@@ -42,4 +42,5 @@ export interface PollResults {
     ties: number
   } | null
   winner_id: string | null
+  voter_count: number
 }

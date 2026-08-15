@@ -88,22 +88,20 @@ export function PollList() {
       <Stack gap="sm">
         {polls.map((poll) => (
           <Card key={poll.id} withBorder component={Link} to={`/polls/${poll.id}`} style={{ textDecoration: 'none' }}>
-            <Group justify="space-between">
-              <div>
-                <Text fw={600} c="var(--mantine-color-text)">
-                  {poll.title}
+            <Stack gap={4}>
+              <Text fw={600} c="var(--mantine-color-text)">
+                {poll.title}
+              </Text>
+              {poll.description && (
+                <Text size="sm" c="dimmed">
+                  {poll.description}
                 </Text>
-                {poll.description && (
-                  <Text size="sm" c="dimmed">
-                    {poll.description}
-                  </Text>
-                )}
-                <Text size="xs" c="dimmed" mt={4}>
-                  {poll.created_by === session?.user.id ? 'Created by you' : `Created by ${poll.created_by_email}`}
-                </Text>
-              </div>
+              )}
+              <Text size="xs" c="dimmed">
+                {poll.created_by === session?.user.id ? 'Created by you' : `Created by ${poll.created_by_email}`}
+              </Text>
               {poll.status && (
-                <Stack gap={4} align="flex-end">
+                <Group gap="xs" mt={4}>
                   <Badge color={poll.status.is_complete ? 'green' : 'blue'} variant="light">
                     {poll.status.is_complete ? 'Results ready' : `${poll.status.voted_count}/${poll.status.invited_count} voted`}
                   </Badge>
@@ -112,9 +110,9 @@ export function PollList() {
                       Vote pending
                     </Badge>
                   )}
-                </Stack>
+                </Group>
               )}
-            </Group>
+            </Stack>
           </Card>
         ))}
       </Stack>

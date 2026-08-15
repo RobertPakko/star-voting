@@ -213,6 +213,10 @@ function Results({ pollId }: { pollId: string }) {
 
   return (
     <Stack gap="lg">
+      <Text size="sm" c="dimmed">
+        {results.voter_count} {results.voter_count === 1 ? 'voter' : 'voters'} participated
+      </Text>
+
       {results.winner_id && (
         <Card withBorder bg="var(--mantine-color-green-light)">
           <Text fw={700} size="lg">
@@ -251,7 +255,7 @@ function Results({ pollId }: { pollId: string }) {
 
       {results.runoff && results.finalists.length === 2 && (
         <Stack gap={4}>
-          <Title order={4}>Automatic runoff</Title>
+          <Title order={4}>Automatic runoff round</Title>
           <Text size="sm">
             {nameById.get(results.finalists[0])}: {results.runoff.prefers_a} voters preferred
           </Text>

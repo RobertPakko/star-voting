@@ -8,12 +8,14 @@ export function Layout() {
   return (
     <AppShell header={{ height: 60 }} padding="md">
       <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <Title order={3}>STAR Voting</Title>
+        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
+          <Link to="/" style={{ textDecoration: 'none', color: 'inherit', minWidth: 0 }}>
+            <Title order={3} size="h4">
+              STAR Voting
+            </Title>
           </Link>
-          <Group gap="md">
-            <Text size="sm" c="dimmed">
+          <Group gap="sm" wrap="nowrap">
+            <Text size="sm" c="dimmed" visibleFrom="sm" truncate maw={240}>
               {session?.user.email}
             </Text>
             <Button variant="subtle" size="sm" onClick={() => signOut()}>
