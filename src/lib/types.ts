@@ -5,6 +5,7 @@ export interface Poll {
   created_by: string
   created_by_email: string
   created_at: string
+  closed_at: string | null
 }
 
 // Backed by the "candidates" table in Postgres -- kept as-is there to
@@ -21,8 +22,18 @@ export interface PollOption {
 export interface PollStatus {
   invited_count: number
   voted_count: number
+  /** Every invited voter has cast a ballot. */
   is_complete: boolean
+  /** The signed-in user has cast a ballot. */
   voted: boolean
+  is_closed: boolean
+  /** What actually gates the results view: complete, or closed with >=1 vote. */
+  results_available: boolean
+}
+
+export interface Invitee {
+  email: string
+  has_voted: boolean
 }
 
 export interface ResultOption {
@@ -43,4 +54,7 @@ export interface PollResults {
   } | null
   winner_id: string | null
   voter_count: number
+  invited_count: number
+  /** Closed by the creator before everyone had voted. */
+  closed_early: boolean
 }

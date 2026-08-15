@@ -15,10 +15,13 @@ import {
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
+import { CreatorControls } from '../components/CreatorControls'
 import type { Poll, PollOption, PollResults, PollStatus } from '../lib/types'
 
 export function PollDetail() {
   const { pollId } = useParams<{ pollId: string }>()
+  const { session } = useAuth()
   const [poll, setPoll] = useState<Poll | null>(null)
   const [options, setOptions] = useState<PollOption[]>([])
   const [status, setStatus] = useState<PollStatus | null>(null)
@@ -27,7 +30,6 @@ export function PollDetail() {
 
   const load = useCallback(async () => {
     if (!pollId) return
-    setLoading(true)
     setError(null)
 
     const [pollRes, optionsRes, statusRes] = await Promise.all([
@@ -36,8 +38,8 @@ export function PollDetail() {
       supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
     ])
 
-    if (pollRes.error) {
-      setError(pollRes.error.message)
+    if (pollRes.error || statusRes.error) {
+      setError((pollRes.error ?? statusRes.error)!.message)
       setLoading(false)
       return
     }
@@ -68,20 +70,35 @@ export function PollDetail() {
     )
   }
 
+  const isCreator = poll.created_by === session?.user.id
+
   return (
     <Stack maw={640} mx="auto" gap="lg">
       <Stack gap={4}>
-        <Title order={2}>{poll.title}</Title>
+        <Group gap="xs">
+          <Title order={2}>{poll.title}</Title>
+          {status.is_closed && (
+            <Badge color="gray" variant="light">
+              Closed
+            </Badge>
+          )}
+        </Group>
         {poll.description && <Text c="dimmed">{poll.description}</Text>}
       </Stack>
 
-      {status.is_complete ? (
+      {status.results_available ? (
         <Results pollId={poll.id} />
+      ) : status.is_closed ? (
+        <Card withBorder>
+          <Text fw={500}>This poll was closed before anyone voted, so there are no results.</Text>
+        </Card>
       ) : status.voted ? (
         <Waiting status={status} />
       ) : (
         <VoteForm pollId={poll.id} options={options} />
       )}
+
+      {isCreator && <CreatorControls pollId={poll.id} status={status} onChange={load} />}
     </Stack>
   )
 }
@@ -91,7 +108,7 @@ function Waiting({ status }: { status: PollStatus }) {
   return (
     <Card withBorder>
       <Stack gap="sm">
-        <Group justify="space-between">
+        <Group justify="space-between" wrap="nowrap" gap="xs">
           <Text fw={500}>Your vote is in. Waiting on the rest of the group.</Text>
           <Badge variant="light">
             {status.voted_count}/{status.invited_count} voted
@@ -145,8 +162,8 @@ function VoteForm({ pollId, options }: { pollId: string; options: PollOption[] }
       </Text>
       {options.map((option) => (
         <Card key={option.id} withBorder>
-          <Group justify="space-between">
-            <div>
+          <Group justify="space-between" wrap="nowrap" gap="sm">
+            <div style={{ minWidth: 0 }}>
               <Text fw={500}>{option.name}</Text>
               {option.description && (
                 <Text size="sm" c="dimmed">
@@ -154,7 +171,11 @@ function VoteForm({ pollId, options }: { pollId: string; options: PollOption[] }
                 </Text>
               )}
             </div>
-            <Rating count={5} value={values[option.id] ?? 0} onChange={(v) => setScore(option.id, v)} />
+            <Rating
+              count={5}
+              value={values[option.id] ?? 0}
+              onChange={(v) => setScore(option.id, v)}
+            />
           </Group>
         </Card>
       ))}
@@ -180,13 +201,11 @@ function Results({ pollId }: { pollId: string }) {
 
   useEffect(() => {
     let cancelled = false
-    supabase
-      .rpc('get_poll_results', { p_poll_id: pollId })
-      .then(({ data, error: rpcError }) => {
-        if (cancelled) return
-        if (rpcError) setError(rpcError.message)
-        else setResults(data as PollResults)
-      })
+    supabase.rpc('get_poll_results', { p_poll_id: pollId }).then(({ data, error: rpcError }) => {
+      if (cancelled) return
+      if (rpcError) setError(rpcError.message)
+      else setResults(data as PollResults)
+    })
     return () => {
       cancelled = true
     }
@@ -214,7 +233,9 @@ function Results({ pollId }: { pollId: string }) {
   return (
     <Stack gap="lg">
       <Text size="sm" c="dimmed">
-        {results.voter_count} {results.voter_count === 1 ? 'voter' : 'voters'} participated
+        {results.voter_count} of {results.invited_count}{' '}
+        {results.invited_count === 1 ? 'invited voter' : 'invited voters'} participated
+        {results.closed_early && ' — voting was closed early'}
       </Text>
 
       {results.winner_id && (
@@ -239,15 +260,18 @@ function Results({ pollId }: { pollId: string }) {
         <Stack gap="xs">
           {results.options.map((o) => (
             <div key={o.id}>
-              <Group justify="space-between" mb={2}>
-                <Text size="sm" fw={results.finalists.includes(o.id) ? 700 : 400}>
+              <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
+                <Text size="sm" fw={results.finalists.includes(o.id) ? 700 : 400} truncate>
                   {o.name}
                 </Text>
-                <Text size="sm" c="dimmed">
+                <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
                   {o.total_score} pts (avg {o.average_score})
                 </Text>
               </Group>
-              <Progress value={(o.total_score / maxScore) * 100} color={results.finalists.includes(o.id) ? 'blue' : 'gray'} />
+              <Progress
+                value={(o.total_score / maxScore) * 100}
+                color={results.finalists.includes(o.id) ? 'blue' : 'gray'}
+              />
             </div>
           ))}
         </Stack>

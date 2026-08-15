@@ -102,10 +102,20 @@ export function PollList() {
               </Text>
               {poll.status && (
                 <Group gap="xs" mt={4}>
-                  <Badge color={poll.status.is_complete ? 'green' : 'blue'} variant="light">
-                    {poll.status.is_complete ? 'Results ready' : `${poll.status.voted_count}/${poll.status.invited_count} voted`}
+                  <Badge
+                    color={poll.status.results_available ? 'green' : 'blue'}
+                    variant="light"
+                  >
+                    {poll.status.results_available
+                      ? 'Results ready'
+                      : `${poll.status.voted_count}/${poll.status.invited_count} voted`}
                   </Badge>
-                  {!poll.status.voted && !poll.status.is_complete && (
+                  {poll.status.is_closed && (
+                    <Badge color="gray" variant="light">
+                      Closed
+                    </Badge>
+                  )}
+                  {!poll.status.voted && !poll.status.results_available && !poll.status.is_closed && (
                     <Badge color="orange" variant="light">
                       Vote pending
                     </Badge>
