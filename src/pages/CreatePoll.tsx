@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ActionIcon,
   Button,
+  Checkbox,
   Group,
   Stack,
   TagsInput,
@@ -24,8 +25,11 @@ export function CreatePoll() {
   const [description, setDescription] = useState('')
   const [options, setOptions] = useState(['', ''])
   const [emails, setEmails] = useState<string[]>([])
+  const [includeSelf, setIncludeSelf] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const myEmail = session?.user.email?.toLowerCase() ?? ''
 
   function updateOption(index: number, value: string) {
     setOptions((prev) => prev.map((c, i) => (i === index ? value : c)))
@@ -42,11 +46,11 @@ export function CreatePoll() {
   async function handleSubmit() {
     setError(null)
 
-    const trimmedTitle = title.trim()
-    const cleanOptions = options.map((c) => c.trim()).filter(Boolean)
-    const cleanEmails = Array.from(new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean)))
+    const cleanOptions = options.map((o) => o.trim()).filter(Boolean)
+    const typedEmails = emails.map((e) => e.trim().toLowerCase()).filter(Boolean)
+    const allEmails = Array.from(new Set(includeSelf ? [...typedEmails, myEmail] : typedEmails))
 
-    if (!trimmedTitle) {
+    if (!title.trim()) {
       setError('Title is required.')
       return
     }
@@ -54,54 +58,46 @@ export function CreatePoll() {
       setError('Add at least two options.')
       return
     }
-    const invalidEmail = cleanEmails.find((e) => !EMAIL_RE.test(e))
+    const invalidEmail = typedEmails.find((e) => !EMAIL_RE.test(e))
     if (invalidEmail) {
       setError(`"${invalidEmail}" doesn't look like a valid email address.`)
       return
     }
-    if (cleanEmails.length === 0) {
-      setError('Invite at least one voter by email.')
+    if (allEmails.length === 0) {
+      setError('Invite at least one voter, or include yourself.')
       return
     }
 
     setSubmitting(true)
-    try {
-      const { data: poll, error: pollError } = await supabase
-        .from('polls')
-        .insert({ title: trimmedTitle, description: description.trim() || null, created_by: session!.user.id })
-        .select()
-        .single()
+    // One transaction: the poll, its options, and its invitees land together
+    // or not at all.
+    const { data, error: rpcError } = await supabase.rpc('create_poll', {
+      p_title: title.trim(),
+      p_description: description.trim() || null,
+      p_options: cleanOptions,
+      p_emails: allEmails,
+    })
+    setSubmitting(false)
 
-      if (pollError || !poll) throw pollError ?? new Error('Failed to create poll')
-
-      const { error: optionsError } = await supabase.from('candidates').insert(
-        cleanOptions.map((name, index) => ({
-          poll_id: poll.id,
-          name,
-          sort_order: index,
-        })),
-      )
-      if (optionsError) throw optionsError
-
-      const { error: votersError } = await supabase.from('invited_voters').insert(
-        cleanEmails.map((email) => ({ poll_id: poll.id, email })),
-      )
-      if (votersError) throw votersError
-
-      notifications.show({ message: 'Poll created', color: 'green' })
-      navigate(`/polls/${poll.id}`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong creating the poll.')
-    } finally {
-      setSubmitting(false)
+    if (rpcError) {
+      setError(rpcError.message)
+      return
     }
+
+    notifications.show({ message: 'Poll created', color: 'green' })
+    navigate(`/polls/${data as string}`)
   }
 
   return (
     <Stack maw={560} mx="auto" gap="md">
       <Title order={2}>New poll</Title>
 
-      <TextInput label="Title" value={title} onChange={(e) => setTitle(e.currentTarget.value)} required />
+      <TextInput
+        label="Title"
+        value={title}
+        onChange={(e) => setTitle(e.currentTarget.value)}
+        required
+      />
       <Textarea
         label="Description"
         value={description}
@@ -138,13 +134,20 @@ export function CreatePoll() {
         </Button>
       </Stack>
 
-      <TagsInput
-        label="Invite voters"
-        description="Type an email and press Enter (or comma) to add it."
-        placeholder="you@example.com"
-        value={emails}
-        onChange={setEmails}
-      />
+      <Stack gap="xs">
+        <TagsInput
+          label="Invite voters"
+          description="Type an email and press Enter (or comma) to add it."
+          placeholder="them@example.com"
+          value={emails}
+          onChange={setEmails}
+        />
+        <Checkbox
+          label={`Include me as a voter (${myEmail})`}
+          checked={includeSelf}
+          onChange={(e) => setIncludeSelf(e.currentTarget.checked)}
+        />
+      </Stack>
 
       {error && (
         <Text c="red" size="sm">

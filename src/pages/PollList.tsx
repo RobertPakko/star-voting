@@ -1,54 +1,26 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  Badge,
-  Button,
-  Card,
-  Center,
-  Group,
-  Loader,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core'
+import { Badge, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import type { Poll, PollStatus } from '../lib/types'
-
-interface PollRow extends Poll {
-  status: PollStatus | null
-}
+import type { PollListItem } from '../lib/types'
 
 export function PollList() {
   const { session } = useAuth()
-  const [polls, setPolls] = useState<PollRow[] | null>(null)
+  const [polls, setPolls] = useState<PollListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
-    async function load() {
-      const { data: pollRows, error: pollError } = await supabase
-        .from('polls')
-        .select('*')
-        .order('created_at', { ascending: false })
+    // One round trip for the polls and their status. This used to be a
+    // select plus one poll_status RPC per poll.
+    supabase.rpc('list_polls').then(({ data, error: rpcError }) => {
+      if (cancelled) return
+      if (rpcError) setError(rpcError.message)
+      else setPolls((data as PollListItem[]) ?? [])
+    })
 
-      if (pollError) {
-        if (!cancelled) setError(pollError.message)
-        return
-      }
-
-      const withStatus = await Promise.all(
-        (pollRows ?? []).map(async (poll) => {
-          const { data } = await supabase.rpc('poll_status', { p_poll_id: poll.id }).single()
-          return { ...poll, status: (data as PollStatus) ?? null }
-        }),
-      )
-
-      if (!cancelled) setPolls(withStatus)
-    }
-
-    load()
     return () => {
       cancelled = true
     }
@@ -87,7 +59,13 @@ export function PollList() {
 
       <Stack gap="sm">
         {polls.map((poll) => (
-          <Card key={poll.id} withBorder component={Link} to={`/polls/${poll.id}`} style={{ textDecoration: 'none' }}>
+          <Card
+            key={poll.id}
+            withBorder
+            component={Link}
+            to={`/polls/${poll.id}`}
+            style={{ textDecoration: 'none' }}
+          >
             <Stack gap={4}>
               <Text fw={600} c="var(--mantine-color-text)">
                 {poll.title}
@@ -98,30 +76,27 @@ export function PollList() {
                 </Text>
               )}
               <Text size="xs" c="dimmed">
-                {poll.created_by === session?.user.id ? 'Created by you' : `Created by ${poll.created_by_email}`}
+                {poll.created_by === session?.user.id
+                  ? 'Created by you'
+                  : `Created by ${poll.created_by_email}`}
               </Text>
-              {poll.status && (
-                <Group gap="xs" mt={4}>
-                  <Badge
-                    color={poll.status.results_available ? 'green' : 'blue'}
-                    variant="light"
-                  >
-                    {poll.status.results_available
-                      ? 'Results ready'
-                      : `${poll.status.voted_count}/${poll.status.invited_count} voted`}
+              <Group gap="xs" mt={4}>
+                <Badge color={poll.results_available ? 'green' : 'blue'} variant="light">
+                  {poll.results_available
+                    ? 'Results ready'
+                    : `${poll.voted_count}/${poll.invited_count} voted`}
+                </Badge>
+                {poll.is_closed && (
+                  <Badge color="gray" variant="light">
+                    Closed
                   </Badge>
-                  {poll.status.is_closed && (
-                    <Badge color="gray" variant="light">
-                      Closed
-                    </Badge>
-                  )}
-                  {!poll.status.voted && !poll.status.results_available && !poll.status.is_closed && (
-                    <Badge color="orange" variant="light">
-                      Vote pending
-                    </Badge>
-                  )}
-                </Group>
-              )}
+                )}
+                {!poll.voted && !poll.results_available && !poll.is_closed && (
+                  <Badge color="orange" variant="light">
+                    Vote pending
+                  </Badge>
+                )}
+              </Group>
             </Stack>
           </Card>
         ))}

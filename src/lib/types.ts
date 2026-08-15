@@ -31,6 +31,9 @@ export interface PollStatus {
   results_available: boolean
 }
 
+/** One row from list_polls(): a poll and its status, fetched together. */
+export interface PollListItem extends Poll, PollStatus {}
+
 export interface Invitee {
   email: string
   has_voted: boolean
