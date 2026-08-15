@@ -46,14 +46,41 @@ export interface ResultOption {
   average_score: number
 }
 
+export interface TiebreakEntry {
+  id: string
+  name: string
+  value: number
+}
+
+/** One rule tried while resolving a tie, and whether it settled it. */
+export interface TiebreakStep {
+  rule: 'head_to_head' | 'five_star_votes'
+  results: TiebreakEntry[]
+  decisive: boolean
+}
+
+/** One tie encountered in the score round, and how STAR resolved it. */
+export interface Tiebreak {
+  tied_at: number
+  tied: { id: string; name: string; total_score: number }[]
+  slots: number
+  steps: TiebreakStep[]
+  resolved_by: 'head_to_head' | 'five_star_votes' | 'random'
+  advanced: { id: string; name: string }[]
+}
+
 export interface PollResults {
   options: ResultOption[]
   finalists: string[]
+  /** Whether any tie-break was needed at all. */
   tie: boolean
+  tiebreaks: Tiebreak[]
   runoff: {
     prefers_a: number
     prefers_b: number
     ties: number
+    /** 'higher_score' means the runoff tied and STAR's score rule decided it. */
+    resolved_by: 'preference' | 'higher_score' | 'unresolved'
   } | null
   winner_id: string | null
   voter_count: number

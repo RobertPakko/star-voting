@@ -246,17 +246,15 @@ function Results({ pollId }: { pollId: string }) {
         </Card>
       )}
       {!results.winner_id && results.finalists.length === 2 && (
-        <Text fw={600}>Runoff tied — no single winner.</Text>
+        <Card withBorder bg="var(--mantine-color-orange-light)">
+          <Text fw={700} size="lg">
+            No winner — a genuine tie
+          </Text>
+        </Card>
       )}
 
       <Stack gap={4}>
         <Title order={4}>Score round</Title>
-        {results.tie && (
-          <Text size="sm" c="orange">
-            There was a tie near the cutoff for 2nd place — finalists below were chosen by a
-            deterministic tie-break, not official STAR tie-break rules.
-          </Text>
-        )}
         <Stack gap="xs">
           {results.options.map((o) => (
             <div key={o.id}>
@@ -277,6 +275,63 @@ function Results({ pollId }: { pollId: string }) {
         </Stack>
       </Stack>
 
+      {results.tiebreaks.length > 0 && (
+        <Stack gap="sm">
+          <Title order={4}>Tie-break{results.tiebreaks.length > 1 ? 's' : ''}</Title>
+          {results.tiebreaks.map((tb, i) => (
+            <Card withBorder key={i} p="sm">
+              <Stack gap="xs">
+                <Text size="sm">
+                  <strong>{tb.tied.map((t) => t.name).join(' and ')}</strong> tied at {tb.tied_at} pts
+                  for {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}. STAR
+                  settles this before the runoff:
+                </Text>
+
+                {tb.steps.map((step, j) => (
+                  <Stack key={step.rule} gap={2}>
+                    <Group gap="xs">
+                      <Text size="sm" fw={600}>
+                        {j + 1}.{' '}
+                        {step.rule === 'head_to_head'
+                          ? 'Head-to-head preference'
+                          : 'Five-star votes'}
+                      </Text>
+                      <Badge size="xs" variant="light" color={step.decisive ? 'green' : 'gray'}>
+                        {step.decisive ? 'Decisive' : 'Still tied'}
+                      </Badge>
+                    </Group>
+                    {step.results.map((r) => (
+                      <Text key={r.id} size="sm" c="dimmed" pl="md">
+                        {r.name}: {r.value}{' '}
+                        {step.rule === 'head_to_head'
+                          ? r.value === 1
+                            ? 'matchup won'
+                            : 'matchups won'
+                          : r.value === 1
+                            ? 'five-star vote'
+                            : 'five-star votes'}
+                      </Text>
+                    ))}
+                  </Stack>
+                ))}
+
+                <Text size="sm" c={tb.resolved_by === 'random' ? 'orange' : undefined}>
+                  {tb.resolved_by === 'random'
+                    ? `Still tied after every rule — ${tb.advanced
+                        .map((a) => a.name)
+                        .join(', ')} advanced by random selection.`
+                    : `${tb.advanced.map((a) => a.name).join(', ')} advanced on ${
+                        tb.resolved_by === 'head_to_head'
+                          ? 'head-to-head preference'
+                          : 'five-star votes'
+                      }.`}
+                </Text>
+              </Stack>
+            </Card>
+          ))}
+        </Stack>
+      )}
+
       {results.runoff && results.finalists.length === 2 && (
         <Stack gap={4}>
           <Title order={4}>Automatic runoff round</Title>
@@ -289,6 +344,18 @@ function Results({ pollId }: { pollId: string }) {
           <Text size="sm" c="dimmed">
             {results.runoff.ties} voters scored both finalists equally.
           </Text>
+          {results.runoff.resolved_by === 'higher_score' && (
+            <Text size="sm">
+              The runoff tied, so it went to {nameById.get(results.winner_id ?? '')} on the higher
+              score-round total — STAR's rule for a tied runoff.
+            </Text>
+          )}
+          {results.runoff.resolved_by === 'unresolved' && (
+            <Text size="sm" c="orange">
+              The runoff tied and both finalists have identical score totals, so there is no winner
+              under STAR's rules.
+            </Text>
+          )}
         </Stack>
       )}
     </Stack>
