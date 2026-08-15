@@ -70,11 +70,8 @@ export function PollList() {
     )
   }
 
-  const created = polls.filter((p) => p.created_by === session?.user.id)
-  const invited = polls.filter((p) => p.created_by !== session?.user.id)
-
   return (
-    <Stack gap="xl" maw={720} mx="auto">
+    <Stack gap="lg" maw={720} mx="auto">
       <Group justify="space-between">
         <Title order={2}>Your polls</Title>
         <Button component={Link} to="/polls/new">
@@ -82,57 +79,45 @@ export function PollList() {
         </Button>
       </Group>
 
-      <PollSection title="Created by you" polls={created} emptyText="You haven't created any polls yet." />
-      <PollSection title="Invited to" polls={invited} emptyText="No polls have been shared with you yet." />
-    </Stack>
-  )
-}
-
-function PollSection({
-  title,
-  polls,
-  emptyText,
-}: {
-  title: string
-  polls: PollRow[]
-  emptyText: string
-}) {
-  return (
-    <Stack gap="sm">
-      <Title order={4}>{title}</Title>
       {polls.length === 0 && (
         <Text c="dimmed" size="sm">
-          {emptyText}
+          No polls yet. Create one, or wait for an invite.
         </Text>
       )}
-      {polls.map((poll) => (
-        <Card key={poll.id} withBorder component={Link} to={`/polls/${poll.id}`} style={{ textDecoration: 'none' }}>
-          <Group justify="space-between">
-            <div>
-              <Text fw={600} c="var(--mantine-color-text)">
-                {poll.title}
-              </Text>
-              {poll.description && (
-                <Text size="sm" c="dimmed">
-                  {poll.description}
+
+      <Stack gap="sm">
+        {polls.map((poll) => (
+          <Card key={poll.id} withBorder component={Link} to={`/polls/${poll.id}`} style={{ textDecoration: 'none' }}>
+            <Group justify="space-between">
+              <div>
+                <Text fw={600} c="var(--mantine-color-text)">
+                  {poll.title}
                 </Text>
-              )}
-            </div>
-            {poll.status && (
-              <Stack gap={4} align="flex-end">
-                <Badge color={poll.status.is_complete ? 'green' : 'blue'} variant="light">
-                  {poll.status.is_complete ? 'Results ready' : `${poll.status.voted_count}/${poll.status.invited_count} voted`}
-                </Badge>
-                {!poll.status.voted && !poll.status.is_complete && (
-                  <Badge color="orange" variant="light">
-                    Vote pending
-                  </Badge>
+                {poll.description && (
+                  <Text size="sm" c="dimmed">
+                    {poll.description}
+                  </Text>
                 )}
-              </Stack>
-            )}
-          </Group>
-        </Card>
-      ))}
+                <Text size="xs" c="dimmed" mt={4}>
+                  {poll.created_by === session?.user.id ? 'Created by you' : `Created by ${poll.created_by_email}`}
+                </Text>
+              </div>
+              {poll.status && (
+                <Stack gap={4} align="flex-end">
+                  <Badge color={poll.status.is_complete ? 'green' : 'blue'} variant="light">
+                    {poll.status.is_complete ? 'Results ready' : `${poll.status.voted_count}/${poll.status.invited_count} voted`}
+                  </Badge>
+                  {!poll.status.voted && !poll.status.is_complete && (
+                    <Badge color="orange" variant="light">
+                      Vote pending
+                    </Badge>
+                  )}
+                </Stack>
+              )}
+            </Group>
+          </Card>
+        ))}
+      </Stack>
     </Stack>
   )
 }

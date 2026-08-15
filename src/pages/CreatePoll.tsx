@@ -5,6 +5,7 @@ import {
   Button,
   Group,
   Stack,
+  TagsInput,
   Text,
   Textarea,
   TextInput,
@@ -21,52 +22,44 @@ export function CreatePoll() {
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [candidates, setCandidates] = useState(['', ''])
-  const [emailsText, setEmailsText] = useState('')
+  const [options, setOptions] = useState(['', ''])
+  const [emails, setEmails] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function updateCandidate(index: number, value: string) {
-    setCandidates((prev) => prev.map((c, i) => (i === index ? value : c)))
+  function updateOption(index: number, value: string) {
+    setOptions((prev) => prev.map((c, i) => (i === index ? value : c)))
   }
 
-  function addCandidate() {
-    setCandidates((prev) => [...prev, ''])
+  function addOption() {
+    setOptions((prev) => [...prev, ''])
   }
 
-  function removeCandidate(index: number) {
-    setCandidates((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  function parseEmails(): string[] {
-    const raw = emailsText
-      .split(/[\n,]/)
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean)
-    return Array.from(new Set(raw))
+  function removeOption(index: number) {
+    setOptions((prev) => prev.filter((_, i) => i !== index))
   }
 
   async function handleSubmit() {
     setError(null)
 
     const trimmedTitle = title.trim()
-    const cleanCandidates = candidates.map((c) => c.trim()).filter(Boolean)
-    const emails = parseEmails()
+    const cleanOptions = options.map((c) => c.trim()).filter(Boolean)
+    const cleanEmails = Array.from(new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean)))
 
     if (!trimmedTitle) {
       setError('Title is required.')
       return
     }
-    if (cleanCandidates.length < 2) {
-      setError('Add at least two candidates.')
+    if (cleanOptions.length < 2) {
+      setError('Add at least two options.')
       return
     }
-    const invalidEmail = emails.find((e) => !EMAIL_RE.test(e))
+    const invalidEmail = cleanEmails.find((e) => !EMAIL_RE.test(e))
     if (invalidEmail) {
       setError(`"${invalidEmail}" doesn't look like a valid email address.`)
       return
     }
-    if (emails.length === 0) {
+    if (cleanEmails.length === 0) {
       setError('Invite at least one voter by email.')
       return
     }
@@ -81,17 +74,17 @@ export function CreatePoll() {
 
       if (pollError || !poll) throw pollError ?? new Error('Failed to create poll')
 
-      const { error: candidatesError } = await supabase.from('candidates').insert(
-        cleanCandidates.map((name, index) => ({
+      const { error: optionsError } = await supabase.from('candidates').insert(
+        cleanOptions.map((name, index) => ({
           poll_id: poll.id,
           name,
           sort_order: index,
         })),
       )
-      if (candidatesError) throw candidatesError
+      if (optionsError) throw optionsError
 
       const { error: votersError } = await supabase.from('invited_voters').insert(
-        emails.map((email) => ({ poll_id: poll.id, email })),
+        cleanEmails.map((email) => ({ poll_id: poll.id, email })),
       )
       if (votersError) throw votersError
 
@@ -119,39 +112,38 @@ export function CreatePoll() {
 
       <Stack gap="xs">
         <Text fw={500} size="sm">
-          Candidates
+          Options
         </Text>
-        {candidates.map((candidate, index) => (
+        {options.map((option, index) => (
           <Group key={index} gap="xs">
             <TextInput
-              value={candidate}
-              onChange={(e) => updateCandidate(index, e.currentTarget.value)}
-              placeholder={`Candidate ${index + 1}`}
+              value={option}
+              onChange={(e) => updateOption(index, e.currentTarget.value)}
+              placeholder={`Option ${index + 1}`}
               style={{ flex: 1 }}
             />
             <ActionIcon
               variant="subtle"
               color="red"
-              onClick={() => removeCandidate(index)}
-              disabled={candidates.length <= 2}
-              aria-label="Remove candidate"
+              onClick={() => removeOption(index)}
+              disabled={options.length <= 2}
+              aria-label="Remove option"
             >
               &times;
             </ActionIcon>
           </Group>
         ))}
-        <Button variant="light" size="xs" onClick={addCandidate} w="fit-content">
-          Add candidate
+        <Button variant="light" size="xs" onClick={addOption} w="fit-content">
+          Add option
         </Button>
       </Stack>
 
-      <Textarea
+      <TagsInput
         label="Invite voters"
-        description="One email per line (or comma-separated)."
-        value={emailsText}
-        onChange={(e) => setEmailsText(e.currentTarget.value)}
-        autosize
-        minRows={3}
+        description="Type an email and press Enter (or comma) to add it."
+        placeholder="you@example.com"
+        value={emails}
+        onChange={setEmails}
       />
 
       {error && (

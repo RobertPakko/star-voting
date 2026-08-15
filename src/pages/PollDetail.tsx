@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   Badge,
   Button,
@@ -15,12 +15,12 @@ import {
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
-import type { Candidate, Poll, PollResults, PollStatus } from '../lib/types'
+import type { Poll, PollOption, PollResults, PollStatus } from '../lib/types'
 
 export function PollDetail() {
   const { pollId } = useParams<{ pollId: string }>()
   const [poll, setPoll] = useState<Poll | null>(null)
-  const [candidates, setCandidates] = useState<Candidate[]>([])
+  const [options, setOptions] = useState<PollOption[]>([])
   const [status, setStatus] = useState<PollStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -30,7 +30,7 @@ export function PollDetail() {
     setLoading(true)
     setError(null)
 
-    const [pollRes, candidatesRes, statusRes] = await Promise.all([
+    const [pollRes, optionsRes, statusRes] = await Promise.all([
       supabase.from('polls').select('*').eq('id', pollId).single(),
       supabase.from('candidates').select('*').eq('poll_id', pollId).order('sort_order'),
       supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
@@ -43,7 +43,7 @@ export function PollDetail() {
     }
 
     setPoll(pollRes.data as Poll)
-    setCandidates((candidatesRes.data as Candidate[]) ?? [])
+    setOptions((optionsRes.data as PollOption[]) ?? [])
     setStatus((statusRes.data as PollStatus) ?? null)
     setLoading(false)
   }, [pollId])
@@ -80,7 +80,7 @@ export function PollDetail() {
       ) : status.voted ? (
         <Waiting status={status} />
       ) : (
-        <VoteForm pollId={poll.id} candidates={candidates} onSubmitted={load} />
+        <VoteForm pollId={poll.id} options={options} />
       )}
     </Stack>
   )
@@ -106,30 +106,23 @@ function Waiting({ status }: { status: PollStatus }) {
   )
 }
 
-function VoteForm({
-  pollId,
-  candidates,
-  onSubmitted,
-}: {
-  pollId: string
-  candidates: Candidate[]
-  onSubmitted: () => void
-}) {
+function VoteForm({ pollId, options }: { pollId: string; options: PollOption[] }) {
+  const navigate = useNavigate()
   const [values, setValues] = useState<Record<string, number>>({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function setScore(candidateId: string, score: number) {
-    setValues((prev) => ({ ...prev, [candidateId]: score }))
+  function setScore(optionId: string, score: number) {
+    setValues((prev) => ({ ...prev, [optionId]: score }))
   }
 
   async function handleSubmit() {
     setError(null)
     setSubmitting(true)
     try {
-      const payload = candidates.map((c) => ({
-        candidate_id: c.id,
-        score: values[c.id] ?? 0,
+      const payload = options.map((o) => ({
+        candidate_id: o.id,
+        score: values[o.id] ?? 0,
       }))
       const { error: rpcError } = await supabase.rpc('submit_ballot', {
         p_poll_id: pollId,
@@ -137,7 +130,7 @@ function VoteForm({
       })
       if (rpcError) throw rpcError
       notifications.show({ message: 'Vote submitted', color: 'green' })
-      onSubmitted()
+      navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit vote.')
     } finally {
@@ -148,20 +141,20 @@ function VoteForm({
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Score each candidate from 0 (worst) to 5 (best). Unscored candidates count as 0.
+        Score each option from 0 (worst) to 5 (best). Unscored options count as 0.
       </Text>
-      {candidates.map((candidate) => (
-        <Card key={candidate.id} withBorder>
+      {options.map((option) => (
+        <Card key={option.id} withBorder>
           <Group justify="space-between">
             <div>
-              <Text fw={500}>{candidate.name}</Text>
-              {candidate.description && (
+              <Text fw={500}>{option.name}</Text>
+              {option.description && (
                 <Text size="sm" c="dimmed">
-                  {candidate.description}
+                  {option.description}
                 </Text>
               )}
             </div>
-            <Rating count={6} value={(values[candidate.id] ?? 0) + 1} onChange={(v) => setScore(candidate.id, Math.max(0, v - 1))} />
+            <Rating count={5} value={values[option.id] ?? 0} onChange={(v) => setScore(option.id, v)} />
           </Group>
         </Card>
       ))}
@@ -215,8 +208,8 @@ function Results({ pollId }: { pollId: string }) {
     )
   }
 
-  const nameById = new Map(results.candidates.map((c) => [c.id, c.name]))
-  const maxScore = Math.max(1, ...results.candidates.map((c) => c.total_score))
+  const nameById = new Map(results.options.map((o) => [o.id, o.name]))
+  const maxScore = Math.max(1, ...results.options.map((o) => o.total_score))
 
   return (
     <Stack gap="lg">
@@ -240,17 +233,17 @@ function Results({ pollId }: { pollId: string }) {
           </Text>
         )}
         <Stack gap="xs">
-          {results.candidates.map((c) => (
-            <div key={c.id}>
+          {results.options.map((o) => (
+            <div key={o.id}>
               <Group justify="space-between" mb={2}>
-                <Text size="sm" fw={results.finalists.includes(c.id) ? 700 : 400}>
-                  {c.name}
+                <Text size="sm" fw={results.finalists.includes(o.id) ? 700 : 400}>
+                  {o.name}
                 </Text>
                 <Text size="sm" c="dimmed">
-                  {c.total_score} pts (avg {c.average_score})
+                  {o.total_score} pts (avg {o.average_score})
                 </Text>
               </Group>
-              <Progress value={(c.total_score / maxScore) * 100} color={results.finalists.includes(c.id) ? 'blue' : 'gray'} />
+              <Progress value={(o.total_score / maxScore) * 100} color={results.finalists.includes(o.id) ? 'blue' : 'gray'} />
             </div>
           ))}
         </Stack>

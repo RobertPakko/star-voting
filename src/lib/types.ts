@@ -3,10 +3,14 @@ export interface Poll {
   title: string
   description: string | null
   created_by: string
+  created_by_email: string
   created_at: string
 }
 
-export interface Candidate {
+// Backed by the "candidates" table in Postgres -- kept as-is there to
+// avoid touching every policy/function for a cosmetic rename. The app
+// itself calls these "options" everywhere.
+export interface PollOption {
   id: string
   poll_id: string
   name: string
@@ -21,7 +25,7 @@ export interface PollStatus {
   voted: boolean
 }
 
-export interface ResultCandidate {
+export interface ResultOption {
   id: string
   name: string
   total_score: number
@@ -29,7 +33,7 @@ export interface ResultCandidate {
 }
 
 export interface PollResults {
-  candidates: ResultCandidate[]
+  options: ResultOption[]
   finalists: string[]
   tie: boolean
   runoff: {
