@@ -1,3 +1,11 @@
+/**
+ * 'invite' gates access by email address: only invited people can see or
+ * vote, and results unlock on completion or when the creator closes.
+ * 'open' gates access by an unguessable link: anyone holding it votes
+ * without signing in, and results unlock only on close.
+ */
+export type PollMode = 'invite' | 'open'
+
 export interface Poll {
   id: string
   title: string
@@ -6,6 +14,11 @@ export interface Poll {
   created_by_email: string
   created_at: string
   closed_at: string | null
+  mode: PollMode
+  /** Participants can see who has responded (never how they voted). */
+  show_voters: boolean
+  /** Set for open polls only; the capability in their share link. */
+  public_token: string | null
 }
 
 // Backed by the "candidates" table in Postgres -- kept as-is there to
@@ -36,7 +49,29 @@ export interface PollListItem extends Poll, PollStatus {}
 
 export interface Invitee {
   email: string
-  has_voted: boolean
+  /** null when the poll hides respondents — show no badge, not "pending". */
+  has_voted: boolean | null
+}
+
+/** Everything the public voting page needs, from one open_poll_view call. */
+export interface OpenPollView {
+  poll: {
+    id: string
+    title: string
+    description: string | null
+    mode: PollMode
+    show_voters: boolean
+    closed_at: string | null
+  }
+  options: PollOption[]
+  voted_count: number
+  is_closed: boolean
+  results_available: boolean
+  /** This browser's voter_key has already submitted a ballot. */
+  voted: boolean
+  your_name: string | null
+  /** Names of everyone who has responded; null when the poll hides them. */
+  voters: string[] | null
 }
 
 export interface ResultOption {
@@ -84,7 +119,9 @@ export interface PollResults {
   } | null
   winner_id: string | null
   voter_count: number
+  /** Always 0 for open polls — there is no invite list. */
   invited_count: number
+  mode: PollMode
   /** Closed by the creator before everyone had voted. */
   closed_early: boolean
 }

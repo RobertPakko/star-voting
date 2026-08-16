@@ -1,28 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Card,
-  Group,
-  Modal,
-  Stack,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core'
+import { Button, Card, Group, Modal, Stack, Text, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
-import type { Invitee, PollStatus } from '../lib/types'
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+import type { PollStatus } from '../lib/types'
 
 /**
- * Creator-only controls: manage the invitee list, close voting early, and
- * delete the poll. Closing exists so a single person who never votes can't
- * freeze the results permanently.
+ * Creator-only lifecycle controls: close voting early, and delete the poll.
+ * The invitee list lives in <Respondents> now, because on a poll that shows
+ * respondents it isn't creator-only any more.
+ *
+ * Closing exists so a single person who never votes can't freeze the
+ * results permanently -- and for open polls it's the only way results are
+ * ever revealed, since there is no roster to complete.
  */
 export function CreatorControls({
   pollId,
@@ -34,66 +25,10 @@ export function CreatorControls({
   onChange: () => void
 }) {
   const navigate = useNavigate()
-  const [invitees, setInvitees] = useState<Invitee[] | null>(null)
-  const [newEmail, setNewEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleteOpened, deleteModal] = useDisclosure(false)
   const [closeOpened, closeModal] = useDisclosure(false)
-
-  const loadInvitees = useCallback(async () => {
-    const { data, error: rpcError } = await supabase.rpc('poll_invitees', { p_poll_id: pollId })
-    if (!rpcError) setInvitees((data as Invitee[]) ?? [])
-  }, [pollId])
-
-  useEffect(() => {
-    loadInvitees()
-  }, [loadInvitees])
-
-  async function addInvitee() {
-    const email = newEmail.trim().toLowerCase()
-    setError(null)
-    if (!EMAIL_RE.test(email)) {
-      setError('Enter a valid email address.')
-      return
-    }
-    if (invitees?.some((i) => i.email === email)) {
-      setError('That person is already invited.')
-      return
-    }
-
-    setBusy(true)
-    const { error: insertError } = await supabase.from('invited_voters').insert({ poll_id: pollId, email })
-    setBusy(false)
-
-    if (insertError) {
-      setError(insertError.message)
-      return
-    }
-    setNewEmail('')
-    notifications.show({ message: `Invited ${email}`, color: 'green' })
-    await loadInvitees()
-    onChange()
-  }
-
-  async function removeInvitee(email: string) {
-    setError(null)
-    setBusy(true)
-    const { error: deleteError } = await supabase
-      .from('invited_voters')
-      .delete()
-      .eq('poll_id', pollId)
-      .eq('email', email)
-    setBusy(false)
-
-    if (deleteError) {
-      setError(deleteError.message)
-      return
-    }
-    notifications.show({ message: `Removed ${email}`, color: 'green' })
-    await loadInvitees()
-    onChange()
-  }
 
   async function closePoll() {
     setError(null)
@@ -124,66 +59,15 @@ export function CreatorControls({
     navigate('/')
   }
 
-  const pending = invitees?.filter((i) => !i.has_voted).length ?? 0
   const canClose = !status.is_closed && !status.is_complete && status.voted_count > 0
+  // Open polls have no invite list, so invited_count is 0 and there is
+  // nobody we can say we're cutting off.
+  const pending = Math.max(0, status.invited_count - status.voted_count)
 
   return (
     <Card withBorder mt="xl">
       <Stack gap="md">
         <Title order={4}>Manage poll</Title>
-
-        <Stack gap="xs">
-          <Text size="sm" fw={500}>
-            Invited voters
-          </Text>
-          {invitees?.map((invitee) => (
-            <Group key={invitee.email} justify="space-between" wrap="nowrap" gap="xs">
-              <Text size="sm" truncate style={{ flex: 1, minWidth: 0 }}>
-                {invitee.email}
-              </Text>
-              <Group gap="xs" wrap="nowrap">
-                <Badge size="sm" variant="light" color={invitee.has_voted ? 'green' : 'orange'}>
-                  {invitee.has_voted ? 'Voted' : 'Pending'}
-                </Badge>
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  aria-label={`Remove ${invitee.email}`}
-                  // Someone who already voted can't be removed -- their ballot
-                  // is counted and can't be honestly un-counted.
-                  disabled={invitee.has_voted || status.is_closed || busy}
-                  onClick={() => removeInvitee(invitee.email)}
-                >
-                  &times;
-                </ActionIcon>
-              </Group>
-            </Group>
-          ))}
-
-          {/* Once results are out, adding a voter would let them vote knowing
-              the standings, so the database blocks it -- don't offer the field. */}
-          {!status.is_closed && !status.results_available && (
-            <Group gap="xs" wrap="nowrap">
-              <TextInput
-                placeholder="Invite another voter"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.currentTarget.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addInvitee()}
-                style={{ flex: 1 }}
-              />
-              <Button variant="light" onClick={addInvitee} loading={busy}>
-                Add
-              </Button>
-            </Group>
-          )}
-
-          {status.results_available && !status.is_closed && (
-            <Text size="xs" c="dimmed">
-              The results are out, so no one else can be invited — a late voter would be voting
-              with the standings already known. Start a new poll to include more people.
-            </Text>
-          )}
-        </Stack>
 
         {error && (
           <Text c="red" size="sm">
@@ -191,7 +75,7 @@ export function CreatorControls({
           </Text>
         )}
 
-        <Group justify="space-between" mt="xs">
+        <Group justify="space-between">
           {canClose ? (
             <Button variant="light" color="orange" onClick={closeModal.open}>
               Close voting now
@@ -210,7 +94,8 @@ export function CreatorControls({
           <Text size="sm">
             Results will be revealed using the {status.voted_count} vote
             {status.voted_count === 1 ? '' : 's'} cast so far.
-            {pending > 0 && ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
+            {pending > 0 &&
+              ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
           </Text>
           <Text size="sm" c="dimmed">
             This can't be undone — a poll can't be reopened once closed.

@@ -84,14 +84,24 @@ export function PollList() {
                 <Badge color={poll.results_available ? 'green' : 'blue'} variant="light">
                   {poll.results_available
                     ? 'Results ready'
-                    : `${poll.voted_count}/${poll.invited_count} voted`}
+                    : poll.mode === 'open'
+                      ? // No invite list, so no denominator to count towards.
+                        `${poll.voted_count} ${poll.voted_count === 1 ? 'response' : 'responses'}`
+                      : `${poll.voted_count}/${poll.invited_count} voted`}
                 </Badge>
+                {poll.mode === 'open' && (
+                  <Badge color="grape" variant="light">
+                    Open link
+                  </Badge>
+                )}
                 {poll.is_closed && (
                   <Badge color="gray" variant="light">
                     Closed
                   </Badge>
                 )}
-                {!poll.voted && !poll.results_available && !poll.is_closed && (
+                {/* `voted` is derived from the signed-in user's ballot, which
+                    open polls never have -- it would always read "pending". */}
+                {poll.mode === 'invite' && !poll.voted && !poll.results_available && !poll.is_closed && (
                   <Badge color="orange" variant="light">
                     Vote pending
                   </Badge>

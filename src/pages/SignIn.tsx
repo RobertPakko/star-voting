@@ -1,11 +1,14 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Button, Center, Paper, Stack, Text, TextInput, Title } from '@mantine/core'
 import { useAuth } from '../lib/auth'
+import { rememberDestination } from '../lib/shareLink'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function SignIn() {
   const { signInWithEmail } = useAuth()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -20,6 +23,8 @@ export function SignIn() {
     }
     setSending(true)
     try {
+      // Held across the magic-link round trip, which drops the hash route.
+      rememberDestination(location.pathname)
       await signInWithEmail(trimmed)
       setSent(true)
     } catch (err) {
