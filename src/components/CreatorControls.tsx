@@ -160,7 +160,9 @@ export function CreatorControls({
             </Group>
           ))}
 
-          {!status.is_closed && (
+          {/* Once results are out, adding a voter would let them vote knowing
+              the standings, so the database blocks it -- don't offer the field. */}
+          {!status.is_closed && !status.results_available && (
             <Group gap="xs" wrap="nowrap">
               <TextInput
                 placeholder="Invite another voter"
@@ -173,6 +175,13 @@ export function CreatorControls({
                 Add
               </Button>
             </Group>
+          )}
+
+          {status.results_available && !status.is_closed && (
+            <Text size="xs" c="dimmed">
+              The results are out, so no one else can be invited — a late voter would be voting
+              with the standings already known. Start a new poll to include more people.
+            </Text>
           )}
         </Stack>
 
