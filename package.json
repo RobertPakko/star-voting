@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "bash test/run.sh"
   },
   "dependencies": {
     "@mantine/core": "^9.5.1",

@@ -17,10 +17,11 @@ src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, Pub
 src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, …)
 src/lib/         supabase client, auth context, share-link and voter-key helpers, shared types
 supabase/migrations/  the schema, as ordered SQL files
+test/            tally tests, run against a throwaway Postgres
 ```
 
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
-`npm run lint` (oxlint), `npm run preview`.
+`npm run lint` (oxlint), `npm run preview`, `npm test` (see [Tests](#tests)).
 
 The app is served under `/star-voting/` (see `base` in `vite.config.ts`) and
 routes are hash-based, so it works as a GitHub Pages project site with no
@@ -79,7 +80,10 @@ merging it — check the Supabase dashboard afterwards to confirm the run
 succeeded.
 
 A migration that has already been applied is never re-run, so fixing a mistake
-means adding a new migration rather than editing the old file.
+means adding a new migration rather than editing the old file. Since merging one
+applies it to the live database, run `npm test` first — the suite builds a
+database from these files, so it catches a migration that does not apply as well
+as one that changes a result.
 
 ### Squashing
 
@@ -94,6 +98,65 @@ This replaces the existing files with one migration describing the current
 schema, and reconciles the linked project's migration history to match, so
 nothing is re-applied against the live database. Commit the result on its own,
 with no other changes in the same commit, so the replacement is easy to review.
+
+## Tests
+
+```bash
+npm test              # every case
+test/run.sh runoff    # only cases whose filename matches "runoff"
+```
+
+The election logic is the part of this app that can be wrong without looking
+wrong: a bad tie-break produces a plausible winner, not an error. It also lives
+almost entirely in Postgres, so that is where the tests are. `test/run.sh`
+builds a throwaway database from `supabase/migrations/`, runs everything in
+`test/sql/cases/`, and reports each assertion.
+
+Requirements are a Postgres server and a role that can create databases —
+`PGHOST`, `PGUSER` and friends are honoured, and with none set it falls back to
+a local cluster and starts one if it is not already running. There is no test
+framework and nothing to `npm install`. CI runs the same script against a
+`postgres` service container
+([`.github/workflows/test.yml`](.github/workflows/test.yml)).
+
+### How a case is written
+
+Cases seed through `create_poll()` and `submit_ballot()` rather than inserting
+rows, so they cannot construct a state the app itself could not produce, and
+each one rolls back at the end. A ballot set is a grid — one row per voter, one
+column per option:
+
+```sql
+v_poll := tests.seed_poll(
+  array['Apple', 'Banana'],
+  array[[5, 4],      -- this voter scored Apple 5 and Banana 4
+        [0, 1]]);
+```
+
+Assertions read the tally back **by option name**, never by id or by the
+runoff's `a`/`b` labels. Options that tie on points are ordered by id, which is
+the documented random tie-break, so those labels are not stable between runs.
+`tests.prefers(t, 'Apple')` and friends in `test/sql/helpers.sql` exist to keep
+cases off that ordering.
+
+Expected values are worked out from the STAR rules by hand and written down
+first — they are not copied back out of a passing run, which would only assert
+that the code still does whatever it currently does.
+
+### What it does and does not cover
+
+Covered: the score round, finalist selection, both score-round tie-break rules,
+the runoff and its tie-breaks, the genuine-tie result, the full ranking, and the
+`create_poll` / `submit_ballot` write path the seeding runs through.
+
+Not covered: RLS policies and the `auth.jwt()`-gated access rules. The shim in
+`test/sql/shim.sql` stands in for Supabase's `auth` schema with a one-row
+session table, which is enough to let the migrations apply and to sign a seeded
+voter in, but it is not Supabase's auth and a passing suite says nothing about
+who is allowed to read a poll. `run.sh` also drops three extensions a stock
+Postgres does not have and the `MAINTAIN` privilege, none of which the tally
+touches. Everything else is applied verbatim, so the functions under test are
+the ones that ship.
 
 ## Behaviour worth preserving
 
@@ -229,4 +292,5 @@ more voters head-to-head, then to the one given five stars on the most ballots,
 then randomly. A runoff tie goes to the higher total score, then to the
 five-star count, and if the options are level on all three the election has no
 winner — the app reports the tie rather than inventing a result. If you change a
-rule, change both the SQL and the About page; they are a pair.
+rule, change the SQL, the About page and the cases in `test/sql/cases/`
+together; they are a set.
