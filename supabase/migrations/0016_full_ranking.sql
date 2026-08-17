@@ -1,54 +1,861 @@
--- ---------------------------------------------------------------------------
--- Full ranking, by sequential elimination.
---
--- STAR names one winner. To order everything below it, run STAR again on
--- what is left: take the winner out, re-run score-then-runoff over the
--- remaining options for second place, and keep going. (Equal Vote's
--- multi-winner Bloc STAR fills seats the same way; this just continues to
--- the bottom of the list instead of stopping at the last seat.)
---
--- Scores are absolute sums, not transferable votes, so removing an option
--- never changes anyone else's total -- the score order is settled once and
--- never moves. Each round therefore collapses to a runoff between the two
--- highest-scoring options still standing, with the loser carried forward to
--- face the next one down. n options cost n-1 runoffs.
---
--- Two consequences the UI has to be honest about:
---   * The runner-up of the headline runoff is not necessarily second. It
---     still has to beat the third-highest scorer, and it can lose that.
---   * Pairwise preferences can cycle, so an option placed low may well beat
---     one placed above it head to head. This is an ordering produced by a
---     procedure, not a transitive ranking of preference.
---
--- Structurally: one round is lifted out of poll_tally into star_round, and
--- poll_tally now calls it once for the headline result -- byte-for-byte the
--- same fields as before -- and then in a loop to fill in the new `ranking`
--- key. Nothing else about the returned object changes, and neither
--- get_poll_results nor open_poll_results needs touching: both already
--- delegate here, so both gain the ranking.
--- ---------------------------------------------------------------------------
 
--- ---------------------------------------------------------------------------
--- star_round: one complete STAR round over an arbitrary pool of options.
---
--- This is the body that used to live inline in poll_tally, with two changes:
--- it works over the pool it is handed rather than every option in the poll,
--- and it returns only the round's own result -- finalists, the tie-breaks it
--- had to resolve, the runoff, the winner. Poll-level facts (voter counts,
--- mode, the score-round list) stay in poll_tally, which is the only caller.
---
--- It takes a poll id and performs no authorization of its own, exactly like
--- poll_tally, so EXECUTE is revoked from every client role at the bottom of
--- this file. It is reachable only from poll_tally, which is itself reachable
--- only through the two gated results functions.
--- ---------------------------------------------------------------------------
 
-create or replace function star_round(p_poll_id uuid, p_pool uuid[])
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+
+CREATE EXTENSION IF NOT EXISTS "pg_net" WITH SCHEMA "extensions";
+
+
+
+
+
+
+COMMENT ON SCHEMA "public" IS 'standard public schema';
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "supabase_vault" WITH SCHEMA "vault";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE OR REPLACE FUNCTION "public"."close_poll"("p_poll_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if not exists (select 1 from polls where id = p_poll_id and created_by = auth.uid()) then
+    raise exception 'Only the poll creator can close this poll';
+  end if;
+
+  if exists (select 1 from polls where id = p_poll_id and closed_at is not null) then
+    raise exception 'This poll is already closed';
+  end if;
+
+  update polls set closed_at = now() where id = p_poll_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."close_poll"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text" DEFAULT 'invite'::"text", "p_show_voters" boolean DEFAULT true) RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $_$
+declare
+  v_poll_id uuid;
+  v_token text;
+  v_opts text[];
+  v_mails text[];
+  v_bad text;
+  i int;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if p_mode is null or p_mode not in ('invite', 'open') then
+    raise exception 'Unknown poll mode';
+  end if;
+
+  if coalesce(trim(p_title), '') = '' then
+    raise exception 'Title is required';
+  end if;
+
+  -- Drop blanks but keep the author's ordering.
+  select array_agg(trim(o) order by ord)
+  into v_opts
+  from unnest(p_options) with ordinality as t(o, ord)
+  where trim(coalesce(o, '')) <> '';
+
+  if coalesce(array_length(v_opts, 1), 0) < 2 then
+    raise exception 'Add at least two options';
+  end if;
+
+  if p_mode = 'invite' then
+    -- Normalize and dedupe invitees the same way every lookup does.
+    select array_agg(distinct lower(trim(e)))
+    into v_mails
+    from unnest(p_emails) e
+    where trim(coalesce(e, '')) <> '';
+
+    if coalesce(array_length(v_mails, 1), 0) < 1 then
+      raise exception 'Invite at least one voter';
+    end if;
+
+    select m into v_bad
+    from unnest(v_mails) m
+    where m !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
+    limit 1;
+
+    if v_bad is not null then
+      raise exception '"%" is not a valid email address', v_bad;
+    end if;
+  else
+    -- 122 bits from a v4 UUID, hex digits only, so it needs no escaping in
+    -- a URL. gen_random_uuid() is core Postgres -- no extension involved.
+    v_token := replace(gen_random_uuid()::text, '-', '');
+  end if;
+
+  insert into polls (title, description, created_by, mode, show_voters, public_token)
+  values (
+    trim(p_title),
+    nullif(trim(coalesce(p_description, '')), ''),
+    auth.uid(),
+    p_mode,
+    coalesce(p_show_voters, true),
+    v_token
+  )
+  returning id into v_poll_id;
+
+  for i in 1 .. array_length(v_opts, 1) loop
+    insert into candidates (poll_id, name, sort_order) values (v_poll_id, v_opts[i], i - 1);
+  end loop;
+
+  if p_mode = 'invite' then
+    for i in 1 .. array_length(v_mails, 1) loop
+      insert into invited_voters (poll_id, email) values (v_poll_id, v_mails[i]);
+    end loop;
+  end if;
+
+  return v_poll_id;
+end;
+$_$;
+
+
+ALTER FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_email text := lower(auth.jwt() ->> 'email');
+  v_mode text;
+  v_invited int;
+  v_voted int;
+  v_closed boolean;
+begin
+  if not exists (
+    select 1 from polls p
+    where p.id = p_poll_id
+      and (
+        p.created_by = auth.uid()
+        or exists (select 1 from invited_voters iv where iv.poll_id = p.id and iv.email = v_email)
+      )
+  ) then
+    raise exception 'Poll not found';
+  end if;
+
+  select mode, closed_at is not null into v_mode, v_closed from polls where id = p_poll_id;
+  select count(*) into v_invited from invited_voters where poll_id = p_poll_id;
+  select count(*) into v_voted from ballots where poll_id = p_poll_id;
+
+  if v_voted = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  if v_mode = 'open' then
+    if not v_closed then
+      raise exception 'Results are not available until the poll is closed';
+    end if;
+  elsif not v_closed and (v_invited = 0 or v_voted < v_invited) then
+    raise exception 'Results are not available until everyone has voted';
+  end if;
+
+  return poll_tally(p_poll_id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."guard_invitee_changes"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll_id uuid;
+  v_invited int;
+  v_voted int;
+begin
+  if tg_op = 'DELETE' then
+    v_poll_id := old.poll_id;
+  else
+    v_poll_id := new.poll_id;
+  end if;
+
+  -- Parent poll already gone => cascade from deleting the poll itself.
+  if not exists (select 1 from polls where id = v_poll_id) then
+    if tg_op = 'DELETE' then return old; else return new; end if;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if exists (select 1 from polls where id = v_poll_id and mode <> 'invite') then
+      raise exception 'This poll is open to anyone with the link, so it has no invitee list';
+    end if;
+
+    if exists (select 1 from polls where id = v_poll_id and closed_at is not null) then
+      raise exception 'Cannot invite people to a poll that has been closed';
+    end if;
+
+    select count(*) into v_invited from invited_voters where poll_id = v_poll_id;
+    select count(*) into v_voted from ballots where poll_id = v_poll_id;
+
+    if v_invited > 0 and v_voted >= v_invited then
+      raise exception 'Cannot invite people once the results have been revealed';
+    end if;
+
+    return new;
+  end if;
+
+  if exists (
+    select 1
+    from ballots b
+    join auth.users u on u.id = b.voter_id
+    where b.poll_id = v_poll_id and lower(u.email) = old.email
+  ) then
+    raise exception 'Cannot remove someone who has already voted';
+  end if;
+
+  return old;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."guard_invitee_changes"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."guard_options_frozen"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll_id uuid;
+begin
+  if tg_op = 'DELETE' then
+    v_poll_id := old.poll_id;
+  else
+    v_poll_id := new.poll_id;
+  end if;
+
+  -- Parent poll already gone => this is a cascade from deleting the poll
+  -- itself, which is allowed.
+  if not exists (select 1 from polls where id = v_poll_id) then
+    if tg_op = 'DELETE' then return old; else return new; end if;
+  end if;
+
+  if exists (select 1 from ballots where poll_id = v_poll_id) then
+    raise exception 'Cannot change the options of a poll that already has votes';
+  end if;
+
+  if tg_op = 'DELETE' then return old; else return new; end if;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."guard_options_frozen"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."is_invited_to_poll"("p_poll_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select exists (
+    select 1 from invited_voters
+    where poll_id = p_poll_id and email = lower(auth.jwt() ->> 'email')
+  );
+$$;
+
+
+ALTER FUNCTION "public"."is_invited_to_poll"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."is_poll_creator"("p_poll_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select exists (
+    select 1 from polls where id = p_poll_id and created_by = auth.uid()
+  );
+$$;
+
+
+ALTER FUNCTION "public"."is_poll_creator"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."list_polls"() RETURNS TABLE("id" "uuid", "title" "text", "description" "text", "created_by" "uuid", "created_by_email" "text", "created_at" timestamp with time zone, "closed_at" timestamp with time zone, "mode" "text", "show_voters" boolean, "public_token" "text", "invited_count" integer, "voted_count" integer, "is_complete" boolean, "voted" boolean, "is_closed" boolean, "results_available" boolean)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  with visible as (
+    select p.*
+    from polls p
+    where p.created_by = auth.uid()
+       or exists (
+         select 1 from invited_voters iv
+         where iv.poll_id = p.id and iv.email = lower(auth.jwt() ->> 'email')
+       )
+  ), tallied as (
+    select
+      v.id as poll_id,
+      (select count(*)::int from invited_voters iv where iv.poll_id = v.id) as invited_count,
+      (select count(*)::int from ballots b where b.poll_id = v.id) as voted_count,
+      exists (select 1 from ballots b where b.poll_id = v.id and b.voter_id = auth.uid()) as voted
+    from visible v
+  )
+  select
+    v.id,
+    v.title,
+    v.description,
+    v.created_by,
+    v.created_by_email,
+    v.created_at,
+    v.closed_at,
+    v.mode,
+    v.show_voters,
+    v.public_token,
+    t.invited_count,
+    t.voted_count,
+    t.invited_count > 0 and t.voted_count >= t.invited_count,
+    t.voted,
+    v.closed_at is not null,
+    -- Open polls reveal only on close; invite polls keep the completion
+    -- rule as well.
+    t.voted_count > 0 and (
+      v.closed_at is not null
+      or (v.mode = 'invite' and t.invited_count > 0 and t.voted_count >= t.invited_count)
+    )
+  from visible v
+  join tallied t on t.poll_id = v.id
+  order by v.created_at desc;
+$$;
+
+
+ALTER FUNCTION "public"."list_polls"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."normalize_invited_email"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  new.email := lower(trim(new.email));
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."normalize_invited_email"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."open_poll_results"("p_token" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+  v_voted int;
+begin
+  select * into v_poll from polls
+  where public_token = p_token and mode = 'open';
+
+  if not found then
+    raise exception 'Poll not found';
+  end if;
+
+  -- Closed first: on a poll still taking votes that is the accurate answer,
+  -- and "no votes were cast" would be a confusing thing to say about a poll
+  -- people can still vote in.
+  if v_poll.closed_at is null then
+    raise exception 'Results are not available until the poll is closed';
+  end if;
+
+  select count(*) into v_voted from ballots where poll_id = v_poll.id;
+
+  if v_voted = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  return poll_tally(v_poll.id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_results"("p_token" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."open_poll_submit"("p_token" "text", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+  v_name text;
+  v_ballot_id uuid;
+  v_option_count int;
+  v_item jsonb;
+  v_candidate_id uuid;
+  v_score int;
+begin
+  select * into v_poll from polls
+  where public_token = p_token and mode = 'open';
+
+  if not found then
+    raise exception 'Poll not found';
+  end if;
+
+  if v_poll.closed_at is not null then
+    raise exception 'This poll has been closed and is no longer accepting votes';
+  end if;
+
+  if p_voter_key is null or trim(p_voter_key) = '' then
+    raise exception 'Missing voter key';
+  end if;
+
+  if v_poll.show_voters then
+    v_name := nullif(trim(coalesce(p_voter_name, '')), '');
+    if v_name is null then
+      raise exception 'Enter your name so the group can see who has voted';
+    end if;
+    if length(v_name) > 60 then
+      raise exception 'That name is too long';
+    end if;
+  else
+    -- A poll that hides respondents must not store one, whatever the client
+    -- sends.
+    v_name := null;
+  end if;
+
+  if exists (select 1 from ballots where poll_id = v_poll.id and voter_key = p_voter_key) then
+    raise exception 'You have already voted in this poll';
+  end if;
+
+  select count(*) into v_option_count from candidates where poll_id = v_poll.id;
+
+  if jsonb_array_length(p_scores) is distinct from v_option_count then
+    raise exception 'Must submit a score for every option';
+  end if;
+
+  begin
+    insert into ballots (poll_id, voter_id, voter_name, voter_key)
+    values (v_poll.id, null, v_name, p_voter_key)
+    returning id into v_ballot_id;
+  exception when unique_violation then
+    -- Either the name is taken, or this browser raced itself (double-click,
+    -- double-submit) past the voter_key check above.
+    if v_name is null then
+      raise exception 'You have already voted in this poll';
+    end if;
+    raise exception '"%" has already voted in this poll. Add a last initial if that is not you.', v_name;
+  end;
+
+  for v_item in select * from jsonb_array_elements(p_scores)
+  loop
+    v_candidate_id := (v_item ->> 'candidate_id')::uuid;
+    v_score := (v_item ->> 'score')::int;
+
+    if v_score < 0 or v_score > 5 then
+      raise exception 'Score must be between 0 and 5';
+    end if;
+
+    if not exists (select 1 from candidates where id = v_candidate_id and poll_id = v_poll.id) then
+      raise exception 'Invalid option for this poll';
+    end if;
+
+    insert into scores (ballot_id, candidate_id, score) values (v_ballot_id, v_candidate_id, v_score);
+  end loop;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_submit"("p_token" "text", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."open_poll_view"("p_token" "text", "p_voter_key" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+  v_voted int;
+  v_options jsonb;
+  v_voters jsonb;
+  v_your_name text;
+  v_voted_already boolean;
+begin
+  select * into v_poll from polls
+  where public_token = p_token and mode = 'open';
+
+  if not found then
+    raise exception 'Poll not found';
+  end if;
+
+  select count(*)::int into v_voted from ballots where poll_id = v_poll.id;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', c.id,
+    'poll_id', c.poll_id,
+    'name', c.name,
+    'description', c.description,
+    'sort_order', c.sort_order
+  ) order by c.sort_order, c.name), '[]'::jsonb)
+  into v_options
+  from candidates c where c.poll_id = v_poll.id;
+
+  -- Names are visible while voting is still open on purpose: knowing whose
+  -- vote is outstanding is the point of a named poll.
+  if v_poll.show_voters then
+    select coalesce(jsonb_agg(b.voter_name order by lower(b.voter_name)), '[]'::jsonb)
+    into v_voters
+    from ballots b
+    where b.poll_id = v_poll.id and b.voter_name is not null;
+  else
+    v_voters := null;
+  end if;
+
+  if p_voter_key is null or trim(p_voter_key) = '' then
+    v_voted_already := false;
+  else
+    select true, b.voter_name into v_voted_already, v_your_name
+    from ballots b
+    where b.poll_id = v_poll.id and b.voter_key = p_voter_key;
+    v_voted_already := coalesce(v_voted_already, false);
+  end if;
+
+  return jsonb_build_object(
+    'poll', jsonb_build_object(
+      'id', v_poll.id,
+      'title', v_poll.title,
+      'description', v_poll.description,
+      'mode', v_poll.mode,
+      'show_voters', v_poll.show_voters,
+      'closed_at', v_poll.closed_at
+    ),
+    'options', v_options,
+    'voted_count', v_voted,
+    'is_closed', v_poll.closed_at is not null,
+    -- Open polls reveal only on close, so early votes can never steer late
+    -- ones. This is the same promise the invite mode makes.
+    'results_available', v_voted > 0 and v_poll.closed_at is not null,
+    'voted', v_voted_already,
+    'your_name', v_your_name,
+    'voters', v_voters
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_view"("p_token" "text", "p_voter_key" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_invitees"("p_poll_id" "uuid") RETURNS TABLE("email" "text", "has_voted" boolean)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_email text := lower(auth.jwt() ->> 'email');
+  v_is_creator boolean;
+  v_is_invited boolean;
+  v_show boolean;
+  v_mode text;
+begin
+  select
+    p.created_by = auth.uid(),
+    p.show_voters,
+    p.mode
+  into v_is_creator, v_show, v_mode
+  from polls p where p.id = p_poll_id;
+
+  if not found then
+    raise exception 'Poll not found';
+  end if;
+
+  -- auth.uid() is null for an unauthenticated caller, which would make the
+  -- comparison above NULL and every `not v_is_creator` test below NULL --
+  -- i.e. not true, but not false either. EXECUTE is revoked from anon, so
+  -- this is belt and braces; it is also exactly the shape of mistake 0010
+  -- was written about.
+  v_is_creator := coalesce(v_is_creator, false);
+
+  select exists (
+    select 1 from invited_voters iv where iv.poll_id = p_poll_id and iv.email = v_email
+  ) into v_is_invited;
+
+  if not v_is_creator and not v_is_invited then
+    raise exception 'Poll not found';
+  end if;
+
+  if v_mode <> 'invite' then
+    raise exception 'This poll is open to anyone with the link, so it has no invitee list';
+  end if;
+
+  if not v_is_creator and not v_show then
+    raise exception 'This poll does not show who has responded';
+  end if;
+
+  return query
+  select
+    iv.email,
+    case when v_show then exists (
+      select 1 from ballots b
+      join auth.users u on u.id = b.voter_id
+      where b.poll_id = p_poll_id and lower(u.email) = iv.email
+    ) else null::boolean end
+  from invited_voters iv
+  where iv.poll_id = p_poll_id
+  order by iv.email;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_invitees"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_status"("p_poll_id" "uuid") RETURNS TABLE("invited_count" integer, "voted_count" integer, "is_complete" boolean, "voted" boolean, "is_closed" boolean, "results_available" boolean)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_email text := lower(auth.jwt() ->> 'email');
+  v_invited int;
+  v_voted int;
+  v_closed boolean;
+  v_mode text;
+begin
+  if not exists (
+    select 1 from polls p
+    where p.id = p_poll_id
+      and (
+        p.created_by = auth.uid()
+        or exists (select 1 from invited_voters iv where iv.poll_id = p.id and iv.email = v_email)
+      )
+  ) then
+    raise exception 'Poll not found';
+  end if;
+
+  select count(*)::int into v_invited from invited_voters where poll_id = p_poll_id;
+  select count(*)::int into v_voted from ballots where poll_id = p_poll_id;
+  select closed_at is not null, mode into v_closed, v_mode from polls where id = p_poll_id;
+
+  return query select
+    v_invited,
+    v_voted,
+    v_invited > 0 and v_voted >= v_invited,
+    exists (select 1 from ballots where poll_id = p_poll_id and voter_id = auth.uid()),
+    v_closed,
+    -- A closed poll with zero ballots has nothing to show.
+    v_voted > 0 and (
+      v_closed or (v_mode = 'invite' and v_invited > 0 and v_voted >= v_invited)
+    );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_status"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_tally"("p_poll_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_invited int;
+  v_voted int;
+  v_closed boolean;
+  v_mode text;
+  v_options jsonb;
+  v_pool uuid[];
+  v_head jsonb;
+  v_head_finalists uuid[];
+  v_round jsonb;
+  v_finalists uuid[];
+  v_winner uuid;
+  v_placed uuid[];
+  v_placed_json jsonb;
+  v_ranking jsonb := '[]'::jsonb;
+  v_place int := 1;
+begin
+  select count(*) into v_invited from invited_voters where poll_id = p_poll_id;
+  select count(*) into v_voted from ballots where poll_id = p_poll_id;
+  select closed_at is not null, mode into v_closed, v_mode from polls where id = p_poll_id;
+
+  if v_voted = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  -- Names and totals for the whole poll, for the score-round list and for
+  -- labelling ranking entries. star_round recomputes its own pool-scoped
+  -- copy; these two never disagree, since a total is a per-option sum that
+  -- no elimination can change.
+  drop table if exists _tally;
+  create temp table _tally on commit drop as
+  select
+    c.id as cid,
+    c.name,
+    coalesce(sum(s.score), 0)::int as total
+  from candidates c
+  left join scores s on s.candidate_id = c.id
+  where c.poll_id = p_poll_id
+  group by c.id, c.name;
+
+  select coalesce(array_agg(cid), '{}'::uuid[]) into v_pool from _tally;
+
+  v_head := star_round(p_poll_id, v_pool);
+
+  select coalesce(array_agg(x::uuid), '{}'::uuid[]) into v_head_finalists
+  from jsonb_array_elements_text(v_head->'finalists') x;
+
+  -- Order the score list so a tie-break winner sits above the option it
+  -- beat, rather than falling alphabetically below it.
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', cid,
+    'name', name,
+    'total_score', total,
+    'average_score', round(total::numeric / v_voted, 2)
+  ) order by total desc, (case when cid = any(v_head_finalists) then 0 else 1 end), name), '[]'::jsonb)
+  into v_options
+  from _tally;
+
+  v_round := v_head;
+
+  while coalesce(array_length(v_pool, 1), 0) > 0 loop
+    select coalesce(array_agg(x::uuid), '{}'::uuid[]) into v_finalists
+    from jsonb_array_elements_text(v_round->'finalists') x;
+
+    v_winner := (v_round->>'winner_id')::uuid;
+
+    if v_winner is null then
+      v_placed := v_finalists;
+    else
+      v_placed := array[v_winner];
+    end if;
+
+    -- Belt and braces: a round that places nobody would loop forever.
+    exit when coalesce(array_length(v_placed, 1), 0) = 0;
+
+    select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'total_score', total)
+                     order by total desc, name)
+    into v_placed_json
+    from _tally where cid = any(v_placed);
+
+    v_ranking := v_ranking || jsonb_build_array(jsonb_build_object(
+      'place', v_place,
+      'options', v_placed_json,
+      'finalists', v_round->'finalists',
+      'runoff', v_round->'runoff',
+      'tiebreaks', v_round->'tiebreaks'));
+
+    v_place := v_place + array_length(v_placed, 1);
+
+    select coalesce(array_agg(x), '{}'::uuid[]) into v_pool
+    from unnest(v_pool) x
+    where not (x = any(v_placed));
+
+    if coalesce(array_length(v_pool, 1), 0) > 0 then
+      v_round := star_round(p_poll_id, v_pool);
+    end if;
+  end loop;
+
+  return jsonb_build_object(
+    'options', v_options,
+    'finalists', case when jsonb_array_length(v_head->'finalists') = 2
+                      then v_head->'finalists'
+                      else '[]'::jsonb end,
+    'tie', jsonb_array_length(v_head->'tiebreaks') > 0,
+    'tiebreaks', v_head->'tiebreaks',
+    'runoff', v_head->'runoff',
+    'winner_id', v_head->'winner_id',
+    'ranking', v_ranking,
+    'voter_count', v_voted,
+    'invited_count', v_invited,
+    'mode', v_mode,
+    'closed_early', v_closed and v_voted < v_invited
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_tally"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."reset_poll"("p_poll_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if not exists (select 1 from polls where id = p_poll_id and created_by = auth.uid()) then
+    raise exception 'Only the poll creator can reset this poll';
+  end if;
+
+  -- scores cascade from ballots (0001), so this clears the whole tally.
+  -- It also frees the per-poll unique names and voter keys that open-poll
+  -- ballots hold, so the same people can vote again under the same names.
+  delete from ballots where poll_id = p_poll_id;
+
+  update polls set closed_at = null where id = p_poll_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."reset_poll"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."set_poll_creator_email"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  new.created_by_email := lower(auth.jwt() ->> 'email');
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."set_poll_creator_email"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."star_round"("p_poll_id" "uuid", "p_pool" "uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
 declare
   v_finalists uuid[] := '{}';
   v_pick uuid[];
@@ -240,153 +1047,674 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------------
--- poll_tally: unchanged output, plus `ranking`.
---
--- Round one is the poll's result and is reported exactly as before -- the
--- headline keys are read straight off it, including the quirk that
--- `finalists` is [] rather than a one-element array when the poll has a
--- single option. The loop then keeps calling star_round on the options that
--- have not been placed yet.
---
--- Each ranking entry places one option, except when a runoff ties on
--- preference and on total score alike: nothing in STAR separates those two,
--- so they share the place and the next number is skipped, the way 1-1-3
--- works in any standings table.
---
--- Tie-breaks stay split deliberately: the top-level `tiebreaks` is round
--- one's only, because that is what the results screen narrates about the
--- winner. Ties resolved further down the list belong to the ranking entry
--- they decided, and travel with it.
--- ---------------------------------------------------------------------------
 
-create or replace function poll_tally(p_poll_id uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
+ALTER FUNCTION "public"."star_round"("p_poll_id" "uuid", "p_pool" "uuid"[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."submit_ballot"("p_poll_id" "uuid", "p_scores" "jsonb") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
 declare
-  v_invited int;
-  v_voted int;
-  v_closed boolean;
-  v_mode text;
-  v_options jsonb;
-  v_pool uuid[];
-  v_head jsonb;
-  v_head_finalists uuid[];
-  v_round jsonb;
-  v_finalists uuid[];
-  v_winner uuid;
-  v_placed uuid[];
-  v_placed_json jsonb;
-  v_ranking jsonb := '[]'::jsonb;
-  v_place int := 1;
+  v_email text := lower(auth.jwt() ->> 'email');
+  v_ballot_id uuid;
+  v_candidate_count int;
+  v_item jsonb;
+  v_candidate_id uuid;
+  v_score int;
 begin
-  select count(*) into v_invited from invited_voters where poll_id = p_poll_id;
-  select count(*) into v_voted from ballots where poll_id = p_poll_id;
-  select closed_at is not null, mode into v_closed, v_mode from polls where id = p_poll_id;
-
-  if v_voted = 0 then
-    raise exception 'No votes were cast in this poll';
+  if v_email is null then
+    raise exception 'Not authenticated';
   end if;
 
-  -- Names and totals for the whole poll, for the score-round list and for
-  -- labelling ranking entries. star_round recomputes its own pool-scoped
-  -- copy; these two never disagree, since a total is a per-option sum that
-  -- no elimination can change.
-  drop table if exists _tally;
-  create temp table _tally on commit drop as
-  select
-    c.id as cid,
-    c.name,
-    coalesce(sum(s.score), 0)::int as total
-  from candidates c
-  left join scores s on s.candidate_id = c.id
-  where c.poll_id = p_poll_id
-  group by c.id, c.name;
+  if exists (select 1 from polls where id = p_poll_id and closed_at is not null) then
+    raise exception 'This poll has been closed and is no longer accepting votes';
+  end if;
 
-  select coalesce(array_agg(cid), '{}'::uuid[]) into v_pool from _tally;
+  if not exists (
+    select 1 from invited_voters where poll_id = p_poll_id and email = v_email
+  ) then
+    raise exception 'You are not invited to this poll';
+  end if;
 
-  v_head := star_round(p_poll_id, v_pool);
+  if exists (
+    select 1 from ballots where poll_id = p_poll_id and voter_id = auth.uid()
+  ) then
+    raise exception 'You have already voted in this poll';
+  end if;
 
-  select coalesce(array_agg(x::uuid), '{}'::uuid[]) into v_head_finalists
-  from jsonb_array_elements_text(v_head->'finalists') x;
+  select count(*) into v_candidate_count from candidates where poll_id = p_poll_id;
 
-  -- Order the score list so a tie-break winner sits above the option it
-  -- beat, rather than falling alphabetically below it.
-  select coalesce(jsonb_agg(jsonb_build_object(
-    'id', cid,
-    'name', name,
-    'total_score', total,
-    'average_score', round(total::numeric / v_voted, 2)
-  ) order by total desc, (case when cid = any(v_head_finalists) then 0 else 1 end), name), '[]'::jsonb)
-  into v_options
-  from _tally;
+  if jsonb_array_length(p_scores) is distinct from v_candidate_count then
+    raise exception 'Must submit a score for every option';
+  end if;
 
-  v_round := v_head;
+  insert into ballots (poll_id, voter_id) values (p_poll_id, auth.uid())
+  returning id into v_ballot_id;
 
-  while coalesce(array_length(v_pool, 1), 0) > 0 loop
-    select coalesce(array_agg(x::uuid), '{}'::uuid[]) into v_finalists
-    from jsonb_array_elements_text(v_round->'finalists') x;
+  for v_item in select * from jsonb_array_elements(p_scores)
+  loop
+    v_candidate_id := (v_item ->> 'candidate_id')::uuid;
+    v_score := (v_item ->> 'score')::int;
 
-    v_winner := (v_round->>'winner_id')::uuid;
-
-    if v_winner is null then
-      v_placed := v_finalists;
-    else
-      v_placed := array[v_winner];
+    if v_score < 0 or v_score > 5 then
+      raise exception 'Score must be between 0 and 5';
     end if;
 
-    -- Belt and braces: a round that places nobody would loop forever.
-    exit when coalesce(array_length(v_placed, 1), 0) = 0;
-
-    select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'total_score', total)
-                     order by total desc, name)
-    into v_placed_json
-    from _tally where cid = any(v_placed);
-
-    v_ranking := v_ranking || jsonb_build_array(jsonb_build_object(
-      'place', v_place,
-      'options', v_placed_json,
-      'finalists', v_round->'finalists',
-      'runoff', v_round->'runoff',
-      'tiebreaks', v_round->'tiebreaks'));
-
-    v_place := v_place + array_length(v_placed, 1);
-
-    select coalesce(array_agg(x), '{}'::uuid[]) into v_pool
-    from unnest(v_pool) x
-    where not (x = any(v_placed));
-
-    if coalesce(array_length(v_pool, 1), 0) > 0 then
-      v_round := star_round(p_poll_id, v_pool);
+    if not exists (select 1 from candidates where id = v_candidate_id and poll_id = p_poll_id) then
+      raise exception 'Invalid option for this poll';
     end if;
+
+    insert into scores (ballot_id, candidate_id, score) values (v_ballot_id, v_candidate_id, v_score);
   end loop;
-
-  return jsonb_build_object(
-    'options', v_options,
-    'finalists', case when jsonb_array_length(v_head->'finalists') = 2
-                      then v_head->'finalists'
-                      else '[]'::jsonb end,
-    'tie', jsonb_array_length(v_head->'tiebreaks') > 0,
-    'tiebreaks', v_head->'tiebreaks',
-    'runoff', v_head->'runoff',
-    'winner_id', v_head->'winner_id',
-    'ranking', v_ranking,
-    'voter_count', v_voted,
-    'invited_count', v_invited,
-    'mode', v_mode,
-    'closed_early', v_closed and v_voted < v_invited
-  );
 end;
 $$;
 
--- star_round authorizes nothing, so no client role may call it. Postgres
--- grants EXECUTE to PUBLIC on new functions, so this revoke is what makes
--- that true rather than merely intended (0010).
-revoke execute on function star_round(uuid, uuid[]) from public, anon, authenticated;
 
--- poll_tally keeps its own revoke from 0013: CREATE OR REPLACE leaves
--- privileges alone. Restated here so the end state is readable in one place.
-revoke execute on function poll_tally(uuid) from public, anon, authenticated;
+ALTER FUNCTION "public"."submit_ballot"("p_poll_id" "uuid", "p_scores" "jsonb") OWNER TO "postgres";
+
+SET default_tablespace = '';
+
+SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."ballots" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "poll_id" "uuid" NOT NULL,
+    "voter_id" "uuid",
+    "submitted_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "voter_name" "text",
+    "voter_key" "text"
+);
+
+
+ALTER TABLE "public"."ballots" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."candidates" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "poll_id" "uuid" NOT NULL,
+    "name" "text" NOT NULL,
+    "description" "text",
+    "sort_order" integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE "public"."candidates" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."invited_voters" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "poll_id" "uuid" NOT NULL,
+    "email" "text" NOT NULL
+);
+
+
+ALTER TABLE "public"."invited_voters" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."polls" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "created_by" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_by_email" "text" DEFAULT "lower"(("auth"."jwt"() ->> 'email'::"text")) NOT NULL,
+    "closed_at" timestamp with time zone,
+    "mode" "text" DEFAULT 'invite'::"text" NOT NULL,
+    "show_voters" boolean DEFAULT true NOT NULL,
+    "public_token" "text",
+    CONSTRAINT "polls_mode_ck" CHECK (("mode" = ANY (ARRAY['invite'::"text", 'open'::"text"]))),
+    CONSTRAINT "polls_public_token_ck" CHECK ((("mode" = 'open'::"text") = ("public_token" IS NOT NULL)))
+);
+
+
+ALTER TABLE "public"."polls" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."scores" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "ballot_id" "uuid" NOT NULL,
+    "candidate_id" "uuid" NOT NULL,
+    "score" smallint NOT NULL,
+    CONSTRAINT "scores_score_check" CHECK ((("score" >= 0) AND ("score" <= 5)))
+);
+
+
+ALTER TABLE "public"."scores" OWNER TO "postgres";
+
+
+ALTER TABLE ONLY "public"."ballots"
+    ADD CONSTRAINT "ballots_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."ballots"
+    ADD CONSTRAINT "ballots_poll_id_voter_id_key" UNIQUE ("poll_id", "voter_id");
+
+
+
+ALTER TABLE ONLY "public"."candidates"
+    ADD CONSTRAINT "candidates_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."invited_voters"
+    ADD CONSTRAINT "invited_voters_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."invited_voters"
+    ADD CONSTRAINT "invited_voters_poll_id_email_key" UNIQUE ("poll_id", "email");
+
+
+
+ALTER TABLE ONLY "public"."polls"
+    ADD CONSTRAINT "polls_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."scores"
+    ADD CONSTRAINT "scores_ballot_id_candidate_id_key" UNIQUE ("ballot_id", "candidate_id");
+
+
+
+ALTER TABLE ONLY "public"."scores"
+    ADD CONSTRAINT "scores_pkey" PRIMARY KEY ("id");
+
+
+
+CREATE INDEX "idx_ballots_poll_id" ON "public"."ballots" USING "btree" ("poll_id");
+
+
+
+CREATE INDEX "idx_candidates_poll_id" ON "public"."candidates" USING "btree" ("poll_id");
+
+
+
+CREATE INDEX "idx_invited_voters_email" ON "public"."invited_voters" USING "btree" ("email");
+
+
+
+CREATE INDEX "idx_invited_voters_poll_id" ON "public"."invited_voters" USING "btree" ("poll_id");
+
+
+
+CREATE INDEX "idx_scores_ballot_id" ON "public"."scores" USING "btree" ("ballot_id");
+
+
+
+CREATE INDEX "idx_scores_candidate_id" ON "public"."scores" USING "btree" ("candidate_id");
+
+
+
+CREATE UNIQUE INDEX "uq_ballots_poll_voter_key" ON "public"."ballots" USING "btree" ("poll_id", "voter_key") WHERE ("voter_key" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "uq_ballots_poll_voter_name" ON "public"."ballots" USING "btree" ("poll_id", "lower"("voter_name")) WHERE ("voter_name" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "uq_polls_public_token" ON "public"."polls" USING "btree" ("public_token");
+
+
+
+CREATE OR REPLACE TRIGGER "trg_guard_invitee_changes" BEFORE INSERT OR DELETE ON "public"."invited_voters" FOR EACH ROW EXECUTE FUNCTION "public"."guard_invitee_changes"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_guard_options_frozen" BEFORE INSERT OR DELETE ON "public"."candidates" FOR EACH ROW EXECUTE FUNCTION "public"."guard_options_frozen"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_normalize_invited_email" BEFORE INSERT OR UPDATE ON "public"."invited_voters" FOR EACH ROW EXECUTE FUNCTION "public"."normalize_invited_email"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_set_poll_creator_email" BEFORE INSERT ON "public"."polls" FOR EACH ROW EXECUTE FUNCTION "public"."set_poll_creator_email"();
+
+
+
+ALTER TABLE ONLY "public"."ballots"
+    ADD CONSTRAINT "ballots_poll_id_fkey" FOREIGN KEY ("poll_id") REFERENCES "public"."polls"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."ballots"
+    ADD CONSTRAINT "ballots_voter_id_fkey" FOREIGN KEY ("voter_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."candidates"
+    ADD CONSTRAINT "candidates_poll_id_fkey" FOREIGN KEY ("poll_id") REFERENCES "public"."polls"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."invited_voters"
+    ADD CONSTRAINT "invited_voters_poll_id_fkey" FOREIGN KEY ("poll_id") REFERENCES "public"."polls"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."polls"
+    ADD CONSTRAINT "polls_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."scores"
+    ADD CONSTRAINT "scores_ballot_id_fkey" FOREIGN KEY ("ballot_id") REFERENCES "public"."ballots"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."scores"
+    ADD CONSTRAINT "scores_candidate_id_fkey" FOREIGN KEY ("candidate_id") REFERENCES "public"."candidates"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE "public"."ballots" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "ballots_select_own" ON "public"."ballots" FOR SELECT USING (("voter_id" = "auth"."uid"()));
+
+
+
+ALTER TABLE "public"."candidates" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "candidates_delete" ON "public"."candidates" FOR DELETE USING ("public"."is_poll_creator"("poll_id"));
+
+
+
+CREATE POLICY "candidates_insert" ON "public"."candidates" FOR INSERT WITH CHECK ("public"."is_poll_creator"("poll_id"));
+
+
+
+CREATE POLICY "candidates_select" ON "public"."candidates" FOR SELECT USING (("public"."is_poll_creator"("poll_id") OR "public"."is_invited_to_poll"("poll_id")));
+
+
+
+ALTER TABLE "public"."invited_voters" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "invited_voters_delete" ON "public"."invited_voters" FOR DELETE USING ("public"."is_poll_creator"("poll_id"));
+
+
+
+CREATE POLICY "invited_voters_insert" ON "public"."invited_voters" FOR INSERT WITH CHECK ("public"."is_poll_creator"("poll_id"));
+
+
+
+CREATE POLICY "invited_voters_select" ON "public"."invited_voters" FOR SELECT USING ((("email" = "lower"(("auth"."jwt"() ->> 'email'::"text"))) OR "public"."is_poll_creator"("poll_id")));
+
+
+
+ALTER TABLE "public"."polls" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "polls_delete" ON "public"."polls" FOR DELETE USING (("created_by" = "auth"."uid"()));
+
+
+
+CREATE POLICY "polls_insert" ON "public"."polls" FOR INSERT WITH CHECK (("created_by" = "auth"."uid"()));
+
+
+
+CREATE POLICY "polls_select" ON "public"."polls" FOR SELECT USING ((("created_by" = "auth"."uid"()) OR "public"."is_invited_to_poll"("id")));
+
+
+
+ALTER TABLE "public"."scores" ENABLE ROW LEVEL SECURITY;
+
+
+
+
+ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
+
+
+
+
+
+GRANT USAGE ON SCHEMA "public" TO "postgres";
+GRANT USAGE ON SCHEMA "public" TO "anon";
+GRANT USAGE ON SCHEMA "public" TO "authenticated";
+GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+REVOKE ALL ON FUNCTION "public"."close_poll"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."close_poll"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."is_invited_to_poll"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."is_invited_to_poll"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."is_poll_creator"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."is_poll_creator"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."list_polls"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."list_polls"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_results"("p_token" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_results"("p_token" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_results"("p_token" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_submit"("p_token" "text", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_submit"("p_token" "text", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_submit"("p_token" "text", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_view"("p_token" "text", "p_voter_key" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_view"("p_token" "text", "p_voter_key" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_view"("p_token" "text", "p_voter_key" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_invitees"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."poll_invitees"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_status"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."poll_status"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_tally"("p_poll_id" "uuid") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."reset_poll"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."reset_poll"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."star_round"("p_poll_id" "uuid", "p_pool" "uuid"[]) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."submit_ballot"("p_poll_id" "uuid", "p_scores" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."submit_ballot"("p_poll_id" "uuid", "p_scores" "jsonb") TO "authenticated";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."ballots" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."ballots" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."ballots" TO "service_role";
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."candidates" TO "anon";
+GRANT SELECT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."candidates" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."candidates" TO "service_role";
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."invited_voters" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."invited_voters" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."invited_voters" TO "service_role";
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."polls" TO "anon";
+GRANT SELECT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."polls" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."polls" TO "service_role";
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."scores" TO "anon";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."scores" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."scores" TO "service_role";
+
+
+
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT UPDATE ON SEQUENCES TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT UPDATE ON SEQUENCES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT UPDATE ON SEQUENCES TO "service_role";
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLES TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLES TO "service_role";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--
+-- Dumped schema changes for auth and storage
+--
+
