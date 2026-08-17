@@ -54,8 +54,8 @@ Two things this makes visible, and the modal says so:
 
 ### 1. Supabase
 
-1. Create a project at [supabase.com](https://supabase.com). Recommended project-creation settings: **Enable Data API** on, **Automatically expose new tables** off (the migration below grants API access to exactly the tables/roles it needs, so this isn't required), **Enable automatic RLS** on (safety net for any table added later outside the migration).
-2. In the SQL Editor, run every file in [`supabase/migrations/`](supabase/migrations) in filename order, starting with `0001_init.sql`. Together they create the tables, row-level security policies, table-level API grants, and the functions the app relies on. Each later migration builds on the ones before it, so the order matters. No dashboard settings need changing for open polls — the `anon` role's access is granted entirely by the migrations, and is limited to the three `open_poll_*` functions.
+1. Create a project at [supabase.com](https://supabase.com). Recommended project-creation settings: **Enable Data API** on, **Automatically expose new tables** off (the migrations grant API access to exactly the tables/roles they need, so this isn't required), **Enable automatic RLS** on (safety net for any table added later outside the migrations).
+2. Connect the project to this repo under **Project Settings → Integrations → GitHub**, with `main` as the production branch. The migrations in [`supabase/migrations/`](supabase/migrations) are then applied for you — see [Database migrations](#database-migrations) below. Nothing needs pasting into the SQL Editor. No dashboard settings need changing for open polls either — the `anon` role's access is granted entirely by the migrations, and is limited to the three `open_poll_*` functions.
 3. Under **Project Settings → API**, copy the Project URL and `anon` public key.
 4. The **Email** auth provider (magic link) is enabled by default — no extra provider setup needed.
 5. Under **Authentication → URL Configuration**, set the Site URL and add your dev URL (`http://localhost:5173`) and your GitHub Pages URL (`https://<your-username>.github.io/star-voting/`) to the allowed redirect URLs, or magic links won't be able to redirect back to the app.
@@ -76,3 +76,19 @@ npm run dev
 3. Push to `main` — the [`deploy` workflow](.github/workflows/deploy.yml) builds and publishes automatically.
 
 The app is served under `/star-voting/` (see `base` in `vite.config.ts`) and uses hash-based routing, so it works as a GitHub Pages project site without extra SPA-fallback configuration.
+
+## Database migrations
+
+Schema changes live as SQL files in [`supabase/migrations/`](supabase/migrations), named so they sort in the order they must run. They are **not** run by hand: Supabase's GitHub integration watches this repo, and any new migration file that lands on `main` is applied to the project automatically. Adding a schema change means committing the file and merging it — check the Supabase dashboard afterwards to confirm the run succeeded.
+
+A migration that has already been applied is never re-run, so fixing a mistake means adding a new migration rather than editing the old file.
+
+### Squashing
+
+Migration files accumulate, and a long chain of them gets slow to run and hard to read. Occasionally collapse the whole history into a single baseline file:
+
+```bash
+npx supabase migration squash --linked
+```
+
+This replaces the existing files with one migration describing the current schema, and reconciles the linked project's migration history to match, so nothing is re-applied against the live database. Commit the result on its own, with no other changes in the same commit, so the replacement is easy to review.
