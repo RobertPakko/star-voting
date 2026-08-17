@@ -125,7 +125,8 @@ export function CreatorControls({
               ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
           </Text>
           <Text size="sm" c="dimmed">
-            This can't be undone — a poll can't be reopened once closed.
+            Closing can't be undone. The only way to reopen the poll is Reset votes, which deletes
+            every vote first — so a closed poll can never go back to collecting more.
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal.close}>

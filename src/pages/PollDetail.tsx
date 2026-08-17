@@ -31,6 +31,11 @@ export function PollDetail() {
   const [status, setStatus] = useState<PollStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Bumped only by creator actions, and used as OpenPollPanel's key so it
+  // remounts. The panel keeps its own copy of the poll (it reads through the
+  // token RPCs, not poll_status), so reloading this page alone would leave
+  // it rendering pre-close or pre-reset state.
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const load = useCallback(async () => {
     if (!pollId) return
@@ -55,6 +60,14 @@ export function PollDetail() {
   }, [pollId])
 
   useEffect(() => {
+    load()
+  }, [load])
+
+  // Close and reset change what the open-poll panel should be rendering, so
+  // they refresh both. A vote doesn't: the panel has already refreshed
+  // itself by then, and bumping the key would just refetch it twice.
+  const reloadAll = useCallback(() => {
+    setRefreshKey((k) => k + 1)
     load()
   }, [load])
 
@@ -100,7 +113,10 @@ export function PollDetail() {
           uses, so the creator votes in their own poll exactly as everyone
           else does -- one code path, one set of rules. */}
       {isOpen ? (
-        <OpenPollPanel token={poll.public_token!} onChange={load} />
+        // Remounting on refreshKey is the whole refresh mechanism -- see
+        // where it's declared. Closing or resetting invalidates any ballot
+        // half-filled in the panel anyway, so losing that state is correct.
+        <OpenPollPanel key={refreshKey} token={poll.public_token!} onChange={load} />
       ) : status.results_available ? (
         <Results source={{ kind: 'poll', pollId: poll.id }} />
       ) : status.is_closed ? (
@@ -113,11 +129,13 @@ export function PollDetail() {
         <VoteForm pollId={poll.id} options={options} />
       )}
 
-      {!isOpen && <Respondents pollId={poll.id} isCreator={isCreator} status={status} onChange={load} />}
+      {!isOpen && (
+        <Respondents pollId={poll.id} isCreator={isCreator} status={status} onChange={reloadAll} />
+      )}
 
       {isCreator && <ShareLink poll={poll} />}
 
-      {isCreator && <CreatorControls pollId={poll.id} status={status} onChange={load} />}
+      {isCreator && <CreatorControls pollId={poll.id} status={status} onChange={reloadAll} />}
     </Stack>
   )
 }
