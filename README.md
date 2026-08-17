@@ -39,6 +39,17 @@ The creator gets these on the poll page:
 
 Reset and delete both confirm first.
 
+## Reading results
+
+Results show the winner, every option's score-round total, any tie-break that had to be resolved, and the automatic runoff between the two finalists.
+
+**See the full ranking** (on polls with more than two options) opens the whole field in placed order. STAR itself only names a winner, so the rest comes from running the method again on the options left standing: the winner steps out, the two highest scorers remaining go to a runoff for the next place, and so on down the list. Scores are absolute sums rather than transferable votes, so eliminating an option never changes anyone else's total — the score order is fixed, and each round is just the next runoff down it.
+
+Two things this makes visible, and the modal says so:
+
+- **The runner-up of the headline runoff is often not second.** It still has to beat the third-highest scorer, and it can lose that. An option can lead on points and place third.
+- **Most pairs of options never meet.** Ordering n options takes n−1 runoffs, out of n(n−1)/2 possible pairings — a ladder, not a round-robin. Where two options did face each other the loser is always placed below the winner, but that guarantee covers only those pairs. Elsewhere an option can be preferred to one placed above it, and it takes no Condorcet cycle for that to happen: an option scoring too low to reach the first runoff enters the ladder below options it would have beaten. Only first place is STAR's official result.
+
 ## One-time setup
 
 ### 1. Supabase

@@ -104,20 +104,42 @@ export interface Tiebreak {
   advanced: { id: string; name: string }[]
 }
 
+/** A runoff between two finalists. 'a' is the higher scorer of the pair. */
+export interface Runoff {
+  prefers_a: number
+  prefers_b: number
+  ties: number
+  /** 'higher_score' means the runoff tied and STAR's score rule decided it. */
+  resolved_by: 'preference' | 'higher_score' | 'unresolved'
+}
+
+/**
+ * One place in the full ranking, which STAR produces by sequential
+ * elimination: the winner steps out and the method runs again on what is
+ * left. Only place 1 is STAR's official result.
+ */
+export interface RankingEntry {
+  place: number
+  /** Normally one option; two when a runoff tied on preference and score alike. */
+  options: { id: string; name: string; total_score: number }[]
+  /** The pair that contested this place -- one id when nothing else was left. */
+  finalists: string[]
+  /** null for the last option standing, which had nobody to run off against. */
+  runoff: Runoff | null
+  /** Ties resolved while choosing this place's finalists, not earlier ones. */
+  tiebreaks: Tiebreak[]
+}
+
 export interface PollResults {
   options: ResultOption[]
   finalists: string[]
   /** Whether any tie-break was needed at all. */
   tie: boolean
   tiebreaks: Tiebreak[]
-  runoff: {
-    prefers_a: number
-    prefers_b: number
-    ties: number
-    /** 'higher_score' means the runoff tied and STAR's score rule decided it. */
-    resolved_by: 'preference' | 'higher_score' | 'unresolved'
-  } | null
+  runoff: Runoff | null
   winner_id: string | null
+  /** Every option in placed order, first to last. */
+  ranking: RankingEntry[]
   voter_count: number
   /** Always 0 for open polls — there is no invite list. */
   invited_count: number

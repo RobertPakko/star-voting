@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Badge, Card, Center, Group, Loader, Progress, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import type { PollResults } from '../lib/types'
+import { FullRanking } from './FullRanking'
 
 /**
  * Which tally endpoint to read. Both return the same shape — the split is
@@ -190,6 +191,8 @@ export function Results({ source }: { source: ResultsSource }) {
           )}
         </Stack>
       )}
+
+      <FullRanking results={results} />
     </Stack>
   )
 }

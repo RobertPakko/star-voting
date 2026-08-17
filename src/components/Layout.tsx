@@ -1,6 +1,7 @@
 import { AppShell, Button, Group, Text, Title } from '@mantine/core'
 import { Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { ThemeToggle } from './ThemeToggle'
 
 export function Layout() {
   const { session, signOut } = useAuth()
@@ -18,6 +19,7 @@ export function Layout() {
             <Text size="sm" c="dimmed" visibleFrom="sm" truncate maw={240}>
               {session?.user.email}
             </Text>
+            <ThemeToggle />
             <Button variant="subtle" size="sm" onClick={() => signOut()}>
               Sign out
             </Button>

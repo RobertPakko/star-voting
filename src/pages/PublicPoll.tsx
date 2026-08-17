@@ -4,6 +4,7 @@ import { Badge, Center, Container, Group, Loader, Stack, Text, Title } from '@ma
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { OpenPollPanel } from '../components/OpenPollPanel'
+import { ThemeToggle } from '../components/ThemeToggle'
 import type { OpenPollView } from '../lib/types'
 
 /**
@@ -59,9 +60,12 @@ export function PublicPoll() {
     <Container size="sm" py="xl">
       <Stack gap="lg">
         <Stack gap={4}>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-            STAR Voting
-          </Text>
+          <Group justify="space-between" wrap="nowrap">
+            <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
+              STAR Voting
+            </Text>
+            <ThemeToggle />
+          </Group>
           <Group gap="xs">
             <Title order={2}>{view.poll.title}</Title>
             {view.is_closed && (
