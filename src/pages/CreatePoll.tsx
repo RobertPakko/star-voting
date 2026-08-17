@@ -1,11 +1,13 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
   Alert,
   Button,
+  Center,
   Checkbox,
   Group,
+  Loader,
   SegmentedControl,
   Stack,
   Switch,
@@ -18,13 +20,16 @@ import {
 import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
-import type { PollMode } from '../lib/types'
+import type { Invitee, Poll, PollMode, PollOption } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function CreatePoll() {
   const { session } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const duplicateOf = searchParams.get('from')
+
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [options, setOptions] = useState(['', ''])
@@ -34,9 +39,64 @@ export function CreatePoll() {
   const [includeSelf, setIncludeSelf] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Only ever true on a duplicate; a blank new poll renders immediately.
+  const [prefilling, setPrefilling] = useState(Boolean(duplicateOf))
 
   const myEmail = session?.user.email?.toLowerCase() ?? ''
   const isOpen = mode === 'open'
+
+  // Duplicating copies the source poll's settings into the form and stops
+  // there -- nothing is created until the user submits, so the copy can be
+  // edited first. Read through the same RLS and RPCs as everywhere else, so
+  // it can only ever duplicate a poll the user can already see.
+  useEffect(() => {
+    if (!duplicateOf) return
+    let cancelled = false
+
+    async function prefill(sourceId: string) {
+      const [pollRes, optionsRes] = await Promise.all([
+        supabase.from('polls').select('*').eq('id', sourceId).single(),
+        supabase.from('candidates').select('*').eq('poll_id', sourceId).order('sort_order'),
+      ])
+      if (cancelled) return
+
+      if (pollRes.error) {
+        setError(`Couldn't load the poll to duplicate: ${pollRes.error.message}`)
+        setPrefilling(false)
+        return
+      }
+
+      const source = pollRes.data as Poll
+      setTitle(source.title)
+      setDescription(source.description ?? '')
+      setMode(source.mode)
+      setShowVoters(source.show_voters)
+
+      const sourceOptions = ((optionsRes.data as PollOption[]) ?? []).map((o) => o.name)
+      // Keep the form's two-row minimum if the source somehow had fewer.
+      setOptions(sourceOptions.length >= 2 ? sourceOptions : [...sourceOptions, '', ''].slice(0, 2))
+
+      if (source.mode === 'invite') {
+        // Open polls have no invitee list and poll_invitees raises on them.
+        const { data: inviteeData } = await supabase.rpc('poll_invitees', {
+          p_poll_id: sourceId,
+        })
+        if (cancelled) return
+        const allEmails = ((inviteeData as Invitee[]) ?? []).map((i) => i.email)
+        // The creator's own address is driven by the checkbox, not the tag
+        // list, so it would otherwise show up twice.
+        setIncludeSelf(allEmails.includes(myEmail))
+        setEmails(allEmails.filter((e) => e !== myEmail))
+      }
+
+      setPrefilling(false)
+    }
+
+    prefill(duplicateOf)
+    return () => {
+      cancelled = true
+    }
+  }, [duplicateOf, myEmail])
 
   function updateOption(index: number, value: string) {
     setOptions((prev) => prev.map((c, i) => (i === index ? value : c)))
@@ -99,9 +159,25 @@ export function CreatePoll() {
     navigate(`/polls/${data as string}`)
   }
 
+  if (prefilling) {
+    return (
+      <Center py="xl">
+        <Loader />
+      </Center>
+    )
+  }
+
   return (
     <Stack maw={560} mx="auto" gap="md">
-      <Title order={2}>New poll</Title>
+      <Stack gap={4}>
+        <Title order={2}>{duplicateOf ? 'Duplicate poll' : 'New poll'}</Title>
+        {duplicateOf && (
+          <Text size="sm" c="dimmed">
+            Prefilled from the original. Change anything you like — nothing is created until you
+            hit Create poll, and the original is left untouched.
+          </Text>
+        )}
+      </Stack>
 
       <TextInput
         label="Title"
@@ -218,7 +294,7 @@ export function CreatePoll() {
 
       <Group justify="flex-end">
         <Button onClick={handleSubmit} loading={submitting}>
-          Create poll
+          {duplicateOf ? 'Create copy' : 'Create poll'}
         </Button>
       </Group>
     </Stack>

@@ -28,6 +28,17 @@ Results stay hidden until they unlock, in both modes, so nobody ever votes knowi
 
 This controls *who responded*, never *how they voted*. Individual scores are never readable through the API in either setting; results are only ever returned as an aggregate tally.
 
+## Managing a poll
+
+The creator gets these on the poll page:
+
+- **Close voting now** — reveals results using the votes cast so far. One-way.
+- **Duplicate** — opens the create form prefilled from this poll (options, invitees, both settings). Nothing is created until you submit, so the copy can be edited first, and the original is untouched.
+- **Reset votes** — deletes every vote and reopens the poll, keeping its id, options, invitee list and share link. Anyone who already voted can vote again, and they aren't told the poll was reset.
+- **Delete poll** — removes the poll and every vote cast, permanently.
+
+Reset and delete both confirm first.
+
 ## One-time setup
 
 ### 1. Supabase
