@@ -1,4 +1,4 @@
-import { AppShell, Button, Group, Text, Title } from '@mantine/core'
+import { Anchor, AppShell, Button, Group, Text, Title } from '@mantine/core'
 import { Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { ThemeToggle } from './ThemeToggle'
@@ -19,6 +19,12 @@ export function Layout() {
             <Text size="sm" c="dimmed" visibleFrom="sm" truncate maw={240}>
               {session?.user.email}
             </Text>
+            {/* A plain link rather than a button: it's navigation, not an
+                action, and the header has to hold the title without wrapping
+                at 375px wide. */}
+            <Anchor component={Link} to="/about" size="sm" style={{ whiteSpace: 'nowrap' }}>
+              About
+            </Anchor>
             <ThemeToggle />
             <Button variant="subtle" size="sm" onClick={() => signOut()}>
               Sign out

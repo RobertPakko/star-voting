@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Badge, Center, Container, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Link, useParams } from 'react-router-dom'
+import { Anchor, Badge, Center, Container, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { OpenPollPanel } from '../components/OpenPollPanel'
@@ -64,7 +64,14 @@ export function PublicPoll() {
             <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
               STAR Voting
             </Text>
-            <ThemeToggle />
+            <Group gap="xs" wrap="nowrap">
+              {/* No account and no context: this is the only page that can
+                  explain what they are about to be asked to do. */}
+              <Anchor component={Link} to="/about" size="sm">
+                About
+              </Anchor>
+              <ThemeToggle />
+            </Group>
           </Group>
           <Group gap="xs">
             <Title order={2}>{view.poll.title}</Title>

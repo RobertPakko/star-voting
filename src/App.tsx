@@ -9,6 +9,7 @@ import { PollList } from './pages/PollList'
 import { CreatePoll } from './pages/CreatePoll'
 import { PollDetail } from './pages/PollDetail'
 import { PublicPoll } from './pages/PublicPoll'
+import { About } from './pages/About'
 
 function App() {
   const { session, loading } = useAuth()
@@ -40,11 +41,17 @@ function App() {
       {session ? (
         <Route element={<Layout />}>
           <Route index element={<PollList />} />
+          <Route path="about" element={<About />} />
           <Route path="polls/new" element={<CreatePoll />} />
           <Route path="polls/:pollId" element={<PollDetail />} />
         </Route>
       ) : (
-        <Route path="*" element={<SignIn />} />
+        <>
+          {/* Explaining the method is most useful to someone who has never
+              signed in, so this one page sits in front of the auth gate. */}
+          <Route path="about" element={<About />} />
+          <Route path="*" element={<SignIn />} />
+        </>
       )}
     </Routes>
   )

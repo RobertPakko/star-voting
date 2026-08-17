@@ -180,13 +180,26 @@ export function Results({ source }: { source: ResultsSource }) {
           {results.runoff.resolved_by === 'higher_score' && (
             <Text size="sm">
               The runoff tied, so it went to {nameById.get(results.winner_id ?? '')} on the higher
-              score-round total — STAR's rule for a tied runoff.
+              score-round total — the first tie-break for a tied runoff.
             </Text>
+          )}
+          {results.runoff.resolved_by === 'five_star_votes' && (
+            <>
+              <Text size="sm">
+                The runoff tied and both finalists have identical score totals, so it went to{' '}
+                {nameById.get(results.winner_id ?? '')} on five-star votes — the same rule that
+                settles a tie in the score round.
+              </Text>
+              <Text size="sm" c="dimmed">
+                {nameById.get(results.finalists[0])}: {results.runoff.five_stars_a} ·{' '}
+                {nameById.get(results.finalists[1])}: {results.runoff.five_stars_b}
+              </Text>
+            </>
           )}
           {results.runoff.resolved_by === 'unresolved' && (
             <Text size="sm" c="orange">
-              The runoff tied and both finalists have identical score totals, so there is no winner
-              under STAR's rules.
+              The runoff tied, both finalists have identical score totals, and both were given five
+              stars on the same number of ballots, so there is no winner.
             </Text>
           )}
         </Stack>

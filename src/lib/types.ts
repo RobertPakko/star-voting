@@ -116,14 +116,25 @@ export interface Runoff {
   prefers_a: number
   prefers_b: number
   ties: number
-  /** 'higher_score' means the runoff tied and STAR's score rule decided it. */
-  resolved_by: 'preference' | 'higher_score' | 'unresolved'
+  /**
+   * Five-star counts for the two finalists. Always present, whether or not
+   * the tie-break needed them, so a reader can check the rule that was not
+   * reached as well as the one that was.
+   */
+  five_stars_a: number
+  five_stars_b: number
+  /**
+   * How the runoff was settled, in the order the rules are tried:
+   * 'preference' outright, then 'higher_score', then 'five_star_votes'.
+   * 'unresolved' means all three were level and there is no winner.
+   */
+  resolved_by: 'preference' | 'higher_score' | 'five_star_votes' | 'unresolved'
 }
 
 /**
  * One place in the full ranking, which STAR produces by sequential
  * elimination: the winner steps out and the method runs again on what is
- * left. Only place 1 is STAR's official result.
+ * left. Only place 1 is what STAR itself produces.
  */
 export interface RankingEntry {
   place: number

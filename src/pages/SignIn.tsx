@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import { Button, Center, Paper, Stack, Text, TextInput, Title } from '@mantine/core'
+import { Link, useLocation } from 'react-router-dom'
+import { Anchor, Button, Center, Paper, Stack, Text, TextInput, Title } from '@mantine/core'
 import { useAuth } from '../lib/auth'
 import { rememberDestination } from '../lib/shareLink'
 
@@ -65,6 +65,11 @@ export function SignIn() {
               </Button>
             </>
           )}
+          {/* Shown either way: someone who has just requested a link has a
+              minute to spare, and may have no idea what STAR voting is. */}
+          <Anchor component={Link} to="/about" size="sm">
+            What is STAR voting?
+          </Anchor>
         </Stack>
       </Paper>
     </Center>
