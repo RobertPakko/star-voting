@@ -16,6 +16,8 @@ import {
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { BallotPrivacy } from '../components/BallotPrivacy'
+import { Ballots } from '../components/Ballots'
 import { CreatorControls } from '../components/CreatorControls'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { Respondents } from '../components/Respondents'
@@ -100,6 +102,14 @@ export function PollDetail() {
               Open link
             </Badge>
           )}
+          {/* Worth saying at the top and not only on the ballot: it is the
+              one setting that changes what happens to a vote after it is
+              cast, and people arrive here from a link without context. */}
+          {poll.show_ballots && (
+            <Badge color="teal" variant="light">
+              Ballots published
+            </Badge>
+          )}
           {status.is_closed && (
             <Badge color="gray" variant="light">
               Closed
@@ -118,7 +128,12 @@ export function PollDetail() {
         // half-filled in the panel anyway, so losing that state is correct.
         <OpenPollPanel key={refreshKey} token={poll.public_token!} onChange={load} />
       ) : status.results_available ? (
-        <Results source={{ kind: 'poll', pollId: poll.id }} />
+        <Stack gap="lg">
+          <Results source={{ kind: 'poll', pollId: poll.id }} />
+          {/* Gated in the database on the same terms as the results, so this
+              condition only decides whether to ask. */}
+          {poll.show_ballots && <Ballots source={{ kind: 'poll', pollId: poll.id }} />}
+        </Stack>
       ) : status.is_closed ? (
         <Card withBorder>
           <Text fw={500}>This poll was closed before anyone voted, so there are no results.</Text>
@@ -126,7 +141,7 @@ export function PollDetail() {
       ) : status.voted ? (
         <Waiting status={status} />
       ) : (
-        <VoteForm pollId={poll.id} options={options} />
+        <VoteForm poll={poll} options={options} />
       )}
 
       {!isOpen && (
@@ -160,8 +175,9 @@ function Waiting({ status }: { status: PollStatus }) {
   )
 }
 
-function VoteForm({ pollId, options }: { pollId: string; options: PollOption[] }) {
+function VoteForm({ poll, options }: { poll: Poll; options: PollOption[] }) {
   const navigate = useNavigate()
+  const pollId = poll.id
   const [values, setValues] = useState<Record<string, number>>({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -194,6 +210,13 @@ function VoteForm({ pollId, options }: { pollId: string; options: PollOption[] }
 
   return (
     <Stack gap="md">
+      {/* Above the options, not below the button: nobody should discover
+          what happens to their ballot after they have filled it in. */}
+      <BallotPrivacy
+        mode={poll.mode}
+        showVoters={poll.show_voters}
+        showBallots={poll.show_ballots}
+      />
       <Text size="sm" c="dimmed">
         Score each option from 0 (worst) to 5 (best). Unscored options count as 0.
       </Text>

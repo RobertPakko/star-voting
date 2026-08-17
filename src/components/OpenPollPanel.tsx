@@ -14,6 +14,8 @@ import {
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
+import { BallotPrivacy } from './BallotPrivacy'
+import { Ballots } from './Ballots'
 import { Results } from './Results'
 import type { OpenPollView, PollOption } from '../lib/types'
 
@@ -70,7 +72,14 @@ export function OpenPollPanel({
   }
 
   if (view.results_available) {
-    return <Results source={{ kind: 'token', token }} />
+    return (
+      <Stack gap="lg">
+        <Results source={{ kind: 'token', token }} />
+        {/* Gated in the database on the same terms as the results, so this
+            condition only decides whether to ask. */}
+        {view.poll.show_ballots && <Ballots source={{ kind: 'token', token }} />}
+      </Stack>
+    )
   }
 
   if (view.is_closed) {
@@ -100,6 +109,7 @@ export function OpenPollPanel({
           token={token}
           options={view.options}
           needsName={view.poll.show_voters}
+          showBallots={view.poll.show_ballots}
           onVoted={handleVoted}
         />
       )}
@@ -162,11 +172,13 @@ function OpenBallot({
   token,
   options,
   needsName,
+  showBallots,
   onVoted,
 }: {
   token: string
   options: PollOption[]
   needsName: boolean
+  showBallots: boolean
   onVoted: () => void
 }) {
   const [name, setName] = useState('')
@@ -202,6 +214,10 @@ function OpenBallot({
 
   return (
     <Stack gap="md">
+      {/* Above everything, including the name field: what that name will be
+          attached to is exactly what this explains. */}
+      <BallotPrivacy mode="open" showVoters={needsName} showBallots={showBallots} />
+
       <Text size="sm" c="dimmed">
         Score each option from 0 (worst) to 5 (best). Unscored options count as 0.
       </Text>
@@ -209,7 +225,11 @@ function OpenBallot({
       {needsName && (
         <TextInput
           label="Your name"
-          description="Shown to everyone in the poll, so they know whose vote is in."
+          description={
+            showBallots
+              ? 'Shown to everyone in the poll, next to the scores on this ballot.'
+              : 'Shown to everyone in the poll, so they know whose vote is in.'
+          }
           placeholder="Your name"
           value={name}
           onChange={(e) => setName(e.currentTarget.value)}

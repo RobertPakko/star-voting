@@ -68,6 +68,14 @@ export function PublicPoll() {
           </Group>
           <Group gap="xs">
             <Title order={2}>{view.poll.title}</Title>
+            {/* Someone arriving from a shared link has no other context, so
+                the one setting that decides what happens to their ballot
+                after they cast it is said here as well as on the form. */}
+            {view.poll.show_ballots && (
+              <Badge color="teal" variant="light">
+                Ballots published
+              </Badge>
+            )}
             {view.is_closed && (
               <Badge color="gray" variant="light">
                 Closed

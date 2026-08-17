@@ -35,6 +35,7 @@ export function CreatePoll() {
   const [options, setOptions] = useState(['', ''])
   const [mode, setMode] = useState<PollMode>('invite')
   const [showVoters, setShowVoters] = useState(true)
+  const [showBallots, setShowBallots] = useState(false)
   const [emails, setEmails] = useState<string[]>([])
   const [includeSelf, setIncludeSelf] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -71,6 +72,7 @@ export function CreatePoll() {
       setDescription(source.description ?? '')
       setMode(source.mode)
       setShowVoters(source.show_voters)
+      setShowBallots(source.show_ballots)
 
       const sourceOptions = ((optionsRes.data as PollOption[]) ?? []).map((o) => o.name)
       // Keep the form's two-row minimum if the source somehow had fewer.
@@ -147,6 +149,7 @@ export function CreatePoll() {
       p_emails: isOpen ? [] : allEmails,
       p_mode: mode,
       p_show_voters: showVoters,
+      p_show_ballots: showBallots,
     })
     setSubmitting(false)
 
@@ -268,6 +271,30 @@ export function CreatePoll() {
             : 'Only the number of votes is shown — nobody, including you, can see who has responded.'
         }
       />
+
+      {/* Independent of the switch above: this one is about the scores, that
+          one about the names. Off gives the behaviour the app has always
+          had, so an untouched form still creates a secret-ballot poll. */}
+      <Stack gap={4}>
+        <Switch
+          checked={showBallots}
+          onChange={(e) => setShowBallots(e.currentTarget.checked)}
+          label="Publish every ballot"
+          description={
+            showBallots
+              ? showVoters
+                ? 'Once the results unlock, everyone in the poll can see the score each person gave every option, with their name against it. Anyone can check the totals for themselves.'
+                : 'Once the results unlock, everyone in the poll can see the scores on every ballot, with no name against any of them and in an order unrelated to when they were cast. Anyone can check the totals; nobody can tell whose ballot is whose.'
+              : 'Only the totals are published — nobody, including you, can see how any one person voted.'
+          }
+        />
+        {showBallots && (
+          <Text size="xs" c="dimmed">
+            Voters are told this on the ballot before they submit it. Like every other poll setting
+            it is fixed at creation, so nobody's ballot can be published after the fact.
+          </Text>
+        )}
+      </Stack>
 
       {!isOpen && (
         <Stack gap="xs">

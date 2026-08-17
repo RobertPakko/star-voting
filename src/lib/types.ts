@@ -15,8 +15,14 @@ export interface Poll {
   created_at: string
   closed_at: string | null
   mode: PollMode
-  /** Participants can see who has responded (never how they voted). */
+  /** Participants can see who has responded. */
   show_voters: boolean
+  /**
+   * Individual ballots are published once results unlock. Independent of
+   * show_voters, which decides whether a name is attached to each one — so
+   * `show_ballots && !show_voters` is a verifiable tally that names nobody.
+   */
+  show_ballots: boolean
   /** Set for open polls only; the capability in their share link. */
   public_token: string | null
 }
@@ -61,6 +67,7 @@ export interface OpenPollView {
     description: string | null
     mode: PollMode
     show_voters: boolean
+    show_ballots: boolean
     closed_at: string | null
   }
   options: PollOption[]
@@ -146,4 +153,24 @@ export interface PollResults {
   mode: PollMode
   /** Closed by the creator before everyone had voted. */
   closed_early: boolean
+}
+
+/** One voter's scores, keyed by option id. */
+export interface Ballot {
+  /** null on a poll that hides respondents — the ballot is unattributed. */
+  voter: string | null
+  scores: Record<string, number>
+}
+
+/**
+ * Every ballot in a poll, for auditing the tally. Only returned once the
+ * results themselves have unlocked, and only on a poll created with
+ * show_ballots — see 0017.
+ */
+export interface BallotSheet {
+  /** Mirrors the poll's show_voters: whether `voter` is filled in. */
+  voters_named: boolean
+  options: { id: string; name: string }[]
+  /** Ordered by name, or by nothing at all when unnamed. Never by time. */
+  ballots: Ballot[]
 }
