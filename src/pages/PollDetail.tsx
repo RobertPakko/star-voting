@@ -20,7 +20,6 @@ import { useLiveRefresh } from '../lib/useLiveRefresh'
 import { voterKeyFor } from '../lib/voterKey'
 import { Ballots } from '../components/Ballots'
 import { CreatorControls } from '../components/CreatorControls'
-import { LiveIndicator } from '../components/LiveIndicator'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { OptionDescription } from '../components/OptionDescription'
 import { PollTags } from '../components/PollTags'
@@ -124,7 +123,7 @@ export function PollDetail() {
   // the indicator goes with it. Its absence is the honest signal there:
   // there is nothing left to wait for.
   const live = !!status && !status.is_closed && !status.results_available
-  const { paused } = useLiveRefresh(refresh, { enabled: live })
+  useLiveRefresh(refresh, { enabled: live })
 
   // Close and reset invalidate a ballot half-filled in the open-poll panel,
   // so they remount it as well as re-reading the poll. A vote doesn't: the
@@ -159,18 +158,13 @@ export function PollDetail() {
       <Stack gap={8}>
         <Title order={2}>{poll.title}</Title>
         {/* All three terms of the poll, at the top, whichever way each is
-            set -- people arrive here from a link with no other context. The
-            live dot rides the same row: it describes the whole page rather
-            than any one number on it, and there is exactly one of it. */}
-        <Group justify="space-between" gap="xs">
-          <PollTags
-            mode={poll.mode}
-            showVoters={poll.show_voters}
-            showBallots={poll.show_ballots}
-            closed={status.is_closed}
-          />
-          {live && <LiveIndicator paused={paused} />}
-        </Group>
+            set -- people arrive here from a link with no other context. */}
+        <PollTags
+          mode={poll.mode}
+          showVoters={poll.show_voters}
+          showBallots={poll.show_ballots}
+          closed={status.is_closed}
+        />
         {poll.description && <Text c="dimmed">{poll.description}</Text>}
       </Stack>
 

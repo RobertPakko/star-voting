@@ -4,7 +4,6 @@ import { Badge, Button, Card, Center, Group, Loader, Stack, Text, Title } from '
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
-import { LiveIndicator } from '../components/LiveIndicator'
 import { PollTags } from '../components/PollTags'
 import { badgeColor, countBadge } from '../lib/badgeColors'
 import type { PollListItem } from '../lib/types'
@@ -42,7 +41,7 @@ export function PollList() {
   // Unlike a single poll, a list has no settled state to stop at: any poll
   // on it can take a vote, and a new invite can add a row. It stays live for
   // as long as the tab is in front of someone.
-  const { paused } = useLiveRefresh(load)
+  useLiveRefresh(load)
 
   if (error) {
     return (
@@ -63,12 +62,7 @@ export function PollList() {
   return (
     <Stack gap="lg" maw={720} mx="auto">
       <Group justify="space-between">
-        <Group gap="sm">
-          <Title order={2}>Your polls</Title>
-          {/* Turnout on every card below moves on its own, so the page says
-              so once, here, rather than putting a dot on each count. */}
-          <LiveIndicator paused={paused} />
-        </Group>
+        <Title order={2}>Your polls</Title>
         <Button component={Link} to="/polls/new">
           New poll
         </Button>
