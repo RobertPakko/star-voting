@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Center, Loader, Stack, Text, Title } from '@mantine/core'
+import { Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
+import { useLiveRefresh } from '../lib/useLiveRefresh'
+import { LiveIndicator } from '../components/LiveIndicator'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollTags } from '../components/PollTags'
 import type { OpenPollView } from '../lib/types'
@@ -17,23 +19,40 @@ export function PublicPoll() {
   const { token } = useParams<{ token: string }>()
   const [view, setView] = useState<OpenPollView | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Whether a read has ever come back, so a refresh that fails can be told
+  // apart from a first read that did. A ref rather than `view` itself,
+  // which would put the poll in load()'s dependencies.
+  const loaded = useRef(false)
 
-  // Fetched here too (cheaply) so the page can render the title and closed
-  // badge around the panel, which owns the voting state itself.
-  useEffect(() => {
+  // The whole poll, read once here and handed to the panel below: this page
+  // needs the title and the tags, the panel needs everything else, and one
+  // copy refreshed on one clock is what keeps them agreeing.
+  const load = useCallback(async () => {
     if (!token) return
-    let cancelled = false
-    supabase
-      .rpc('open_poll_view', { p_token: token, p_voter_key: voterKeyFor(token) })
-      .then(({ data, error: rpcError }) => {
-        if (cancelled) return
-        if (rpcError) setError(rpcError.message)
-        else setView(data as OpenPollView)
-      })
-    return () => {
-      cancelled = true
+    const { data, error: rpcError } = await supabase.rpc('open_poll_view', {
+      p_token: token,
+      p_voter_key: voterKeyFor(token),
+    })
+    if (rpcError) {
+      // Only a first read that fails says anything about the link. A later
+      // one keeps the poll already on screen -- turning a page somebody has
+      // been voting on into "poll not found" because one request lost a
+      // race with a flaky connection would be a lie about their link.
+      if (!loaded.current) setError(rpcError.message)
+      return
     }
+    loaded.current = true
+    setView(data as OpenPollView)
   }, [token])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  // A closed poll takes no more votes, and one whose results are out has
+  // stopped moving -- so the refreshing stops with it, and so does the dot.
+  const live = !!view && !view.is_closed && !view.results_available
+  const { paused } = useLiveRefresh(load, { enabled: live })
 
   if (!token || error) {
     return (
@@ -60,17 +79,21 @@ export function PublicPoll() {
         <Title order={2}>{view.poll.title}</Title>
         {/* Someone arriving from a shared link has no other context at all,
             so all three terms of the poll are stated here, not just the one
-            that changes what happens to their ballot. */}
-        <PollTags
-          mode={view.poll.mode}
-          showVoters={view.poll.show_voters}
-          showBallots={view.poll.show_ballots}
-          closed={view.is_closed}
-        />
+            that changes what happens to their ballot. The live dot shares
+            the row: it speaks for the page, not for any one number. */}
+        <Group justify="space-between" gap="xs">
+          <PollTags
+            mode={view.poll.mode}
+            showVoters={view.poll.show_voters}
+            showBallots={view.poll.show_ballots}
+            closed={view.is_closed}
+          />
+          {live && <LiveIndicator paused={paused} />}
+        </Group>
         {view.poll.description && <Text c="dimmed">{view.poll.description}</Text>}
       </Stack>
 
-      <OpenPollPanel token={token} />
+      <OpenPollPanel token={token} view={view} onVoted={load} />
     </Stack>
   )
 }

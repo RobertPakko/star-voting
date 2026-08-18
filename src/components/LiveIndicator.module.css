@@ -1,0 +1,60 @@
+.indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  /* Never squeezed by the tags it sits beside on a narrow screen. */
+  flex: none;
+}
+
+.dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--mantine-primary-color-filled);
+  z-index: 2;
+}
+
+.pulse {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--mantine-primary-color-filled);
+  z-index: 1;
+  animation: pulse 1s infinite;
+}
+
+.paused {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--mantine-color-dimmed);
+  z-index: 2;
+}
+
+/* A dot that expands and fades out from under a solid one: the same shape
+   the eye already reads as "transmitting" on a recording light. */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* The dot is a status, not a decoration, so it stays put and legible when
+   the reader has asked for less movement -- the label still says "Live". */
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+    display: none;
+  }
+}

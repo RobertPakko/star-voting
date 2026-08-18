@@ -158,6 +158,66 @@ Postgres does not have and the `MAINTAIN` privilege, none of which the tally
 touches. Everything else is applied verbatim, so the functions under test are
 the ones that ship.
 
+## Live updates
+
+Poll pages re-read themselves every few seconds so votes appear without a
+reload: `src/lib/useLiveRefresh.ts` is the timer, `LiveIndicator` is the dot
+that says so, and `LIVE_REFRESH_MS` is the one interval every live surface
+in the app runs at.
+
+**Polling, not Supabase Realtime.** Realtime streams row changes over a
+websocket, and subscribing to a table's changes needs a `SELECT` grant on
+that table. `anon` deliberately has none, on any table — an open poll's
+voters reach their poll entirely through the `open_poll_*` functions, which
+is what stops a share token from also being a key to the rest of the schema.
+Streaming would therefore mean either opening those tables to `anon` and
+re-deriving every access rule in this file as an RLS policy, or streaming to
+signed-in voters and polling for everyone else anyway. Re-calling the RPCs
+the pages already use keeps one access path and one set of rules, and a poll
+big enough for the difference in load to matter is not the kind of poll this
+app is for.
+
+Four rules keep it honest:
+
+- **The page owns the poll; components render what they are handed.** Both
+  pages carrying an open poll read `open_poll_view` and hand it to
+  `OpenPollPanel`, which used to fetch its own copy. Two copies on two
+  timers could disagree about whether the poll had closed, and would have
+  disagreed visibly — the tags row says *Closed* while the panel below it
+  still shows a ballot. `Respondents` is the same idea from the other end:
+  it reloads on the page's `liveTick` rather than a timer of its own, so the
+  roster and the turnout count above it are always read at the same moment.
+- **A refresh that fails changes nothing on screen.** Every live reload
+  keeps the last good copy and tries again on the next tick. Only a *first*
+  read that fails is allowed to produce an error, because only then is there
+  nothing to show — a page that has been working for ten minutes must not
+  turn into "poll not found" because one request lost a race with a flaky
+  connection.
+- **A hidden tab stops polling, and says so.** Nobody is reading a
+  backgrounded poll, and a laptop lid closed on twenty of them should not
+  keep talking to the database. The indicator greys out and reads *Paused*
+  rather than going quietly stale, and coming back to the tab refreshes
+  immediately instead of waiting out an interval.
+- **The dot disappears when there is nothing left to watch.** A closed poll,
+  or one whose results are out, has taken its last vote — the timer stops
+  and the indicator goes with it. Its absence is the signal that the numbers
+  on screen are final. The poll list is the exception, and stays live for as
+  long as it is on screen: any poll on it can take a vote, and a new invite
+  can add a row.
+
+Requests are chained rather than fired on a fixed interval — the next goes
+out after the last comes back — so a slow connection spaces refreshes out
+instead of stacking them up.
+
+One live surface per page, and the dot rides the tags row rather than
+sitting next to a count. Turnout is reported in two places at once on an
+invite poll (the waiting card and the roster), so a dot per number meant two
+dots saying one thing; the tags row is also the one row every poll page
+already has. It takes the theme's primary colour rather than a key from
+`badgeColors.ts` — it is not a badge, it reports the state of the page
+rather than a fact about the poll, and green there means *settled*, which is
+the opposite of what a live poll is.
+
 ## Behaviour worth preserving
 
 These are decisions, not accidents. Changing any of them changes a promise the

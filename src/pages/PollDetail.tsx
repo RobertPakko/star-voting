@@ -16,14 +16,17 @@ import {
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { useLiveRefresh } from '../lib/useLiveRefresh'
+import { voterKeyFor } from '../lib/voterKey'
 import { Ballots } from '../components/Ballots'
 import { CreatorControls } from '../components/CreatorControls'
+import { LiveIndicator } from '../components/LiveIndicator'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollTags } from '../components/PollTags'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
-import type { Poll, PollOption, PollStatus } from '../lib/types'
+import type { OpenPollView, Poll, PollOption, PollStatus } from '../lib/types'
 
 export function PollDetail() {
   const { pollId } = useParams<{ pollId: string }>()
@@ -31,13 +34,22 @@ export function PollDetail() {
   const [poll, setPoll] = useState<Poll | null>(null)
   const [options, setOptions] = useState<PollOption[]>([])
   const [status, setStatus] = useState<PollStatus | null>(null)
+  // An open poll's own view of itself, read through the token RPCs. Owned
+  // here rather than inside OpenPollPanel so that one place on this page
+  // holds the poll's live state: the tags row, the creator controls and the
+  // panel then can never disagree about how many votes are in.
+  const [view, setView] = useState<OpenPollView | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Bumped only by creator actions, and used as OpenPollPanel's key so it
-  // remounts. The panel keeps its own copy of the poll (it reads through the
-  // token RPCs, not poll_status), so reloading this page alone would leave
-  // it rendering pre-close or pre-reset state.
+  // remounts. Closing or resetting invalidates a half-filled ballot in the
+  // panel, and remounting is what discards it.
   const [refreshKey, setRefreshKey] = useState(0)
+  // Bumped on every live refresh, and watched by <Respondents> so the
+  // roster reloads on this page's clock instead of running one of its own.
+  // Two timers would drift, and a roster a few seconds ahead of the count
+  // sitting above it reads as a bug rather than as a refresh in flight.
+  const [liveTick, setLiveTick] = useState(0)
 
   const load = useCallback(async () => {
     if (!pollId) return
@@ -55,9 +67,24 @@ export function PollDetail() {
       return
     }
 
-    setPoll(pollRes.data as Poll)
+    const loaded = pollRes.data as Poll
+    setPoll(loaded)
     setOptions((optionsRes.data as PollOption[]) ?? [])
     setStatus((statusRes.data as PollStatus) ?? null)
+
+    if (loaded.mode === 'open' && loaded.public_token) {
+      const { data, error: viewError } = await supabase.rpc('open_poll_view', {
+        p_token: loaded.public_token,
+        p_voter_key: voterKeyFor(loaded.public_token),
+      })
+      if (viewError) {
+        setError(viewError.message)
+        setLoading(false)
+        return
+      }
+      setView(data as OpenPollView)
+    }
+
     setLoading(false)
   }, [pollId])
 
@@ -65,9 +92,43 @@ export function PollDetail() {
     load()
   }, [load])
 
-  // Close and reset change what the open-poll panel should be rendering, so
-  // they refresh both. A vote doesn't: the panel has already refreshed
-  // itself by then, and bumping the key would just refetch it twice.
+  // The live tick, deliberately narrower than load(): a poll's title,
+  // options and settings are frozen at creation, so the only things that
+  // can change while someone watches are the counts and whether it closed.
+  const refresh = useCallback(async () => {
+    if (!pollId) return
+    // Bumped before the requests rather than after, so the roster below
+    // asks at the same moment this does and the two agree on screen.
+    setLiveTick((t) => t + 1)
+
+    const token = poll?.mode === 'open' ? poll.public_token : null
+    const [statusRes, viewRes] = await Promise.all([
+      supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
+      token
+        ? supabase.rpc('open_poll_view', { p_token: token, p_voter_key: voterKeyFor(token) })
+        : null,
+    ])
+
+    // A refresh that fails changes nothing on screen: the page keeps the
+    // copy it has and tries again on the next tick. Replacing a poll that
+    // has been working for ten minutes with an error message, because one
+    // request lost a race with a flaky connection, would be much worse
+    // than being five seconds out of date.
+    if (!statusRes.error && statusRes.data) setStatus(statusRes.data as PollStatus)
+    if (viewRes && !viewRes.error && viewRes.data) setView(viewRes.data as OpenPollView)
+  }, [pollId, poll?.mode, poll?.public_token])
+
+  // Nothing about a closed poll changes again, and a poll whose results are
+  // out has taken its last vote either way -- so the refreshing stops, and
+  // the indicator goes with it. Its absence is the honest signal there:
+  // there is nothing left to wait for.
+  const live = !!status && !status.is_closed && !status.results_available
+  const { paused } = useLiveRefresh(refresh, { enabled: live })
+
+  // Close and reset invalidate a ballot half-filled in the open-poll panel,
+  // so they remount it as well as re-reading the poll. A vote doesn't: the
+  // ballot it was filling in is gone either way, and a remount would only
+  // throw away a panel that is already showing the right thing.
   const reloadAll = useCallback(() => {
     setRefreshKey((k) => k + 1)
     load()
@@ -97,13 +158,18 @@ export function PollDetail() {
       <Stack gap={8}>
         <Title order={2}>{poll.title}</Title>
         {/* All three terms of the poll, at the top, whichever way each is
-            set -- people arrive here from a link with no other context. */}
-        <PollTags
-          mode={poll.mode}
-          showVoters={poll.show_voters}
-          showBallots={poll.show_ballots}
-          closed={status.is_closed}
-        />
+            set -- people arrive here from a link with no other context. The
+            live dot rides the same row: it describes the whole page rather
+            than any one number on it, and there is exactly one of it. */}
+        <Group justify="space-between" gap="xs">
+          <PollTags
+            mode={poll.mode}
+            showVoters={poll.show_voters}
+            showBallots={poll.show_ballots}
+            closed={status.is_closed}
+          />
+          {live && <LiveIndicator paused={paused} />}
+        </Group>
         {poll.description && <Text c="dimmed">{poll.description}</Text>}
       </Stack>
 
@@ -111,15 +177,18 @@ export function PollDetail() {
           uses, so the creator votes in their own poll exactly as everyone
           else does -- one code path, one set of rules. */}
       {isOpen ? (
-        // Remounting on refreshKey is the whole refresh mechanism -- see
-        // where it's declared. Closing or resetting invalidates any ballot
-        // half-filled in the panel anyway, so losing that state is correct.
-        <OpenPollPanel
-          key={refreshKey}
-          token={poll.public_token!}
-          isCreator={isCreator}
-          onChange={load}
-        />
+        view && (
+          // Keyed so a close or a reset remounts it -- see where refreshKey
+          // is declared. A live refresh only replaces the view prop, which
+          // leaves a half-filled ballot inside the panel alone.
+          <OpenPollPanel
+            key={refreshKey}
+            token={poll.public_token!}
+            view={view}
+            isCreator={isCreator}
+            onVoted={load}
+          />
+        )
       ) : status.results_available ? (
         <Stack gap="lg">
           <Results source={{ kind: 'poll', pollId: poll.id }} />
@@ -142,7 +211,13 @@ export function PollDetail() {
           they decide when to close, and this is also where they manage the
           invite list. */}
       {!isOpen && (status.voted || isCreator) && (
-        <Respondents pollId={poll.id} isCreator={isCreator} status={status} onChange={reloadAll} />
+        <Respondents
+          pollId={poll.id}
+          isCreator={isCreator}
+          status={status}
+          liveTick={liveTick}
+          onChange={reloadAll}
+        />
       )}
 
       {/* The share link is inside Manage poll now -- see the note there. */}

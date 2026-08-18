@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Badge,
   Button,
   Card,
-  Center,
   Divider,
   Group,
-  Loader,
   Rating,
   Stack,
   Text,
@@ -28,54 +26,27 @@ import type { OpenPollView, PollOption } from '../lib/types'
  * and inside the creator's own poll page so they can vote in their own poll
  * without going through the link. Both go through the same anon-callable
  * RPCs, so there is one code path and one set of rules.
+ *
+ * The view is handed in rather than fetched here. Both pages already read
+ * it -- they render the poll's title and tags around this panel -- and both
+ * now re-read it on a timer to keep votes arriving without a reload, so
+ * fetching it here as well would mean two copies of the same poll on one
+ * screen, refreshed on two clocks, free to disagree about whether it has
+ * closed. The page owns the poll; this renders it and reports a vote back.
  */
 export function OpenPollPanel({
   token,
+  view,
   isCreator = false,
-  onChange,
+  onVoted,
 }: {
   token: string
+  view: OpenPollView
   /** Creators see participation before voting; see where it's rendered. */
   isCreator?: boolean
-  onChange?: () => void
+  /** A ballot went in: the page re-reads the poll. */
+  onVoted: () => void
 }) {
-  const [view, setView] = useState<OpenPollView | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    const { data, error: rpcError } = await supabase.rpc('open_poll_view', {
-      p_token: token,
-      p_voter_key: voterKeyFor(token),
-    })
-    if (rpcError) setError(rpcError.message)
-    else setView(data as OpenPollView)
-  }, [token])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
-  if (error) {
-    return (
-      <Text c="red" ta="center">
-        {error}
-      </Text>
-    )
-  }
-
-  if (!view) {
-    return (
-      <Center py="xl">
-        <Loader />
-      </Center>
-    )
-  }
-
-  function handleVoted() {
-    load()
-    onChange?.()
-  }
-
   if (view.results_available) {
     return (
       <Stack gap="lg">
@@ -128,7 +99,7 @@ export function OpenPollPanel({
           options={view.options}
           needsName={view.poll.show_voters}
           showBallots={view.poll.show_ballots}
-          onVoted={handleVoted}
+          onVoted={onVoted}
         />
       )}
 
@@ -222,6 +193,10 @@ function OpenBallot({
    * score a voter gives pops the keyboard back up over the ballot. Dropping
    * focus as the tap starts -- before the browser decides whether to re-open
    * the keyboard -- leaves the stars tappable in peace.
+   *
+   * The same blur is what Enter needs: the name field stands alone rather than
+   * in a form, so there is nothing for Enter to submit and the keyboard simply
+   * stays up. See the key handler on the field.
    */
   function releaseNameFocus() {
     nameRef.current?.blur()
@@ -264,6 +239,14 @@ function OpenBallot({
           onChange={(e) => setName(e.currentTarget.value)}
           maxLength={60}
           required
+          /* Label the key "Done" rather than a Go/newline the field has no use
+             for, and honour that label by putting the keyboard away. */
+          enterKeyHint="done"
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            releaseNameFocus()
+          }}
         />
       )}
 
