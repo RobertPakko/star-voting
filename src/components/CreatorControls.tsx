@@ -92,7 +92,7 @@ export function CreatorControls({
   const pending = Math.max(0, status.invited_count - status.voted_count)
 
   return (
-    <Card withBorder mt="xl">
+    <Card withBorder>
       <Stack gap="md">
         <Title order={4}>Manage poll</Title>
 

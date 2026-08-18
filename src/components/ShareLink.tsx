@@ -49,8 +49,8 @@ export function ShareLink({
       </Group>
       <Text size="xs" c="dimmed">
         {isOpen
-          ? 'Anyone with this link can vote, without signing in. Only share it with the people you want voting.'
-          : 'Only invited people can vote. Anyone else who opens this will be asked to sign in and then told the poll is unavailable.'}
+          ? 'Anyone with this link can vote without signing in'
+          : 'Only invited people can vote; they must sign in to do so'}
       </Text>
     </Stack>
   )

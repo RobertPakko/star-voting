@@ -6,7 +6,6 @@ interface AuthContextValue {
   session: Session | null
   loading: boolean
   signInWithEmail: (email: string) => Promise<void>
-  signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -36,12 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error
   }
 
-  async function signOut() {
-    await supabase.auth.signOut()
-  }
-
   return (
-    <AuthContext.Provider value={{ session, loading, signInWithEmail, signOut }}>
+    <AuthContext.Provider value={{ session, loading, signInWithEmail }}>
       {children}
     </AuthContext.Provider>
   )

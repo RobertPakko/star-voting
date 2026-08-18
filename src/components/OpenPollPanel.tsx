@@ -201,7 +201,6 @@ function OpenBallot({
   token,
   options,
   needsName,
-  showBallots,
   onVoted,
 }: {
   token: string
@@ -256,20 +255,10 @@ function OpenBallot({
 
   return (
     <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        Score each option from 0 (worst) to 5 (best). Unscored options count as 0, and
-        clicking the star you picked returns an option to 0.
-      </Text>
-
       {needsName && (
         <TextInput
           ref={nameRef}
           label="Your name"
-          description={
-            showBallots
-              ? 'Shown to everyone in the poll, next to the scores on this ballot.'
-              : 'Shown to everyone in the poll, so they know whose vote is in.'
-          }
           placeholder="Your name"
           value={name}
           onChange={(e) => setName(e.currentTarget.value)}

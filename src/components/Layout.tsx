@@ -16,7 +16,7 @@ import { ThemeToggle } from './ThemeToggle'
  * out — which is where a wordmark in the top-left is expected to go.
  */
 export function Layout() {
-  const { session, signOut } = useAuth()
+  const { session } = useAuth()
 
   return (
     <AppShell header={{ height: 60 }} padding="md">
@@ -43,12 +43,8 @@ export function Layout() {
             {/* Signed out this is an offer rather than a gate — voting on an
                 open poll needs no account — but it has to be visible to be
                 taken, so it gets the same slot the sign-out button holds. */}
-            {session ? (
-              <Button variant="subtle" size="sm" onClick={() => signOut()}>
-                Sign out
-              </Button>
-            ) : (
-              <Button component={Link} to="/" variant="subtle" size="sm">
+            {!session && (
+              <Button component={Link} to="/" variant="outline" size="sm">
                 Sign in
               </Button>
             )}
