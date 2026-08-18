@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Badge, Card, Center, Group, Loader, Progress, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
+import { badgeColor } from '../lib/badgeColors'
 import type { PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { voters } from '../lib/plural'
@@ -130,7 +131,11 @@ export function Results({ source }: { source: ResultsSource }) {
                           ? 'Head-to-head preference'
                           : 'Five-star votes'}
                       </Text>
-                      <Badge size="xs" variant="light" color={step.decisive ? 'green' : 'gray'}>
+                      <Badge
+                        size="xs"
+                        variant="light"
+                        color={step.decisive ? badgeColor.done : badgeColor.unsettled}
+                      >
                         {step.decisive ? 'Decisive' : 'Still tied'}
                       </Badge>
                     </Group>

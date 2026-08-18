@@ -27,7 +27,7 @@ export function CreatorControls({
   status,
   onChange,
 }: {
-  poll: Pick<Poll, 'id' | 'mode' | 'public_token'>
+  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token'>
   status: PollStatus
   onChange: () => void
 }) {

@@ -1,5 +1,6 @@
 import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
+import { countBadge } from '../lib/badgeColors'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
 import { voters } from '../lib/plural'
 
@@ -76,7 +77,7 @@ function Place({
 
   return (
     <Group align="flex-start" wrap="nowrap" gap="sm">
-      <Badge variant="light" size="lg">
+      <Badge {...countBadge} size="lg">
         {entry.place}
       </Badge>
       <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>

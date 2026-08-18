@@ -1,4 +1,5 @@
 import { Badge, Group } from '@mantine/core'
+import { badgeColor } from '../lib/badgeColors'
 import type { PollMode } from '../lib/types'
 
 /**
@@ -11,12 +12,18 @@ import type { PollMode } from '../lib/types'
  * means the terms of a poll can be taken in at a glance and compared between
  * polls.
  *
+ * Every state carries its own colour rather than one colour per setting —
+ * see `src/lib/badgeColors.ts` for why, and for the whole palette these are
+ * picked from.
+ *
  * The wording is deliberately not symmetrical across the three. Respondents
  * are shown or hidden -- hiding them lists nobody at all, which is not the
  * same as listing them anonymously -- while ballots are published or
  * private. An anonymous ballot is the two tags together: respondents hidden,
- * ballots published. That combination is exactly what the ballot notice
- * spells out in words on the form itself.
+ * ballots published.
+ *
+ * These tags are also the only place a voter is told what happens to their
+ * ballot, so every page carrying a ballot puts them above it.
  */
 export function PollTags({
   mode,
@@ -32,17 +39,23 @@ export function PollTags({
 }) {
   return (
     <Group gap="xs">
-      <Badge color="grape" variant="light">
+      <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
         {mode === 'open' ? 'Open link' : 'Invite only'}
       </Badge>
-      <Badge color="blue" variant="light">
+      <Badge
+        color={showVoters ? badgeColor.respondentsShown : badgeColor.respondentsHidden}
+        variant="light"
+      >
         {showVoters ? 'Respondents shown' : 'Respondents hidden'}
       </Badge>
-      <Badge color="teal" variant="light">
+      <Badge
+        color={showBallots ? badgeColor.ballotsPublished : badgeColor.ballotsPrivate}
+        variant="light"
+      >
         {showBallots ? 'Ballots published' : 'Ballots private'}
       </Badge>
       {closed && (
-        <Badge color="gray" variant="light">
+        <Badge color={badgeColor.closed} variant="light">
           Closed
         </Badge>
       )}

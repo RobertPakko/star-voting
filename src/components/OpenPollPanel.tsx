@@ -15,7 +15,7 @@ import {
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
-import { BallotPrivacy } from './BallotPrivacy'
+import { badgeColor, countBadge } from '../lib/badgeColors'
 import { Ballots } from './Ballots'
 import { Results } from './Results'
 import { ShareLink } from './ShareLink'
@@ -112,7 +112,14 @@ export function OpenPollPanel({
                 distraction before that. The creator has it in Manage poll
                 regardless, so this is not their only route to it. */}
             <Divider my="xs" />
-            <ShareLink poll={{ id: view.poll.id, mode: 'open', public_token: token }} />
+            <ShareLink
+              poll={{
+                id: view.poll.id,
+                title: view.poll.title,
+                mode: 'open',
+                public_token: token,
+              }}
+            />
           </Stack>
         </Card>
       ) : (
@@ -156,7 +163,7 @@ export function OpenPollPanel({
 
 function ResponseCount({ count }: { count: number }) {
   return (
-    <Badge variant="light">
+    <Badge {...countBadge}>
       {count} {count === 1 ? 'response' : 'responses'}
     </Badge>
   )
@@ -179,7 +186,7 @@ function VoterList({ voters }: { voters: string[] }) {
         ) : (
           <Group gap="xs">
             {voters.map((name) => (
-              <Badge key={name} variant="light" color="green">
+              <Badge key={name} variant="light" color={badgeColor.done}>
                 {name}
               </Badge>
             ))}
@@ -291,12 +298,6 @@ function OpenBallot({
           Submit vote
         </Button>
       </Group>
-
-      {/* Below the button, not above the options: the ballot is what the
-          voter came to do, and leading with a boxed warning outweighed it.
-          Still on the same screen and still before anything is submitted --
-          nothing here can be discovered only after the fact. */}
-      <BallotPrivacy mode="open" showVoters={needsName} showBallots={showBallots} />
     </Stack>
   )
 }

@@ -4,6 +4,7 @@ import { Badge, Button, Card, Center, Group, Loader, Stack, Text, Title } from '
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { PollTags } from '../components/PollTags'
+import { badgeColor, countBadge } from '../lib/badgeColors'
 import type { PollListItem } from '../lib/types'
 
 export function PollList() {
@@ -84,7 +85,11 @@ export function PollList() {
               {/* Where the poll has got to, kept on its own line so it can't
                   be confused with the settings row underneath. */}
               <Group gap="xs" mt={4}>
-                <Badge color={poll.results_available ? 'green' : 'blue'} variant="light">
+                <Badge
+                  {...(poll.results_available
+                    ? { color: badgeColor.done, variant: 'light' as const }
+                    : countBadge)}
+                >
                   {poll.results_available
                     ? 'Results ready'
                     : poll.mode === 'open'
@@ -95,7 +100,7 @@ export function PollList() {
                 {/* `voted` is derived from the signed-in user's ballot, which
                     open polls never have -- it would always read "pending". */}
                 {poll.mode === 'invite' && !poll.voted && !poll.results_available && !poll.is_closed && (
-                  <Badge color="orange" variant="light">
+                  <Badge color={badgeColor.outstanding} variant="light">
                     Vote pending
                   </Badge>
                 )}

@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, …)
-src/lib/         supabase client, auth context, share-link and voter-key helpers, shared types
+src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, shared types
 supabase/migrations/  the schema, as ordered SQL files
 test/            tally tests, run against a throwaway Postgres
 ```
@@ -176,6 +176,14 @@ tag that appeared only for one of its two states made its absence carry meaning,
 and nobody reads an absence. `Closed` is appended to the same row but is a
 *state* rather than a setting, so it is grey and always last.
 
+**Every state has its own colour**, not one colour per setting: with all three
+tags always present, a colour shared across a pair told you which question was
+being answered but not what the answer was, leaving the text to carry the whole
+tag. Colours come from `src/lib/badgeColors.ts`, which holds every badge colour
+in the app in one place — badges from different files land side by side on a
+poll list card, so choosing at the call site is exactly how two unrelated
+meanings end up the same colour. Add a key there before adding a badge.
+
 The wording is deliberately not symmetrical. Respondents are **shown** or
 **hidden** — hiding them lists nobody at all, which is not the same as listing
 them anonymously — while ballots are **published** or **private**. An anonymous
@@ -214,7 +222,7 @@ knowing how it is going.
 This controls *who responded*, never *how they voted*.
 
 Either way, participation is **held back until you have voted**. Someone still
-looking at a blank ballot sees the ballot and its privacy notice, nothing else.
+looking at a blank ballot sees the ballot and the poll's tags, nothing else.
 Two reasons: nothing in the roster helps you fill a ballot in, and on a poll
 that names respondents it is a live feed of the arrival order — the same order
 the anonymous ballot ordering below exists to keep off the published grid.
@@ -256,14 +264,19 @@ Four rules hold the published setting together:
 - **The creator gets no exception.** Hiding ballots is a promise made to the
   people who voted, not an access level, so an unpublished poll's ballots are
   unreadable by everybody.
-- **Voters are told before they vote.** Both voting forms state what will happen
-  to the ballot — whether the scores will be published, and whether a name will
-  be attached — on the ballot itself, never in a settings summary elsewhere. It
-  sits below the submit button rather than above the options: leading with a
-  boxed warning made the notice louder than the ballot, and the ballot is what
-  the voter came to do. What matters is that it is on the same screen and
-  readable before anything is sent, not that it comes first — nothing about a
-  ballot can be discovered only after it is cast.
+- **Voters are told before they vote.** Whether the scores will be published,
+  and whether a name will be attached, is on screen and readable before
+  anything is sent — nothing about a ballot can be discovered only after it is
+  cast. This is `PollTags`' job: both pages that carry a ballot put the tags
+  above it, so the terms are stated where the ballot is cast rather than in a
+  settings summary elsewhere.
+
+  This used to be a boxed `Alert` under the submit button as well, spelling the
+  same two facts out in sentences. It was removed once the tags covered both
+  states of all three settings: the alert restated what the tags already said,
+  and a warning that repeats the label six inches above it trains people to
+  skip both. The requirement is that the voter can read the terms before
+  submitting, not that they are said twice.
 - **Anonymous ballots are ordered by a hash of their row id, never by submission
   time.** This matters: on an open poll that shows respondents, names appear in
   the voter list as people vote, so anyone refreshing the page while voting is
@@ -292,6 +305,43 @@ On the poll page, the creator gets:
 - **Delete poll** — removes the poll and every vote cast, permanently.
 
 Reset and delete both confirm first.
+
+The **share link** sits in the same block (`src/components/ShareLink.tsx`),
+with **Copy** and a **QR code** beside it. Handing the poll out is something
+the creator does to the poll, not something a voter needs while scoring
+options, and keeping it here means it is never withheld — the link has to go
+out before anyone, the creator included, has voted. Open polls also offer it on
+the thank-you card once you have voted, where passing it on is a reasonable
+thing to want.
+
+### The QR code
+
+`ShareQr` (`src/components/ShareQr.tsx`) encodes the same link `ShareLink`
+shows, for handing a poll to a room holding phones rather than keyboards. It
+grants exactly what the link grants — on an open poll the code *is* the
+capability, so putting one on a projector puts the poll in front of everyone
+who can see the screen, and the modal says so.
+
+Generated in the browser from `uqr`, the only runtime dependency added for it,
+via `src/lib/qr.ts`. Four things there are fixed rather than left to the caller,
+because each produces a code that looks right and scans badly:
+
+- **Error correction M, not the default L.** L saves a few modules and gives up
+  the tolerance that lets a code survive being printed, taped to a wall and
+  photographed at an angle.
+- **A four-module quiet zone.** The margin is part of the symbol — scanners use
+  it to find the edge. uqr defaults to one module, below spec.
+- **Black on white always, in both colour schemes.** A QR code has to be
+  dark-on-light, so the modal puts it on its own white plate rather than
+  inverting it in dark mode.
+- **The PNG is drawn module-by-module on a canvas**, at a whole number of
+  pixels each, rather than scaling the SVG. A module boundary landing on a half
+  pixel gets anti-aliased to grey, and a blurred boundary is the one thing that
+  reliably breaks a scan.
+
+It is behind a button rather than inline: most polls are shared by pasting a
+link, and a code big enough to scan is too big to sit in the manage block
+unasked.
 
 ### Results and the full ranking
 

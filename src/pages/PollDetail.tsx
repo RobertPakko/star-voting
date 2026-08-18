@@ -16,11 +16,11 @@ import {
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { BallotPrivacy } from '../components/BallotPrivacy'
 import { Ballots } from '../components/Ballots'
 import { CreatorControls } from '../components/CreatorControls'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollTags } from '../components/PollTags'
+import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
 import type { Poll, PollOption, PollStatus } from '../lib/types'
@@ -158,7 +158,7 @@ function Waiting({ status }: { status: PollStatus }) {
       <Stack gap="sm">
         <Group justify="space-between" wrap="nowrap" gap="xs">
           <Text fw={500}>Your vote is in. Waiting on the rest of the group.</Text>
-          <Badge variant="light">
+          <Badge {...countBadge}>
             {status.voted_count}/{status.invited_count} voted
           </Badge>
         </Group>
@@ -171,7 +171,7 @@ function Waiting({ status }: { status: PollStatus }) {
   )
 }
 
-function VoteForm({ poll, options }: { poll: Poll; options: PollOption[] }) {
+function VoteForm({ poll, options }: { poll: Pick<Poll, 'id'>; options: PollOption[] }) {
   const navigate = useNavigate()
   const pollId = poll.id
   const [values, setValues] = useState<Record<string, number>>({})
@@ -247,15 +247,6 @@ function VoteForm({ poll, options }: { poll: Poll; options: PollOption[] }) {
           Submit vote
         </Button>
       </Group>
-
-      {/* Below the button, not above the options -- see the matching note on
-          the open-poll ballot. Still on the same screen, still before
-          anything is submitted. */}
-      <BallotPrivacy
-        mode={poll.mode}
-        showVoters={poll.show_voters}
-        showBallots={poll.show_ballots}
-      />
     </Stack>
   )
 }

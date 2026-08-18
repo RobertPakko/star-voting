@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ActionIcon, Badge, Button, Card, Group, Stack, Text, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
+import { badgeColor, countBadge } from '../lib/badgeColors'
 import type { Invitee, PollStatus } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -117,7 +118,7 @@ export function Respondents({
           <Text fw={500} size="sm">
             Invited voters
           </Text>
-          <Badge variant="light">
+          <Badge {...countBadge}>
             {status.voted_count}/{status.invited_count} voted
           </Badge>
         </Group>
@@ -129,7 +130,11 @@ export function Respondents({
             </Text>
             <Group gap="xs" wrap="nowrap">
               {invitee.has_voted !== null && (
-                <Badge size="sm" variant="light" color={invitee.has_voted ? 'green' : 'orange'}>
+                <Badge
+                  size="sm"
+                  variant="light"
+                  color={invitee.has_voted ? badgeColor.done : badgeColor.outstanding}
+                >
                   {invitee.has_voted ? 'Voted' : 'Pending'}
                 </Badge>
               )}
