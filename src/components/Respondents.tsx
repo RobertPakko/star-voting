@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActionIcon, Badge, Button, Card, Group, Stack, Text, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
@@ -21,15 +21,27 @@ export function Respondents({
   pollId,
   isCreator,
   status,
+  liveTick = 0,
   onChange,
 }: {
   pollId: string
   isCreator: boolean
   status: PollStatus
+  /**
+   * Bumped by the poll page on every live refresh. The roster reloads with
+   * it rather than on a timer of its own, so who has voted and the count
+   * above it are always read at the same moment.
+   */
+  liveTick?: number
   onChange: () => void
 }) {
   const [invitees, setInvitees] = useState<Invitee[] | null>(null)
   const [hidden, setHidden] = useState(false)
+  // Whether a read has ever succeeded, so a live refresh that fails can be
+  // told apart from a first read that did. Kept in a ref rather than read
+  // from `invitees`, which would put the roster in load()'s dependencies
+  // and have every load schedule the next one.
+  const loaded = useRef(false)
   const [newEmail, setNewEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -37,6 +49,11 @@ export function Respondents({
   const load = useCallback(async () => {
     const { data, error: rpcError } = await supabase.rpc('poll_invitees', { p_poll_id: pollId })
     if (rpcError) {
+      // A refresh that fails leaves the roster already on screen alone --
+      // only a first read tells us anything about access, and a dropped
+      // request should not make a list that has been there all along
+      // vanish or sprout an error.
+      if (loaded.current) return
       // For a non-creator the expected failure is "this poll doesn't show
       // who responded", which just means there is nothing to render. The
       // creator always has access, so for them a failure is real and
@@ -45,12 +62,13 @@ export function Respondents({
       else setHidden(true)
       return
     }
+    loaded.current = true
     setInvitees((data as Invitee[]) ?? [])
   }, [pollId, isCreator])
 
   useEffect(() => {
     load()
-  }, [load])
+  }, [load, liveTick])
 
   async function addInvitee() {
     const email = newEmail.trim().toLowerCase()

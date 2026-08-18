@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { useLiveRefresh } from '../lib/useLiveRefresh'
+import { LiveIndicator } from '../components/LiveIndicator'
 import { PollTags } from '../components/PollTags'
 import { badgeColor, countBadge } from '../lib/badgeColors'
 import type { PollListItem } from '../lib/types'
@@ -11,22 +13,36 @@ export function PollList() {
   const { session } = useAuth()
   const [polls, setPolls] = useState<PollListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Whether a read has ever come back; see the note in PublicPoll.
+  const loaded = useRef(false)
+
+  // One round trip for the polls and their status. This used to be a
+  // select plus one poll_status RPC per poll -- which is also what makes it
+  // cheap enough to re-read on a timer.
+  const load = useCallback(async () => {
+    const { data, error: rpcError } = await supabase.rpc('list_polls')
+    if (rpcError) {
+      // A refresh that fails keeps the list already on screen; only a first
+      // read that fails leaves nothing to show.
+      if (!loaded.current) setError(rpcError.message)
+      return
+    }
+    loaded.current = true
+    // Clears an error from a first read that failed: this page keeps
+    // polling either way, so a connection that comes back brings the list
+    // with it instead of leaving the reader looking at a dead end.
+    setError(null)
+    setPolls((data as PollListItem[]) ?? [])
+  }, [])
 
   useEffect(() => {
-    let cancelled = false
+    load()
+  }, [load])
 
-    // One round trip for the polls and their status. This used to be a
-    // select plus one poll_status RPC per poll.
-    supabase.rpc('list_polls').then(({ data, error: rpcError }) => {
-      if (cancelled) return
-      if (rpcError) setError(rpcError.message)
-      else setPolls((data as PollListItem[]) ?? [])
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // Unlike a single poll, a list has no settled state to stop at: any poll
+  // on it can take a vote, and a new invite can add a row. It stays live for
+  // as long as the tab is in front of someone.
+  const { paused } = useLiveRefresh(load)
 
   if (error) {
     return (
@@ -47,7 +63,12 @@ export function PollList() {
   return (
     <Stack gap="lg" maw={720} mx="auto">
       <Group justify="space-between">
-        <Title order={2}>Your polls</Title>
+        <Group gap="sm">
+          <Title order={2}>Your polls</Title>
+          {/* Turnout on every card below moves on its own, so the page says
+              so once, here, rather than putting a dot on each count. */}
+          <LiveIndicator paused={paused} />
+        </Group>
         <Button component={Link} to="/polls/new">
           New poll
         </Button>
