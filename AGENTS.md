@@ -267,6 +267,16 @@ predates that by a long way: `candidates.description` and both ballots'
 rendering of it were written first, and nothing had ever been able to fill it
 in.
 
+The field it opens says what it is by its shape. It is indented under the
+option it belongs to, with an elbow drawn from the bottom of the name field
+across to its left edge (`CreatePoll.module.css`) — indenting alone reads as an
+unrelated field that happens to be narrower, and the elbow is the shape a file
+tree already uses for "belongs to the thing above". It opens two rows tall
+rather than one, because a field the same height as the name above it looks
+like another one-line answer, and it grows from there instead of scrolling.
+Its placeholder names its option — *Option 2 description* — so a form with
+several of them open cannot be misread.
+
 Four things hold it together:
 
 - **Descriptions are paired with options by position, and filtered with them.**

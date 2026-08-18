@@ -22,6 +22,7 @@ import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import type { Invitee, Poll, PollMode, PollOption } from '../lib/types'
+import classes from './CreatePoll.module.css'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -249,11 +250,11 @@ export function CreatePoll() {
           <Text fw={500} size="sm">
             Options
           </Text>
-          {/* The details button is one small icon on a row of them, so it
-              gets one line saying what it is for. Most polls need none. */}
+          {/* The + is one small icon on a row of them, so it gets one line
+              saying what it is for. Most polls need none. */}
           <Text size="xs" c="dimmed">
-            Use + to add details or a link to an option, if its name doesn&apos;t say enough on its
-            own.
+            Use + to add a description to an option — a note, a caveat, a link — if its name
+            doesn&apos;t say enough on its own.
           </Text>
         </Stack>
         {options.map((option, index) => (
@@ -265,19 +266,25 @@ export function CreatePoll() {
                 placeholder={`Option ${index + 1}`}
               />
               {option.description !== null && (
-                <Textarea
-                  value={option.description}
-                  onChange={(e) => updateOption(index, { description: e.currentTarget.value })}
-                  placeholder="Details voters see under this option — a note, a caveat, a link"
-                  size="xs"
-                  autosize
-                  minRows={1}
-                  autoFocus
-                />
+                <div className={classes.description}>
+                  <Textarea
+                    value={option.description}
+                    onChange={(e) => updateOption(index, { description: e.currentTarget.value })}
+                    placeholder={`Option ${index + 1} description`}
+                    size="xs"
+                    /* Two rows before a word is typed: a description is
+                       usually a sentence or two, and a field the height of
+                       the name above it looks like another one-line answer.
+                       autosize grows it from there rather than scrolling. */
+                    autosize
+                    minRows={2}
+                    autoFocus
+                  />
+                </div>
               )}
             </Stack>
             <Tooltip
-              label={option.description === null ? 'Add details' : 'Remove details'}
+              label={option.description === null ? 'Add description' : 'Remove description'}
               withArrow
             >
               <ActionIcon
@@ -286,8 +293,8 @@ export function CreatePoll() {
                 onClick={() => toggleDescription(index)}
                 aria-label={
                   option.description === null
-                    ? `Add details to option ${index + 1}`
-                    : `Remove details from option ${index + 1}`
+                    ? `Add a description to option ${index + 1}`
+                    : `Remove the description from option ${index + 1}`
                 }
               >
                 {option.description === null ? '+' : '−'}
