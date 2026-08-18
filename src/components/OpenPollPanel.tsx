@@ -194,6 +194,10 @@ function OpenBallot({
    * score a voter gives pops the keyboard back up over the ballot. Dropping
    * focus as the tap starts -- before the browser decides whether to re-open
    * the keyboard -- leaves the stars tappable in peace.
+   *
+   * The same blur is what Enter needs: the name field stands alone rather than
+   * in a form, so there is nothing for Enter to submit and the keyboard simply
+   * stays up. See the key handler on the field.
    */
   function releaseNameFocus() {
     nameRef.current?.blur()
@@ -246,6 +250,14 @@ function OpenBallot({
           onChange={(e) => setName(e.currentTarget.value)}
           maxLength={60}
           required
+          /* Label the key "Done" rather than a Go/newline the field has no use
+             for, and honour that label by putting the keyboard away. */
+          enterKeyHint="done"
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            releaseNameFocus()
+          }}
         />
       )}
 
