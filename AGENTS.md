@@ -251,6 +251,48 @@ ballot is the two tags in combination: respondents hidden, ballots published.
 Changing any of these strings means changing them in `PollTags` alone, which is
 the point of it existing.
 
+### Option descriptions
+
+An option can carry a description as well as a name: a caveat, a couple of
+lines of detail, a link to whatever is being voted on. It is optional and
+nearly always absent, so it is not a field that is always on screen — each row
+of the create form has a `+` beside it that opens one, and `0019` is the
+migration that gave `create_poll` somewhere to put the text. The column itself
+predates that by a long way: `candidates.description` and both ballots'
+rendering of it were written first, and nothing had ever been able to fill it
+in.
+
+Four things hold it together:
+
+- **Descriptions are paired with options by position, and filtered with them.**
+  They travel to `create_poll` as a second array, so dropping a blank option row
+  without dropping its slot in that pairing would slide every later description
+  one option up — not an error anywhere, just the wrong text under the wrong
+  name. `CreatePoll` filters the pairs and `create_poll` aggregates both
+  columns in one pass, and neither ever filters one array alone.
+- **Hidden means gone.** Collapsing the field discards what was in it rather
+  than remembering it, so a poll can never carry a description its creator can
+  no longer see. It is also why "no description" is `null` rather than an empty
+  string in the form state: the same value collapses the field and means there
+  is nothing to store.
+- **They belong to the ballot, and appear nowhere else.** Both ballots show one
+  under the option's name, because that is where the detail is a voting aid.
+  Results, the full ranking and the published ballot grid name options and
+  nothing more — a paragraph beside a bar of points is noise at the point where
+  the decision has already been made.
+- **URLs in them are links.** Pointing at something else is most of the reason
+  to write a description at all, and a link nobody can click is one the reader
+  has to select and copy. `OptionDescription` turns `http(s)://` and bare
+  `www.` runs into anchors as React elements — no HTML is ever parsed out of
+  the text, and the `href` is either the matched URL or `https://` glued onto
+  the `www.` form, so a description cannot produce a `javascript:` link.
+
+Like everything else about a poll, a description is fixed at creation; the
+options of a poll with votes in it cannot change at all
+(`guard_options_frozen`). Duplicating a poll copies the descriptions with the
+options, which is the only way to get a nearly-identical poll with the
+explanations intact.
+
 ### Who can vote
 
 |  | **Invited people** | **Anyone with the link** |

@@ -3,7 +3,6 @@ import {
   Badge,
   Button,
   Card,
-  Divider,
   Group,
   Rating,
   Stack,
@@ -15,8 +14,8 @@ import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { badgeColor, countBadge } from '../lib/badgeColors'
 import { Ballots } from './Ballots'
+import { OptionDescription } from './OptionDescription'
 import { Results } from './Results'
-import { ShareLink } from './ShareLink'
 import type { OpenPollView, PollOption } from '../lib/types'
 
 /**
@@ -241,11 +240,7 @@ function OpenBallot({
           <Group justify="space-between" wrap="nowrap" gap="sm">
             <div style={{ minWidth: 0 }}>
               <Text fw={500}>{option.name}</Text>
-              {option.description && (
-                <Text size="sm" c="dimmed">
-                  {option.description}
-                </Text>
-              )}
+              {option.description && <OptionDescription description={option.description} />}
             </div>
             {/* See the note on the invite-poll ballot: without allowClear a
                 score of 0 is unreachable once any star is picked. */}

@@ -22,6 +22,7 @@ import { Ballots } from '../components/Ballots'
 import { CreatorControls } from '../components/CreatorControls'
 import { LiveIndicator } from '../components/LiveIndicator'
 import { OpenPollPanel } from '../components/OpenPollPanel'
+import { OptionDescription } from '../components/OptionDescription'
 import { PollTags } from '../components/PollTags'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
@@ -290,11 +291,7 @@ function VoteForm({ poll, options }: { poll: Pick<Poll, 'id'>; options: PollOpti
           <Group justify="space-between" wrap="nowrap" gap="sm">
             <div style={{ minWidth: 0 }}>
               <Text fw={500}>{option.name}</Text>
-              {option.description && (
-                <Text size="sm" c="dimmed">
-                  {option.description}
-                </Text>
-              )}
+              {option.description && <OptionDescription description={option.description} />}
             </div>
             {/* 0 is a real score here, not the absence of one, and without
                 allowClear it has no reachable target: the 0 hit area is an
