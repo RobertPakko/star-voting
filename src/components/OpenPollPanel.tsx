@@ -72,25 +72,11 @@ export function OpenPollPanel({
         <Card withBorder>
           <Stack gap="xs">
             <Text fw={500}>
-              {view.your_name ? `Your vote is in, ${view.your_name}.` : 'Your vote is in.'}
+              Your vote is in
             </Text>
             <Text size="sm" c="dimmed">
-              Results are revealed once the poll's creator closes it, so nobody votes knowing how
-              it's going.
+              {isCreator ? 'Results are revealed once you close the poll' : 'Results are revealed once the poll\'s creator closes it'}
             </Text>
-            {/* Offered here and not on the ballot: passing the link on is a
-                reasonable thing to want the moment you have finished, and a
-                distraction before that. The creator has it in Manage poll
-                regardless, so this is not their only route to it. */}
-            <Divider my="xs" />
-            <ShareLink
-              poll={{
-                id: view.poll.id,
-                title: view.poll.title,
-                mode: 'open',
-                public_token: token,
-              }}
-            />
           </Stack>
         </Card>
       ) : (
