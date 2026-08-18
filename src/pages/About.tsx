@@ -1,19 +1,7 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
-import {
-  Anchor,
-  Button,
-  Container,
-  Divider,
-  Group,
-  List,
-  Paper,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core'
+import { Anchor, Container, Divider, List, Paper, Stack, Text, Title } from '@mantine/core'
 import { useAuth } from '../lib/auth'
-import { ThemeToggle } from '../components/ThemeToggle'
+import { PublicHeader } from '../components/PublicHeader'
 
 /**
  * The /about route: what STAR voting is and why this site uses it. Public,
@@ -28,20 +16,8 @@ export function About() {
       <Stack gap="xl">
         {/* Signed-in readers already have the app shell's header above them;
             signed-out ones are on a bare page and need the theme control and
-            a way into the app. */}
-        {!session && (
-          <Group justify="space-between" wrap="nowrap">
-            <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-              STAR Voting
-            </Text>
-            <Group gap="xs" wrap="nowrap">
-              <ThemeToggle />
-              <Button component={Link} to="/" variant="subtle" size="sm">
-                Sign in
-              </Button>
-            </Group>
-          </Group>
-        )}
+            a way into the app. No About link — they are already on it. */}
+        {!session && <PublicHeader showAbout={false} />}
 
         <Title order={1}>About</Title>
 
