@@ -169,6 +169,20 @@ Each poll fixes three things when it is created, and none can be changed
 afterwards: `authenticated` has no `UPDATE` grant on the `polls` table at all.
 A poll's terms are settled the moment it exists.
 
+All three are surfaced together by `PollTags` (`src/components/PollTags.tsx`) on
+the poll list, the poll page and the public voting page — always all three,
+always in the same order and the same words, whichever way each one is set. A
+tag that appeared only for one of its two states made its absence carry meaning,
+and nobody reads an absence. `Closed` is appended to the same row but is a
+*state* rather than a setting, so it is grey and always last.
+
+The wording is deliberately not symmetrical. Respondents are **shown** or
+**hidden** — hiding them lists nobody at all, which is not the same as listing
+them anonymously — while ballots are **published** or **private**. An anonymous
+ballot is the two tags in combination: respondents hidden, ballots published.
+Changing any of these strings means changing them in `PollTags` alone, which is
+the point of it existing.
+
 ### Who can vote
 
 |  | **Invited people** | **Anyone with the link** |
@@ -199,6 +213,24 @@ knowing how it is going.
 
 This controls *who responded*, never *how they voted*.
 
+Either way, participation is **held back until you have voted**. Someone still
+looking at a blank ballot sees the ballot and its privacy notice, nothing else.
+Two reasons: nothing in the roster helps you fill a ballot in, and on a poll
+that names respondents it is a live feed of the arrival order — the same order
+the anonymous ballot ordering below exists to keep off the published grid.
+Withholding it until you vote leaves that order visible only to people actually
+in the poll rather than to anyone holding the link. It narrows the leak without
+closing it: a voter still sees everyone who arrives after them.
+
+The **creator is exempt** and sees participation whether or not they have voted.
+The roster is what *Close voting now* gets decided on, and a creator who isn't
+on the invite list could never earn the view by voting. On invite polls it is
+also where the invite list is managed.
+
+On open polls "you have voted" is the `localStorage` voter key, so clearing site
+data hides the roster again. That is the same deliberately-weak signal behind
+"your vote is in" — a convenience, not a guard, and accepted as such here.
+
 ### Whether ballots are published
 
 - **Not published** (the default) — results come back only as an aggregate
@@ -226,7 +258,12 @@ Four rules hold the published setting together:
   unreadable by everybody.
 - **Voters are told before they vote.** Both voting forms state what will happen
   to the ballot — whether the scores will be published, and whether a name will
-  be attached — above the options, not after the submit button.
+  be attached — on the ballot itself, never in a settings summary elsewhere. It
+  sits below the submit button rather than above the options: leading with a
+  boxed warning made the notice louder than the ballot, and the ballot is what
+  the voter came to do. What matters is that it is on the same screen and
+  readable before anything is sent, not that it comes first — nothing about a
+  ballot can be discovered only after it is cast.
 - **Anonymous ballots are ordered by a hash of their row id, never by submission
   time.** This matters: on an open poll that shows respondents, names appear in
   the voter list as people vote, so anyone refreshing the page while voting is

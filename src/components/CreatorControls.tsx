@@ -4,26 +4,34 @@ import { Button, Card, Group, Modal, Stack, Text, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
-import type { PollStatus } from '../lib/types'
+import { ShareLink } from './ShareLink'
+import type { Poll, PollStatus } from '../lib/types'
 
 /**
  * Creator-only lifecycle controls: close voting early, and delete the poll.
  * The invitee list lives in <Respondents> now, because on a poll that shows
  * respondents it isn't creator-only any more.
  *
+ * The share link lives here rather than beside the ballot: handing the poll
+ * out is something the creator does to the poll, not something a voter needs
+ * while scoring options. Keeping it in this block also means it is never
+ * withheld -- the creator has to be able to send the link out before anyone,
+ * themselves included, has voted.
+ *
  * Closing exists so a single person who never votes can't freeze the
  * results permanently -- and for open polls it's the only way results are
  * ever revealed, since there is no roster to complete.
  */
 export function CreatorControls({
-  pollId,
+  poll,
   status,
   onChange,
 }: {
-  pollId: string
+  poll: Pick<Poll, 'id' | 'mode' | 'public_token'>
   status: PollStatus
   onChange: () => void
 }) {
+  const pollId = poll.id
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -87,6 +95,8 @@ export function CreatorControls({
     <Card withBorder mt="xl">
       <Stack gap="md">
         <Title order={4}>Manage poll</Title>
+
+        <ShareLink poll={poll} />
 
         {error && (
           <Text c="red" size="sm">

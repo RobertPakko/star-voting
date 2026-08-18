@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Badge, Button, Card, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { PollTags } from '../components/PollTags'
 import type { PollListItem } from '../lib/types'
 
 export function PollList() {
@@ -80,6 +81,8 @@ export function PollList() {
                   ? 'Created by you'
                   : `Created by ${poll.created_by_email}`}
               </Text>
+              {/* Where the poll has got to, kept on its own line so it can't
+                  be confused with the settings row underneath. */}
               <Group gap="xs" mt={4}>
                 <Badge color={poll.results_available ? 'green' : 'blue'} variant="light">
                   {poll.results_available
@@ -89,16 +92,6 @@ export function PollList() {
                         `${poll.voted_count} ${poll.voted_count === 1 ? 'response' : 'responses'}`
                       : `${poll.voted_count}/${poll.invited_count} voted`}
                 </Badge>
-                {poll.mode === 'open' && (
-                  <Badge color="grape" variant="light">
-                    Open link
-                  </Badge>
-                )}
-                {poll.is_closed && (
-                  <Badge color="gray" variant="light">
-                    Closed
-                  </Badge>
-                )}
                 {/* `voted` is derived from the signed-in user's ballot, which
                     open polls never have -- it would always read "pending". */}
                 {poll.mode === 'invite' && !poll.voted && !poll.results_available && !poll.is_closed && (
@@ -107,6 +100,15 @@ export function PollList() {
                   </Badge>
                 )}
               </Group>
+
+              {/* The terms of the poll, in the same three tags and the same
+                  words as the poll page itself. */}
+              <PollTags
+                mode={poll.mode}
+                showVoters={poll.show_voters}
+                showBallots={poll.show_ballots}
+                closed={poll.is_closed}
+              />
             </Stack>
           </Card>
         ))}

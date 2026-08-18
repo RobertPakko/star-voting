@@ -1,6 +1,7 @@
 import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
+import { voters } from '../lib/plural'
 
 /**
  * The whole field in placed order, behind a button.
@@ -107,8 +108,6 @@ function Place({
   )
 }
 
-const voters = (n: number) => `${n} ${n === 1 ? 'voter' : 'voters'}`
-
 /** How this place was settled, in one line. */
 function decision(entry: RankingEntry, nameById: Map<string, string>): string {
   const { runoff, finalists, options } = entry
@@ -130,6 +129,10 @@ function decision(entry: RankingEntry, nameById: Map<string, string>): string {
 
   if (runoff.resolved_by === 'higher_score') {
     return `Level with ${other} at ${voters(won)} each — placed above it on the higher score total.`
+  }
+
+  if (runoff.resolved_by === 'five_star_votes') {
+    return `Level with ${other} at ${voters(won)} each and on score — placed above it on five-star votes.`
   }
 
   return `Preferred over ${other} by ${voters(won)} to ${lost}.`

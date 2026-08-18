@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Anchor, Badge, Center, Container, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Anchor, Center, Container, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { OpenPollPanel } from '../components/OpenPollPanel'
+import { PollTags } from '../components/PollTags'
 import { ThemeToggle } from '../components/ThemeToggle'
 import type { OpenPollView } from '../lib/types'
 
@@ -73,22 +74,16 @@ export function PublicPoll() {
               <ThemeToggle />
             </Group>
           </Group>
-          <Group gap="xs">
-            <Title order={2}>{view.poll.title}</Title>
-            {/* Someone arriving from a shared link has no other context, so
-                the one setting that decides what happens to their ballot
-                after they cast it is said here as well as on the form. */}
-            {view.poll.show_ballots && (
-              <Badge color="teal" variant="light">
-                Ballots published
-              </Badge>
-            )}
-            {view.is_closed && (
-              <Badge color="gray" variant="light">
-                Closed
-              </Badge>
-            )}
-          </Group>
+          <Title order={2}>{view.poll.title}</Title>
+          {/* Someone arriving from a shared link has no other context at all,
+              so all three terms of the poll are stated here, not just the one
+              that changes what happens to their ballot. */}
+          <PollTags
+            mode={view.poll.mode}
+            showVoters={view.poll.show_voters}
+            showBallots={view.poll.show_ballots}
+            closed={view.is_closed}
+          />
           {view.poll.description && <Text c="dimmed">{view.poll.description}</Text>}
         </Stack>
 

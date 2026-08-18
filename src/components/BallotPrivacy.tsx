@@ -5,9 +5,11 @@ import type { PollMode } from '../lib/types'
  * What happens to your ballot, said plainly, on the form where you cast it.
  *
  * Publishing ballots is only defensible if the person filling one in knew it
- * was going to happen — so this sits above the options on both voting forms,
- * not in a settings summary somewhere else. It reports two independent facts
- * in a fixed order:
+ * was going to happen — so this sits on both voting forms themselves, not in a
+ * settings summary somewhere else. It sits below the submit button: the ballot
+ * outranks the notice for position, and being on the same screen before
+ * anything is sent is what actually makes it honest. It reports two independent
+ * facts in a fixed order:
  *
  *   1. Will your scores be published, and with your name on them?
  *   2. Will the fact that you responded be visible?

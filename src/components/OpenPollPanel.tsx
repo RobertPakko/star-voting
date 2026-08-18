@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Center,
+  Divider,
   Group,
   Loader,
   Rating,
@@ -17,6 +18,7 @@ import { voterKeyFor } from '../lib/voterKey'
 import { BallotPrivacy } from './BallotPrivacy'
 import { Ballots } from './Ballots'
 import { Results } from './Results'
+import { ShareLink } from './ShareLink'
 import type { OpenPollView, PollOption } from '../lib/types'
 
 /**
@@ -29,9 +31,12 @@ import type { OpenPollView, PollOption } from '../lib/types'
  */
 export function OpenPollPanel({
   token,
+  isCreator = false,
   onChange,
 }: {
   token: string
+  /** Creators see participation before voting; see where it's rendered. */
+  isCreator?: boolean
   onChange?: () => void
 }) {
   const [view, setView] = useState<OpenPollView | null>(null)
@@ -102,6 +107,12 @@ export function OpenPollPanel({
               Results are revealed once the poll's creator closes it, so nobody votes knowing how
               it's going.
             </Text>
+            {/* Offered here and not on the ballot: passing the link on is a
+                reasonable thing to want the moment you have finished, and a
+                distraction before that. The creator has it in Manage poll
+                regardless, so this is not their only route to it. */}
+            <Divider my="xs" />
+            <ShareLink poll={{ id: view.poll.id, mode: 'open', public_token: token }} />
           </Stack>
         </Card>
       ) : (
@@ -114,20 +125,31 @@ export function OpenPollPanel({
         />
       )}
 
-      {/* Exactly one place reports participation: the roster when the poll
+      {/* Participation is held back until you have voted: nothing in it helps
+          you fill in a ballot, and on a poll that names respondents it is a
+          live feed of the arrival order -- which the app otherwise works to
+          keep off the published ballots (see the ordering note in AGENTS.md).
+          Withholding it until you vote leaves that order visible only to
+          people actually in the poll, rather than to anyone holding the link.
+
+          The creator is exempt: the roster is what "close voting now" is
+          decided on, and a creator who isn't voting can never earn the view.
+
+          Exactly one place reports participation: the roster when the poll
           names respondents, a bare count when it doesn't. */}
-      {view.voters ? (
-        <VoterList voters={view.voters} />
-      ) : (
-        <Card withBorder>
-          <Group justify="space-between" gap="xs">
-            <Text size="sm" c="dimmed">
-              This poll doesn't show who has responded.
-            </Text>
-            <ResponseCount count={view.voted_count} />
-          </Group>
-        </Card>
-      )}
+      {(view.voted || isCreator) &&
+        (view.voters ? (
+          <VoterList voters={view.voters} />
+        ) : (
+          <Card withBorder>
+            <Group justify="space-between" gap="xs">
+              <Text size="sm" c="dimmed">
+                This poll doesn't show who has responded.
+              </Text>
+              <ResponseCount count={view.voted_count} />
+            </Group>
+          </Card>
+        ))}
     </Stack>
   )
 }
@@ -214,12 +236,9 @@ function OpenBallot({
 
   return (
     <Stack gap="md">
-      {/* Above everything, including the name field: what that name will be
-          attached to is exactly what this explains. */}
-      <BallotPrivacy mode="open" showVoters={needsName} showBallots={showBallots} />
-
       <Text size="sm" c="dimmed">
-        Score each option from 0 (worst) to 5 (best). Unscored options count as 0.
+        Score each option from 0 (worst) to 5 (best). Unscored options count as 0, and
+        clicking the star you picked returns an option to 0.
       </Text>
 
       {needsName && (
@@ -249,8 +268,11 @@ function OpenBallot({
                 </Text>
               )}
             </div>
+            {/* See the note on the invite-poll ballot: without allowClear a
+                score of 0 is unreachable once any star is picked. */}
             <Rating
               count={5}
+              allowClear
               value={values[option.id] ?? 0}
               onChange={(v) => setValues((prev) => ({ ...prev, [option.id]: v }))}
             />
@@ -269,6 +291,12 @@ function OpenBallot({
           Submit vote
         </Button>
       </Group>
+
+      {/* Below the button, not above the options: the ballot is what the
+          voter came to do, and leading with a boxed warning outweighed it.
+          Still on the same screen and still before anything is submitted --
+          nothing here can be discovered only after the fact. */}
+      <BallotPrivacy mode="open" showVoters={needsName} showBallots={showBallots} />
     </Stack>
   )
 }

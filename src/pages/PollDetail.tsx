@@ -20,9 +20,9 @@ import { BallotPrivacy } from '../components/BallotPrivacy'
 import { Ballots } from '../components/Ballots'
 import { CreatorControls } from '../components/CreatorControls'
 import { OpenPollPanel } from '../components/OpenPollPanel'
+import { PollTags } from '../components/PollTags'
 import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
-import { ShareLink } from '../components/ShareLink'
 import type { Poll, PollOption, PollStatus } from '../lib/types'
 
 export function PollDetail() {
@@ -94,28 +94,16 @@ export function PollDetail() {
 
   return (
     <Stack maw={640} mx="auto" gap="lg">
-      <Stack gap={4}>
-        <Group gap="xs">
-          <Title order={2}>{poll.title}</Title>
-          {isOpen && (
-            <Badge color="grape" variant="light">
-              Open link
-            </Badge>
-          )}
-          {/* Worth saying at the top and not only on the ballot: it is the
-              one setting that changes what happens to a vote after it is
-              cast, and people arrive here from a link without context. */}
-          {poll.show_ballots && (
-            <Badge color="teal" variant="light">
-              Ballots published
-            </Badge>
-          )}
-          {status.is_closed && (
-            <Badge color="gray" variant="light">
-              Closed
-            </Badge>
-          )}
-        </Group>
+      <Stack gap={8}>
+        <Title order={2}>{poll.title}</Title>
+        {/* All three terms of the poll, at the top, whichever way each is
+            set -- people arrive here from a link with no other context. */}
+        <PollTags
+          mode={poll.mode}
+          showVoters={poll.show_voters}
+          showBallots={poll.show_ballots}
+          closed={status.is_closed}
+        />
         {poll.description && <Text c="dimmed">{poll.description}</Text>}
       </Stack>
 
@@ -126,7 +114,12 @@ export function PollDetail() {
         // Remounting on refreshKey is the whole refresh mechanism -- see
         // where it's declared. Closing or resetting invalidates any ballot
         // half-filled in the panel anyway, so losing that state is correct.
-        <OpenPollPanel key={refreshKey} token={poll.public_token!} onChange={load} />
+        <OpenPollPanel
+          key={refreshKey}
+          token={poll.public_token!}
+          isCreator={isCreator}
+          onChange={load}
+        />
       ) : status.results_available ? (
         <Stack gap="lg">
           <Results source={{ kind: 'poll', pollId: poll.id }} />
@@ -144,13 +137,16 @@ export function PollDetail() {
         <VoteForm poll={poll} options={options} />
       )}
 
-      {!isOpen && (
+      {/* Held back until you have voted, for the reasons set out where the
+          open-poll panel does the same. The creator is exempt twice over:
+          they decide when to close, and this is also where they manage the
+          invite list. */}
+      {!isOpen && (status.voted || isCreator) && (
         <Respondents pollId={poll.id} isCreator={isCreator} status={status} onChange={reloadAll} />
       )}
 
-      {isCreator && <ShareLink poll={poll} />}
-
-      {isCreator && <CreatorControls pollId={poll.id} status={status} onChange={reloadAll} />}
+      {/* The share link is inside Manage poll now -- see the note there. */}
+      {isCreator && <CreatorControls poll={poll} status={status} onChange={reloadAll} />}
     </Stack>
   )
 }
@@ -210,15 +206,9 @@ function VoteForm({ poll, options }: { poll: Poll; options: PollOption[] }) {
 
   return (
     <Stack gap="md">
-      {/* Above the options, not below the button: nobody should discover
-          what happens to their ballot after they have filled it in. */}
-      <BallotPrivacy
-        mode={poll.mode}
-        showVoters={poll.show_voters}
-        showBallots={poll.show_ballots}
-      />
       <Text size="sm" c="dimmed">
-        Score each option from 0 (worst) to 5 (best). Unscored options count as 0.
+        Score each option from 0 (worst) to 5 (best). Unscored options count as 0, and
+        clicking the star you picked returns an option to 0.
       </Text>
       {options.map((option) => (
         <Card key={option.id} withBorder>
@@ -231,8 +221,14 @@ function VoteForm({ poll, options }: { poll: Poll; options: PollOption[] }) {
                 </Text>
               )}
             </div>
+            {/* 0 is a real score here, not the absence of one, and without
+                allowClear it has no reachable target: the 0 hit area is an
+                overlay that only wins a click while the score is already 0,
+                so a voter who picked any star could never take it back.
+                allowClear makes clicking the chosen star again return it. */}
             <Rating
               count={5}
+              allowClear
               value={values[option.id] ?? 0}
               onChange={(v) => setScore(option.id, v)}
             />
@@ -251,6 +247,15 @@ function VoteForm({ poll, options }: { poll: Poll; options: PollOption[] }) {
           Submit vote
         </Button>
       </Group>
+
+      {/* Below the button, not above the options -- see the matching note on
+          the open-poll ballot. Still on the same screen, still before
+          anything is submitted. */}
+      <BallotPrivacy
+        mode={poll.mode}
+        showVoters={poll.show_voters}
+        showBallots={poll.show_ballots}
+      />
     </Stack>
   )
 }

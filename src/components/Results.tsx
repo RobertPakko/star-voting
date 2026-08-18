@@ -3,6 +3,7 @@ import { Badge, Card, Center, Group, Loader, Progress, Stack, Text, Title } from
 import { supabase } from '../lib/supabase'
 import type { PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
+import { voters } from '../lib/plural'
 
 /**
  * Which tally endpoint to read. Both return the same shape — the split is
@@ -169,13 +170,13 @@ export function Results({ source }: { source: ResultsSource }) {
         <Stack gap={4}>
           <Title order={4}>Automatic runoff round</Title>
           <Text size="sm">
-            {nameById.get(results.finalists[0])}: {results.runoff.prefers_a} voters preferred
+            {nameById.get(results.finalists[0])}: {voters(results.runoff.prefers_a)} preferred
           </Text>
           <Text size="sm">
-            {nameById.get(results.finalists[1])}: {results.runoff.prefers_b} voters preferred
+            {nameById.get(results.finalists[1])}: {voters(results.runoff.prefers_b)} preferred
           </Text>
           <Text size="sm" c="dimmed">
-            {results.runoff.ties} voters scored both finalists equally.
+            {voters(results.runoff.ties)} scored both finalists equally.
           </Text>
           {results.runoff.resolved_by === 'higher_score' && (
             <Text size="sm">
