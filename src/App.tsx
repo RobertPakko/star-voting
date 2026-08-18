@@ -34,25 +34,27 @@ function App() {
 
   return (
     <Routes>
-      {/* Open polls are votable without an account, so this route sits
-          above the auth gate entirely. */}
-      <Route path="p/:token" element={<PublicPoll />} />
+      {/* Everything but the sign-in screen shares the app shell, so a
+          signed-out voter and the poll's creator see the same header. */}
+      <Route element={<Layout />}>
+        {/* Open polls are votable without an account, and explaining the
+            method is most useful to someone who has never signed in, so
+            these two sit in front of the auth gate. */}
+        <Route path="p/:token" element={<PublicPoll />} />
+        <Route path="about" element={<About />} />
 
-      {session ? (
-        <Route element={<Layout />}>
-          <Route index element={<PollList />} />
-          <Route path="about" element={<About />} />
-          <Route path="polls/new" element={<CreatePoll />} />
-          <Route path="polls/:pollId" element={<PollDetail />} />
-        </Route>
-      ) : (
-        <>
-          {/* Explaining the method is most useful to someone who has never
-              signed in, so this one page sits in front of the auth gate. */}
-          <Route path="about" element={<About />} />
-          <Route path="*" element={<SignIn />} />
-        </>
-      )}
+        {session && (
+          <>
+            <Route index element={<PollList />} />
+            <Route path="polls/new" element={<CreatePoll />} />
+            <Route path="polls/:pollId" element={<PollDetail />} />
+          </>
+        )}
+      </Route>
+
+      {/* Its own full-page card, with no shell around it: there is nothing
+          to sign out of and nowhere else to go. */}
+      {!session && <Route path="*" element={<SignIn />} />}
     </Routes>
   )
 }
