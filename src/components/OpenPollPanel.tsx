@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Badge,
   Button,
@@ -214,6 +214,19 @@ function OpenBallot({
   const [values, setValues] = useState<Record<string, number>>({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  /**
+   * Dismissing the on-screen keyboard on a phone does not blur the field it
+   * belongs to, and Rating cancels the default action of the tap that picks a
+   * star, so focus never moves off the name box on its own. Left alone, every
+   * score a voter gives pops the keyboard back up over the ballot. Dropping
+   * focus as the tap starts -- before the browser decides whether to re-open
+   * the keyboard -- leaves the stars tappable in peace.
+   */
+  function releaseNameFocus() {
+    nameRef.current?.blur()
+  }
 
   async function handleSubmit() {
     setError(null)
@@ -250,6 +263,7 @@ function OpenBallot({
 
       {needsName && (
         <TextInput
+          ref={nameRef}
           label="Your name"
           description={
             showBallots
@@ -282,6 +296,7 @@ function OpenBallot({
               allowClear
               value={values[option.id] ?? 0}
               onChange={(v) => setValues((prev) => ({ ...prev, [option.id]: v }))}
+              onPointerDown={releaseNameFocus}
             />
           </Group>
         </Card>
