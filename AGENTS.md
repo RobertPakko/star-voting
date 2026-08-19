@@ -23,10 +23,21 @@ test/            tally tests, run against a throwaway Postgres
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
 `npm run lint` (oxlint), `npm run preview`, `npm test` (see [Tests](#tests)).
 
-The app is served under `/star-voting/` (see `base` in `vite.config.ts`) and
-routes are hash-based, so it works as a GitHub Pages project site with no
+The app is served from the domain root (see `base` in `vite.config.ts`) and
+routes are hash-based, so it works as a GitHub Pages site with no
 SPA-fallback configuration. Links into the app therefore look like
-`…/star-voting/#/poll/<id>`.
+`https://choicelab.app/#/poll/<id>`.
+
+It's served from the custom domain `choicelab.app` rather than the default
+`<username>.github.io/star-voting/` GitHub Pages URL. This is configured via
+the [`public/CNAME`](public/CNAME) file, which Vite copies into `dist` on
+build — GitHub Pages reads it from the published artifact and serves the
+site at that domain. DNS for `choicelab.app` needs an `ANAME`/`ALIAS` record
+(or the four GitHub Pages `A` records, plus `AAAA` records for IPv6) pointing
+at GitHub Pages; see [GitHub's custom domain
+docs](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site).
+Repo **Settings → Pages** should show the domain once DNS resolves, with
+**Enforce HTTPS** enabled.
 
 ## One-time setup
 
@@ -49,10 +60,10 @@ SPA-fallback configuration. Links into the app therefore look like
 3. Under **Project Settings → API**, copy the Project URL and `anon` public key.
 4. The **Email** auth provider (magic link) is enabled by default — no extra
    provider setup needed.
-5. Under **Authentication → URL Configuration**, set the Site URL and add your
-   dev URL (`http://localhost:5173`) and your GitHub Pages URL
-   (`https://<your-username>.github.io/star-voting/`) to the allowed redirect
-   URLs, or magic links won't be able to redirect back to the app.
+5. Under **Authentication → URL Configuration**, set the Site URL to
+   `https://choicelab.app/` and add your dev URL (`http://localhost:5173`) to
+   the allowed redirect URLs, or magic links won't be able to redirect back
+   to the app.
 
 ### 2. Local development
 
@@ -68,7 +79,9 @@ npm run dev
 1. Repo **Settings → Pages** → set source to **GitHub Actions**.
 2. Repo **Settings → Secrets and variables → Actions** → add
    `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-3. Push to `main` — the deploy workflow builds and publishes automatically.
+3. Point the custom domain's DNS at GitHub Pages (see above), then push to
+   `main` — the deploy workflow builds and publishes automatically, and
+   GitHub picks up the domain from `public/CNAME` in the published artifact.
 
 ## Database migrations
 
