@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
   Badge,
   Button,
@@ -230,7 +230,7 @@ export function PollDetail() {
       ) : status.voted ? (
         <Waiting status={status} />
       ) : (
-        <VoteForm poll={poll} options={options} />
+        <VoteForm poll={poll} options={options} onVoted={load} />
       )}
 
       {/* Held back until you have voted, for the reasons set out where the
@@ -273,8 +273,25 @@ function Waiting({ status }: { status: PollStatus }) {
   )
 }
 
-function VoteForm({ poll, options }: { poll: Pick<Poll, 'id'>; options: PollOption[] }) {
-  const navigate = useNavigate()
+/**
+ * The ballot for an invite poll.
+ *
+ * Submitting re-reads the poll rather than leaving it. A vote is not the end
+ * of anybody's interest in a poll -- the results are -- and this page is
+ * where they arrive, on its own, as the rest of the group votes. Being sent
+ * back to the list threw that away and made the poll something you had to
+ * find your way back to.
+ */
+function VoteForm({
+  poll,
+  options,
+  onVoted,
+}: {
+  poll: Pick<Poll, 'id'>
+  options: PollOption[]
+  /** The ballot is in: re-read the poll so this page becomes the wait. */
+  onVoted: () => void
+}) {
   const pollId = poll.id
   const [values, setValues] = useState<Record<string, number>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -298,7 +315,7 @@ function VoteForm({ poll, options }: { poll: Pick<Poll, 'id'>; options: PollOpti
       })
       if (rpcError) throw rpcError
       notifications.show({ message: 'Vote submitted', color: 'green' })
-      navigate('/')
+      onVoted()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit vote.')
     } finally {
@@ -309,8 +326,8 @@ function VoteForm({ poll, options }: { poll: Pick<Poll, 'id'>; options: PollOpti
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Score each option from 0 (worst) to 5 (best). Unscored options count as 0, and
-        clicking the star you picked returns an option to 0.
+        Score each option from 0 (worst) to 5 (best). Unscored options count as 0, and clicking the
+        star you picked returns an option to 0.
       </Text>
       {options.map((option) => (
         <Card key={option.id} withBorder>

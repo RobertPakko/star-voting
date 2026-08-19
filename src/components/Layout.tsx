@@ -1,5 +1,5 @@
 import { Anchor, AppShell, Button, Group, Text, Title } from '@mantine/core'
-import { Link, Outlet } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { ThemeToggle } from './ThemeToggle'
 
@@ -14,9 +14,15 @@ import { ThemeToggle } from './ThemeToggle'
  * Only the right-hand group changes with the session. The wordmark links
  * to `/` either way — the poll list signed in, the sign-in screen signed
  * out — which is where a wordmark in the top-left is expected to go.
+ *
+ * The About link is dropped while About is what's on screen: a link to the
+ * page you are already reading is a dead end that still asks to be read,
+ * and its absence is the plainest way to say you have arrived.
  */
 export function Layout() {
   const { session } = useAuth()
+  const { pathname } = useLocation()
+  const onAbout = pathname === '/about'
 
   return (
     <AppShell header={{ height: 60 }} padding="md">
@@ -36,9 +42,11 @@ export function Layout() {
             {/* A plain link rather than a button: it's navigation, not an
                 action, and the header has to hold the title without wrapping
                 at 375px wide. */}
-            <Anchor component={Link} to="/about" size="sm" style={{ whiteSpace: 'nowrap' }}>
-              About
-            </Anchor>
+            {!onAbout && (
+              <Anchor component={Link} to="/about" size="sm" style={{ whiteSpace: 'nowrap' }}>
+                About
+              </Anchor>
+            )}
             <ThemeToggle />
             {/* Signed out this is an offer rather than a gate — voting on an
                 open poll needs no account — but it has to be visible to be
