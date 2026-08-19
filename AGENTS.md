@@ -23,18 +23,32 @@ test/            tally tests, run against a throwaway Postgres
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
 `npm run lint` (oxlint), `npm run preview`, `npm test` (see [Tests](#tests)).
 
-The app is served from the domain root (see `base` in `vite.config.ts`) and
+The app is served under `/star-voting/` (see `base` in `vite.config.ts`) and
 routes are hash-based, so it works as a GitHub Pages site with no
 SPA-fallback configuration. Links into the app therefore look like
-`https://choicelab.app/#/poll/<id>`.
+`https://choicelab.app/star-voting/#/poll/<id>`.
 
 It's served from the custom domain `choicelab.app` rather than the default
-`<username>.github.io/star-voting/` GitHub Pages URL. This is configured via
-the [`public/CNAME`](public/CNAME) file, which Vite copies into `dist` on
-build — GitHub Pages reads it from the published artifact and serves the
-site at that domain. DNS for `choicelab.app` needs an `ANAME`/`ALIAS` record
-(or the four GitHub Pages `A` records, plus `AAAA` records for IPv6) pointing
-at GitHub Pages; see [GitHub's custom domain
+`<username>.github.io/star-voting/` GitHub Pages URL. A custom domain is
+served from its own root by GitHub Pages, with no automatic `/star-voting/`
+prefix the way the default `github.io` project URL gets one — so that prefix
+has to be built into the deployed files themselves, and choicelab.app is
+meant to eventually host more than just this app. The setup:
+
+- `vite.config.ts` sets `base: '/star-voting/'` and `build.outDir:
+  'dist/star-voting'`, so the built app (and its asset URLs) live under that
+  path rather than at the output root.
+- [`site-root/`](site-root) holds what's served at the actual domain root:
+  `CNAME` (read by GitHub Pages from the published artifact to map the
+  domain) and an `index.html` that redirects to `/star-voting/`. The deploy
+  workflow copies it into `dist/` after the Vite build, alongside the
+  `star-voting/` subdirectory Vite produced.
+- Once there's more than one app, `site-root/index.html` is where a real
+  landing/directory page replaces the redirect.
+
+DNS for `choicelab.app` needs an `ANAME`/`ALIAS` record (or the four GitHub
+Pages `A` records, plus `AAAA` records for IPv6) pointing at GitHub Pages;
+see [GitHub's custom domain
 docs](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site).
 Repo **Settings → Pages** should show the domain once DNS resolves, with
 **Enforce HTTPS** enabled.
@@ -61,9 +75,9 @@ Repo **Settings → Pages** should show the domain once DNS resolves, with
 4. The **Email** auth provider (magic link) is enabled by default — no extra
    provider setup needed.
 5. Under **Authentication → URL Configuration**, set the Site URL to
-   `https://choicelab.app/` and add your dev URL (`http://localhost:5173`) to
-   the allowed redirect URLs, or magic links won't be able to redirect back
-   to the app.
+   `https://choicelab.app/star-voting/` and add your dev URL
+   (`http://localhost:5173`) to the allowed redirect URLs, or magic links
+   won't be able to redirect back to the app.
 
 ### 2. Local development
 
@@ -81,7 +95,8 @@ npm run dev
    `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 3. Point the custom domain's DNS at GitHub Pages (see above), then push to
    `main` — the deploy workflow builds and publishes automatically, and
-   GitHub picks up the domain from `public/CNAME` in the published artifact.
+   GitHub picks up the domain from `site-root/CNAME` in the published
+   artifact.
 
 ## Database migrations
 

@@ -28,6 +28,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # vite builds the app into dist/star-voting/ (see vite.config.ts); merge
+      # in the root-level CNAME and redirect from site-root/.
+      - run: cp -r site-root/. dist/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -2,7 +2,7 @@
 
 Make a poll, share it, and let people score each option from 0 to 5 stars. The winner is decided by [STAR voting](https://www.starvoting.org/) — *Score Then Automatic Runoff* — which takes the two highest-scoring options and hands the win to whichever of the two more voters preferred.
 
-**[Open the app →](https://choicelab.app/)**  ·  [What is STAR voting, and why use it?](https://choicelab.app/#/about)
+**[Open the app →](https://choicelab.app/star-voting/)**  ·  [What is STAR voting, and why use it?](https://choicelab.app/star-voting/#/about)
 
 ## What you can do with it
 

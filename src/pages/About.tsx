@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Anchor, Divider, List, Paper, Stack, Text, Title } from '@mantine/core'
+import { Anchor, List, Paper, Stack, Text, Title } from '@mantine/core'
 
 /**
  * The /about route: what STAR voting is and why this site uses it. Public,
