@@ -268,40 +268,38 @@ export function CreatePoll() {
             ? 'Voters open a link and score the options. No sign-in, no account.'
             : "Voters sign in with their email. Only addresses on the invite list can see or vote in the poll."}
         </Text>
-      </Stack>
-
-      {isOpen && (
-        <Alert color="yellow" title="Anyone with the link can vote">
-          <Stack gap={4}>
-            <Text size="sm">
-              There is no sign-in, so there is no way to tell voters apart. Anyone the link reaches
-              can vote, and one person can vote more than once by using another browser or clearing
-              their site data.
-            </Text>
-            <Text size="sm">
-              Good for picking a movie. Not good for anything where the outcome actually matters —
-              use an invite poll for that.
-            </Text>
+        {isOpen && (
+          <Alert color="yellow" title="Anyone with the link can vote">
+            <Stack gap={4}>
+              <Text size="sm">
+                There is no sign-in, so there is no way to tell voters apart. Anyone the link reaches
+                can vote, and one person can vote more than once by using another browser or clearing
+                their site data.
+              </Text>
+              <Text size="sm">
+                Good for picking a movie. Not good for anything where the outcome actually matters —
+                use an invite poll for that.
+              </Text>
+            </Stack>
+          </Alert>
+        )}
+        {!isOpen && (
+          <Stack gap="xs">
+            <TagsInput
+              label="Invite voters"
+              description="Type an email and press Enter (or comma) to add it."
+              placeholder="them@example.com"
+              value={emails}
+              onChange={setEmails}
+            />
+            <Checkbox
+              label={`Include me as a voter (${myEmail})`}
+              checked={includeSelf}
+              onChange={(e) => setIncludeSelf(e.currentTarget.checked)}
+            />
           </Stack>
-        </Alert>
-      )}
-
-      {!isOpen && (
-        <Stack gap="xs">
-          <TagsInput
-            label="Invite voters"
-            description="Type an email and press Enter (or comma) to add it."
-            placeholder="them@example.com"
-            value={emails}
-            onChange={setEmails}
-          />
-          <Checkbox
-            label={`Include me as a voter (${myEmail})`}
-            checked={includeSelf}
-            onChange={(e) => setIncludeSelf(e.currentTarget.checked)}
-          />
-        </Stack>
-      )}
+        )}
+      </Stack>
 
       <Switch
         checked={showVoters}
