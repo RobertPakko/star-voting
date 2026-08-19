@@ -52,27 +52,10 @@ export function PollTags({
 }) {
   return (
     <Group gap="xs">
-      <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
-        {mode === 'open' ? 'Open link' : 'Invite only'}
-      </Badge>
-      <Badge
-        color={showVoters ? badgeColor.respondentsShown : badgeColor.respondentsHidden}
-        variant="light"
-      >
-        {showVoters ? 'Respondents shown' : 'Respondents hidden'}
-      </Badge>
-      <Badge
-        color={showBallots ? badgeColor.ballotsPublished : badgeColor.ballotsPrivate}
-        variant="light"
-      >
-        {showBallots ? 'Ballots published' : 'Ballots private'}
-      </Badge>
-      <Badge
-        color={solicitOptions ? badgeColor.optionsFromRespondents : badgeColor.optionsFromCreator}
-        variant="light"
-      >
-        {solicitOptions ? 'Options from respondents' : 'Options from creator'}
-      </Badge>
+      <ModeTag mode={mode} />
+      <RespondentsTag showVoters={showVoters} />
+      <BallotsTag showBallots={showBallots} />
+      <OptionsTag solicitOptions={solicitOptions} />
       {soliciting && (
         <Badge color={badgeColor.collectingOptions} variant="light">
           Collecting options
@@ -84,5 +67,58 @@ export function PollTags({
         </Badge>
       )}
     </Group>
+  )
+}
+
+/*
+ * The four tags one at a time.
+ *
+ * The poll list shows three of them rather than four -- a card there also
+ * carries a turnout count and the poll's state, and where the options came
+ * from is the one setting that answers a question nobody asks of a row in a
+ * list. Exporting the tags individually is what lets it drop one without
+ * owning a second copy of the words: the strings, the colours and the two
+ * states of each setting are still decided here alone, which is the whole
+ * point of this file.
+ */
+
+export function ModeTag({ mode }: { mode: PollMode }) {
+  return (
+    <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
+      {mode === 'open' ? 'Open link' : 'Invite only'}
+    </Badge>
+  )
+}
+
+export function RespondentsTag({ showVoters }: { showVoters: boolean }) {
+  return (
+    <Badge
+      color={showVoters ? badgeColor.respondentsShown : badgeColor.respondentsHidden}
+      variant="light"
+    >
+      {showVoters ? 'Respondents shown' : 'Respondents hidden'}
+    </Badge>
+  )
+}
+
+export function BallotsTag({ showBallots }: { showBallots: boolean }) {
+  return (
+    <Badge
+      color={showBallots ? badgeColor.ballotsPublished : badgeColor.ballotsPrivate}
+      variant="light"
+    >
+      {showBallots ? 'Ballots published' : 'Ballots private'}
+    </Badge>
+  )
+}
+
+export function OptionsTag({ solicitOptions }: { solicitOptions: boolean }) {
+  return (
+    <Badge
+      color={solicitOptions ? badgeColor.optionsFromRespondents : badgeColor.optionsFromCreator}
+      variant="light"
+    >
+      {solicitOptions ? 'Options from respondents' : 'Options from creator'}
+    </Badge>
   )
 }

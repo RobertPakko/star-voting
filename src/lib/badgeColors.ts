@@ -45,9 +45,15 @@ export const badgeColor = {
   collectingOptions: 'dark',
   closed: 'gray',
 
-  /** Finished: results are ready, this person voted, this step was decisive. */
+  /**
+   * Finished: results are ready, this person voted, this step was decisive.
+   * The poll list's winner badge is the same claim about a whole poll.
+   */
   done: 'green',
-  /** Still owed: your vote is pending, this invitee hasn't voted yet. */
+  /**
+   * Still owed: this invitee hasn't voted yet, this poll is still waiting on
+   * the votes that will finish it.
+   */
   outstanding: 'orange',
   /** A tie-break step that ran and settled nothing. */
   unsettled: 'yellow',
