@@ -175,10 +175,19 @@ export function PollStateBadge({
         </Badge>
       )
     }
+    // The only badge here that shrinks, because the only one whose text
+    // belongs to the poll rather than to the app -- an elected option can be
+    // a sentence. It shrinks between bounds: `maw` keeps a long name from
+    // taking the row off a wide screen, and `miw` keeps a long *title* from
+    // squeezing the name down to two letters and an ellipsis on a narrow
+    // one, which is what happens when both sides of the row are free to
+    // give. Below that floor the title wraps to a second line instead,
+    // which costs a line and is what the wrapping is for.
     return (
       <Badge
         color={badgeColor.done}
         variant="light"
+        miw={120}
         maw={220}
         style={{ flexShrink: 1 }}
         title={winner ?? undefined}

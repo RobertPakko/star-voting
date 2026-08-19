@@ -75,7 +75,7 @@ export function OpenPollPanel({
   // names to show, and the header has already said how many and why.
   const participation =
     view.voters && (view.voted || isCreator || view.results_available) ? (
-      <VoterList voters={view.voters} />
+      <VoterList voters={view.voters} final={view.results_available} />
     ) : null
 
   if (view.results_available) {
@@ -126,13 +126,21 @@ export function OpenPollPanel({
   )
 }
 
-function VoterList({ voters }: { voters: string[] }) {
+/**
+ * Who has voted, on a poll that names them.
+ *
+ * "So far" is a promise that the list is still moving, and on a poll whose
+ * results are out it is not: every ballot that will ever be cast is in it,
+ * and the roster is a record rather than a progress report. The heading says
+ * whichever of the two this poll is.
+ */
+function VoterList({ voters, final }: { voters: string[]; final: boolean }) {
   return (
     <Card withBorder>
       <Stack gap="xs">
         {/* No count beside it -- see where this is rendered. */}
         <Text fw={500} size="sm">
-          Voted so far
+          {final ? 'Who voted' : 'Voted so far'}
         </Text>
         {voters.length === 0 ? (
           <Text size="sm" c="dimmed">
