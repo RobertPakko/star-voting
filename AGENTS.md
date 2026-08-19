@@ -1008,7 +1008,10 @@ rows, so the two can't disagree.
 
 The counts ride along in the payload rather than being fetched when a reader
 expands something: they are a few integers over a poll whose results that
-reader is already holding. `Results.tsx` still handles their absence, for the
-same reason `FullRanking` handles a missing `ranking` — the built app deploys
-on push while migrations are applied when they merge, so a browser can hold
-this code against an older `star_round` for a few minutes.
+reader is already holding. `TiebreakStep` is a union on `rule` rather than one
+shape with an optional `matchups`, so a head-to-head step cannot be read
+without them — they are what that rule counted, not an extra it might carry.
+There is deliberately no fallback for a browser holding this code against an
+older `star_round`: the app deploys on push and the migration applies on the
+same merge, so that window is minutes long, and a branch nothing reaches after
+them is worse than the window is.

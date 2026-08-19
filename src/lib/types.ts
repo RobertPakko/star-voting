@@ -152,17 +152,27 @@ export interface Matchup {
   ties: number
 }
 
-/** One rule tried while resolving a tie, and whether it settled it. */
-export interface TiebreakStep {
-  rule: 'head_to_head' | 'five_star_votes'
+/**
+ * One rule tried while resolving a tie, and whether it settled it.
+ *
+ * A union rather than one shape with an optional field, because the pairs
+ * are not an extra a head-to-head step might carry: they are what the rule
+ * counted, and there is no such thing to carry for a five-star count.
+ */
+export type TiebreakStep = HeadToHeadStep | FiveStarStep
+
+export interface HeadToHeadStep {
+  rule: 'head_to_head'
   results: TiebreakEntry[]
   decisive: boolean
-  /**
-   * The pairs a head_to_head step compared, each once — the counts its
-   * per-option win totals are made of. Absent on five_star_votes steps, and
-   * against a database whose star_round predates them.
-   */
-  matchups?: Matchup[]
+  /** Every pair in the tied group, once — what `results` was counted from. */
+  matchups: Matchup[]
+}
+
+export interface FiveStarStep {
+  rule: 'five_star_votes'
+  results: TiebreakEntry[]
+  decisive: boolean
 }
 
 /** One tie encountered in the score round, and how STAR resolved it. */

@@ -13,7 +13,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
 import { recall, remember } from '../lib/settled'
-import type { Matchup, PollResults, TiebreakStep } from '../lib/types'
+import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { OptionDescription } from './OptionDescription'
 import { ResultsSkeleton } from './Skeletons'
@@ -259,23 +259,8 @@ export function Results({ source }: { source: ResultsSource }) {
  * beat the most others -- and shows the pairs they were counted from
  * underneath.
  */
-function HeadToHead({ step }: { step: TiebreakStep }) {
-  const matchups = step.matchups
-
-  // The built app ships on push while migrations land when they merge, so a
-  // browser can hold this code against a star_round that does not send the
-  // pairs yet. Fall back to the totals rather than showing nothing.
-  if (!matchups?.length) {
-    return (
-      <>
-        {step.results.map((r) => (
-          <Text key={r.id} size="sm" c="dimmed" pl="md">
-            {r.name}: {r.value} {r.value === 1 ? 'matchup won' : 'matchups won'}
-          </Text>
-        ))}
-      </>
-    )
-  }
+function HeadToHead({ step }: { step: HeadToHeadStep }) {
+  const { matchups } = step
 
   if (matchups.length === 1) {
     const m = matchups[0]
