@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Card, Center, Group, Loader, Stack, Table, Text, Title } from '@mantine/core'
+import { Card, Group, Stack, Table, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
+import { BallotsSkeleton } from './Skeletons'
 import type { BallotSheet } from '../lib/types'
 
 /**
@@ -56,13 +57,7 @@ export function Ballots({ source }: { source: BallotsSource }) {
     )
   }
 
-  if (!sheet) {
-    return (
-      <Center py="md">
-        <Loader size="sm" />
-      </Center>
-    )
-  }
+  if (!sheet) return <BallotsSkeleton />
 
   const named = sheet.voters_named
   // Unscored options count as 0 everywhere else in the app; a ballot missing

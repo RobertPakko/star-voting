@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Center, Loader, Stack, Text, Title } from '@mantine/core'
+import { Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollTags } from '../components/PollTags'
+import { PollPageSkeleton } from '../components/Skeletons'
 import type { OpenPollView } from '../lib/types'
 
 /**
@@ -64,13 +65,7 @@ export function PublicPoll() {
     )
   }
 
-  if (!view) {
-    return (
-      <Center h="60vh">
-        <Loader />
-      </Center>
-    )
-  }
+  if (!view) return <PollPageSkeleton />
 
   return (
     <Stack gap="lg" maw={720} mx="auto">

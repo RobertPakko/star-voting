@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import {
-  Badge,
-  Button,
-  Card,
-  Center,
-  Group,
-  Loader,
-  Progress,
-  Rating,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core'
+import { Badge, Button, Card, Group, Progress, Rating, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -24,6 +12,7 @@ import { CreatorControls } from '../components/CreatorControls'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { OptionDescription } from '../components/OptionDescription'
 import { PollTags } from '../components/PollTags'
+import { PollPageSkeleton } from '../components/Skeletons'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
@@ -154,13 +143,9 @@ export function PollDetail() {
     load()
   }, [load])
 
-  if (loading) {
-    return (
-      <Center py="xl">
-        <Loader />
-      </Center>
-    )
-  }
+  // The shape of the page that is coming: a title, the poll's terms, and
+  // the cards of a ballot. See the note in Skeletons.tsx.
+  if (loading) return <PollPageSkeleton />
 
   if (error || !poll || !status) {
     return (
@@ -234,10 +219,14 @@ export function PollDetail() {
       )}
 
       {/* Held back until you have voted, for the reasons set out where the
-          open-poll panel does the same. The creator is exempt twice over:
-          they decide when to close, and this is also where they manage the
-          invite list. */}
-      {!isOpen && (status.voted || isCreator) && (
+          open-poll panel does the same -- including the two exemptions. The
+          creator is exempt twice over: they decide when to close, and this
+          is also where they manage the invite list. A poll whose results are
+          out is exempt because the embargo exists to keep a roster away from
+          somebody still holding a ballot, and there are no ballots left to
+          hold. It is also where turnout is reported now that the results
+          above it no longer state it themselves. */}
+      {!isOpen && (status.voted || isCreator || status.results_available) && (
         <Respondents
           pollId={poll.id}
           isCreator={isCreator}

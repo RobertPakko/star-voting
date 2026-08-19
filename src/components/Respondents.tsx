@@ -8,12 +8,21 @@ import type { Invitee, PollStatus } from '../lib/types'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
- * The invite list for an invite-mode poll.
+ * Who has responded to an invite-mode poll, in whichever shape the poll
+ * allows: the invite list, or the count on its own.
  *
- * Who sees it is decided in the database (poll_invitees): every participant
- * when the poll shows respondents, the creator alone otherwise — and in
- * that case has_voted comes back null, so the creator keeps the address
- * list they need to manage invites without the roster of who has voted.
+ * Who sees the list is decided in the database (poll_invitees): every
+ * participant when the poll shows respondents, the creator alone otherwise —
+ * and in that case has_voted comes back null, so the creator keeps the
+ * address list they need to manage invites without the roster of who voted.
+ *
+ * A participant on a poll that hides respondents gets no list at all, and
+ * used to get nothing: the component rendered null and turnout went
+ * unreported on their screen. But the count is not what hiding respondents
+ * hides — "only the number of votes is shown, to everyone" is exactly what
+ * the setting promises — so that case is now a card with the number in it.
+ * It is also the only place turnout appears once the results are out, since
+ * the results themselves no longer restate it.
  *
  * The add/remove controls are creator-only and unchanged in behaviour.
  */
@@ -117,7 +126,27 @@ export function Respondents({
     onChange()
   }
 
-  if (hidden) return null
+  // No access to the roster, which on this poll means there is no roster to
+  // have: what is left is the number, which the poll shows everybody.
+  if (hidden) {
+    return (
+      <Card withBorder>
+        <Stack gap="xs">
+          <Group justify="space-between" gap="xs">
+            <Text fw={500} size="sm">
+              Responses
+            </Text>
+            <Badge {...countBadge}>
+              {status.voted_count}/{status.invited_count} voted
+            </Badge>
+          </Group>
+          <Text size="xs" c="dimmed">
+            This poll hides who has responded, so only the number of votes is shown.
+          </Text>
+        </Stack>
+      </Card>
+    )
+  }
 
   if (!invitees) {
     return error ? (

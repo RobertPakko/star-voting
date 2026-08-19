@@ -56,6 +56,38 @@ export function OpenPollPanel({
     )
   }
 
+  // Who took part, in the one shape this poll can say it: the roster when it
+  // names respondents, a bare count when it doesn't. Rendered under whatever
+  // stage the poll is in, so turnout is reported once on every screen and in
+  // the same place -- the results above it no longer state it themselves.
+  //
+  // Held back until you have voted, because nothing in it helps you fill in a
+  // ballot and on a poll that names respondents it is a live feed of the
+  // arrival order -- which the app otherwise works to keep off the published
+  // ballots (see the ordering note in AGENTS.md). Withholding it until you
+  // vote leaves that order visible only to people actually in the poll rather
+  // than to anyone holding the link.
+  //
+  // Two exemptions. The creator, because the roster is what "close voting
+  // now" gets decided on and a creator who isn't voting could never earn the
+  // view. And a poll whose results are out, because the reason for the
+  // embargo is that a ballot might still be cast, and on that poll none can.
+  const participation =
+    view.voted || isCreator || view.results_available ? (
+      view.voters ? (
+        <VoterList voters={view.voters} />
+      ) : (
+        <Card withBorder>
+          <Group justify="space-between" gap="xs">
+            <Text size="sm" c="dimmed">
+              This poll doesn't show who has responded.
+            </Text>
+            <ResponseCount count={view.voted_count} />
+          </Group>
+        </Card>
+      )
+    ) : null
+
   if (view.results_available) {
     return (
       <Stack gap="lg">
@@ -63,6 +95,7 @@ export function OpenPollPanel({
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {view.poll.show_ballots && <Ballots source={{ kind: 'token', token }} />}
+        {participation}
       </Stack>
     )
   }
@@ -98,31 +131,7 @@ export function OpenPollPanel({
         />
       )}
 
-      {/* Participation is held back until you have voted: nothing in it helps
-          you fill in a ballot, and on a poll that names respondents it is a
-          live feed of the arrival order -- which the app otherwise works to
-          keep off the published ballots (see the ordering note in AGENTS.md).
-          Withholding it until you vote leaves that order visible only to
-          people actually in the poll, rather than to anyone holding the link.
-
-          The creator is exempt: the roster is what "close voting now" is
-          decided on, and a creator who isn't voting can never earn the view.
-
-          Exactly one place reports participation: the roster when the poll
-          names respondents, a bare count when it doesn't. */}
-      {(view.voted || isCreator) &&
-        (view.voters ? (
-          <VoterList voters={view.voters} />
-        ) : (
-          <Card withBorder>
-            <Group justify="space-between" gap="xs">
-              <Text size="sm" c="dimmed">
-                This poll doesn't show who has responded.
-              </Text>
-              <ResponseCount count={view.voted_count} />
-            </Group>
-          </Card>
-        ))}
+      {participation}
     </Stack>
   )
 }

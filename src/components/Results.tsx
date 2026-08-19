@@ -1,9 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Badge, Card, Center, Group, Loader, Progress, Stack, Text, Title } from '@mantine/core'
+import {
+  ActionIcon,
+  Badge,
+  Card,
+  Group,
+  Popover,
+  Progress,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
 import type { PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
+import { OptionDescription } from './OptionDescription'
+import { ResultsSkeleton } from './Skeletons'
 import { voters } from '../lib/plural'
 
 /**
@@ -49,29 +61,23 @@ export function Results({ source }: { source: ResultsSource }) {
     )
   }
 
-  if (!results) {
-    return (
-      <Center py="xl">
-        <Loader />
-      </Center>
-    )
-  }
+  if (!results) return <ResultsSkeleton />
 
   const nameById = new Map(results.options.map((o) => [o.id, o.name]))
   const maxScore = Math.max(1, ...results.options.map((o) => o.total_score))
 
   return (
     <Stack gap="lg">
-      <Text size="sm" c="dimmed">
-        {results.mode === 'open'
-          ? // Open polls have no invite list, so a participation rate would
-            // be meaningless — there's no denominator.
-            `${results.voter_count} ${results.voter_count === 1 ? 'person' : 'people'} voted`
-          : `${results.voter_count} of ${results.invited_count} ${
-              results.invited_count === 1 ? 'invited voter' : 'invited voters'
-            } participated`}
-        {results.closed_early && ' — voting was closed early'}
-      </Text>
+      {/* Turnout is reported once, by the participation card below the
+          results, and not again here: the same two numbers stated twice on
+          one screen read as two different facts that happen to agree. What
+          is left is the one thing that card cannot say -- that the numbers
+          are smaller than they were going to be. */}
+      {results.closed_early && (
+        <Text size="sm" c="dimmed">
+          Voting was closed early, so these results count the ballots cast up to that point.
+        </Text>
+      )}
 
       {results.winner_id && (
         <Card withBorder bg="var(--mantine-color-green-light)">
@@ -94,9 +100,12 @@ export function Results({ source }: { source: ResultsSource }) {
           {results.options.map((o) => (
             <div key={o.id}>
               <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
-                <Text size="sm" fw={results.finalists.includes(o.id) ? 700 : 400} truncate>
-                  {o.name}
-                </Text>
+                <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+                  <Text size="sm" fw={results.finalists.includes(o.id) ? 700 : 400} truncate>
+                    {o.name}
+                  </Text>
+                  {o.description && <OptionNote name={o.name} description={o.description} />}
+                </Group>
                 <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
                   {o.total_score} pts (avg {o.average_score})
                 </Text>
@@ -213,5 +222,64 @@ export function Results({ source }: { source: ResultsSource }) {
 
       <FullRanking results={results} />
     </Stack>
+  )
+}
+
+/**
+ * What an option said, once the ballot that said it is gone.
+ *
+ * A description is a voting aid: on the ballot it belongs under the option's
+ * name, where it is read while the decision is being made. By the time the
+ * results are out that decision has been taken, and a paragraph beside a bar
+ * of points is in the way of the number it is sitting next to. But it is
+ * also the only record of what the option actually was, and a poll read back
+ * months later is exactly when "Option B" needs explaining.
+ *
+ * So it is here, and it is folded away: one dimmed mark beside the name,
+ * showing nothing at all on the options that never had one -- which is
+ * nearly all of them. A popover rather than a tooltip, because a tooltip on
+ * a phone is a thing that cannot be opened.
+ */
+function OptionNote({ name, description }: { name: string; description: string }) {
+  return (
+    <Popover width={280} position="bottom-start" withArrow shadow="md">
+      <Popover.Target>
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          size="sm"
+          radius="xl"
+          aria-label={`What ${name} said`}
+        >
+          <InfoIcon />
+        </ActionIcon>
+      </Popover.Target>
+      <Popover.Dropdown>
+        <Stack gap={4}>
+          <Text size="sm" fw={500}>
+            {name}
+          </Text>
+          <OptionDescription description={description} />
+        </Stack>
+      </Popover.Dropdown>
+    </Popover>
+  )
+}
+
+function InfoIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={14}
+      height={14}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 7.5v.5" />
+    </svg>
   )
 }

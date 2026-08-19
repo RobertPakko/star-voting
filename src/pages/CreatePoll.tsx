@@ -4,10 +4,8 @@ import {
   ActionIcon,
   Alert,
   Button,
-  Center,
   Checkbox,
   Group,
-  Loader,
   SegmentedControl,
   Stack,
   Switch,
@@ -22,6 +20,7 @@ import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { DescriptionField } from '../components/DescriptionField'
+import { FormSkeleton } from '../components/Skeletons'
 import type { Invitee, Poll, PollMode, PollOption } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -217,13 +216,9 @@ export function CreatePoll() {
     navigate(`/polls/${data as string}`)
   }
 
-  if (prefilling) {
-    return (
-      <Center py="xl">
-        <Loader />
-      </Center>
-    )
-  }
+  // Only ever on a duplicate, and only until the source poll comes back:
+  // the form it is standing in for is the one being filled in from it.
+  if (prefilling) return <FormSkeleton />
 
   return (
     <Stack maw={560} mx="auto" gap="md">
