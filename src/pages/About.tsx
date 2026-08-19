@@ -17,8 +17,8 @@ export function About() {
         </Title>
         <Text>
           <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is a mechanism
-          for conducting elections. It can be used for decisions as serious as choosing a national
-          leader to as trivial as selecting a film for your next movie night. This website allows
+          for conducting elections. It can be used for decisions from choosing a national leader
+          to selecting a film for your next movie night. This website allows
           you to create and respond to polls using STAR voting.
         </Text>
       </Stack>
@@ -29,8 +29,8 @@ export function About() {
         </Title>
         <Text>
           STAR voting is an acronym that stands for &ldquo;Score Then Automatic Runoff&rdquo;. It
-          is a combination of{' '}
-          <Ext href="https://en.wikipedia.org/wiki/Score_voting">score voting</Ext> and{' '}
+          combines{' '}
+          <Ext href="https://en.wikipedia.org/wiki/Score_voting">score voting</Ext> with{' '}
           <Ext href="https://en.wikipedia.org/wiki/Instant-runoff_voting">ranked choice voting</Ext>{' '}
           algorithms. The following procedure is used to resolve an election:
         </Text>
@@ -41,8 +41,8 @@ export function About() {
             score and 5 being the best score.
           </List.Item>
           <List.Item>
-            Once all votes are cast, for each option, a score is calculated reflecting the total
-            number of stars that the option received.
+            Once all votes are cast, a score for reach option is calculated reflecting the total
+            number of stars that it received.
           </List.Item>
           <List.Item>
             The two options with the highest scores are selected as finalists
@@ -60,8 +60,7 @@ export function About() {
           Why would I want to use STAR voting?
         </Title>
         <Text>
-          STAR voting has a combination of cohesive properties that no other voting system offers
-          in its entirety. STAR voting is:
+          STAR voting has several useful properties that no other voting system offers in full. STAR voting is:
         </Text>
         {/* Each property answers the shortcoming of the system above it, so
             these stay in order and read as one argument rather than a
@@ -79,17 +78,19 @@ export function About() {
       </Stack>
 
       <Stack gap="sm">
-        <Divider />
         <Title order={3} size="h5">
           Footnotes
         </Title>
         <List type="ordered" spacing="xs" size="sm" withPadding c="dimmed">
           <List.Item>
-            A tie in the scoring round is broken in favor of the option that is preferred by the most
-            voters among the tied options. An option is 'preferred by more voters' when it receives a higher score than the other
-            option(s) on a greater number of ballots than the other option(s). If the options are
-            still tied, it goes to the one given five stars on the most ballots. If they remain
-            tied after both rules, a finalist is chosen randomly between them. 
+            A tie in the scoring round is broken in favor of the option that is preferred by the
+            most voters among the tied options. That's decided by comparing the tied options one
+            pair at a time. For each pair, we check which option is preferred by more voters. An
+            option is 'preferred by more voters' when it receives a higher score than the other
+            option on a greater number of ballots than the other option. Whichever option is preferred
+            in the most of these one-on-one comparisons wins the tie. If the options are still tied,
+            the tie is broken in favor of the option given five stars on the most ballots. If they
+            remain tied after both rules, a finalist is chosen randomly between them.
           </List.Item>
           <List.Item>
             A tie in the runoff is broken in favor of the option with the higher total score. If
@@ -108,7 +109,7 @@ export function About() {
           </List.Item>
           <List.Item>
             If you want to audit and verify things yourself, the complete
-            implementation of this site can be found at{' '}
+            implementation of this site is available at{' '}
             <Ext href="https://github.com/RobertPakko/star-voting">
               github.com/RobertPakko/star-voting
             </Ext>
