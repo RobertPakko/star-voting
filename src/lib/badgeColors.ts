@@ -24,10 +24,20 @@
  * signal the badge is one too many, not a reason to double up.
  */
 export const badgeColor = {
-  // The settings a poll is frozen with that a card puts on screen. The two
-  // states of one setting never appear together, so what these are spaced
-  // against is the *other* settings on the same row -- which is why the
-  // pairs are not same-family.
+  // The settings a poll is frozen with that a card puts on screen: one hue
+  // family per question -- purple for who can vote, blue for the roster,
+  // green for the ballots -- and the two answers to it are two hues within
+  // that family. The families are what the row is scanned by, since exactly
+  // one badge from each is on screen at a time; the pairing within a family
+  // is what says the two badges answer the same question.
+  //
+  // **Neither answer may read as the right one.** Both settings of both
+  // switches are a choice the poll's creator is entitled to make, and this
+  // pair used to be teal against pink: green and red, which is a mark for
+  // one answer and a mark against the other. A poll that keeps its ballots
+  // private is not a poll doing it wrong. Nothing here carries approval --
+  // that is what `done` and `outstanding` below are for, and they are about
+  // progress, which does have a right end to be at.
   //
   // Where the options came from is frozen with these three and is not here:
   // it is the one setting nobody scans for, and the row it was in had grown
@@ -37,7 +47,7 @@ export const badgeColor = {
   respondentsShown: 'cyan',
   respondentsHidden: 'blue',
   ballotsPublished: 'teal',
-  ballotsPrivate: 'pink',
+  ballotsPrivate: 'lime',
 
   /**
    * States rather than settings, so both are neutral where the settings

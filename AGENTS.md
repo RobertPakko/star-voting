@@ -433,16 +433,25 @@ badge takes the numbers and builds its own label rather than being handed one.
 **One poll looks like one thing wherever it is read.** The card on the list,
 the poll's own page and the public voting page share a header: where the poll
 has got to, in a badge beside its title, then four badges saying what kind of
-poll it is — **how many have answered**, then respondents shown/hidden, then
-ballots published/private, then invite only/open link. The count leads
-because it is the only one that moves; the access mode ends the row because
-it is the one that never does. Two screens describing one poll differently is
-two things to learn about a poll instead of one.
+poll it is — **invite only/open link**, then respondents shown/hidden, then
+ballots published/private, then how many have answered. The three settings
+run in the order `CreatePoll` asks for them, so the form that sets a poll's
+terms and the row that reports them tell one story in one order; the count
+comes last of the four because it is the only one that is not a setting at
+all. Two screens describing one poll differently is two things to learn about
+a poll instead of one.
 
 Three decisions hold that shape:
 
 - **Where the options came from is not in the row**, alone of the four
   settings — see above.
+- **No badge in the row carries approval.** Both settings of both switches
+  are the creator's to make, so neither state of a pair may look like the
+  right answer. Ballots published/private was teal against pink until it read
+  as green against red — a tick for publishing and a cross for not — and is
+  now two greens, one hue family for one question, like the other two pairs.
+  Approval belongs to the progress colours (`done`, `outstanding`), which are
+  about getting somewhere rather than about a choice.
 - **The count stays after the poll closes.** It used to be replaced by
   *Results ready* at exactly the moment it stopped being a moving number and
   became a permanent fact about the poll. While a poll is collecting options

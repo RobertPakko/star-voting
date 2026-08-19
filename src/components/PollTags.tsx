@@ -8,10 +8,14 @@ import type { PollMode } from '../lib/types'
  * beside the title saying where it has got to.
  *
  * The row is the same four badges everywhere, in the same order and the same
- * words: **how many have answered**, then respondents shown/hidden, then
- * ballots published/private, then invite only/open link. The count leads
- * because it is the only one that moves; the access mode ends the row
- * because it is the one that never does.
+ * words: **invite only/open link**, then respondents shown/hidden, then
+ * ballots published/private, then how many have answered. The three settings
+ * are in the order they are chosen in `CreatePoll` -- who can vote, then
+ * whether their names are shown, then whether their ballots are -- so the
+ * form that sets a poll's terms and the row that reports them tell one story
+ * in one order, and nobody has to re-sort the row to check what they picked.
+ * The count comes last of the four because it is the only one that is not a
+ * setting at all: it is the poll happening rather than the poll's terms.
  *
  * Always-present matters more than it sounds: when a tag only appeared for
  * one of its two states, its absence had to be read as the other state, and
@@ -55,7 +59,9 @@ export function PollTags({
 }) {
   return (
     <Group gap="xs">
-      {turnout && <Badge {...countBadge}>{turnoutLabel(turnout)}</Badge>}
+      <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
+        {mode === 'open' ? 'Open link' : 'Invite only'}
+      </Badge>
       <Badge
         color={showVoters ? badgeColor.respondentsShown : badgeColor.respondentsHidden}
         variant="light"
@@ -68,9 +74,7 @@ export function PollTags({
       >
         {showBallots ? 'Ballots published' : 'Ballots private'}
       </Badge>
-      <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
-        {mode === 'open' ? 'Open link' : 'Invite only'}
-      </Badge>
+      {turnout && <Badge {...countBadge}>{turnoutLabel(turnout)}</Badge>}
     </Group>
   )
 }
