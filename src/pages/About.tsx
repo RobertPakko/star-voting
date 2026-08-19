@@ -49,8 +49,7 @@ export function About() {
             <Footnote n={1} />.
           </List.Item>
           <List.Item>
-            Among the two finalists, the option that was given a higher score on a greater number
-            of ballots is selected as the winner
+            Among the two finalists, the option that is preferred by more voters is selected as the winner
             <Footnote n={2} />.
           </List.Item>
         </List>
@@ -86,17 +85,16 @@ export function About() {
         </Title>
         <List type="ordered" spacing="xs" size="sm" withPadding c="dimmed">
           <List.Item>
-            A tie in the scoring round is broken in favor of the option that is preferred by more
-            voters in head-to-head comparisons against the other tied options. If the options are
+            A tie in the scoring round is broken in favor of the option that is preferred by the most
+            voters among the tied options. An option is 'preferred by more voters' when it receives a higher score than the other
+            option(s) on a greater number of ballots than the other option(s). If the options are
             still tied, it goes to the one given five stars on the most ballots. If they remain
-            tied after both rules, a finalist is chosen randomly between them.
+            tied after both rules, a finalist is chosen randomly between them. 
           </List.Item>
           <List.Item>
             A tie in the runoff is broken in favor of the option with the higher total score. If
             both finalists also have the same score, it goes to the one given five stars on more
-            ballots — the same rule that settles a tie in the scoring round. If they are level on
-            all three, the election has no winner: the tie is genuine, and this site reports it as
-            such rather than inventing a result.
+            ballots. If they are level on all three, the election has no winner.
           </List.Item>
           <List.Item>
             <Ext href="https://en.wikipedia.org/wiki/Gibbard%27s_theorem">Gibbard&rsquo;s theorem</Ext>{' '}
@@ -109,9 +107,8 @@ export function About() {
             can&rsquo;t be audited reliably.
           </List.Item>
           <List.Item>
-            This site is open source, which is a form of transparency in its own right: an
-            election result is only as auditable as the code that produced it. The complete
-            implementation — including every tie-break rule described above — can be read at{' '}
+            If you want to audit and verify things yourself, the complete
+            implementation of this site can be found at{' '}
             <Ext href="https://github.com/RobertPakko/star-voting">
               github.com/RobertPakko/star-voting
             </Ext>
@@ -141,8 +138,7 @@ const PROPERTIES: { name: string; body: ReactNode }[] = [
       <>
         <Ext href="https://en.wikipedia.org/wiki/Approval_voting">Approval voting</Ext> solves the
         above problem, but it doesn&rsquo;t allow voters to express the magnitude of their
-        preference. STAR voting is expressive because voters have various levels of preference that
-        can be assigned to options.
+        preference. STAR voting is expressive because voters can express different levels of preference for each option.
       </>
     ),
   },
@@ -163,8 +159,8 @@ const PROPERTIES: { name: string; body: ReactNode }[] = [
     body: (
       <>
         <Ext href="https://en.wikipedia.org/wiki/Instant-runoff_voting">Ranked choice voting</Ext>{' '}
-        solves the above problems, but it&rsquo;s simply inaccurate in many cases (enumerated on
-        Wikipedia). STAR voting is accurate because it addresses most
+        solves the above problems, but it&rsquo;s simply inaccurate in some cases. It's vulnerable to
+        'center squeeze' and 'spoiler' effects in common scenarios. STAR voting is accurate because it addresses most
         <Footnote n={4} /> situations where ranked choice voting becomes inaccurate.
       </>
     ),
