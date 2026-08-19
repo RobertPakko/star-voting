@@ -203,3 +203,28 @@ returns text[] language sql stable as $$
        jsonb_array_elements(r->'options') o
   where (r->>'place')::int = p_place
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Time travel
+-- ---------------------------------------------------------------------------
+
+-- Moves a poll, and everything in it, back in time by p_age.
+--
+-- Retention is the one behaviour a case cannot reach through the app: it
+-- needs months to pass. So this is the one helper that writes to a table
+-- directly -- and it writes only to the timestamps the app sets itself, so
+-- what it leaves behind is a state the app would have produced that long
+-- ago, not one it could never produce.
+create or replace function tests.age_poll(p_poll uuid, p_age interval)
+returns void language plpgsql as $$
+begin
+  update polls
+  set created_at = created_at - p_age,
+      closed_at = closed_at - p_age,
+      options_finalized_at = options_finalized_at - p_age
+  where id = p_poll;
+
+  update ballots
+  set submitted_at = submitted_at - p_age
+  where poll_id = p_poll;
+end $$;

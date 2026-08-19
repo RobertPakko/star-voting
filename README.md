@@ -31,6 +31,8 @@ Publishing ballots is about *how people voted*; showing respondents is about *wh
 
 Once the poll is running you can close voting early, reset the votes and start over, duplicate the poll into a new one, or delete it outright.
 
+Polls aren't kept forever. Six months after a poll is created, it and every ballot in it are deleted automatically — voting in it or closing it doesn't push that back. Every poll page says which day it goes on, and duplicating a poll starts a fresh one with six months of its own.
+
 ## Running your own copy
 
 React + Vite on top of [Supabase](https://supabase.com) (Postgres + Auth), deployed to GitHub Pages. Setup instructions, the database layout, and the reasoning behind the rules above live in [AGENTS.md](AGENTS.md).

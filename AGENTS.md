@@ -92,6 +92,11 @@ Repo **Settings → Pages** should show the domain once DNS resolves, with
    `https://choicelab.app/star-voting/` and add your dev URL
    (`http://localhost:5173`) to the allowed redirect URLs, or magic links
    won't be able to redirect back to the app.
+6. Under **Database → Extensions**, check that `pg_cron` is enabled. The
+   migration that schedules the nightly purge of expired polls enables it
+   itself and shrugs if it cannot, so a project where it was unavailable ends
+   up with the purge defined and never running — see [Polls are deleted after
+   six months](#polls-are-deleted-after-six-months).
 
 ### 2. Local development
 
@@ -228,7 +233,9 @@ session table, which is enough to let the migrations apply and to sign a seeded
 voter in, but it is not Supabase's auth and a passing suite says nothing about
 who is allowed to read a poll. `run.sh` also drops three extensions a stock
 Postgres does not have and the `MAINTAIN` privilege, none of which the tally
-touches. Everything else is applied verbatim, so the functions under test are
+touches. A fourth, `pg_cron`, is not edited out here but guards itself in the
+migration that wants it, so the retention rules are tested on a database with
+no scheduler in it. Everything else is applied verbatim, so the functions under test are
 the ones that ship.
 
 ## Live updates
@@ -793,6 +800,73 @@ options, and keeping it here means it is never withheld — the link has to go
 out before anyone, the creator included, has voted. Open polls also offer it on
 the thank-you card once you have voted, where passing it on is a reasonable
 thing to want.
+
+### Polls are deleted after six months
+
+Nothing in this app had ever removed a poll it was not told to remove, so
+every poll ever created was still in the database and the storage bill only
+went one way. The app is free and promises nobody a permanent record; what it
+does promise instead is a rule that is written down, applied to every poll
+alike, and visible on the poll itself before it comes due.
+[`0025_poll_retention.sql`](supabase/migrations/0025_poll_retention.sql) holds
+all of it:
+
+- `poll_retention_window()` is the period, and the only place the number is
+  written down. `poll_expires_at(polls)` is when one poll goes.
+- **The clock runs from `created_at`, and nothing moves it** — not a vote,
+  not the option list being settled, not the creator closing the poll. Dating
+  it from the poll's last activity instead was written and then rejected: an
+  open poll takes votes from anyone holding its link and nobody has to close
+  it, so "six months since something happened" is a window one stray vote
+  reopens and a forgotten poll never reaches — which is the exact poll this
+  exists to clear out. Creation is a date every poll has, that nothing can
+  move, and that its creator can read off the page on the day they make it.
+  A poll that has to outlive its six months gets **Duplicate**, which the
+  creator already has.
+- `purge_old_polls()` deletes every expired poll and returns how many went. It
+  deletes the `polls` row and nothing else: every table hanging off a poll is
+  `ON DELETE CASCADE`, which is what the creator's own **Delete poll** button
+  already relies on, so there is one definition of what deleting a poll means.
+- **pg_cron runs it nightly**, as the job `purge-old-polls`. The extension
+  only exists on a real Supabase project, so both the `create extension` and
+  the `cron.schedule` sit in `DO` blocks that degrade to a notice — the
+  throwaway database `npm test` builds has no scheduler, and defines and tests
+  the function all the same.
+
+If the job is ever missing on the live project — pg_cron not enabled when the
+migration ran is the likely reason — enabling it and scheduling it is the
+whole fix, and nothing else needs redeploying:
+
+```sql
+create extension if not exists pg_cron;
+select cron.schedule('purge-old-polls', '17 4 * * *', 'select public.purge_old_polls()');
+```
+
+`select * from cron.job_run_details order by start_time desc limit 10;` says
+whether it has been running, and `select purge_old_polls();` runs it by hand.
+
+The date reaches the app as `expires_at` on `poll_status()` — which the poll
+page already asks for on a timer — rather than as a column on the `polls`
+select. The app deploys on push and its migrations apply on merge, so a
+browser can be a few minutes ahead of the database: an extra RPC column it
+does not know about is `undefined` and says nothing, where a select naming a
+column that does not exist yet fails outright and takes the poll page with it.
+
+`RetentionNote` (`src/components/RetentionNote.tsx`) is the line at the foot
+of the poll page, shown to everyone the poll admits rather than to its creator
+alone — an invitee's ballot is in there too. It is quiet for almost all of a
+poll's life and becomes an orange warning in the last month, when there is
+still time to act on it. Only the creator is pointed at **Duplicate** there:
+an invitee has no such button, and being told to press one you do not have is
+worse than being told nothing. An automatic deletion is only fair if it was
+never a surprise, which is the whole reason the date is on the poll from the
+day it is created — and why it is the same date on the last day as on the
+first.
+
+The public voting page carries no date, and `open_poll_view` no field for
+one: it answers to a link rather than to an account, and it is read once by
+someone who came to vote. The policy is on the [About](src/pages/About.tsx)
+page, which is public, and on the poll page its creator uses.
 
 ### The QR code
 

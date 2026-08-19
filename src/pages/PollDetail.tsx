@@ -12,6 +12,7 @@ import { CreatorControls } from '../components/CreatorControls'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { OptionDescription } from '../components/OptionDescription'
 import { PollTags } from '../components/PollTags'
+import { RetentionNote } from '../components/RetentionNote'
 import { PollPageSkeleton } from '../components/Skeletons'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
@@ -239,6 +240,12 @@ export function PollDetail() {
 
       {/* The share link is inside Manage poll now -- see the note there. */}
       {isCreator && <CreatorControls poll={poll} status={status} onChange={reloadAll} />}
+
+      {/* Last thing on the page, for everyone who can see the poll rather
+          than its creator alone: a voter's ballot is in here too, and the
+          result they came back to read goes on the same day. Only the
+          creator is pointed at Duplicate, since only they have it. */}
+      <RetentionNote expiresAt={status.expires_at} canDuplicate={isCreator} />
     </Stack>
   )
 }

@@ -66,6 +66,17 @@ export interface PollStatus {
    * finalized, not closed — so it can never disagree with them.
    */
   soliciting: boolean
+  /**
+   * When the poll is deleted: six months after it was created, and nothing
+   * that happens in the poll afterwards moves it — see
+   * 0025_poll_retention.sql.
+   *
+   * Optional because this app deploys on push and its migrations apply on
+   * merge, so a browser can be holding this code against a database whose
+   * poll_status predates the column. A missing date says nothing rather
+   * than guessing one.
+   */
+  expires_at?: string | null
 }
 
 /** One row from list_polls(): a poll and its status, fetched together. */
