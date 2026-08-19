@@ -90,26 +90,22 @@ export function PublicPoll() {
             so the terms of the poll are stated here, not just the one that
             changes what happens to their ballot.
 
-            Turnout is the exception, and is held back until this browser has
-            voted. Everywhere else the count is a click away on the reader's
-            own poll list; here the link is the whole of their access, so
-            putting it above a blank ballot would be the one screen that
-            tells a voter how it is going before they vote. */}
+            The count included, and before this reader has voted. What a poll
+            keeps from its voters is how it is *going* -- the standings, which
+            stay sealed until the results unlock -- and how many have answered
+            is not that. It names nobody, it says nothing about any ballot,
+            and the roster below still waits. */}
         <PollTags
           mode={view.poll.mode}
           showVoters={view.poll.show_voters}
           showBallots={view.poll.show_ballots}
-          turnout={
-            view.voted || view.results_available
-              ? {
-                  soliciting: view.soliciting,
-                  mode: view.poll.mode,
-                  votedCount: view.voted_count,
-                  invitedCount: 0,
-                  optionCount: view.options.length,
-                }
-              : undefined
-          }
+          turnout={{
+            soliciting: view.soliciting,
+            mode: view.poll.mode,
+            votedCount: view.voted_count,
+            invitedCount: 0,
+            optionCount: view.options.length,
+          }}
         />
         {view.poll.description && <Text c="dimmed">{view.poll.description}</Text>}
       </Stack>

@@ -4,7 +4,7 @@ import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { VOTER_NAME_MAX } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
-import { badgeColor, countBadge } from '../lib/badgeColors'
+import { badgeColor } from '../lib/badgeColors'
 import { Ballots } from './Ballots'
 import { CollectOptions } from './CollectOptions'
 import { OptionDescription } from './OptionDescription'
@@ -57,36 +57,25 @@ export function OpenPollPanel({
     )
   }
 
-  // Who took part, in the one shape this poll can say it: the roster when it
-  // names respondents, a bare count when it doesn't. Rendered under whatever
-  // stage the poll is in, so turnout is reported once on every screen and in
-  // the same place -- the results above it no longer state it themselves.
+  // Who has voted, on a poll that names them. Only the names: how many is in
+  // the header badge above, once, on every screen the poll appears on.
   //
-  // Held back until you have voted, because nothing in it helps you fill in a
-  // ballot and on a poll that names respondents it is a live feed of the
-  // arrival order -- which the app otherwise works to keep off the published
-  // ballots (see the ordering note in AGENTS.md). Withholding it until you
-  // vote leaves that order visible only to people actually in the poll rather
-  // than to anyone holding the link.
+  // Held back until you have voted, because watching a roster fill up is a
+  // live feed of the arrival order -- names attached to the moment each one
+  // arrived -- which is what the published ballots work to keep off the
+  // record by ordering themselves on a hash instead of on time. The count on
+  // its own carries no name and is not withheld anywhere.
   //
   // Two exemptions. The creator, because the roster is what "close voting
   // now" gets decided on and a creator who isn't voting could never earn the
   // view. And a poll whose results are out, because the reason for the
   // embargo is that a ballot might still be cast, and on that poll none can.
+  //
+  // A poll that hides respondents renders nothing here at all: it has no
+  // names to show, and the header has already said how many and why.
   const participation =
-    view.voted || isCreator || view.results_available ? (
-      view.voters ? (
-        <VoterList voters={view.voters} />
-      ) : (
-        <Card withBorder>
-          <Group justify="space-between" gap="xs">
-            <Text size="sm" c="dimmed">
-              This poll doesn't show who has responded.
-            </Text>
-            <ResponseCount count={view.voted_count} />
-          </Group>
-        </Card>
-      )
+    view.voters && (view.voted || isCreator || view.results_available) ? (
+      <VoterList voters={view.voters} />
     ) : null
 
   if (view.results_available) {
@@ -137,24 +126,14 @@ export function OpenPollPanel({
   )
 }
 
-function ResponseCount({ count }: { count: number }) {
-  return (
-    <Badge {...countBadge}>
-      {count} {count === 1 ? 'response' : 'responses'}
-    </Badge>
-  )
-}
-
 function VoterList({ voters }: { voters: string[] }) {
   return (
     <Card withBorder>
       <Stack gap="xs">
-        <Group justify="space-between" gap="xs">
-          <Text fw={500} size="sm">
-            Voted so far
-          </Text>
-          <ResponseCount count={voters.length} />
-        </Group>
+        {/* No count beside it -- see where this is rendered. */}
+        <Text fw={500} size="sm">
+          Voted so far
+        </Text>
         {voters.length === 0 ? (
           <Text size="sm" c="dimmed">
             Nobody has voted yet.

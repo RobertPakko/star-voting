@@ -451,12 +451,10 @@ Three decisions hold that shape:
 - **"Vote pending" is gone.** It answered a question about the reader rather
   than about the poll, which is what the rest of the row is for.
 
-The count has one exception, and it is on the **public voting page**: it is
-withheld until that browser has voted. Everywhere else the same number is one
-click away on the reader's own poll list, so withholding it on the poll page
-would be a curtain with a door beside it. A share link is the whole of its
-holder's access, so the badge there would be the one screen in the app that
-tells a voter how it is going before they vote.
+The count is on every one of those screens, including the public voting page
+and including before the reader has voted — see [Whether respondents are
+shown](#whether-respondents-are-shown) for why it is the roster that waits and
+not the number.
 
 The state badge says *Collecting options*, *In progress*, *Closed*, or **the
 option that won**. A finished poll naming its winner is the answer the whole
@@ -619,14 +617,27 @@ knowing how it is going.
 
 This controls *who responded*, never *how they voted*.
 
-Either way, participation is **held back until you have voted**. Someone still
-looking at a blank ballot sees the ballot and the poll's tags, nothing else.
-Two reasons: nothing in the roster helps you fill a ballot in, and on a poll
-that names respondents it is a live feed of the arrival order — the same order
-the anonymous ballot ordering below exists to keep off the published grid.
-Withholding it until you vote leaves that order visible only to people actually
-in the poll rather than to anyone holding the link. It narrows the leak without
-closing it: a voter still sees everyone who arrives after them.
+**The roster is held back until you have voted; the count never is.** The two
+used to be withheld together, which was one rule too many — they are not the
+same disclosure.
+
+What the roster leaks is *names attached to the moment each one arrived*.
+Watching it fill up is a live feed of the arrival order, and that order is
+what the published ballots work to keep off the record by sorting themselves
+on `md5(id)` rather than on time. Note that the roster itself is alphabetical
+(`order by lower(voter_name)`) — the leak is in watching it grow, not in
+reading it once. Withholding it until you vote leaves that order visible only
+to people actually in the poll rather than to anyone holding a link. It
+narrows the leak without closing it: a voter still sees everyone who arrives
+after them.
+
+A bare count leaks neither half. It names nobody, and it says nothing about
+any ballot — so it is on every screen a poll appears on, before you vote and
+after. What a poll keeps from its voters is how it is **going**, and turnout
+is not that: the standings stay sealed until the results unlock, in both
+modes, and no count moves them. The poll list has shown `3/6 voted` for polls
+you had not voted in since long before this was written down, which is the
+app's actual position on whether the number is secret.
 
 Two things are exempt. The **creator**, who sees participation whether or not
 they have voted: the roster is what *Close voting now* gets decided on, and a
@@ -639,17 +650,20 @@ On open polls "you have voted" is the `localStorage` voter key, so clearing site
 data hides the roster again. That is the same deliberately-weak signal behind
 "your vote is in" — a convenience, not a guard, and accepted as such here.
 
-**Participation is reported in exactly one place on any screen**, and that
-place is the card at the bottom rather than the results above it. Both used to
-say it — "6 of 6 invited voters participated" over a card counting the same six
-— and one fact stated twice reads as two facts that happen to agree. The card
-has a shape for every combination, which is what lets the results drop the
-line: the invite list on a poll that shows respondents, the names on an open
-one, and on a poll that hides them a card with nothing in it but the number.
-That last state is new. Hiding respondents has always promised that "only the
-number of votes is shown" — but for a participant who was not the creator, the
-component rendered nothing at all, and turnout went unreported on the one
-screen it mattered on.
+**Turnout is reported in exactly one place on any screen**, and that place is
+the count badge in the poll's header — the same badge, in the same position,
+on the list and on the poll's own page. One fact stated twice reads as two
+facts that happen to agree, which is why the results no longer open with "6 of
+6 invited voters participated" and why neither roster carries a count of its
+own any more.
+
+That leaves the roster answering *who* and nothing else, and it means a poll
+that hides its respondents renders no card at all for anyone but its creator:
+the header has already said how many voted, and the *Respondents hidden* tag
+beside it has already said why nobody is named underneath. The creator still
+gets the list, because for them it is the invite list they manage rather than
+a roster of who voted — and on a hidden poll it comes back with no per-person
+status, which the card says in a line.
 
 ### Whether ballots are published
 

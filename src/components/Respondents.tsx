@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActionIcon, Badge, Button, Card, Group, Stack, Text, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
-import { badgeColor, countBadge } from '../lib/badgeColors'
+import { badgeColor } from '../lib/badgeColors'
 import type { Invitee, PollStatus } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -16,19 +16,23 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * and in that case has_voted comes back null, so the creator keeps the
  * address list they need to manage invites without the roster of who voted.
  *
- * A participant on a poll that hides respondents gets no list at all, and
- * used to get nothing: the component rendered null and turnout went
- * unreported on their screen. But the count is not what hiding respondents
- * hides — "only the number of votes is shown, to everyone" is exactly what
- * the setting promises — so that case is now a card with the number in it.
- * It is also the only place turnout appears once the results are out, since
- * the results themselves no longer restate it.
+ * This card answers *who*, and only that. **How many is not here**: the
+ * count badge in the poll's header says it once, on every screen the poll
+ * appears on, and a card restating it directly underneath is the same fact
+ * arriving twice looking like two.
  *
- * That case is read from the poll rather than from a failed request. The
- * page already knows the setting, and asking anyway meant one request per
- * refresh that was expected to fail — with the further problem that a
- * request failing for any *other* reason would have been reported to the
- * reader as "this poll hides who has responded", which might not be true.
+ * So a poll that hides its respondents renders no card at all for anyone but
+ * its creator — the header has already said how many voted, and the
+ * "Respondents hidden" tag beside it has already said why there are no names
+ * under it. The creator still gets the list, because for them it is the
+ * invite list they manage rather than a roster of who voted.
+ *
+ * Whether the roster is readable is taken from the poll rather than from a
+ * failed request. The page already knows the setting, and asking anyway
+ * meant one request per refresh that was expected to fail — with the further
+ * problem that a request failing for any *other* reason would have been
+ * reported to the reader as "this poll hides who has responded", which might
+ * not be true.
  *
  * The add/remove controls are creator-only and unchanged in behaviour.
  */
@@ -156,27 +160,10 @@ export function Respondents({
   }
 
   // No roster to show, either because the poll hides it or because the read
-  // came back saying so: what is left is the number, which the poll shows
-  // everybody whichever way that setting is set.
-  if (!rosterReadable || hidden) {
-    return (
-      <Card withBorder>
-        <Stack gap="xs">
-          <Group justify="space-between" gap="xs">
-            <Text fw={500} size="sm">
-              Responses
-            </Text>
-            <Badge {...countBadge}>
-              {status.voted_count}/{status.invited_count} voted
-            </Badge>
-          </Group>
-          <Text size="xs" c="dimmed">
-            This poll hides who has responded, so only the number of votes is shown.
-          </Text>
-        </Stack>
-      </Card>
-    )
-  }
+  // came back saying so. Nothing takes its place: the header's count badge
+  // has said how many voted and its "Respondents hidden" tag has said why
+  // nobody is named, so a card here would only repeat both.
+  if (!rosterReadable || hidden) return null
 
   if (!invitees) {
     return error ? (
@@ -191,14 +178,11 @@ export function Respondents({
   return (
     <Card withBorder>
       <Stack gap="xs">
-        <Group justify="space-between" gap="xs">
-          <Text fw={500} size="sm">
-            Invited voters
-          </Text>
-          <Badge {...countBadge}>
-            {status.voted_count}/{status.invited_count} voted
-          </Badge>
-        </Group>
+        {/* No count beside it: the header badge above already carries the
+            number, and this card is about who rather than how many. */}
+        <Text fw={500} size="sm">
+          Invited voters
+        </Text>
 
         {invitees.map((invitee) => (
           <Group key={invitee.email} justify="space-between" wrap="nowrap" gap="xs">
@@ -236,7 +220,8 @@ export function Respondents({
 
         {!showsStatus && (
           <Text size="xs" c="dimmed">
-            This poll hides who has responded, so only the number of votes is shown.
+            This poll hides who has responded, so nobody — you included — can see which of these
+            people have voted.
           </Text>
         )}
 
