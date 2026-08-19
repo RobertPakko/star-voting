@@ -22,8 +22,10 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 
 # Extensions that only exist on a Supabase instance, and that nothing under
 # test uses. pg_stat_statements is real but needs shared_preload_libraries, so
-# it goes too rather than making every contributor edit postgresql.conf.
-UNAVAILABLE='^CREATE EXTENSION.*(pg_net|supabase_vault|pg_stat_statements)'
+# it goes too rather than making every contributor edit postgresql.conf, and
+# pg_cron needs the same -- the only thing it schedules here is
+# purge_old_polls(), which the retention case calls directly.
+UNAVAILABLE='^CREATE EXTENSION.*(pg_cron|pg_net|supabase_vault|pg_stat_statements)'
 
 # Rewrites one migration into something a stock Postgres will accept. Two
 # edits: the extensions above, and the MAINTAIN privilege, which Postgres 17
