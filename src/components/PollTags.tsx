@@ -1,124 +1,206 @@
 import { Badge, Group } from '@mantine/core'
-import { badgeColor } from '../lib/badgeColors'
+import { badgeColor, countBadge } from '../lib/badgeColors'
 import type { PollMode } from '../lib/types'
 
 /**
- * The four settings a poll is frozen with, always all four, always in the
- * same order and the same words — the same order the create form asks them
- * in.
+ * A poll's high-level details, in the same shape on every screen that shows
+ * a poll: a row of badges saying what kind of poll it is, and one badge
+ * beside the title saying where it has got to.
+ *
+ * The row is the same four badges everywhere, in the same order and the same
+ * words: **how many have answered**, then respondents shown/hidden, then
+ * ballots published/private, then invite only/open link. The count leads
+ * because it is the only one that moves; the access mode ends the row
+ * because it is the one that never does.
  *
  * Always-present matters more than it sounds: when a tag only appeared for
  * one of its two states, its absence had to be read as the other state, and
- * "no tag" is not something anyone reads. Showing both states of all four
- * means the terms of a poll can be taken in at a glance and compared between
- * polls.
+ * "no tag" is not something anyone reads. Showing both states of all three
+ * settings means the terms of a poll can be taken in at a glance and
+ * compared between polls.
  *
- * Every state carries its own colour rather than one colour per setting —
- * see `src/lib/badgeColors.ts` for why, and for the whole palette these are
- * picked from.
- *
- * The wording is deliberately not symmetrical across the four. Respondents
- * are shown or hidden -- hiding them lists nobody at all, which is not the
- * same as listing them anonymously -- while ballots are published or
- * private. An anonymous ballot is the two tags together: respondents hidden,
- * ballots published. Options say where they came from rather than whether
- * they are open, because by the time most people read the tag the list has
- * been settled and only its origin is still true.
+ * The wording is deliberately not symmetrical. Respondents are shown or
+ * hidden -- hiding them lists nobody at all, which is not the same as
+ * listing them anonymously -- while ballots are published or private. An
+ * anonymous ballot is the two tags together: respondents hidden, ballots
+ * published.
  *
  * These tags are also the only place a voter is told what happens to their
- * ballot, so every page carrying a ballot puts them above it.
+ * ballot, so every page carrying a ballot puts them above it. Changing any
+ * of these strings means changing them here, which is the point of this file
+ * existing.
  *
- * `soliciting` and `closed` are states rather than settings: neutral instead
- * of coloured, and always after the four. A poll can only be in one of them
- * — collecting happens before the first vote, closing after the last.
+ * **Where the poll has got to is not in this row.** It is a state rather
+ * than a setting, it is the one thing on a card that moves on its own, and
+ * it is the only part worth reading before deciding whether to open the
+ * poll at all -- so it sits beside the title as `PollStateBadge`, on its own,
+ * where a row of settings cannot bury it.
  */
 export function PollTags({
   mode,
   showVoters,
   showBallots,
-  solicitOptions,
-  soliciting = false,
-  closed = false,
+  turnout,
 }: {
   mode: PollMode
   showVoters: boolean
   showBallots: boolean
-  /** Where the options came from, which stays true long after the poll ends. */
-  solicitOptions: boolean
-  /** Not a setting -- a state -- so it is neutral and sits after the four. */
-  soliciting?: boolean
-  /** Not a setting either, and always last. */
-  closed?: boolean
+  /**
+   * The numbers behind the count badge. Left off entirely — rather than
+   * passed as zero — where the poll withholds participation from this
+   * reader, since a badge saying nobody has voted is not the same as no
+   * badge at all.
+   */
+  turnout?: Turnout
 }) {
   return (
     <Group gap="xs">
-      <ModeTag mode={mode} />
-      <RespondentsTag showVoters={showVoters} />
-      <BallotsTag showBallots={showBallots} />
-      <OptionsTag solicitOptions={solicitOptions} />
-      {soliciting && (
-        <Badge color={badgeColor.collectingOptions} variant="light">
-          Collecting options
-        </Badge>
-      )}
-      {closed && (
-        <Badge color={badgeColor.closed} variant="light">
-          Closed
-        </Badge>
-      )}
+      {turnout && <Badge {...countBadge}>{turnoutLabel(turnout)}</Badge>}
+      <Badge
+        color={showVoters ? badgeColor.respondentsShown : badgeColor.respondentsHidden}
+        variant="light"
+      >
+        {showVoters ? 'Respondents shown' : 'Respondents hidden'}
+      </Badge>
+      <Badge
+        color={showBallots ? badgeColor.ballotsPublished : badgeColor.ballotsPrivate}
+        variant="light"
+      >
+        {showBallots ? 'Ballots published' : 'Ballots private'}
+      </Badge>
+      <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
+        {mode === 'open' ? 'Open link' : 'Invite only'}
+      </Badge>
     </Group>
   )
 }
 
-/*
- * The four tags one at a time.
+/** What the count badge counts, which is not the same at every stage. */
+export interface Turnout {
+  soliciting: boolean
+  mode: PollMode
+  votedCount: number
+  invitedCount: number
+  /** Only read while collecting, when it is the number that is moving. */
+  optionCount: number
+}
+
+/**
+ * How many have answered so far — which is not the same question at every
+ * stage, and the badge says whichever one the poll is actually asking.
  *
- * The poll list shows three of them rather than four -- a card there also
- * carries a turnout count and the poll's state, and where the options came
- * from is the one setting that answers a question nobody asks of a row in a
- * list. Exporting the tags individually is what lets it drop one without
- * owning a second copy of the words: the strings, the colours and the two
- * states of each setting are still decided here alone, which is the whole
- * point of this file.
+ * It stays on the card after the poll closes. It used to be replaced by
+ * "Results ready" the moment they were, which threw away the turnout the
+ * result was reached on at exactly the point it became a permanent fact
+ * about the poll — and said nothing the state badge does not now say better.
+ *
+ * Not exported: every string this file decides is decided in this file, and
+ * a helper the callers could reach would be a second place for the wording
+ * to drift to.
  */
-
-export function ModeTag({ mode }: { mode: PollMode }) {
-  return (
-    <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
-      {mode === 'open' ? 'Open link' : 'Invite only'}
-    </Badge>
-  )
+function turnoutLabel({
+  soliciting,
+  mode,
+  votedCount,
+  invitedCount,
+  optionCount,
+}: Turnout): string {
+  if (soliciting) {
+    // Turnout is zero and stays zero until the list is settled, so this
+    // stage counts what is actually moving: the options coming in.
+    return `${optionCount} ${optionCount === 1 ? 'option' : 'options'} so far`
+  }
+  if (mode === 'open') {
+    // No invite list, so no denominator to count towards.
+    return `${votedCount} ${votedCount === 1 ? 'response' : 'responses'}`
+  }
+  return `${votedCount}/${invitedCount} voted`
 }
 
-export function RespondentsTag({ showVoters }: { showVoters: boolean }) {
-  return (
-    <Badge
-      color={showVoters ? badgeColor.respondentsShown : badgeColor.respondentsHidden}
-      variant="light"
-    >
-      {showVoters ? 'Respondents shown' : 'Respondents hidden'}
-    </Badge>
-  )
-}
+/**
+ * Where the poll has got to, in one badge beside its title: collecting its
+ * options, in progress, or finished — and a finished poll names the option
+ * that won, because that is the answer the whole poll was for and the reason
+ * anybody opens it again months later.
+ *
+ * The name is not prefixed with "Winner:". The badge is green, it sits where
+ * every other poll's state sits, and the polls around it read *In progress*
+ * and *Collecting options* — a label saying which question is being answered
+ * is only worth its room when the answer alone would be ambiguous.
+ *
+ * Three outcomes are told apart rather than collapsed, because a reader
+ * scanning a list of finished polls needs *what happened*, and "ready to
+ * look at" is not that:
+ *
+ *  - a name — the option STAR elected;
+ *  - *Tied — no winner* — the election ran and settled nothing, which STAR
+ *    can genuinely produce and the app reports rather than inventing a
+ *    result. It carries the colour of a tie-break that decided nothing,
+ *    which is the same claim one level up;
+ *  - *Results ready* — the poll is finished and this page has not been told
+ *    which of the two it is. That is a real state, not a fallback: the name
+ *    arrives in a request behind the list, and a browser talking to a
+ *    database older than `poll_winners()` never learns it at all. It must
+ *    never read as *Tied*, which would be a wrong answer rather than a
+ *    missing one.
+ */
+export function PollStateBadge({
+  soliciting,
+  resultsAvailable,
+  closed,
+  winner,
+}: {
+  soliciting: boolean
+  resultsAvailable: boolean
+  closed: boolean
+  /**
+   * The option that won, `null` for a poll that elected nobody, and
+   * `undefined` for one whose result this page has not been told.
+   */
+  winner?: string | null
+}) {
+  if (soliciting) {
+    return (
+      <Badge color={badgeColor.collectingOptions} variant="light" style={{ flexShrink: 0 }}>
+        Collecting options
+      </Badge>
+    )
+  }
 
-export function BallotsTag({ showBallots }: { showBallots: boolean }) {
-  return (
-    <Badge
-      color={showBallots ? badgeColor.ballotsPublished : badgeColor.ballotsPrivate}
-      variant="light"
-    >
-      {showBallots ? 'Ballots published' : 'Ballots private'}
-    </Badge>
-  )
-}
+  if (resultsAvailable) {
+    if (winner === null) {
+      return (
+        <Badge color={badgeColor.unsettled} variant="light" style={{ flexShrink: 0 }}>
+          Tied — no winner
+        </Badge>
+      )
+    }
+    return (
+      <Badge
+        color={badgeColor.done}
+        variant="light"
+        maw={220}
+        style={{ flexShrink: 1 }}
+        title={winner ?? undefined}
+      >
+        {winner ?? 'Results ready'}
+      </Badge>
+    )
+  }
 
-export function OptionsTag({ solicitOptions }: { solicitOptions: boolean }) {
+  if (closed) {
+    // Closed with nothing in it: there is no result to name, and never will
+    // be unless the creator resets it.
+    return (
+      <Badge color={badgeColor.closed} variant="light" style={{ flexShrink: 0 }}>
+        Closed
+      </Badge>
+    )
+  }
+
   return (
-    <Badge
-      color={solicitOptions ? badgeColor.optionsFromRespondents : badgeColor.optionsFromCreator}
-      variant="light"
-    >
-      {solicitOptions ? 'Options from respondents' : 'Options from creator'}
+    <Badge color={badgeColor.outstanding} variant="light" style={{ flexShrink: 0 }}>
+      In progress
     </Badge>
   )
 }

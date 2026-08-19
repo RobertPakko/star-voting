@@ -5,13 +5,14 @@ import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
+import { useWinner } from '../lib/useWinner'
 import { voterKeyFor } from '../lib/voterKey'
 import { Ballots } from '../components/Ballots'
 import { CollectOptions } from '../components/CollectOptions'
 import { CreatorControls } from '../components/CreatorControls'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { OptionDescription } from '../components/OptionDescription'
-import { PollTags } from '../components/PollTags'
+import { PollStateBadge, PollTags } from '../components/PollTags'
 import { RetentionNote } from '../components/RetentionNote'
 import { PollPageSkeleton } from '../components/Skeletons'
 import { countBadge } from '../lib/badgeColors'
@@ -135,6 +136,11 @@ export function PollDetail() {
   const live = !!status && !status.is_closed && !status.results_available
   useLiveRefresh(refresh, { enabled: live })
 
+  // For the state badge beside the title. Almost always already known: the
+  // list this poll was opened from asked the same question through the same
+  // cache.
+  const winner = useWinner(pollId, status?.results_available === true)
+
   // Close and reset invalidate a ballot half-filled in the open-poll panel,
   // so they remount it as well as re-reading the poll. A vote doesn't: the
   // ballot it was filling in is gone either way, and a remount would only
@@ -161,18 +167,34 @@ export function PollDetail() {
 
   return (
     <Stack maw={640} mx="auto" gap="lg">
+      {/* The same shape a poll wears on the list it was opened from: where
+          it has got to beside its title, then its terms in the same four
+          badges. Two screens describing one poll differently is two things
+          to learn about a poll instead of one. */}
       <Stack gap={8}>
-        <Title order={2}>{poll.title}</Title>
+        <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
+          <Title order={2}>{poll.title}</Title>
+          <PollStateBadge
+            soliciting={status.soliciting}
+            resultsAvailable={status.results_available}
+            closed={status.is_closed}
+            winner={winner}
+          />
+        </Group>
         {poll.description && <Text c="dimmed">{poll.description}</Text>}
-        {/* All four terms of the poll, at the top, whichever way each is
-            set -- people arrive here from a link with no other context. */}
+        {/* The terms of the poll, at the top, whichever way each is set --
+            people arrive here from a link with no other context. */}
         <PollTags
           mode={poll.mode}
           showVoters={poll.show_voters}
           showBallots={poll.show_ballots}
-          solicitOptions={poll.solicit_options}
-          soliciting={status.soliciting}
-          closed={status.is_closed}
+          turnout={{
+            soliciting: status.soliciting,
+            mode: poll.mode,
+            votedCount: status.voted_count,
+            invitedCount: status.invited_count,
+            optionCount: options.length,
+          }}
         />
       </Stack>
 

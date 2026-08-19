@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Stack, Text, Title } from '@mantine/core'
+import { Group, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
 import { OpenPollPanel } from '../components/OpenPollPanel'
-import { PollTags } from '../components/PollTags'
+import { PollStateBadge, PollTags } from '../components/PollTags'
 import { PollPageSkeleton } from '../components/Skeletons'
 import type { OpenPollView } from '../lib/types'
 
@@ -69,18 +69,47 @@ export function PublicPoll() {
 
   return (
     <Stack gap="lg" maw={720} mx="auto">
+      {/* The same header the signed-in poll page shows, for the same reason
+          it shows it: one poll should not be two different-looking things
+          depending on how you reached it. */}
       <Stack gap={8}>
-        <Title order={2}>{view.poll.title}</Title>
+        <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
+          <Title order={2}>{view.poll.title}</Title>
+          {/* No winner's name here: naming it needs poll_winners(), which is
+              for signed-in readers, and this page has no account behind it.
+              The badge says the results are ready and the tally underneath
+              says what they were -- see PollStateBadge on why that state is
+              a real one rather than a fallback. */}
+          <PollStateBadge
+            soliciting={view.soliciting}
+            resultsAvailable={view.results_available}
+            closed={view.is_closed}
+          />
+        </Group>
         {/* Someone arriving from a shared link has no other context at all,
-            so all four terms of the poll are stated here, not just the one
-            that changes what happens to their ballot. */}
+            so the terms of the poll are stated here, not just the one that
+            changes what happens to their ballot.
+
+            Turnout is the exception, and is held back until this browser has
+            voted. Everywhere else the count is a click away on the reader's
+            own poll list; here the link is the whole of their access, so
+            putting it above a blank ballot would be the one screen that
+            tells a voter how it is going before they vote. */}
         <PollTags
           mode={view.poll.mode}
           showVoters={view.poll.show_voters}
           showBallots={view.poll.show_ballots}
-          solicitOptions={view.poll.solicit_options}
-          soliciting={view.soliciting}
-          closed={view.is_closed}
+          turnout={
+            view.voted || view.results_available
+              ? {
+                  soliciting: view.soliciting,
+                  mode: view.poll.mode,
+                  votedCount: view.voted_count,
+                  invitedCount: 0,
+                  optionCount: view.options.length,
+                }
+              : undefined
+          }
         />
         {view.poll.description && <Text c="dimmed">{view.poll.description}</Text>}
       </Stack>

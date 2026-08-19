@@ -24,17 +24,20 @@
  * signal the badge is one too many, not a reason to double up.
  */
 export const badgeColor = {
-  // The four settings a poll is frozen with. The two states of one setting
-  // never appear together, so what these are spaced against is the *other*
-  // settings on the same row -- which is why the pairs are not same-family.
+  // The settings a poll is frozen with that a card puts on screen. The two
+  // states of one setting never appear together, so what these are spaced
+  // against is the *other* settings on the same row -- which is why the
+  // pairs are not same-family.
+  //
+  // Where the options came from is frozen with these three and is not here:
+  // it is the one setting nobody scans for, and the row it was in had grown
+  // past what anybody reads. See PollTags.
   openLink: 'grape',
   inviteOnly: 'violet',
   respondentsShown: 'cyan',
   respondentsHidden: 'blue',
   ballotsPublished: 'teal',
   ballotsPrivate: 'pink',
-  optionsFromCreator: 'indigo',
-  optionsFromRespondents: 'lime',
 
   /**
    * States rather than settings, so both are neutral where the settings
@@ -55,7 +58,10 @@ export const badgeColor = {
    * the votes that will finish it.
    */
   outstanding: 'orange',
-  /** A tie-break step that ran and settled nothing. */
+  /**
+   * Ran and settled nothing: a tie-break step that decided no order, and a
+   * whole election that elected nobody. The same claim one level up.
+   */
   unsettled: 'yellow',
 } as const
 

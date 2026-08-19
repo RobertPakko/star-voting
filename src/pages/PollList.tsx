@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Badge, Button, Card, Group, Pagination, Stack, Text, Title } from '@mantine/core'
+import { Button, Card, Group, Pagination, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
-import { BallotsTag, ModeTag, RespondentsTag } from '../components/PollTags'
+import { PollStateBadge, PollTags } from '../components/PollTags'
 import { PollListSkeleton } from '../components/Skeletons'
-import { badgeColor, countBadge } from '../lib/badgeColors'
 import { knownWinners, rememberWinner } from '../lib/settled'
 import type { PollListItem } from '../lib/types'
 
@@ -152,7 +151,12 @@ export function PollList() {
                 <Text fw={600} c="var(--mantine-color-text)">
                   {poll.title}
                 </Text>
-                <StateBadge poll={poll} winner={winners.get(poll.id)} />
+                <PollStateBadge
+                  soliciting={poll.soliciting}
+                  resultsAvailable={poll.results_available}
+                  closed={poll.is_closed}
+                  winner={winners.get(poll.id)}
+                />
               </Group>
               {poll.description && (
                 <Text size="sm" c="dimmed">
@@ -165,23 +169,22 @@ export function PollList() {
                   : `Created by ${poll.created_by_email}`}
               </Text>
 
-              {/* Four badges, always the same four, in the same order on
-                  every card: how many have answered, then who can see what,
-                  then who was allowed in. The count leads because it is the
-                  only one that moves; the access mode anchors the end
-                  because it is the one that never does.
-
-                  The poll page's tag row carries a fifth -- where the
-                  options came from -- which is dropped here. It is worth
-                  reading on the poll itself and it is the one setting nobody
-                  scans a list for, and a row of five tags under a title had
-                  stopped being read at all. */}
-              <Group gap="xs" mt={4}>
-                <Badge {...countBadge}>{turnout(poll)}</Badge>
-                <RespondentsTag showVoters={poll.show_voters} />
-                <BallotsTag showBallots={poll.show_ballots} />
-                <ModeTag mode={poll.mode} />
-              </Group>
+              {/* The same four badges, in the same order, that the poll's
+                  own page shows above its ballot. */}
+              <div style={{ marginTop: 4 }}>
+                <PollTags
+                  mode={poll.mode}
+                  showVoters={poll.show_voters}
+                  showBallots={poll.show_ballots}
+                  turnout={{
+                    soliciting: poll.soliciting,
+                    mode: poll.mode,
+                    votedCount: poll.voted_count,
+                    invitedCount: poll.invited_count,
+                    optionCount: poll.option_count,
+                  }}
+                />
+              </div>
             </Stack>
           </Card>
         ))}
@@ -203,93 +206,5 @@ export function PollList() {
         </Group>
       )}
     </Stack>
-  )
-}
-
-/**
- * How many have answered so far -- which is not the same question at every
- * stage, and the badge says whichever one the poll is actually asking.
- *
- * It stays on the card after the poll closes. It used to be replaced by
- * "Results ready" the moment they were, which threw away the turnout the
- * result was reached on at exactly the point it became a permanent fact
- * about the poll -- and said nothing the state badge does not now say
- * better.
- */
-function turnout(poll: PollListItem): string {
-  if (poll.soliciting) {
-    // Turnout is zero and stays zero until the list is settled, so this
-    // stage counts what is actually moving: the options coming in.
-    return `${poll.option_count} ${poll.option_count === 1 ? 'option' : 'options'} so far`
-  }
-  if (poll.mode === 'open') {
-    // No invite list, so no denominator to count towards.
-    return `${poll.voted_count} ${poll.voted_count === 1 ? 'response' : 'responses'}`
-  }
-  return `${poll.voted_count}/${poll.invited_count} voted`
-}
-
-/**
- * Where the poll has got to, in one badge: collecting its options, waiting
- * on votes, or finished — and a finished poll names the option that won,
- * because that is the answer the whole poll was for and the reason anybody
- * opens it again afterwards.
- *
- * The name comes from list_polls(), which runs the same star_round() the
- * results page runs, so the badge and the poll page cannot disagree about
- * who won. It is absent in three cases, and all three land on the same
- * neutral wording rather than guessing: a genuine tie that elected nobody, a
- * poll closed before anyone voted, and a browser holding this code against a
- * database whose list_polls predates the column.
- */
-function StateBadge({
-  poll,
-  winner,
-}: {
-  poll: PollListItem
-  /**
-   * What the poll elected, or `null` for a poll that elected nobody.
-   * `undefined` means this tab has not been told yet — the answer is a
-   * request behind the list, so a finished poll wears the neutral wording
-   * for the moment before it arrives.
-   */
-  winner: string | null | undefined
-}) {
-  if (poll.soliciting) {
-    return (
-      <Badge color={badgeColor.collectingOptions} variant="light" style={{ flexShrink: 0 }}>
-        Collecting options
-      </Badge>
-    )
-  }
-
-  if (poll.results_available) {
-    return (
-      <Badge
-        color={badgeColor.done}
-        variant="light"
-        maw={220}
-        style={{ flexShrink: 1 }}
-        title={winner ?? undefined}
-      >
-        {winner ? `Winner: ${winner}` : 'Results ready'}
-      </Badge>
-    )
-  }
-
-  if (poll.is_closed) {
-    // Closed with nothing in it: there is no result to name, and never will
-    // be unless the creator resets it.
-    return (
-      <Badge color={badgeColor.closed} variant="light" style={{ flexShrink: 0 }}>
-        Closed
-      </Badge>
-    )
-  }
-
-  return (
-    <Badge color={badgeColor.outstanding} variant="light" style={{ flexShrink: 0 }}>
-      Pending
-    </Badge>
   )
 }

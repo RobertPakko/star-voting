@@ -294,15 +294,15 @@ Requests are chained rather than fired on a fixed interval — the next goes
 out after the last comes back — so a slow connection spaces refreshes out
 instead of stacking them up.
 
-One request per page on a first load, and one per tick after that. The poll
-list is the one page that can make a second: it asks `poll_winners()` for the
-finished polls on the page whose result it cannot already name, which is a
-request on a first look at a page and nothing on the ticks after it. See [The
-poll list card](#the-poll-list-card) for why that is a request of its own,
+One request per page on a first load, and one per tick after that. The pages
+carrying a state badge can make a second: they ask `poll_winners()` for the
+finished polls whose result they cannot already name, which is a request on a
+first look and nothing on the ticks after it. See [The poll's high-level
+details](#the-polls-high-level-details) for why that is a request of its own,
 and [Settled polls](#settled-polls) for why it stops.
 
-In `npm run dev` every one of those appears twice: React's `StrictMode` mounts each
-component, unmounts it and mounts it again, so every effect that fetches
+In `npm run dev` every one of those appears twice: React's `StrictMode` mounts
+each component, unmounts it and mounts it again, so every effect that fetches
 runs twice. That is development-only and deliberate — it is what catches an
 effect whose cleanup does not work — and `npm run build` output does it
 once. Count requests against `npm run preview`, not `npm run dev`. Against a
@@ -392,26 +392,30 @@ afterwards moves through a `SECURITY DEFINER` function with its own rules —
 `close_poll`, `reset_poll`, `finalize_options` — never through a write from the
 client.
 
-All four are surfaced together by `PollTags` (`src/components/PollTags.tsx`) on
-the poll page and the public voting page — always all four, always in the same
-order and the same words, whichever way each one is set. A tag that appeared
-only for one of its two states made its absence carry meaning, and nobody reads
-an absence. `Collecting options` and `Closed` are appended to the same row but
-are *states* rather than settings, so they are neutral rather than coloured and
-always come last. A poll is in at most one of them: collecting happens before
-the first vote, closing after the last.
+Three of the four are surfaced by `PollTags` (`src/components/PollTags.tsx`)
+— always those three, always in the same order and the same words, whichever
+way each one is set, on the poll list, the poll page and the public voting
+page alike. A tag that appeared only for one of its two states made its
+absence carry meaning, and nobody reads an absence. Showing both states of
+each means the terms of a poll can be taken in at a glance and compared
+between polls.
 
-The poll list shows three of the four — see [The poll list
-card](#the-poll-list-card) — through the same file: `PollTags` is composed of
-`ModeTag`, `RespondentsTag`, `BallotsTag` and `OptionsTag`, each exported so a
-caller can drop one without owning a second copy of the words. The strings, the
-colours and both states of every setting are still decided in that one file,
-which is the whole point of it.
+**Where the options came from is the one that is not shown.** It is frozen
+like the other three and still true long after the poll ends, but it is the
+one setting nobody scans for, and the row it was in had grown past what
+anybody reads — five tags under a title is a row that gets skipped whole,
+which costs the two tags that tell a voter what happens to their ballot. It
+is stated in full while it matters, by the option-collecting stage itself
+(`CollectOptions`), and by the state badge reading *Collecting options*.
 
-**Every state has its own colour**, not one colour per setting: with all four
-tags always present, a colour shared across a pair told you which question was
-being answered but not what the answer was, leaving the text to carry the whole
-tag. Colours come from `src/lib/badgeColors.ts`, which holds every badge colour
+`Collecting options` and `Closed` used to be appended to the same row as
+neutral tags. They are not settings, they are where the poll has *got to* —
+see [The poll's high-level details](#the-polls-high-level-details).
+
+**Every state has its own colour**, not one colour per setting: with every
+tag always present, a colour shared across a pair told you which question was
+being answered but not what the answer was, leaving the text to carry the
+whole tag. Colours come from `src/lib/badgeColors.ts`, which holds every badge colour
 in the app in one place — badges from different files land side by side on a
 poll list card, so choosing at the call site is exactly how two unrelated
 meanings end up the same colour. Add a key there before adding a badge.
@@ -421,22 +425,24 @@ The wording is deliberately not symmetrical. Respondents are **shown** or
 them anonymously — while ballots are **published** or **private**. An anonymous
 ballot is the two tags in combination: respondents hidden, ballots published.
 Changing any of these strings means changing them in `PollTags` alone, which is
-the point of it existing.
+the point of it existing — the turnout wording included, which is why the count
+badge takes the numbers and builds its own label rather than being handed one.
 
-### The poll list card
+### The poll's high-level details
 
-A row on the poll list carries four badges and a state, and every card
-carries the same four in the same order: **how many have answered**, then
-respondents shown/hidden, then ballots published/private, then invite
-only/open link. The count leads because it is the only one that moves; the
-access mode ends the row because it is the one that never does.
+**One poll looks like one thing wherever it is read.** The card on the list,
+the poll's own page and the public voting page share a header: where the poll
+has got to, in a badge beside its title, then four badges saying what kind of
+poll it is — **how many have answered**, then respondents shown/hidden, then
+ballots published/private, then invite only/open link. The count leads
+because it is the only one that moves; the access mode ends the row because
+it is the one that never does. Two screens describing one poll differently is
+two things to learn about a poll instead of one.
 
 Three decisions hold that shape:
 
-- **Where the options came from is dropped here**, alone of the four settings.
-  It is worth reading on the poll itself and it is the one setting nobody
-  scans a list for — and a card had grown to six badges over two rows, which
-  is the point at which the badges worth reading stop being read.
+- **Where the options came from is not in the row**, alone of the four
+  settings — see above.
 - **The count stays after the poll closes.** It used to be replaced by
   *Results ready* at exactly the moment it stopped being a moving number and
   became a permanent fact about the poll. While a poll is collecting options
@@ -445,10 +451,34 @@ Three decisions hold that shape:
 - **"Vote pending" is gone.** It answered a question about the reader rather
   than about the poll, which is what the rest of the row is for.
 
-The state sits on the right of the title and says where the poll has got to:
-*Collecting options*, *Pending*, or **the option that won**. A finished poll
-naming its winner is the answer the whole poll was for, and the reason
-anybody opens one again months later.
+The count has one exception, and it is on the **public voting page**: it is
+withheld until that browser has voted. Everywhere else the same number is one
+click away on the reader's own poll list, so withholding it on the poll page
+would be a curtain with a door beside it. A share link is the whole of its
+holder's access, so the badge there would be the one screen in the app that
+tells a voter how it is going before they vote.
+
+The state badge says *Collecting options*, *In progress*, *Closed*, or **the
+option that won**. A finished poll naming its winner is the answer the whole
+poll was for, and the reason anybody opens one again months later.
+
+Two things it deliberately does not do. It does not prefix the name with
+*Winner:* — the badge is green, it sits where every other poll's state sits,
+and the polls around it read *In progress*; a label naming the question is
+only worth its room when the answer alone would be ambiguous. And it does not
+collapse the three finished outcomes into one:
+
+| Badge | Means |
+| --- | --- |
+| the option's name | STAR elected it |
+| *Tied — no winner* | the election ran and settled nothing — see [Tie-breaks](#tie-breaks) |
+| *Results ready* | finished, and this page has not been told which of the two |
+
+That last row is a real state rather than a fallback: the name arrives in a
+request behind the page, and two readers never learn it at all — a browser
+talking to a database older than `poll_winners()`, and the public voting page,
+which has no account to ask with. It must never read as *Tied*, which would be
+a wrong answer where this is only a missing one.
 
 The name comes from `poll_winners()` (`0024`), which calls
 `poll_winner_name()`, which runs the same `star_round()` the results page
@@ -479,13 +509,15 @@ uses, and answers with **no row at all** for a poll the caller cannot see:
 alike. It also refuses more than 200 ids in one request, because each one is
 an election.
 
-Three cases produce no name, and all three read *Results ready* rather than a
-guess: a genuine tie, which elects nobody; a poll closed before anyone voted;
-and a browser holding a build newer than the database it is talking to — the
-app deploys on push while migrations land on merge, so for a few minutes
-`poll_winners()` may not exist yet. That failure is swallowed on purpose: a
-list with no winners named on it is a working list, where a list that 404s is
-not.
+A browser holding a build newer than the database it is talking to reads
+*Results ready* too — the app deploys on push while migrations land on merge,
+so for a few minutes `poll_winners()` may not exist yet. That failure is
+swallowed on purpose: a list with no winners named on it is a working list,
+where a list that 404s is not.
+
+The poll page asks the same function through `useWinner`, and through the same
+cache, so opening a poll from the list — which is how most people open one —
+costs no request at all and cannot disagree with the card it was opened from.
 
 **Ten polls to a page.** The list is read whole and paged in the browser:
 `list_polls()` returns the polls you were invited to, which is a number in the
