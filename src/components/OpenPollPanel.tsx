@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Badge, Button, Card, Group, Rating, Stack, Text, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
+import { VOTER_NAME_MAX } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
 import { badgeColor, countBadge } from '../lib/badgeColors'
 import { Ballots } from './Ballots'
@@ -187,6 +188,10 @@ function OpenBallot({
   const [name, setName] = useState('')
   const [values, setValues] = useState<Record<string, number>>({})
   const [submitting, setSubmitting] = useState(false)
+  // The name is the one thing on this ballot that can be wrong, so it is
+  // marked on the box rather than as a line above the submit button, where
+  // it sat below the field it was about.
+  const [nameError, setNameError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
 
@@ -208,10 +213,12 @@ function OpenBallot({
 
   async function handleSubmit() {
     setError(null)
+    setNameError(null)
 
     const trimmedName = name.trim()
     if (needsName && !trimmedName) {
-      setError('Enter your name so the group can see who has voted.')
+      setNameError('Enter your name so the group can see who has voted.')
+      nameRef.current?.focus()
       return
     }
 
@@ -240,8 +247,12 @@ function OpenBallot({
           label="Your name"
           placeholder="Your name"
           value={name}
-          onChange={(e) => setName(e.currentTarget.value)}
-          maxLength={60}
+          onChange={(e) => {
+            setName(e.currentTarget.value)
+            setNameError(null)
+          }}
+          error={nameError}
+          maxLength={VOTER_NAME_MAX}
           required
           /* Label the key "Done" rather than a Go/newline the field has no use
              for, and honour that label by putting the keyboard away. */

@@ -15,6 +15,7 @@ import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { countBadge } from '../lib/badgeColors'
+import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
 import { DescriptionField } from './DescriptionField'
 import { OptionDescription } from './OptionDescription'
 import type { PollOption } from '../lib/types'
@@ -68,21 +69,57 @@ export function CollectOptions({
   // throws away what was in it.
   const [description, setDescription] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // What is wrong with the suggestion being typed, against the field it is
+  // wrong in -- rather than as a line of red under the whole card, which is
+  // where the request that failed still reports itself.
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [descriptionError, setDescriptionError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [finalizeOpened, finalizeModal] = useDisclosure(false)
 
   const enough = options.length >= 2
+  const full = options.length >= MAX_OPTIONS
 
   async function addOption() {
     const trimmed = name.trim()
+    const trimmedDescription = description?.trim() ?? ''
+
+    // The same four rules add_suggested_option applies, checked here so the
+    // one that fails is marked on the field it failed in. The database is
+    // still what decides -- these cannot be trusted and are not relied on --
+    // and anything it refuses for a reason not listed here still comes back
+    // as the error under the card.
+    setNameError(null)
+    setDescriptionError(null)
+    setError(null)
+
     if (!trimmed) {
-      setError('Give the option a name.')
+      setNameError('Give the option a name.')
+      return
+    }
+    if (trimmed.length > OPTION_NAME_MAX) {
+      setNameError(tooLong('An option name', trimmed.length, OPTION_NAME_MAX))
+      return
+    }
+    // Case-insensitive, like the database: two options differing only in
+    // case are one option to everybody scoring the ballot.
+    if (options.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
+      setNameError(`“${trimmed}” has already been suggested.`)
+      return
+    }
+    if (trimmedDescription.length > OPTION_DESCRIPTION_MAX) {
+      setDescriptionError(
+        tooLong('A description', trimmedDescription.length, OPTION_DESCRIPTION_MAX),
+      )
+      return
+    }
+    if (full) {
+      setNameError(`This poll already holds the ${MAX_OPTIONS} options a ballot can.`)
       return
     }
 
-    setError(null)
     setBusy(true)
-    const body = { p_name: trimmed, p_description: description?.trim() || null }
+    const body = { p_name: trimmed, p_description: trimmedDescription || null }
     const { error: rpcError } =
       source.kind === 'poll'
         ? await supabase.rpc('suggest_option', { p_poll_id: source.pollId, ...body })
@@ -172,9 +209,14 @@ export function CollectOptions({
           <Stack gap={4} style={{ flex: 1 }}>
             <TextInput
               value={name}
-              onChange={(e) => setName(e.currentTarget.value)}
+              onChange={(e) => {
+                setName(e.currentTarget.value)
+                // The message was about what was in the box; it stops being
+                // true the moment that changes.
+                setNameError(null)
+              }}
               placeholder="Add an option"
-              maxLength={100}
+              error={nameError}
               /* The field stands alone rather than in a form, so Enter has
                  nothing to submit unless it is given something. */
               onKeyDown={(e) => {
@@ -186,9 +228,12 @@ export function CollectOptions({
             {description !== null && (
               <DescriptionField
                 value={description}
-                onChange={(e) => setDescription(e.currentTarget.value)}
+                onChange={(e) => {
+                  setDescription(e.currentTarget.value)
+                  setDescriptionError(null)
+                }}
                 placeholder="What it is, a caveat, a link"
-                maxLength={500}
+                error={descriptionError}
                 autoFocus
               />
             )}
@@ -210,7 +255,7 @@ export function CollectOptions({
               {description === null ? '+' : '−'}
             </ActionIcon>
           </Tooltip>
-          <Button variant="light" onClick={addOption} loading={busy}>
+          <Button variant="light" onClick={addOption} loading={busy} disabled={full}>
             Add
           </Button>
         </Group>
@@ -241,6 +286,13 @@ export function CollectOptions({
         {isCreator && !enough && (
           <Text size="xs" c="dimmed">
             Two options at least — one option is not an election.
+          </Text>
+        )}
+
+        {full && (
+          <Text size="xs" c="dimmed">
+            This poll holds the {MAX_OPTIONS} options a ballot can. A list nobody reads to the end
+            is not one anybody can score honestly.
           </Text>
         )}
       </Stack>

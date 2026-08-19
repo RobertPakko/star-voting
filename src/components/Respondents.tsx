@@ -53,6 +53,10 @@ export function Respondents({
   const loaded = useRef(false)
   const [newEmail, setNewEmail] = useState('')
   const [busy, setBusy] = useState(false)
+  // Wrong with the address being typed, marked on the box it was typed in.
+  // `error` below is for a request that failed, which is about the poll
+  // rather than about the field, and stays where it was.
+  const [emailError, setEmailError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -82,12 +86,20 @@ export function Respondents({
   async function addInvitee() {
     const email = newEmail.trim().toLowerCase()
     setError(null)
-    if (!EMAIL_RE.test(email)) {
-      setError('Enter a valid email address.')
+    setEmailError(null)
+
+    if (!email) {
+      setEmailError('Type an email address to invite.')
       return
     }
+    if (!EMAIL_RE.test(email)) {
+      setEmailError(`"${email}" doesn't look like an email address.`)
+      return
+    }
+    // Addresses are stored lowercased (normalize_invited_email), so this
+    // catches the same duplicate the unique index would.
     if (invitees?.some((i) => i.email === email)) {
-      setError('That person is already invited.')
+      setEmailError('That person is already invited.')
       return
     }
 
@@ -212,13 +224,19 @@ export function Respondents({
 
         {/* Once results are out, adding a voter would let them vote knowing
             the standings, so the database blocks it -- don't offer the field. */}
+        {/* The row is top-aligned so an error message under the box pushes
+            the message down rather than the button that dismisses it. */}
         {isCreator && !status.is_closed && !status.results_available && (
-          <Group gap="xs" wrap="nowrap" mt={4}>
+          <Group gap="xs" wrap="nowrap" align="flex-start" mt={4}>
             <TextInput
               placeholder="Invite another voter"
               value={newEmail}
-              onChange={(e) => setNewEmail(e.currentTarget.value)}
+              onChange={(e) => {
+                setNewEmail(e.currentTarget.value)
+                setEmailError(null)
+              }}
               onKeyDown={(e) => e.key === 'Enter' && addInvitee()}
+              error={emailError}
               style={{ flex: 1 }}
             />
             <Button variant="light" onClick={addInvitee} loading={busy}>
