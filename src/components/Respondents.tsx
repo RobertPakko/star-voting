@@ -24,17 +24,29 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * It is also the only place turnout appears once the results are out, since
  * the results themselves no longer restate it.
  *
+ * That case is read from the poll rather than from a failed request. The
+ * page already knows the setting, and asking anyway meant one request per
+ * refresh that was expected to fail — with the further problem that a
+ * request failing for any *other* reason would have been reported to the
+ * reader as "this poll hides who has responded", which might not be true.
+ *
  * The add/remove controls are creator-only and unchanged in behaviour.
  */
 export function Respondents({
   pollId,
   isCreator,
+  showVoters,
   status,
   liveTick = 0,
   onChange,
 }: {
   pollId: string
   isCreator: boolean
+  /**
+   * The poll's own setting. A participant on a poll that hides respondents
+   * has no roster to ask for, so this decides whether to ask at all.
+   */
+  showVoters: boolean
   status: PollStatus
   /**
    * Bumped by the poll page on every live refresh. The roster reloads with
@@ -59,7 +71,13 @@ export function Respondents({
   const [emailError, setEmailError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Nobody but the creator can read the list on a poll that hides
+  // respondents, and the poll says so up front -- so the request is not made
+  // rather than made and expected to fail.
+  const rosterReadable = showVoters || isCreator
+
   const load = useCallback(async () => {
+    if (!rosterReadable) return
     const { data, error: rpcError } = await supabase.rpc('poll_invitees', { p_poll_id: pollId })
     if (rpcError) {
       // A refresh that fails leaves the roster already on screen alone --
@@ -67,17 +85,16 @@ export function Respondents({
       // request should not make a list that has been there all along
       // vanish or sprout an error.
       if (loaded.current) return
-      // For a non-creator the expected failure is "this poll doesn't show
-      // who responded", which just means there is nothing to render. The
-      // creator always has access, so for them a failure is real and
+      // The creator always has access, so a failure for them is real and
       // hiding their invite controls silently would be worse than noise.
+      // For anyone else it means there is nothing to render.
       if (isCreator) setError(rpcError.message)
       else setHidden(true)
       return
     }
     loaded.current = true
     setInvitees((data as Invitee[]) ?? [])
-  }, [pollId, isCreator])
+  }, [pollId, isCreator, rosterReadable])
 
   useEffect(() => {
     load()
@@ -138,9 +155,10 @@ export function Respondents({
     onChange()
   }
 
-  // No access to the roster, which on this poll means there is no roster to
-  // have: what is left is the number, which the poll shows everybody.
-  if (hidden) {
+  // No roster to show, either because the poll hides it or because the read
+  // came back saying so: what is left is the number, which the poll shows
+  // everybody whichever way that setting is set.
+  if (!rosterReadable || hidden) {
     return (
       <Card withBorder>
         <Stack gap="xs">

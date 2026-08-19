@@ -230,6 +230,7 @@ export function PollDetail() {
         <Respondents
           pollId={poll.id}
           isCreator={isCreator}
+          showVoters={poll.show_voters}
           status={status}
           liveTick={liveTick}
           onChange={reloadAll}
