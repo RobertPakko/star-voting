@@ -987,3 +987,28 @@ five-star count, and if the options are level on all three the election has no
 winner — the app reports the tie rather than inventing a result. If you change a
 rule, change the SQL, the About page and the cases in `test/sql/cases/`
 together; they are a set.
+
+**A head-to-head tie-break is reported as the comparisons it is made of**, not
+as the score it keeps. The rule pairs every tied option with every other and
+counts the pairs each one won, and for the commonest tie there is — two
+options level on points, one runoff slot between them — that count is zero on
+both sides whenever the pair itself is level. "0 matchups won" twice is a true
+and unreadable statement of a tie, in a unit nobody outside voting theory uses,
+at the moment a reader is working out why their option went out.
+
+So `star_round` sends the pairs themselves (`steps[].matchups`: the two
+options, the voters who preferred each, and the voters who scored them the
+same), and `Results.tsx` renders a two-option tie as the single comparison it
+is — "3 voters preferred each, 2 scored them equally", the words the runoff
+below already uses for the same arithmetic, with the word *matchup* gone. A
+group of three or more keeps the per-option totals, because there the totals
+are the point (the rule is asking which option beat the most others), and
+lists the pairs beneath them. The totals are derived from those same pair
+rows, so the two can't disagree.
+
+The counts ride along in the payload rather than being fetched when a reader
+expands something: they are a few integers over a poll whose results that
+reader is already holding. `Results.tsx` still handles their absence, for the
+same reason `FullRanking` handles a missing `ranking` — the built app deploys
+on push while migrations are applied when they merge, so a browser can hold
+this code against an older `star_round` for a few minutes.

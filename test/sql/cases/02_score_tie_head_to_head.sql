@@ -46,6 +46,23 @@ begin
   perform tests.assert_eq('Apple beats both of the others',
     (tb #>> '{steps,0,results,0,value}')::int, 2);
 
+  -- Three tied options make three pairs, each reported once, ordered by
+  -- name: Apple/Banana, Apple/Cherry, Banana/Cherry. The counts in them are
+  -- where the win totals above come from.
+  perform tests.assert_eq('every pair in the tie is reported once',
+    jsonb_array_length(tb #> '{steps,0,matchups}'), 3);
+  perform tests.assert_eq('the first pair is Apple against Banana',
+    (tb #>> '{steps,0,matchups,0,a_name}') || ' vs ' || (tb #>> '{steps,0,matchups,0,b_name}'),
+    'Apple vs Banana');
+  perform tests.assert_eq('three voters preferred Apple in it',
+    (tb #>> '{steps,0,matchups,0,prefers_a}')::int, 3);
+  perform tests.assert_eq('two preferred Banana',
+    (tb #>> '{steps,0,matchups,0,prefers_b}')::int, 2);
+  perform tests.assert_eq('and nobody scored the two the same',
+    (tb #>> '{steps,0,matchups,0,ties}')::int, 0);
+  perform tests.assert_eq('Banana beat Cherry in the pair they shared',
+    (tb #>> '{steps,0,matchups,2,prefers_a}')::int, 3);
+
   perform tests.assert_eq('Apple and Banana advance',
     tests.finalists(t), array['Apple', 'Banana']);
   perform tests.assert_eq('three voters prefer Apple in the runoff',

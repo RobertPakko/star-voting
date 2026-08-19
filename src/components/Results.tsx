@@ -13,7 +13,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
 import { recall, remember } from '../lib/settled'
-import type { PollResults } from '../lib/types'
+import type { Matchup, PollResults, TiebreakStep } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { OptionDescription } from './OptionDescription'
 import { ResultsSkeleton } from './Skeletons'
@@ -167,18 +167,15 @@ export function Results({ source }: { source: ResultsSource }) {
                         {step.decisive ? 'Decisive' : 'Still tied'}
                       </Badge>
                     </Group>
-                    {step.results.map((r) => (
-                      <Text key={r.id} size="sm" c="dimmed" pl="md">
-                        {r.name}: {r.value}{' '}
-                        {step.rule === 'head_to_head'
-                          ? r.value === 1
-                            ? 'matchup won'
-                            : 'matchups won'
-                          : r.value === 1
-                            ? 'five-star vote'
-                            : 'five-star votes'}
-                      </Text>
-                    ))}
+                    {step.rule === 'head_to_head' ? (
+                      <HeadToHead step={step} />
+                    ) : (
+                      step.results.map((r) => (
+                        <Text key={r.id} size="sm" c="dimmed" pl="md">
+                          {r.name}: {r.value} {r.value === 1 ? 'five-star vote' : 'five-star votes'}
+                        </Text>
+                      ))
+                    )}
                   </Stack>
                 ))}
 
@@ -242,6 +239,96 @@ export function Results({ source }: { source: ResultsSource }) {
       <FullRanking results={results} />
     </Stack>
   )
+}
+
+/**
+ * The head-to-head tie-break, in the units the ballots were cast in.
+ *
+ * The rule counts matchups: every option in the tied group is compared with
+ * every other, one pair at a time, and the option more voters scored higher
+ * wins that pair. Reporting only the totals produced the least useful line
+ * this page has ever shown -- two options tied for one runoff slot meet
+ * exactly once, and if that meeting is level they have won nothing, so the
+ * step read "0 matchups won" twice and left the reader to guess whether that
+ * meant a tie, an error, or a rule that had not run.
+ *
+ * So a two-option tie is reported as the one comparison it actually is,
+ * in the same words the runoff below uses for the same arithmetic, and the
+ * word "matchup" does not appear at all. A larger group keeps the totals --
+ * with three options they are the point, since the rule is asking which one
+ * beat the most others -- and shows the pairs they were counted from
+ * underneath.
+ */
+function HeadToHead({ step }: { step: TiebreakStep }) {
+  const matchups = step.matchups
+
+  // The built app ships on push while migrations land when they merge, so a
+  // browser can hold this code against a star_round that does not send the
+  // pairs yet. Fall back to the totals rather than showing nothing.
+  if (!matchups?.length) {
+    return (
+      <>
+        {step.results.map((r) => (
+          <Text key={r.id} size="sm" c="dimmed" pl="md">
+            {r.name}: {r.value} {r.value === 1 ? 'matchup won' : 'matchups won'}
+          </Text>
+        ))}
+      </>
+    )
+  }
+
+  if (matchups.length === 1) {
+    const m = matchups[0]
+    return (
+      <Stack gap={2} pl="md">
+        <Text size="sm" c="dimmed">
+          {m.a_name}: {voters(m.prefers_a)} preferred it
+        </Text>
+        <Text size="sm" c="dimmed">
+          {m.b_name}: {voters(m.prefers_b)} preferred it
+        </Text>
+        {m.ties > 0 && (
+          <Text size="sm" c="dimmed">
+            {voters(m.ties)} scored them equally.
+          </Text>
+        )}
+      </Stack>
+    )
+  }
+
+  return (
+    <Stack gap={2} pl="md">
+      <Text size="sm" c="dimmed">
+        Each option meets each of the others one on one, and wins that matchup if more voters scored
+        it higher.
+      </Text>
+      {step.results.map((r) => (
+        <Text key={r.id} size="sm" c="dimmed">
+          {r.name}: {r.value} of {step.results.length - 1} matchups won
+        </Text>
+      ))}
+      <Stack gap={2} mt={4}>
+        {matchups.map((m) => (
+          <Text key={`${m.a}-${m.b}`} size="sm" c="dimmed">
+            {matchupLine(m)}
+          </Text>
+        ))}
+      </Stack>
+    </Stack>
+  )
+}
+
+/** One pair of the tied group, and which way its voters went. */
+function matchupLine(m: Matchup): string {
+  const equal = m.prefers_a === m.prefers_b
+  const [ahead, behind, won, lost] =
+    m.prefers_a >= m.prefers_b
+      ? [m.a_name, m.b_name, m.prefers_a, m.prefers_b]
+      : [m.b_name, m.a_name, m.prefers_b, m.prefers_a]
+
+  return equal
+    ? `${m.a_name} vs ${m.b_name} — ${voters(won)} each, so neither wins it`
+    : `${ahead} vs ${behind} — ${voters(won)} to ${lost}`
 }
 
 /**

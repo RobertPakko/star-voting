@@ -135,11 +135,34 @@ export interface TiebreakEntry {
   value: number
 }
 
+/**
+ * One pair inside a tied group, and how the ballots split between them: the
+ * voters who scored `a` above `b`, the voters who scored `b` above `a`, and
+ * the voters who scored the two the same. Winning the matchup means being on
+ * the larger of the first two numbers; the third decides nothing and is
+ * reported because a reader counting heads needs it to reach the turnout.
+ */
+export interface Matchup {
+  a: string
+  a_name: string
+  b: string
+  b_name: string
+  prefers_a: number
+  prefers_b: number
+  ties: number
+}
+
 /** One rule tried while resolving a tie, and whether it settled it. */
 export interface TiebreakStep {
   rule: 'head_to_head' | 'five_star_votes'
   results: TiebreakEntry[]
   decisive: boolean
+  /**
+   * The pairs a head_to_head step compared, each once — the counts its
+   * per-option win totals are made of. Absent on five_star_votes steps, and
+   * against a database whose star_round predates them.
+   */
+  matchups?: Matchup[]
 }
 
 /** One tie encountered in the score round, and how STAR resolved it. */
