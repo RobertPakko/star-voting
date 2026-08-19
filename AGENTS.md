@@ -15,13 +15,27 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, …)
-src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, shared types
+src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, shared types
 supabase/migrations/  the schema, as ordered SQL files
 test/            tally tests, run against a throwaway Postgres
 ```
 
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
-`npm run lint` (oxlint), `npm run preview`, `npm test` (see [Tests](#tests)).
+`npm run lint` (oxlint), `npm run fmt` (oxfmt; `npm run fmt:check` reports
+without writing), `npm run preview`, `npm test` (see [Tests](#tests)).
+
+The formatter is configured in `.oxfmtrc.json` to the style the code was
+already written in — no semicolons, single quotes, a hundred columns — and
+skips Markdown, since this file and the README are wrapped by hand and the
+wrapping carries meaning.
+
+Two files exist only to keep a lint rule honest, and the rule is worth the
+split: a module that exports both a component and a hook cannot be
+hot-reloaded without discarding its state, which for the auth context means
+being signed out on every edit. `src/lib/auth.ts` holds the context and
+`useAuth`; `src/lib/AuthProvider.tsx` holds the provider and nothing else.
+Every `useAuth` import still reads `from '../lib/auth'`, which is why the
+split goes that way round.
 
 The app is served under `/star-voting/` (see `base` in `vite.config.ts`) and
 routes are hash-based, so it works as a GitHub Pages site with no
@@ -282,6 +296,32 @@ once. Count requests against `npm run preview`, not `npm run dev`. Against a
 real Supabase project each request is also preceded by a CORS preflight
 `OPTIONS`, so the browser's network panel shows two entries per call.
 
+## Waiting
+
+A live page is the second read onwards; the first one has nothing to show at
+all, and every one of those used to be the same spinner in the middle of an
+empty column — the same mark whether what was coming was a poll list, a
+ballot or a tally, with the page landing all at once underneath it.
+
+`src/components/Skeletons.tsx` draws the shape of the page instead: the
+list's cards, the poll's tag row, the score round's bars, the form's fields.
+Two rules keep them from becoming a lie:
+
+- **A skeleton claims only what the page always has.** The list draws three
+  cards because the wait is over long before anyone counts them; it does not
+  draw a winner badge, which most polls do not have. A placeholder for
+  something that then fails to appear is a small lie the reader has to
+  un-learn.
+- **They all live in that one file**, so a page and its stand-in get changed
+  together. The failure mode of skeletons is that they slowly stop resembling
+  anything.
+
+They are `aria-hidden`, wrapped in a `role="status"` that says *Loading* once:
+the shapes are decoration, and what a non-visual reader needs is the word
+they are miming. The one wait that is still a spinner is the app's own boot,
+before the session is known — at that point there is no page to draw the
+shape of.
+
 ## Behaviour worth preserving
 
 These are decisions, not accidents. Changing any of them changes a promise the
@@ -297,13 +337,20 @@ afterwards moves through a `SECURITY DEFINER` function with its own rules —
 client.
 
 All four are surfaced together by `PollTags` (`src/components/PollTags.tsx`) on
-the poll list, the poll page and the public voting page — always all four,
-always in the same order and the same words, whichever way each one is set. A
-tag that appeared only for one of its two states made its absence carry meaning,
-and nobody reads an absence. `Collecting options` and `Closed` are appended to
-the same row but are *states* rather than settings, so they are neutral rather
-than coloured and always come last. A poll is in at most one of them:
-collecting happens before the first vote, closing after the last.
+the poll page and the public voting page — always all four, always in the same
+order and the same words, whichever way each one is set. A tag that appeared
+only for one of its two states made its absence carry meaning, and nobody reads
+an absence. `Collecting options` and `Closed` are appended to the same row but
+are *states* rather than settings, so they are neutral rather than coloured and
+always come last. A poll is in at most one of them: collecting happens before
+the first vote, closing after the last.
+
+The poll list shows three of the four — see [The poll list
+card](#the-poll-list-card) — through the same file: `PollTags` is composed of
+`ModeTag`, `RespondentsTag`, `BallotsTag` and `OptionsTag`, each exported so a
+caller can drop one without owning a second copy of the words. The strings, the
+colours and both states of every setting are still decided in that one file,
+which is the whole point of it.
 
 **Every state has its own colour**, not one colour per setting: with all four
 tags always present, a colour shared across a pair told you which question was
@@ -319,6 +366,55 @@ them anonymously — while ballots are **published** or **private**. An anonymou
 ballot is the two tags in combination: respondents hidden, ballots published.
 Changing any of these strings means changing them in `PollTags` alone, which is
 the point of it existing.
+
+### The poll list card
+
+A row on the poll list carries four badges and a state, and every card
+carries the same four in the same order: **how many have answered**, then
+respondents shown/hidden, then ballots published/private, then invite
+only/open link. The count leads because it is the only one that moves; the
+access mode ends the row because it is the one that never does.
+
+Three decisions hold that shape:
+
+- **Where the options came from is dropped here**, alone of the four settings.
+  It is worth reading on the poll itself and it is the one setting nobody
+  scans a list for — and a card had grown to six badges over two rows, which
+  is the point at which the badges worth reading stop being read.
+- **The count stays after the poll closes.** It used to be replaced by
+  *Results ready* at exactly the moment it stopped being a moving number and
+  became a permanent fact about the poll. While a poll is collecting options
+  it counts options instead, because turnout is zero and stays zero until the
+  list is settled.
+- **"Vote pending" is gone.** It answered a question about the reader rather
+  than about the poll, which is what the rest of the row is for.
+
+The state sits on the right of the title and says where the poll has got to:
+*Collecting options*, *Pending*, or **the option that won**. A finished poll
+naming its winner is the answer the whole poll was for, and the reason
+anybody opens one again months later.
+
+The name comes from `list_polls()`, which calls `poll_winner_name()`, which
+runs the same `star_round()` the results page runs — so the badge and the
+poll page cannot disagree about who won, because there is one implementation
+of the method and this is a second caller of it. It is **only asked of polls
+whose results have already unlocked**; the `CASE` guarding the call is not
+tidiness but what stops a list of open polls from running an election per row
+per refresh. `star_round()` builds a temp table and is therefore volatile, so
+`list_polls()` is declared volatile too — a `STABLE` function may not promise
+more than what it calls.
+
+Three cases produce no name, and all three read *Results ready* rather than a
+guess: a genuine tie, which elects nobody; a poll closed before anyone voted;
+and a browser holding a build newer than the database it is talking to, which
+happens because the app deploys on push while migrations are applied by hand.
+
+**Ten polls to a page.** The list is read whole and paged in the browser:
+`list_polls()` returns the polls you were invited to, which is a number in the
+tens for anyone this app is for, and paging in the database would cost the
+live refresh its one round trip for nothing. The page number is clamped at
+render rather than reset, so a poll deleted from page three leaves the reader
+on page three — or on the last page there is, if that was it.
 
 ### Option descriptions
 
@@ -354,11 +450,22 @@ Four things hold it together:
   no longer see. It is also why "no description" is `null` rather than an empty
   string in the form state: the same value collapses the field and means there
   is nothing to store.
-- **They belong to the ballot, and appear nowhere else.** Both ballots show one
-  under the option's name, because that is where the detail is a voting aid.
-  Results, the full ranking and the published ballot grid name options and
-  nothing more — a paragraph beside a bar of points is noise at the point where
-  the decision has already been made.
+- **They belong to the ballot, and are folded away everywhere else.** Both
+  ballots show one under the option's name, because that is where the detail is
+  a voting aid. The results do not: a paragraph beside a bar of points is noise
+  at the point where the decision has already been made. But it is also the
+  only record of what the option *was*, and it used to vanish from the app
+  entirely the moment a poll closed — so the score round carries one dimmed
+  mark beside the options that have a description, and nothing at all beside
+  the ones that don't, opening it in a popover. A popover rather than a
+  tooltip, because a tooltip on a phone is a thing that cannot be opened. The
+  full ranking and the published ballot grid still name options and nothing
+  more.
+
+  The text reaches the results through `poll_tally`, which carries a
+  `description` on each option in the score-round list (`0023`). No new access
+  comes with it: descriptions travel with the results, on the same terms, to
+  the people the results already reach.
 - **URLs in them are links.** Pointing at something else is most of the reason
   to write a description at all, and a link nobody can click is one the reader
   has to select and copy. `OptionDescription` turns `http(s)://` and bare
@@ -411,14 +518,28 @@ Withholding it until you vote leaves that order visible only to people actually
 in the poll rather than to anyone holding the link. It narrows the leak without
 closing it: a voter still sees everyone who arrives after them.
 
-The **creator is exempt** and sees participation whether or not they have voted.
-The roster is what *Close voting now* gets decided on, and a creator who isn't
-on the invite list could never earn the view by voting. On invite polls it is
-also where the invite list is managed.
+Two things are exempt. The **creator**, who sees participation whether or not
+they have voted: the roster is what *Close voting now* gets decided on, and a
+creator who isn't on the invite list could never earn the view by voting. On
+invite polls it is also where the invite list is managed. And a **poll whose
+results are out**, to everyone in it: the embargo exists because a ballot might
+still be cast, and on that poll none can.
 
 On open polls "you have voted" is the `localStorage` voter key, so clearing site
 data hides the roster again. That is the same deliberately-weak signal behind
 "your vote is in" — a convenience, not a guard, and accepted as such here.
+
+**Participation is reported in exactly one place on any screen**, and that
+place is the card at the bottom rather than the results above it. Both used to
+say it — "6 of 6 invited voters participated" over a card counting the same six
+— and one fact stated twice reads as two facts that happen to agree. The card
+has a shape for every combination, which is what lets the results drop the
+line: the invite list on a poll that shows respondents, the names on an open
+one, and on a poll that hides them a card with nothing in it but the number.
+That last state is new. Hiding respondents has always promised that "only the
+number of votes is shown" — but for a participant who was not the creator, the
+component rendered nothing at all, and turnout went unreported on the one
+screen it mattered on.
 
 ### Whether ballots are published
 
@@ -538,6 +659,44 @@ poll with its votes cleared, and the list everyone was shown is part of the
 same poll. A poll closed while it was still collecting does reopen collecting,
 because that is the stage it was in.
 
+### What a form checks before it sends
+
+Every form in the app used to fail the same way: one red line, in one place,
+naming the first thing that was wrong. On the create form that place is under
+the submit button — the furthest point on the page from most of the answers —
+so *Add at least two options* left the reader to go and find which two, and
+fixing it earned them the next message rather than the poll.
+
+Errors now sit on the field they belong to, as Mantine's error state, and
+every rule is checked in one pass so all of them appear at once. When they
+appear is the other half of it: **on the first submit, and cleared as each
+field is corrected**. A field that goes red while you are still typing in it
+is telling you off for being halfway through, and one that stays red after
+you have fixed it is worse. `CreatePoll` does this by computing the whole
+error set on every render and showing it only once `showErrors` is set, which
+is also why fixing a field needs no second press.
+
+`src/lib/limits.ts` holds every length in one place, and three of them are
+not the form's own idea. `add_suggested_option` has capped a suggested option
+at 100 characters, its description at 500, and a poll at 50 options since
+options could be suggested at all — limits written for the one field a whole
+group can write to, but they answer the same question the create form asks:
+how long is a label on a ballot, and how long is the note under it. The form
+applies them so that two paths into `candidates` cannot disagree about what
+fits. The duplicate-name check is the same story: `add_suggested_option`
+refuses a name already on the list, case-insensitively, because two options
+differing only in case are one option to everybody scoring the ballot. The
+create form now refuses the pair too, marking the *later* row — the earlier
+one keeps the name, so it is not the one that has to change.
+
+A title and a poll's description are bounded by the form alone; nothing in
+the database bounds either, and neither limit is a security measure.
+
+None of this is trusted and none of it is relied on. **The database is still
+what decides**, and anything it refuses for a reason not listed here comes
+back the way it always did — as the error under the form. What the checks buy
+is being told which box is wrong instead of being told no.
+
 ### Creator controls
 
 On the poll page, the creator gets:
@@ -598,7 +757,13 @@ unasked.
 Results show the winner, every option's score-round total, any tie-break that
 had to be resolved, and the automatic runoff between the two finalists. On a
 poll that publishes its ballots, the grid of every ballot cast follows
-underneath, with column totals to check the score round against.
+underneath, with column totals to check the score round against, and the
+participation card is last — it is where turnout is stated, and the results
+no longer state it themselves (see [Whether respondents are
+shown](#whether-respondents-are-shown)). The one thing they do still say
+about the count is that voting was closed early, which is the one thing that
+card cannot: it explains why the numbers are smaller than they were going to
+be.
 
 **See the full ranking** (on polls with more than two options) opens the whole
 field in placed order. STAR itself only names a winner, so the rest comes from
