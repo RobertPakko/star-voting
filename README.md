@@ -7,6 +7,7 @@ Make a poll, share it, and let people score each option from 0 to 5 stars. The w
 ## What you can do with it
 
 - **Run a poll for anything.** Where to eat, which logo, who gets the job. Sign in with an emailed magic link, add your options, send it out.
+- **Explain an option when its name doesn't.** Any option can carry a note under it — a caveat, an address, a link to whatever is being voted on — so voters have the detail in front of them while they score. Optional, and most polls never need it.
 - **Invite people, or just share a link.** Invited polls know who has and hasn't voted and allow one ballot each. Link polls need no sign-in at all — handy, but anyone who has the link can vote, and nothing stops them voting twice.
 - **Hand it to a room.** Every poll's link comes with a QR code you can put on a screen or print, so people can scan their way in instead of typing anything.
 - **Watch the votes land.** Poll pages keep themselves current while you have them open — turnout, the roster of who has voted, and the moment results unlock, with nothing to reload.

@@ -161,9 +161,8 @@ the ones that ship.
 ## Live updates
 
 Poll pages re-read themselves every few seconds so votes appear without a
-reload: `src/lib/useLiveRefresh.ts` is the timer, `LiveIndicator` is the dot
-that says so, and `LIVE_REFRESH_MS` is the one interval every live surface
-in the app runs at.
+reload: `src/lib/useLiveRefresh.ts` is the timer, and `LIVE_REFRESH_MS` is
+the one interval every live surface in the app runs at.
 
 **Polling, not Supabase Realtime.** Realtime streams row changes over a
 websocket, and subscribing to a table's changes needs a `SELECT` grant on
@@ -177,8 +176,11 @@ the pages already use keeps one access path and one set of rules, and a poll
 big enough for the difference in load to matter is not the kind of poll this
 app is for.
 
-Four rules keep it honest:
+Five rules keep it honest:
 
+- **There is no live indicator, deliberately.** A page that updates itself
+  demonstrates that by updating itself; a dot claiming it does is one more
+  thing to read and one more thing to keep true.
 - **The page owns the poll; components render what they are handed.** Both
   pages carrying an open poll read `open_poll_view` and hand it to
   `OpenPollPanel`, which used to fetch its own copy. Two copies on two
@@ -193,30 +195,33 @@ Four rules keep it honest:
   nothing to show — a page that has been working for ten minutes must not
   turn into "poll not found" because one request lost a race with a flaky
   connection.
-- **A hidden tab stops polling, and says so.** Nobody is reading a
-  backgrounded poll, and a laptop lid closed on twenty of them should not
-  keep talking to the database. The indicator greys out and reads *Paused*
-  rather than going quietly stale, and coming back to the tab refreshes
-  immediately instead of waiting out an interval.
-- **The dot disappears when there is nothing left to watch.** A closed poll,
-  or one whose results are out, has taken its last vote — the timer stops
-  and the indicator goes with it. Its absence is the signal that the numbers
-  on screen are final. The poll list is the exception, and stays live for as
-  long as it is on screen: any poll on it can take a vote, and a new invite
-  can add a row.
+- **Refreshing stops when nobody is watching, and resumes on its own.** A
+  hidden tab stops entirely — nobody is reading a backgrounded poll, and a
+  laptop lid closed on twenty of them should not keep talking to the
+  database — and coming back to the tab refreshes immediately rather than
+  waiting out an interval. `LIVE_REFRESH_LIMIT` does the same job for a tab
+  left open in the foreground and forgotten: after half an hour of
+  refreshing with no sign of a reader it stops, and the first click, key or
+  scroll resets the budget and refreshes at once. The one case this gets
+  wrong is a poll parked on a projector that nobody touches for half an
+  hour; raising the limit is the fix if that becomes a real complaint.
+- **Refreshing stops when there is nothing left to watch.** A closed poll,
+  or one whose results are out, has taken its last vote. The poll list is
+  the exception and stays live for as long as it is on screen: any poll on
+  it can take a vote, and a new invite can add a row.
 
 Requests are chained rather than fired on a fixed interval — the next goes
 out after the last comes back — so a slow connection spaces refreshes out
 instead of stacking them up.
 
-One live surface per page, and the dot rides the tags row rather than
-sitting next to a count. Turnout is reported in two places at once on an
-invite poll (the waiting card and the roster), so a dot per number meant two
-dots saying one thing; the tags row is also the one row every poll page
-already has. It takes the theme's primary colour rather than a key from
-`badgeColors.ts` — it is not a badge, it reports the state of the page
-rather than a fact about the poll, and green there means *settled*, which is
-the opposite of what a live poll is.
+One request per page on a first load, and one per tick after that. In `npm
+run dev` every one of those appears twice: React's `StrictMode` mounts each
+component, unmounts it and mounts it again, so every effect that fetches
+runs twice. That is development-only and deliberate — it is what catches an
+effect whose cleanup does not work — and `npm run build` output does it
+once. Count requests against `npm run preview`, not `npm run dev`. Against a
+real Supabase project each request is also preceded by a CORS preflight
+`OPTIONS`, so the browser's network panel shows two entries per call.
 
 ## Behaviour worth preserving
 
@@ -250,6 +255,58 @@ them anonymously — while ballots are **published** or **private**. An anonymou
 ballot is the two tags in combination: respondents hidden, ballots published.
 Changing any of these strings means changing them in `PollTags` alone, which is
 the point of it existing.
+
+### Option descriptions
+
+An option can carry a description as well as a name: a caveat, a couple of
+lines of detail, a link to whatever is being voted on. It is optional and
+nearly always absent, so it is not a field that is always on screen — each row
+of the create form has a `+` beside it that opens one, and `0019` is the
+migration that gave `create_poll` somewhere to put the text. The column itself
+predates that by a long way: `candidates.description` and both ballots'
+rendering of it were written first, and nothing had ever been able to fill it
+in.
+
+The field it opens says what it is by its shape. It is indented under the
+option it belongs to, with an elbow drawn from the bottom of the name field
+across to its left edge (`CreatePoll.module.css`) — indenting alone reads as an
+unrelated field that happens to be narrower, and the elbow is the shape a file
+tree already uses for "belongs to the thing above". It opens two rows tall
+rather than one, because a field the same height as the name above it looks
+like another one-line answer, and it grows from there instead of scrolling.
+Its placeholder names its option — *Option 2 description* — so a form with
+several of them open cannot be misread.
+
+Four things hold it together:
+
+- **Descriptions are paired with options by position, and filtered with them.**
+  They travel to `create_poll` as a second array, so dropping a blank option row
+  without dropping its slot in that pairing would slide every later description
+  one option up — not an error anywhere, just the wrong text under the wrong
+  name. `CreatePoll` filters the pairs and `create_poll` aggregates both
+  columns in one pass, and neither ever filters one array alone.
+- **Hidden means gone.** Collapsing the field discards what was in it rather
+  than remembering it, so a poll can never carry a description its creator can
+  no longer see. It is also why "no description" is `null` rather than an empty
+  string in the form state: the same value collapses the field and means there
+  is nothing to store.
+- **They belong to the ballot, and appear nowhere else.** Both ballots show one
+  under the option's name, because that is where the detail is a voting aid.
+  Results, the full ranking and the published ballot grid name options and
+  nothing more — a paragraph beside a bar of points is noise at the point where
+  the decision has already been made.
+- **URLs in them are links.** Pointing at something else is most of the reason
+  to write a description at all, and a link nobody can click is one the reader
+  has to select and copy. `OptionDescription` turns `http(s)://` and bare
+  `www.` runs into anchors as React elements — no HTML is ever parsed out of
+  the text, and the `href` is either the matched URL or `https://` glued onto
+  the `www.` form, so a description cannot produce a `javascript:` link.
+
+Like everything else about a poll, a description is fixed at creation; the
+options of a poll with votes in it cannot change at all
+(`guard_options_frozen`). Duplicating a poll copies the descriptions with the
+options, which is the only way to get a nearly-identical poll with the
+explanations intact.
 
 ### Who can vote
 

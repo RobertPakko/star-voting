@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { Center, Loader, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
-import { LiveIndicator } from '../components/LiveIndicator'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollTags } from '../components/PollTags'
 import type { OpenPollView } from '../lib/types'
@@ -50,9 +49,9 @@ export function PublicPoll() {
   }, [load])
 
   // A closed poll takes no more votes, and one whose results are out has
-  // stopped moving -- so the refreshing stops with it, and so does the dot.
+  // stopped moving, so the refreshing stops with it.
   const live = !!view && !view.is_closed && !view.results_available
-  const { paused } = useLiveRefresh(load, { enabled: live })
+  useLiveRefresh(load, { enabled: live })
 
   if (!token || error) {
     return (
@@ -79,17 +78,13 @@ export function PublicPoll() {
         <Title order={2}>{view.poll.title}</Title>
         {/* Someone arriving from a shared link has no other context at all,
             so all three terms of the poll are stated here, not just the one
-            that changes what happens to their ballot. The live dot shares
-            the row: it speaks for the page, not for any one number. */}
-        <Group justify="space-between" gap="xs">
-          <PollTags
-            mode={view.poll.mode}
-            showVoters={view.poll.show_voters}
-            showBallots={view.poll.show_ballots}
-            closed={view.is_closed}
-          />
-          {live && <LiveIndicator paused={paused} />}
-        </Group>
+            that changes what happens to their ballot. */}
+        <PollTags
+          mode={view.poll.mode}
+          showVoters={view.poll.show_voters}
+          showBallots={view.poll.show_ballots}
+          closed={view.is_closed}
+        />
         {view.poll.description && <Text c="dimmed">{view.poll.description}</Text>}
       </Stack>
 

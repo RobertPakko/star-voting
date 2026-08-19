@@ -16,13 +16,29 @@ import {
   Textarea,
   TextInput,
   Title,
+  Tooltip,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import type { Invitee, Poll, PollMode, PollOption } from '../lib/types'
+import classes from './CreatePoll.module.css'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/**
+ * One row of the options list. `description` is null when the option has no
+ * description field on screen at all, which is the state nearly every option
+ * in nearly every poll stays in.
+ */
+interface OptionDraft {
+  name: string
+  description: string | null
+}
+
+function blankOption(): OptionDraft {
+  return { name: '', description: null }
+}
 
 export function CreatePoll() {
   const { session } = useAuth()
@@ -32,7 +48,7 @@ export function CreatePoll() {
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [options, setOptions] = useState(['', ''])
+  const [options, setOptions] = useState<OptionDraft[]>([blankOption(), blankOption()])
   const [mode, setMode] = useState<PollMode>('invite')
   const [showVoters, setShowVoters] = useState(true)
   const [showBallots, setShowBallots] = useState(false)
@@ -74,9 +90,18 @@ export function CreatePoll() {
       setShowVoters(source.show_voters)
       setShowBallots(source.show_ballots)
 
-      const sourceOptions = ((optionsRes.data as PollOption[]) ?? []).map((o) => o.name)
+      // Descriptions come across with their options, so a duplicate of a poll
+      // that explained its options does not quietly lose the explanations.
+      const sourceOptions = ((optionsRes.data as PollOption[]) ?? []).map((o) => ({
+        name: o.name,
+        description: o.description,
+      }))
       // Keep the form's two-row minimum if the source somehow had fewer.
-      setOptions(sourceOptions.length >= 2 ? sourceOptions : [...sourceOptions, '', ''].slice(0, 2))
+      setOptions(
+        sourceOptions.length >= 2
+          ? sourceOptions
+          : [...sourceOptions, blankOption(), blankOption()].slice(0, 2),
+      )
 
       if (source.mode === 'invite') {
         // Open polls have no invitee list and poll_invitees raises on them.
@@ -100,22 +125,41 @@ export function CreatePoll() {
     }
   }, [duplicateOf, myEmail])
 
-  function updateOption(index: number, value: string) {
-    setOptions((prev) => prev.map((c, i) => (i === index ? value : c)))
+  function updateOption(index: number, patch: Partial<OptionDraft>) {
+    setOptions((prev) => prev.map((o, i) => (i === index ? { ...o, ...patch } : o)))
   }
 
   function addOption() {
-    setOptions((prev) => [...prev, ''])
+    setOptions((prev) => [...prev, blankOption()])
   }
 
   function removeOption(index: number) {
     setOptions((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // null is "no description", and is also what collapses the field: showing a
+  // description means giving it an empty string to type into, and hiding one
+  // throws whatever was in it away. Keeping hidden text would mean a poll
+  // could carry a description its creator can no longer see, which is the one
+  // way this field could surprise anybody.
+  function toggleDescription(index: number) {
+    setOptions((prev) =>
+      prev.map((o, i) =>
+        i === index ? { ...o, description: o.description === null ? '' : null } : o,
+      ),
+    )
+  }
+
   async function handleSubmit() {
     setError(null)
 
-    const cleanOptions = options.map((o) => o.trim()).filter(Boolean)
+    // Blank rows are dropped here and in create_poll alike, and the
+    // descriptions travel as a parallel array -- so they are filtered
+    // together, never separately, or a dropped row would slide every later
+    // description onto the wrong option.
+    const cleanOptions = options
+      .map((o) => ({ name: o.name.trim(), description: o.description?.trim() || null }))
+      .filter((o) => o.name)
     const typedEmails = emails.map((e) => e.trim().toLowerCase()).filter(Boolean)
     const allEmails = Array.from(new Set(includeSelf ? [...typedEmails, myEmail] : typedEmails))
 
@@ -145,11 +189,16 @@ export function CreatePoll() {
     const { data, error: rpcError } = await supabase.rpc('create_poll', {
       p_title: title.trim(),
       p_description: description.trim() || null,
-      p_options: cleanOptions,
+      p_options: cleanOptions.map((o) => o.name),
       p_emails: isOpen ? [] : allEmails,
       p_mode: mode,
       p_show_voters: showVoters,
       p_show_ballots: showBallots,
+      // Most polls describe nothing, and send nothing rather than a row of
+      // nulls the database would only throw away again.
+      p_option_descriptions: cleanOptions.some((o) => o.description)
+        ? cleanOptions.map((o) => o.description)
+        : null,
     })
     setSubmitting(false)
 
@@ -197,17 +246,60 @@ export function CreatePoll() {
       />
 
       <Stack gap="xs">
-        <Text fw={500} size="sm">
-          Options
-        </Text>
+        <Stack gap={2}>
+          <Text fw={500} size="sm">
+            Options
+          </Text>
+          {/* The + is one small icon on a row of them, so it gets one line
+              saying what it is for. Most polls need none. */}
+          <Text size="xs" c="dimmed">
+            Use + to add a description to an option — a note, a caveat, a link — if its name
+            doesn&apos;t say enough on its own.
+          </Text>
+        </Stack>
         {options.map((option, index) => (
-          <Group key={index} gap="xs">
-            <TextInput
-              value={option}
-              onChange={(e) => updateOption(index, e.currentTarget.value)}
-              placeholder={`Option ${index + 1}`}
-              style={{ flex: 1 }}
-            />
+          <Group key={index} gap="xs" align="flex-start" wrap="nowrap">
+            <Stack gap={4} style={{ flex: 1 }}>
+              <TextInput
+                value={option.name}
+                onChange={(e) => updateOption(index, { name: e.currentTarget.value })}
+                placeholder={`Option ${index + 1}`}
+              />
+              {option.description !== null && (
+                <div className={classes.description}>
+                  <Textarea
+                    value={option.description}
+                    onChange={(e) => updateOption(index, { description: e.currentTarget.value })}
+                    placeholder={`Option ${index + 1} description`}
+                    size="xs"
+                    /* Two rows before a word is typed: a description is
+                       usually a sentence or two, and a field the height of
+                       the name above it looks like another one-line answer.
+                       autosize grows it from there rather than scrolling. */
+                    autosize
+                    minRows={2}
+                    autoFocus
+                  />
+                </div>
+              )}
+            </Stack>
+            <Tooltip
+              label={option.description === null ? 'Add description' : 'Remove description'}
+              withArrow
+            >
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                onClick={() => toggleDescription(index)}
+                aria-label={
+                  option.description === null
+                    ? `Add a description to option ${index + 1}`
+                    : `Remove the description from option ${index + 1}`
+                }
+              >
+                {option.description === null ? '+' : '−'}
+              </ActionIcon>
+            </Tooltip>
             <ActionIcon
               variant="subtle"
               color="red"
