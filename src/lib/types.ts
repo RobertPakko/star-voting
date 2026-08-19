@@ -23,6 +23,18 @@ export interface Poll {
    * `show_ballots && !show_voters` is a verifiable tally that names nobody.
    */
   show_ballots: boolean
+  /**
+   * The options were collected from the people in the poll rather than
+   * written by its creator. Frozen at creation like the three above; what
+   * moves is `options_finalized_at`.
+   */
+  solicit_options: boolean
+  /**
+   * When the creator closed the option list and opened voting. Null while a
+   * soliciting poll is still collecting, and never set on a poll whose
+   * creator wrote the options.
+   */
+  options_finalized_at: string | null
   /** Set for open polls only; the capability in their share link. */
   public_token: string | null
 }
@@ -48,10 +60,19 @@ export interface PollStatus {
   is_closed: boolean
   /** What actually gates the results view: complete, or closed with >=1 vote. */
   results_available: boolean
+  /**
+   * Still collecting options, so there is no ballot yet. Derived in the
+   * database from the two columns above it — solicits options, not
+   * finalized, not closed — so it can never disagree with them.
+   */
+  soliciting: boolean
 }
 
 /** One row from list_polls(): a poll and its status, fetched together. */
-export interface PollListItem extends Poll, PollStatus {}
+export interface PollListItem extends Poll, PollStatus {
+  /** How many options the poll has — its turnout number while collecting. */
+  option_count: number
+}
 
 export interface Invitee {
   email: string
@@ -68,11 +89,14 @@ export interface OpenPollView {
     mode: PollMode
     show_voters: boolean
     show_ballots: boolean
+    solicit_options: boolean
     closed_at: string | null
   }
   options: PollOption[]
   voted_count: number
   is_closed: boolean
+  /** Still collecting options; see PollStatus.soliciting. */
+  soliciting: boolean
   results_available: boolean
   /** This browser's voter_key has already submitted a ballot. */
   voted: boolean

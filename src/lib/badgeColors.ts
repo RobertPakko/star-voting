@@ -2,7 +2,7 @@
  * Every badge colour the app uses, in one place.
  *
  * Badges from different files land next to each other all the time — a poll
- * list card carries the three setting tags, a turnout count and a vote
+ * list card carries the four setting tags, a turnout count and a vote
  * reminder in the same few square inches — so picking a colour at the call
  * site is how two unrelated meanings end up sharing one. Colours are chosen
  * here instead, against the whole set, and no two distinct meanings share.
@@ -10,7 +10,7 @@
  * Three rules keep it that way:
  *
  *  1. **Every state of a setting gets its own colour**, not one colour per
- *     setting. `PollTags` always shows all three settings whichever way each
+ *     setting. `PollTags` always shows all four settings whichever way each
  *     is set, so a shared colour per pair meant the colour told you which
  *     question was being answered but not what the answer was — leaving the
  *     text to carry it alone.
@@ -24,7 +24,7 @@
  * signal the badge is one too many, not a reason to double up.
  */
 export const badgeColor = {
-  // The three settings a poll is frozen with. The two states of one setting
+  // The four settings a poll is frozen with. The two states of one setting
   // never appear together, so what these are spaced against is the *other*
   // settings on the same row -- which is why the pairs are not same-family.
   openLink: 'grape',
@@ -33,8 +33,16 @@ export const badgeColor = {
   respondentsHidden: 'blue',
   ballotsPublished: 'teal',
   ballotsPrivate: 'pink',
+  optionsFromCreator: 'indigo',
+  optionsFromRespondents: 'lime',
 
-  /** A state rather than a setting, so it is grey and always sits last. */
+  /**
+   * States rather than settings, so both are neutral where the settings
+   * above them are coloured, and both sit after them. A poll has at most one
+   * of these at a time: collecting comes before any vote, closed after the
+   * last one.
+   */
+  collectingOptions: 'dark',
   closed: 'gray',
 
   /** Finished: results are ready, this person voted, this step was decisive. */

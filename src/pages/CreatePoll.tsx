@@ -21,8 +21,8 @@ import {
 import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
+import { DescriptionField } from '../components/DescriptionField'
 import type { Invitee, Poll, PollMode, PollOption } from '../lib/types'
-import classes from './CreatePoll.module.css'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -52,6 +52,7 @@ export function CreatePoll() {
   const [mode, setMode] = useState<PollMode>('invite')
   const [showVoters, setShowVoters] = useState(true)
   const [showBallots, setShowBallots] = useState(false)
+  const [solicitOptions, setSolicitOptions] = useState(false)
   const [emails, setEmails] = useState<string[]>([])
   const [includeSelf, setIncludeSelf] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -89,6 +90,7 @@ export function CreatePoll() {
       setMode(source.mode)
       setShowVoters(source.show_voters)
       setShowBallots(source.show_ballots)
+      setSolicitOptions(source.solicit_options)
 
       // Descriptions come across with their options, so a duplicate of a poll
       // that explained its options does not quietly lose the explanations.
@@ -167,7 +169,10 @@ export function CreatePoll() {
       setError('Title is required.')
       return
     }
-    if (cleanOptions.length < 2) {
+    // A poll that collects its options may be created with none: the same
+    // minimum is applied later, when the creator turns the list into a
+    // ballot. Seeding a few here is a head start, not a requirement.
+    if (!solicitOptions && cleanOptions.length < 2) {
       setError('Add at least two options.')
       return
     }
@@ -194,6 +199,7 @@ export function CreatePoll() {
       p_mode: mode,
       p_show_voters: showVoters,
       p_show_ballots: showBallots,
+      p_solicit_options: solicitOptions,
       // Most polls describe nothing, and send nothing rather than a row of
       // nulls the database would only throw away again.
       p_option_descriptions: cleanOptions.some((o) => o.description)
@@ -244,77 +250,6 @@ export function CreatePoll() {
         autosize
         minRows={2}
       />
-
-      <Stack gap="xs">
-        <Stack gap={2}>
-          <Text fw={500} size="sm">
-            Options
-          </Text>
-          {/* The + is one small icon on a row of them, so it gets one line
-              saying what it is for. Most polls need none. */}
-          <Text size="xs" c="dimmed">
-            Use + to add a description to an option — a note, a caveat, a link — if its name
-            doesn&apos;t say enough on its own.
-          </Text>
-        </Stack>
-        {options.map((option, index) => (
-          <Group key={index} gap="xs" align="flex-start" wrap="nowrap">
-            <Stack gap={4} style={{ flex: 1 }}>
-              <TextInput
-                value={option.name}
-                onChange={(e) => updateOption(index, { name: e.currentTarget.value })}
-                placeholder={`Option ${index + 1}`}
-              />
-              {option.description !== null && (
-                <div className={classes.description}>
-                  <Textarea
-                    value={option.description}
-                    onChange={(e) => updateOption(index, { description: e.currentTarget.value })}
-                    placeholder={`Option ${index + 1} description`}
-                    size="xs"
-                    /* Two rows before a word is typed: a description is
-                       usually a sentence or two, and a field the height of
-                       the name above it looks like another one-line answer.
-                       autosize grows it from there rather than scrolling. */
-                    autosize
-                    minRows={2}
-                    autoFocus
-                  />
-                </div>
-              )}
-            </Stack>
-            <Tooltip
-              label={option.description === null ? 'Add description' : 'Remove description'}
-              withArrow
-            >
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                onClick={() => toggleDescription(index)}
-                aria-label={
-                  option.description === null
-                    ? `Add a description to option ${index + 1}`
-                    : `Remove the description from option ${index + 1}`
-                }
-              >
-                {option.description === null ? '+' : '−'}
-              </ActionIcon>
-            </Tooltip>
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={() => removeOption(index)}
-              disabled={options.length <= 2}
-              aria-label="Remove option"
-            >
-              &times;
-            </ActionIcon>
-          </Group>
-        ))}
-        <Button variant="light" size="xs" onClick={addOption} w="fit-content">
-          Add option
-        </Button>
-      </Stack>
 
       <Stack gap="xs">
         <Text fw={500} size="sm">
@@ -388,6 +323,19 @@ export function CreatePoll() {
         )}
       </Stack>
 
+      {/* The one setting that decides what the poll does *before* anyone
+          votes. Off is the behaviour the app has always had. */}
+      <Switch
+        checked={solicitOptions}
+        onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
+        label="Collect options from respondents"
+        description={
+          solicitOptions
+            ? 'The poll opens for suggestions instead of votes. Everyone in it can add options, and nobody can vote until you settle the list — which you do from the poll’s own page.'
+            : 'You write the options yourself, below, and the poll opens for voting straight away.'
+        }
+      />
+
       {!isOpen && (
         <Stack gap="xs">
           <TagsInput
@@ -404,6 +352,75 @@ export function CreatePoll() {
           />
         </Stack>
       )}
+
+      {/* Last, because it is the only part of the form whose shape depends on
+          the answers above it: a poll collecting its options can be created
+          with none at all, and the rows here become a head start rather than
+          the ballot. */}
+      <Stack gap="xs">
+        <Stack gap={2}>
+          <Text fw={500} size="sm">
+            {solicitOptions ? 'Starting options' : 'Options'}
+          </Text>
+          {/* The + is one small icon on a row of them, so it gets one line
+              saying what it is for. Most polls need none. */}
+          <Text size="xs" c="dimmed">
+            {solicitOptions
+              ? 'Optional. Anything here is on the list from the start; everyone in the poll can add to it, and you settle the list on the poll’s page.'
+              : 'Use + to add a description to an option — a note, a caveat, a link — if its name doesn’t say enough on its own.'}
+          </Text>
+        </Stack>
+        {options.map((option, index) => (
+          <Group key={index} gap="xs" align="flex-start" wrap="nowrap">
+            <Stack gap={4} style={{ flex: 1 }}>
+              <TextInput
+                value={option.name}
+                onChange={(e) => updateOption(index, { name: e.currentTarget.value })}
+                placeholder={`Option ${index + 1}`}
+              />
+              {option.description !== null && (
+                <DescriptionField
+                  value={option.description}
+                  onChange={(e) => updateOption(index, { description: e.currentTarget.value })}
+                  placeholder={`Option ${index + 1} description`}
+                  autoFocus
+                />
+              )}
+            </Stack>
+            <Tooltip
+              label={option.description === null ? 'Add description' : 'Remove description'}
+              withArrow
+            >
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                onClick={() => toggleDescription(index)}
+                aria-label={
+                  option.description === null
+                    ? `Add a description to option ${index + 1}`
+                    : `Remove the description from option ${index + 1}`
+                }
+              >
+                {option.description === null ? '+' : '−'}
+              </ActionIcon>
+            </Tooltip>
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              onClick={() => removeOption(index)}
+              /* Two rows is the floor for a poll that ships its options with
+                 it, and no floor at all for one that collects them. */
+              disabled={!solicitOptions && options.length <= 2}
+              aria-label="Remove option"
+            >
+              &times;
+            </ActionIcon>
+          </Group>
+        ))}
+        <Button variant="light" size="xs" onClick={addOption} w="fit-content">
+          Add option
+        </Button>
+      </Stack>
 
       {error && (
         <Text c="red" size="sm">

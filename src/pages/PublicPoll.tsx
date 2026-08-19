@@ -77,18 +77,20 @@ export function PublicPoll() {
       <Stack gap={8}>
         <Title order={2}>{view.poll.title}</Title>
         {/* Someone arriving from a shared link has no other context at all,
-            so all three terms of the poll are stated here, not just the one
+            so all four terms of the poll are stated here, not just the one
             that changes what happens to their ballot. */}
         <PollTags
           mode={view.poll.mode}
           showVoters={view.poll.show_voters}
           showBallots={view.poll.show_ballots}
+          solicitOptions={view.poll.solicit_options}
+          soliciting={view.soliciting}
           closed={view.is_closed}
         />
         {view.poll.description && <Text c="dimmed">{view.poll.description}</Text>}
       </Stack>
 
-      <OpenPollPanel token={token} view={view} onVoted={load} />
+      <OpenPollPanel token={token} view={view} onChanged={load} />
     </Stack>
   )
 }

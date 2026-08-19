@@ -19,6 +19,7 @@ import { useAuth } from '../lib/auth'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
 import { voterKeyFor } from '../lib/voterKey'
 import { Ballots } from '../components/Ballots'
+import { CollectOptions } from '../components/CollectOptions'
 import { CreatorControls } from '../components/CreatorControls'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { OptionDescription } from '../components/OptionDescription'
@@ -92,9 +93,23 @@ export function PollDetail() {
     load()
   }, [load])
 
-  // The live tick, deliberately narrower than load(): a poll's title,
-  // options and settings are frozen at creation, so the only things that
-  // can change while someone watches are the counts and whether it closed.
+  // A poll that collected its own options is the one poll whose option list
+  // moves while somebody is watching it, so it is the one whose page
+  // re-reads the list. Open polls get theirs inside open_poll_view.
+  //
+  // Until the first vote, not just until the list is finalized: that is a
+  // hair wider than the collecting stage, and it is what closes the gap at
+  // the moment the stage ends. A suggestion landing between the last tick
+  // and the creator finalizing would otherwise leave a voter scoring a
+  // ballot one option short of the one submit_ballot is expecting.
+  // guard_options_frozen takes over from the first ballot on.
+  const optionsMayMove =
+    poll?.mode === 'invite' && poll?.solicit_options === true && status?.voted_count === 0
+
+  // The live tick, deliberately narrower than load(): a poll's title and
+  // settings are frozen at creation, so what can change while someone
+  // watches is the counts, the options of a poll collecting them, and
+  // whether it has moved on to voting or closed.
   const refresh = useCallback(async () => {
     if (!pollId) return
     // Bumped before the requests rather than after, so the roster below
@@ -102,10 +117,13 @@ export function PollDetail() {
     setLiveTick((t) => t + 1)
 
     const token = poll?.mode === 'open' ? poll.public_token : null
-    const [statusRes, viewRes] = await Promise.all([
+    const [statusRes, viewRes, optionsRes] = await Promise.all([
       supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
       token
         ? supabase.rpc('open_poll_view', { p_token: token, p_voter_key: voterKeyFor(token) })
+        : null,
+      optionsMayMove
+        ? supabase.from('candidates').select('*').eq('poll_id', pollId).order('sort_order')
         : null,
     ])
 
@@ -116,7 +134,9 @@ export function PollDetail() {
     // than being five seconds out of date.
     if (!statusRes.error && statusRes.data) setStatus(statusRes.data as PollStatus)
     if (viewRes && !viewRes.error && viewRes.data) setView(viewRes.data as OpenPollView)
-  }, [pollId, poll?.mode, poll?.public_token])
+    if (optionsRes && !optionsRes.error && optionsRes.data)
+      setOptions(optionsRes.data as PollOption[])
+  }, [pollId, poll?.mode, poll?.public_token, optionsMayMove])
 
   // Nothing about a closed poll changes again, and a poll whose results are
   // out has taken its last vote either way -- so the refreshing stops, and
@@ -158,12 +178,14 @@ export function PollDetail() {
       <Stack gap={8}>
         <Title order={2}>{poll.title}</Title>
         {poll.description && <Text c="dimmed">{poll.description}</Text>}
-        {/* All three terms of the poll, at the top, whichever way each is
+        {/* All four terms of the poll, at the top, whichever way each is
             set -- people arrive here from a link with no other context. */}
         <PollTags
           mode={poll.mode}
           showVoters={poll.show_voters}
           showBallots={poll.show_ballots}
+          solicitOptions={poll.solicit_options}
+          soliciting={status.soliciting}
           closed={status.is_closed}
         />
       </Stack>
@@ -181,9 +203,19 @@ export function PollDetail() {
             token={poll.public_token!}
             view={view}
             isCreator={isCreator}
-            onVoted={load}
+            onChanged={load}
           />
         )
+      ) : status.soliciting ? (
+        /* No ballot yet: the poll is a list everyone in it can add to, and
+           the creator decides when it becomes a ballot. */
+        <CollectOptions
+          source={{ kind: 'poll', pollId: poll.id }}
+          pollId={poll.id}
+          options={options}
+          isCreator={isCreator}
+          onChanged={load}
+        />
       ) : status.results_available ? (
         <Stack gap="lg">
           <Results source={{ kind: 'poll', pollId: poll.id }} />

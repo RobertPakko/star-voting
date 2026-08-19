@@ -43,7 +43,8 @@ SPA-fallback configuration. Links into the app therefore look like
    [Database migrations](#database-migrations). Nothing needs pasting into the
    SQL Editor. No dashboard settings need changing for open polls either: the
    `anon` role's access is granted entirely by the migrations, and is limited to
-   the `open_poll_*` functions (`view`, `submit`, `results`, `ballots`) — it has
+   the `open_poll_*` functions (`view`, `submit`, `suggest_option`, `results`,
+   `ballots`) — it has
    no read or write grant on any table.
 3. Under **Project Settings → API**, copy the Project URL and `anon` public key.
 4. The **Email** auth provider (magic link) is enabled by default — no extra
@@ -230,18 +231,23 @@ app makes to the people voting in it.
 
 ### Poll settings are frozen at creation
 
-Each poll fixes three things when it is created, and none can be changed
+Each poll fixes four things when it is created, and none can be changed
 afterwards: `authenticated` has no `UPDATE` grant on the `polls` table at all.
-A poll's terms are settled the moment it exists.
+A poll's terms are settled the moment it exists. Everything that *does* move
+afterwards moves through a `SECURITY DEFINER` function with its own rules —
+`close_poll`, `reset_poll`, `finalize_options` — never through a write from the
+client.
 
-All three are surfaced together by `PollTags` (`src/components/PollTags.tsx`) on
-the poll list, the poll page and the public voting page — always all three,
+All four are surfaced together by `PollTags` (`src/components/PollTags.tsx`) on
+the poll list, the poll page and the public voting page — always all four,
 always in the same order and the same words, whichever way each one is set. A
 tag that appeared only for one of its two states made its absence carry meaning,
-and nobody reads an absence. `Closed` is appended to the same row but is a
-*state* rather than a setting, so it is grey and always last.
+and nobody reads an absence. `Collecting options` and `Closed` are appended to
+the same row but are *states* rather than settings, so they are neutral rather
+than coloured and always come last. A poll is in at most one of them:
+collecting happens before the first vote, closing after the last.
 
-**Every state has its own colour**, not one colour per setting: with all three
+**Every state has its own colour**, not one colour per setting: with all four
 tags always present, a colour shared across a pair told you which question was
 being answered but not what the answer was, leaving the text to carry the whole
 tag. Colours come from `src/lib/badgeColors.ts`, which holds every badge colour
@@ -269,7 +275,7 @@ in.
 
 The field it opens says what it is by its shape. It is indented under the
 option it belongs to, with an elbow drawn from the bottom of the name field
-across to its left edge (`CreatePoll.module.css`) — indenting alone reads as an
+across to its left edge (`DescriptionField.module.css`) — indenting alone reads as an
 unrelated field that happens to be narrower, and the elbow is the shape a file
 tree already uses for "belongs to the thing above". It opens two rows tall
 rather than one, because a field the same height as the name above it looks
@@ -390,7 +396,7 @@ Four rules hold the published setting together:
 
   This used to be a boxed `Alert` under the submit button as well, spelling the
   same two facts out in sentences. It was removed once the tags covered both
-  states of all three settings: the alert restated what the tags already said,
+  states of all four settings: the alert restated what the tags already said,
   and a warning that repeats the label six inches above it trains people to
   skip both. The requirement is that the voter can read the terms before
   submitting, not that they are said twice.
@@ -408,13 +414,82 @@ enforces one ballot each; hiding is a policy applied over data that still
 exists, and anyone with direct database access could undo it. The stronger
 guarantee needs an open poll.
 
+### Where the options come from
+
+Two answers, and the second one gives a poll a stage it did not have before.
+
+- **From the creator** (the default) — the options are written in the create
+  form and exist the moment the poll does. This is every poll the app made
+  until `0020`.
+- **From respondents** — the poll opens as a list rather than a ballot.
+  Everyone in it can add options, nobody can vote, and it stays that way until
+  the creator finalizes the list. Voting opens then, and from that point the
+  poll is indistinguishable from any other: same ballot, same tally, same
+  rules about who may see what.
+
+`solicit_options` is the setting and is frozen like the other three; it says
+where the options came from, which is still worth reading long after the poll
+has closed. `options_finalized_at` is the *state*, and moves exactly once. A
+poll is **collecting** when it solicits options, has not been finalized, and
+has not been closed — derived in the database rather than stored, the same way
+`is_closed` is derived from `closed_at`, so the two can never disagree.
+
+The one promise this stage makes is that **everyone who votes scores the same
+list**, and every rule under it is holding that up:
+
+- **Nobody votes while the list is growing.** Both `submit_ballot` and
+  `open_poll_submit` refuse, so a page left open across the transition cannot
+  slip an early ballot in — and an early ballot would be answering a different
+  question from everyone else's.
+- **Nobody suggests once it is finalized.** The finalized list is the one every
+  voter is scoring, so it cannot grow underneath them. After the first vote
+  `guard_options_frozen` holds it there for good, exactly as on any other poll.
+- **Only the creator finalizes, and only into a real ballot.** Two options
+  minimum — the same floor `create_poll` puts on a poll whose creator wrote the
+  options, applied at the point the list becomes a ballot instead. A soliciting
+  poll may therefore be created with no options at all; seeding a few is a head
+  start, not a requirement.
+- **Everyone suggests through a function, the creator included.** An invitee
+  has no `INSERT` grant on `candidates` and `anon` has no grant on any table, so
+  `suggest_option` (invite polls) and `open_poll_suggest_option` (open polls)
+  are the only ways in. One path means the rules are stated once, and the
+  creator's list cannot be built under rules nobody else's is — the same reason
+  the creator votes in their own open poll through the `anon` RPC.
+- **Suggestions carry no name.** Who suggested what is a third disclosure
+  question on top of *who responded* and *how they voted*, and the poll's tags
+  answer neither of those about the option list. Storing a name nothing
+  displays would only be a leak waiting to happen.
+
+Two caps exist on the suggestion path and nowhere else, because this is the
+only field in the app a whole group can write to rather than the poll's creator
+alone: 100 characters on a name, 500 on a description, and 50 options in a
+poll. None is near what a real suggestion needs, and the last one is really
+about the ballot — a list nobody will read to the end is not one anybody can
+score honestly.
+
+The stage is surfaced by `CollectOptions` (`src/components/CollectOptions.tsx`)
+in place of the ballot, on all three pages that can carry one. Everyone sees
+the same list and the same box to add to it; the creator additionally gets a
+`×` on each row and the button that ends the stage. Both of those sit beside
+the list they act on rather than in `CreatorControls`, the same way the invite
+controls sit inside `Respondents` — `CreatorControls` holds what the creator
+does to the *poll*.
+
+**Reset votes leaves a finalized poll finalized.** Resetting promises the same
+poll with its votes cleared, and the list everyone was shown is part of the
+same poll. A poll closed while it was still collecting does reopen collecting,
+because that is the stage it was in.
+
 ### Creator controls
 
 On the poll page, the creator gets:
 
+- **Open for voting** — on a poll collecting its options, and only there:
+  finalizes the list and lets people vote. One-way, and offered from the option
+  list itself rather than from this block.
 - **Close voting now** — reveals results using the votes cast so far. One-way.
 - **Duplicate** — opens the create form prefilled from this poll (options,
-  invitees, all three settings). Nothing is created until submit, so the copy
+  invitees, all four settings). Nothing is created until submit, so the copy
   can be edited first, and the original is untouched.
 - **Reset votes** — deletes every vote and reopens the poll, keeping its id,
   options, invitee list and share link. Anyone who already voted can vote again,

@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { badgeColor, countBadge } from '../lib/badgeColors'
 import { Ballots } from './Ballots'
+import { CollectOptions } from './CollectOptions'
 import { OptionDescription } from './OptionDescription'
 import { Results } from './Results'
 import type { OpenPollView, PollOption } from '../lib/types'
@@ -26,6 +27,10 @@ import type { OpenPollView, PollOption } from '../lib/types'
  * without going through the link. Both go through the same anon-callable
  * RPCs, so there is one code path and one set of rules.
  *
+ * It covers every stage an open poll can be in, because every one of them
+ * is reached through the same link: collecting options, taking votes, and
+ * showing the result.
+ *
  * The view is handed in rather than fetched here. Both pages already read
  * it -- they render the poll's title and tags around this panel -- and both
  * now re-read it on a timer to keep votes arriving without a reload, so
@@ -37,15 +42,29 @@ export function OpenPollPanel({
   token,
   view,
   isCreator = false,
-  onVoted,
+  onChanged,
 }: {
   token: string
   view: OpenPollView
   /** Creators see participation before voting; see where it's rendered. */
   isCreator?: boolean
-  /** A ballot went in: the page re-reads the poll. */
-  onVoted: () => void
+  /** A ballot went in, or the option list moved: the page re-reads the poll. */
+  onChanged: () => void
 }) {
+  // Before anything else, because a poll still collecting its options has no
+  // ballot to show and no result to show either.
+  if (view.soliciting) {
+    return (
+      <CollectOptions
+        source={{ kind: 'token', token }}
+        pollId={view.poll.id}
+        options={view.options}
+        isCreator={isCreator}
+        onChanged={onChanged}
+      />
+    )
+  }
+
   if (view.results_available) {
     return (
       <Stack gap="lg">
@@ -84,7 +103,7 @@ export function OpenPollPanel({
           options={view.options}
           needsName={view.poll.show_voters}
           showBallots={view.poll.show_ballots}
-          onVoted={onVoted}
+          onVoted={onChanged}
         />
       )}
 
