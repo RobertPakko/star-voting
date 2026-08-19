@@ -286,6 +286,23 @@ export function CreatePoll() {
         </Alert>
       )}
 
+      {!isOpen && (
+        <Stack gap="xs">
+          <TagsInput
+            label="Invite voters"
+            description="Type an email and press Enter (or comma) to add it."
+            placeholder="them@example.com"
+            value={emails}
+            onChange={setEmails}
+          />
+          <Checkbox
+            label={`Include me as a voter (${myEmail})`}
+            checked={includeSelf}
+            onChange={(e) => setIncludeSelf(e.currentTarget.checked)}
+          />
+        </Stack>
+      )}
+
       <Switch
         checked={showVoters}
         onChange={(e) => setShowVoters(e.currentTarget.checked)}
@@ -335,23 +352,6 @@ export function CreatePoll() {
             : 'You write the options yourself, below, and the poll opens for voting straight away.'
         }
       />
-
-      {!isOpen && (
-        <Stack gap="xs">
-          <TagsInput
-            label="Invite voters"
-            description="Type an email and press Enter (or comma) to add it."
-            placeholder="them@example.com"
-            value={emails}
-            onChange={setEmails}
-          />
-          <Checkbox
-            label={`Include me as a voter (${myEmail})`}
-            checked={includeSelf}
-            onChange={(e) => setIncludeSelf(e.currentTarget.checked)}
-          />
-        </Stack>
-      )}
 
       {/* Last, because it is the only part of the form whose shape depends on
           the answers above it: a poll collecting its options can be created
