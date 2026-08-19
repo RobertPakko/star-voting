@@ -6,7 +6,7 @@ import { Notifications } from '@mantine/notifications'
 import '@mantine/core/styles.css'
 import '@mantine/notifications/styles.css'
 import './index.css'
-import { AuthProvider } from './lib/auth'
+import { AuthProvider } from './lib/AuthProvider'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(

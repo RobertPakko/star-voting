@@ -231,8 +231,8 @@ export function CreatePoll() {
         <Title order={2}>{duplicateOf ? 'Duplicate poll' : 'New poll'}</Title>
         {duplicateOf && (
           <Text size="sm" c="dimmed">
-            Prefilled from the original. Change anything you like — nothing is created until you
-            hit Create poll, and the original is left untouched.
+            Prefilled from the original. Change anything you like — nothing is created until you hit
+            Create poll, and the original is left untouched.
           </Text>
         )}
       </Stack>
@@ -266,15 +266,15 @@ export function CreatePoll() {
         <Text size="xs" c="dimmed">
           {isOpen
             ? 'Voters open a link and score the options. No sign-in, no account.'
-            : "Voters sign in with their email. Only addresses on the invite list can see or vote in the poll."}
+            : 'Voters sign in with their email. Only addresses on the invite list can see or vote in the poll.'}
         </Text>
         {isOpen && (
           <Alert color="yellow" title="Anyone with the link can vote">
             <Stack gap={4}>
               <Text size="sm">
-                There is no sign-in, so there is no way to tell voters apart. Anyone the link reaches
-                can vote, and one person can vote more than once by using another browser or clearing
-                their site data.
+                There is no sign-in, so there is no way to tell voters apart. Anyone the link
+                reaches can vote, and one person can vote more than once by using another browser or
+                clearing their site data.
               </Text>
               <Text size="sm">
                 Good for picking a movie. Not good for anything where the outcome actually matters —

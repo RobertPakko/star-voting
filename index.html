@@ -13,8 +13,7 @@
       // the defaultColorScheme in main.tsx.
       try {
         var stored = window.localStorage.getItem('mantine-color-scheme-value')
-        var scheme =
-          stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'auto'
+        var scheme = stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'auto'
         var computed =
           scheme !== 'auto'
             ? scheme

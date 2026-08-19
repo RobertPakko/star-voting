@@ -63,11 +63,11 @@ export function SignIn() {
               <Button fullWidth onClick={handleSubmit} loading={sending}>
                 Send sign-in link
               </Button>
-                        {/* Shown either way: someone who has just requested a link has a
+              {/* Shown either way: someone who has just requested a link has a
               minute to spare, and may have no idea what STAR voting is. */}
-          <Anchor component={Link} to="/about" size="sm">
-            What is STAR voting?
-          </Anchor>
+              <Anchor component={Link} to="/about" size="sm">
+                What is STAR voting?
+              </Anchor>
             </>
           )}
         </Stack>

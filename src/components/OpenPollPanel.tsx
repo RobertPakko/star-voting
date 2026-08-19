@@ -1,14 +1,5 @@
 import { useRef, useState } from 'react'
-import {
-  Badge,
-  Button,
-  Card,
-  Group,
-  Rating,
-  Stack,
-  Text,
-  TextInput,
-} from '@mantine/core'
+import { Badge, Button, Card, Group, Rating, Stack, Text, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
@@ -89,11 +80,11 @@ export function OpenPollPanel({
       {view.voted ? (
         <Card withBorder>
           <Stack gap="xs">
-            <Text fw={500}>
-              Your vote is in
-            </Text>
+            <Text fw={500}>Your vote is in</Text>
             <Text size="sm" c="dimmed">
-              {isCreator ? 'Results are revealed once you close the poll' : 'Results are revealed once the poll\'s creator closes it'}
+              {isCreator
+                ? 'Results are revealed once you close the poll'
+                : "Results are revealed once the poll's creator closes it"}
             </Text>
           </Stack>
         </Card>

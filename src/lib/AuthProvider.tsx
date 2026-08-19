@@ -1,15 +1,14 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { AuthContext } from './auth'
 
-interface AuthContextValue {
-  session: Session | null
-  loading: boolean
-  signInWithEmail: (email: string) => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined)
-
+/**
+ * Holds the Supabase session and keeps it current, for the whole app.
+ *
+ * The context itself and the `useAuth` hook are in `auth.ts` next door, so
+ * this file exports nothing but a component — see the note there.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
@@ -40,10 +39,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider')
-  return ctx
 }

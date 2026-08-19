@@ -49,9 +49,9 @@ export function FullRanking({ results }: { results: PollResults }) {
           </Stack>
 
           <Text size="xs" c="dimmed">
-            Only first place is what STAR itself produces. Each place takes one runoff, so most pairs
-            of options never actually meet: where two did, the loser is always below the winner, but
-            everywhere else an option may well be preferred to one placed above it.
+            Only first place is what STAR itself produces. Each place takes one runoff, so most
+            pairs of options never actually meet: where two did, the loser is always below the
+            winner, but everywhere else an option may well be preferred to one placed above it.
           </Text>
         </Stack>
       </Modal>

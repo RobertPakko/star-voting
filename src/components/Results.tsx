@@ -117,9 +117,9 @@ export function Results({ source }: { source: ResultsSource }) {
             <Card withBorder key={i} p="sm">
               <Stack gap="xs">
                 <Text size="sm">
-                  <strong>{tb.tied.map((t) => t.name).join(' and ')}</strong> tied at {tb.tied_at} pts
-                  for {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}. STAR
-                  settles this before the runoff:
+                  <strong>{tb.tied.map((t) => t.name).join(' and ')}</strong> tied at {tb.tied_at}{' '}
+                  pts for {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}.
+                  STAR settles this before the runoff:
                 </Text>
 
                 {tb.steps.map((step, j) => (

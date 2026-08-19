@@ -16,10 +16,10 @@ export function About() {
           What is STAR voting?
         </Title>
         <Text>
-          <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is a mechanism
-          for conducting elections. It can be used for decisions from choosing a national leader
-          to selecting a film for your next movie night. This website allows
-          you to create and respond to polls using STAR voting.
+          <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is a mechanism for
+          conducting elections. It can be used for decisions from choosing a national leader to
+          selecting a film for your next movie night. This website allows you to create and respond
+          to polls using STAR voting.
         </Text>
       </Stack>
 
@@ -29,8 +29,7 @@ export function About() {
         </Title>
         <Text>
           STAR voting is an acronym that stands for &ldquo;Score Then Automatic Runoff&rdquo;. It
-          combines{' '}
-          <Ext href="https://en.wikipedia.org/wiki/Score_voting">score voting</Ext> with{' '}
+          combines <Ext href="https://en.wikipedia.org/wiki/Score_voting">score voting</Ext> with{' '}
           <Ext href="https://en.wikipedia.org/wiki/Instant-runoff_voting">ranked choice voting</Ext>{' '}
           algorithms. The following procedure is used to resolve an election:
         </Text>
@@ -49,7 +48,8 @@ export function About() {
             <Footnote n={1} />.
           </List.Item>
           <List.Item>
-            Among the two finalists, the option that is preferred by more voters is selected as the winner
+            Among the two finalists, the option that is preferred by more voters is selected as the
+            winner
             <Footnote n={2} />.
           </List.Item>
         </List>
@@ -60,7 +60,8 @@ export function About() {
           Why would I want to use STAR voting?
         </Title>
         <Text>
-          STAR voting has several useful properties that no other voting system offers in full. STAR voting is:
+          STAR voting has several useful properties that no other voting system offers in full. STAR
+          voting is:
         </Text>
         {/* Each property answers the shortcoming of the system above it, so
             these stay in order and read as one argument rather than a
@@ -87,10 +88,11 @@ export function About() {
             most voters among the tied options. That's decided by comparing the tied options one
             pair at a time. For each pair, we check which option is preferred by more voters. An
             option is 'preferred by more voters' when it receives a higher score than the other
-            option on a greater number of ballots than the other option. Whichever option is preferred
-            in the most of these one-on-one comparisons wins the tie. If the options are still tied,
-            the tie is broken in favor of the option given five stars on the most ballots. If they
-            remain tied after both rules, a finalist is chosen randomly between them.
+            option on a greater number of ballots than the other option. Whichever option is
+            preferred in the most of these one-on-one comparisons wins the tie. If the options are
+            still tied, the tie is broken in favor of the option given five stars on the most
+            ballots. If they remain tied after both rules, a finalist is chosen randomly between
+            them.
           </List.Item>
           <List.Item>
             A tie in the runoff is broken in favor of the option with the higher total score. If
@@ -98,18 +100,20 @@ export function About() {
             ballots. If they are level on all three, the election has no winner.
           </List.Item>
           <List.Item>
-            <Ext href="https://en.wikipedia.org/wiki/Gibbard%27s_theorem">Gibbard&rsquo;s theorem</Ext>{' '}
-            demonstrates that no deterministic, non-dictatorial voting method can be entirely
-            immune from tactical voting.
+            <Ext href="https://en.wikipedia.org/wiki/Gibbard%27s_theorem">
+              Gibbard&rsquo;s theorem
+            </Ext>{' '}
+            demonstrates that no deterministic, non-dictatorial voting method can be entirely immune
+            from tactical voting.
           </List.Item>
           <List.Item>
-            STAR voting is not perfectly accurate, but all perfectly accurate voting systems
-            either can&rsquo;t be computed reliably, can&rsquo;t be understood reliably, or
-            can&rsquo;t be audited reliably.
+            STAR voting is not perfectly accurate, but all perfectly accurate voting systems either
+            can&rsquo;t be computed reliably, can&rsquo;t be understood reliably, or can&rsquo;t be
+            audited reliably.
           </List.Item>
           <List.Item>
-            If you want to audit and verify things yourself, the complete
-            implementation of this site is available at{' '}
+            If you want to audit and verify things yourself, the complete implementation of this
+            site is available at{' '}
             <Ext href="https://github.com/RobertPakko/star-voting">
               github.com/RobertPakko/star-voting
             </Ext>
@@ -139,7 +143,8 @@ const PROPERTIES: { name: string; body: ReactNode }[] = [
       <>
         <Ext href="https://en.wikipedia.org/wiki/Approval_voting">Approval voting</Ext> solves the
         above problem, but it doesn&rsquo;t allow voters to express the magnitude of their
-        preference. STAR voting is expressive because voters can express different levels of preference for each option.
+        preference. STAR voting is expressive because voters can express different levels of
+        preference for each option.
       </>
     ),
   },
@@ -160,8 +165,9 @@ const PROPERTIES: { name: string; body: ReactNode }[] = [
     body: (
       <>
         <Ext href="https://en.wikipedia.org/wiki/Instant-runoff_voting">Ranked choice voting</Ext>{' '}
-        solves the above problems, but it&rsquo;s simply inaccurate in some cases. It's vulnerable to
-        'center squeeze' and 'spoiler' effects in common scenarios. STAR voting is accurate because it addresses most
+        solves the above problems, but it&rsquo;s simply inaccurate in some cases. It's vulnerable
+        to 'center squeeze' and 'spoiler' effects in common scenarios. STAR voting is accurate
+        because it addresses most
         <Footnote n={4} /> situations where ranked choice voting becomes inaccurate.
       </>
     ),

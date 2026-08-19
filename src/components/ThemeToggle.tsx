@@ -1,4 +1,10 @@
-import { ActionIcon, Menu, Text, useComputedColorScheme, useMantineColorScheme } from '@mantine/core'
+import {
+  ActionIcon,
+  Menu,
+  Text,
+  useComputedColorScheme,
+  useMantineColorScheme,
+} from '@mantine/core'
 
 const OPTIONS = [
   ['light', 'Light'],

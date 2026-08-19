@@ -227,12 +227,7 @@ export function CollectOptions({
               Nobody can vote while the list is still growing. Open the poll once the options are
               settled — after that the list is fixed, like any other poll’s.
             </Text>
-            <Button
-              color="orange"
-              variant="light"
-              disabled={!enough}
-              onClick={finalizeModal.open}
-            >
+            <Button color="orange" variant="light" disabled={!enough} onClick={finalizeModal.open}>
               Open for voting
             </Button>
           </Group>
