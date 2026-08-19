@@ -4,6 +4,7 @@ import { Button, Card, Group, Modal, Stack, Text, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
+import { forgetPoll } from '../lib/settled'
 import { ShareLink } from './ShareLink'
 import type { Poll, PollStatus } from '../lib/types'
 
@@ -50,6 +51,11 @@ export function CreatorControls({
       setError(rpcError.message)
       return
     }
+    // Resetting is the one thing that un-settles a settled poll, so it is
+    // also the one thing that has to throw away what the browser remembered
+    // about it -- the tally, the ballot grid and the elected option. See
+    // lib/settled.ts for what that cache does and does not promise.
+    forgetPoll(pollId, poll.public_token)
     notifications.show({ message: 'Votes cleared', color: 'green' })
     onChange()
   }
@@ -79,6 +85,8 @@ export function CreatorControls({
       setError(deleteError.message)
       return
     }
+    // Nothing left to remember it by.
+    forgetPoll(pollId, poll.public_token)
     notifications.show({ message: 'Poll deleted', color: 'green' })
     navigate('/')
   }

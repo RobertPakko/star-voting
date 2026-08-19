@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, …)
-src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, shared types
+src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, shared types
 supabase/migrations/  the schema, as ordered SQL files
 test/            tally tests, run against a throwaway Postgres
 ```
@@ -287,14 +287,63 @@ Requests are chained rather than fired on a fixed interval — the next goes
 out after the last comes back — so a slow connection spaces refreshes out
 instead of stacking them up.
 
-One request per page on a first load, and one per tick after that. In `npm
-run dev` every one of those appears twice: React's `StrictMode` mounts each
+One request per page on a first load, and one per tick after that. The poll
+list is the one page that can make a second: it asks `poll_winners()` for the
+finished polls on the page whose result it cannot already name, which is a
+request on a first look at a page and nothing on the ticks after it. See [The
+poll list card](#the-poll-list-card) for why that is a request of its own,
+and [Settled polls](#settled-polls) for why it stops.
+
+In `npm run dev` every one of those appears twice: React's `StrictMode` mounts each
 component, unmounts it and mounts it again, so every effect that fetches
 runs twice. That is development-only and deliberate — it is what catches an
 effect whose cleanup does not work — and `npm run build` output does it
 once. Count requests against `npm run preview`, not `npm run dev`. Against a
 real Supabase project each request is also preceded by a CORS preflight
 `OPTIONS`, so the browser's network panel shows two entries per call.
+
+## Settled polls
+
+Live updates are for what can change. This is its mirror image: a poll whose
+results are out has taken its last vote, so its tally, its ballot grid and
+the option it elected are fixed for good, and re-reading them is work that
+can only ever produce the same answer. `src/lib/settled.ts` remembers all
+three, and it is what makes the winner badge cost one request per poll rather
+than one per refresh.
+
+What it changes on screen: walking back into a finished poll draws it from
+memory, with no skeleton and no request, and the poll list stops asking about
+polls it has already asked about.
+
+**In memory, for the life of the tab, and no further.** Nothing is written to
+`localStorage`, and that is a decision rather than an omission. A settled poll
+is settled *unless its creator resets it* — reset deletes every vote and
+reopens the poll, which can then finish again with a different answer, and
+[nobody is told](#creator-controls). So the bound on a wrong answer is kept
+short:
+
+- A reset **in this tab** clears the entries outright: `CreatorControls`
+  calls `forgetPoll`, so the creator — the person most likely to look
+  immediately afterwards — never sees the old result.
+- A reset **somewhere else** leaves this tab holding a tally the poll no
+  longer has. Every screen that renders one reads `poll_status` or
+  `open_poll_view` first, and neither is ever cached, so a poll that has gone
+  back to taking votes shows its ballot rather than a stale result. What is
+  left is a poll reset elsewhere *and finished again* while this tab stayed
+  open, which shows the previous answer until it is reloaded. Persisting any
+  of this would turn that window into a permanent one, to save one request
+  per poll per session.
+
+Two properties make the cache safe to write to at all. Every RPC cached here
+refuses to answer until the results have unlocked, so **holding a response is
+itself proof the poll is finished** — there is no separate check to get
+wrong. And nothing in it is secret: every entry is a response the server had
+already decided this reader could have, dropped when the tab is.
+
+`null` is a real answer in the winners map — a genuine tie elects nobody, and
+so does a poll closed before anyone voted — so it is a `Map` with a `has`
+check rather than a lookup treating *missing* and *empty* alike. Otherwise a
+poll with no winner would be asked about forever.
 
 ## Waiting
 
@@ -394,20 +443,42 @@ The state sits on the right of the title and says where the poll has got to:
 naming its winner is the answer the whole poll was for, and the reason
 anybody opens one again months later.
 
-The name comes from `list_polls()`, which calls `poll_winner_name()`, which
-runs the same `star_round()` the results page runs — so the badge and the
-poll page cannot disagree about who won, because there is one implementation
-of the method and this is a second caller of it. It is **only asked of polls
-whose results have already unlocked**; the `CASE` guarding the call is not
-tidiness but what stops a list of open polls from running an election per row
-per refresh. `star_round()` builds a temp table and is therefore volatile, so
-`list_polls()` is declared volatile too — a `STABLE` function may not promise
-more than what it calls.
+The name comes from `poll_winners()` (`0024`), which calls
+`poll_winner_name()`, which runs the same `star_round()` the results page
+runs — so the badge and the poll page cannot disagree about who won, because
+there is one implementation of the method and this is a second caller of it.
+
+**It is a separate request, not a column on `list_polls()`, and that is the
+whole design.** Running STAR is not free, and the list re-reads itself every
+few seconds for as long as it is on screen; a `winner_name` column would have
+re-run every finished poll's election on every tick, for an answer that
+cannot change. Instead:
+
+- `list_polls()` stays what it was — one cheap `STABLE` query per tick, with
+  no election in it.
+- The page asks `poll_winners()` for the finished polls **on the page being
+  looked at** that the browser cannot already name. That is at most ten, it
+  happens the first time a page is looked at and on the tick a poll's results
+  unlock, and it happens not at all in between (see [Settled
+  polls](#settled-polls)).
+
+So the cost is one election per poll per tab, rather than per poll per tick —
+it stops growing with the length of your poll history, which is what a badge
+on a list has to do.
+
+`poll_winners()` checks visibility itself, on exactly the terms `list_polls()`
+uses, and answers with **no row at all** for a poll the caller cannot see:
+*not yours* and *no winner* are different answers and must not arrive looking
+alike. It also refuses more than 200 ids in one request, because each one is
+an election.
 
 Three cases produce no name, and all three read *Results ready* rather than a
 guess: a genuine tie, which elects nobody; a poll closed before anyone voted;
-and a browser holding a build newer than the database it is talking to, which
-happens because the app deploys on push while migrations are applied by hand.
+and a browser holding a build newer than the database it is talking to — the
+app deploys on push while migrations land on merge, so for a few minutes
+`poll_winners()` may not exist yet. That failure is swallowed on purpose: a
+list with no winners named on it is a working list, where a list that 404s is
+not.
 
 **Ten polls to a page.** The list is read whole and paged in the browser:
 `list_polls()` returns the polls you were invited to, which is a number in the

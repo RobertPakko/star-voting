@@ -7,6 +7,7 @@ import { useLiveRefresh } from '../lib/useLiveRefresh'
 import { BallotsTag, ModeTag, RespondentsTag } from '../components/PollTags'
 import { PollListSkeleton } from '../components/Skeletons'
 import { badgeColor, countBadge } from '../lib/badgeColors'
+import { knownWinners, rememberWinner } from '../lib/settled'
 import type { PollListItem } from '../lib/types'
 
 /**
@@ -25,6 +26,12 @@ export function PollList() {
   const [polls, setPolls] = useState<PollListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  // Winners this tab has learned, seeded from what it learned before this
+  // page was last mounted. The Map in lib/settled.ts is the copy that
+  // outlives the component; this one is what re-renders when it grows.
+  const [winners, setWinners] = useState<ReadonlyMap<string, string | null>>(
+    () => new Map(knownWinners()),
+  )
   // Whether a read has ever come back; see the note in PublicPoll.
   const loaded = useRef(false)
 
@@ -56,6 +63,52 @@ export function PollList() {
   // as long as the tab is in front of someone.
   useLiveRefresh(load)
 
+  // Clamped rather than reset: a poll deleted from page three should leave
+  // the reader on page three, or on the last page there is if that was it.
+  // Derived at render so a live refresh that shortens the list can never
+  // leave the page pointing past the end of it.
+  const pageCount = Math.max(1, Math.ceil((polls?.length ?? 0) / PAGE_SIZE))
+  const current = Math.min(page, pageCount)
+  const shown = polls?.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE) ?? []
+
+  // Which polls on this page have finished without this tab knowing what they
+  // decided. Nearly always empty: it fills on a first look at a page and on
+  // the tick a poll's results unlock, and is empty on every tick in between.
+  //
+  // Joined into a string to depend on, because `polls` is a fresh array on
+  // every refresh tick and an effect watching it would re-ask every few
+  // seconds for an answer that cannot change.
+  const wanted = shown
+    .filter((poll) => poll.results_available && !winners.has(poll.id))
+    .map((poll) => poll.id)
+  const wantedKey = wanted.join(',')
+
+  // The winners are their own request rather than a column on list_polls,
+  // because a column would re-run every finished poll's election on every
+  // tick. This asks once per poll, for the polls on screen, and a settled
+  // poll never comes back into the question. See 0024_poll_winners.sql.
+  useEffect(() => {
+    if (!wantedKey) return
+    let cancelled = false
+    const ids = wantedKey.split(',')
+
+    supabase.rpc('poll_winners', { p_poll_ids: ids }).then(({ data, error: rpcError }) => {
+      // A list with no winners named on it is a working list, so a failure
+      // here is swallowed: it is also what a browser sees when it is running
+      // ahead of the migration that adds the function. The next tick asks
+      // again, since nothing was remembered.
+      if (rpcError || !data) return
+      const answered = data as { poll_id: string; winner_name: string | null }[]
+      for (const row of answered) rememberWinner(row.poll_id, row.winner_name)
+      if (cancelled) return
+      setWinners(new Map(knownWinners()))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [wantedKey])
+
   if (error) {
     return (
       <Text c="red" ta="center">
@@ -65,14 +118,6 @@ export function PollList() {
   }
 
   if (!polls) return <PollListSkeleton />
-
-  // Clamped rather than reset: a poll deleted from page three should leave
-  // the reader on page three, or on the last page there is if that was it.
-  // Derived at render so a live refresh that shortens the list can never
-  // leave the page pointing past the end of it.
-  const pageCount = Math.max(1, Math.ceil(polls.length / PAGE_SIZE))
-  const current = Math.min(page, pageCount)
-  const shown = polls.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
 
   return (
     <Stack gap="lg" maw={720} mx="auto">
@@ -107,7 +152,7 @@ export function PollList() {
                 <Text fw={600} c="var(--mantine-color-text)">
                   {poll.title}
                 </Text>
-                <StateBadge poll={poll} />
+                <StateBadge poll={poll} winner={winners.get(poll.id)} />
               </Group>
               {poll.description && (
                 <Text size="sm" c="dimmed">
@@ -197,7 +242,19 @@ function turnout(poll: PollListItem): string {
  * poll closed before anyone voted, and a browser holding this code against a
  * database whose list_polls predates the column.
  */
-function StateBadge({ poll }: { poll: PollListItem }) {
+function StateBadge({
+  poll,
+  winner,
+}: {
+  poll: PollListItem
+  /**
+   * What the poll elected, or `null` for a poll that elected nobody.
+   * `undefined` means this tab has not been told yet — the answer is a
+   * request behind the list, so a finished poll wears the neutral wording
+   * for the moment before it arrives.
+   */
+  winner: string | null | undefined
+}) {
   if (poll.soliciting) {
     return (
       <Badge color={badgeColor.collectingOptions} variant="light" style={{ flexShrink: 0 }}>
@@ -213,9 +270,9 @@ function StateBadge({ poll }: { poll: PollListItem }) {
         variant="light"
         maw={220}
         style={{ flexShrink: 1 }}
-        title={poll.winner_name ?? undefined}
+        title={winner ?? undefined}
       >
-        {poll.winner_name ? `Winner: ${poll.winner_name}` : 'Results ready'}
+        {winner ? `Winner: ${winner}` : 'Results ready'}
       </Badge>
     )
   }

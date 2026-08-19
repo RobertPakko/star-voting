@@ -72,13 +72,6 @@ export interface PollStatus {
 export interface PollListItem extends Poll, PollStatus {
   /** How many options the poll has — its turnout number while collecting. */
   option_count: number
-  /**
-   * The option STAR elected, computed the same way the results page computes
-   * it. Null until the results unlock, null on the genuine tie that elects
-   * nobody, and undefined against a database whose list_polls predates it —
-   * so a caller reads "no name" as "nothing to announce" in all three cases.
-   */
-  winner_name?: string | null
 }
 
 export interface Invitee {

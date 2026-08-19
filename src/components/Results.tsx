@@ -12,6 +12,7 @@ import {
 } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
+import { recall, remember } from '../lib/settled'
 import type { PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { OptionDescription } from './OptionDescription'
@@ -26,15 +27,30 @@ import { voters } from '../lib/plural'
 export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'token'; token: string }
 
 export function Results({ source }: { source: ResultsSource }) {
-  const [results, setResults] = useState<PollResults | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
   const key = source.kind === 'poll' ? source.pollId : source.token
+  const rpc = kind === 'poll' ? 'get_poll_results' : 'open_poll_results'
+
+  // A tally this tab has already been given, rendered without a request and
+  // therefore without a skeleton: the poll it describes has taken its last
+  // vote, so there is nothing a second read could tell us. See lib/settled.ts
+  // for why that is in memory only.
+  const [results, setResults] = useState<PollResults | null>(
+    () => recall<PollResults>(rpc, key) ?? null,
+  )
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Checked again here rather than only in the initial state, because one
+    // mounted Results can be handed a different poll.
+    const cached = recall<PollResults>(rpc, key)
+    if (cached) {
+      setResults(cached)
+      return
+    }
+
     let cancelled = false
 
     const request =
@@ -43,6 +59,9 @@ export function Results({ source }: { source: ResultsSource }) {
         : supabase.rpc('open_poll_results', { p_token: key })
 
     request.then(({ data, error: rpcError }) => {
+      // Remembered whether or not this component still wants it: the answer
+      // is about the poll, not about who asked.
+      if (!rpcError) remember(rpc, key, data)
       if (cancelled) return
       if (rpcError) setError(rpcError.message)
       else setResults(data as PollResults)
@@ -51,7 +70,7 @@ export function Results({ source }: { source: ResultsSource }) {
     return () => {
       cancelled = true
     }
-  }, [kind, key])
+  }, [kind, key, rpc])
 
   if (error) {
     return (
