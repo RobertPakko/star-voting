@@ -173,7 +173,11 @@ export function PollDetail() {
           to learn about a poll instead of one. */}
       <Stack gap={8}>
         <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
-          <Title order={2}>{poll.title}</Title>
+          {/* Wraps rather than squeezing the badge beside it -- see
+              PollStateBadge. */}
+          <Title order={2} style={{ minWidth: 0, wordBreak: 'break-word' }}>
+            {poll.title}
+          </Title>
           <PollStateBadge
             soliciting={status.soliciting}
             resultsAvailable={status.results_available}

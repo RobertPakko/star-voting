@@ -74,7 +74,11 @@ export function PublicPoll() {
           depending on how you reached it. */}
       <Stack gap={8}>
         <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
-          <Title order={2}>{view.poll.title}</Title>
+          {/* Wraps rather than squeezing the badge beside it -- see
+              PollStateBadge. */}
+          <Title order={2} style={{ minWidth: 0, wordBreak: 'break-word' }}>
+            {view.poll.title}
+          </Title>
           {/* No winner's name here: naming it needs poll_winners(), which is
               for signed-in readers, and this page has no account behind it.
               The badge says the results are ready and the tally underneath

@@ -148,7 +148,16 @@ export function PollList() {
                   progress rather than its terms, and the only thing worth
                   reading before deciding whether to open it. */}
               <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
-                <Text fw={600} c="var(--mantine-color-text)">
+                {/* The side of this row that gives: the badge beside it is
+                    sized to the name it carries, so a title too long for
+                    what is left wraps rather than squeezing it. `minWidth`
+                    lets it wrap past its longest word, which a title with
+                    no spaces in it otherwise would not. */}
+                <Text
+                  fw={600}
+                  c="var(--mantine-color-text)"
+                  style={{ minWidth: 0, wordBreak: 'break-word' }}
+                >
                   {poll.title}
                 </Text>
                 <PollStateBadge
