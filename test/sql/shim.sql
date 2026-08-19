@@ -72,3 +72,35 @@ create or replace function auth.jwt() returns jsonb
            end
     from auth._session where id
   $$;
+
+-- pg_cron, as far as the migrations can tell. The extension itself needs
+-- shared_preload_libraries and is stripped from the schema before it is
+-- applied (see test/run.sh), but the scheduling that goes with it is ordinary
+-- SQL against the cron schema, and it is worth running: a squash that drops
+-- it takes the nightly purge with it, silently, which is exactly what
+-- happened once. With these stand-ins the schedule lands somewhere a case can
+-- assert on, so losing it fails the suite instead of the database.
+create schema if not exists cron;
+
+create table if not exists cron.job (
+  jobid    bigserial primary key,
+  jobname  text unique,
+  schedule text not null,
+  command  text not null
+);
+
+create or replace function cron.schedule(job_name text, schedule text, command text)
+  returns bigint
+  language sql
+  as $$
+    insert into cron.job (jobname, schedule, command)
+    values (job_name, schedule, command)
+    on conflict (jobname)
+      do update set schedule = excluded.schedule, command = excluded.command
+    returning jobid
+  $$;
+
+create or replace function cron.unschedule(job_id bigint)
+  returns boolean
+  language sql
+  as $$ delete from cron.job where jobid = job_id returning true $$;

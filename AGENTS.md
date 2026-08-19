@@ -17,6 +17,8 @@ src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, Pub
 src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, …)
 src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, shared types
 supabase/migrations/  the schema, as ordered SQL files
+supabase/after-squash.sql  the statements a schema dump cannot carry
+scripts/         squash.sh, which squashes the migrations and replays the above
 test/            tally tests, run against a throwaway Postgres
 ```
 
@@ -121,9 +123,9 @@ npm run dev
 
 Inviting someone to a poll (`create_poll` inserting into `invited_voters`)
 sends them an email through [Resend](https://resend.com), via a trigger
-(`send_invite_email` in
-[`0021_invite_emails.sql`](supabase/migrations/0021_invite_emails.sql)) that
-calls Resend's HTTP API directly using `pg_net`. The API key is never
+(`send_invite_email`, in the squashed baseline under
+[`supabase/migrations/`](supabase/migrations)) that calls Resend's HTTP API
+directly using `pg_net`. The API key is never
 committed — the trigger reads it from Supabase Vault at send time:
 
 1. In the Supabase dashboard, open the **SQL Editor** on the project (not a
@@ -169,13 +171,34 @@ Migration files accumulate, and a long chain of them gets slow to run and hard
 to read. Occasionally collapse the whole history into a single baseline file:
 
 ```bash
-npx supabase migration squash --linked
+scripts/squash.sh
 ```
 
-This replaces the existing files with one migration describing the current
-schema, and reconciles the linked project's migration history to match, so
-nothing is re-applied against the live database. Commit the result on its own,
-with no other changes in the same commit, so the replacement is easy to review.
+Use the script rather than `npx supabase migration squash --linked` directly.
+The squash replays the migrations into a shadow database and pg_dumps the
+result, so the baseline it writes describes the current schema and nothing
+else. **A statement that does something rather than declaring something does
+not survive it** — a backfill, a one-off `update`, the `cron.schedule()` that
+runs the nightly purge. Those live in
+[`supabase/after-squash.sql`](supabase/after-squash.sql), and the script
+replays that file into a fresh migration on top of the new baseline. Anything
+added there has to be idempotent: it is applied again on every rebuild, on top
+of a database that may already have it.
+
+The script also renames the squashed baseline to `<version>_baseline.sql`. The
+squash writes the whole schema into the newest migration file and keeps that
+file's name, which after a run of this script is the replay from the previous
+one; the rename keeps the version prefix, which is the part Supabase's
+migration history is keyed on, and changes only the label after it. It then
+runs `npm test` and prints `supabase migration list` so local and remote
+history can be compared before anything is committed.
+
+Commit the result on its own, with no other changes in the same commit, so the
+replacement is easy to review.
+
+This is not a hypothetical: a plain squash silently dropped the purge schedule
+once. `12_poll_retention` now asserts the job exists, so a squash that loses it
+again fails the suite instead of quietly disabling retention.
 
 ## Tests
 
@@ -863,8 +886,8 @@ every poll ever created was still in the database and the storage bill only
 went one way. The app is free and promises nobody a permanent record; what it
 does promise instead is a rule that is written down, applied to every poll
 alike, and visible on the poll itself before it comes due.
-[`0025_poll_retention.sql`](supabase/migrations/0025_poll_retention.sql) holds
-all of it:
+The schema half of it is in the squashed baseline and the scheduling half in
+[`supabase/after-squash.sql`](supabase/after-squash.sql):
 
 - `poll_retention_window()` is the period, and the only place the number is
   written down. `poll_expires_at(polls)` is when one poll goes.
@@ -884,9 +907,12 @@ all of it:
   already relies on, so there is one definition of what deleting a poll means.
 - **pg_cron runs it nightly**, as the job `purge-old-polls`. The extension
   only exists on a real Supabase project, so both the `create extension` and
-  the `cron.schedule` sit in `DO` blocks that degrade to a notice — the
-  throwaway database `npm test` builds has no scheduler, and defines and tests
-  the function all the same.
+  the `cron.schedule` sit in `DO` blocks that degrade to a notice. They live in
+  [`supabase/after-squash.sql`](supabase/after-squash.sql) rather than in the
+  baseline, because scheduling is not schema and a squash would drop it — see
+  [Squashing](#squashing). The throwaway database `npm test` builds has no
+  scheduler, but `test/sql/shim.sql` stands in a `cron` schema so the schedule
+  lands somewhere a case can assert on.
 
 If the job is ever missing on the live project — pg_cron not enabled when the
 migration ran is the likely reason — enabling it and scheduling it is the

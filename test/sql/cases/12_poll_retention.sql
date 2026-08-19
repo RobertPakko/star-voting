@@ -151,4 +151,24 @@ begin
     (select expires_at from poll_status(v_poll)), v_expires);
 end $$;
 
+
+-- Defining the purge is only half of it: nothing in the app calls
+-- purge_old_polls(), so a schedule that goes missing takes retention with it
+-- and every assertion above still passes. The scheduling is not schema, so a
+-- squash drops it unless it is replayed (supabase/after-squash.sql, and
+-- scripts/squash.sh which puts it back) -- and that has already happened
+-- once. This is the assertion that would have caught it.
+do $$
+begin
+  perform tests.assert_eq('the purge is scheduled',
+    (select count(*)::int from cron.job where jobname = 'purge-old-polls'), 1);
+
+  perform tests.assert_eq('nightly, off the hour',
+    (select schedule from cron.job where jobname = 'purge-old-polls'), '17 4 * * *');
+
+  perform tests.assert_eq('and it runs the purge',
+    (select command from cron.job where jobname = 'purge-old-polls'),
+    'select public.purge_old_polls()');
+end $$;
+
 rollback;

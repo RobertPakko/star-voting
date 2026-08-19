@@ -1,0 +1,38 @@
+-- Everything the app needs that a schema dump cannot carry.
+--
+-- `supabase migration squash` replays the migrations into a shadow database
+-- and pg_dumps the result, so the baseline it writes holds schema and only
+-- schema: tables, functions, grants, comments. A statement that *does*
+-- something -- a backfill, a one-off UPDATE, the cron.schedule() below -- ran
+-- against the shadow database and left nothing in the dump to show for it.
+-- The nightly purge was lost exactly this way once already.
+--
+-- scripts/squash.sh replays this file into a fresh migration after every
+-- squash, so anything here survives as long as it is idempotent: it will be
+-- applied again on top of a database that already has it.
+
+DO $$
+begin
+  create extension if not exists "pg_cron";
+exception when others then
+  -- Any stock Postgres, including the one the tests build. Everything the
+  -- purge needs is already in place; only the schedule is missing.
+  raise notice 'pg_cron unavailable (%); purge_old_polls() is defined but not scheduled', sqlerrm;
+end $$;
+
+
+DO $$
+begin
+  if to_regnamespace('cron') is null then
+    return;
+  end if;
+
+  -- Unscheduled first rather than relying on cron.schedule() replacing a job
+  -- by name, so re-running this by hand cannot leave two jobs purging.
+  perform cron.unschedule(jobid) from cron.job where jobname = 'purge-old-polls';
+
+  -- Nightly, at an hour nobody is running a poll in, and off the hour: a
+  -- schedule shared with every other cron job in the world is the one that
+  -- competes for the database's attention.
+  perform cron.schedule('purge-old-polls', '17 4 * * *', $cron$select public.purge_old_polls()$cron$);
+end $$;
