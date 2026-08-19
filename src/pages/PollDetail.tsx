@@ -157,6 +157,7 @@ export function PollDetail() {
     <Stack maw={640} mx="auto" gap="lg">
       <Stack gap={8}>
         <Title order={2}>{poll.title}</Title>
+        {poll.description && <Text c="dimmed">{poll.description}</Text>}
         {/* All three terms of the poll, at the top, whichever way each is
             set -- people arrive here from a link with no other context. The
             live dot rides the same row: it describes the whole page rather
@@ -170,7 +171,6 @@ export function PollDetail() {
           />
           {live && <LiveIndicator paused={paused} />}
         </Group>
-        {poll.description && <Text c="dimmed">{poll.description}</Text>}
       </Stack>
 
       {/* Open polls are voted through the same anon RPCs the public route
