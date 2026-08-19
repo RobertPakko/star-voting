@@ -107,26 +107,37 @@ export function PollList() {
                 >
                   {poll.results_available
                     ? 'Results ready'
-                    : poll.mode === 'open'
-                      ? // No invite list, so no denominator to count towards.
-                        `${poll.voted_count} ${poll.voted_count === 1 ? 'response' : 'responses'}`
-                      : `${poll.voted_count}/${poll.invited_count} voted`}
+                    : poll.soliciting
+                      ? // Turnout is zero and stays zero until the list is
+                        // settled, so this stage counts what is actually
+                        // moving: the options coming in.
+                        `${poll.option_count} ${poll.option_count === 1 ? 'option' : 'options'} so far`
+                      : poll.mode === 'open'
+                        ? // No invite list, so no denominator to count towards.
+                          `${poll.voted_count} ${poll.voted_count === 1 ? 'response' : 'responses'}`
+                        : `${poll.voted_count}/${poll.invited_count} voted`}
                 </Badge>
                 {/* `voted` is derived from the signed-in user's ballot, which
                     open polls never have -- it would always read "pending". */}
-                {poll.mode === 'invite' && !poll.voted && !poll.results_available && !poll.is_closed && (
-                  <Badge color={badgeColor.outstanding} variant="light">
-                    Vote pending
-                  </Badge>
-                )}
+                {poll.mode === 'invite' &&
+                  !poll.voted &&
+                  !poll.soliciting &&
+                  !poll.results_available &&
+                  !poll.is_closed && (
+                    <Badge color={badgeColor.outstanding} variant="light">
+                      Vote pending
+                    </Badge>
+                  )}
               </Group>
 
-              {/* The terms of the poll, in the same three tags and the same
+              {/* The terms of the poll, in the same four tags and the same
                   words as the poll page itself. */}
               <PollTags
                 mode={poll.mode}
                 showVoters={poll.show_voters}
                 showBallots={poll.show_ballots}
+                solicitOptions={poll.solicit_options}
+                soliciting={poll.soliciting}
                 closed={poll.is_closed}
               />
             </Stack>
