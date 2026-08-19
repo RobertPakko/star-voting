@@ -98,6 +98,36 @@ npm run dev
    GitHub picks up the domain from `site-root/CNAME` in the published
    artifact.
 
+### 4. Invite emails
+
+Inviting someone to a poll (`create_poll` inserting into `invited_voters`)
+sends them an email through [Resend](https://resend.com), via a trigger
+(`send_invite_email` in
+[`0021_invite_emails.sql`](supabase/migrations/0021_invite_emails.sql)) that
+calls Resend's HTTP API directly using `pg_net`. The API key is never
+committed — the trigger reads it from Supabase Vault at send time:
+
+1. In the Supabase dashboard, open the **SQL Editor** on the project (not a
+   migration file — this is a secret, so it doesn't belong in the repo) and
+   run:
+   ```sql
+   select vault.create_secret('re_your_resend_api_key', 'resend_api_key');
+   ```
+   Use a Resend API key scoped to sending only. If the key ever needs
+   rotating, run the same command again with a new value — Vault stores
+   secrets by name, so this updates it rather than creating a duplicate; if
+   `create_secret` complains the name already exists, use
+   `select vault.update_secret(id, 'new_key_value') from vault.secrets where
+   name = 'resend_api_key';` instead.
+2. That's it — no redeploy needed. The next row inserted into
+   `invited_voters` (i.e. the next poll created with invitees) will pick up
+   the key automatically.
+
+This only works against a real Supabase project: `pg_net` and Vault don't
+exist in the throwaway database `npm test` builds, so the trigger checks for
+both schemas first and quietly does nothing if either is missing — invite
+emails are best-effort and never block or fail an invitation itself.
+
 ## Database migrations
 
 Schema changes live as SQL files in
