@@ -3,12 +3,11 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 /**
- * How long a page waits after being told something changed before it re-reads.
+ * The minimum time between reads caused by live signals.
  *
- * Long enough that a burst arrives as one read — a creator pasting in six
- * invitees writes six rows, and six reads of the same poll would be six
- * answers that are all the same. Short enough that nobody perceives it: the
- * websocket handshake that just delivered the message cost more than this.
+ * A signal reads immediately when the page is idle, then further signals in
+ * the interval share one trailing read. A creator pasting in six invitees
+ * therefore gets a prompt first update without six reads of the same poll.
  */
 const SETTLE_MS = 250
 
@@ -144,6 +143,9 @@ export function useLiveStream(
     // connection spaces them out instead of stacking them up.
     let reading = false
     let missed = false
+    // The throttle is measured between read starts, so a slow read does not
+    // add another delay before the trailing read.
+    let lastReadAt: number | undefined
     // Whether at least one channel is currently carrying messages.
     let subscribed = false
     // Whether the channels were let go on purpose, because the tab went
@@ -165,6 +167,7 @@ export function useLiveStream(
         return
       }
       reading = true
+      lastReadAt = Date.now()
       let ok = true
       try {
         ok = (await onChangeRef.current()) !== false
@@ -198,7 +201,7 @@ export function useLiveStream(
 
       if (missed) {
         missed = false
-        again(SETTLE_MS)
+        soon()
       }
     }
 
@@ -211,7 +214,14 @@ export function useLiveStream(
 
     function soon() {
       failures = 0
-      again(SETTLE_MS)
+      if (reading) {
+        missed = true
+        return
+      }
+      const delay = lastReadAt === undefined
+        ? 0
+        : Math.max(0, lastReadAt + SETTLE_MS - Date.now())
+      again(delay)
     }
 
     // Start counting towards telling the reader that this page has gone
