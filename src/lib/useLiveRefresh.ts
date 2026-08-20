@@ -6,20 +6,20 @@ import { useEffect, useRef } from 'react'
  * Fast enough that a vote arriving mid-conversation shows up while people
  * are still looking at the screen, slow enough that a poll left open on a
  * projector all afternoon is not hammering the database. One shared
- * constant so every live surface in the app moves at the same rate — a
+ * constant so every live surface in the app moves at the same rate; a
  * roster refreshing twice as fast as the count beside it reads as a bug.
  */
 export const LIVE_REFRESH_MS = 5000
 
 /**
  * How many refreshes a page may run through before it stops and waits to be
- * asked again — thirty minutes' worth.
+ * asked again; thirty minutes' worth.
  *
  * A tab nobody has touched since lunch should not still be polling at
  * teatime, and left uncapped that is exactly what an app whose pages update
  * themselves does. Any sign of a reader resets the budget in full (see
  * `wake` below), so this only ever bites a page that has sat untouched in
- * the foreground for half an hour — and the first click or scroll on one
+ * the foreground for half an hour and the first click or scroll on one
  * brings it back with an immediate refresh.
  */
 export const LIVE_REFRESH_LIMIT = (30 * 60 * 1000) / LIVE_REFRESH_MS
@@ -38,7 +38,7 @@ const WAKE_OPTIONS = { passive: true, capture: true } as const
  *
  * **Polling, not Supabase Realtime.** Realtime delivers row changes over a
  * websocket, and subscribing to them needs a `SELECT` grant on the table
- * the rows are in. `anon` deliberately has no read grant on any table — an
+ * the rows are in. `anon` deliberately has no read grant on any table; an
  * open poll's voters reach their poll entirely through the `open_poll_*`
  * functions, which is what keeps a share token from also being a key to the
  * rest of the schema (see AGENTS.md). Realtime would therefore mean either
@@ -58,7 +58,7 @@ const WAKE_OPTIONS = { passive: true, capture: true } as const
  *  - a hidden tab, because nobody is reading a backgrounded poll and a
  *    laptop lid closed on twenty of them should not keep talking to the
  *    database. Coming back refreshes immediately rather than waiting out an
- *    interval — whatever arrived meanwhile is what its reader is coming
+ *    interval; whatever arrived meanwhile is what its reader is coming
  *    back to look at;
  *  - the refresh budget above, for a tab left open and forgotten;
  *  - `enabled` going false, for a poll that has taken its last vote.
@@ -69,7 +69,7 @@ const WAKE_OPTIONS = { passive: true, capture: true } as const
 export function useLiveRefresh(
   refresh: () => void | Promise<void>,
   {
-    /** False once there is nothing left to watch — a settled poll. */
+    /** False once there is nothing left to watch; a settled poll. */
     enabled = true,
     intervalMs = LIVE_REFRESH_MS,
     limit = LIVE_REFRESH_LIMIT,
@@ -107,7 +107,7 @@ export function useLiveRefresh(
       spent += 1
       await refreshRef.current()
       // Unmounted, disabled, or backgrounded while the request was in
-      // flight -- scheduling another would restart a loop nobody stopped.
+      // flight; scheduling another would restart a loop nobody stopped.
       if (cancelled) return
       if (document.hidden) {
         pending = false

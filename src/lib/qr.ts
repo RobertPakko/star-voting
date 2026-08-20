@@ -20,7 +20,7 @@ const QUIET_ZONE = 4
 export interface QrCode {
   /** Width and height in modules, quiet zone included. */
   size: number
-  /** `modules[y][x]` — true is a dark module. */
+  /** `modules[y][x]` true is a dark module. */
   modules: boolean[][]
 }
 
@@ -31,7 +31,7 @@ export function qrCodeFor(text: string): QrCode {
 
 /**
  * The dark modules as one SVG path, in a coordinate space one unit per
- * module — so the caller sizes the code with the viewBox and it stays crisp
+ * module so the caller sizes the code with the viewBox and it stays crisp
  * at any size, on screen or printed.
  */
 export function qrPath(code: QrCode): string {

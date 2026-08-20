@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import {
   ActionIcon,
-  Badge,
   Button,
   Card,
   Group,
@@ -14,7 +13,6 @@ import {
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
-import { countBadge } from '../lib/badgeColors'
 import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
 import { DescriptionField } from './DescriptionField'
 import { OptionDescription } from './OptionDescription'
@@ -31,7 +29,7 @@ export type OptionsSource = { kind: 'poll'; pollId: string } | { kind: 'token'; 
  * A poll that is still collecting its options, in place of the ballot it does
  * not have yet.
  *
- * Everyone in the poll sees the same list and the same box to add to it —
+ * Everyone in the poll sees the same list and the same box to add to it;
  * the creator included, who suggests through the same RPC as everybody else
  * rather than a path of their own. That is the same shape as the creator
  * voting in their own open poll through the anon RPC: one code path, one set
@@ -44,7 +42,7 @@ export type OptionsSource = { kind: 'poll'; pollId: string } | { kind: 'token'; 
  *
  * Two things are creator-only, and both are about ending the stage rather
  * than taking part in it: pruning the list, and finalizing it. They sit here,
- * beside the list they act on, rather than in `CreatorControls` — the same
+ * beside the list they act on, rather than in `CreatorControls`; the same
  * place the invite controls sit inside `Respondents`, and for the same
  * reason. `CreatorControls` holds what the creator does to the *poll*.
  */
@@ -70,7 +68,7 @@ export function CollectOptions({
   const [description, setDescription] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // What is wrong with the suggestion being typed, against the field it is
-  // wrong in -- rather than as a line of red under the whole card, which is
+  // wrong in rather than as a line of red under the whole card, which is
   // where the request that failed still reports itself.
   const [nameError, setNameError] = useState<string | null>(null)
   const [descriptionError, setDescriptionError] = useState<string | null>(null)
@@ -86,7 +84,7 @@ export function CollectOptions({
 
     // The same four rules add_suggested_option applies, checked here so the
     // one that fails is marked on the field it failed in. The database is
-    // still what decides -- these cannot be trusted and are not relied on --
+    // still what decides, these cannot be trusted and are not relied on,
     // and anything it refuses for a reason not listed here still comes back
     // as the error under the card.
     setNameError(null)
@@ -170,13 +168,6 @@ export function CollectOptions({
   return (
     <Card withBorder>
       <Stack gap="md">
-        <Group justify="space-between" gap="xs">
-          <Text fw={500}>Options so far</Text>
-          <Badge {...countBadge}>
-            {options.length} {options.length === 1 ? 'option' : 'options'}
-          </Badge>
-        </Group>
-
         {options.length === 0 ? (
           <Text size="sm" c="dimmed">
             Nothing suggested yet. Add the first one.
@@ -194,7 +185,6 @@ export function CollectOptions({
                     variant="subtle"
                     color="red"
                     aria-label={`Remove ${option.name}`}
-                    disabled={busy}
                     onClick={() => removeOption(option)}
                   >
                     &times;
@@ -278,14 +268,7 @@ export function CollectOptions({
           </Group>
         ) : (
           <Text size="sm" c="dimmed">
-            Voting hasn’t started. Everyone can add options until the poll’s creator settles the
-            list and opens it.
-          </Text>
-        )}
-
-        {isCreator && !enough && (
-          <Text size="xs" c="dimmed">
-            Two options at least — one option is not an election.
+            Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.
           </Text>
         )}
 
@@ -305,12 +288,10 @@ export function CollectOptions({
       >
         <Stack gap="md">
           <Text size="sm">
-            The {options.length} options suggested so far become the ballot, and everyone in the
-            poll can vote on them.
+            The {options.length} current options become the ballot and voting opens.
           </Text>
           <Text size="sm" c="dimmed">
-            This can’t be undone: no more options can be suggested afterwards, and the list is
-            frozen for good once the first vote is in.
+            Options cannot be added or removed once voting starts.
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={finalizeModal.close}>

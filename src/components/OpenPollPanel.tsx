@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Badge, Button, Card, Group, Rating, Stack, Text, TextInput } from '@mantine/core'
+import { Badge, Button, Card, Group, Rating, Stack, Text, TextInput, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { VOTER_NAME_MAX } from '../lib/limits'
@@ -24,7 +24,7 @@ import type { OpenPollView, PollOption } from '../lib/types'
  * showing the result.
  *
  * The view is handed in rather than fetched here. Both pages already read
- * it -- they render the poll's title and tags around this panel -- and both
+ * it, they render the poll's title and tags around this panel, and both
  * now re-read it on a timer to keep votes arriving without a reload, so
  * fetching it here as well would mean two copies of the same poll on one
  * screen, refreshed on two clocks, free to disagree about whether it has
@@ -61,8 +61,8 @@ export function OpenPollPanel({
   // the header badge above, once, on every screen the poll appears on.
   //
   // Held back until you have voted, because watching a roster fill up is a
-  // live feed of the arrival order -- names attached to the moment each one
-  // arrived -- which is what the published ballots work to keep off the
+  // live feed of the arrival order, names attached to the moment each one
+  // arrived, which is what the published ballots work to keep off the
   // record by ordering themselves on a hash instead of on time. The count on
   // its own carries no name and is not withheld anywhere.
   //
@@ -84,8 +84,8 @@ export function OpenPollPanel({
         <Results source={{ kind: 'token', token }} />
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
-        {view.poll.show_ballots && <Ballots source={{ kind: 'token', token }} />}
         {participation}
+        {view.poll.show_ballots && <Ballots source={{ kind: 'token', token }} />}
       </Stack>
     )
   }
@@ -134,14 +134,11 @@ export function OpenPollPanel({
  * and the roster is a record rather than a progress report. The heading says
  * whichever of the two this poll is.
  */
-function VoterList({ voters, final }: { voters: string[]; final: boolean }) {
+function VoterList({ voters }: { voters: string[]; final: boolean }) {
   return (
-    <Card withBorder>
-      <Stack gap="xs">
-        {/* No count beside it -- see where this is rendered. */}
-        <Text fw={500} size="sm">
-          {final ? 'Who voted' : 'Voted so far'}
-        </Text>
+    <Stack gap="sm">
+      <Title order={4}>Voters</Title>
+      <Card withBorder>
         {voters.length === 0 ? (
           <Text size="sm" c="dimmed">
             Nobody has voted yet.
@@ -155,8 +152,8 @@ function VoterList({ voters, final }: { voters: string[]; final: boolean }) {
             ))}
           </Group>
         )}
-      </Stack>
-    </Card>
+      </Card>
+    </Stack>
   )
 }
 
@@ -187,8 +184,8 @@ function OpenBallot({
    * belongs to, and Rating cancels the default action of the tap that picks a
    * star, so focus never moves off the name box on its own. Left alone, every
    * score a voter gives pops the keyboard back up over the ballot. Dropping
-   * focus as the tap starts -- before the browser decides whether to re-open
-   * the keyboard -- leaves the stars tappable in peace.
+   * focus as the tap starts, before the browser decides whether to re-open
+   * the keyboard, leaves the stars tappable in peace.
    *
    * The same blur is what Enter needs: the name field stands alone rather than
    * in a form, so there is nothing for Enter to submit and the keyboard simply

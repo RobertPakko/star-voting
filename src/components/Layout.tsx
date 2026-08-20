@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth'
 import { ThemeToggle } from './ThemeToggle'
 
 /**
- * The app shell, wrapped around every page except the sign-in screen —
+ * The app shell, wrapped around every page except the sign-in screen;
  * including the ones reachable without an account (the public voting page
  * and `/about`). A voter who arrives from a share link is looking at the
  * same site as everyone else and should see the same header: the earlier
@@ -12,8 +12,8 @@ import { ThemeToggle } from './ThemeToggle'
  * read as part of the poll rather than as the site around it.
  *
  * Only the right-hand group changes with the session. The wordmark links
- * to `/` either way — the poll list signed in, the sign-in screen signed
- * out — which is where a wordmark in the top-left is expected to go.
+ * to `/` either way; the poll list signed in, the sign-in screen signed
+ * out; which is where a wordmark in the top-left is expected to go.
  *
  * The About link is dropped while About is what's on screen: a link to the
  * page you are already reading is a dead end that still asks to be read,
@@ -48,8 +48,8 @@ export function Layout() {
               </Anchor>
             )}
             <ThemeToggle />
-            {/* Signed out this is an offer rather than a gate — voting on an
-                open poll needs no account — but it has to be visible to be
+            {/* Signed out this is an offer rather than a gate; voting on an
+                open poll needs no account; but it has to be visible to be
                 taken, so it gets the same slot the sign-out button holds. */}
             {!session && (
               <Button component={Link} to="/" variant="outline" size="sm">

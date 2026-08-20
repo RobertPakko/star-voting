@@ -19,7 +19,7 @@ export interface Poll {
   show_voters: boolean
   /**
    * Individual ballots are published once results unlock. Independent of
-   * show_voters, which decides whether a name is attached to each one — so
+   * show_voters, which decides whether a name is attached to each one so
    * `show_ballots && !show_voters` is a verifiable tally that names nobody.
    */
   show_ballots: boolean
@@ -39,7 +39,7 @@ export interface Poll {
   public_token: string | null
 }
 
-// Backed by the "candidates" table in Postgres -- kept as-is there to
+// Backed by the "candidates" table in Postgres; kept as-is there to
 // avoid touching every policy/function for a cosmetic rename. The app
 // itself calls these "options" everywhere.
 export interface PollOption {
@@ -62,13 +62,13 @@ export interface PollStatus {
   results_available: boolean
   /**
    * Still collecting options, so there is no ballot yet. Derived in the
-   * database from the two columns above it — solicits options, not
-   * finalized, not closed — so it can never disagree with them.
+   * database from the two columns above it; solicits options, not
+   * finalized, not closed so it can never disagree with them.
    */
   soliciting: boolean
   /**
    * When the poll is deleted: six months after it was created, and nothing
-   * that happens in the poll afterwards moves it — see
+   * that happens in the poll afterwards moves it; see
    * 0025_poll_retention.sql.
    *
    * Optional because this app deploys on push and its migrations apply on
@@ -81,13 +81,13 @@ export interface PollStatus {
 
 /** One row from list_polls(): a poll and its status, fetched together. */
 export interface PollListItem extends Poll, PollStatus {
-  /** How many options the poll has — its turnout number while collecting. */
+  /** How many options the poll has; its turnout number while collecting. */
   option_count: number
 }
 
 export interface Invitee {
   email: string
-  /** null when the poll hides respondents — show no badge, not "pending". */
+  /** null when the poll hides respondents; show no badge, not "pending". */
   has_voted: boolean | null
 }
 
@@ -165,7 +165,7 @@ export interface HeadToHeadStep {
   rule: 'head_to_head'
   results: TiebreakEntry[]
   decisive: boolean
-  /** Every pair in the tied group, once — what `results` was counted from. */
+  /** Every pair in the tied group, once what `results` was counted from. */
   matchups: Matchup[]
 }
 
@@ -214,7 +214,7 @@ export interface RankingEntry {
   place: number
   /** Normally one option; two when a runoff tied on preference and score alike. */
   options: { id: string; name: string; total_score: number }[]
-  /** The pair that contested this place -- one id when nothing else was left. */
+  /** The pair that contested this place; one id when nothing else was left. */
   finalists: string[]
   /** null for the last option standing, which had nobody to run off against. */
   runoff: Runoff | null
@@ -233,7 +233,7 @@ export interface PollResults {
   /** Every option in placed order, first to last. */
   ranking: RankingEntry[]
   voter_count: number
-  /** Always 0 for open polls — there is no invite list. */
+  /** Always 0 for open polls; there is no invite list. */
   invited_count: number
   mode: PollMode
   /** Closed by the creator before everyone had voted. */
@@ -242,15 +242,14 @@ export interface PollResults {
 
 /** One voter's scores, keyed by option id. */
 export interface Ballot {
-  /** null on a poll that hides respondents — the ballot is unattributed. */
+  /** null on a poll that hides respondents; the ballot is unattributed. */
   voter: string | null
   scores: Record<string, number>
 }
 
 /**
  * Every ballot in a poll, for auditing the tally. Only returned once the
- * results themselves have unlocked, and only on a poll created with
- * show_ballots — see 0017.
+ * results themselves have unlocked
  */
 export interface BallotSheet {
   /** Mirrors the poll's show_voters: whether `voter` is filled in. */

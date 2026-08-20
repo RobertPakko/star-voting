@@ -7,7 +7,7 @@ import { AuthContext } from './auth'
  * Holds the Supabase session and keeps it current, for the whole app.
  *
  * The context itself and the `useAuth` hook are in `auth.ts` next door, so
- * this file exports nothing but a component — see the note there.
+ * this file exports nothing but a component.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)

@@ -12,7 +12,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * allows: the invite list, or the count on its own.
  *
  * Who sees the list is decided in the database (poll_invitees): every
- * participant when the poll shows respondents, the creator alone otherwise —
+ * participant when the poll shows respondents, the creator alone otherwise;
  * and in that case has_voted comes back null, so the creator keeps the
  * address list they need to manage invites without the roster of who voted.
  *
@@ -22,14 +22,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * arriving twice looking like two.
  *
  * So a poll that hides its respondents renders no card at all for anyone but
- * its creator — the header has already said how many voted, and the
+ * its creator; the header has already said how many voted, and the
  * "Respondents hidden" tag beside it has already said why there are no names
  * under it. The creator still gets the list, because for them it is the
  * invite list they manage rather than a roster of who voted.
  *
  * Whether the roster is readable is taken from the poll rather than from a
  * failed request. The page already knows the setting, and asking anyway
- * meant one request per refresh that was expected to fail — with the further
+ * meant one request per refresh that was expected to fail; with the further
  * problem that a request failing for any *other* reason would have been
  * reported to the reader as "this poll hides who has responded", which might
  * not be true.
@@ -76,7 +76,7 @@ export function Respondents({
   const [error, setError] = useState<string | null>(null)
 
   // Nobody but the creator can read the list on a poll that hides
-  // respondents, and the poll says so up front -- so the request is not made
+  // respondents, and the poll says so up front, so the request is not made
   // rather than made and expected to fail.
   const rosterReadable = showVoters || isCreator
 
@@ -84,7 +84,7 @@ export function Respondents({
     if (!rosterReadable) return
     const { data, error: rpcError } = await supabase.rpc('poll_invitees', { p_poll_id: pollId })
     if (rpcError) {
-      // A refresh that fails leaves the roster already on screen alone --
+      // A refresh that fails leaves the roster already on screen alone;
       // only a first read tells us anything about access, and a dropped
       // request should not make a list that has been there all along
       // vanish or sprout an error.
@@ -178,12 +178,6 @@ export function Respondents({
   return (
     <Card withBorder>
       <Stack gap="xs">
-        {/* No count beside it: the header badge above already carries the
-            number, and this card is about who rather than how many. */}
-        <Text fw={500} size="sm">
-          Invited voters
-        </Text>
-
         {invitees.map((invitee) => (
           <Group key={invitee.email} justify="space-between" wrap="nowrap" gap="xs">
             <Text size="sm" truncate style={{ flex: 1, minWidth: 0 }}>
@@ -204,7 +198,7 @@ export function Respondents({
                   variant="subtle"
                   color="red"
                   aria-label={`Remove ${invitee.email}`}
-                  // Someone who already voted can't be removed -- their
+                  // Someone who already voted can't be removed; their
                   // ballot is counted and can't be honestly un-counted. On a
                   // poll that hides respondents we don't know who that is,
                   // so the database refuses and reports why.
@@ -220,13 +214,13 @@ export function Respondents({
 
         {!showsStatus && (
           <Text size="xs" c="dimmed">
-            This poll hides who has responded, so nobody — you included — can see which of these
-            people have voted.
+            This poll hides who has responded, so you cannot can see which of these people have
+            voted.
           </Text>
         )}
 
         {/* Once results are out, adding a voter would let them vote knowing
-            the standings, so the database blocks it -- don't offer the field. */}
+            the standings, so the database blocks it; don't offer the field. */}
         {/* The row is top-aligned so an error message under the box pushes
             the message down rather than the button that dismisses it. */}
         {isCreator && !status.is_closed && !status.results_available && (
@@ -246,13 +240,6 @@ export function Respondents({
               Add
             </Button>
           </Group>
-        )}
-
-        {isCreator && status.results_available && !status.is_closed && (
-          <Text size="xs" c="dimmed">
-            The results are out, so no one else can be invited — a late voter would be voting with
-            the standings already known. Start a new poll to include more people.
-          </Text>
         )}
 
         {error && (

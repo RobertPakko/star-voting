@@ -130,7 +130,7 @@ export function PollDetail() {
   }, [pollId, poll?.mode, poll?.public_token, optionsMayMove])
 
   // Nothing about a closed poll changes again, and a poll whose results are
-  // out has taken its last vote either way -- so the refreshing stops, and
+  // out has taken its last vote either way; so the refreshing stops, and
   // the indicator goes with it. Its absence is the honest signal there:
   // there is nothing left to wait for.
   const live = !!status && !status.is_closed && !status.results_available
@@ -173,7 +173,7 @@ export function PollDetail() {
           to learn about a poll instead of one. */}
       <Stack gap={8}>
         <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
-          {/* Wraps rather than squeezing the badge beside it -- see
+          {/* Wraps rather than squeezing the badge beside it, see
               PollStateBadge. */}
           <Title order={2} style={{ minWidth: 0, wordBreak: 'break-word' }}>
             {poll.title}
@@ -186,7 +186,7 @@ export function PollDetail() {
           />
         </Group>
         {poll.description && <Text c="dimmed">{poll.description}</Text>}
-        {/* The terms of the poll, at the top, whichever way each is set --
+        {/* The terms of the poll, at the top, whichever way each is set;
             people arrive here from a link with no other context. */}
         <PollTags
           mode={poll.mode}
@@ -204,10 +204,10 @@ export function PollDetail() {
 
       {/* Open polls are voted through the same anon RPCs the public route
           uses, so the creator votes in their own poll exactly as everyone
-          else does -- one code path, one set of rules. */}
+          else does; one code path, one set of rules. */}
       {isOpen ? (
         view && (
-          // Keyed so a close or a reset remounts it -- see where refreshKey
+          // Keyed so a close or a reset remounts it; see where refreshKey
           // is declared. A live refresh only replaces the view prop, which
           // leaves a half-filled ballot inside the panel alone.
           <OpenPollPanel
@@ -246,7 +246,7 @@ export function PollDetail() {
       )}
 
       {/* Held back until you have voted, for the reasons set out where the
-          open-poll panel does the same -- including the two exemptions. The
+          open-poll panel does the same; including the two exemptions. The
           creator is exempt twice over: they decide when to close, and this
           is also where they manage the invite list. A poll whose results are
           out is exempt because the embargo exists to keep a roster away from
@@ -254,17 +254,20 @@ export function PollDetail() {
           hold. It is also where turnout is reported now that the results
           above it no longer state it themselves. */}
       {!isOpen && (status.voted || isCreator || status.results_available) && (
-        <Respondents
-          pollId={poll.id}
-          isCreator={isCreator}
-          showVoters={poll.show_voters}
-          status={status}
-          liveTick={liveTick}
-          onChange={reloadAll}
-        />
+        <Stack gap="sm">
+          <Title order={4}>Voters</Title>
+          <Respondents
+            pollId={poll.id}
+            isCreator={isCreator}
+            showVoters={poll.show_voters}
+            status={status}
+            liveTick={liveTick}
+            onChange={reloadAll}
+          />
+        </Stack>
       )}
 
-      {/* The share link is inside Manage poll now -- see the note there. */}
+      {/* The share link is inside Manage poll now; see the note there. */}
       {isCreator && <CreatorControls poll={poll} status={status} onChange={reloadAll} />}
 
       {/* Last thing on the page, for everyone who can see the poll rather
@@ -300,7 +303,7 @@ function Waiting({ status }: { status: PollStatus }) {
  * The ballot for an invite poll.
  *
  * Submitting re-reads the poll rather than leaving it. A vote is not the end
- * of anybody's interest in a poll -- the results are -- and this page is
+ * of anybody's interest in a poll, the results are, and this page is
  * where they arrive, on its own, as the rest of the group votes. Being sent
  * back to the list threw that away and made the poll something you had to
  * find your way back to.

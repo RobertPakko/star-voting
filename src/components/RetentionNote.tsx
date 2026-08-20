@@ -15,8 +15,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
  * with it. It never moves, so this line says the same thing on the last day
  * as it did on the first.
  *
- * It is a quiet line for almost all of a poll's life -- nobody needs warning
- * in March about September -- and becomes a warning in the last month, when
+ * It is a quiet line for almost all of a poll's life, nobody needs warning
+ * in March about September, and becomes a warning in the last month, when
  * there is still time to do something about it. What the creator can do is
  * duplicate the poll, so they are told that, and only they are: an invitee
  * has no such button and being told to press it would be worse than being

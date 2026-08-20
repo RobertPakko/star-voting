@@ -10,8 +10,8 @@ import type { PollMode } from '../lib/types'
  * The row is the same four badges everywhere, in the same order and the same
  * words: **invite only/open link**, then respondents shown/hidden, then
  * ballots published/private, then how many have answered. The three settings
- * are in the order they are chosen in `CreatePoll` -- who can vote, then
- * whether their names are shown, then whether their ballots are -- so the
+ * are in the order they are chosen in `CreatePoll`, who can vote, then
+ * whether their names are shown, then whether their ballots are, so the
  * form that sets a poll's terms and the row that reports them tell one story
  * in one order, and nobody has to re-sort the row to check what they picked.
  * The count comes last of the four because it is the only one that is not a
@@ -24,8 +24,8 @@ import type { PollMode } from '../lib/types'
  * compared between polls.
  *
  * The wording is deliberately not symmetrical. Respondents are shown or
- * hidden -- hiding them lists nobody at all, which is not the same as
- * listing them anonymously -- while ballots are published or private. An
+ * hidden, hiding them lists nobody at all, which is not the same as
+ * listing them anonymously, while ballots are published or private. An
  * anonymous ballot is the two tags together: respondents hidden, ballots
  * published.
  *
@@ -37,7 +37,7 @@ import type { PollMode } from '../lib/types'
  * **Where the poll has got to is not in this row.** It is a state rather
  * than a setting, it is the one thing on a card that moves on its own, and
  * it is the only part worth reading before deciding whether to open the
- * poll at all -- so it sits beside the title as `PollStateBadge`, on its own,
+ * poll at all; so it sits beside the title as `PollStateBadge`, on its own,
  * where a row of settings cannot bury it.
  */
 export function PollTags({
@@ -50,8 +50,8 @@ export function PollTags({
   showVoters: boolean
   showBallots: boolean
   /**
-   * The numbers behind the count badge. Left off entirely — rather than
-   * passed as zero — where the poll withholds participation from this
+   * The numbers behind the count badge. Left off entirely; rather than
+   * passed as zero; where the poll withholds participation from this
    * reader, since a badge saying nobody has voted is not the same as no
    * badge at all.
    */
@@ -66,7 +66,7 @@ export function PollTags({
         color={showVoters ? badgeColor.respondentsShown : badgeColor.respondentsHidden}
         variant="light"
       >
-        {showVoters ? 'Respondents shown' : 'Respondents hidden'}
+        {showVoters ? 'Voters shown' : 'Voters hidden'}
       </Badge>
       <Badge
         color={showBallots ? badgeColor.ballotsPublished : badgeColor.ballotsPrivate}
@@ -90,13 +90,13 @@ export interface Turnout {
 }
 
 /**
- * How many have answered so far — which is not the same question at every
+ * How many have answered so far; which is not the same question at every
  * stage, and the badge says whichever one the poll is actually asking.
  *
  * It stays on the card after the poll closes. It used to be replaced by
  * "Results ready" the moment they were, which threw away the turnout the
  * result was reached on at exactly the point it became a permanent fact
- * about the poll — and said nothing the state badge does not now say better.
+ * about the poll; and said nothing the state badge does not now say better.
  *
  * Not exported: every string this file decides is decided in this file, and
  * a helper the callers could reach would be a second place for the wording
@@ -112,36 +112,36 @@ function turnoutLabel({
   if (soliciting) {
     // Turnout is zero and stays zero until the list is settled, so this
     // stage counts what is actually moving: the options coming in.
-    return `${optionCount} ${optionCount === 1 ? 'option' : 'options'} so far`
+    return `${optionCount} ${optionCount === 1 ? 'option' : 'options'}`
   }
   if (mode === 'open') {
     // No invite list, so no denominator to count towards.
-    return `${votedCount} ${votedCount === 1 ? 'response' : 'responses'}`
+    return `${votedCount} ${votedCount === 1 ? 'vote' : 'votes'}`
   }
-  return `${votedCount}/${invitedCount} voted`
+  return `${votedCount}/${invitedCount} votes`
 }
 
 /**
  * Where the poll has got to, in one badge beside its title: collecting its
- * options, in progress, or finished — and a finished poll names the option
+ * options, in progress, or finished; and a finished poll names the option
  * that won, because that is the answer the whole poll was for and the reason
  * anybody opens it again months later.
  *
  * The name is not prefixed with "Winner:". The badge is green, it sits where
  * every other poll's state sits, and the polls around it read *In progress*
- * and *Collecting options* — a label saying which question is being answered
+ * and *Collecting options*; a label saying which question is being answered
  * is only worth its room when the answer alone would be ambiguous.
  *
  * Three outcomes are told apart rather than collapsed, because a reader
  * scanning a list of finished polls needs *what happened*, and "ready to
  * look at" is not that:
  *
- *  - a name — the option STAR elected;
- *  - *Tied — no winner* — the election ran and settled nothing, which STAR
+ *  - a name: the option STAR elected;
+ *  - *Tied*: the election ran and settled nothing, which STAR
  *    can genuinely produce and the app reports rather than inventing a
  *    result. It carries the colour of a tie-break that decided nothing,
  *    which is the same claim one level up;
- *  - *Results ready* — the poll is finished and this page has not been told
+ *  - *Results ready*: the poll is finished and this page has not been told
  *    which of the two it is. That is a real state, not a fallback: the name
  *    arrives in a request behind the list, and a browser talking to a
  *    database older than `poll_winners()` never learns it at all. It must
@@ -175,7 +175,7 @@ export function PollStateBadge({
     if (winner === null) {
       return (
         <Badge color={badgeColor.unsettled} variant="light" style={{ flexShrink: 0 }}>
-          Tied — no winner
+          Tie
         </Badge>
       )
     }
@@ -186,7 +186,7 @@ export function PollStateBadge({
     //
     // It does not shrink below its text, though. Both sides of this row used
     // to be free to give, and a long title on a narrow screen took the
-    // badge's width rather than wrapping -- leaving two letters and an
+    // badge's width rather than wrapping; leaving two letters and an
     // ellipsis where the answer to the poll should be. The title is the side
     // that gives now (see the call sites, which let it), so the badge is as
     // wide as the name it carries and no wider.

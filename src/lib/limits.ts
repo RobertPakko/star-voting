@@ -5,8 +5,8 @@
  * database has capped a suggested option at 100 characters, its description
  * at 500, and a poll at 50 options since options could be suggested at all.
  * Those limits were written for the one field a whole group can write to,
- * but they are the answer to the same question the create form asks — how
- * long is a label on a ballot, and how long is the note under it — and a
+ * but they are the answer to the same question the create form asks "how
+ * long is a label on a ballot, and how long is the note under it" and a
  * poll whose options came from its creator has to be scored by the same
  * people reading the same ballot. So the form applies them too, rather than
  * letting the two paths into `candidates` disagree about what fits.
@@ -20,7 +20,7 @@
  * the tail of a pasted paragraph tells the writer nothing; a field that goes
  * red and says how far over it is tells them exactly what to cut. The one
  * exception is a field that already had a hard cap and is a single word
- * anyway — a voter's name on an open ballot.
+ * anyway; a voter's name on an open ballot.
  */
 
 export const TITLE_MAX = 100

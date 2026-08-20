@@ -4,7 +4,7 @@
  * It exists so the app can say "your vote is in" and so a refresh or a
  * double-click can't cast a second ballot. It is explicitly NOT a vote
  * guard: clearing site data or opening another browser mints a new key and
- * buys another vote. That is the accepted trade of open polls — see the
+ * buys another vote. That is the accepted trade of open polls; see the
  * warning shown at creation time.
  *
  * Scoped per poll rather than one id per browser, so it can't be used to

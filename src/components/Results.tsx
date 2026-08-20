@@ -20,7 +20,7 @@ import { ResultsSkeleton } from './Skeletons'
 import { voters } from '../lib/plural'
 
 /**
- * Which tally endpoint to read. Both return the same shape — the split is
+ * Which tally endpoint to read. Both return the same shape; the split is
  * only about how the caller proves it's allowed to see it: a session for
  * invite polls, the share token for open ones.
  */
@@ -90,7 +90,7 @@ export function Results({ source }: { source: ResultsSource }) {
       {/* Turnout is reported once, by the participation card below the
           results, and not again here: the same two numbers stated twice on
           one screen read as two different facts that happen to agree. What
-          is left is the one thing that card cannot say -- that the numbers
+          is left is the one thing that card cannot say: that the numbers
           are smaller than they were going to be. */}
       {results.closed_early && (
         <Text size="sm" c="dimmed">
@@ -108,34 +108,36 @@ export function Results({ source }: { source: ResultsSource }) {
       {!results.winner_id && results.finalists.length === 2 && (
         <Card withBorder bg="var(--mantine-color-orange-light)">
           <Text fw={700} size="lg">
-            No winner — a genuine tie
+            No winner
           </Text>
         </Card>
       )}
 
-      <Stack gap={4}>
+      <Stack gap="sm">
         <Title order={4}>Score round</Title>
-        <Stack gap="xs">
-          {results.options.map((o) => (
-            <div key={o.id}>
-              <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
-                <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
-                  <Text size="sm" fw={results.finalists.includes(o.id) ? 700 : 400} truncate>
-                    {o.name}
+        <Card withBorder p="sm">
+          <Stack gap="xs">
+            {results.options.map((o) => (
+              <div key={o.id}>
+                <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
+                  <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+                    <Text size="sm" fw={results.finalists.includes(o.id) ? 700 : 400} truncate>
+                      {o.name}
+                    </Text>
+                    {o.description && <OptionNote name={o.name} description={o.description} />}
+                  </Group>
+                  <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                    {o.total_score} pts (avg {o.average_score})
                   </Text>
-                  {o.description && <OptionNote name={o.name} description={o.description} />}
                 </Group>
-                <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                  {o.total_score} pts (avg {o.average_score})
-                </Text>
-              </Group>
-              <Progress
-                value={(o.total_score / maxScore) * 100}
-                color={results.finalists.includes(o.id) ? 'blue' : 'gray'}
-              />
-            </div>
-          ))}
-        </Stack>
+                <Progress
+                  value={(o.total_score / maxScore) * 100}
+                  color={results.finalists.includes(o.id) ? 'blue' : 'gray'}
+                />
+              </div>
+            ))}
+          </Stack>
+        </Card>
       </Stack>
 
       {results.tiebreaks.length > 0 && (
@@ -145,11 +147,15 @@ export function Results({ source }: { source: ResultsSource }) {
             <Card withBorder key={i} p="sm">
               <Stack gap="xs">
                 <Text size="sm">
-                  <strong>{tb.tied.map((t) => t.name).join(' and ')}</strong> tied at {tb.tied_at}{' '}
-                  pts for {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}.
-                  STAR settles this before the runoff:
+                  {tb.tied.map((t, index) => (
+                    <span key={t.id}>
+                      {index > 0 && ' and '}
+                      <strong>{t.name}</strong>
+                    </span>
+                  ))}{' '}
+                  tied at {tb.tied_at} pts for{' '}
+                  {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}.
                 </Text>
-
                 {tb.steps.map((step, j) => (
                   <Stack key={step.rule} gap={2}>
                     <Group gap="xs">
@@ -172,7 +178,8 @@ export function Results({ source }: { source: ResultsSource }) {
                     ) : (
                       step.results.map((r) => (
                         <Text key={r.id} size="sm" c="dimmed" pl="md">
-                          {r.name}: {r.value} {r.value === 1 ? 'five-star vote' : 'five-star votes'}
+                          <strong>{r.name}</strong>: {r.value}{' '}
+                          {r.value === 1 ? 'five-star vote' : 'five-star votes'}
                         </Text>
                       ))
                     )}
@@ -181,7 +188,7 @@ export function Results({ source }: { source: ResultsSource }) {
 
                 <Text size="sm" c={tb.resolved_by === 'random' ? 'orange' : undefined}>
                   {tb.resolved_by === 'random'
-                    ? `Still tied after every rule — ${tb.advanced
+                    ? `Still tied after every rule; ${tb.advanced
                         .map((a) => a.name)
                         .join(', ')} advanced by random selection.`
                     : `${tb.advanced.map((a) => a.name).join(', ')} advanced on ${
@@ -197,42 +204,47 @@ export function Results({ source }: { source: ResultsSource }) {
       )}
 
       {results.runoff && results.finalists.length === 2 && (
-        <Stack gap={4}>
+        <Stack gap="sm">
           <Title order={4}>Automatic runoff round</Title>
-          <Text size="sm">
-            {nameById.get(results.finalists[0])}: {voters(results.runoff.prefers_a)} preferred
-          </Text>
-          <Text size="sm">
-            {nameById.get(results.finalists[1])}: {voters(results.runoff.prefers_b)} preferred
-          </Text>
-          <Text size="sm" c="dimmed">
-            {voters(results.runoff.ties)} scored both finalists equally.
-          </Text>
-          {results.runoff.resolved_by === 'higher_score' && (
-            <Text size="sm">
-              The runoff tied, so it went to {nameById.get(results.winner_id ?? '')} on the higher
-              score-round total — the first tie-break for a tied runoff.
-            </Text>
-          )}
-          {results.runoff.resolved_by === 'five_star_votes' && (
-            <>
+          <Card withBorder p="sm">
+            <Stack gap="xs">
               <Text size="sm">
-                The runoff tied and both finalists have identical score totals, so it went to{' '}
-                {nameById.get(results.winner_id ?? '')} on five-star votes — the same rule that
-                settles a tie in the score round.
+                <strong>{nameById.get(results.finalists[0])}</strong>:{' '}
+                {voters(results.runoff.prefers_a)} preferred
+              </Text>
+              <Text size="sm">
+                <strong>{nameById.get(results.finalists[1])}</strong>:{' '}
+                {voters(results.runoff.prefers_b)} preferred
               </Text>
               <Text size="sm" c="dimmed">
-                {nameById.get(results.finalists[0])}: {results.runoff.five_stars_a} ·{' '}
-                {nameById.get(results.finalists[1])}: {results.runoff.five_stars_b}
+                {voters(results.runoff.ties)} scored both finalists equally.
               </Text>
-            </>
-          )}
-          {results.runoff.resolved_by === 'unresolved' && (
-            <Text size="sm" c="orange">
-              The runoff tied, both finalists have identical score totals, and both were given five
-              stars on the same number of ballots, so there is no winner.
-            </Text>
-          )}
+              {results.runoff.resolved_by === 'higher_score' && (
+                <Text size="sm">
+                  The runoff tied, so it went to {nameById.get(results.winner_id ?? '')} on the
+                  higher score-round total.
+                </Text>
+              )}
+              {results.runoff.resolved_by === 'five_star_votes' && (
+                <>
+                  <Text size="sm">
+                    The runoff tied and both finalists have identical score totals, so it went to{' '}
+                    {nameById.get(results.winner_id ?? '')} on five-star votes.
+                  </Text>
+                  <Text size="sm" c="dimmed">
+                    {nameById.get(results.finalists[0])}: {results.runoff.five_stars_a} ·{' '}
+                    {nameById.get(results.finalists[1])}: {results.runoff.five_stars_b}
+                  </Text>
+                </>
+              )}
+              {results.runoff.resolved_by === 'unresolved' && (
+                <Text size="sm" c="orange">
+                  The runoff tied, both finalists have identical score totals, and both were given
+                  five stars on the same number of ballots, so there is no winner.
+                </Text>
+              )}
+            </Stack>
+          </Card>
         </Stack>
       )}
 
@@ -247,16 +259,16 @@ export function Results({ source }: { source: ResultsSource }) {
  * The rule counts matchups: every option in the tied group is compared with
  * every other, one pair at a time, and the option more voters scored higher
  * wins that pair. Reporting only the totals produced the least useful line
- * this page has ever shown -- two options tied for one runoff slot meet
+ * this page has ever shown; two options tied for one runoff slot meet
  * exactly once, and if that meeting is level they have won nothing, so the
  * step read "0 matchups won" twice and left the reader to guess whether that
  * meant a tie, an error, or a rule that had not run.
  *
  * So a two-option tie is reported as the one comparison it actually is,
  * in the same words the runoff below uses for the same arithmetic, and the
- * word "matchup" does not appear at all. A larger group keeps the totals --
+ * word "matchup" does not appear at all. A larger group keeps the totals,
  * with three options they are the point, since the rule is asking which one
- * beat the most others -- and shows the pairs they were counted from
+ * beat the most others; and shows the pairs they were counted from
  * underneath.
  */
 function HeadToHead({ step }: { step: HeadToHeadStep }) {
@@ -267,10 +279,10 @@ function HeadToHead({ step }: { step: HeadToHeadStep }) {
     return (
       <Stack gap={2} pl="md">
         <Text size="sm" c="dimmed">
-          {m.a_name}: {voters(m.prefers_a)} preferred it
+          <strong>{m.a_name}</strong>: {voters(m.prefers_a)} preferred it
         </Text>
         <Text size="sm" c="dimmed">
-          {m.b_name}: {voters(m.prefers_b)} preferred it
+          <strong>{m.b_name}</strong>: {voters(m.prefers_b)} preferred it
         </Text>
         {m.ties > 0 && (
           <Text size="sm" c="dimmed">
@@ -312,8 +324,8 @@ function matchupLine(m: Matchup): string {
       : [m.b_name, m.a_name, m.prefers_b, m.prefers_a]
 
   return equal
-    ? `${m.a_name} vs ${m.b_name} — ${voters(won)} each, so neither wins it`
-    : `${ahead} vs ${behind} — ${voters(won)} to ${lost}`
+    ? `${m.a_name} vs ${m.b_name}: ${voters(won)} each, so neither wins`
+    : `${ahead} vs ${behind}: ${voters(won)} to ${lost}`
 }
 
 /**
@@ -327,7 +339,7 @@ function matchupLine(m: Matchup): string {
  * months later is exactly when "Option B" needs explaining.
  *
  * So it is here, and it is folded away: one dimmed mark beside the name,
- * showing nothing at all on the options that never had one -- which is
+ * showing nothing at all on the options that never had one; which is
  * nearly all of them. A popover rather than a tooltip, because a tooltip on
  * a phone is a thing that cannot be opened.
  */

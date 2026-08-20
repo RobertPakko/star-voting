@@ -9,7 +9,7 @@ function appRoot(): string {
 }
 
 /**
- * Open polls link to the tokenized public route — that link IS the
+ * Open polls link to the tokenized public route; that link IS the
  * capability. Invite polls link to the ordinary poll page: the recipient
  * still has to sign in and still has to be on the invite list, so the link
  * is a convenience, not access.
@@ -35,7 +35,7 @@ export function rememberDestination(path: string) {
   try {
     localStorage.setItem(PENDING_KEY, JSON.stringify({ path, at: Date.now() }))
   } catch {
-    // Nothing to do — the user just lands on the poll list instead.
+    // Nothing to do; the user just lands on the poll list instead.
   }
 }
 

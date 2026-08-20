@@ -35,7 +35,7 @@ export function PollList() {
   const loaded = useRef(false)
 
   // One round trip for the polls and their status. This used to be a
-  // select plus one poll_status RPC per poll -- which is also what makes it
+  // select plus one poll_status RPC per poll; which is also what makes it
   // cheap enough to re-read on a timer.
   const load = useCallback(async () => {
     const { data, error: rpcError } = await supabase.rpc('list_polls')

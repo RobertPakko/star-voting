@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Group, Stack, Table, Text, Title } from '@mantine/core'
+import { Stack, Table, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { recall, remember } from '../lib/settled'
 import { BallotsSkeleton } from './Skeletons'
@@ -15,7 +15,7 @@ export type BallotsSource = { kind: 'poll'; pollId: string } | { kind: 'token'; 
 /**
  * Every ballot in the poll, so the tally can be checked rather than trusted.
  *
- * Only rendered when the poll was created with show_ballots — the caller
+ * Only rendered when the poll was created with show_ballots. The caller
  * knows that from the poll it already has, so a failure here is a real
  * failure and gets shown, not swallowed.
  *
@@ -83,68 +83,54 @@ export function Ballots({ source }: { source: BallotsSource }) {
   )
 
   return (
-    <Card withBorder>
-      <Stack gap="sm">
-        <Group justify="space-between" gap="xs">
-          <Title order={4}>Every ballot</Title>
-          <Text size="sm" c="dimmed">
-            {sheet.ballots.length} {sheet.ballots.length === 1 ? 'ballot' : 'ballots'}
-          </Text>
-        </Group>
-
-        <Text size="sm" c="dimmed">
-          {named
-            ? 'This poll publishes its ballots with names, so the result can be checked line by line.'
-            : 'This poll publishes its ballots without names, in an order unrelated to when they were cast. The columns add up to the score round, so the result can be checked without anyone being identified.'}
-        </Text>
-
-        <Table.ScrollContainer minWidth={120 + sheet.options.length * 90}>
-          <Table striped withTableBorder>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{named ? 'Voter' : 'Ballot'}</Table.Th>
-                {sheet.options.map((o) => (
-                  <Table.Th key={o.id} ta="right">
-                    {o.name}
-                  </Table.Th>
-                ))}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {/* Index as key: the list is static once fetched, and an
-                  unnamed sheet has nothing else to key on by design. */}
-              {sheet.ballots.map((ballot, i) => (
-                <Table.Tr key={i}>
-                  <Table.Td>
-                    {named ? (
-                      ballot.voter
-                    ) : (
-                      <Text size="sm" c="dimmed">
-                        #{i + 1}
-                      </Text>
-                    )}
-                  </Table.Td>
-                  {sheet.options.map((o) => (
-                    <Table.Td key={o.id} ta="right">
-                      {scoreOn(ballot.scores, o.id)}
-                    </Table.Td>
-                  ))}
-                </Table.Tr>
+    <Stack gap="sm">
+      <Title order={4}>Ballots</Title>
+      <Table.ScrollContainer minWidth={120 + sheet.options.length * 90}>
+        <Table striped withTableBorder withColumnBorders>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>{named ? 'Voter' : 'Ballot'}</Table.Th>
+              {sheet.options.map((o) => (
+                <Table.Th key={o.id} ta="right">
+                  {o.name}
+                </Table.Th>
               ))}
-            </Table.Tbody>
-            <Table.Tfoot>
-              <Table.Tr>
-                <Table.Th>Total</Table.Th>
-                {totals.map((total, i) => (
-                  <Table.Th key={sheet.options[i].id} ta="right">
-                    {total}
-                  </Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {/* Index as key: the list is static once fetched, and an
+                  unnamed sheet has nothing else to key on by design. */}
+            {sheet.ballots.map((ballot, i) => (
+              <Table.Tr key={i}>
+                <Table.Td>
+                  {named ? (
+                    ballot.voter
+                  ) : (
+                    <Text size="sm" c="dimmed">
+                      #{i + 1}
+                    </Text>
+                  )}
+                </Table.Td>
+                {sheet.options.map((o) => (
+                  <Table.Td key={o.id} ta="right">
+                    {scoreOn(ballot.scores, o.id)}
+                  </Table.Td>
                 ))}
               </Table.Tr>
-            </Table.Tfoot>
-          </Table>
-        </Table.ScrollContainer>
-      </Stack>
-    </Card>
+            ))}
+          </Table.Tbody>
+          <Table.Tfoot>
+            <Table.Tr>
+              <Table.Th>Total</Table.Th>
+              {totals.map((total, i) => (
+                <Table.Th key={sheet.options[i].id} ta="right">
+                  {total}
+                </Table.Th>
+              ))}
+            </Table.Tr>
+          </Table.Tfoot>
+        </Table>
+      </Table.ScrollContainer>
+    </Stack>
   )
 }

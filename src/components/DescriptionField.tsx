@@ -7,7 +7,7 @@ import classes from './DescriptionField.module.css'
  *
  * The field says what it is by its shape. It is indented under the name it
  * belongs to, with an elbow drawn from the bottom of that field across to its
- * left edge (`DescriptionField.module.css`) — indenting alone reads as an
+ * left edge (`DescriptionField.module.css`); indenting alone reads as an
  * unrelated field that happens to be narrower, and the elbow is the shape a
  * file tree already uses for "belongs to the thing above".
  *

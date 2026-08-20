@@ -8,7 +8,7 @@ import { voters } from '../lib/plural'
  * The whole field in placed order, behind a button.
  *
  * Kept out of the results page proper because most polls only ever need
- * their winner -- but "what were the top three" is a real question, and the
+ * their winner; but "what were the top three" is a real question, and the
  * score round on its own doesn't answer it: the score order ignores the
  * runoffs, which is exactly the part STAR adds.
  */
@@ -47,12 +47,6 @@ export function FullRanking({ results }: { results: PollResults }) {
               <Place key={entry.place} entry={entry} results={results} nameById={nameById} />
             ))}
           </Stack>
-
-          <Text size="xs" c="dimmed">
-            Only first place is what STAR itself produces. Each place takes one runoff, so most
-            pairs of options never actually meet: where two did, the loser is always below the
-            winner, but everywhere else an option may well be preferred to one placed above it.
-          </Text>
         </Stack>
       </Modal>
     </>
@@ -71,7 +65,7 @@ function Place({
   const total = entry.options[0].total_score
 
   // Standard competition rank on score alone, so options level on points
-  // share a number. Shown only where it disagrees with the placing -- which
+  // share a number. Shown only where it disagrees with the placing; which
   // is the whole reason this ranking isn't just the score round re-sorted.
   const scoreRank = 1 + results.options.filter((o) => o.total_score > total).length
 
@@ -114,7 +108,7 @@ function decision(entry: RankingEntry, nameById: Map<string, string>): string {
   const { runoff, finalists, options } = entry
 
   if (!runoff || finalists.length < 2) {
-    return 'The last option standing — no runoff left to hold.'
+    return 'The last option standing.'
   }
 
   if (runoff.resolved_by === 'unresolved') {
@@ -129,11 +123,11 @@ function decision(entry: RankingEntry, nameById: Map<string, string>): string {
       : [runoff.prefers_b, runoff.prefers_a]
 
   if (runoff.resolved_by === 'higher_score') {
-    return `Level with ${other} at ${voters(won)} each — placed above it on the higher score total.`
+    return `Level with ${other} at ${voters(won)} each; placed above it on the higher score total.`
   }
 
   if (runoff.resolved_by === 'five_star_votes') {
-    return `Level with ${other} at ${voters(won)} each and on score — placed above it on five-star votes.`
+    return `Level with ${other} at ${voters(won)} each and on score; placed above it on five-star votes.`
   }
 
   return `Preferred over ${other} by ${voters(won)} to ${lost}.`

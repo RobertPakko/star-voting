@@ -6,7 +6,7 @@ export default defineConfig({
   base: '/star-voting/',
   build: {
     // The app is one function among several planned for choicelab.app, so it
-    // lives under /star-voting/ rather than the domain root — see
+    // lives under /star-voting/ rather than the domain root. See
     // site-root/ for what's served at the root itself.
     outDir: 'dist/star-voting',
   },

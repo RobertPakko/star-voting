@@ -35,7 +35,7 @@ export function PublicPoll() {
     })
     if (rpcError) {
       // Only a first read that fails says anything about the link. A later
-      // one keeps the poll already on screen -- turning a page somebody has
+      // one keeps the poll already on screen; turning a page somebody has
       // been voting on into "poll not found" because one request lost a
       // race with a flaky connection would be a lie about their link.
       if (!loaded.current) setError(rpcError.message)
@@ -74,7 +74,7 @@ export function PublicPoll() {
           depending on how you reached it. */}
       <Stack gap={8}>
         <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
-          {/* Wraps rather than squeezing the badge beside it -- see
+          {/* Wraps rather than squeezing the badge beside it, see
               PollStateBadge. */}
           <Title order={2} style={{ minWidth: 0, wordBreak: 'break-word' }}>
             {view.poll.title}
@@ -82,7 +82,7 @@ export function PublicPoll() {
           {/* No winner's name here: naming it needs poll_winners(), which is
               for signed-in readers, and this page has no account behind it.
               The badge says the results are ready and the tally underneath
-              says what they were -- see PollStateBadge on why that state is
+              says what they were; see PollStateBadge on why that state is
               a real one rather than a fallback. */}
           <PollStateBadge
             soliciting={view.soliciting}
@@ -95,8 +95,8 @@ export function PublicPoll() {
             changes what happens to their ballot.
 
             The count included, and before this reader has voted. What a poll
-            keeps from its voters is how it is *going* -- the standings, which
-            stay sealed until the results unlock -- and how many have answered
+            keeps from its voters is how it is *going*, the standings, which
+            stay sealed until the results unlock, and how many have answered
             is not that. It names nobody, it says nothing about any ballot,
             and the roster below still waits. */}
         <PollTags

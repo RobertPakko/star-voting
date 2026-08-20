@@ -16,11 +16,11 @@ import type { Poll, PollStatus } from '../lib/types'
  * The share link lives here rather than beside the ballot: handing the poll
  * out is something the creator does to the poll, not something a voter needs
  * while scoring options. Keeping it in this block also means it is never
- * withheld -- the creator has to be able to send the link out before anyone,
+ * withheld; the creator has to be able to send the link out before anyone,
  * themselves included, has voted.
  *
  * Closing exists so a single person who never votes can't freeze the
- * results permanently -- and for open polls it's the only way results are
+ * results permanently and for open polls it's the only way results are
  * ever revealed, since there is no roster to complete.
  */
 export function CreatorControls({
@@ -53,7 +53,7 @@ export function CreatorControls({
     }
     // Resetting is the one thing that un-settles a settled poll, so it is
     // also the one thing that has to throw away what the browser remembered
-    // about it -- the tally, the ballot grid and the elected option. See
+    // about it; the tally, the ballot grid and the elected option. See
     // lib/settled.ts for what that cache does and does not promise.
     forgetPoll(pollId, poll.public_token)
     notifications.show({ message: 'Votes cleared', color: 'green' })
@@ -92,7 +92,7 @@ export function CreatorControls({
   }
 
   const canClose = !status.is_closed && !status.is_complete && status.voted_count > 0
-  // Nothing to clear on a fresh poll -- but a closed one is worth offering
+  // Nothing to clear on a fresh poll, but a closed one is worth offering
   // even with no votes, since resetting is the only way to reopen it.
   const canReset = status.voted_count > 0 || status.is_closed
   // Open polls have no invite list, so invited_count is 0 and there is
@@ -115,7 +115,7 @@ export function CreatorControls({
         <Group gap="sm" wrap="wrap">
           {canClose && (
             <Button variant="light" color="orange" onClick={closeModal.open}>
-              Close voting now
+              Close voting
             </Button>
           )}
           {/* Opens the create form prefilled from this poll, so the copy can
@@ -134,17 +134,16 @@ export function CreatorControls({
         </Group>
       </Stack>
 
-      <Modal opened={closeOpened} onClose={closeModal.close} title="Close voting now?" centered>
+      <Modal opened={closeOpened} onClose={closeModal.close} title="Close voting?" centered>
         <Stack gap="md">
           <Text size="sm">
-            Results will be revealed using the {status.voted_count} vote
-            {status.voted_count === 1 ? '' : 's'} cast so far.
+            Results will be revealed using the current {status.voted_count} vote
+            {status.voted_count === 1 ? '' : 's'}.
             {pending > 0 &&
               ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
           </Text>
           <Text size="sm" c="dimmed">
-            Closing can't be undone. The only way to reopen the poll is Reset votes, which deletes
-            every vote first — so a closed poll can never go back to collecting more.
+            he only way to reopen the poll is to reset the votes.
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal.close}>
@@ -162,16 +161,13 @@ export function CreatorControls({
           <Text size="sm">
             {status.voted_count === 0
               ? 'This poll has no votes to clear.'
-              : `All ${status.voted_count} vote${status.voted_count === 1 ? '' : 's'} cast so far will be permanently deleted, along with any results.`}
+              : `The ${status.voted_count} current vote${status.voted_count === 1 ? '' : 's'} will be deleted, along with any results.`}
           </Text>
           <Text size="sm">
             The poll keeps its options{status.invited_count > 0 && ', its invitee list'} and its
             link
             {status.is_closed && ', and reopens for voting'}. Everyone who already voted will be
-            able to vote again — and they won't be told the poll was reset.
-          </Text>
-          <Text size="sm" c="dimmed">
-            This can't be undone.
+            able to vote again.
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={resetModal.close}>

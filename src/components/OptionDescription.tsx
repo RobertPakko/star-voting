@@ -3,7 +3,7 @@ import { Anchor, Text } from '@mantine/core'
 
 // A description is written by the poll's creator for the people they invited,
 // and is the one place in the app where they might reasonably want to point
-// somewhere else -- a menu, a spec, a candidate's write-up. So URLs in it are
+// somewhere else; a menu, a spec, a candidate's write-up. So URLs in it are
 // turned into links rather than left as text nobody can follow without
 // selecting and copying it.
 //
@@ -26,7 +26,7 @@ function linkify(text: string): ReactNode[] {
   for (const match of text.matchAll(URL_RE)) {
     const start = match.index
     const url = match[0].replace(TRAILING_PUNCTUATION, '')
-    // The stripped punctuation is not dropped -- it goes back into the plain
+    // The stripped punctuation is not dropped; it goes back into the plain
     // text that follows the link.
     const end = start + url.length
 

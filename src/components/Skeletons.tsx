@@ -4,14 +4,6 @@ import { Card, Group, Skeleton, Stack, VisuallyHidden } from '@mantine/core'
 /**
  * The shapes each page draws while it is waiting for its first read.
  *
- * A spinner says "something is happening" and nothing else: it is the same
- * mark in the middle of the screen whether what is arriving is a poll list, a
- * ballot or a tally, and the page it is standing in for appears all at once
- * underneath it, jumping the layout as it lands. These stand in for the page
- * that is actually coming — its cards, its rows, its bars — so the wait is
- * spent looking at the shape of the answer, and the real content replaces
- * placeholders of roughly its own size instead of an empty column.
- *
  * Two rules keep them honest:
  *
  *  - **A skeleton claims only what the page always has.** The poll list draws
@@ -21,7 +13,7 @@ import { Card, Group, Skeleton, Stack, VisuallyHidden } from '@mantine/core'
  *    reader has to un-learn.
  *  - **They are one component per page, next to nothing else.** Every skeleton
  *    in the app is in this file, so a page and its stand-in are changed
- *    together rather than drifting apart — the failure mode of skeletons is
+ *    together rather than drifting apart; the failure mode of skeletons is
  *    that they slowly stop resembling anything.
  *
  * Screen readers get none of it: the shapes are decoration, and what a

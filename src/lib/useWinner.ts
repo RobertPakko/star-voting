@@ -7,8 +7,8 @@ import { knownWinners, rememberWinner } from './settled'
  *
  * The poll list asks about a page of polls at once; a poll page asks about
  * the one it is showing. Both go through `poll_winners()` and both remember
- * what they learn in the same place, so arriving at a poll from the list —
- * which is how most people arrive — costs nothing at all, and the badge on
+ * what they learn in the same place, so arriving at a poll from the list,
+ * which is how most people arrive, costs nothing at all, and the badge on
  * the card and the badge on the page cannot disagree.
  *
  * Returns `undefined` until an answer exists, `null` for a poll that elected

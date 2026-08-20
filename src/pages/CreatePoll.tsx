@@ -53,7 +53,7 @@ function blankOption(): OptionDraft {
  *
  * Per-field rather than one message at the bottom, because "Add at least two
  * options" under a form of a dozen inputs makes the reader find the problem
- * themselves — and the reader is looking at the button they just pressed,
+ * themselves; and the reader is looking at the button they just pressed,
  * which is the furthest point on the page from most of the answers. Mantine
  * puts the message under the field it belongs to and turns that field red,
  * which is the whole of the fix.
@@ -62,7 +62,6 @@ interface FormErrors {
   title?: string
   description?: string
   emails?: string
-  /** Wrong with the list as a whole -- too few options, or too many. */
   options?: string
   optionNames: Record<number, string>
   optionDescriptions: Record<number, string>
@@ -91,7 +90,7 @@ function hasErrors(errors: FormErrors): boolean {
  * These are the same rules create_poll enforces, plus the lengths and the
  * duplicate check the suggestion path has always applied to the other way
  * into `candidates` (see src/lib/limits.ts). The database is still the one
- * that decides -- nothing here can be trusted, and none of it is relied on.
+ * that decides; nothing here can be trusted, and none of it is relied on.
  * What it buys is being told which box is wrong instead of being told no.
  */
 function validate(form: {
@@ -146,7 +145,7 @@ function validate(form: {
   // minimum is applied later, when the creator turns the list into a ballot.
   // Seeding a few here is a head start, not a requirement.
   if (!form.solicitOptions && filled < 2) {
-    errors.options = 'A poll needs at least two options — one option is not an election.'
+    errors.options = 'A poll needs at least two options.'
   } else if (filled > MAX_OPTIONS) {
     errors.options = `A ballot holds ${MAX_OPTIONS} options; this one has ${filled}.`
   }
@@ -161,13 +160,13 @@ function validate(form: {
           : `These don't look like email addresses: ${invalid.join(', ')}.`
     } else {
       // The tag list refuses a repeat of a tag already in it, so the
-      // duplicate that can actually happen is against the checkbox below --
+      // duplicate that can actually happen is against the checkbox below;
       // and a repeat differing only in case slips past it too.
       const repeated = typed.filter((e, i) => typed.indexOf(e) !== i)
       if (repeated.length) {
         errors.emails = `${repeated[0]} is on the list twice.`
       } else if (form.includeSelf && typed.includes(form.myEmail)) {
-        errors.emails = `You're invited by the checkbox below — remove ${form.myEmail} from the list, or untick it.`
+        errors.emails = `You're invited by the checkbox below; remove ${form.myEmail} from the list, or untick it.`
       } else if (typed.length === 0 && !form.includeSelf) {
         errors.emails = 'Invite at least one voter, or include yourself.'
       }
@@ -195,7 +194,7 @@ export function CreatePoll() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Whether the form has been submitted once. Until it has, nothing is
-  // marked wrong -- see validate().
+  // marked wrong, see validate().
   const [showErrors, setShowErrors] = useState(false)
   // Only ever true on a duplicate; a blank new poll renders immediately.
   const [prefilling, setPrefilling] = useState(Boolean(duplicateOf))
@@ -218,7 +217,7 @@ export function CreatePoll() {
   const shown: FormErrors = showErrors ? errors : { optionNames: {}, optionDescriptions: {} }
 
   // Duplicating copies the source poll's settings into the form and stops
-  // there -- nothing is created until the user submits, so the copy can be
+  // there; nothing is created until the user submits, so the copy can be
   // edited first. Read through the same RLS and RPCs as everywhere else, so
   // it can only ever duplicate a poll the user can already see.
   useEffect(() => {
@@ -315,7 +314,7 @@ export function CreatePoll() {
     if (hasErrors(errors)) return
 
     // Blank rows are dropped here and in create_poll alike, and the
-    // descriptions travel as a parallel array -- so they are filtered
+    // descriptions travel as a parallel array; so they are filtered
     // together, never separately, or a dropped row would slide every later
     // description onto the wrong option.
     const cleanOptions = options
@@ -361,16 +360,11 @@ export function CreatePoll() {
     <Stack maw={560} mx="auto" gap="md">
       <Stack gap={4}>
         <Title order={2}>{duplicateOf ? 'Duplicate poll' : 'New poll'}</Title>
-        {duplicateOf && (
-          <Text size="sm" c="dimmed">
-            Prefilled from the original. Change anything you like — nothing is created until you hit
-            Create poll, and the original is left untouched.
-          </Text>
-        )}
       </Stack>
 
       <TextInput
         label="Title"
+        placeholder="A title for your poll"
         value={title}
         onChange={(e) => setTitle(e.currentTarget.value)}
         error={shown.title}
@@ -378,6 +372,7 @@ export function CreatePoll() {
       />
       <Textarea
         label="Description"
+        placeholder="Optional additional details"
         value={description}
         onChange={(e) => setDescription(e.currentTarget.value)}
         error={shown.description}
@@ -399,29 +394,20 @@ export function CreatePoll() {
         />
         <Text size="xs" c="dimmed">
           {isOpen
-            ? 'Voters open a link and score the options. No sign-in, no account.'
-            : 'Voters sign in with their email. Only addresses on the invite list can see or vote in the poll.'}
+            ? 'Anyone with the link can see and vote in the poll.'
+            : 'Voters must sign in with their email. Only addresses on the invite list can see or vote in the poll.'}
         </Text>
         {isOpen && (
-          <Alert color="yellow" title="Anyone with the link can vote">
+          <Alert color="yellow" title="Unauthenticated">
             <Stack gap={4}>
-              <Text size="sm">
-                There is no sign-in, so there is no way to tell voters apart. Anyone the link
-                reaches can vote, and one person can vote more than once by using another browser or
-                clearing their site data.
-              </Text>
-              <Text size="sm">
-                Good for picking a movie. Not good for anything where the outcome actually matters —
-                use an invite poll for that.
-              </Text>
+              <Text size="sm">One person can vote more than once by using another browser.</Text>
             </Stack>
           </Alert>
         )}
         {!isOpen && (
           <Stack gap="xs">
             <TagsInput
-              label="Invite voters"
-              description="Type an email and press Enter (or comma) to add it."
+              description="Type an email and press Enter to add it or paste a comma separated list of emails."
               placeholder="them@example.com"
               value={emails}
               onChange={setEmails}
@@ -439,14 +425,7 @@ export function CreatePoll() {
       <Switch
         checked={showVoters}
         onChange={(e) => setShowVoters(e.currentTarget.checked)}
-        label="Show who has responded"
-        description={
-          showVoters
-            ? isOpen
-              ? 'Voters enter a name with their ballot, and everyone can see who has voted so far. How they voted stays private.'
-              : 'Everyone in the poll can see which invitees have voted and which are still pending. How they voted stays private.'
-            : 'Only the number of votes is shown — nobody, including you, can see who has responded.'
-        }
+        label="Show who has voted"
       />
 
       {/* Independent of the switch above: this one is about the scores, that
@@ -456,14 +435,7 @@ export function CreatePoll() {
         <Switch
           checked={showBallots}
           onChange={(e) => setShowBallots(e.currentTarget.checked)}
-          label="Publish every ballot"
-          description={
-            showBallots
-              ? showVoters
-                ? 'Once the results unlock, everyone in the poll can see the score each person gave every option, with their name against it. Anyone can check the totals for themselves.'
-                : 'Once the results unlock, everyone in the poll can see the scores on every ballot, with no name against any of them and in an order unrelated to when they were cast. Anyone can check the totals; nobody can tell whose ballot is whose.'
-              : 'Only the totals are published — nobody, including you, can see how any one person voted.'
-          }
+          label="Publish ballots"
         />
         {showBallots && (
           <Text size="xs" c="dimmed">
@@ -478,12 +450,7 @@ export function CreatePoll() {
       <Switch
         checked={solicitOptions}
         onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
-        label="Collect options from respondents"
-        description={
-          solicitOptions
-            ? 'The poll opens for suggestions instead of votes. Everyone in it can add options, and nobody can vote until you settle the list — which you do from the poll’s own page.'
-            : 'You write the options yourself, below, and the poll opens for voting straight away.'
-        }
+        label="Solicit options from voters"
       />
 
       {/* Last, because it is the only part of the form whose shape depends on
@@ -499,8 +466,8 @@ export function CreatePoll() {
               saying what it is for. Most polls need none. */}
           <Text size="xs" c="dimmed">
             {solicitOptions
-              ? 'Optional. Anything here is on the list from the start; everyone in the poll can add to it, and you settle the list on the poll’s page.'
-              : 'Use + to add a description to an option — a note, a caveat, a link — if its name doesn’t say enough on its own.'}
+              ? 'Voters will be able to add to this list later.'
+              : 'Use + to add a description to an option.'}
           </Text>
         </Stack>
         {options.map((option, index) => (

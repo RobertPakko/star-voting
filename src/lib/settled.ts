@@ -11,14 +11,14 @@
  *
  * **In memory, for the life of the tab, and no further.** Nothing here
  * touches `localStorage`, and that is the point rather than an omission. A
- * settled poll is settled *unless its creator resets it* — reset deletes
+ * settled poll is settled *unless its creator resets it*; reset deletes
  * every vote and reopens the poll, and the same poll can then finish again
  * with a different answer. Reset is rare and it is announced to nobody
  * (`AGENTS.md`, "Creator controls"), so the honest bound on a wrong answer is
  * a short one:
  *
- *  - A reset **in this tab** clears these entries outright — `CreatorControls`
- *    calls `forgetPoll` — so the creator, who is the person most likely to
+ *  - A reset **in this tab** clears these entries outright; `CreatorControls`
+ *    calls `forgetPoll` so the creator, who is the person most likely to
  *    look immediately afterwards, is never shown the old result.
  *  - A reset **somewhere else** leaves this tab holding a tally the poll no
  *    longer has. Every screen that renders one first reads `poll_status` or
@@ -38,8 +38,8 @@
 const responses = new Map<string, unknown>()
 
 /**
- * Elected options, by poll id. `null` is a real answer — a genuine tie
- * elects nobody, and so does a poll closed before anyone voted — which is why
+ * Elected options, by poll id. `null` is a real answer; a genuine tie
+ * elects nobody, and so does a poll closed before anyone voted which is why
  * this is a Map with a `has` check rather than a lookup that treats a missing
  * entry and an empty one alike. Asking again for a poll that has no winner
  * would be a request repeated forever.
@@ -64,7 +64,7 @@ export function remember(rpc: string, key: string, value: unknown): void {
   responses.set(cacheKey(rpc, key), value)
 }
 
-/** Every poll this tab can already name a winner for — or name nobody for. */
+/** Every poll this tab can already name a winner or name nobody for. */
 export function knownWinners(): ReadonlyMap<string, string | null> {
   return winners
 }
@@ -75,7 +75,7 @@ export function rememberWinner(pollId: string, name: string | null): void {
 
 /**
  * Forget everything about a poll, because it is no longer the poll that was
- * cached — it was reset, or deleted outright.
+ * cached; it was reset, or deleted outright.
  *
  * Takes the share token as well as the id: an open poll's tally is fetched
  * through the token by the same page that resets it through the id, and
