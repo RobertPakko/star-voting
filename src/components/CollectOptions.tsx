@@ -234,7 +234,7 @@ export function CollectOptions({
                   setDescription(e.currentTarget.value)
                   setDescriptionError(null)
                 }}
-                placeholder="What it is, a caveat, a link"
+                placeholder="Option description"
                 error={descriptionError}
                 autoFocus
               />
