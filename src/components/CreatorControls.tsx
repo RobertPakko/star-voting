@@ -62,6 +62,7 @@ export function CreatorControls({
   const [closeOpened, closeModal] = useDisclosure(false)
   const [resetOpened, resetModal] = useDisclosure(false)
   const [openOpened, openModal] = useDisclosure(false)
+  const [frozenOpened, frozenModal] = useDisclosure(false)
 
   async function resetPoll() {
     setError(null)
@@ -137,11 +138,20 @@ export function CreatorControls({
   // options `create_poll` demands of a poll whose creator wrote the list.
   const canOpen = status.soliciting && !status.is_closed
   const enoughToOpen = optionCount >= 2
-  // Correcting a list that is already a ballot, which is a different thing
-  // from collecting one and is offered on exactly the terms the database
-  // allows it: the creator's poll, open, and nobody has voted. See
-  // 0028_creator_edits_options.sql.
-  const canEditOptions = !status.soliciting && !status.is_closed && status.voted_count === 0
+  // Correcting a list that is already a ballot. The database allows it on the
+  // creator's own poll, open, with nobody having voted -- see
+  // 0028_creator_edits_options.sql -- and that is what `optionsEditable` is.
+  //
+  // The *button* is offered more widely than that, on purpose. It used to
+  // disappear the moment the first vote landed, on a page that otherwise
+  // looked exactly as it had a second earlier, so the only thing a creator
+  // could learn from it was that something they had just been able to do was
+  // gone. Now it stays and says why, and points at the two things that do
+  // work. Closing the poll takes it away, but a poll that has closed rewrites
+  // this whole block and the page under it, so nothing there vanishes
+  // quietly.
+  const optionsEditable = !status.is_closed && status.voted_count === 0
+  const showEditOptions = !status.soliciting && !status.is_closed && !editingOptions
   // Open polls have no invite list, so invited_count is 0 and there is
   // nobody we can say we're cutting off.
   const pending = Math.max(0, status.invited_count - status.voted_count)
@@ -176,8 +186,11 @@ export function CreatorControls({
               </span>
             </Tooltip>
           )}
-          {canEditOptions && !editingOptions && (
-            <Button variant="light" onClick={() => onEditOptions(true)}>
+          {showEditOptions && (
+            <Button
+              variant="light"
+              onClick={() => (optionsEditable ? onEditOptions(true) : frozenModal.open())}
+            >
               Edit options
             </Button>
           )}
@@ -201,6 +214,49 @@ export function CreatorControls({
           </Button>
         </Group>
       </Stack>
+
+      {/* Why the option list is closed, and the two ways there are round it.
+          Both are offered as buttons rather than described and left to be
+          found: they are in this same block, and a modal that says "use
+          Reset votes" while covering the Reset votes button is a riddle. */}
+      <Modal
+        opened={frozenOpened}
+        onClose={frozenModal.close}
+        title="The options are settled"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            This poll has {status.voted_count} vote{status.voted_count === 1 ? '' : 's'} in it, so
+            its options can't change. Everyone who voted scored the list as it stands, and adding or
+            removing an option now would leave their ballots answering a different question from
+            everybody else's.
+          </Text>
+          <Text size="sm" c="dimmed">
+            Two ways round it. <b>Clear the votes</b> to reopen the list on this same poll, keeping
+            its link — everyone who voted is free to vote again. Or <b>duplicate</b> the poll to
+            start a fresh one with the options you want, leaving this one as it is; the copy gets
+            its own link.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={frozenModal.close}>
+              Cancel
+            </Button>
+            <Button variant="light" onClick={() => navigate(`/polls/new?from=${pollId}`)}>
+              Duplicate
+            </Button>
+            <Button
+              color="orange"
+              onClick={() => {
+                frozenModal.close()
+                resetModal.open()
+              }}
+            >
+              Clear votes
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={openOpened}

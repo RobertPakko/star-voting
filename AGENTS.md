@@ -925,6 +925,22 @@ replaces the ballot while it is open — they are two readings of one list, and
 a poll with no votes in it has no ballot anybody is part-way through. A vote
 arriving while it is open closes it and puts the ballot back.
 
+**The button outlives the window it opens.** It used to disappear the moment
+the first vote landed, on a page that otherwise looked exactly as it had a
+second earlier, so the only thing a creator could learn from it was that
+something they had just been able to do was gone — and nothing said whether
+that was the rule or a bug. It now stays for as long as the poll has a ballot
+and has not closed, and on a poll with votes in it opens a modal that says
+what the rule is and offers the two ways round it: **Clear votes**, which
+reopens the list on this same poll and its same link, and **Duplicate**, which
+starts a fresh poll with the options you want and leaves this one alone. Both
+are buttons in that modal rather than instructions to go and find them — they
+live in the same block the modal is covering.
+
+Closing the poll does take the button away, and that is not the same problem:
+a poll that closes rewrites this whole block and the page under it at once, so
+nothing about it vanishes quietly.
+
 **What it does not promise is that nobody is looking at the old list.**
 Someone with the ballot already on screen picks the correction up on the next
 live tick, and a submit inside that window is refused rather than filed:
@@ -981,11 +997,13 @@ they do to the *poll*:
 - **Open poll** — on a poll collecting its options, and only there: finalizes
   the list and lets people vote. One-way. Disabled until the list has the two
   options an election needs, with the reason on a tooltip.
-- **Edit options** — while the poll has no votes in it: swaps the ballot for
-  the option list so it can be corrected. The way back out is **Done**, under
-  the list itself, and this button is not offered while that list is up:
-  finishing with something belongs beside the thing, not in a block further
-  down the page. See [The creator can correct the options until somebody
+- **Edit options** — on any poll that has a ballot and has not closed. With no
+  votes in it, it swaps the ballot for the option list so it can be corrected;
+  with votes in it, it says why it can't and offers the two things that do
+  work. The way back out of the editor is **Done**, under the list itself, and
+  this button is not offered while that list is up: finishing with something
+  belongs beside the thing, not in a block further down the page. See [The
+  creator can correct the options until somebody
   votes](#the-creator-can-correct-the-options-until-somebody-votes).
 - **Close voting** — reveals results using the votes cast so far. One-way.
 - **Duplicate** — opens the create form prefilled from this poll (options,
