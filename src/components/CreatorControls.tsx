@@ -154,179 +154,181 @@ export function CreatorControls({
   const pending = Math.max(0, status.invited_count - status.voted_count)
 
   return (
-    <Card withBorder>
-      <Stack gap="md">
-        <Title order={4}>Manage poll</Title>
+    <Stack gap="sm">
+      <Title order={4}>Manage poll</Title>
+      <Card withBorder>
+        <Stack gap="xs">
 
-        <ShareLink poll={poll} />
+          <ShareLink poll={poll} />
 
-        {error && (
-          <Text c="red" size="sm">
-            {error}
-          </Text>
-        )}
+          {error && (
+            <Text c="red" size="sm">
+              {error}
+            </Text>
+          )}
 
-        <Group gap="sm" wrap="wrap">
-          {canOpen && (
-            <Tooltip label="Add at least two options first" disabled={enoughToOpen} withArrow>
-              {/* A disabled button fires no pointer events of its own, so the
-                  reason it is disabled needs something around it that does. */}
-              <span>
-                <Button
-                  variant="light"
-                  color="orange"
-                  disabled={!enoughToOpen}
-                  onClick={openModal.open}
-                >
-                  Open poll
-                </Button>
-              </span>
-            </Tooltip>
-          )}
-          {canClose && (
-            <Button variant="light" color="orange" onClick={closeModal.open}>
-              Close poll
-            </Button>
-          )}
-          {showEditOptions && (
-            <Button
-              variant="light"
-              onClick={() => (optionsEditable ? onEditOptions(true) : frozenModal.open())}
-            >
-              Edit options
-            </Button>
-          )}
-          {canReset && (
-            <Button variant="light" color="orange" onClick={resetModal.open}>
-              Reset votes
-            </Button>
-          )}
-          {/* Opens the create form prefilled from this poll, so the copy can
-              be edited before it exists. */}
-          <Button variant="light" onClick={() => navigate(`/polls/new?from=${pollId}`)}>
-            Duplicate
-          </Button>
-          <Button variant="subtle" color="red" onClick={deleteModal.open} ml="auto">
-            Delete poll
-          </Button>
-        </Group>
-      </Stack>
-
-      <Modal
-        opened={frozenOpened}
-        onClose={frozenModal.close}
-        title="Cannot edit options"
-        centered
-      >
-        <Stack gap="md">
-          <Text size="sm">
-            Options cannot be changed after votes have been cast. You can either reset the votes and correct the list or duplicate the poll and correct the copy.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={frozenModal.close}>
-              Cancel
-            </Button>
+          <Group gap="sm" wrap="wrap">
+            {canOpen && (
+              <Tooltip label="Add at least two options first" disabled={enoughToOpen} withArrow>
+                {/* A disabled button fires no pointer events of its own, so the
+                    reason it is disabled needs something around it that does. */}
+                <span>
+                  <Button
+                    variant="light"
+                    color="orange"
+                    disabled={!enoughToOpen}
+                    onClick={openModal.open}
+                  >
+                    Open poll
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
+            {canClose && (
+              <Button variant="light" color="orange" onClick={closeModal.open}>
+                Close poll
+              </Button>
+            )}
+            {showEditOptions && (
+              <Button
+                variant="light"
+                onClick={() => (optionsEditable ? onEditOptions(true) : frozenModal.open())}
+              >
+                Edit options
+              </Button>
+            )}
+            {canReset && (
+              <Button variant="light" color="orange" onClick={resetModal.open}>
+                Reset votes
+              </Button>
+            )}
+            {/* Opens the create form prefilled from this poll, so the copy can
+                be edited before it exists. */}
             <Button variant="light" onClick={() => navigate(`/polls/new?from=${pollId}`)}>
               Duplicate
             </Button>
-            <Button
-              variant="light"
-              color="orange"
-              onClick={() => {
-                frozenModal.close()
-                resetModal.open()
-              }}
-            >
-              Reset votes
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-
-      <Modal
-        opened={openOpened}
-        onClose={openModal.close}
-        title="Open this poll for voting?"
-        centered
-      >
-        <Stack gap="md">
-          <Text size="sm">
-            The {optionCount} current options become the ballot and voting opens.
-          </Text>
-          <Text size="sm" c="dimmed">
-            Nobody can suggest an option after this. You can still correct the list yourself, up
-            until the first vote comes in.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={openModal.close}>
-              Cancel
-            </Button>
-            <Button color="orange" onClick={openPoll} loading={busy}>
-              Open poll
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-
-      <Modal opened={closeOpened} onClose={closeModal.close} title="Close poll?" centered>
-        <Stack gap="md">
-          <Text size="sm">
-            The poll will be closed and results will be revealed using the {status.voted_count} current vote
-            {status.voted_count === 1 ? '' : 's'}.
-            {pending > 0 &&
-              ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={closeModal.close}>
-              Cancel
-            </Button>
-            <Button color="orange" onClick={closePoll} loading={busy}>
-              Close poll
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-
-      <Modal opened={resetOpened} onClose={resetModal.close} title="Delete votes?" centered>
-        <Stack gap="md">
-          <Text size="sm">
-            {status.voted_count === 0
-              ? 'This poll has no votes to clear.'
-              : `The ${status.voted_count} current vote${status.voted_count === 1 ? '' : 's'} will be deleted, along with any results.`}
-          </Text>
-          <Text size="sm">
-            The poll keeps its options{status.invited_count > 0 && ', its invitee list'} and its
-            link
-            {status.is_closed && ', and reopens for voting'}. Everyone who already voted will be
-            able to vote again.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={resetModal.close}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={resetPoll} loading={busy}>
-              Delete votes
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-
-      <Modal opened={deleteOpened} onClose={deleteModal.close} title="Delete this poll?" centered>
-        <Stack gap="md">
-          <Text size="sm">
-            The poll, its options, and every vote cast will be permanently deleted. This can't be
-            undone.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={deleteModal.close}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={deletePoll} loading={busy}>
+            <Button variant="subtle" color="red" onClick={deleteModal.open} ml="auto">
               Delete poll
             </Button>
           </Group>
         </Stack>
-      </Modal>
-    </Card>
+
+        <Modal
+          opened={frozenOpened}
+          onClose={frozenModal.close}
+          title="Cannot edit options"
+          centered
+        >
+          <Stack gap="md">
+            <Text size="sm">
+              Options cannot be changed after votes have been cast. You can either reset the votes and correct the list or duplicate the poll and correct the copy.
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={frozenModal.close}>
+                Cancel
+              </Button>
+              <Button variant="light" onClick={() => navigate(`/polls/new?from=${pollId}`)}>
+                Duplicate
+              </Button>
+              <Button
+                variant="light"
+                color="orange"
+                onClick={() => {
+                  frozenModal.close()
+                  resetModal.open()
+                }}
+              >
+                Reset votes
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+
+        <Modal
+          opened={openOpened}
+          onClose={openModal.close}
+          title="Open this poll for voting?"
+          centered
+        >
+          <Stack gap="md">
+            <Text size="sm">
+              The {optionCount} current options become the ballot and voting opens.
+            </Text>
+            <Text size="sm" c="dimmed">
+              Nobody can suggest an option after this. You can still correct the list yourself, up
+              until the first vote comes in.
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={openModal.close}>
+                Cancel
+              </Button>
+              <Button color="orange" onClick={openPoll} loading={busy}>
+                Open poll
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+
+        <Modal opened={closeOpened} onClose={closeModal.close} title="Close poll?" centered>
+          <Stack gap="md">
+            <Text size="sm">
+              The poll will be closed and results will be revealed using the {status.voted_count} current vote
+              {status.voted_count === 1 ? '' : 's'}.
+              {pending > 0 &&
+                ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={closeModal.close}>
+                Cancel
+              </Button>
+              <Button color="orange" onClick={closePoll} loading={busy}>
+                Close poll
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+
+        <Modal opened={resetOpened} onClose={resetModal.close} title="Delete votes?" centered>
+          <Stack gap="md">
+            <Text size="sm">
+              {status.voted_count === 0
+                ? 'This poll has no votes to clear.'
+                : `The ${status.voted_count} current vote${status.voted_count === 1 ? '' : 's'} will be deleted, along with any results.`}
+            </Text>
+            <Text size="sm">
+              The poll keeps its options{status.invited_count > 0 && ', its invitee list'} and its
+              link
+              {status.is_closed && ', and reopens for voting'}. Everyone who already voted will be
+              able to vote again.
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={resetModal.close}>
+                Cancel
+              </Button>
+              <Button color="red" onClick={resetPoll} loading={busy}>
+                Delete votes
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+
+        <Modal opened={deleteOpened} onClose={deleteModal.close} title="Delete this poll?" centered>
+          <Stack gap="md">
+            <Text size="sm">
+              The poll, its options, and every vote cast will be permanently deleted. This can't be
+              undone.
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={deleteModal.close}>
+                Cancel
+              </Button>
+              <Button color="red" onClick={deletePoll} loading={busy}>
+                Delete poll
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+      </Card>
+    </Stack>
   )
 }

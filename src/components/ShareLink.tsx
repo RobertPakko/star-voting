@@ -22,11 +22,16 @@ export function ShareLink({
 
   return (
     <Stack gap="xs">
-      <Text fw={500} size="sm">
-        Share this poll
-      </Text>
-      <Group gap="xs" wrap="nowrap">
+      <Group gap="xs" wrap="nowrap" align="flex-end">
         <TextInput
+          label="Share this poll"
+          description={poll.closed_at
+          ? isOpen
+            ? 'Anyone with this link can view the results'
+            : 'Only invited people can view the results; they must sign in to do so'
+          : isOpen
+          ? 'Anyone with this link can vote without signing in'
+          : 'Only invited people can vote; they must sign in to do so'}
           value={url}
           readOnly
           onFocus={(e) => e.currentTarget.select()}
@@ -41,15 +46,6 @@ export function ShareLink({
         </CopyButton>
         <ShareQr url={url} title={poll.title} isOpen={isOpen} />
       </Group>
-      <Text size="xs" c="dimmed">
-        {poll.closed_at
-          ? isOpen
-            ? 'Anyone with this link can view the results'
-            : 'Only invited people can view the results; they must sign in to do so'
-          : isOpen
-          ? 'Anyone with this link can vote without signing in'
-          : 'Only invited people can vote; they must sign in to do so'}
-      </Text>
     </Stack>
   )
 }

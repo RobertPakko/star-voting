@@ -238,7 +238,7 @@ export function PollDetail() {
           footer={
             <Group justify="space-between" wrap="wrap" gap="sm">
               <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
-                Nobody has voted yet, so the list is still yours to fix. The first vote settles it.
+                Nobody has voted yet, so options can still be updated.
               </Text>
               <Button variant="light" onClick={() => setEditingOptions(false)}>
                 Done
