@@ -227,14 +227,16 @@ export function Results({
 
                 <Text size="sm" c={tb.resolved_by === 'random' ? 'orange' : undefined}>
                   {tb.resolved_by === 'random'
-                    ? `Still tied after every rule; ${tb.advanced
-                        .map((a) => a.name)
-                        .join(', ')} advanced by random selection.`
-                    : `${tb.advanced.map((a) => a.name).join(', ')} advanced on ${
-                        tb.resolved_by === 'head_to_head'
-                          ? 'head-to-head preference'
-                          : 'five-star votes'
-                      }.`}
+                    ? renderAdvancedNames(tb.advanced, 'Still tied after every rule; ', ' advanced by random selection.')
+                    : renderAdvancedNames(
+                        tb.advanced,
+                        '',
+                        ` advanced on ${
+                          tb.resolved_by === 'head_to_head'
+                            ? 'head-to-head preference'
+                            : 'five-star votes'
+                        }.`,
+                      )}
                 </Text>
               </Stack>
             </Card>
@@ -351,6 +353,25 @@ function HeadToHead({ step }: { step: HeadToHeadStep }) {
         ))}
       </Stack>
     </Stack>
+  )
+}
+
+function renderAdvancedNames(
+  advanced: { id: string; name: string }[],
+  prefix: string,
+  suffix: string,
+) {
+  return (
+    <>
+      {prefix}
+      {advanced.map((a, index) => (
+        <span key={a.id}>
+          {index > 0 && ', '}
+          <strong>{a.name}</strong>
+        </span>
+      ))}
+      {suffix}
+    </>
   )
 }
 

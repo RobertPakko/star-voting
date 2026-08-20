@@ -190,7 +190,7 @@ export function PollStateBadge({
     // ellipsis where the answer to the poll should be. The title is the side
     // that gives now (see the call sites, which let it), so the badge is as
     // wide as the name it carries and no wider.
-    return (
+    return winner ? (
       <Badge
         color={badgeColor.done}
         variant="light"
@@ -198,9 +198,9 @@ export function PollStateBadge({
         style={{ flexShrink: 0 }}
         title={winner ?? undefined}
       >
-        {winner ?? 'Results ready'}
+        {winner}
       </Badge>
-    )
+    ) : (<></>)
   }
 
   if (closed) {
