@@ -79,23 +79,6 @@ export function About() {
       </Stack>
 
       <Stack gap="sm">
-        <Title order={2} size="h3">
-          How long is a poll kept?
-        </Title>
-        <Text>
-          Six months, counted from the day it was created. After that the poll is deleted, along
-          with its options and every ballot in it. Voting in a poll doesn&rsquo;t extend that, and
-          neither does closing it: the date is fixed when the poll is made, and every poll page says
-          which day it is. A creator can delete their poll sooner than that whenever they like, and
-          can duplicate it into a fresh one that starts its own six months.
-        </Text>
-        <Text>
-          This site is free to use and nobody is paying to keep your poll, so no poll is kept
-          forever. If a result still matters in a year, write it down somewhere that belongs to you.
-        </Text>
-      </Stack>
-
-      <Stack gap="sm">
         <Title order={3} size="h5">
           Footnotes
         </Title>
