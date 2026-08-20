@@ -15,7 +15,7 @@ import { ShareQr } from './ShareQr'
 export function ShareLink({
   poll,
 }: {
-  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token'>
+  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token' | 'closed_at'>
 }) {
   const url = shareLinkFor(poll)
   const isOpen = poll.mode === 'open'
@@ -42,7 +42,11 @@ export function ShareLink({
         <ShareQr url={url} title={poll.title} isOpen={isOpen} />
       </Group>
       <Text size="xs" c="dimmed">
-        {isOpen
+        {poll.closed_at
+          ? isOpen
+            ? 'Anyone with this link can view the results'
+            : 'Only invited people can view the results; they must sign in to do so'
+          : isOpen
           ? 'Anyone with this link can vote without signing in'
           : 'Only invited people can vote; they must sign in to do so'}
       </Text>

@@ -13,9 +13,6 @@ import type { Poll, PollStatus } from '../lib/types'
  * in one block. Open it for voting, close voting early, correct the options,
  * duplicate it, clear its votes, delete it.
  *
- * The invitee list is not here — it lives in <Respondents>, because on a poll
- * that shows respondents it isn't creator-only any more.
- *
  * The share link lives here rather than beside the ballot: handing the poll
  * out is something the creator does to the poll, not something a voter needs
  * while scoring options. Keeping it in this block also means it is never
@@ -40,7 +37,7 @@ export function CreatorControls({
   onEditOptions,
   onChange,
 }: {
-  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token'>
+  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token' | 'closed_at'>
   status: PollStatus
   /** How many options the poll holds: the floor "Open poll" has to clear. */
   optionCount: number
@@ -186,6 +183,11 @@ export function CreatorControls({
               </span>
             </Tooltip>
           )}
+          {canClose && (
+            <Button variant="light" color="orange" onClick={closeModal.open}>
+              Close poll
+            </Button>
+          )}
           {showEditOptions && (
             <Button
               variant="light"
@@ -194,9 +196,9 @@ export function CreatorControls({
               Edit options
             </Button>
           )}
-          {canClose && (
-            <Button variant="light" color="orange" onClick={closeModal.open}>
-              Close voting
+          {canReset && (
+            <Button variant="light" color="orange" onClick={resetModal.open}>
+              Reset votes
             </Button>
           )}
           {/* Opens the create form prefilled from this poll, so the copy can
@@ -204,39 +206,21 @@ export function CreatorControls({
           <Button variant="light" onClick={() => navigate(`/polls/new?from=${pollId}`)}>
             Duplicate
           </Button>
-          {canReset && (
-            <Button variant="light" color="orange" onClick={resetModal.open}>
-              Reset votes
-            </Button>
-          )}
           <Button variant="subtle" color="red" onClick={deleteModal.open} ml="auto">
             Delete poll
           </Button>
         </Group>
       </Stack>
 
-      {/* Why the option list is closed, and the two ways there are round it.
-          Both are offered as buttons rather than described and left to be
-          found: they are in this same block, and a modal that says "use
-          Reset votes" while covering the Reset votes button is a riddle. */}
       <Modal
         opened={frozenOpened}
         onClose={frozenModal.close}
-        title="The options are settled"
+        title="Cannot edit options"
         centered
       >
         <Stack gap="md">
           <Text size="sm">
-            This poll has {status.voted_count} vote{status.voted_count === 1 ? '' : 's'} in it, so
-            its options can't change. Everyone who voted scored the list as it stands, and adding or
-            removing an option now would leave their ballots answering a different question from
-            everybody else's.
-          </Text>
-          <Text size="sm" c="dimmed">
-            Two ways round it. <b>Clear the votes</b> to reopen the list on this same poll, keeping
-            its link — everyone who voted is free to vote again. Or <b>duplicate</b> the poll to
-            start a fresh one with the options you want, leaving this one as it is; the copy gets
-            its own link.
+            Options cannot be changed after votes have been cast. You can either reset the votes and correct the list or duplicate the poll and correct the copy.
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={frozenModal.close}>
@@ -246,13 +230,14 @@ export function CreatorControls({
               Duplicate
             </Button>
             <Button
+              variant="light"
               color="orange"
               onClick={() => {
                 frozenModal.close()
                 resetModal.open()
               }}
             >
-              Clear votes
+              Reset votes
             </Button>
           </Group>
         </Stack>
@@ -283,29 +268,26 @@ export function CreatorControls({
         </Stack>
       </Modal>
 
-      <Modal opened={closeOpened} onClose={closeModal.close} title="Close voting?" centered>
+      <Modal opened={closeOpened} onClose={closeModal.close} title="Close poll?" centered>
         <Stack gap="md">
           <Text size="sm">
-            Results will be revealed using the current {status.voted_count} vote
+            The poll will be closed and results will be revealed using the {status.voted_count} current vote
             {status.voted_count === 1 ? '' : 's'}.
             {pending > 0 &&
               ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
-          </Text>
-          <Text size="sm" c="dimmed">
-            The only way to reopen the poll is to reset the votes.
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal.close}>
               Cancel
             </Button>
             <Button color="orange" onClick={closePoll} loading={busy}>
-              Close voting
+              Close poll
             </Button>
           </Group>
         </Stack>
       </Modal>
 
-      <Modal opened={resetOpened} onClose={resetModal.close} title="Clear every vote?" centered>
+      <Modal opened={resetOpened} onClose={resetModal.close} title="Delete votes?" centered>
         <Stack gap="md">
           <Text size="sm">
             {status.voted_count === 0
@@ -322,8 +304,8 @@ export function CreatorControls({
             <Button variant="default" onClick={resetModal.close}>
               Cancel
             </Button>
-            <Button color="orange" onClick={resetPoll} loading={busy}>
-              Clear votes
+            <Button color="red" onClick={resetPoll} loading={busy}>
+              Delete votes
             </Button>
           </Group>
         </Stack>

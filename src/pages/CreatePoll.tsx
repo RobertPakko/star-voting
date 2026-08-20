@@ -147,7 +147,7 @@ function validate(form: {
   if (!form.solicitOptions && filled < 2) {
     errors.options = 'A poll needs at least two options.'
   } else if (filled > MAX_OPTIONS) {
-    errors.options = `A ballot holds ${MAX_OPTIONS} options; this one has ${filled}.`
+    errors.options = `A ballot can only hold ${MAX_OPTIONS} options; this one has ${filled}.`
   }
 
   if (!form.isOpen) {

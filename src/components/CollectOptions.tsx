@@ -14,7 +14,7 @@ import type { PollOption } from '../lib/types'
  * The first two are the suggestion path, and are the same split as
  * ResultsSource and BallotsSource for the same reason: a session proves the
  * caller belongs to an invite poll, the share token proves it for an open
- * one. `creator` is the other path entirely — the poll's own creator
+ * one. `creator` is the other path entirely; the poll's own creator
  * correcting a list that is already a ballot, on a poll nobody has voted in
  * yet. See 0028_creator_edits_options.sql for why that is allowed and where
  * the window closes.
@@ -91,6 +91,8 @@ export function CollectOptions({
   const atFloor = source.kind === 'creator' && options.length <= 2
 
   async function addOption() {
+    if (busy) return
+
     const trimmed = name.trim()
     const trimmedDescription = description?.trim() ?? ''
 
@@ -152,6 +154,8 @@ export function CollectOptions({
   // list: the row is theirs to delete under the poll's own policies, and
   // nothing about a poll with no votes in it needs a function to say so.
   async function removeOption(option: PollOption) {
+    if (busy) return
+
     setError(null)
     setBusy(true)
     const { error: deleteError } = await supabase.from('candidates').delete().eq('id', option.id)
@@ -253,7 +257,7 @@ export function CollectOptions({
               {description === null ? '+' : '−'}
             </ActionIcon>
           </Tooltip>
-          <Button variant="light" onClick={addOption} loading={busy} disabled={full}>
+          <Button variant="light" onClick={addOption} disabled={full}>
             Add
           </Button>
         </Group>
@@ -268,8 +272,7 @@ export function CollectOptions({
 
         {full && (
           <Text size="xs" c="dimmed">
-            This poll holds the {MAX_OPTIONS} options a ballot can. A list nobody reads to the end
-            is not one anybody can score honestly.
+            A ballot may only have {MAX_OPTIONS} options.
           </Text>
         )}
       </Stack>
