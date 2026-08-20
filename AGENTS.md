@@ -937,8 +937,11 @@ they do to the *poll*:
   the list and lets people vote. One-way. Disabled until the list has the two
   options an election needs, with the reason on a tooltip.
 - **Edit options** — while the poll has no votes in it: swaps the ballot for
-  the option list so it can be corrected. See [The creator can correct the
-  options until somebody votes](#the-creator-can-correct-the-options-until-somebody-votes).
+  the option list so it can be corrected. The way back out is **Done**, under
+  the list itself, and this button is not offered while that list is up:
+  finishing with something belongs beside the thing, not in a block further
+  down the page. See [The creator can correct the options until somebody
+  votes](#the-creator-can-correct-the-options-until-somebody-votes).
 - **Close voting** — reveals results using the votes cast so far. One-way.
 - **Duplicate** — opens the create form prefilled from this poll (options,
   invitees, all four settings). Nothing is created until submit, so the copy

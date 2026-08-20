@@ -44,9 +44,13 @@ export function CreatorControls({
   status: PollStatus
   /** How many options the poll holds: the floor "Open poll" has to clear. */
   optionCount: number
-  /** Whether the page is currently showing the option list to be corrected. */
+  /**
+   * Whether the page is already showing the option list to be corrected, in
+   * which case this block does not offer to show it again: the list has its
+   * own way out, sitting under the thing it acts on.
+   */
   editingOptions: boolean
-  /** Show or hide that list; the page owns it, since it replaces the ballot. */
+  /** Show that list; the page owns it, since it replaces the ballot. */
   onEditOptions: (editing: boolean) => void
   onChange: () => void
 }) {
@@ -172,9 +176,9 @@ export function CreatorControls({
               </span>
             </Tooltip>
           )}
-          {canEditOptions && (
-            <Button variant="light" onClick={() => onEditOptions(!editingOptions)}>
-              {editingOptions ? 'Done editing options' : 'Edit options'}
+          {canEditOptions && !editingOptions && (
+            <Button variant="light" onClick={() => onEditOptions(true)}>
+              Edit options
             </Button>
           )}
           {canClose && (
