@@ -100,7 +100,7 @@ export interface OpenPollView {
     /*
      * No created_by_email here, alone of the three views of a poll: this one
      * is read through a share link, which goes wherever it is forwarded, and
-     * open_poll_view does not return the column at all. See 0029.
+     * open_poll_view does not return the column at all.
      */
     mode: PollMode
     show_voters: boolean
@@ -114,13 +114,6 @@ export interface OpenPollView {
   /** Still collecting options; see PollStatus.soliciting. */
   soliciting: boolean
   results_available: boolean
-  /**
-   * The option STAR elected, for the badge beside the title. Three answers
-   * and they are all different: a name, `null` for a poll that elected
-   * nobody, and `undefined` for a database older than this field. Only
-   * filled in once the results are out; see 0029.
-   */
-  winner_name?: string | null
   /** This browser's voter_key has already submitted a ballot. */
   voted: boolean
   your_name: string | null

@@ -87,7 +87,7 @@ export function OpenPollPanel({
   if (view.results_available) {
     return (
       <Stack gap="lg">
-        <Results source={{ kind: 'token', token }} />
+        <Results source={{ kind: 'token', token }} pollId={view.poll.id} />
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}

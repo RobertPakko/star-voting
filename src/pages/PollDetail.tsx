@@ -281,7 +281,7 @@ export function PollDetail() {
         />
       ) : status.results_available ? (
         <Stack gap="lg">
-          <Results source={{ kind: 'poll', pollId: poll.id }} />
+          <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />
           {/* Gated in the database on the same terms as the results, so this
               condition only decides whether to ask. */}
           {poll.show_ballots && <Ballots source={{ kind: 'poll', pollId: poll.id }} />}

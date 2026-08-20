@@ -46,6 +46,21 @@ const responses = new Map<string, unknown>()
  */
 const winners = new Map<string, string | null>()
 
+/**
+ * Who wants telling when that map grows.
+ *
+ * A winner can arrive from either of two places — `poll_winners()`, asked
+ * for by a list or a poll page, or the tally a `Results` card fetched for
+ * itself — and the badge that displays it is neither of them. Without this,
+ * a badge that rendered before the answer landed would keep saying "Results
+ * ready" until something else happened to re-render it.
+ */
+const listeners = new Set<() => void>()
+
+function announce(): void {
+  for (const listener of listeners) listener()
+}
+
 function cacheKey(rpc: string, key: string): string {
   return `${rpc}:${key}`
 }
@@ -70,7 +85,21 @@ export function knownWinners(): ReadonlyMap<string, string | null> {
 }
 
 export function rememberWinner(pollId: string, name: string | null): void {
+  // Announcing unconditionally would re-render every badge in the tab each
+  // time a page of the poll list re-learns what it already knew.
+  if (winners.get(pollId) === name && winners.has(pollId)) return
   winners.set(pollId, name)
+  announce()
+}
+
+/**
+ * Watch the winners map, for `useSyncExternalStore`. Returns the unsubscribe.
+ */
+export function subscribeWinners(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }
 
 /**
@@ -89,4 +118,7 @@ export function forgetPoll(pollId: string, token?: string | null): void {
       responses.delete(key)
     }
   }
+  // A badge naming an option that this poll no longer elected has to stop
+  // saying so now, not on whatever re-render happens next.
+  announce()
 }

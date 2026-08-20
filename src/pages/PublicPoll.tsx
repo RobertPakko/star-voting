@@ -4,6 +4,7 @@ import { Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
+import { useKnownWinner } from '../lib/useWinner'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollHeading } from '../components/PollHeading'
 import { PollPageSkeleton } from '../components/Skeletons'
@@ -54,6 +55,14 @@ export function PublicPoll() {
   const live = !!view && !view.is_closed && !view.results_available
   useLiveRefresh(load, { enabled: live })
 
+  // What the tally below this heading elected, read out of the browser rather
+  // than asked for: the Results card fetches that tally for itself and files
+  // the winner under the poll, so the badge costs no request. It asks nobody,
+  // because `poll_winners()` answers only to an account and this page has
+  // none; until the card lands, the badge says the results are ready without
+  // saying what they were, which is exactly what that state is for.
+  const winner = useKnownWinner(view?.poll.id)
+
   if (!token || error) {
     return (
       <Stack gap="xs" align="center" maw={720} mx="auto">
@@ -76,10 +85,7 @@ export function PublicPoll() {
           One of its four parts is left out here, and knowingly: who created
           the poll. Every email address this app shows anywhere is shown to
           somebody already in the poll it belongs to, and a share link has no
-          such boundary — it reaches whoever it was forwarded to. The winner's
-          name is not the same kind of thing and is right here in the badge;
-          open_poll_view runs the election for it once the results are out.
-          See 0029.
+          such boundary — it reaches whoever it was forwarded to.
 
           Someone arriving from a shared link has no other context at all, so
           the terms of the poll are stated in full, not just the one that
@@ -106,7 +112,7 @@ export function PublicPoll() {
           soliciting: view.soliciting,
           resultsAvailable: view.results_available,
           closed: view.is_closed,
-          winner: view.winner_name,
+          winner,
         }}
       />
 

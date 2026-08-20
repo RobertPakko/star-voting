@@ -250,9 +250,8 @@ Covered: the score round, finalist selection, both score-round tie-break rules,
 the runoff and its tie-breaks, the genuine-tie result, the full ranking, the
 `create_poll` / `submit_ballot` write path the seeding runs through, the two
 windows in which a poll's option list may move — the collecting stage, and the
-creator's own corrections before the first vote — and what an open poll's
-share link does and does not disclose about the poll: the winner once there is
-one, never an email address.
+creator's own corrections before the first vote — and that an open poll's
+share link discloses no email address, its creator's included.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. The shim in
 `test/sql/shim.sql` stands in for Supabase's `auth` schema with a one-row
@@ -500,22 +499,32 @@ return the column, so there is nothing there to leak by accident.
 An open poll's roster is no counter-example: those names are typed into the
 ballot by the voters themselves, not addresses the app knows about anybody.
 
-**The winner's name is a different kind of thing, and this page does get it.**
-It was never withheld here — the tally under the heading has always named the
-winner in full. What was missing was the name *in the badge*, because that
-comes from `poll_winners()` and that function answers only to an account, so
-the badge read *Results ready* next to a result sitting right underneath it.
-`0029` closes that through `poll_winner_name()` inside `open_poll_view()`,
-which is the same election `poll_winners()` runs.
+**The winner's name is a different kind of thing, and this page does name
+it** — in the badge, like everywhere else. It was never withheld here: the
+tally under the heading has always named it in full. What was missing was the
+name *in the badge*, because that comes from `poll_winners()` and that
+function answers only to an account, so the badge read *Results ready* next to
+a result sitting right underneath it.
 
-**It is computed only once the results are out, and that condition is the
-whole of what keeps it affordable.** Both pages that call `open_poll_view()`
-re-read it every few seconds while the poll is live and stop the moment the
-results unlock, so `poll_winner_name()` runs on the tick that discovers the
-poll has finished and on later page loads — never on a repeating timer.
-Computing it unconditionally would re-run the whole of STAR on every tick of
-every open poll in the app, which is the same trap `list_polls()` avoids by
-not carrying a `winner_name` column.
+**It is filled in from the tally the page already has, not from a request of
+its own.** `Results` fetches that tally for itself on every screen that shows
+one, and it carries `winner_id` and the option names — so the badge is drawn
+from it, and running an election server-side to answer a question the browser
+can already answer would be work for nothing. `Results` files what it learns
+under the poll through `rememberWinner`, exactly where `poll_winners()` files
+its answer, and the badge reads whichever arrives.
+
+The two can never disagree: `winner_id` is `star_round()`'s first place, and
+`poll_winner_name()` returns the *name* of `star_round()`'s first place. A
+poll that elected nobody is `null` from both, which is a real answer and not a
+missing one — see the table above.
+
+Until that card lands, the badge reads *Results ready*, which is the state
+that means precisely "finished, and this page has not been told which". So the
+badge fills itself in a moment after the page paints, while the results
+underneath it are still a skeleton. That is the whole cost, and it buys the
+public page a request it never makes and the server an election it never
+runs.
 
 Three decisions hold that shape:
 
@@ -557,12 +566,11 @@ collapse the three finished outcomes into one:
 | *Tied — no winner* | the election ran and settled nothing — see [Tie-breaks](#tie-breaks) |
 | *Results ready* | finished, and this page has not been told which of the two |
 
-That last row is a real state rather than a fallback: on the poll list the
-name arrives in a request behind the page, and a browser talking to a database
-older than `poll_winners()` — or, on the public voting page, older than the
-`winner_name` that `0029` added to `open_poll_view()` — never learns it at
-all. It must never read as *Tied*, which would be a wrong answer where this is
-only a missing one.
+That last row is a real state rather than a fallback: the name always arrives
+behind the page — in a `poll_winners()` request on the poll list, or with the
+tally on a page that shows one — and a browser talking to a database older
+than `poll_winners()` never learns it at all. It must never read as *Tied*,
+which would be a wrong answer where this is only a missing one.
 
 The name comes from `poll_winners()` (`0024`), which calls
 `poll_winner_name()`, which runs the same `star_round()` the results page
@@ -591,10 +599,14 @@ on a list has to do.
 uses, and answers with **no row at all** for a poll the caller cannot see:
 *not yours* and *no winner* are different answers and must not arrive looking
 alike. It also refuses more than 200 ids in one request, because each one is
-an election. The public voting page does not go through it — it has no account
-to ask with — and gets the same name from `poll_winner_name()` inside
-`open_poll_view()` instead. One election implementation, three callers of it,
-so no two readers of a poll can be told different things about who won.
+an election.
+
+**A page that already shows a tally does not go through it at all**, and the
+public voting page could not anyway — it has no account to ask with. It takes
+the winner out of `Results`' own tally instead, through the same
+`rememberWinner` the list writes to. So the function is asked only where there
+is no tally on screen to read the answer off: the poll list, and a poll page
+opened before its results card has loaded.
 
 A browser holding a build newer than the database it is talking to reads
 *Results ready* too — the app deploys on push while migrations land on merge,
