@@ -70,10 +70,16 @@ export function PublicPoll() {
   return (
     <Stack gap="lg" maw={720} mx="auto">
       {/* The same heading the signed-in poll page and the poll list carry,
-          all four parts of it, for the reason PollHeading exists: one poll
-          should not be two different-looking things depending on how you
-          reached it. Both parts this page used to leave blank now come out
-          of open_poll_view itself; see 0029 for what each one costs.
+          for the reason PollHeading exists: one poll should not be two
+          different-looking things depending on how you reached it.
+
+          One of its four parts is left out here, and knowingly: who created
+          the poll. Every email address this app shows anywhere is shown to
+          somebody already in the poll it belongs to, and a share link has no
+          such boundary — it reaches whoever it was forwarded to. The winner's
+          name is not the same kind of thing and is right here in the badge;
+          open_poll_view runs the election for it once the results are out.
+          See 0029.
 
           Someone arriving from a shared link has no other context at all, so
           the terms of the poll are stated in full, not just the one that
@@ -85,7 +91,7 @@ export function PublicPoll() {
       <PollHeading
         title={view.poll.title}
         description={view.poll.description}
-        createdBy={view.poll.created_by_email ?? null}
+        createdBy={null}
         mode={view.poll.mode}
         showVoters={view.poll.show_voters}
         showBallots={view.poll.show_ballots}

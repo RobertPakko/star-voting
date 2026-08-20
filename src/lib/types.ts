@@ -97,15 +97,11 @@ export interface OpenPollView {
     id: string
     title: string
     description: string | null
-    /**
-     * Who created the poll, named on this page the same way it is named on
-     * every other. Optional for the same reason PollStatus.expires_at is:
-     * this app deploys on push and its migrations apply on merge, so a
-     * browser can be holding this code against an open_poll_view that
-     * predates the field. Missing means "not told", and the heading then
-     * says nothing rather than guessing.
+    /*
+     * No created_by_email here, alone of the three views of a poll: this one
+     * is read through a share link, which goes wherever it is forwarded, and
+     * open_poll_view does not return the column at all. See 0029.
      */
-    created_by_email?: string
     mode: PollMode
     show_voters: boolean
     show_ballots: boolean

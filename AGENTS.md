@@ -251,8 +251,8 @@ the runoff and its tie-breaks, the genuine-tie result, the full ranking, the
 `create_poll` / `submit_ballot` write path the seeding runs through, the two
 windows in which a poll's option list may move — the collecting stage, and the
 creator's own corrections before the first vote — and what an open poll's
-share link discloses about the poll, including that the winner is not computed
-until there is one.
+share link does and does not disclose about the poll: the winner once there is
+one, never an email address.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. The shim in
 `test/sql/shim.sql` stands in for Supabase's `auth` schema with a one-row
@@ -483,29 +483,39 @@ one.
 `compact` is the list card — the same four parts at smaller sizes, because a
 page title inside a link among nine others shouts.
 
-**The public voting page draws all four parts too**, and `0029` is what let
-it: both of the ones it used to leave blank now come out of
-`open_poll_view()`, which is the only thing that page can ask.
+**The public voting page draws three of the four, and the one it leaves out is
+who created the poll.** That is the only place this heading is knowingly
+incomplete, and the reason is worth writing down because the layout argument
+points the other way.
 
-- **Who created it** is the creator's own email address, published to whoever
-  the share link reaches. That is a deliberate disclosure, taken for
-  consistency: an invite poll that shows respondents already names people by
-  email, and of everyone in a poll the creator is the one who chose to be in
-  it.
-- **Which option won** was never actually withheld here — the tally under the
-  heading has always named it in full. What was missing was the name *in the
-  badge*, because that name comes from `poll_winners()` and that function
-  answers only to an account; so the badge read *Results ready* next to a
-  result sitting right underneath it.
+Every email address this app displays anywhere is displayed to somebody who
+is already in the poll it belongs to: an invite poll's roster is read by its
+invitees, and nobody else can see the poll at all. **A share link has no such
+boundary.** It goes wherever it is forwarded, to people who never signed in
+and never will. Publishing the creator's address to all of them would be the
+first time the app told an address to somebody outside the poll, and matching
+three headings is not worth being that exception. `open_poll_view()` does not
+return the column, so there is nothing there to leak by accident.
 
-**The winner is computed only once the results are out, and that condition is
-the whole of what keeps it affordable.** Both pages that call
-`open_poll_view()` re-read it every few seconds while the poll is live and
-stop the moment the results unlock, so `poll_winner_name()` runs on the tick
-that discovers the poll has finished and on later page loads — never on a
-repeating timer. Computing it unconditionally would re-run the whole of STAR
-on every tick of every open poll in the app, which is the same trap
-`list_polls()` avoids by not carrying a `winner_name` column.
+An open poll's roster is no counter-example: those names are typed into the
+ballot by the voters themselves, not addresses the app knows about anybody.
+
+**The winner's name is a different kind of thing, and this page does get it.**
+It was never withheld here — the tally under the heading has always named the
+winner in full. What was missing was the name *in the badge*, because that
+comes from `poll_winners()` and that function answers only to an account, so
+the badge read *Results ready* next to a result sitting right underneath it.
+`0029` closes that through `poll_winner_name()` inside `open_poll_view()`,
+which is the same election `poll_winners()` runs.
+
+**It is computed only once the results are out, and that condition is the
+whole of what keeps it affordable.** Both pages that call `open_poll_view()`
+re-read it every few seconds while the poll is live and stop the moment the
+results unlock, so `poll_winner_name()` runs on the tick that discovers the
+poll has finished and on later page loads — never on a repeating timer.
+Computing it unconditionally would re-run the whole of STAR on every tick of
+every open poll in the app, which is the same trap `list_polls()` avoids by
+not carrying a `winner_name` column.
 
 Three decisions hold that shape:
 

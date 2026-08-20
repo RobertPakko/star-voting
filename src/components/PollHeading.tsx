@@ -40,13 +40,11 @@ export function PollHeading({
   title: string
   description: string | null
   /**
-   * Who created the poll: `'you'`, an email address, or `null` where the
-   * reader has not been told. The public voting page is named the same way
-   * as the other two, which does mean a share link carries the creator's
-   * email wherever it is forwarded; that is deliberate, and the poll's own
-   * roster already names people by email on an invite poll that shows
-   * respondents. `null` is left for a browser talking to a database that
-   * predates the field, where saying nothing beats guessing.
+   * Who created the poll: `'you'`, an email address, or `null` for a reader
+   * who is not to be told. The public voting page is the last of those, and
+   * the one part of this heading it leaves out: every address the app shows
+   * is shown to somebody already in the poll it belongs to, and a share link
+   * reaches whoever it was forwarded to.
    */
   createdBy: 'you' | string | null
   mode: PollMode

@@ -1,27 +1,14 @@
--- Two things the public voting page could not say about a poll, and now can:
--- who created it, and which option won.
+-- Name the winning option in the view an open poll's share link is drawn from.
 --
--- Both were missing for the same reason -- `open_poll_view()` is the only
--- thing that page can ask, and it did not return them -- and neither absence
--- was worth keeping:
---
---   * **Who created it** is on the poll list and on the poll's own page, so
---     leaving it off the third screen made one poll look like two different
---     things depending on how it was reached. It is the poll's creator's own
---     email address, and a share link goes wherever it is forwarded; that is
---     a real disclosure and it is a deliberate one. On an invite poll the
---     roster already names people by email whenever the poll shows
---     respondents, so this is the same kind of fact the app already publishes
---     about the people in a poll -- and the creator is the one person in a
---     poll who chose to be in it.
---
---   * **Which option won** was never withheld from this page. The tally under
---     the heading has always named the winner in full. What the page could
---     not do was put the name in the state badge beside the title the way a
---     signed-in reader gets it, because that name comes from `poll_winners()`
---     and that function answers only to an account. So the badge read
---     "Results ready" next to a result that was right there. This closes
---     that gap through the function the page already calls.
+-- The winner was never withheld from that page: the tally under the heading
+-- has always named it in full. What the page could not do was put the name in
+-- the state badge beside the title, the way a signed-in reader gets it,
+-- because that name comes from `poll_winners()` and that function answers
+-- only to an account. So the badge read "Results ready" next to a result
+-- sitting right underneath it. `poll_winner_name()` is what `poll_winners()`
+-- calls, it needs no account, and `open_poll_view()` is already the one thing
+-- that page can ask -- so the gap closes here, from the same election a
+-- signed-in reader's badge is drawn from.
 --
 -- The election is run only once the results are out, which is the one thing
 -- that keeps this cheap. Both pages that call `open_poll_view()` re-read it
@@ -30,6 +17,16 @@
 -- poll has finished and on later page loads, never on a repeating timer. A
 -- winner computed unconditionally would have re-run the whole of STAR on
 -- every tick of every open poll in the app.
+--
+-- **Who created the poll is deliberately not here.** It is on the poll list
+-- and on the poll's own page, and leaving it off this third screen is the one
+-- place the shared heading is knowingly incomplete. Every email address the
+-- app displays anywhere is shown to someone who is already in the poll it
+-- belongs to -- an invite poll's roster is read by its invitees. A share link
+-- has no such boundary: it goes wherever it is forwarded, to people who never
+-- signed in and never will. Publishing the creator's address to all of them
+-- would be the first time the app told an address to somebody who is not in
+-- the poll, and consistency of layout is not worth being the exception.
 CREATE OR REPLACE FUNCTION "public"."open_poll_view"("p_token" "text", "p_voter_key" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -102,7 +99,6 @@ begin
       'id', v_poll.id,
       'title', v_poll.title,
       'description', v_poll.description,
-      'created_by_email', v_poll.created_by_email,
       'mode', v_poll.mode,
       'show_voters', v_poll.show_voters,
       'show_ballots', v_poll.show_ballots,

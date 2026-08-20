@@ -1,11 +1,14 @@
 -- What an open poll's share link says about the poll itself.
 --
 -- The public voting page can ask open_poll_view() and nothing else, so the
--- heading it draws is whatever this function returns. Two of those parts are
--- the ones a signed-in reader gets from elsewhere: who created the poll, and
--- which option won. The winner is the one with a cost attached -- it runs the
--- election -- so the case it really has to make is that it is not computed
--- until there is a result to compute.
+-- heading it draws is whatever this function returns. Two things about that:
+-- it names the option that won, which a signed-in reader gets from
+-- poll_winners() instead; and it names nobody's email address, because a
+-- share link reaches whoever it was forwarded to.
+--
+-- The winner has a cost attached, since finding it runs the election, so the
+-- case it really has to make is that it is not computed until there is a
+-- result to compute.
 
 begin;
 
@@ -23,8 +26,6 @@ begin
   select public_token into v_token from polls where id = v_poll;
 
   v_view := open_poll_view(v_token);
-  perform tests.assert_eq('the link names who made the poll',
-    v_view -> 'poll' ->> 'created_by_email', 'creator@example.com');
 
   -- No result yet, and therefore no election run to find one. A null here is
   -- what keeps the live refresh cheap: both pages re-read this every few
@@ -52,8 +53,12 @@ begin
     (v_view ->> 'results_available')::boolean, true);
   perform tests.assert_eq('and the link names what won',
     v_view ->> 'winner_name', 'Dune');
-  perform tests.assert_eq('naming the creator all the while',
-    v_view -> 'poll' ->> 'created_by_email', 'creator@example.com');
+
+  -- The one part of the shared heading this page leaves out. Every address
+  -- the app displays is displayed to somebody already in the poll, and a
+  -- share link has no such boundary.
+  perform tests.assert_null('but never who made the poll',
+    v_view -> 'poll' ->> 'created_by_email');
 
   -- The same name the signed-in badge gets, from the same election: two
   -- readers of one poll must never be told different things about it.
