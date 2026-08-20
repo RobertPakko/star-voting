@@ -102,11 +102,6 @@ CREATE OR REPLACE FUNCTION "public"."add_suggested_option"("p_poll" "public"."po
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-declare
-  v_name text := nullif(trim(coalesce(p_name, '')), '');
-  v_description text := nullif(trim(coalesce(p_description, '')), '');
-  v_next int;
-  v_count int;
 begin
   if not p_poll.solicit_options then
     raise exception 'The options for this poll were set when it was created';
@@ -120,43 +115,7 @@ begin
     raise exception 'The options for this poll are settled and voting has started';
   end if;
 
-  if v_name is null then
-    raise exception 'Give the option a name';
-  end if;
-
-  -- Lengths are capped here and nowhere else, because this is the one field
-  -- in the app a whole group can write to rather than the poll's creator
-  -- alone. Neither limit is near what a real suggestion needs: a name is a
-  -- label on a ballot, and a description is a couple of lines under it.
-  if length(v_name) > 100 then
-    raise exception 'That option name is too long';
-  end if;
-
-  if length(v_description) > 500 then
-    raise exception 'That description is too long';
-  end if;
-
-  if exists (
-    select 1 from candidates c
-    where c.poll_id = p_poll.id and lower(c.name) = lower(v_name)
-  ) then
-    raise exception '"%" has already been suggested', v_name;
-  end if;
-
-  select count(*)::int, coalesce(max(sort_order), -1) + 1
-  into v_count, v_next
-  from candidates where poll_id = p_poll.id;
-
-  -- A ballot is a list somebody has to read to the end before scoring any of
-  -- it, and a shared list with nothing stopping it grows until nobody does.
-  if v_count >= 50 then
-    raise exception 'This poll already has as many options as it can hold';
-  end if;
-
-  -- Arrival order, which is the order everyone watching the page has been
-  -- reading the list in already.
-  insert into candidates (poll_id, name, description, sort_order)
-  values (p_poll.id, v_name, v_description, v_next);
+  perform insert_option(p_poll, p_name, p_description);
 end;
 $$;
 
@@ -335,6 +294,44 @@ $_$;
 ALTER FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+begin
+  select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
+
+  -- The same 'not found' a poll that exists but isn't yours gets everywhere
+  -- else: whether a given id is a real poll is not something an outsider
+  -- needs to learn.
+  if not found then
+    raise exception 'Poll not found';
+  end if;
+
+  if v_poll.closed_at is not null then
+    raise exception 'This poll has been closed';
+  end if;
+
+  -- The trigger says this too, and would refuse the insert on its own. Saying
+  -- it here is what makes the message the one the creator can act on.
+  if exists (select 1 from ballots where poll_id = p_poll_id) then
+    raise exception 'Cannot change the options of a poll that already has votes';
+  end if;
+
+  perform insert_option(v_poll, p_name, p_description);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") IS 'Adds an option to the creator''s own poll while it still has no votes. The window is "no ballots" and nothing else; where the options came from does not enter into it.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."finalize_options"("p_poll_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -484,7 +481,9 @@ CREATE OR REPLACE FUNCTION "public"."guard_options_frozen"() RETURNS "trigger"
     SET "search_path" TO 'public'
     AS $$
 declare
+  v_poll polls;
   v_poll_id uuid;
+  v_remaining int;
 begin
   if tg_op = 'DELETE' then
     v_poll_id := old.poll_id;
@@ -492,9 +491,11 @@ begin
     v_poll_id := new.poll_id;
   end if;
 
+  select * into v_poll from polls where id = v_poll_id;
+
   -- Parent poll already gone => this is a cascade from deleting the poll
   -- itself, which is allowed.
-  if not exists (select 1 from polls where id = v_poll_id) then
+  if not found then
     if tg_op = 'DELETE' then return old; else return new; end if;
   end if;
 
@@ -502,12 +503,85 @@ begin
     raise exception 'Cannot change the options of a poll that already has votes';
   end if;
 
-  if tg_op = 'DELETE' then return old; else return new; end if;
+  if tg_op = 'DELETE' then
+    -- Only once the list is a ballot. While it is still being collected there
+    -- is a later checkpoint -- finalize_options -- and pruning back to one
+    -- option, or to none, is a normal thing to do on the way there.
+    if not (v_poll.solicit_options and v_poll.options_finalized_at is null) then
+      select count(*)::int into v_remaining
+      from candidates where poll_id = v_poll_id and id <> old.id;
+
+      if v_remaining < 2 then
+        raise exception 'A poll needs at least two options';
+      end if;
+    end if;
+
+    return old;
+  end if;
+
+  return new;
 end;
 $$;
 
 
 ALTER FUNCTION "public"."guard_options_frozen"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_name text := nullif(trim(coalesce(p_name, '')), '');
+  v_description text := nullif(trim(coalesce(p_description, '')), '');
+  v_next int;
+  v_count int;
+begin
+  if v_name is null then
+    raise exception 'Give the option a name';
+  end if;
+
+  -- A name is a label on a ballot and a description is a couple of lines
+  -- under it. Neither cap is near what a real option needs; they are here
+  -- because the suggestion path lets a whole group write to this table.
+  if length(v_name) > 100 then
+    raise exception 'That option name is too long';
+  end if;
+
+  if length(v_description) > 500 then
+    raise exception 'That description is too long';
+  end if;
+
+  if exists (
+    select 1 from candidates c
+    where c.poll_id = p_poll.id and lower(c.name) = lower(v_name)
+  ) then
+    raise exception '"%" is already on the list', v_name;
+  end if;
+
+  select count(*)::int, coalesce(max(sort_order), -1) + 1
+  into v_count, v_next
+  from candidates where poll_id = p_poll.id;
+
+  -- A ballot is a list somebody has to read to the end before scoring any of
+  -- it, and a shared list with nothing stopping it grows until nobody does.
+  if v_count >= 50 then
+    raise exception 'This poll already has as many options as it can hold';
+  end if;
+
+  -- Arrival order, which is the order everyone watching the page has been
+  -- reading the list in already.
+  insert into candidates (poll_id, name, description, sort_order)
+  values (p_poll.id, v_name, v_description, v_next);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") IS 'The field rules for one option -- name, description, duplicates, the 50-option ceiling -- shared by the suggestion path and the creator''s own. Internal: the caller has already decided it may write to this poll.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."is_invited_to_poll"("p_poll_id" "uuid") RETURNS boolean
@@ -2295,6 +2369,11 @@ GRANT ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "
 
 
 
+REVOKE ALL ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."finalize_options"("p_poll_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."finalize_options"("p_poll_id" "uuid") TO "authenticated";
 
@@ -2302,6 +2381,10 @@ GRANT ALL ON FUNCTION "public"."finalize_options"("p_poll_id" "uuid") TO "authen
 
 REVOKE ALL ON FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") FROM PUBLIC;
 
 
 
