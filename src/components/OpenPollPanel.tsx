@@ -177,6 +177,17 @@ function OpenBallot({
 }) {
   const [name, setName] = useState('')
   const [values, setValues] = useState<Record<string, number>>({})
+
+  function setScore(optionId: string, score: number) {
+    // Mantine's Rating only applies allowClear (re-tap-to-zero) on the click
+    // path; on touch it calls onChange straight from touch coordinates and
+    // suppresses the click that would carry the clear logic. Reimplement the
+    // clear here so tapping the already-selected star still zeroes it out.
+    setValues((prev) => ({
+      ...prev,
+      [optionId]: score !== 0 && (prev[optionId] ?? 0) === score ? 0 : score,
+    }))
+  }
   const [submitting, setSubmitting] = useState(false)
   // The name is the one thing on this ballot that can be wrong, so it is
   // marked on the box rather than as a line above the submit button, where
@@ -268,7 +279,7 @@ function OpenBallot({
               count={5}
               allowClear
               value={values[option.id] ?? 0}
-              onChange={(v) => setValues((prev) => ({ ...prev, [option.id]: v }))}
+              onChange={(v) => setScore(option.id, v)}
               onPointerDown={releaseNameFocus}
             />
           </Group>
