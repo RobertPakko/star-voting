@@ -49,9 +49,15 @@ export function OpenPollPanel({
     return (
       <CollectOptions
         source={{ kind: 'token', token }}
-        pollId={view.poll.id}
         options={view.options}
         isCreator={isCreator}
+        footer={
+          <Text size="sm" c="dimmed">
+            {isCreator
+              ? 'Nobody can vote while the list is still growing. Open the poll from Manage poll below once the options are settled.'
+              : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
+          </Text>
+        }
         onChanged={onChanged}
       />
     )

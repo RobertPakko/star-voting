@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Card, Group, Modal, Stack, Text, Title } from '@mantine/core'
+import { Button, Card, Group, Modal, Stack, Text, Title, Tooltip } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
@@ -9,9 +9,12 @@ import { ShareLink } from './ShareLink'
 import type { Poll, PollStatus } from '../lib/types'
 
 /**
- * Creator-only lifecycle controls: close voting early, and delete the poll.
- * The invitee list lives in <Respondents> now, because on a poll that shows
- * respondents it isn't creator-only any more.
+ * Creator-only lifecycle controls: everything the creator does to the *poll*,
+ * in one block. Open it for voting, close voting early, correct the options,
+ * duplicate it, clear its votes, delete it.
+ *
+ * The invitee list is not here — it lives in <Respondents>, because on a poll
+ * that shows respondents it isn't creator-only any more.
  *
  * The share link lives here rather than beside the ballot: handing the poll
  * out is something the creator does to the poll, not something a voter needs
@@ -22,14 +25,29 @@ import type { Poll, PollStatus } from '../lib/types'
  * Closing exists so a single person who never votes can't freeze the
  * results permanently and for open polls it's the only way results are
  * ever revealed, since there is no roster to complete.
+ *
+ * Every button that changes the poll confirms in a modal first, and the modal
+ * is where what it will do is spelled out. None of them carries a paragraph
+ * of explanation out here beside it: the block would be unreadable, and the
+ * sentence anybody actually needs is the one in front of them at the moment
+ * they are deciding.
  */
 export function CreatorControls({
   poll,
   status,
+  optionCount,
+  editingOptions,
+  onEditOptions,
   onChange,
 }: {
   poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token'>
   status: PollStatus
+  /** How many options the poll holds: the floor "Open poll" has to clear. */
+  optionCount: number
+  /** Whether the page is currently showing the option list to be corrected. */
+  editingOptions: boolean
+  /** Show or hide that list; the page owns it, since it replaces the ballot. */
+  onEditOptions: (editing: boolean) => void
   onChange: () => void
 }) {
   const pollId = poll.id
@@ -39,6 +57,7 @@ export function CreatorControls({
   const [deleteOpened, deleteModal] = useDisclosure(false)
   const [closeOpened, closeModal] = useDisclosure(false)
   const [resetOpened, resetModal] = useDisclosure(false)
+  const [openOpened, openModal] = useDisclosure(false)
 
   async function resetPoll() {
     setError(null)
@@ -57,6 +76,21 @@ export function CreatorControls({
     // lib/settled.ts for what that cache does and does not promise.
     forgetPoll(pollId, poll.public_token)
     notifications.show({ message: 'Votes cleared', color: 'green' })
+    onChange()
+  }
+
+  async function openPoll() {
+    setError(null)
+    setBusy(true)
+    const { error: rpcError } = await supabase.rpc('finalize_options', { p_poll_id: pollId })
+    setBusy(false)
+    openModal.close()
+
+    if (rpcError) {
+      setError(rpcError.message)
+      return
+    }
+    notifications.show({ message: 'Voting is open', color: 'green' })
     onChange()
   }
 
@@ -95,6 +129,15 @@ export function CreatorControls({
   // Nothing to clear on a fresh poll, but a closed one is worth offering
   // even with no votes, since resetting is the only way to reopen it.
   const canReset = status.voted_count > 0 || status.is_closed
+  // Ending the collecting stage, and the floor it has to clear: the same two
+  // options `create_poll` demands of a poll whose creator wrote the list.
+  const canOpen = status.soliciting && !status.is_closed
+  const enoughToOpen = optionCount >= 2
+  // Correcting a list that is already a ballot, which is a different thing
+  // from collecting one and is offered on exactly the terms the database
+  // allows it: the creator's poll, open, and nobody has voted. See
+  // 0028_creator_edits_options.sql.
+  const canEditOptions = !status.soliciting && !status.is_closed && status.voted_count === 0
   // Open polls have no invite list, so invited_count is 0 and there is
   // nobody we can say we're cutting off.
   const pending = Math.max(0, status.invited_count - status.voted_count)
@@ -113,6 +156,27 @@ export function CreatorControls({
         )}
 
         <Group gap="sm" wrap="wrap">
+          {canOpen && (
+            <Tooltip label="Add at least two options first" disabled={enoughToOpen} withArrow>
+              {/* A disabled button fires no pointer events of its own, so the
+                  reason it is disabled needs something around it that does. */}
+              <span>
+                <Button
+                  variant="light"
+                  color="orange"
+                  disabled={!enoughToOpen}
+                  onClick={openModal.open}
+                >
+                  Open poll
+                </Button>
+              </span>
+            </Tooltip>
+          )}
+          {canEditOptions && (
+            <Button variant="light" onClick={() => onEditOptions(!editingOptions)}>
+              {editingOptions ? 'Done editing options' : 'Edit options'}
+            </Button>
+          )}
           {canClose && (
             <Button variant="light" color="orange" onClick={closeModal.open}>
               Close voting
@@ -134,6 +198,31 @@ export function CreatorControls({
         </Group>
       </Stack>
 
+      <Modal
+        opened={openOpened}
+        onClose={openModal.close}
+        title="Open this poll for voting?"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            The {optionCount} current options become the ballot and voting opens.
+          </Text>
+          <Text size="sm" c="dimmed">
+            Nobody can suggest an option after this. You can still correct the list yourself, up
+            until the first vote comes in.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={openModal.close}>
+              Cancel
+            </Button>
+            <Button color="orange" onClick={openPoll} loading={busy}>
+              Open poll
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
       <Modal opened={closeOpened} onClose={closeModal.close} title="Close voting?" centered>
         <Stack gap="md">
           <Text size="sm">
@@ -143,7 +232,7 @@ export function CreatorControls({
               ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
           </Text>
           <Text size="sm" c="dimmed">
-            he only way to reopen the poll is to reset the votes.
+            The only way to reopen the poll is to reset the votes.
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal.close}>

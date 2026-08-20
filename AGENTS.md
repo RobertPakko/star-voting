@@ -247,8 +247,10 @@ that the code still does whatever it currently does.
 ### What it does and does not cover
 
 Covered: the score round, finalist selection, both score-round tie-break rules,
-the runoff and its tie-breaks, the genuine-tie result, the full ranking, and the
-`create_poll` / `submit_ballot` write path the seeding runs through.
+the runoff and its tie-breaks, the genuine-tie result, the full ranking, the
+`create_poll` / `submit_ballot` write path the seeding runs through, and the
+two windows in which a poll's option list may move — the collecting stage, and
+the creator's own corrections before the first vote.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. The shim in
 `test/sql/shim.sql` stands in for Supabase's `auth` schema with a one-row
@@ -412,8 +414,8 @@ Each poll fixes four things when it is created, and none can be changed
 afterwards: `authenticated` has no `UPDATE` grant on the `polls` table at all.
 A poll's terms are settled the moment it exists. Everything that *does* move
 afterwards moves through a `SECURITY DEFINER` function with its own rules —
-`close_poll`, `reset_poll`, `finalize_options` — never through a write from the
-client.
+`close_poll`, `reset_poll`, `finalize_options`, `creator_add_option` — never
+through a write from the client.
 
 Three of the four are surfaced by `PollTags` (`src/components/PollTags.tsx`)
 — always those three, always in the same order and the same words, whichever
@@ -454,15 +456,37 @@ badge takes the numbers and builds its own label rather than being handed one.
 ### The poll's high-level details
 
 **One poll looks like one thing wherever it is read.** The card on the list,
-the poll's own page and the public voting page share a header: where the poll
-has got to, in a badge beside its title, then four badges saying what kind of
-poll it is — **invite only/open link**, then respondents shown/hidden, then
-ballots published/private, then how many have answered. The three settings
-run in the order `CreatePoll` asks for them, so the form that sets a poll's
-terms and the row that reports them tell one story in one order; the count
-comes last of the four because it is the only one that is not a setting at
-all. Two screens describing one poll differently is two things to learn about
-a poll instead of one.
+the poll's own page and the public voting page share a heading, and share it
+literally: `PollHeading` (`src/components/PollHeading.tsx`) is the one
+component all three render, because three hand-written copies of one layout is
+three things to keep in step and they had already fallen out of it. Four
+parts, always in this order:
+
+1. the **title**, with where the poll has got to in a badge beside it;
+2. the poll's **description**, when it has one;
+3. **who created it** — *Created by you*, or their email address;
+4. the four badges saying **what kind of poll it is** — **invite only/open
+   link**, then respondents shown/hidden, then ballots published/private, then
+   how many have answered.
+
+The order is not a preference. A description is the creator's own words about
+the poll and belongs with the title it extends, above the row of app-written
+badges rather than stranded under it. The three settings inside the row run in
+the order `CreatePoll` asks for them, so the form that sets a poll's terms and
+the row that reports them tell one story in one order; the count comes last of
+the four because it is the only one that is not a setting at all. Two screens
+describing one poll differently is two things to learn about a poll instead of
+one.
+
+`compact` is the list card — the same four parts at smaller sizes, because a
+page title inside a link among nine others shouts.
+
+**The public voting page leaves two of the four blank, and both times because
+it answers to no account.** No winner's name in the state badge, which needs
+`poll_winners()` (see below); and no creator, because a share link goes
+wherever it is forwarded and the creator's email address is not something it
+should hand out. `open_poll_view()` does not return that column at all, so
+there is nothing there to leak by accident.
 
 Three decisions hold that shape:
 
@@ -783,7 +807,9 @@ list**, and every rule under it is holding that up:
   minimum — the same floor `create_poll` puts on a poll whose creator wrote the
   options, applied at the point the list becomes a ballot instead. A soliciting
   poll may therefore be created with no options at all; seeding a few is a head
-  start, not a requirement.
+  start, not a requirement. The button that does it is **Open poll**, and it is
+  in `CreatorControls` with the rest of the lifecycle — see [Creator
+  controls](#creator-controls).
 - **Everyone suggests through a function, the creator included.** An invitee
   has no `INSERT` grant on `candidates` and `anon` has no grant on any table, so
   `suggest_option` (invite polls) and `open_poll_suggest_option` (open polls)
@@ -805,15 +831,64 @@ score honestly.
 The stage is surfaced by `CollectOptions` (`src/components/CollectOptions.tsx`)
 in place of the ballot, on all three pages that can carry one. Everyone sees
 the same list and the same box to add to it; the creator additionally gets a
-`×` on each row and the button that ends the stage. Both of those sit beside
-the list they act on rather than in `CreatorControls`, the same way the invite
-controls sit inside `Respondents` — `CreatorControls` holds what the creator
-does to the *poll*.
+`×` on each row, which sits beside the list it acts on rather than in
+`CreatorControls`, the same way the invite controls sit inside `Respondents`.
+Ending the stage is the other way round — that is something the creator does
+to the *poll*, so **Open poll** is in `CreatorControls`.
 
 **Reset votes leaves a finalized poll finalized.** Resetting promises the same
 poll with its votes cleared, and the list everyone was shown is part of the
 same poll. A poll closed while it was still collecting does reopen collecting,
 because that is the stage it was in.
+
+### The creator can correct the options until somebody votes
+
+Separate from where the options came from, and deliberately blind to it: a
+poll's creator can add and remove options for as long as the poll has **no
+ballots in it**. Before that existed, a typo in an option was permanent the
+moment the ballot was — the fix was to duplicate the poll and send a new link
+out, which costs everyone who already had the old one.
+
+The window is exactly "no ballots", and nothing else enters into it. Not
+`solicit_options`, which says where the list came from and is frozen either
+way; not `options_finalized_at`, which is a stage. What the option list
+promises is that **everyone who votes scores the same list**, and a poll
+nobody has voted in has nobody who has scored anything — so changing it there
+changes no answer anybody has given. `reset_poll` reopens the window, on the
+same reasoning: everyone is being asked to vote again regardless.
+
+`guard_options_frozen` has always drawn that line and still does, on every
+write to `candidates` from any path at all. What `0028` added on top:
+
+- **`creator_add_option()`**, because `authenticated` has no `INSERT` grant on
+  `candidates` and `suggest_option` only serves a poll that is still
+  collecting. Removing one needed nothing new: the `candidates_delete` policy
+  already allowed the creator and the trigger already bounded it.
+- **`insert_option()`**, the field rules for one option — name, description,
+  duplicates, the 50-option ceiling — lifted out of `add_suggested_option` so
+  both ways in apply exactly the same ones. Granted to nobody: both callers
+  are `SECURITY DEFINER` and reach it having already decided this caller may
+  write to this poll.
+- **The two-option floor, on the delete.** A list still being collected may be
+  pruned to nothing, because `finalize_options` applies the floor when it
+  becomes a ballot; a list that already *is* a ballot has no later checkpoint,
+  so the floor is applied to the delete itself. Otherwise correcting an option
+  list could leave a live poll with one option and no election in it.
+
+The creator reaches it from **Edit options** in `CreatorControls`, and it
+replaces the ballot while it is open — they are two readings of one list, and
+a poll with no votes in it has no ballot anybody is part-way through. A vote
+arriving while it is open closes it and puts the ballot back.
+
+**What it does not promise is that nobody is looking at the old list.**
+Someone with the ballot already on screen picks the correction up on the next
+live tick, and a submit inside that window is refused rather than filed:
+`submit_ballot` and `open_poll_submit` both demand a score for every option,
+and both reject an id that is not on the poll — so a stale ballot fails
+whether the list got longer, got shorter, or had one option swapped for
+another at the same length. Being told to try again is the safe half of that
+trade; the unsafe half would be a ballot silently scoring an option nobody
+showed the voter.
 
 ### What a form checks before it sends
 
@@ -855,12 +930,16 @@ is being told which box is wrong instead of being told no.
 
 ### Creator controls
 
-On the poll page, the creator gets:
+On the poll page, the creator gets a **Manage poll** block holding everything
+they do to the *poll*:
 
-- **Open for voting** — on a poll collecting its options, and only there:
-  finalizes the list and lets people vote. One-way, and offered from the option
-  list itself rather than from this block.
-- **Close voting now** — reveals results using the votes cast so far. One-way.
+- **Open poll** — on a poll collecting its options, and only there: finalizes
+  the list and lets people vote. One-way. Disabled until the list has the two
+  options an election needs, with the reason on a tooltip.
+- **Edit options** — while the poll has no votes in it: swaps the ballot for
+  the option list so it can be corrected. See [The creator can correct the
+  options until somebody votes](#the-creator-can-correct-the-options-until-somebody-votes).
+- **Close voting** — reveals results using the votes cast so far. One-way.
 - **Duplicate** — opens the create form prefilled from this poll (options,
   invitees, all four settings). Nothing is created until submit, so the copy
   can be edited first, and the original is untouched.
@@ -869,7 +948,12 @@ On the poll page, the creator gets:
   and they aren't told the poll was reset.
 - **Delete poll** — removes the poll and every vote cast, permanently.
 
-Reset and delete both confirm first.
+Open, close, reset and delete all confirm in a modal first, and **the modal is
+where what the button will do is spelled out** — none of them carries a
+paragraph of explanation out beside it. A block of six buttons each with its
+own sentence is a block nobody reads, and the sentence that matters is the one
+in front of you at the moment you are deciding, not the one you scrolled past
+on the way to the button.
 
 The **share link** sits in the same block (`src/components/ShareLink.tsx`),
 with **Copy** and a **QR code** beside it. Handing the poll out is something

@@ -12,7 +12,7 @@ import { CollectOptions } from '../components/CollectOptions'
 import { CreatorControls } from '../components/CreatorControls'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { OptionDescription } from '../components/OptionDescription'
-import { PollStateBadge, PollTags } from '../components/PollTags'
+import { PollHeading } from '../components/PollHeading'
 import { RetentionNote } from '../components/RetentionNote'
 import { PollPageSkeleton } from '../components/Skeletons'
 import { countBadge } from '../lib/badgeColors'
@@ -42,6 +42,12 @@ export function PollDetail() {
   // Two timers would drift, and a roster a few seconds ahead of the count
   // sitting above it reads as a bug rather than as a refresh in flight.
   const [liveTick, setLiveTick] = useState(0)
+  // Whether the creator is correcting the option list, which stands in for
+  // the ballot while they are. Owned here rather than in CreatorControls
+  // because it is this page that swaps one for the other; the button that
+  // sets it lives down there with the rest of what the creator does to the
+  // poll.
+  const [editingOptions, setEditingOptions] = useState(false)
 
   const load = useCallback(async () => {
     if (!pollId) return
@@ -84,18 +90,18 @@ export function PollDetail() {
     load()
   }, [load])
 
-  // A poll that collected its own options is the one poll whose option list
-  // moves while somebody is watching it, so it is the one whose page
-  // re-reads the list. Open polls get theirs inside open_poll_view.
+  // Whether this page has to re-read the option list on the live tick. Open
+  // polls get theirs inside open_poll_view, so this is about invite polls.
   //
-  // Until the first vote, not just until the list is finalized: that is a
-  // hair wider than the collecting stage, and it is what closes the gap at
-  // the moment the stage ends. A suggestion landing between the last tick
-  // and the creator finalizing would otherwise leave a voter scoring a
-  // ballot one option short of the one submit_ballot is expecting.
+  // The window is "no votes yet", which is exactly the window the database
+  // lets the list move in: a poll collecting its options takes suggestions
+  // from everyone in it, and a poll past that stage still takes corrections
+  // from its creator, who may be making them in another tab. It is a hair
+  // wider than either stage on purpose — a suggestion landing between the
+  // last tick and the creator opening the poll would otherwise leave a voter
+  // scoring a ballot one option short of the one submit_ballot expects.
   // guard_options_frozen takes over from the first ballot on.
-  const optionsMayMove =
-    poll?.mode === 'invite' && poll?.solicit_options === true && status?.voted_count === 0
+  const optionsMayMove = poll?.mode === 'invite' && status?.voted_count === 0
 
   // The live tick, deliberately narrower than load(): a poll's title and
   // settings are frozen at creation, so what can change while someone
@@ -150,6 +156,27 @@ export function PollDetail() {
     load()
   }, [load])
 
+  // Whether the creator may correct the option list as things stand: their
+  // own poll, past the collecting stage, still open, and nobody has voted.
+  // The same terms the database allows it on; see
+  // 0028_creator_edits_options.sql.
+  //
+  // Computed up here, above the early returns, so the effect below can watch
+  // it. A vote arriving while the editor is open has to put the ballot back,
+  // and closing the editor rather than merely hiding it is what keeps it
+  // from springing open again if those votes are later cleared.
+  const editable =
+    !!poll &&
+    !!status &&
+    poll.created_by === session?.user.id &&
+    !status.soliciting &&
+    !status.is_closed &&
+    status.voted_count === 0
+
+  useEffect(() => {
+    if (!editable) setEditingOptions(false)
+  }, [editable])
+
   // The shape of the page that is coming: a title, the poll's terms, and
   // the cards of a ballot. See the note in Skeletons.tsx.
   if (loading) return <PollPageSkeleton />
@@ -164,48 +191,66 @@ export function PollDetail() {
 
   const isCreator = poll.created_by === session?.user.id
   const isOpen = poll.mode === 'open'
+  // One option list for this page. An open poll's arrives inside its view,
+  // which is what its ballot is scored from; every other poll's is the table
+  // read directly. The heading counts it and the option editor edits it, and
+  // neither should have to know which poll it is looking at.
+  const optionList = isOpen ? (view?.options ?? []) : options
 
   return (
     <Stack maw={640} mx="auto" gap="lg">
-      {/* The same shape a poll wears on the list it was opened from: where
-          it has got to beside its title, then its terms in the same four
-          badges. Two screens describing one poll differently is two things
-          to learn about a poll instead of one. */}
-      <Stack gap={8}>
-        <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
-          {/* Wraps rather than squeezing the badge beside it, see
-              PollStateBadge. */}
-          <Title order={2} style={{ minWidth: 0, wordBreak: 'break-word' }}>
-            {poll.title}
-          </Title>
-          <PollStateBadge
-            soliciting={status.soliciting}
-            resultsAvailable={status.results_available}
-            closed={status.is_closed}
-            winner={winner}
-          />
-        </Group>
-        {poll.description && <Text c="dimmed">{poll.description}</Text>}
-        {/* The terms of the poll, at the top, whichever way each is set;
-            people arrive here from a link with no other context. */}
-        <PollTags
-          mode={poll.mode}
-          showVoters={poll.show_voters}
-          showBallots={poll.show_ballots}
-          turnout={{
-            soliciting: status.soliciting,
-            mode: poll.mode,
-            votedCount: status.voted_count,
-            invitedCount: status.invited_count,
-            optionCount: options.length,
-          }}
-        />
-      </Stack>
+      {/* The same heading a poll wears on the list it was opened from, down
+          to who created it and the order the parts come in; see
+          PollHeading. */}
+      <PollHeading
+        title={poll.title}
+        description={poll.description}
+        createdBy={isCreator ? 'you' : poll.created_by_email}
+        mode={poll.mode}
+        showVoters={poll.show_voters}
+        showBallots={poll.show_ballots}
+        turnout={{
+          soliciting: status.soliciting,
+          mode: poll.mode,
+          votedCount: status.voted_count,
+          invitedCount: status.invited_count,
+          optionCount: optionList.length,
+        }}
+        state={{
+          soliciting: status.soliciting,
+          resultsAvailable: status.results_available,
+          closed: status.is_closed,
+          winner,
+        }}
+      />
 
-      {/* Open polls are voted through the same anon RPCs the public route
-          uses, so the creator votes in their own poll exactly as everyone
-          else does; one code path, one set of rules. */}
-      {isOpen ? (
+      {/* The creator's correction to an option list that is already a ballot,
+          in place of that ballot while it is open. It replaces the ballot
+          rather than sitting beside it because they are two readings of one
+          list, and a poll with no votes in it has no ballot anybody is
+          part-way through. See 0028_creator_edits_options.sql for when this
+          is allowed at all. */}
+      {editingOptions && editable ? (
+        <CollectOptions
+          source={{ kind: 'creator', pollId: poll.id }}
+          options={optionList}
+          isCreator
+          footer={
+            <Group justify="space-between" wrap="wrap" gap="sm">
+              <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
+                Nobody has voted yet, so the list is still yours to fix. The first vote settles it.
+              </Text>
+              <Button variant="light" onClick={() => setEditingOptions(false)}>
+                Done
+              </Button>
+            </Group>
+          }
+          onChanged={reloadAll}
+        />
+      ) : /* Open polls are voted through the same anon RPCs the public route
+             uses, so the creator votes in their own poll exactly as everyone
+             else does; one code path, one set of rules. */
+      isOpen ? (
         view && (
           // Keyed so a close or a reset remounts it; see where refreshKey
           // is declared. A live refresh only replaces the view prop, which
@@ -223,9 +268,15 @@ export function PollDetail() {
            the creator decides when it becomes a ballot. */
         <CollectOptions
           source={{ kind: 'poll', pollId: poll.id }}
-          pollId={poll.id}
           options={options}
           isCreator={isCreator}
+          footer={
+            <Text size="sm" c="dimmed">
+              {isCreator
+                ? 'Nobody can vote while the list is still growing. Open the poll from Manage poll below once the options are settled.'
+                : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
+            </Text>
+          }
           onChanged={load}
         />
       ) : status.results_available ? (
@@ -242,7 +293,10 @@ export function PollDetail() {
       ) : status.voted ? (
         <Waiting status={status} />
       ) : (
-        <VoteForm poll={poll} options={options} onVoted={load} />
+        /* Keyed like the open-poll panel, and for the same reason: a
+           correction to the option list invalidates a half-filled ballot,
+           and remounting is what discards it. */
+        <VoteForm key={refreshKey} poll={poll} options={options} onVoted={load} />
       )}
 
       {/* Held back until you have voted, for the reasons set out where the
@@ -268,7 +322,16 @@ export function PollDetail() {
       )}
 
       {/* The share link is inside Manage poll now; see the note there. */}
-      {isCreator && <CreatorControls poll={poll} status={status} onChange={reloadAll} />}
+      {isCreator && (
+        <CreatorControls
+          poll={poll}
+          status={status}
+          optionCount={optionList.length}
+          editingOptions={editingOptions}
+          onEditOptions={setEditingOptions}
+          onChange={reloadAll}
+        />
+      )}
 
       {/* Last thing on the page, for everyone who can see the poll rather
           than its creator alone: a voter's ballot is in here too, and the

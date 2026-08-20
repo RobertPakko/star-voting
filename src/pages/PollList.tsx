@@ -4,7 +4,7 @@ import { Button, Card, Group, Pagination, Stack, Text, Title } from '@mantine/co
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
-import { PollStateBadge, PollTags } from '../components/PollTags'
+import { PollHeading } from '../components/PollHeading'
 import { PollListSkeleton } from '../components/Skeletons'
 import { knownWinners, rememberWinner } from '../lib/settled'
 import type { PollListItem } from '../lib/types'
@@ -142,59 +142,30 @@ export function PollList() {
             to={`/polls/${poll.id}`}
             style={{ textDecoration: 'none' }}
           >
-            <Stack gap={4}>
-              {/* Where the poll has got to, on the right of the title: it is
-                  the one thing on the card that is about this poll's own
-                  progress rather than its terms, and the only thing worth
-                  reading before deciding whether to open it. */}
-              <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
-                {/* The side of this row that gives: the badge beside it is
-                    sized to the name it carries, so a title too long for
-                    what is left wraps rather than squeezing it. `minWidth`
-                    lets it wrap past its longest word, which a title with
-                    no spaces in it otherwise would not. */}
-                <Text
-                  fw={600}
-                  c="var(--mantine-color-text)"
-                  style={{ minWidth: 0, wordBreak: 'break-word' }}
-                >
-                  {poll.title}
-                </Text>
-                <PollStateBadge
-                  soliciting={poll.soliciting}
-                  resultsAvailable={poll.results_available}
-                  closed={poll.is_closed}
-                  winner={winners.get(poll.id)}
-                />
-              </Group>
-              {poll.description && (
-                <Text size="sm" c="dimmed">
-                  {poll.description}
-                </Text>
-              )}
-              <Text size="xs" c="dimmed">
-                {poll.created_by === session?.user.id
-                  ? 'Created by you'
-                  : `Created by ${poll.created_by_email}`}
-              </Text>
-
-              {/* The same four badges, in the same order, that the poll's
-                  own page shows above its ballot. */}
-              <div style={{ marginTop: 4 }}>
-                <PollTags
-                  mode={poll.mode}
-                  showVoters={poll.show_voters}
-                  showBallots={poll.show_ballots}
-                  turnout={{
-                    soliciting: poll.soliciting,
-                    mode: poll.mode,
-                    votedCount: poll.voted_count,
-                    invitedCount: poll.invited_count,
-                    optionCount: poll.option_count,
-                  }}
-                />
-              </div>
-            </Stack>
+            {/* The same heading the poll's own page carries, at card size;
+                see PollHeading. */}
+            <PollHeading
+              compact
+              title={poll.title}
+              description={poll.description}
+              createdBy={poll.created_by === session?.user.id ? 'you' : poll.created_by_email}
+              mode={poll.mode}
+              showVoters={poll.show_voters}
+              showBallots={poll.show_ballots}
+              turnout={{
+                soliciting: poll.soliciting,
+                mode: poll.mode,
+                votedCount: poll.voted_count,
+                invitedCount: poll.invited_count,
+                optionCount: poll.option_count,
+              }}
+              state={{
+                soliciting: poll.soliciting,
+                resultsAvailable: poll.results_available,
+                closed: poll.is_closed,
+                winner: winners.get(poll.id),
+              }}
+            />
           </Card>
         ))}
       </Stack>

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Group, Stack, Text, Title } from '@mantine/core'
+import { Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { voterKeyFor } from '../lib/voterKey'
 import { useLiveRefresh } from '../lib/useLiveRefresh'
 import { OpenPollPanel } from '../components/OpenPollPanel'
-import { PollStateBadge, PollTags } from '../components/PollTags'
+import { PollHeading } from '../components/PollHeading'
 import { PollPageSkeleton } from '../components/Skeletons'
 import type { OpenPollView } from '../lib/types'
 
@@ -69,50 +69,44 @@ export function PublicPoll() {
 
   return (
     <Stack gap="lg" maw={720} mx="auto">
-      {/* The same header the signed-in poll page shows, for the same reason
-          it shows it: one poll should not be two different-looking things
-          depending on how you reached it. */}
-      <Stack gap={8}>
-        <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
-          {/* Wraps rather than squeezing the badge beside it, see
-              PollStateBadge. */}
-          <Title order={2} style={{ minWidth: 0, wordBreak: 'break-word' }}>
-            {view.poll.title}
-          </Title>
-          {/* No winner's name here: naming it needs poll_winners(), which is
-              for signed-in readers, and this page has no account behind it.
-              The badge says the results are ready and the tally underneath
-              says what they were; see PollStateBadge on why that state is
-              a real one rather than a fallback. */}
-          <PollStateBadge
-            soliciting={view.soliciting}
-            resultsAvailable={view.results_available}
-            closed={view.is_closed}
-          />
-        </Group>
-        {/* Someone arriving from a shared link has no other context at all,
-            so the terms of the poll are stated here, not just the one that
-            changes what happens to their ballot.
+      {/* The same heading the signed-in poll page and the poll list carry,
+          for the reason PollHeading exists: one poll should not be two
+          different-looking things depending on how you reached it.
 
-            The count included, and before this reader has voted. What a poll
-            keeps from its voters is how it is *going*, the standings, which
-            stay sealed until the results unlock, and how many have answered
-            is not that. It names nobody, it says nothing about any ballot,
-            and the roster below still waits. */}
-        <PollTags
-          mode={view.poll.mode}
-          showVoters={view.poll.show_voters}
-          showBallots={view.poll.show_ballots}
-          turnout={{
-            soliciting: view.soliciting,
-            mode: view.poll.mode,
-            votedCount: view.voted_count,
-            invitedCount: 0,
-            optionCount: view.options.length,
-          }}
-        />
-        {view.poll.description && <Text c="dimmed">{view.poll.description}</Text>}
-      </Stack>
+          Two of its parts are left empty here, and both because this page
+          answers to no account. No winner's name: naming it needs
+          poll_winners(), which is for signed-in readers, so the badge says
+          the results are ready and the tally underneath says what they were.
+          And no creator: a share link goes wherever it is forwarded, and the
+          creator's email address is not something it should hand out.
+
+          Someone arriving from a shared link has no other context at all, so
+          the terms of the poll are stated in full, not just the one that
+          changes what happens to their ballot. The count included, and before
+          this reader has voted: what a poll keeps from its voters is how it
+          is *going*, the standings, which stay sealed until the results
+          unlock, and how many have answered is not that. It names nobody, it
+          says nothing about any ballot, and the roster below still waits. */}
+      <PollHeading
+        title={view.poll.title}
+        description={view.poll.description}
+        createdBy={null}
+        mode={view.poll.mode}
+        showVoters={view.poll.show_voters}
+        showBallots={view.poll.show_ballots}
+        turnout={{
+          soliciting: view.soliciting,
+          mode: view.poll.mode,
+          votedCount: view.voted_count,
+          invitedCount: 0,
+          optionCount: view.options.length,
+        }}
+        state={{
+          soliciting: view.soliciting,
+          resultsAvailable: view.results_available,
+          closed: view.is_closed,
+        }}
+      />
 
       <OpenPollPanel token={token} view={view} onChanged={load} />
     </Stack>
