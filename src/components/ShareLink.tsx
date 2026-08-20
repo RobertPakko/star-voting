@@ -1,4 +1,4 @@
-import { Button, CopyButton, Group, Stack, Text, TextInput } from '@mantine/core'
+import { Button, CopyButton, Group, Stack, TextInput } from '@mantine/core'
 import type { Poll } from '../lib/types'
 import { shareLinkFor } from '../lib/shareLink'
 import { ShareQr } from './ShareQr'
@@ -25,13 +25,15 @@ export function ShareLink({
       <Group gap="xs" wrap="nowrap" align="flex-end">
         <TextInput
           label="Share this poll"
-          description={poll.closed_at
-          ? isOpen
-            ? 'Anyone with this link can view the results'
-            : 'Only invited people can view the results; they must sign in to do so'
-          : isOpen
-          ? 'Anyone with this link can vote without signing in'
-          : 'Only invited people can vote; they must sign in to do so'}
+          description={
+            poll.closed_at
+              ? isOpen
+                ? 'Anyone with this link can view the results'
+                : 'Only invited people can view the results; they must sign in to do so'
+              : isOpen
+                ? 'Anyone with this link can vote without signing in'
+                : 'Only invited people can vote; they must sign in to do so'
+          }
           value={url}
           readOnly
           onFocus={(e) => e.currentTarget.select()}

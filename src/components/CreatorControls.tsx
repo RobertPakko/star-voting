@@ -158,7 +158,6 @@ export function CreatorControls({
       <Title order={4}>Manage poll</Title>
       <Card withBorder>
         <Stack gap="xs">
-
           <ShareLink poll={poll} />
 
           {error && (
@@ -221,7 +220,8 @@ export function CreatorControls({
         >
           <Stack gap="md">
             <Text size="sm">
-              Options cannot be changed after votes have been cast. You can either reset the votes and correct the list or duplicate the poll and correct the copy.
+              Options cannot be changed after votes have been cast. You can either reset the votes
+              and correct the list or duplicate the poll and correct the copy.
             </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={frozenModal.close}>
@@ -272,7 +272,8 @@ export function CreatorControls({
         <Modal opened={closeOpened} onClose={closeModal.close} title="Close poll?" centered>
           <Stack gap="md">
             <Text size="sm">
-              The poll will be closed and results will be revealed using the {status.voted_count} current vote
+              The poll will be closed and results will be revealed using the {status.voted_count}{' '}
+              current vote
               {status.voted_count === 1 ? '' : 's'}.
               {pending > 0 &&
                 ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}

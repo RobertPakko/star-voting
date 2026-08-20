@@ -227,7 +227,11 @@ export function Results({
 
                 <Text size="sm" c={tb.resolved_by === 'random' ? 'orange' : undefined}>
                   {tb.resolved_by === 'random'
-                    ? renderAdvancedNames(tb.advanced, 'Still tied after every rule; ', ' advanced by random selection.')
+                    ? renderAdvancedNames(
+                        tb.advanced,
+                        'Still tied after every rule; ',
+                        ' advanced by random selection.',
+                      )
                     : renderAdvancedNames(
                         tb.advanced,
                         '',

@@ -200,7 +200,9 @@ export function PollStateBadge({
       >
         {winner}
       </Badge>
-    ) : (<></>)
+    ) : (
+      <></>
+    )
   }
 
   if (closed) {

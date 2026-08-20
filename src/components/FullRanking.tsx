@@ -113,9 +113,7 @@ function decision(entry: RankingEntry, nameById: Map<string, string>) {
 
   if (runoff.resolved_by === 'unresolved') {
     return (
-      <>
-        Genuinely tied: {voters(runoff.prefers_a)} preferred each, on identical score totals.
-      </>
+      <>Genuinely tied: {voters(runoff.prefers_a)} preferred each, on identical score totals.</>
     )
   }
 
