@@ -273,7 +273,7 @@ export function PollDetail() {
           footer={
             <Text size="sm" c="dimmed">
               {isCreator
-                ? 'Nobody can vote while the list is still growing. Open the poll from Manage poll below once the options are settled.'
+                ? 'Voting hasn’t started. Everyone can add options until you open the poll.'
                 : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
             </Text>
           }
