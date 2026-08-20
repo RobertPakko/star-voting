@@ -49,9 +49,15 @@ export function OpenPollPanel({
     return (
       <CollectOptions
         source={{ kind: 'token', token }}
-        pollId={view.poll.id}
         options={view.options}
         isCreator={isCreator}
+        footer={
+          <Text size="sm" c="dimmed">
+            {isCreator
+              ? 'Nobody can vote while the list is still growing. Open the poll from Manage poll below once the options are settled.'
+              : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
+          </Text>
+        }
         onChanged={onChanged}
       />
     )
@@ -81,7 +87,7 @@ export function OpenPollPanel({
   if (view.results_available) {
     return (
       <Stack gap="lg">
-        <Results source={{ kind: 'token', token }} />
+        <Results source={{ kind: 'token', token }} pollId={view.poll.id} />
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}

@@ -44,7 +44,7 @@ begin
 
   perform tests.assert_raises('the same option cannot be suggested twice',
     format('select suggest_option(%L, %L)', v_poll, 'pizza'),
-    'has already been suggested');
+    'is already on the list');
 
   perform tests.sign_in('stranger@example.com');
   perform tests.assert_raises('somebody outside the poll cannot suggest at all',

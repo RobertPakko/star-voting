@@ -97,6 +97,11 @@ export interface OpenPollView {
     id: string
     title: string
     description: string | null
+    /*
+     * No created_by_email here, alone of the three views of a poll: this one
+     * is read through a share link, which goes wherever it is forwarded, and
+     * open_poll_view does not return the column at all.
+     */
     mode: PollMode
     show_voters: boolean
     show_ballots: boolean

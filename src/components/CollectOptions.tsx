@@ -1,16 +1,6 @@
 import { useState } from 'react'
-import {
-  ActionIcon,
-  Button,
-  Card,
-  Group,
-  Modal,
-  Stack,
-  Text,
-  TextInput,
-  Tooltip,
-} from '@mantine/core'
-import { useDisclosure } from '@mantine/hooks'
+import type { ReactNode } from 'react'
+import { ActionIcon, Button, Card, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
@@ -19,46 +9,64 @@ import { OptionDescription } from './OptionDescription'
 import type { PollOption } from '../lib/types'
 
 /**
- * Which suggestion endpoint to write to. Same split as ResultsSource and
- * BallotsSource, and for the same reason: a session proves the caller belongs
- * to an invite poll, the share token proves it for an open one.
+ * Which endpoint an added option goes through.
+ *
+ * The first two are the suggestion path, and are the same split as
+ * ResultsSource and BallotsSource for the same reason: a session proves the
+ * caller belongs to an invite poll, the share token proves it for an open
+ * one. `creator` is the other path entirely — the poll's own creator
+ * correcting a list that is already a ballot, on a poll nobody has voted in
+ * yet. See 0028_creator_edits_options.sql for why that is allowed and where
+ * the window closes.
  */
-export type OptionsSource = { kind: 'poll'; pollId: string } | { kind: 'token'; token: string }
+export type OptionsSource =
+  | { kind: 'poll'; pollId: string }
+  | { kind: 'token'; token: string }
+  | { kind: 'creator'; pollId: string }
 
 /**
- * A poll that is still collecting its options, in place of the ballot it does
- * not have yet.
+ * A poll's option list, and the box that adds to it.
  *
- * Everyone in the poll sees the same list and the same box to add to it;
- * the creator included, who suggests through the same RPC as everybody else
- * rather than a path of their own. That is the same shape as the creator
- * voting in their own open poll through the anon RPC: one code path, one set
- * of rules, and no way for the creator's list to be built by rules nobody
- * else's is.
+ * It stands in for the ballot on two occasions, and they are not the same
+ * occasion:
+ *
+ *  - a poll **still collecting** its options, which has no ballot yet.
+ *    Everyone in the poll sees this list and this box, the creator included,
+ *    who suggests through the same RPC as everybody else rather than a path
+ *    of their own. That is the same shape as the creator voting in their own
+ *    open poll through the anon RPC: one code path, one set of rules, and no
+ *    way for the creator's list to be built under rules nobody else's is.
+ *  - a poll whose creator is **correcting** a list that is already a ballot,
+ *    which only they see, and only while nobody has voted. That path is
+ *    `source.kind === 'creator'`; see `OptionsSource` above.
  *
  * Suggestions carry no name. Who suggested what would be a third disclosure
  * question on top of "who responded" and "how they voted", and the poll's
  * tags answer neither of those about the option list.
  *
- * Two things are creator-only, and both are about ending the stage rather
- * than taking part in it: pruning the list, and finalizing it. They sit here,
- * beside the list they act on, rather than in `CreatorControls`; the same
- * place the invite controls sit inside `Respondents`, and for the same
- * reason. `CreatorControls` holds what the creator does to the *poll*.
+ * Pruning the list is creator-only either way, and sits here beside the list
+ * it acts on, the same place the invite controls sit inside `Respondents`.
+ * Opening the poll does not: it is what the creator does to the *poll*, so it
+ * is in `CreatorControls` with the rest of the lifecycle, and this component
+ * has nothing to say about when the stage ends.
  */
 export function CollectOptions({
   source,
-  pollId,
   options,
   isCreator,
+  footer,
   onChanged,
 }: {
   source: OptionsSource
-  /** Finalizing is authenticated and by id, whichever way suggestions go in. */
-  pollId: string
   options: PollOption[]
   isCreator: boolean
-  /** An option arrived or left, or the list was finalized: re-read the poll. */
+  /**
+   * What goes under the box: who may still add to this list and until when,
+   * or the way out of the creator's correction. Passed in because the answer
+   * belongs to the page's situation rather than to the list.
+   */
+  footer?: ReactNode
+  /** An option arrived or left: re-read the poll. */
   onChanged: () => void
 }) {
   const [name, setName] = useState('')
@@ -73,10 +81,14 @@ export function CollectOptions({
   const [nameError, setNameError] = useState<string | null>(null)
   const [descriptionError, setDescriptionError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [finalizeOpened, finalizeModal] = useDisclosure(false)
 
-  const enough = options.length >= 2
   const full = options.length >= MAX_OPTIONS
+  // A list that is already a ballot cannot be pruned below what an election
+  // needs; a list still being collected can, because `finalize_options`
+  // applies the floor when it becomes a ballot. The trigger enforces both,
+  // and this only decides whether to offer the button. See
+  // 0028_creator_edits_options.sql.
+  const atFloor = source.kind === 'creator' && options.length <= 2
 
   async function addOption() {
     const trimmed = name.trim()
@@ -102,7 +114,7 @@ export function CollectOptions({
     // Case-insensitive, like the database: two options differing only in
     // case are one option to everybody scoring the ballot.
     if (options.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
-      setNameError(`“${trimmed}” has already been suggested.`)
+      setNameError(`“${trimmed}” is already on the list.`)
       return
     }
     if (trimmedDescription.length > OPTION_DESCRIPTION_MAX) {
@@ -121,7 +133,9 @@ export function CollectOptions({
     const { error: rpcError } =
       source.kind === 'poll'
         ? await supabase.rpc('suggest_option', { p_poll_id: source.pollId, ...body })
-        : await supabase.rpc('open_poll_suggest_option', { p_token: source.token, ...body })
+        : source.kind === 'creator'
+          ? await supabase.rpc('creator_add_option', { p_poll_id: source.pollId, ...body })
+          : await supabase.rpc('open_poll_suggest_option', { p_token: source.token, ...body })
     setBusy(false)
 
     if (rpcError) {
@@ -150,21 +164,6 @@ export function CollectOptions({
     onChanged()
   }
 
-  async function finalize() {
-    setError(null)
-    setBusy(true)
-    const { error: rpcError } = await supabase.rpc('finalize_options', { p_poll_id: pollId })
-    setBusy(false)
-    finalizeModal.close()
-
-    if (rpcError) {
-      setError(rpcError.message)
-      return
-    }
-    notifications.show({ message: 'Voting is open', color: 'green' })
-    onChanged()
-  }
-
   return (
     <Card withBorder>
       <Stack gap="md">
@@ -181,14 +180,23 @@ export function CollectOptions({
                   {option.description && <OptionDescription description={option.description} />}
                 </div>
                 {isCreator && (
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    aria-label={`Remove ${option.name}`}
-                    onClick={() => removeOption(option)}
-                  >
-                    &times;
-                  </ActionIcon>
+                  <Tooltip label="A poll needs at least two options" disabled={!atFloor} withArrow>
+                    {/* The span is what a tooltip on a disabled button needs:
+                        a disabled control fires no pointer events of its
+                        own, so the reason it is disabled would never be
+                        readable without something around it that does. */}
+                    <span>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        disabled={atFloor}
+                        aria-label={`Remove ${option.name}`}
+                        onClick={() => removeOption(option)}
+                      >
+                        &times;
+                      </ActionIcon>
+                    </span>
+                  </Tooltip>
                 )}
               </Group>
             ))}
@@ -256,21 +264,7 @@ export function CollectOptions({
           </Text>
         )}
 
-        {isCreator ? (
-          <Group justify="space-between" wrap="wrap" gap="sm">
-            <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
-              Nobody can vote while the list is still growing. Open the poll once the options are
-              settled — after that the list is fixed, like any other poll’s.
-            </Text>
-            <Button color="orange" variant="light" disabled={!enough} onClick={finalizeModal.open}>
-              Open for voting
-            </Button>
-          </Group>
-        ) : (
-          <Text size="sm" c="dimmed">
-            Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.
-          </Text>
-        )}
+        {footer}
 
         {full && (
           <Text size="xs" c="dimmed">
@@ -279,30 +273,6 @@ export function CollectOptions({
           </Text>
         )}
       </Stack>
-
-      <Modal
-        opened={finalizeOpened}
-        onClose={finalizeModal.close}
-        title="Open this poll for voting?"
-        centered
-      >
-        <Stack gap="md">
-          <Text size="sm">
-            The {options.length} current options become the ballot and voting opens.
-          </Text>
-          <Text size="sm" c="dimmed">
-            Options cannot be added or removed once voting starts.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={finalizeModal.close}>
-              Cancel
-            </Button>
-            <Button color="orange" onClick={finalize} loading={busy}>
-              Open for voting
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
     </Card>
   )
 }

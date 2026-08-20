@@ -12,7 +12,7 @@ import {
 } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
-import { recall, remember } from '../lib/settled'
+import { recall, remember, rememberWinner } from '../lib/settled'
 import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { OptionDescription } from './OptionDescription'
@@ -26,7 +26,42 @@ import { voters } from '../lib/plural'
  */
 export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'token'; token: string }
 
-export function Results({ source }: { source: ResultsSource }) {
+/**
+ * File the option this tally elected under its poll, for the state badge
+ * beside the title.
+ *
+ * The badge is the answer to the same question the card below it answers in
+ * full, and this tally is already in the browser — so the badge is drawn from
+ * it rather than from a second request that would re-run the same election on
+ * the server. That is why `poll_winner_name()` is not reached from the public
+ * voting page: the page it would serve has the answer already.
+ *
+ * It cannot disagree with `poll_winners()`, which is where a signed-in reader
+ * gets the same badge from. `winner_id` is `star_round()`'s first place and
+ * `poll_winner_name()` returns the name of `star_round()`'s first place; a
+ * poll that elected nobody is `null` from both, which is a real answer and not
+ * a missing one.
+ */
+function publishWinner(pollId: string, results: PollResults): void {
+  const winner = results.winner_id
+  rememberWinner(
+    pollId,
+    winner ? (results.options.find((o) => o.id === winner)?.name ?? null) : null,
+  )
+}
+
+export function Results({
+  source,
+  pollId,
+}: {
+  source: ResultsSource
+  /**
+   * The poll this tally belongs to, which the token form of `source` does
+   * not carry. Only used to file the elected option under it; see the note
+   * on `publishWinner` below.
+   */
+  pollId: string
+}) {
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
@@ -48,6 +83,7 @@ export function Results({ source }: { source: ResultsSource }) {
     const cached = recall<PollResults>(rpc, key)
     if (cached) {
       setResults(cached)
+      publishWinner(pollId, cached)
       return
     }
 
@@ -61,7 +97,10 @@ export function Results({ source }: { source: ResultsSource }) {
     request.then(({ data, error: rpcError }) => {
       // Remembered whether or not this component still wants it: the answer
       // is about the poll, not about who asked.
-      if (!rpcError) remember(rpc, key, data)
+      if (!rpcError) {
+        remember(rpc, key, data)
+        publishWinner(pollId, data as PollResults)
+      }
       if (cancelled) return
       if (rpcError) setError(rpcError.message)
       else setResults(data as PollResults)
@@ -70,7 +109,7 @@ export function Results({ source }: { source: ResultsSource }) {
     return () => {
       cancelled = true
     }
-  }, [kind, key, rpc])
+  }, [kind, key, rpc, pollId])
 
   if (error) {
     return (
