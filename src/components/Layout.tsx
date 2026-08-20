@@ -28,10 +28,26 @@ export function Layout() {
     <AppShell header={{ height: 60 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Link to="/" style={{ textDecoration: 'none', color: 'inherit', minWidth: 0 }}>
-            <Title order={3} size="h4">
-              STAR Voting
-            </Title>
+          <Link
+            to="/"
+            style={{
+              textDecoration: 'none',
+              color: 'inherit',
+              minWidth: 0,
+            }}
+          >
+            <Group component="span" gap="sm" wrap="nowrap">
+              <img
+                src={`${import.meta.env.BASE_URL}logo.png`}
+                alt="logo"
+                width={32}
+                height={32}
+                style={{ borderRadius: 8, display: 'block' }}
+              />
+              <Title order={3} size="h4">
+                STAR Voting
+              </Title>
+            </Group>
           </Link>
           <Group gap="sm" wrap="nowrap">
             {session && (
