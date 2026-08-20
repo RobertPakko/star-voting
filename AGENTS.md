@@ -248,9 +248,11 @@ that the code still does whatever it currently does.
 
 Covered: the score round, finalist selection, both score-round tie-break rules,
 the runoff and its tie-breaks, the genuine-tie result, the full ranking, the
-`create_poll` / `submit_ballot` write path the seeding runs through, and the
-two windows in which a poll's option list may move — the collecting stage, and
-the creator's own corrections before the first vote.
+`create_poll` / `submit_ballot` write path the seeding runs through, the two
+windows in which a poll's option list may move — the collecting stage, and the
+creator's own corrections before the first vote — and what an open poll's
+share link discloses about the poll, including that the winner is not computed
+until there is one.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. The shim in
 `test/sql/shim.sql` stands in for Supabase's `auth` schema with a one-row
@@ -481,12 +483,29 @@ one.
 `compact` is the list card — the same four parts at smaller sizes, because a
 page title inside a link among nine others shouts.
 
-**The public voting page leaves two of the four blank, and both times because
-it answers to no account.** No winner's name in the state badge, which needs
-`poll_winners()` (see below); and no creator, because a share link goes
-wherever it is forwarded and the creator's email address is not something it
-should hand out. `open_poll_view()` does not return that column at all, so
-there is nothing there to leak by accident.
+**The public voting page draws all four parts too**, and `0029` is what let
+it: both of the ones it used to leave blank now come out of
+`open_poll_view()`, which is the only thing that page can ask.
+
+- **Who created it** is the creator's own email address, published to whoever
+  the share link reaches. That is a deliberate disclosure, taken for
+  consistency: an invite poll that shows respondents already names people by
+  email, and of everyone in a poll the creator is the one who chose to be in
+  it.
+- **Which option won** was never actually withheld here — the tally under the
+  heading has always named it in full. What was missing was the name *in the
+  badge*, because that name comes from `poll_winners()` and that function
+  answers only to an account; so the badge read *Results ready* next to a
+  result sitting right underneath it.
+
+**The winner is computed only once the results are out, and that condition is
+the whole of what keeps it affordable.** Both pages that call
+`open_poll_view()` re-read it every few seconds while the poll is live and
+stop the moment the results unlock, so `poll_winner_name()` runs on the tick
+that discovers the poll has finished and on later page loads — never on a
+repeating timer. Computing it unconditionally would re-run the whole of STAR
+on every tick of every open poll in the app, which is the same trap
+`list_polls()` avoids by not carrying a `winner_name` column.
 
 Three decisions hold that shape:
 
@@ -528,11 +547,12 @@ collapse the three finished outcomes into one:
 | *Tied — no winner* | the election ran and settled nothing — see [Tie-breaks](#tie-breaks) |
 | *Results ready* | finished, and this page has not been told which of the two |
 
-That last row is a real state rather than a fallback: the name arrives in a
-request behind the page, and two readers never learn it at all — a browser
-talking to a database older than `poll_winners()`, and the public voting page,
-which has no account to ask with. It must never read as *Tied*, which would be
-a wrong answer where this is only a missing one.
+That last row is a real state rather than a fallback: on the poll list the
+name arrives in a request behind the page, and a browser talking to a database
+older than `poll_winners()` — or, on the public voting page, older than the
+`winner_name` that `0029` added to `open_poll_view()` — never learns it at
+all. It must never read as *Tied*, which would be a wrong answer where this is
+only a missing one.
 
 The name comes from `poll_winners()` (`0024`), which calls
 `poll_winner_name()`, which runs the same `star_round()` the results page
@@ -561,7 +581,10 @@ on a list has to do.
 uses, and answers with **no row at all** for a poll the caller cannot see:
 *not yours* and *no winner* are different answers and must not arrive looking
 alike. It also refuses more than 200 ids in one request, because each one is
-an election.
+an election. The public voting page does not go through it — it has no account
+to ask with — and gets the same name from `poll_winner_name()` inside
+`open_poll_view()` instead. One election implementation, three callers of it,
+so no two readers of a poll can be told different things about who won.
 
 A browser holding a build newer than the database it is talking to reads
 *Results ready* too — the app deploys on push while migrations land on merge,

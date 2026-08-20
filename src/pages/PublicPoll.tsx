@@ -70,15 +70,10 @@ export function PublicPoll() {
   return (
     <Stack gap="lg" maw={720} mx="auto">
       {/* The same heading the signed-in poll page and the poll list carry,
-          for the reason PollHeading exists: one poll should not be two
-          different-looking things depending on how you reached it.
-
-          Two of its parts are left empty here, and both because this page
-          answers to no account. No winner's name: naming it needs
-          poll_winners(), which is for signed-in readers, so the badge says
-          the results are ready and the tally underneath says what they were.
-          And no creator: a share link goes wherever it is forwarded, and the
-          creator's email address is not something it should hand out.
+          all four parts of it, for the reason PollHeading exists: one poll
+          should not be two different-looking things depending on how you
+          reached it. Both parts this page used to leave blank now come out
+          of open_poll_view itself; see 0029 for what each one costs.
 
           Someone arriving from a shared link has no other context at all, so
           the terms of the poll are stated in full, not just the one that
@@ -90,7 +85,7 @@ export function PublicPoll() {
       <PollHeading
         title={view.poll.title}
         description={view.poll.description}
-        createdBy={null}
+        createdBy={view.poll.created_by_email ?? null}
         mode={view.poll.mode}
         showVoters={view.poll.show_voters}
         showBallots={view.poll.show_ballots}
@@ -105,6 +100,7 @@ export function PublicPoll() {
           soliciting: view.soliciting,
           resultsAvailable: view.results_available,
           closed: view.is_closed,
+          winner: view.winner_name,
         }}
       />
 

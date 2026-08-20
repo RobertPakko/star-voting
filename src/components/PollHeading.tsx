@@ -41,9 +41,12 @@ export function PollHeading({
   description: string | null
   /**
    * Who created the poll: `'you'`, an email address, or `null` where the
-   * reader has no way to be told. The public voting page is the last of
-   * those: it answers to no account, and the creator's address is not
-   * something a share link should hand out.
+   * reader has not been told. The public voting page is named the same way
+   * as the other two, which does mean a share link carries the creator's
+   * email wherever it is forwarded; that is deliberate, and the poll's own
+   * roster already names people by email on an invite poll that shows
+   * respondents. `null` is left for a browser talking to a database that
+   * predates the field, where saying nothing beats guessing.
    */
   createdBy: 'you' | string | null
   mode: PollMode

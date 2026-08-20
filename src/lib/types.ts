@@ -97,6 +97,15 @@ export interface OpenPollView {
     id: string
     title: string
     description: string | null
+    /**
+     * Who created the poll, named on this page the same way it is named on
+     * every other. Optional for the same reason PollStatus.expires_at is:
+     * this app deploys on push and its migrations apply on merge, so a
+     * browser can be holding this code against an open_poll_view that
+     * predates the field. Missing means "not told", and the heading then
+     * says nothing rather than guessing.
+     */
+    created_by_email?: string
     mode: PollMode
     show_voters: boolean
     show_ballots: boolean
@@ -109,6 +118,13 @@ export interface OpenPollView {
   /** Still collecting options; see PollStatus.soliciting. */
   soliciting: boolean
   results_available: boolean
+  /**
+   * The option STAR elected, for the badge beside the title. Three answers
+   * and they are all different: a name, `null` for a poll that elected
+   * nobody, and `undefined` for a database older than this field. Only
+   * filled in once the results are out; see 0029.
+   */
+  winner_name?: string | null
   /** This browser's voter_key has already submitted a ballot. */
   voted: boolean
   your_name: string | null
