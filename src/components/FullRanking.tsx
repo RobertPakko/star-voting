@@ -104,7 +104,7 @@ function Place({
 }
 
 /** How this place was settled, in one line. */
-function decision(entry: RankingEntry, nameById: Map<string, string>): string {
+function decision(entry: RankingEntry, nameById: Map<string, string>) {
   const { runoff, finalists, options } = entry
 
   if (!runoff || finalists.length < 2) {
@@ -112,7 +112,11 @@ function decision(entry: RankingEntry, nameById: Map<string, string>): string {
   }
 
   if (runoff.resolved_by === 'unresolved') {
-    return `Genuinely tied: ${voters(runoff.prefers_a)} preferred each, on identical score totals.`
+    return (
+      <>
+        Genuinely tied: {voters(runoff.prefers_a)} preferred each, on identical score totals.
+      </>
+    )
   }
 
   const placed = options[0].id
@@ -123,18 +127,32 @@ function decision(entry: RankingEntry, nameById: Map<string, string>): string {
       : [runoff.prefers_b, runoff.prefers_a]
 
   if (runoff.resolved_by === 'higher_score') {
-    return `Level with ${other} at ${voters(won)} each; placed above it on the higher score total.`
+    return (
+      <>
+        Level with <strong>{other}</strong> at {voters(won)} each; placed above it on the higher
+        score total.
+      </>
+    )
   }
 
   if (runoff.resolved_by === 'five_star_votes') {
-    return `Level with ${other} at ${voters(won)} each and on score; placed above it on five-star votes.`
+    return (
+      <>
+        Level with <strong>{other}</strong> at {voters(won)} each and on score; placed above it on
+        five-star votes.
+      </>
+    )
   }
 
-  return `Preferred over ${other} by ${voters(won)} to ${lost}.`
+  return (
+    <>
+      Preferred over <strong>{other}</strong> by {voters(won)} to {lost}.
+    </>
+  )
 }
 
 /** A tie for this place's runoff slots, and what broke it. */
-function tiebreakNote(tb: Tiebreak): string {
+function tiebreakNote(tb: Tiebreak) {
   const rule =
     tb.resolved_by === 'head_to_head'
       ? 'head-to-head preference'
@@ -142,7 +160,22 @@ function tiebreakNote(tb: Tiebreak): string {
         ? 'five-star votes'
         : 'a random draw'
 
-  return `${tb.tied.map((t) => t.name).join(' and ')} tied at ${tb.tied_at} pts for the runoff; ${tb.advanced
-    .map((a) => a.name)
-    .join(', ')} advanced on ${rule}.`
+  return (
+    <>
+      {tb.tied.map((t, index) => (
+        <span key={t.id}>
+          {index > 0 && ' and '}
+          <strong>{t.name}</strong>
+        </span>
+      ))}{' '}
+      tied at {tb.tied_at} pts for the runoff;{' '}
+      {tb.advanced.map((a, index) => (
+        <span key={a.id}>
+          {index > 0 && ', '}
+          <strong>{a.name}</strong>
+        </span>
+      ))}{' '}
+      advanced on {rule}.
+    </>
+  )
 }
