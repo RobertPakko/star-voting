@@ -205,6 +205,56 @@ returns text[] language sql stable as $$
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Live update signals
+--
+-- What the triggers in 0030 would have broadcast. The pattern is to forget
+-- everything, do one thing, and then ask what that one thing announced --
+-- counts matter as much as topics, because a change that announces itself
+-- once per row rather than once per statement is a bug that still passes any
+-- assertion phrased as "did it say anything".
+-- ---------------------------------------------------------------------------
+
+create or replace function tests.forget_signals()
+returns void language sql as $$
+  delete from realtime.messages
+$$;
+
+create or replace function tests.signals(p_topic text)
+returns int language sql stable as $$
+  select count(*)::int from realtime.messages where topic = p_topic
+$$;
+
+-- Every topic told about anything since the last forget_signals(),
+-- alphabetically, so a case can assert on the whole audience at once.
+create or replace function tests.signalled()
+returns text[] language sql stable as $$
+  select coalesce(array_agg(distinct topic order by topic), array[]::text[])
+  from realtime.messages
+$$;
+
+-- The same ordering, for the expected side of that comparison.
+--
+-- Not decoration: a poll's id and its share token are both random, so which
+-- of 'poll:<id>' and 'poll:<token>' sorts first differs from run to run. An
+-- expected list written in the order a person thinks of them passes about
+-- half the time, which is worse than failing.
+create or replace function tests.sorted(p_topics text[])
+returns text[] language sql immutable as $$
+  select coalesce(array_agg(t order by t), array[]::text[]) from unnest(p_topics) t
+$$;
+
+create or replace function tests.poll_topic(p_poll uuid)
+returns text language sql stable as $$
+  select 'poll:' || p_poll::text
+$$;
+
+create or replace function tests.user_topic(p_email text)
+returns text language sql stable as $$
+  select 'user:' || (select id::text from auth.users where lower(email) = lower(p_email))
+$$;
+
+
+-- ---------------------------------------------------------------------------
 -- Time travel
 -- ---------------------------------------------------------------------------
 

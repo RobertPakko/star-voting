@@ -3,9 +3,9 @@
  *
  * A poll whose results are out has taken its last vote: the tally, the ballot
  * grid and the elected option are all fixed for good. Everything else in this
- * app is deliberately re-read on a timer because it can change; these three
- * cannot, so re-reading them is work that can only ever produce the same
- * answer. The list asks for a winner once instead of once every few seconds,
+ * app is deliberately re-read whenever it changes; these three cannot change,
+ * so re-reading them is work that can only ever produce the same answer. The
+ * list asks for a winner once instead of once for every vote cast anywhere on
  * and walking back into a finished poll renders it from what is already here
  * rather than from a request.
  *

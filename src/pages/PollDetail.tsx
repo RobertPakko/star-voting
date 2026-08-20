@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Badge, Button, Card, Group, Progress, Rating, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { useLiveRefresh } from '../lib/useLiveRefresh'
+import { pollTopic, useLiveStream } from '../lib/useLiveStream'
 import { useWinner } from '../lib/useWinner'
 import { voterKeyFor } from '../lib/voterKey'
 import { Ballots } from '../components/Ballots'
 import { CollectOptions } from '../components/CollectOptions'
 import { CreatorControls } from '../components/CreatorControls'
+import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { OptionDescription } from '../components/OptionDescription'
 import { PollHeading } from '../components/PollHeading'
@@ -48,9 +49,16 @@ export function PollDetail() {
   // sets it lives down there with the rest of what the creator does to the
   // poll.
   const [editingOptions, setEditingOptions] = useState(false)
+  // Whether the whole poll has been read yet. This page has two reads — the
+  // whole poll once, and the parts that move on every signal after that —
+  // and the socket cannot tell them apart, so something has to remember
+  // which one is next. A ref rather than state because the answer is needed
+  // during a read rather than at the next render: two signals arriving
+  // together must not both decide they are the first.
+  const loadedOnce = useRef(false)
 
   const load = useCallback(async () => {
-    if (!pollId) return
+    if (!pollId) return true
     setError(null)
 
     const [pollRes, optionsRes, statusRes] = await Promise.all([
@@ -62,7 +70,7 @@ export function PollDetail() {
     if (pollRes.error || statusRes.error) {
       setError((pollRes.error ?? statusRes.error)!.message)
       setLoading(false)
-      return
+      return false
     }
 
     const loaded = pollRes.data as Poll
@@ -78,17 +86,15 @@ export function PollDetail() {
       if (viewError) {
         setError(viewError.message)
         setLoading(false)
-        return
+        return false
       }
       setView(data as OpenPollView)
     }
 
+    loadedOnce.current = true
     setLoading(false)
+    return true
   }, [pollId])
-
-  useEffect(() => {
-    load()
-  }, [load])
 
   // Whether this page has to re-read the option list on the live tick. Open
   // polls get theirs inside open_poll_view, so this is about invite polls.
@@ -108,7 +114,7 @@ export function PollDetail() {
   // watches is the counts, the options of a poll collecting them, and
   // whether it has moved on to voting or closed.
   const refresh = useCallback(async () => {
-    if (!pollId) return
+    if (!pollId) return true
     // Bumped before the requests rather than after, so the roster below
     // asks at the same moment this does and the two agree on screen.
     setLiveTick((t) => t + 1)
@@ -125,22 +131,41 @@ export function PollDetail() {
     ])
 
     // A refresh that fails changes nothing on screen: the page keeps the
-    // copy it has and tries again on the next tick. Replacing a poll that
-    // has been working for ten minutes with an error message, because one
-    // request lost a race with a flaky connection, would be much worse
-    // than being five seconds out of date.
+    // copy it has and is asked again shortly. Replacing a poll that has been
+    // working for ten minutes with an error message, because one request
+    // lost a race with a flaky connection, would be much worse than being a
+    // few seconds out of date.
     if (!statusRes.error && statusRes.data) setStatus(statusRes.data as PollStatus)
     if (viewRes && !viewRes.error && viewRes.data) setView(viewRes.data as OpenPollView)
     if (optionsRes && !optionsRes.error && optionsRes.data)
       setOptions(optionsRes.data as PollOption[])
+
+    // The status is what every other part of this page is derived from, so
+    // it decides whether this counts as a read at all. The other two are
+    // allowed to have missed: an option list that arrives one signal late
+    // costs nothing, and a poll can only be waiting on one of them anyway.
+    return !statusRes.error
   }, [pollId, poll?.mode, poll?.public_token, optionsMayMove])
 
+  // What a signal on this poll means, which depends on whether this page has
+  // ever read it: the whole poll the first time, and only the parts that can
+  // move on every one after that. Navigating from one poll to another
+  // remounts nothing, so the flag is cleared alongside the poll it describes.
+  const onSignal = useCallback(async () => {
+    if (loadedOnce.current) return refresh()
+    return load()
+  }, [load, refresh])
+
+  useEffect(() => {
+    loadedOnce.current = false
+  }, [pollId])
+
   // Nothing about a closed poll changes again, and a poll whose results are
-  // out has taken its last vote either way; so the refreshing stops, and
-  // the indicator goes with it. Its absence is the honest signal there:
-  // there is nothing left to wait for.
-  const live = !!status && !status.is_closed && !status.results_available
-  useLiveRefresh(refresh, { enabled: live })
+  // out has taken its last vote either way; so the watching stops. Before the
+  // first read there is nothing to stop for — that read is what the
+  // subscription is for.
+  const live = !status || (!status.is_closed && !status.results_available)
+  const liveStatus = useLiveStream(pollId ? [pollTopic(pollId)] : [], onSignal, { enabled: live })
 
   // For the state badge beside the title. Almost always already known: the
   // list this poll was opened from asked the same question through the same
@@ -199,6 +224,8 @@ export function PollDetail() {
 
   return (
     <Stack maw={640} mx="auto" gap="lg">
+      <LiveConnectionNotice status={liveStatus} />
+
       {/* The same heading a poll wears on the list it was opened from, down
           to who created it and the order the parts come in; see
           PollHeading. */}

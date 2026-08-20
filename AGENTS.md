@@ -250,10 +250,19 @@ Covered: the score round, finalist selection, both score-round tie-break rules,
 the runoff and its tie-breaks, the genuine-tie result, the full ranking, the
 `create_poll` / `submit_ballot` write path the seeding runs through, the two
 windows in which a poll's option list may move — the collecting stage, and the
-creator's own corrections before the first vote — and that an open poll's
-share link discloses no email address, its creator's included.
+creator's own corrections before the first vote, that an open poll's share
+link discloses no email address, its creator's included, and which changes
+announce themselves to which topics for [Live updates](#live-updates) — counts
+as well as topics, since a change that announces itself once per row rather
+than once per statement passes any assertion phrased as "did it say
+anything".
 
-Not covered: RLS policies and the `auth.jwt()`-gated access rules. The shim in
+Not covered: RLS policies and the `auth.jwt()`-gated access rules. Nor the
+delivery half of live updates: `test/sql/shim.sql` keeps `realtime.send()`'s
+write to `realtime.messages` and drops the service that fans it out, so the
+suite can say who would have been told and never that anyone was. Everything
+on the browser's side of the socket — `useLiveStream`, the debounce, the
+retry — has no harness at all; this repo's tests are SQL. The shim in
 `test/sql/shim.sql` stands in for Supabase's `auth` schema with a one-row
 session table, which is enough to let the migrations apply and to sign a seeded
 voter in, but it is not Supabase's auth and a passing suite says nothing about
@@ -266,72 +275,112 @@ the ones that ship.
 
 ## Live updates
 
-Poll pages re-read themselves every few seconds so votes appear without a
-reload: `src/lib/useLiveRefresh.ts` is the timer, and `LIVE_REFRESH_MS` is
-the one interval every live surface in the app runs at.
+Poll pages hold a websocket and re-read themselves when the database says
+something moved, so votes appear without a reload.
+[`src/lib/useLiveStream.ts`](src/lib/useLiveStream.ts) is the listening half;
+[`supabase/migrations/0030_broadcast_poll_changes.sql`](supabase/migrations/0030_broadcast_poll_changes.sql)
+is the telling half. This needs Realtime enabled on the Supabase project and
+nothing else: broadcasting from the database writes to `realtime.messages`,
+which needs no publication changes and no table grants.
 
-**Polling, not Supabase Realtime.** Realtime streams row changes over a
-websocket, and subscribing to a table's changes needs a `SELECT` grant on
-that table. `anon` deliberately has none, on any table — an open poll's
-voters reach their poll entirely through the `open_poll_*` functions, which
-is what stops a share token from also being a key to the rest of the schema.
-Streaming would therefore mean either opening those tables to `anon` and
-re-deriving every access rule in this file as an RLS policy, or streaming to
-signed-in voters and polling for everyone else anyway. Re-calling the RPCs
-the pages already use keeps one access path and one set of rules, and a poll
-big enough for the difference in load to matter is not the kind of poll this
-app is for.
+**A signal, not the data.** Every message is empty. It says a poll changed and
+refuses to say how; whoever hears it re-reads the poll through the same RPC
+they would have called anyway. That is the whole reason this can exist without
+unpicking the access rules. `anon` still has no read grant on any table, an
+open poll's voters still reach their poll only through the `open_poll_*`
+functions, and not one rule about who may see what had to be restated. The
+alternative — subscribing to row changes directly — would have meant opening
+those tables to `anon` and re-deriving every rule in this file as an RLS
+policy, which is a second copy of the access model to keep in step with the
+first.
 
-Five rules keep it honest:
+**The topics are public, and that is a decision rather than an oversight.** A
+listener needs no authorization because there is nothing to authorize: the
+payload is `{}`, and the most anyone gains by guessing a topic is knowing that
+a poll whose id or share token they already held changed at some moment. The
+share token is what it always was — the thing you must hold to read an open
+poll — and it is still the RPC, not the socket, that decides what comes back.
 
-- **There is no live indicator, deliberately.** A page that updates itself
-  demonstrates that by updating itself; a dot claiming it does is one more
-  thing to read and one more thing to keep true.
-- **The page owns the poll; components render what they are handed.** Both
-  pages carrying an open poll read `open_poll_view` and hand it to
-  `OpenPollPanel`, which used to fetch its own copy. Two copies on two
-  timers could disagree about whether the poll had closed, and would have
-  disagreed visibly — the tags row says *Closed* while the panel below it
-  still shows a ballot. `Respondents` is the same idea from the other end:
-  it reloads on the page's `liveTick` rather than a timer of its own, so the
-  roster and the turnout count above it are always read at the same moment.
-- **A refresh that fails changes nothing on screen.** Every live reload
-  keeps the last good copy and tries again on the next tick. Only a *first*
-  read that fails is allowed to produce an error, because only then is there
-  nothing to show — a page that has been working for ten minutes must not
-  turn into "poll not found" because one request lost a race with a flaky
-  connection.
-- **Refreshing stops when nobody is watching, and resumes on its own.** A
-  hidden tab stops entirely — nobody is reading a backgrounded poll, and a
-  laptop lid closed on twenty of them should not keep talking to the
-  database — and coming back to the tab refreshes immediately rather than
-  waiting out an interval. `LIVE_REFRESH_LIMIT` does the same job for a tab
-  left open in the foreground and forgotten: after half an hour of
-  refreshing with no sign of a reader it stops, and the first click, key or
-  scroll resets the budget and refreshes at once. The one case this gets
-  wrong is a poll parked on a projector that nobody touches for half an
-  hour; raising the limit is the fix if that becomes a real complaint.
-- **Refreshing stops when there is nothing left to watch.** A closed poll,
-  or one whose results are out, has taken its last vote. The poll list is
-  the exception and stays live for as long as it is on screen: any poll on
+There are three kinds of topic:
+
+- `poll:<id>`, for pages that know the poll's id: a poll's own page, and the
+  rows of a poll list.
+- `poll:<share token>`, for `/p/:token`, which holds only a link. Every open
+  poll is announced under both, and the second is what lets that page
+  subscribe *before* its first read instead of after it — see below.
+- `user:<id>`, for one person's poll list. It carries invites, which are the
+  one change that has to reach somebody who has never seen the poll: a list is
+  subscribed to the polls in front of its reader, and a poll they were invited
+  to a moment ago is not one of them.
+
+Six rules keep it honest:
+
+- **The first read happens on subscribe, not on mount.** A page that loaded
+  itself and then subscribed would either read twice or leave a gap between
+  the two for a vote to slip through unseen. Waiting for the subscription
+  costs a handshake before anything appears and buys both problems away. It is
+  also what makes reconnecting self-healing: Realtime does not replay what it
+  sent while a socket was down, but rejoining a channel reports `SUBSCRIBED`
+  again, and every one of those is a fresh read. A laptop that slept through
+  four votes wakes up and asks. The one exception is the floor under that
+  rule: taken literally it makes the websocket load-bearing for the poll
+  appearing at all, so `FIRST_READ_MS` reads once anyway if subscribing has
+  not worked in a few seconds. A network that blocks websockets costs live
+  updates; it must not cost the poll.
+- **Deletes are announced as loudly as inserts.** `reset_poll` clears a poll's
+  ballots and a creator correcting the option list takes rows back off. A page
+  told only about arrivals would sit there showing a tally that has just been
+  thrown away, which is a worse failure than being slow.
+- **One statement, one message.** The triggers are statement-level, so a reset
+  clearing twenty ballots is one message rather than twenty, each of which
+  would otherwise land on everybody connected. A poll on its way out is silent
+  altogether: its rows cascade behind it, and `broadcast_poll_change` returns
+  early when the poll is already gone, which is also what keeps the nightly
+  purge quiet.
+- **A read that fails is tried again, a few times, and then admitted to.**
+  Polling used to cover this by accident — a dropped request was simply
+  followed by another one five seconds later. Nothing follows a failed read
+  now, and on the last vote of a poll there is no next signal to wait for, so
+  `useLiveStream` retries briefly and then says so rather than leaving a page
+  quietly wrong.
+- **A hidden tab holds no socket.** Nobody is reading a backgrounded poll and
+  twenty of them behind a closed lid should not each hold a connection open.
+  Coming back re-subscribes, which re-reads, so returning to a tab shows what
+  arrived while it was away rather than what was there when it left.
+- **Watching stops when there is nothing left to watch.** A closed poll, or
+  one whose results are out, has taken its last vote. The poll list is the
+  exception and stays subscribed for as long as it is on screen: any poll on
   it can take a vote, and a new invite can add a row.
 
-Requests are chained rather than fired on a fixed interval — the next goes
-out after the last comes back — so a slow connection spaces refreshes out
-instead of stacking them up.
+**There is still no live indicator, and there is now one notice.** A page that
+updates itself demonstrates that by updating itself; a dot claiming it does is
+one more thing to read and one more thing to keep true. A page that has
+*stopped* updating itself demonstrates nothing at all, and that is the one
+state a reader cannot work out by looking — so
+[`LiveConnectionNotice`](src/components/LiveConnectionNotice.tsx) says it, and
+says what to do about it. It matters because there is deliberately no polling
+fallback: a network that blocks websockets outright will serve every request
+this app makes and still leave a page that never changes. Refreshing is the
+fallback, so the notice asks for exactly that rather than inviting somebody to
+wait for a reconnection that is not coming. `useLiveStream` sits on the state
+for several seconds first, so a socket that drops and comes straight back
+never reaches the screen.
 
-One request per page on a first load, and one per tick after that. The pages
+One request per page on a first read, and one per change after that. The pages
 carrying a state badge can make a second: they ask `poll_winners()` for the
 finished polls whose result they cannot already name, which is a request on a
-first look and nothing on the ticks after it. See [The poll's high-level
+first look and nothing afterwards. See [The poll's high-level
 details](#the-polls-high-level-details) for why that is a request of its own,
-and [Settled polls](#settled-polls) for why it stops.
+and [Settled polls](#settled-polls) for why it stops. The poll list makes one
+more when its page of polls changes, because that changes the set of topics it
+is subscribed to; turning a page is a deliberate act and the list is a single
+request that answers for every poll at once.
 
 In `npm run dev` every one of those appears twice: React's `StrictMode` mounts
 each component, unmounts it and mounts it again, so every effect that fetches
-runs twice. That is development-only and deliberate — it is what catches an
-effect whose cleanup does not work — and `npm run build` output does it
-once. Count requests against `npm run preview`, not `npm run dev`. Against a
+or subscribes runs twice. That is development-only and deliberate — it is what
+catches an effect whose cleanup does not work — and `npm run build` output does
+it once. Count requests against `npm run preview`, not `npm run dev`. Against a
 real Supabase project each request is also preceded by a CORS preflight
 `OPTIONS`, so the browser's network panel shows two entries per call.
 
@@ -942,8 +991,9 @@ a poll that closes rewrites this whole block and the page under it at once, so
 nothing about it vanishes quietly.
 
 **What it does not promise is that nobody is looking at the old list.**
-Someone with the ballot already on screen picks the correction up on the next
-live tick, and a submit inside that window is refused rather than filed:
+Someone with the ballot already on screen picks the correction up when the
+change is announced, and a submit inside that window is refused rather than
+filed:
 `submit_ballot` and `open_poll_submit` both demand a score for every option,
 and both reject an id that is not on the poll — so a stale ballot fails
 whether the list got longer, got shorter, or had one option swapped for
@@ -1077,8 +1127,8 @@ select cron.schedule('purge-old-polls', '17 4 * * *', 'select public.purge_old_p
 whether it has been running, and `select purge_old_polls();` runs it by hand.
 
 The date reaches the app as `expires_at` on `poll_status()` — which the poll
-page already asks for on a timer — rather than as a column on the `polls`
-select. The app deploys on push and its migrations apply on merge, so a
+page already asks for on every live read — rather than as a column on the
+`polls` select. The app deploys on push and its migrations apply on merge, so a
 browser can be a few minutes ahead of the database: an extra RPC column it
 does not know about is `undefined` and says nothing, where a select naming a
 column that does not exist yet fails outright and takes the poll page with it.

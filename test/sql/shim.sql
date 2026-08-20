@@ -104,3 +104,39 @@ create or replace function cron.unschedule(job_id bigint)
   returns boolean
   language sql
   as $$ delete from cron.job where jobid = job_id returning true $$;
+
+-- Supabase Realtime, as far as the migrations can tell.
+--
+-- On Supabase, realtime.send() writes to realtime.messages and the Realtime
+-- service reads that table from the replication slot and fans it out to the
+-- websockets subscribed to each topic. Here the write is the whole of it:
+-- there is no service and nothing connected, so the table is a record of what
+-- *would* have been broadcast, which is exactly what a case wants to assert
+-- on. Delivery itself is the service's business and is not under test; who
+-- gets told, and when, is this repo's business and is.
+--
+-- Kept deliberately close to the real signature, so a case that passes here
+-- is calling the function the migrations will call in production.
+create schema if not exists realtime;
+
+create table if not exists realtime.messages (
+  id          bigserial primary key,
+  topic       text not null,
+  event       text,
+  payload     jsonb,
+  private     boolean not null default true,
+  inserted_at timestamptz not null default now()
+);
+
+create or replace function realtime.send(
+  payload jsonb,
+  event text,
+  topic text,
+  private boolean default true
+)
+  returns void
+  language sql
+  as $$
+    insert into realtime.messages (topic, event, payload, private)
+    values (topic, event, payload, private)
+  $$;

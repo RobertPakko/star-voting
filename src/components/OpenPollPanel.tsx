@@ -25,10 +25,10 @@ import type { OpenPollView, PollOption } from '../lib/types'
  *
  * The view is handed in rather than fetched here. Both pages already read
  * it, they render the poll's title and tags around this panel, and both
- * now re-read it on a timer to keep votes arriving without a reload, so
- * fetching it here as well would mean two copies of the same poll on one
- * screen, refreshed on two clocks, free to disagree about whether it has
- * closed. The page owns the poll; this renders it and reports a vote back.
+ * now re-read it whenever the database says it moved, so fetching it here as
+ * well would mean two copies of the same poll on one screen, answering the
+ * same signal separately and free to disagree about whether it has closed.
+ * The page owns the poll; this renders it and reports a vote back.
  */
 export function OpenPollPanel({
   token,

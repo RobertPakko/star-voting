@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { Button, Card, Group, Pagination, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { useLiveRefresh } from '../lib/useLiveRefresh'
+import { pollTopic, userTopic, useLiveStream } from '../lib/useLiveStream'
+import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
 import { PollListSkeleton } from '../components/Skeletons'
 import { knownWinners, rememberWinner } from '../lib/settled'
@@ -36,31 +37,23 @@ export function PollList() {
 
   // One round trip for the polls and their status. This used to be a
   // select plus one poll_status RPC per poll; which is also what makes it
-  // cheap enough to re-read on a timer.
+  // cheap enough to re-read whenever anything on it moves.
   const load = useCallback(async () => {
     const { data, error: rpcError } = await supabase.rpc('list_polls')
     if (rpcError) {
       // A refresh that fails keeps the list already on screen; only a first
       // read that fails leaves nothing to show.
       if (!loaded.current) setError(rpcError.message)
-      return
+      return false
     }
     loaded.current = true
-    // Clears an error from a first read that failed: this page keeps
-    // polling either way, so a connection that comes back brings the list
-    // with it instead of leaving the reader looking at a dead end.
+    // Clears an error from a first read that failed: a failed read is tried
+    // again, so a connection that comes back brings the list with it instead
+    // of leaving the reader looking at a dead end.
     setError(null)
     setPolls((data as PollListItem[]) ?? [])
+    return true
   }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
-  // Unlike a single poll, a list has no settled state to stop at: any poll
-  // on it can take a vote, and a new invite can add a row. It stays live for
-  // as long as the tab is in front of someone.
-  useLiveRefresh(load)
 
   // Clamped rather than reset: a poll deleted from page three should leave
   // the reader on page three, or on the last page there is if that was it.
@@ -70,13 +63,38 @@ export function PollList() {
   const current = Math.min(page, pageCount)
   const shown = polls?.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE) ?? []
 
+  // Unlike a single poll, a list has no settled state to stop at: any poll on
+  // it can take a vote, and a new invite can add a row. So it watches two
+  // different things.
+  //
+  // The polls in front of the reader, for the counts and the badges. A page
+  // of them, not all of them: the list is read whole and paged in the browser
+  // (see PAGE_SIZE), and subscribing to every poll somebody has ever been
+  // invited to would be an unbounded number of channels to keep a number
+  // moving on ten rows they can see.
+  //
+  // And the reader themselves, for the rows that do not exist yet. A poll
+  // they were invited to a moment ago cannot be on the list they are
+  // subscribed to, because it was not on the list; the invite is announced to
+  // them personally instead.
+  //
+  // Turning a page changes the set and so costs one more read of the list.
+  // That is a deliberate trade against holding tens of channels open, and
+  // list_polls() is a single request that answers for every poll at once —
+  // the same one request this page used to make every five seconds.
+  const topics = shown.map((poll) => pollTopic(poll.id))
+  if (session?.user.id) topics.push(userTopic(session.user.id))
+
+  const liveStatus = useLiveStream(topics, load)
+
   // Which polls on this page have finished without this tab knowing what they
   // decided. Nearly always empty: it fills on a first look at a page and on
-  // the tick a poll's results unlock, and is empty on every tick in between.
+  // the read where a poll's results unlock, and is empty on every read in
+  // between.
   //
-  // Joined into a string to depend on, because `polls` is a fresh array on
-  // every refresh tick and an effect watching it would re-ask every few
-  // seconds for an answer that cannot change.
+  // Joined into a string to depend on, because `polls` is a fresh array after
+  // every read and an effect watching it would re-ask, every time anybody
+  // voted anywhere on the list, for an answer that cannot change.
   const wanted = shown
     .filter((poll) => poll.results_available && !winners.has(poll.id))
     .map((poll) => poll.id)
@@ -84,7 +102,7 @@ export function PollList() {
 
   // The winners are their own request rather than a column on list_polls,
   // because a column would re-run every finished poll's election on every
-  // tick. This asks once per poll, for the polls on screen, and a settled
+  // read. This asks once per poll, for the polls on screen, and a settled
   // poll never comes back into the question. See 0024_poll_winners.sql.
   useEffect(() => {
     if (!wantedKey) return
@@ -94,7 +112,7 @@ export function PollList() {
     supabase.rpc('poll_winners', { p_poll_ids: ids }).then(({ data, error: rpcError }) => {
       // A list with no winners named on it is a working list, so a failure
       // here is swallowed: it is also what a browser sees when it is running
-      // ahead of the migration that adds the function. The next tick asks
+      // ahead of the migration that adds the function. The next read asks
       // again, since nothing was remembered.
       if (rpcError || !data) return
       const answered = data as { poll_id: string; winner_name: string | null }[]
@@ -120,6 +138,8 @@ export function PollList() {
 
   return (
     <Stack gap="lg" maw={720} mx="auto">
+      <LiveConnectionNotice status={liveStatus} />
+
       <Group justify="space-between">
         <Title order={2}>Your polls</Title>
         <Button component={Link} to="/polls/new">
