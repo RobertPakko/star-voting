@@ -400,7 +400,7 @@ export function CreatePoll() {
         {isOpen && (
           <Alert color="yellow" title="Unauthenticated">
             <Stack gap={4}>
-              <Text size="sm">One person can vote more than once by using another browser.</Text>
+              <Text size="sm">People can vote more than once by using multiple browsers.</Text>
             </Stack>
           </Alert>
         )}
