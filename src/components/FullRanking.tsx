@@ -1,8 +1,19 @@
+import { useEffect, useState } from 'react'
 import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
+import { supabase } from '../lib/supabase'
 import { countBadge } from '../lib/badgeColors'
+import { recall, remember } from '../lib/settled'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
+import { RankingSkeleton } from './Skeletons'
 import { voters } from '../lib/plural'
+
+/**
+ * Which ranking endpoint to read. Same split as ResultsSource and
+ * BallotsSource, and for the same reason: a session proves the caller's
+ * right to an invite poll, the share token proves it for an open one.
+ */
+export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'token'; token: string }
 
 /**
  * The whole field in placed order, behind a button.
@@ -11,20 +22,77 @@ import { voters } from '../lib/plural'
  * their winner; but "what were the top three" is a real question, and the
  * score round on its own doesn't answer it: the score order ignores the
  * runoffs, which is exactly the part STAR adds.
+ *
+ * **Fetched when the button is pressed, not with the tally that drew it.**
+ * STAR names one winner in one round; ordering the rest takes a round per
+ * place, each one re-reading every ballot, and it is far and away the most
+ * expensive thing this app asks a database for -- a tally that took 48ms on
+ * ten options and a hundred voters takes 8ms without it, and one that took
+ * 527ms on fifty options takes 19ms. Almost nobody presses the button, so
+ * almost nobody should pay for it. The cost of the split is that whoever does
+ * press it waits, and pays for the head round twice: first place is part of
+ * the ranking, so `poll_ranking` runs it again rather than being handed it.
+ * See AGENTS.md, "Results and the full ranking", for the measurements.
+ *
+ * The answer is cached for the life of the tab like the tally is -- a poll
+ * whose results are out has taken its last vote -- so the wait is once per
+ * reader, not once per opening.
  */
-export function FullRanking({ results }: { results: PollResults }) {
+export function FullRanking({ source, results }: { source: RankingSource; results: PollResults }) {
   const [opened, modal] = useDisclosure(false)
 
-  // With two options the ranking is the winner and the option it beat, both
-  // already on screen; with one there is nothing to order.
-  //
-  // The optional chain is not redundant: the built app deploys on push while
-  // migrations are applied by hand, so a browser can hold this code against a
-  // database whose poll_tally predates `ranking`. Hide the button, don't crash
-  // the results page.
-  if (results.options.length < 3 || !results.ranking?.length) return null
+  // Flattened to primitives so the dependency list is complete without
+  // depending on a fresh object identity every render.
+  const kind = source.kind
+  const key = source.kind === 'poll' ? source.pollId : source.token
+  const rpc = kind === 'poll' ? 'get_poll_ranking' : 'open_poll_ranking'
 
-  const nameById = new Map(results.options.map((o) => [o.id, o.name]))
+  const [ranking, setRanking] = useState<RankingEntry[] | null>(
+    () => recall<RankingEntry[]>(rpc, key) ?? null,
+  )
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // The whole point of the split: nothing is asked for until somebody
+    // asks for it.
+    if (!opened) return
+
+    const cached = recall<RankingEntry[]>(rpc, key)
+    if (cached) {
+      setRanking(cached)
+      return
+    }
+
+    // Cleared rather than left standing, so closing a failed modal and
+    // opening it again is a retry rather than a replay.
+    setError(null)
+
+    let cancelled = false
+
+    const request =
+      kind === 'poll'
+        ? supabase.rpc('get_poll_ranking', { p_poll_id: key })
+        : supabase.rpc('open_poll_ranking', { p_token: key })
+
+    request.then(({ data, error: rpcError }) => {
+      // Remembered whether or not this component still wants it: the answer
+      // is about the poll, not about who asked.
+      if (!rpcError) remember(rpc, key, data)
+      if (cancelled) return
+      if (rpcError) setError(rpcError.message)
+      else setRanking(data as RankingEntry[])
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [opened, kind, key, rpc])
+
+  // With two options the ranking is the winner and the option it beat, both
+  // already on screen; with one there is nothing to order. Decided from the
+  // options the tally already carries, so the button never waits on a
+  // request to find out whether it should exist.
+  if (results.options.length < 3) return null
 
   return (
     <>
@@ -42,14 +110,30 @@ export function FullRanking({ results }: { results: PollResults }) {
             next place, and so on down the list.
           </Text>
 
-          <Stack gap="md">
-            {results.ranking.map((entry) => (
-              <Place key={entry.place} entry={entry} results={results} nameById={nameById} />
-            ))}
-          </Stack>
+          {error && (
+            <Text c="red" size="sm">
+              {error}
+            </Text>
+          )}
+
+          {!error && !ranking && <RankingSkeleton places={results.options.length} />}
+
+          {ranking && <Places ranking={ranking} results={results} />}
         </Stack>
       </Modal>
     </>
+  )
+}
+
+function Places({ ranking, results }: { ranking: RankingEntry[]; results: PollResults }) {
+  const nameById = new Map(results.options.map((o) => [o.id, o.name]))
+
+  return (
+    <Stack gap="md">
+      {ranking.map((entry) => (
+        <Place key={entry.place} entry={entry} results={results} nameById={nameById} />
+      ))}
+    </Stack>
   )
 }
 

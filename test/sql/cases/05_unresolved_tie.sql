@@ -37,9 +37,9 @@ begin
     jsonb_array_length(t->'finalists'), 2);
 
   perform tests.assert_eq('the ranking puts them level in first',
-    tests.placed_at(t, 1), array['Apple', 'Banana']);
+    tests.placed_at(poll_ranking(v_poll), 1), array['Apple', 'Banana']);
   perform tests.assert_eq('and there is no second place',
-    jsonb_array_length(t->'ranking'), 1);
+    jsonb_array_length(poll_ranking(v_poll)), 1);
 end $$;
 
 rollback;

@@ -52,7 +52,7 @@ begin
   -- placing is noise, and the score round has already given it once.
   perform tests.assert_eq('the ranking stays a list of names',
     (select count(*)::int
-       from jsonb_array_elements(v_tally->'ranking') r,
+       from jsonb_array_elements(poll_ranking(v_poll)) r,
             jsonb_array_elements(r->'options') o
       where o ? 'description'),
     0);

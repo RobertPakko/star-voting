@@ -41,7 +41,8 @@ begin
 
   perform tests.assert_eq('no score-round tie-break was involved',
     jsonb_array_length(t->'tiebreaks'), 0);
-  perform tests.assert_eq('Banana is second', tests.placed_at(t, 2), array['Banana']);
+  perform tests.assert_eq('Banana is second',
+    tests.placed_at(poll_ranking(v_poll), 2), array['Banana']);
 end $$;
 
 rollback;

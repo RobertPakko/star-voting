@@ -51,7 +51,7 @@ begin
     tests.finalists(t), array['Apple', 'Banana']);
   perform tests.assert_eq('Apple wins the runoff', tests.winner(t), 'Apple');
   perform tests.assert_eq('Cherry, having lost the tie-break, is third',
-    tests.placed_at(t, 3), array['Cherry']);
+    tests.placed_at(poll_ranking(v_poll), 3), array['Cherry']);
 end $$;
 
 rollback;

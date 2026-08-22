@@ -196,10 +196,12 @@ $$;
 
 -- The options placed at p_place in the full ranking, alphabetically. More than
 -- one name means the ranking could not separate them.
-create or replace function tests.placed_at(p_tally jsonb, p_place int)
+-- Takes the array poll_ranking() returns, not the tally: the ranking is its
+-- own call now, and a tally has no places in it.
+create or replace function tests.placed_at(p_ranking jsonb, p_place int)
 returns text[] language sql stable as $$
   select array_agg(o->>'name' order by o->>'name')
-  from jsonb_array_elements(p_tally->'ranking') r,
+  from jsonb_array_elements(p_ranking) r,
        jsonb_array_elements(r->'options') o
   where (r->>'place')::int = p_place
 $$;

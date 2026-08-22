@@ -214,6 +214,11 @@ export interface Runoff {
  * One place in the full ranking, which STAR produces by sequential
  * elimination: the winner steps out and the method runs again on what is
  * left. Only place 1 is what STAR itself produces.
+ *
+ * Fetched on its own, by `FullRanking` when somebody opens the modal, rather
+ * than riding along with the tally: it costs a round per place and almost
+ * nobody asks for it. `get_poll_ranking` and `open_poll_ranking` each return
+ * an array of these, first place first.
  */
 export interface RankingEntry {
   place: number
@@ -235,8 +240,6 @@ export interface PollResults {
   tiebreaks: Tiebreak[]
   runoff: Runoff | null
   winner_id: string | null
-  /** Every option in placed order, first to last. */
-  ranking: RankingEntry[]
   voter_count: number
   /** Always 0 for open polls; there is no invite list. */
   invited_count: number

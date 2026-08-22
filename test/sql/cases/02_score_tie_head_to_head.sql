@@ -70,8 +70,10 @@ begin
   perform tests.assert_eq('Apple wins', tests.winner(t), 'Apple');
 
   -- Cherry lost the tie-break, so it cannot place above the option it lost to.
-  perform tests.assert_eq('Banana is second', tests.placed_at(t, 2), array['Banana']);
-  perform tests.assert_eq('Cherry is third',  tests.placed_at(t, 3), array['Cherry']);
+  perform tests.assert_eq('Banana is second',
+    tests.placed_at(poll_ranking(v_poll), 2), array['Banana']);
+  perform tests.assert_eq('Cherry is third',
+    tests.placed_at(poll_ranking(v_poll), 3), array['Cherry']);
 end $$;
 
 rollback;

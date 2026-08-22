@@ -387,11 +387,12 @@ real Supabase project each request is also preceded by a CORS preflight
 ## Settled polls
 
 Live updates are for what can change. This is its mirror image: a poll whose
-results are out has taken its last vote, so its tally, its ballot grid and
-the option it elected are fixed for good, and re-reading them is work that
-can only ever produce the same answer. `src/lib/settled.ts` remembers all
-three, and it is what makes the winner badge cost one request per poll rather
-than one per refresh.
+results are out has taken its last vote, so its tally, its full ranking, its
+ballot grid and the option it elected are fixed for good, and re-reading them
+is work that can only ever produce the same answer. `src/lib/settled.ts`
+remembers all four, and it is what makes the winner badge cost one request per
+poll rather than one per refresh — and the full ranking one per tab rather than
+one per time the modal is opened.
 
 What it changes on screen: walking back into a finished poll draws it from
 memory, with no skeleton and no request, and the poll list stops asking about
@@ -718,7 +719,7 @@ Four things hold it together:
   the ones that don't, opening it in a popover. A popover rather than a
   tooltip, because a tooltip on a phone is a thing that cannot be opened. The
   full ranking and the published ballot grid still name options and nothing
-  more.
+  more — `poll_ranking` does not return a description at all.
 
   The text reaches the results through `poll_tally`, which carries a
   `description` on each option in the score-round list (`0023`). No new access
@@ -1229,6 +1230,50 @@ two highest scorers remaining go to a runoff for the next place, and so on down
 the list. Scores are absolute sums rather than transferable votes, so
 eliminating an option never changes anyone else's total — the score order is
 fixed, and each round is just the next runoff down it.
+
+**It is a request of its own, made when the button is pressed.** The ladder
+used to ride along inside `poll_tally`, which meant every reader of every
+result paid for a round per option whether or not they ever opened the modal —
+and that ladder is far and away the most expensive thing this app asks a
+database for. Against the test database on random polls, each call in its own
+transaction as it is in production, median of five after a warm-up:
+
+| options | voters | one call (old) | winner only | the ladder |
+| ------: | -----: | -------------: | ----------: | ---------: |
+|       4 |     20 |        20.4 ms |      6.4 ms |    15.9 ms |
+|      10 |    100 |        48.3 ms |      8.4 ms |    48.3 ms |
+|      20 |    200 |       190.4 ms |     11.7 ms |   187.0 ms |
+|      50 |    200 |       526.6 ms |     19.4 ms |  541.9 ms |
+
+The ranking was 58% of the JSON on the smallest of those and 77% on the
+largest. `poll_winner_name()` had already drawn this line for the poll list
+— "a list row wants none of that" — and `0031` draws the same one for the
+results page: `poll_tally` runs the head round and stops, and `poll_ranking`
+is asked for separately by `FullRanking`.
+
+Two things follow, and neither is free:
+
+- **Opening the modal costs more than the old single call did**, not less.
+  First place is part of the ranking, so `poll_ranking` runs the head round
+  again rather than being handed it. The trade is 4–18% more for the readers
+  who ask, against 69–96% less for the readers who don't — and the answer is
+  cached like the tally is, so a reader pays it once per tab rather than once
+  per opening. The overhead is worst in relative terms on the smallest polls,
+  where one round is a large fraction of the work and the whole thing is over
+  in milliseconds anyway.
+- **The modal has a loading state now**, where it used to draw instantly from
+  data already on screen. The button itself does not: whether it appears is
+  decided by the option count the tally already carries, so it never waits on a
+  request to find out whether it should exist.
+
+**The gate is one function, not four.** `get_poll_ranking` and
+`open_poll_ranking` answer on exactly the terms `get_poll_results` and
+`open_poll_results` do, and they do it by calling the same
+`assert_results_readable` / `open_results_poll_id` those two now call. The
+ranking discloses *more* than the tally — every placing, every runoff below the
+headline one — so it must not be readable on easier terms, and a visibility
+rule written out four times is four places for it to drift.
+`test/sql/cases/17_ranking_is_gated.sql` holds each refusal to both.
 
 Two consequences, which the modal states rather than hides:
 

@@ -1,13 +1,13 @@
 /**
  * What the browser remembers about polls that have stopped moving.
  *
- * A poll whose results are out has taken its last vote: the tally, the ballot
- * grid and the elected option are all fixed for good. Everything else in this
- * app is deliberately re-read whenever it changes; these three cannot change,
- * so re-reading them is work that can only ever produce the same answer. The
- * list asks for a winner once instead of once for every vote cast anywhere on
- * and walking back into a finished poll renders it from what is already here
- * rather than from a request.
+ * A poll whose results are out has taken its last vote: the tally, the full
+ * ranking, the ballot grid and the elected option are all fixed for good.
+ * Everything else in this app is deliberately re-read whenever it changes;
+ * these four cannot change, so re-reading them is work that can only ever
+ * produce the same answer. The list asks for a winner once instead of once for
+ * every vote cast anywhere on and walking back into a finished poll renders it
+ * from what is already here rather than from a request.
  *
  * **In memory, for the life of the tab, and no further.** Nothing here
  * touches `localStorage`, and that is the point rather than an omission. A
@@ -34,7 +34,7 @@
  * so a shared computer gives up no more than the page already on screen did.
  */
 
-/** Tallies and ballot sheets, keyed by which RPC answered and for what. */
+/** Tallies, rankings and ballot sheets, keyed by which RPC answered and for what. */
 const responses = new Map<string, unknown>()
 
 /**

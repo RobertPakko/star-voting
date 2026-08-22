@@ -116,6 +116,33 @@ export function ResultsSkeleton({ options = 4 }: { options?: number }) {
   )
 }
 
+/**
+ * The full ranking, while the modal waits for it: a place number, the option
+ * on it, and the line saying how it was settled.
+ *
+ * `places` is the poll's option count, which is the number of places on every
+ * poll that did not end in a tie -- and a tie for a place is rare enough that
+ * drawing for it would be the lie the note at the top of this file warns
+ * about, one place too few rather than one too many.
+ */
+export function RankingSkeleton({ places = 4 }: { places?: number }) {
+  return (
+    <Loading>
+      <Stack gap="md">
+        {Array.from({ length: places }, (_, i) => (
+          <Group key={i} align="flex-start" wrap="nowrap" gap="sm">
+            <Skeleton height={26} width={34} radius="xl" />
+            <Stack gap={6} style={{ flex: 1 }}>
+              <Skeleton height={12} width="45%" radius="sm" />
+              <Skeleton height={10} width="70%" radius="sm" />
+            </Stack>
+          </Group>
+        ))}
+      </Stack>
+    </Loading>
+  )
+}
+
 /** The published ballot grid, which is a table however wide the poll is. */
 export function BallotsSkeleton({ rows = 4 }: { rows?: number }) {
   return (

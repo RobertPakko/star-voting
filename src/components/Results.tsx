@@ -293,7 +293,7 @@ export function Results({
         </Stack>
       )}
 
-      <FullRanking results={results} />
+      <FullRanking source={source} results={results} />
     </Stack>
   )
 }
