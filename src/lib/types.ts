@@ -67,6 +67,12 @@ export interface GroupQuestion {
   id: string
   question_position: number
   question_title: string
+  /**
+   * How many options this question holds. Read by the creator's "Open poll"
+   * button, which applies the floor finalize_options applies -- and that is
+   * a floor on every question, since opening is one act over all of them.
+   */
+  option_count: number
   /** Whether the signed-in reader has cast a ballot in this question. */
   voted: boolean
 }

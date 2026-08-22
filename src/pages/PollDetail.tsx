@@ -451,6 +451,7 @@ export function PollDetail() {
           poll={poll}
           status={status}
           optionCount={optionList.length}
+          questions={questions}
           editingOptions={editingOptions && editable}
           onEditOptions={setEditingOptions}
           onChange={reloadAll}

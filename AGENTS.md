@@ -1281,12 +1281,20 @@ aggregate over other people on an anonymous poll, which is exactly the
 correlation the key scoping exists to prevent, so losing it is the feature
 working rather than a gap.
 
-**A group cannot collect its options.** `create_poll_group` refuses
-`solicit_options`, and the create form disables that switch. A poll whose
-questions each finalize their own list would be one where question 1 takes
-votes while question 2 is still gathering, which is the opposite of what the
-feature is for. It wants a group-wide stage of its own, and that is a later
-change.
+**Collecting options is one stage for the whole poll.** Each question gathers
+its own list, because a suggestion lands in `candidates` against a poll id and
+that is what a question is — so `suggest_option` and friends never changed.
+But `finalize_options` opens every question at once, for the same reason
+closing does: a poll half-opened would take votes on some questions while
+others were still gathering.
+
+The floor of two options is therefore checked against **every** question
+before **any** is opened, and the refusal names the question that is short —
+on a poll of five, "add two options" leaves the creator to work out which one.
+The creator's *Open poll* button applies the same rule from the option counts
+`poll_group` returns, so it is disabled with the reason rather than offered
+and turned down. A poll asking one question has no name to give and raises
+exactly the message it always did.
 
 **On screen.** The poll list shows position 1 and hides the rest
 (`list_polls`), with the count badge reading *N questions* instead of a

@@ -6,7 +6,7 @@ import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { forgetPoll } from '../lib/settled'
 import { ShareLink } from './ShareLink'
-import type { Poll, PollStatus } from '../lib/types'
+import type { GroupQuestion, Poll, PollStatus } from '../lib/types'
 
 /**
  * Creator-only lifecycle controls: everything the creator does to the *poll*,
@@ -33,6 +33,7 @@ export function CreatorControls({
   poll,
   status,
   optionCount,
+  questions = [],
   editingOptions,
   onEditOptions,
   onChange,
@@ -41,6 +42,13 @@ export function CreatorControls({
   status: PollStatus
   /** How many options the poll holds: the floor "Open poll" has to clear. */
   optionCount: number
+  /**
+   * The poll's other questions, when it asks several. Opening acts on all of
+   * them at once, so the floor this button has to clear is every question's
+   * and not just this one's; empty on a poll that asks one question, where
+   * `optionCount` is the whole story.
+   */
+  questions?: GroupQuestion[]
   /**
    * Whether the page is already showing the option list to be corrected, in
    * which case this block does not offer to show it again: the list has its
@@ -143,7 +151,13 @@ export function CreatorControls({
   // Ending the collecting stage, and the floor it has to clear: the same two
   // options `create_poll` demands of a poll whose creator wrote the list.
   const canOpen = status.soliciting && !status.is_closed
-  const enoughToOpen = optionCount >= 2
+  // Opening is one act over every question, and the database refuses it until
+  // all of them clear the floor. The button applies the same rule rather than
+  // offering itself and being turned down -- and names the question that is
+  // short, since on a poll of five "add two options" leaves the creator to
+  // find which one.
+  const short = questions.filter((question) => question.option_count < 2)
+  const enoughToOpen = questions.length > 0 ? short.length === 0 : optionCount >= 2
   // Correcting a list that is already a ballot. The database allows it on the
   // creator's own poll, open, with nobody having voted -- see
   // 0028_creator_edits_options.sql -- and that is what `optionsEditable` is.
@@ -177,7 +191,17 @@ export function CreatorControls({
 
           <Group gap="sm" wrap="wrap">
             {canOpen && (
-              <Tooltip label="Add at least two options first" disabled={enoughToOpen} withArrow>
+              <Tooltip
+                label={
+                  short.length
+                    ? `Add at least two options to ${short.map((q) => `"${q.question_title}"`).join(', ')} first`
+                    : 'Add at least two options first'
+                }
+                disabled={enoughToOpen}
+                withArrow
+                multiline
+                w={260}
+              >
                 {/* A disabled button fires no pointer events of its own, so the
                     reason it is disabled needs something around it that does. */}
                 <span>
@@ -261,11 +285,13 @@ export function CreatorControls({
         >
           <Stack gap="md">
             <Text size="sm">
-              The {optionCount} current options become the ballot and voting opens.
+              {questions.length > 0
+                ? `Every question's options become its ballot, and voting opens on all ${questions.length} of them.`
+                : `The ${optionCount} current options become the ballot and voting opens.`}
             </Text>
             <Text size="sm" c="dimmed">
-              Nobody can suggest an option after this. You can still correct the list yourself, up
-              until the first vote comes in.
+              Nobody can suggest an option after this. You can still correct the{' '}
+              {questions.length > 0 ? 'lists' : 'list'} yourself, up until the first vote comes in.
             </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={openModal.close}>

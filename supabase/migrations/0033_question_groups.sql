@@ -44,12 +44,13 @@
 -- it back on the next question; nothing on the server links the two. See
 -- src/lib/voterKey.ts, which explains what that scoping buys.
 --
--- **Options are not collected per group.** `create_poll_group` refuses a
--- soliciting poll. A group whose questions each collect and finalize their
--- own option list would be a poll where question 1 is taking votes while
--- question 2 is still gathering, which is the opposite of the one thing this
--- feature is for. It is a stage that wants a group-wide answer of its own
--- rather than a fan-out, and that is a later change.
+-- **Collecting options is one stage for the whole poll.** Each question
+-- gathers its own list, because suggestions land in `candidates` against a
+-- poll id and that is what a question is. But `finalize_options` opens every
+-- question at once, for the same reason closing does: a poll half-opened
+-- would take votes on some questions while others were still gathering. The
+-- floor of two options is therefore checked against every question before any
+-- of them is opened, and the refusal names the question that is short.
 
 
 -- ---------------------------------------------------------------------------
@@ -309,7 +310,7 @@ ALTER FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", 
 -- "description": text|null }] }], in the order they are to be asked.
 -- Returns the first question's poll id, which is where every link into the
 -- poll points.
-CREATE OR REPLACE FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text" DEFAULT 'invite'::"text", "p_show_voters" boolean DEFAULT true, "p_show_ballots" boolean DEFAULT false) RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text" DEFAULT 'invite'::"text", "p_show_voters" boolean DEFAULT true, "p_show_ballots" boolean DEFAULT false, "p_solicit_options" boolean DEFAULT false) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -374,7 +375,7 @@ begin
       p_mode,
       coalesce(p_show_voters, true),
       coalesce(p_show_ballots, false),
-      false,
+      coalesce(p_solicit_options, false),
       v_group_id,
       i + 1
     );
@@ -388,9 +389,9 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) OWNER TO "postgres";
 
-COMMENT ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean) IS 'Creates a poll that asks several questions: one poll row per question, sharing a group, a title, a description, an invite list and their settings. One transaction. Takes no solicit_options: a group whose questions each gather their own options would take votes on one while another was still collecting.';
+COMMENT ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) IS 'Creates a poll that asks several questions: one poll row per question, sharing a group, a title, a description, an invite list and their settings. One transaction. A soliciting group collects options question by question and opens all of them at once; see finalize_options.';
 
 
 -- ---------------------------------------------------------------------------
@@ -555,6 +556,11 @@ begin
       'id', q.id,
       'question_position', q.question_position,
       'question_title', q.question_title,
+      -- What the creator's "Open poll" button needs to apply the floor
+      -- finalize_options applies, rather than offering a button that is
+      -- refused: opening is one act over every question, so the button has
+      -- to know about every question's list and not just this one's.
+      'option_count', (select count(*)::int from candidates c where c.poll_id = q.id),
       -- Which questions this reader has already answered. Free on this side:
       -- an invite ballot carries the voter's account, so nothing has to be
       -- linked to find them. The share-link side deliberately cannot ask
@@ -713,15 +719,15 @@ ALTER FUNCTION "public"."list_polls"() OWNER TO "postgres";
 
 
 -- ---------------------------------------------------------------------------
--- Closing and clearing a poll
+-- Opening, closing and clearing a poll
 --
--- Both act on the group. The creator closes *the poll*, not the question
+-- All three act on the group. The creator closes *the poll*, not the question
 -- they happen to have open, and a poll that could be closed one question at
 -- a time would be one whose voters were told to stop halfway. It is also
 -- what keeps the reveal above reachable: a group unlocks when every question
 -- has stopped, so closing has to be able to stop every question.
 --
--- Both still take one poll id and both are still refused to anyone but the
+-- All three still take one poll id and are still refused to anyone but the
 -- creator, who owns every question in the group by construction.
 -- ---------------------------------------------------------------------------
 
@@ -751,6 +757,70 @@ end;
 $$;
 
 ALTER FUNCTION "public"."close_poll"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."finalize_options"("p_poll_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+  v_short record;
+begin
+  select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
+
+  if not found then
+    raise exception 'Only the poll creator can finalize these options';
+  end if;
+
+  if not v_poll.solicit_options then
+    raise exception 'The options for this poll were set when it was created';
+  end if;
+
+  if v_poll.closed_at is not null then
+    raise exception 'This poll has been closed';
+  end if;
+
+  -- Asked of this question, which is enough: the group is opened in one
+  -- statement below, so its questions are finalized together or not at all
+  -- and can never disagree about whether they have been.
+  if v_poll.options_finalized_at is not null then
+    raise exception 'The options for this poll have already been finalized';
+  end if;
+
+  -- The same floor create_poll puts on a poll whose creator wrote the
+  -- options: one option is not an election. Every question is checked
+  -- *before* any is opened -- a poll half-opened would be taking votes on
+  -- some questions while others were still gathering, which is the state
+  -- opening the poll in one act exists to prevent.
+  select q.question_title, count(c.id)::int as options
+  into v_short
+  from poll_group_members(v_poll) q
+  left join candidates c on c.poll_id = q.id
+  group by q.id, q.question_position, q.question_title
+  having count(c.id) < 2
+  order by min(q.question_position)
+  limit 1;
+
+  if found then
+    -- Named, because on a poll of several questions "add two options" leaves
+    -- the creator to find which of five is short. A poll asking one question
+    -- has no name to give and says what it always said.
+    if v_short.question_title is null then
+      raise exception 'Add at least two options before opening the poll for voting';
+    end if;
+    raise exception 'Add at least two options to "%" before opening the poll for voting',
+      v_short.question_title;
+  end if;
+
+  update polls set options_finalized_at = now()
+  where id in (select q.id from poll_group_members(v_poll) q);
+end;
+$$;
+
+ALTER FUNCTION "public"."finalize_options"("p_poll_id" "uuid") OWNER TO "postgres";
+
+COMMENT ON FUNCTION "public"."finalize_options"("p_poll_id" "uuid") IS 'Turns a collected option list into a ballot, for every question of the poll at once. Refuses until each of them has two options, naming the one that is short.';
 
 
 CREATE OR REPLACE FUNCTION "public"."reset_poll"("p_poll_id" "uuid") RETURNS "void"
@@ -794,8 +864,8 @@ REVOKE ALL ON FUNCTION "public"."poll_is_first_question"("p_poll_id" "uuid") FRO
 REVOKE ALL ON FUNCTION "public"."normalize_invite_emails"("p_emails" "text"[]) FROM PUBLIC;
 REVOKE ALL ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer) FROM PUBLIC;
 
-REVOKE ALL ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."poll_group"("p_poll_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."poll_group"("p_poll_id" "uuid") TO "authenticated";

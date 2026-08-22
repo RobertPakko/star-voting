@@ -306,3 +306,95 @@ begin
 end $$;
 
 rollback;
+
+
+-- Collecting options for a poll that asks several questions.
+--
+-- Each question gathers its own list, because a suggestion lands against a
+-- poll id and that is what a question is. Opening is one act over all of
+-- them, for the same reason closing is.
+begin;
+
+do $$
+declare
+  v_first uuid;
+  v_questions uuid[];
+  v_q1 uuid;
+  v_q2 uuid;
+begin
+  perform tests.sign_in('creator@example.com');
+  v_first := create_poll_group(
+    'Team offsite', null,
+    '[{"title":"Where?","options":[{"name":"Coast"},{"name":"Mountains"}]},
+      {"title":"When?","options":[]}]'::jsonb,
+    array['voter1@example.com'], 'invite', true, false, true);
+
+  v_questions := tests.group_questions(v_first);
+  v_q1 := v_questions[1];
+  v_q2 := v_questions[2];
+
+  perform tests.assert_eq('a soliciting group may start with almost nothing',
+    (select count(*)::int from candidates where poll_id = v_q2), 0);
+  perform tests.assert_eq('and every question is collecting',
+    (select bool_and(soliciting) from poll_status(v_q1)), true);
+
+  -- ---- the floor is asked of every question, before any of them opens ----
+  --
+  -- Question 1 already clears it. Opening is refused all the same, and named
+  -- on the question that does not -- not on the one the creator happened to
+  -- press the button from, and not on the first in the poll.
+
+  perform tests.assert_raises('a question still short refuses the whole poll',
+    format('select finalize_options(%L)', v_q1),
+    'Add at least two options');
+  perform tests.assert_raises('and says which question is short',
+    format('select finalize_options(%L)', v_q1),
+    'When?');
+
+  perform tests.assert_eq('nothing was opened by the attempt',
+    (select count(*)::int from polls
+      where id = any(v_questions) and options_finalized_at is not null), 0);
+
+  -- ---- voters fill the lists in, question by question --------------------
+
+  perform tests.sign_in('voter1@example.com');
+  perform suggest_option(v_q1, 'Desert');
+  perform suggest_option(v_q2, 'June');
+  perform suggest_option(v_q2, 'September');
+
+  perform tests.assert_eq('suggestions land on the question they were made in',
+    (select count(*)::int from candidates where poll_id = v_q2), 2);
+  perform tests.assert_eq('and not on its neighbour',
+    (select count(*)::int from candidates where poll_id = v_q1), 3);
+
+  -- ---- opening is one act ------------------------------------------------
+
+  perform tests.sign_in('creator@example.com');
+  perform finalize_options(v_q2);
+
+  perform tests.assert_eq('opening the poll opens every question',
+    (select count(*)::int from polls
+      where id = any(v_questions) and options_finalized_at is not null), 2);
+
+  perform tests.assert_eq('so none of them is still collecting',
+    (select soliciting from poll_status(v_q1)), false);
+
+  perform tests.assert_raises('and the lists are closed for good',
+    format('select suggest_option(%L, %L)', v_q1, 'Desert'),
+    'settled and voting has started');
+
+  perform tests.assert_raises('there being nothing left to open twice',
+    format('select finalize_options(%L)', v_q1),
+    'already been finalized');
+
+  -- Voting now works on every question, which is the whole point of opening
+  -- them together rather than one at a time.
+  perform tests.sign_in('voter1@example.com');
+  perform tests.cast_ballot(v_q1, array[5, 0, 2]);
+  perform tests.cast_ballot(v_q2, array[0, 5]);
+
+  perform tests.assert_eq('every question takes votes at once',
+    (select count(*)::int from ballots where poll_id = any(v_questions)), 2);
+end $$;
+
+rollback;

@@ -428,13 +428,10 @@ export function CreatePoll() {
    * meant -- and what is dropped is on screen at the moment the switch is
    * pressed, so it is a visible loss rather than a silent one.
    *
-   * A poll that collects its options cannot ask several questions; see
-   * create_poll_group. Turning this on turns that off.
    */
   function toggleMultiQuestion(on: boolean) {
     setMultiQuestion(on)
     if (on) {
-      setSolicitOptions(false)
       setQuestions((prev) => (prev.length >= 2 ? prev : [...prev, blankQuestion()]))
     } else {
       setQuestions((prev) => prev.slice(0, 1))
@@ -489,6 +486,7 @@ export function CreatePoll() {
           p_mode: mode,
           p_show_voters: showVoters,
           p_show_ballots: showBallots,
+          p_solicit_options: solicitOptions,
         })
       : await supabase.rpc('create_poll', {
           p_title: title.trim(),
@@ -616,12 +614,10 @@ export function CreatePoll() {
           checked={solicitOptions}
           onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
           label="Solicit options from voters"
-          disabled={multiQuestion}
         />
-        {multiQuestion && (
+        {solicitOptions && multiQuestion && (
           <Text size="xs" c="dimmed">
-            A poll that asks several questions writes its own options: collecting them would leave
-            one question taking votes while another was still gathering.
+            Each question collects its own options, and opening the poll opens all of them at once.
           </Text>
         )}
       </Stack>
