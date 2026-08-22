@@ -48,3 +48,13 @@ export const VOTER_NAME_MAX = 60
 export function tooLong(what: string, length: number, max: number): string {
   return `${what} can be ${max} characters; this one is ${length}. Trim ${length - max}.`
 }
+
+/**
+ * How many questions one poll can ask. Matches `create_poll_group`.
+ *
+ * A ballot per question, each with its own options to read: a poll long
+ * enough that people stop partway is a poll whose later questions are
+ * answered by fewer people than its early ones, and there is no honest way to
+ * report that as one result.
+ */
+export const MAX_QUESTIONS = 20

@@ -95,8 +95,12 @@ export function PollList() {
   // Joined into a string to depend on, because `polls` is a fresh array after
   // every read and an effect watching it would re-ask, every time anybody
   // voted anywhere on the list, for an answer that cannot change.
+  //
+  // A poll that asks several questions is not asked about at all: it has a winner
+  // per question and no single one to name, so its badge stays "Results
+  // ready" and the answers are named on the question pages themselves.
   const wanted = shown
-    .filter((poll) => poll.results_available && !winners.has(poll.id))
+    .filter((poll) => poll.results_available && poll.question_count < 2 && !winners.has(poll.id))
     .map((poll) => poll.id)
   const wantedKey = wanted.join(',')
 
@@ -178,11 +182,14 @@ export function PollList() {
                 votedCount: poll.voted_count,
                 invitedCount: poll.invited_count,
                 optionCount: poll.option_count,
+                questionCount: poll.question_count,
               }}
               state={{
                 soliciting: poll.soliciting,
                 resultsAvailable: poll.results_available,
                 closed: poll.is_closed,
+                // Deliberately never asked for on a multi-question poll, so
+                // this stays undefined and the badge reads "Results ready".
                 winner: winners.get(poll.id),
               }}
             />

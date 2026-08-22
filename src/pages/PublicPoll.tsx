@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
@@ -6,10 +6,12 @@ import { voterKeyFor } from '../lib/voterKey'
 import { shareTopic, useLiveStream } from '../lib/useLiveStream'
 import { useKnownWinner } from '../lib/useWinner'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
+import { NextQuestion } from '../components/NextQuestion'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollHeading } from '../components/PollHeading'
+import { QuestionStrip } from '../components/QuestionStrip'
 import { PollPageSkeleton } from '../components/Skeletons'
-import type { OpenPollView } from '../lib/types'
+import type { OpenGroupQuestion, OpenPollView } from '../lib/types'
 
 /**
  * The /p/:token route: an open poll seen by someone who is not signed in,
@@ -20,6 +22,7 @@ import type { OpenPollView } from '../lib/types'
 export function PublicPoll() {
   const { token } = useParams<{ token: string }>()
   const [view, setView] = useState<OpenPollView | null>(null)
+  const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
   const [error, setError] = useState<string | null>(null)
   // Whether a read has ever come back, so a refresh that fails can be told
   // apart from a first read that did. A ref rather than `view` itself,
@@ -47,6 +50,30 @@ export function PublicPoll() {
     setView(data as OpenPollView)
     return true
   }, [token])
+
+  // The poll's other questions, with the share token of each. Read once per
+  // question rather than on the live tick: which questions a poll asks is
+  // frozen at creation, and this side has nothing per-reader in it — an open
+  // poll's ballots are deliberately not linkable across questions, so there
+  // is no "answered" flag here to keep up to date. See open_poll_group.
+  const groupId = view?.poll.group_id
+  useEffect(() => {
+    if (!token || !groupId) {
+      setQuestions([])
+      return
+    }
+    let cancelled = false
+    supabase.rpc('open_poll_group', { p_token: token }).then(({ data, error: rpcError }) => {
+      // Swallowed like the winner lookup on the list: a browser running
+      // ahead of the migration gets no strip, and a poll with no strip is a
+      // poll of one question.
+      if (rpcError || !data || cancelled) return
+      setQuestions(data as OpenGroupQuestion[])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [token, groupId])
 
   // This page can subscribe before it has read anything, because the poll is
   // announced under its share token as well as under its id and the token is
@@ -80,6 +107,9 @@ export function PublicPoll() {
   }
 
   if (!view) return <PollPageSkeleton />
+
+  const here = questions.findIndex((question) => question.token === token)
+  const nextQuestion = here >= 0 && here < questions.length - 1 ? questions[here + 1] : null
 
   return (
     <Stack gap="lg" maw={720} mx="auto">
@@ -123,7 +153,34 @@ export function PublicPoll() {
         }}
       />
 
+      {/* The rest of the poll, reached by the tokens open_poll_group hands
+          back to whoever already holds one of them. No question is marked
+          answered here, and that is the design rather than an omission: an
+          open ballot is identified by a key minted per question so that one
+          browser's ballots cannot be joined to each other, and the server is
+          not asked to undo that for a tick. */}
+      <QuestionStrip
+        questions={questions.map((question) => ({
+          key: question.token,
+          position: question.question_position,
+          title: question.question_title,
+        }))}
+        current={token}
+        hrefFor={(next) => `/p/${next}`}
+      />
+
+      {/* What this question asks; the heading above carries the poll's own
+          title, which every question shares. */}
+      {view.poll.question_title && <Title order={3}>{view.poll.question_title}</Title>}
+
       <OpenPollPanel token={token} view={view} onChanged={load} />
+
+      {/* Offered once this browser's ballot is in, which open_poll_view knows
+          for this question because it was shown the key that cast it. It
+          knows nothing about the other questions and is not asked to. */}
+      {nextQuestion && view.voted && (
+        <NextQuestion title={nextQuestion.question_title} href={`/p/${nextQuestion.token}`} />
+      )}
     </Stack>
   )
 }

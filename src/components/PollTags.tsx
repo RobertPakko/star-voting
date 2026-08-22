@@ -87,6 +87,12 @@ export interface Turnout {
   invitedCount: number
   /** Only read while collecting, when it is the number that is moving. */
   optionCount: number
+  /**
+   * How many questions the poll asks. Above one it takes the badge over
+   * entirely; see turnoutLabel for why a multi-question poll has no turnout
+   * number to report.
+   */
+  questionCount?: number
 }
 
 /**
@@ -108,7 +114,17 @@ function turnoutLabel({
   votedCount,
   invitedCount,
   optionCount,
+  questionCount,
 }: Turnout): string {
+  // A poll that asks several questions has no turnout, only turnouts: each
+  // question takes its own ballots, and the numbers come apart the moment
+  // one person answers three of five. Reporting the first question's count
+  // as the poll's would be a number that reads like the whole and is not,
+  // so the badge says the one thing about the shape of the poll that is
+  // true of all of it — how much of it there is to answer.
+  if (questionCount !== undefined && questionCount > 1) {
+    return `${questionCount} questions`
+  }
   if (soliciting) {
     // Turnout is zero and stays zero until the list is settled, so this
     // stage counts what is actually moving: the options coming in.
@@ -179,6 +195,18 @@ export function PollStateBadge({
         </Badge>
       )
     }
+    // Finished, and this page has not been told what it decided. Either the
+    // request naming the winner is still in flight, or nothing is going to
+    // ask: a poll of several questions has a winner per question and no
+    // single one to name, so its card says the results are ready and leaves
+    // naming them to the question the reader opens.
+    if (winner === undefined) {
+      return (
+        <Badge color={badgeColor.done} variant="light" style={{ flexShrink: 0 }}>
+          Results ready
+        </Badge>
+      )
+    }
     // The only badge here whose text belongs to the poll rather than to the
     // app: an elected option can be a sentence, so this is the one that
     // needs a ceiling. `maw` is that ceiling, and past it the name
@@ -190,18 +218,16 @@ export function PollStateBadge({
     // ellipsis where the answer to the poll should be. The title is the side
     // that gives now (see the call sites, which let it), so the badge is as
     // wide as the name it carries and no wider.
-    return winner ? (
+    return (
       <Badge
         color={badgeColor.done}
         variant="light"
         maw={220}
         style={{ flexShrink: 0 }}
-        title={winner ?? undefined}
+        title={winner}
       >
         {winner}
       </Badge>
-    ) : (
-      <></>
     )
   }
 

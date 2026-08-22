@@ -23,13 +23,14 @@ import { DescriptionField } from '../components/DescriptionField'
 import { FormSkeleton } from '../components/Skeletons'
 import {
   MAX_OPTIONS,
+  MAX_QUESTIONS,
   OPTION_DESCRIPTION_MAX,
   OPTION_NAME_MAX,
   POLL_DESCRIPTION_MAX,
   TITLE_MAX,
   tooLong,
 } from '../lib/limits'
-import type { Invitee, Poll, PollMode, PollOption } from '../lib/types'
+import type { GroupQuestion, Invitee, Poll, PollMode, PollOption } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -48,6 +49,32 @@ function blankOption(): OptionDraft {
 }
 
 /**
+ * One question of the poll being written: what it asks, and what it offers.
+ *
+ * The form holds a list of these whether or not the poll asks more than one,
+ * so that every rule about an option list is written once and applied to
+ * every list there is. A single-question poll is one entry whose `title` is
+ * never read; turning the switch on is what starts reading it.
+ */
+interface QuestionDraft {
+  title: string
+  options: OptionDraft[]
+}
+
+function blankQuestion(): QuestionDraft {
+  return { title: '', options: [blankOption(), blankOption()] }
+}
+
+/**
+ * Which question an option-level message belongs to, since the fields are a
+ * list inside a list. A single-question poll never sees the difference: its
+ * one question is index 0 and its rows key off that like any other.
+ */
+function optionKey(question: number, option: number): string {
+  return `${question}:${option}`
+}
+
+/**
  * Everything wrong with the form right now, keyed the way the form is laid
  * out: one message per field, and the option rows by their index.
  *
@@ -62,9 +89,15 @@ interface FormErrors {
   title?: string
   description?: string
   emails?: string
-  options?: string
-  optionNames: Record<number, string>
-  optionDescriptions: Record<number, string>
+  /** Wrong with the poll's list of questions, rather than with any one of them. */
+  questions?: string
+  /** Wrong with one question's title, by that question's index. */
+  questionTitles: Record<number, string>
+  /** Wrong with one question's option list, by that question's index. */
+  options: Record<number, string>
+  /** Keyed by optionKey(): one message per field, wherever the field sits. */
+  optionNames: Record<string, string>
+  optionDescriptions: Record<string, string>
 }
 
 function hasErrors(errors: FormErrors): boolean {
@@ -72,10 +105,17 @@ function hasErrors(errors: FormErrors): boolean {
     errors.title ||
     errors.description ||
     errors.emails ||
-    errors.options ||
+    errors.questions ||
+    Object.keys(errors.questionTitles).length ||
+    Object.keys(errors.options).length ||
     Object.keys(errors.optionNames).length ||
     Object.keys(errors.optionDescriptions).length,
   )
+}
+
+/** An empty set of messages: what the fields render before the first submit. */
+function noErrors(): FormErrors {
+  return { questionTitles: {}, options: {}, optionNames: {}, optionDescriptions: {} }
 }
 
 /**
@@ -96,14 +136,15 @@ function hasErrors(errors: FormErrors): boolean {
 function validate(form: {
   title: string
   description: string
-  options: OptionDraft[]
+  questions: QuestionDraft[]
+  multiQuestion: boolean
   emails: string[]
   includeSelf: boolean
   myEmail: string
   isOpen: boolean
   solicitOptions: boolean
 }): FormErrors {
-  const errors: FormErrors = { optionNames: {}, optionDescriptions: {} }
+  const errors: FormErrors = noErrors()
 
   const title = form.title.trim()
   if (!title) errors.title = 'Give the poll a title.'
@@ -114,41 +155,73 @@ function validate(form: {
     errors.description = tooLong('A description', description.length, POLL_DESCRIPTION_MAX)
   }
 
-  // Compared lowercased: two options that differ only in case are one
-  // option to everybody scoring the ballot, and the suggestion path has
-  // always refused the pair for that reason.
-  const seen = new Map<string, number>()
-  form.options.forEach((option, index) => {
-    const name = option.name.trim()
-    if (name.length > OPTION_NAME_MAX) {
-      errors.optionNames[index] = tooLong('An option name', name.length, OPTION_NAME_MAX)
-    } else if (name) {
-      const first = seen.get(name.toLowerCase())
-      // Reported against the later row: the first one is the one that keeps
-      // the name, so it is not the one that has to change.
-      if (first !== undefined) errors.optionNames[index] = `Same as option ${first + 1}.`
-      else seen.set(name.toLowerCase(), index)
+  // A poll asks at least one question and at most what create_poll_group
+  // accepts; the floor is two the moment it is asking more than one, since
+  // a group of one is a single-question poll wearing a switch.
+  if (form.multiQuestion) {
+    if (form.questions.length < 2) {
+      errors.questions = 'A multi-question poll needs at least two questions.'
+    } else if (form.questions.length > MAX_QUESTIONS) {
+      errors.questions = `A poll can ask ${MAX_QUESTIONS} questions; this one asks ${form.questions.length}.`
+    }
+  }
+
+  form.questions.forEach((question, questionIndex) => {
+    // Only read on a poll that asks more than one: a single question is
+    // named by the poll's own title, and there is no field on screen here.
+    if (form.multiQuestion) {
+      const questionTitle = question.title.trim()
+      if (!questionTitle) {
+        errors.questionTitles[questionIndex] = 'Give the question a title.'
+      } else if (questionTitle.length > TITLE_MAX) {
+        errors.questionTitles[questionIndex] = tooLong(
+          'A question title',
+          questionTitle.length,
+          TITLE_MAX,
+        )
+      }
     }
 
-    const optionDescription = option.description?.trim() ?? ''
-    if (optionDescription.length > OPTION_DESCRIPTION_MAX) {
-      errors.optionDescriptions[index] = tooLong(
-        'A description',
-        optionDescription.length,
-        OPTION_DESCRIPTION_MAX,
-      )
+    // Compared lowercased: two options that differ only in case are one
+    // option to everybody scoring the ballot, and the suggestion path has
+    // always refused the pair for that reason. Compared within the question
+    // and not across them: two questions are two ballots, and offering the
+    // same option on both is ordinary rather than a mistake.
+    const seen = new Map<string, number>()
+    question.options.forEach((option, index) => {
+      const key = optionKey(questionIndex, index)
+      const name = option.name.trim()
+      if (name.length > OPTION_NAME_MAX) {
+        errors.optionNames[key] = tooLong('An option name', name.length, OPTION_NAME_MAX)
+      } else if (name) {
+        const first = seen.get(name.toLowerCase())
+        // Reported against the later row: the first one is the one that keeps
+        // the name, so it is not the one that has to change.
+        if (first !== undefined) errors.optionNames[key] = `Same as option ${first + 1}.`
+        else seen.set(name.toLowerCase(), index)
+      }
+
+      const optionDescription = option.description?.trim() ?? ''
+      if (optionDescription.length > OPTION_DESCRIPTION_MAX) {
+        errors.optionDescriptions[key] = tooLong(
+          'A description',
+          optionDescription.length,
+          OPTION_DESCRIPTION_MAX,
+        )
+      }
+    })
+
+    const filled = question.options.filter((o) => o.name.trim()).length
+    // A poll that collects its options may be created with none: the same
+    // minimum is applied later, when the creator turns the list into a ballot.
+    // Seeding a few here is a head start, not a requirement.
+    if (!form.solicitOptions && filled < 2) {
+      errors.options[questionIndex] = 'A question needs at least two options.'
+    } else if (filled > MAX_OPTIONS) {
+      errors.options[questionIndex] =
+        `A ballot can only hold ${MAX_OPTIONS} options; this one has ${filled}.`
     }
   })
-
-  const filled = form.options.filter((o) => o.name.trim()).length
-  // A poll that collects its options may be created with none: the same
-  // minimum is applied later, when the creator turns the list into a ballot.
-  // Seeding a few here is a head start, not a requirement.
-  if (!form.solicitOptions && filled < 2) {
-    errors.options = 'A poll needs at least two options.'
-  } else if (filled > MAX_OPTIONS) {
-    errors.options = `A ballot can only hold ${MAX_OPTIONS} options; this one has ${filled}.`
-  }
 
   if (!form.isOpen) {
     const typed = form.emails.map((e) => e.trim().toLowerCase()).filter(Boolean)
@@ -184,7 +257,11 @@ export function CreatePoll() {
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [options, setOptions] = useState<OptionDraft[]>([blankOption(), blankOption()])
+  // Always a list, whether or not the poll asks more than one question; see
+  // QuestionDraft. The switch decides what is rendered and what is read, not
+  // what is held.
+  const [questions, setQuestions] = useState<QuestionDraft[]>([blankQuestion()])
+  const [multiQuestion, setMultiQuestion] = useState(false)
   const [mode, setMode] = useState<PollMode>('invite')
   const [showVoters, setShowVoters] = useState(true)
   const [showBallots, setShowBallots] = useState(false)
@@ -205,7 +282,8 @@ export function CreatePoll() {
   const errors = validate({
     title,
     description,
-    options,
+    questions,
+    multiQuestion,
     emails,
     includeSelf,
     myEmail,
@@ -214,7 +292,7 @@ export function CreatePoll() {
   })
   // What the fields actually render. Held back until the first submit, then
   // live: fixing a field clears its message as it is fixed.
-  const shown: FormErrors = showErrors ? errors : { optionNames: {}, optionDescriptions: {} }
+  const shown: FormErrors = showErrors ? errors : noErrors()
 
   // Duplicating copies the source poll's settings into the form and stops
   // there; nothing is created until the user submits, so the copy can be
@@ -247,16 +325,41 @@ export function CreatePoll() {
 
       // Descriptions come across with their options, so a duplicate of a poll
       // that explained its options does not quietly lose the explanations.
-      const sourceOptions = ((optionsRes.data as PollOption[]) ?? []).map((o) => ({
-        name: o.name,
-        description: o.description,
-      }))
-      // Keep the form's two-row minimum if the source somehow had fewer.
-      setOptions(
-        sourceOptions.length >= 2
-          ? sourceOptions
-          : [...sourceOptions, blankOption(), blankOption()].slice(0, 2),
-      )
+      const draftFrom = (rows: PollOption[]): OptionDraft[] => {
+        const drafted = rows.map((o) => ({ name: o.name, description: o.description }))
+        // Keep the form's two-row minimum if the source somehow had fewer.
+        return drafted.length >= 2
+          ? drafted
+          : [...drafted, blankOption(), blankOption()].slice(0, 2)
+      }
+
+      // A duplicate of a poll that asks several questions is a poll that asks
+      // the same several, not whichever one the creator happened to press
+      // Duplicate on. The group is read through the same RPC the poll page
+      // uses, and every question's options in one query rather than one each.
+      const { data: groupData } = await supabase.rpc('poll_group', { p_poll_id: sourceId })
+      if (cancelled) return
+      const group = (groupData as GroupQuestion[]) ?? []
+
+      if (group.length > 1) {
+        const ids = group.map((q) => q.id)
+        const { data: allOptions } = await supabase
+          .from('candidates')
+          .select('*')
+          .in('poll_id', ids)
+          .order('sort_order')
+        if (cancelled) return
+        const rows = (allOptions as PollOption[]) ?? []
+        setMultiQuestion(true)
+        setQuestions(
+          group.map((question) => ({
+            title: question.question_title,
+            options: draftFrom(rows.filter((o) => o.poll_id === question.id)),
+          })),
+        )
+      } else {
+        setQuestions([{ title: '', options: draftFrom((optionsRes.data as PollOption[]) ?? []) }])
+      }
 
       if (source.mode === 'invite') {
         // Open polls have no invitee list and poll_invitees raises on them.
@@ -280,16 +383,62 @@ export function CreatePoll() {
     }
   }, [duplicateOf, myEmail])
 
-  function updateOption(index: number, patch: Partial<OptionDraft>) {
-    setOptions((prev) => prev.map((o, i) => (i === index ? { ...o, ...patch } : o)))
+  /** Edits one question's option list in place, leaving the others alone. */
+  function patchOptions(question: number, edit: (options: OptionDraft[]) => OptionDraft[]) {
+    setQuestions((prev) =>
+      prev.map((q, i) => (i === question ? { ...q, options: edit(q.options) } : q)),
+    )
   }
 
-  function addOption() {
-    setOptions((prev) => [...prev, blankOption()])
+  function updateOption(question: number, index: number, patch: Partial<OptionDraft>) {
+    patchOptions(question, (options) =>
+      options.map((o, i) => (i === index ? { ...o, ...patch } : o)),
+    )
   }
 
-  function removeOption(index: number) {
-    setOptions((prev) => prev.filter((_, i) => i !== index))
+  function addOption(question: number) {
+    patchOptions(question, (options) => [...options, blankOption()])
+  }
+
+  function removeOption(question: number, index: number) {
+    patchOptions(question, (options) => options.filter((_, i) => i !== index))
+  }
+
+  function updateQuestionTitle(index: number, value: string) {
+    setQuestions((prev) => prev.map((q, i) => (i === index ? { ...q, title: value } : q)))
+  }
+
+  function addQuestion() {
+    setQuestions((prev) => [...prev, blankQuestion()])
+  }
+
+  function removeQuestion(index: number) {
+    setQuestions((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  /**
+   * Turning the poll into several questions, or back into one.
+   *
+   * On: the options already typed become question 1, and a second empty
+   * question is added, because the switch is a promise that there is somewhere
+   * to put the next question and an empty list is not that.
+   *
+   * Off: question 1 is kept whole and the rest are dropped. Nothing is merged
+   * -- two ballots' worth of options concatenated into one is not what anybody
+   * meant -- and what is dropped is on screen at the moment the switch is
+   * pressed, so it is a visible loss rather than a silent one.
+   *
+   * A poll that collects its options cannot ask several questions; see
+   * create_poll_group. Turning this on turns that off.
+   */
+  function toggleMultiQuestion(on: boolean) {
+    setMultiQuestion(on)
+    if (on) {
+      setSolicitOptions(false)
+      setQuestions((prev) => (prev.length >= 2 ? prev : [...prev, blankQuestion()]))
+    } else {
+      setQuestions((prev) => prev.slice(0, 1))
+    }
   }
 
   // null is "no description", and is also what collapses the field: showing a
@@ -297,9 +446,9 @@ export function CreatePoll() {
   // throws whatever was in it away. Keeping hidden text would mean a poll
   // could carry a description its creator can no longer see, which is the one
   // way this field could surprise anybody.
-  function toggleDescription(index: number) {
-    setOptions((prev) =>
-      prev.map((o, i) =>
+  function toggleDescription(question: number, index: number) {
+    patchOptions(question, (options) =>
+      options.map((o, i) =>
         i === index ? { ...o, description: o.description === null ? '' : null } : o,
       ),
     )
@@ -313,34 +462,49 @@ export function CreatePoll() {
     // this size turns into four round trips.
     if (hasErrors(errors)) return
 
-    // Blank rows are dropped here and in create_poll alike, and the
-    // descriptions travel as a parallel array; so they are filtered
-    // together, never separately, or a dropped row would slide every later
-    // description onto the wrong option.
-    const cleanOptions = options
-      .map((o) => ({ name: o.name.trim(), description: o.description?.trim() || null }))
-      .filter((o) => o.name)
+    // Blank rows are dropped here and in the database alike, and the
+    // descriptions travel with their option rather than beside it, so a
+    // dropped row cannot slide every later description onto the wrong one.
+    const cleaned = questions.map((question) => ({
+      title: question.title.trim(),
+      options: question.options
+        .map((o) => ({ name: o.name.trim(), description: o.description?.trim() || null }))
+        .filter((o) => o.name),
+    }))
     const typedEmails = emails.map((e) => e.trim().toLowerCase()).filter(Boolean)
     const allEmails = Array.from(new Set(includeSelf ? [...typedEmails, myEmail] : typedEmails))
 
     setSubmitting(true)
-    // One transaction: the poll, its options, and its invitees land together
-    // or not at all.
-    const { data, error: rpcError } = await supabase.rpc('create_poll', {
-      p_title: title.trim(),
-      p_description: description.trim() || null,
-      p_options: cleanOptions.map((o) => o.name),
-      p_emails: isOpen ? [] : allEmails,
-      p_mode: mode,
-      p_show_voters: showVoters,
-      p_show_ballots: showBallots,
-      p_solicit_options: solicitOptions,
-      // Most polls describe nothing, and send nothing rather than a row of
-      // nulls the database would only throw away again.
-      p_option_descriptions: cleanOptions.some((o) => o.description)
-        ? cleanOptions.map((o) => o.description)
-        : null,
-    })
+    // One transaction either way: the poll, its questions, their options and
+    // its invitees land together or not at all. That is the whole reason a
+    // group is created by one function rather than by a loop out here -- a
+    // failure part-way would leave a real, half-built poll behind, with the
+    // invitations for it already sent.
+    const { data, error: rpcError } = multiQuestion
+      ? await supabase.rpc('create_poll_group', {
+          p_title: title.trim(),
+          p_description: description.trim() || null,
+          p_questions: cleaned,
+          p_emails: isOpen ? [] : allEmails,
+          p_mode: mode,
+          p_show_voters: showVoters,
+          p_show_ballots: showBallots,
+        })
+      : await supabase.rpc('create_poll', {
+          p_title: title.trim(),
+          p_description: description.trim() || null,
+          p_options: cleaned[0].options.map((o) => o.name),
+          p_emails: isOpen ? [] : allEmails,
+          p_mode: mode,
+          p_show_voters: showVoters,
+          p_show_ballots: showBallots,
+          p_solicit_options: solicitOptions,
+          // Most polls describe nothing, and send nothing rather than a row of
+          // nulls the database would only throw away again.
+          p_option_descriptions: cleaned[0].options.some((o) => o.description)
+            ? cleaned[0].options.map((o) => o.description)
+            : null,
+        })
     setSubmitting(false)
 
     if (rpcError) {
@@ -447,95 +611,177 @@ export function CreatePoll() {
 
       {/* The one setting that decides what the poll does *before* anyone
           votes. Off is the behaviour the app has always had. */}
-      <Switch
-        checked={solicitOptions}
-        onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
-        label="Solicit options from voters"
-      />
+      <Stack gap={4}>
+        <Switch
+          checked={solicitOptions}
+          onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
+          label="Solicit options from voters"
+          disabled={multiQuestion}
+        />
+        {multiQuestion && (
+          <Text size="xs" c="dimmed">
+            A poll that asks several questions writes its own options: collecting them would leave
+            one question taking votes while another was still gathering.
+          </Text>
+        )}
+      </Stack>
+
+      {/* Below the settings and above the options, because it is what decides
+          the shape of everything under it: one option list, or one per
+          question. Off is the behaviour the app has always had. */}
+      <Stack gap={4}>
+        <Switch
+          checked={multiQuestion}
+          onChange={(e) => toggleMultiQuestion(e.currentTarget.checked)}
+          label="Ask several questions"
+        />
+        <Text size="xs" c="dimmed">
+          {multiQuestion
+            ? 'Each question is scored on its own ballot and elects its own winner. Voters answer them one after another.'
+            : 'One ballot, one winner. Turn this on to ask more than one question in the same poll.'}
+        </Text>
+      </Stack>
 
       {/* Last, because it is the only part of the form whose shape depends on
           the answers above it: a poll collecting its options can be created
           with none at all, and the rows here become a head start rather than
           the ballot. */}
-      <Stack gap="xs">
-        <Stack gap={2}>
-          <Text fw={500} size="sm">
-            {solicitOptions ? 'Starting options' : 'Options'}
-          </Text>
-          {/* The + is one small icon on a row of them, so it gets one line
-              saying what it is for. Most polls need none. */}
-          <Text size="xs" c="dimmed">
-            {solicitOptions
-              ? 'Voters will be able to add to this list later.'
-              : 'Use + to add a description to an option.'}
-          </Text>
-        </Stack>
-        {options.map((option, index) => (
-          <Group key={index} gap="xs" align="flex-start" wrap="nowrap">
-            <Stack gap={4} style={{ flex: 1 }}>
-              <TextInput
-                value={option.name}
-                onChange={(e) => updateOption(index, { name: e.currentTarget.value })}
-                placeholder={`Option ${index + 1}`}
-                error={shown.optionNames[index]}
-              />
-              {option.description !== null && (
-                <DescriptionField
-                  value={option.description}
-                  onChange={(e) => updateOption(index, { description: e.currentTarget.value })}
-                  placeholder={`Option ${index + 1} description`}
-                  error={shown.optionDescriptions[index]}
-                  autoFocus
+      <Stack gap="lg">
+        {questions.map((question, questionIndex) => (
+          <Stack key={questionIndex} gap="xs">
+            {/* A question of a multi-question poll is titled and can be
+                removed; the single question of an ordinary poll is neither,
+                because the poll's own title names it and there is nothing to
+                remove it from. */}
+            {multiQuestion && (
+              <Group gap="xs" align="flex-end" wrap="nowrap">
+                <TextInput
+                  label={`Question ${questionIndex + 1}`}
+                  placeholder="What is this question asking?"
+                  value={question.title}
+                  onChange={(e) => updateQuestionTitle(questionIndex, e.currentTarget.value)}
+                  error={shown.questionTitles[questionIndex]}
+                  style={{ flex: 1 }}
+                  required
                 />
-              )}
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  onClick={() => removeQuestion(questionIndex)}
+                  disabled={questions.length <= 2}
+                  aria-label={`Remove question ${questionIndex + 1}`}
+                >
+                  &times;
+                </ActionIcon>
+              </Group>
+            )}
+
+            <Stack gap={2}>
+              <Text fw={500} size="sm">
+                {solicitOptions ? 'Starting options' : 'Options'}
+              </Text>
+              {/* The + is one small icon on a row of them, so it gets one line
+                  saying what it is for. Most polls need none. */}
+              <Text size="xs" c="dimmed">
+                {solicitOptions
+                  ? 'Voters will be able to add to this list later.'
+                  : 'Use + to add a description to an option.'}
+              </Text>
             </Stack>
-            <Tooltip
-              label={option.description === null ? 'Add description' : 'Remove description'}
-              withArrow
-            >
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                onClick={() => toggleDescription(index)}
-                aria-label={
-                  option.description === null
-                    ? `Add a description to option ${index + 1}`
-                    : `Remove the description from option ${index + 1}`
-                }
+
+            {question.options.map((option, index) => (
+              <Group key={index} gap="xs" align="flex-start" wrap="nowrap">
+                <Stack gap={4} style={{ flex: 1 }}>
+                  <TextInput
+                    value={option.name}
+                    onChange={(e) =>
+                      updateOption(questionIndex, index, { name: e.currentTarget.value })
+                    }
+                    placeholder={`Option ${index + 1}`}
+                    error={shown.optionNames[optionKey(questionIndex, index)]}
+                  />
+                  {option.description !== null && (
+                    <DescriptionField
+                      value={option.description}
+                      onChange={(e) =>
+                        updateOption(questionIndex, index, { description: e.currentTarget.value })
+                      }
+                      placeholder={`Option ${index + 1} description`}
+                      error={shown.optionDescriptions[optionKey(questionIndex, index)]}
+                      autoFocus
+                    />
+                  )}
+                </Stack>
+                <Tooltip
+                  label={option.description === null ? 'Add description' : 'Remove description'}
+                  withArrow
+                >
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    onClick={() => toggleDescription(questionIndex, index)}
+                    aria-label={
+                      option.description === null
+                        ? `Add a description to option ${index + 1}`
+                        : `Remove the description from option ${index + 1}`
+                    }
+                  >
+                    {option.description === null ? '+' : '−'}
+                  </ActionIcon>
+                </Tooltip>
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  onClick={() => removeOption(questionIndex, index)}
+                  /* Two rows is the floor for a poll that ships its options with
+                     it, and no floor at all for one that collects them. */
+                  disabled={!solicitOptions && question.options.length <= 2}
+                  aria-label="Remove option"
+                >
+                  &times;
+                </ActionIcon>
+              </Group>
+            ))}
+
+            <Group gap="sm" align="center">
+              <Button
+                variant="light"
+                size="xs"
+                onClick={() => addOption(questionIndex)}
+                w="fit-content"
+                disabled={question.options.length >= MAX_OPTIONS}
               >
-                {option.description === null ? '+' : '−'}
-              </ActionIcon>
-            </Tooltip>
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={() => removeOption(index)}
-              /* Two rows is the floor for a poll that ships its options with
-                 it, and no floor at all for one that collects them. */
-              disabled={!solicitOptions && options.length <= 2}
-              aria-label="Remove option"
-            >
-              &times;
-            </ActionIcon>
-          </Group>
+                Add option
+              </Button>
+            </Group>
+
+            {/* Wrong with the list rather than with a row in it, so it sits under
+                the list rather than under any one field. */}
+            {shown.options[questionIndex] && (
+              <Text c="var(--mantine-color-error)" size="sm">
+                {shown.options[questionIndex]}
+              </Text>
+            )}
+          </Stack>
         ))}
-        <Group gap="sm" align="center">
-          <Button
-            variant="light"
-            size="xs"
-            onClick={addOption}
-            w="fit-content"
-            disabled={options.length >= MAX_OPTIONS}
-          >
-            Add option
-          </Button>
-        </Group>
-        {/* Wrong with the list rather than with a row in it, so it sits under
-            the list rather than under any one field. */}
-        {shown.options && (
-          <Text c="var(--mantine-color-error)" size="sm">
-            {shown.options}
-          </Text>
+
+        {multiQuestion && (
+          <Stack gap="xs">
+            <Button
+              variant="light"
+              size="xs"
+              onClick={addQuestion}
+              w="fit-content"
+              disabled={questions.length >= MAX_QUESTIONS}
+            >
+              Add question
+            </Button>
+            {shown.questions && (
+              <Text c="var(--mantine-color-error)" size="sm">
+                {shown.questions}
+              </Text>
+            )}
+          </Stack>
         )}
       </Stack>
 

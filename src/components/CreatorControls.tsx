@@ -37,7 +37,7 @@ export function CreatorControls({
   onEditOptions,
   onChange,
 }: {
-  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token' | 'closed_at'>
+  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token' | 'closed_at' | 'group_id'>
   status: PollStatus
   /** How many options the poll holds: the floor "Open poll" has to clear. */
   optionCount: number
@@ -113,7 +113,16 @@ export function CreatorControls({
 
   async function deletePoll() {
     setBusy(true)
-    const { error: deleteError } = await supabase.from('polls').delete().eq('id', pollId)
+    // The whole poll, not the question in front of the creator. Close and
+    // reset already act on the group -- they go through functions that walk
+    // it -- and deleting one question of a poll would leave the rest of it
+    // standing with a gap in the middle. The row-level security is the same
+    // either way: it allows the creator to delete polls they created, and
+    // they created every question in the group.
+    const query = supabase.from('polls').delete()
+    const { error: deleteError } = await (poll.group_id
+      ? query.eq('group_id', poll.group_id)
+      : query.eq('id', pollId))
     setBusy(false)
     deleteModal.close()
 
@@ -316,8 +325,8 @@ export function CreatorControls({
         <Modal opened={deleteOpened} onClose={deleteModal.close} title="Delete this poll?" centered>
           <Stack gap="md">
             <Text size="sm">
-              The poll, its options, and every vote cast will be permanently deleted. This can't be
-              undone.
+              {poll.group_id ? 'Every question in this poll' : 'The poll'}, its options, and every
+              vote cast will be permanently deleted. This can't be undone.
             </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={deleteModal.close}>

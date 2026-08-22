@@ -13,14 +13,16 @@ import { CreatorControls } from '../components/CreatorControls'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { OptionDescription } from '../components/OptionDescription'
+import { NextQuestion } from '../components/NextQuestion'
 import { PollHeading } from '../components/PollHeading'
+import { QuestionStrip } from '../components/QuestionStrip'
 import { RetentionNote } from '../components/RetentionNote'
 import { PollPageSkeleton } from '../components/Skeletons'
 import { StarRating } from '../components/StarRating'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
-import type { OpenPollView, Poll, PollOption, PollStatus } from '../lib/types'
+import type { GroupQuestion, OpenPollView, Poll, PollOption, PollStatus } from '../lib/types'
 
 export function PollDetail() {
   const { pollId } = useParams<{ pollId: string }>()
@@ -33,6 +35,12 @@ export function PollDetail() {
   // holds the poll's live state: the tags row, the creator controls and the
   // panel then can never disagree about how many votes are in.
   const [view, setView] = useState<OpenPollView | null>(null)
+  // The poll's other questions, when it asks more than one. Read alongside
+  // the poll rather than on the live tick: which questions a poll asks is
+  // fixed at creation, like everything else about it, so the only part of
+  // this that moves is which of them this reader has answered — and that
+  // moves when they vote, which re-reads the page anyway.
+  const [questions, setQuestions] = useState<GroupQuestion[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Bumped only by creator actions, and used as OpenPollPanel's key so it
@@ -67,10 +75,11 @@ export function PollDetail() {
     if (!pollId) return true
     setError(null)
 
-    const [pollRes, optionsRes, statusRes] = await Promise.all([
+    const [pollRes, optionsRes, statusRes, groupRes] = await Promise.all([
       supabase.from('polls').select('*').eq('id', pollId).single(),
       supabase.from('candidates').select('*').eq('poll_id', pollId).order('sort_order'),
       supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
+      supabase.rpc('poll_group', { p_poll_id: pollId }),
     ])
 
     if (pollRes.error || statusRes.error) {
@@ -83,6 +92,10 @@ export function PollDetail() {
     setPoll(loaded)
     setOptions((optionsRes.data as PollOption[]) ?? [])
     setStatus((statusRes.data as PollStatus) ?? null)
+    // A failure here is swallowed rather than shown: a browser running ahead
+    // of the migration that adds poll_group() gets no strip, and a poll with
+    // no strip is a poll of one question — which every poll was until now.
+    setQuestions(groupRes.error ? [] : ((groupRes.data as GroupQuestion[]) ?? []))
 
     if (loaded.mode === 'open' && loaded.public_token) {
       const { data, error: viewError } = await supabase.rpc('open_poll_view', {
@@ -236,6 +249,15 @@ export function PollDetail() {
 
   const isCreator = poll.created_by === session?.user.id
   const isOpen = poll.mode === 'open'
+  // The question after this one, when there is one. `questions` is empty on a
+  // poll that asks a single question, so this is null there and nothing about
+  // the page changes.
+  const here = questions.findIndex((question) => question.id === poll.id)
+  const nextQuestion = here >= 0 && here < questions.length - 1 ? questions[here + 1] : null
+  // Whether this reader has finished with this question, and so whether the
+  // way on is the obvious thing to offer. An open poll answers for the browser
+  // holding the key, an invite poll for the account.
+  const answeredHere = isOpen ? view?.voted === true : status.voted
   // One option list for this page. An open poll's arrives inside its view,
   // which is what its ballot is scored from; every other poll's is the table
   // read directly. The heading counts it and the option editor edits it, and
@@ -270,6 +292,26 @@ export function PollDetail() {
           winner,
         }}
       />
+
+      {/* Where in the poll this question sits, and the way to the rest of
+          it. Renders nothing at all on a poll that asks one question, which
+          is what keeps every existing poll looking exactly as it did. */}
+      <QuestionStrip
+        questions={questions.map((question) => ({
+          key: question.id,
+          position: question.question_position,
+          title: question.question_title,
+          answered: question.voted,
+        }))}
+        current={poll.id}
+        hrefFor={(id) => `/polls/${id}`}
+      />
+
+      {/* What this one question asks, above the ballot that answers it. The
+          heading above carries the poll's title, which every question in the
+          poll shares; this is the part that is only true of this one, so it
+          sits with the options rather than with the poll's terms. */}
+      {poll.question_title && <Title order={3}>{poll.question_title}</Title>}
 
       {/* The creator's correction to an option list that is already a ballot,
           in place of that ballot while it is open. It replaces the ballot
@@ -335,7 +377,15 @@ export function PollDetail() {
         </Stack>
       ) : status.is_closed ? (
         <Card withBorder>
-          <Text fw={500}>This poll was closed before anyone voted, so there are no results.</Text>
+          {/* Closing acts on the whole poll, so one question of several can
+              end with nothing in it while the rest have results. Saying "this
+              poll" there would be wrong about the poll and about the question
+              alike. */}
+          <Text fw={500}>
+            {poll.group_id
+              ? 'The poll was closed before anyone answered this question, so it has no results.'
+              : 'This poll was closed before anyone voted, so there are no results.'}
+          </Text>
         </Card>
       ) : status.voted ? (
         /* You have voted and the results are still sealed, which is exactly
@@ -364,6 +414,13 @@ export function PollDetail() {
            correction to the option list invalidates a half-filled ballot,
            and remounting is what discards it. */
         <VoteForm key={refreshKey} poll={poll} options={options} onVoted={load} />
+      )}
+
+      {/* The way on, once this question is behind them. The strip at the top
+          can already reach every question; this is the one that is where a
+          voter is looking at the moment they finish a ballot. */}
+      {nextQuestion && answeredHere && (
+        <NextQuestion title={nextQuestion.question_title} href={`/polls/${nextQuestion.id}`} />
       )}
 
       {/* Held back until you have voted, for the reasons set out where the

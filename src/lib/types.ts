@@ -37,6 +37,45 @@ export interface Poll {
   options_finalized_at: string | null
   /** Set for open polls only; the capability in their share link. */
   public_token: string | null
+  /**
+   * The multi-question poll this question belongs to, or null on a poll that
+   * asks one question. Every question in a group shares its title,
+   * description, mode and settings; the options and the ballots are its own.
+   */
+  group_id: string | null
+  /** Where this question sits in its group, from 1. Null when it has none. */
+  question_position: number | null
+  /**
+   * What this one question asks. The poll's title is shared across the
+   * group, so this is the part that tells two questions apart. Null on a
+   * poll that asks one question, which has nothing to tell apart.
+   */
+  question_title: string | null
+}
+
+/**
+ * One question of a multi-question poll, as the question strip renders it.
+ *
+ * Two shapes for the two ways into a poll, and the difference is not
+ * cosmetic. An invited voter is an account, so the server can say which
+ * questions they have answered; a voter behind a share link is a `voter_key`
+ * minted separately for every question precisely so those ballots cannot be
+ * joined, and `open_poll_group` will not undo that to fill in a tick. The
+ * browser knows its own answers either way.
+ */
+export interface GroupQuestion {
+  id: string
+  question_position: number
+  question_title: string
+  /** Whether the signed-in reader has cast a ballot in this question. */
+  voted: boolean
+}
+
+/** One question of an open multi-question poll; see GroupQuestion. */
+export interface OpenGroupQuestion {
+  token: string
+  question_position: number
+  question_title: string
 }
 
 // Backed by the "candidates" table in Postgres; kept as-is there to
@@ -83,6 +122,17 @@ export interface PollStatus {
 export interface PollListItem extends Poll, PollStatus {
   /** How many options the poll has; its turnout number while collecting. */
   option_count: number
+  /**
+   * How many questions the poll asks: 1 for an ordinary poll, and what the
+   * count badge says in place of a turnout on a grouped one.
+   *
+   * The list carries the first question of a group and hides the rest, so
+   * every other number on this row — the turnout, the option count — belongs
+   * to that first question alone. The three that mean the whole poll are
+   * `is_closed`, `is_complete` and `results_available`, which list_polls()
+   * asks of every question.
+   */
+  question_count: number
 }
 
 export interface Invitee {
@@ -107,6 +157,15 @@ export interface OpenPollView {
     show_ballots: boolean
     solicit_options: boolean
     closed_at: string | null
+    /**
+     * Which multi-question poll this question belongs to, where it sits, and
+     * what it asks. All three null on a poll asking one question, and all
+     * three undefined against a database whose open_poll_view predates them
+     * — the same reason PollStatus.expires_at is optional.
+     */
+    group_id?: string | null
+    question_position?: number | null
+    question_title?: string | null
   }
   options: PollOption[]
   voted_count: number

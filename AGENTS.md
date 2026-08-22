@@ -1224,6 +1224,79 @@ out before anyone, the creator included, has voted. Open polls also offer it on
 the thank-you card once you have voted, where passing it on is a reasonable
 thing to want.
 
+### A poll can ask more than one question
+
+A multi-question poll is **several ordinary polls that know they belong
+together**. `group_id` says which set a poll is part of, `question_position`
+says where in it, and `question_title` is what that one question asks; the
+poll's own `title`, description, mode and settings are the same on every row.
+All three columns move together or not at all (`polls_question_ck`), and like
+every other poll setting they are frozen at creation — `authenticated` still
+has no `UPDATE` grant on the table.
+
+**Nothing about the election changed.** `poll_tally`, `star_round` and
+`poll_ranking` take a poll id and count the ballots against it; a question is
+a poll, so they were not touched, and neither were their tests. That is the
+whole reason for this shape rather than a `questions` table under `polls`,
+which would have moved two foreign keys and rewritten every one of those
+functions to reach a poll through one more hop, for no difference in what a
+voter sees.
+
+Three things are true of the set rather than of one question, and each is one
+existing rule widened rather than a second rule to keep in step:
+
+1. **One invitation.** Every question carries the whole invite list, because
+   that list is what the row-level security on its options and ballots reads.
+   `trg_send_invite_email` therefore fires for the first question only —
+   through a `WHEN` clause calling `poll_is_first_question`, so the trigger
+   holds the rule about who gets told and the function stays about the letter.
+   A five-question poll sends one email per person, and it links to question 1.
+2. **One reveal.** `poll_results_revealed()` was already the single place
+   deciding whether a poll has shown its tally; `poll_status`, `open_poll_view`,
+   `assert_results_readable` and both revision paths all read it. It now asks
+   the *gate* of every question in the group, so question 1's result cannot be
+   read while question 5 is still taking votes — the same promise a
+   single-question poll makes, applied to the unit the voter thinks in.
+   **"Has anyone answered" stays per question**, so a poll closed with nobody
+   having reached question 5 still shows question 1's result, and question 5
+   says it took no votes.
+3. **One lifecycle.** `close_poll` and `reset_poll` walk the group, and the
+   Delete button removes every question. The creator acts on the poll, not on
+   the question they happen to be looking at.
+
+**Ballots, voter keys and voter names stay per question**, and this is the
+part most likely to look like an oversight. A voter gets one ballot and one
+`voter_key` per question, because `voterKeyFor()` is scoped to a share token
+and keeping it that way is what stops one browser's ballots being joined to
+each other — see `src/lib/voterKey.ts`. The continuity a voter actually
+notices is the name, and that lives in the browser instead
+(`src/lib/voterName.ts`): typed once, offered back on the next question,
+never linked on the server. `open_poll_group` accordingly returns the sibling
+tokens and **no "answered" flag**; `poll_group` does return one, because an
+invite ballot carries an account and nothing has to be linked to find it.
+
+What this costs, knowingly: nobody can tell whether the six people who
+answered question 2 are among the eight who answered question 1. That is an
+aggregate over other people on an anonymous poll, which is exactly the
+correlation the key scoping exists to prevent, so losing it is the feature
+working rather than a gap.
+
+**A group cannot collect its options.** `create_poll_group` refuses
+`solicit_options`, and the create form disables that switch. A poll whose
+questions each finalize their own list would be one where question 1 takes
+votes while question 2 is still gathering, which is the opposite of what the
+feature is for. It wants a group-wide stage of its own, and that is a later
+change.
+
+**On screen.** The poll list shows position 1 and hides the rest
+(`list_polls`), with the count badge reading *N questions* instead of a
+turnout — the turnouts come apart the moment somebody answers three of five,
+and the first question's number would read like the whole. Its state badge
+stays *Results ready* rather than naming a winner, because there is one per
+question; the winner is named on each question's own page. `QuestionStrip`
+carries the walking between them, and renders nothing at all below two
+questions, so every existing poll looks exactly as it did.
+
 ### Polls are deleted after six months
 
 Nothing in this app had ever removed a poll it was not told to remove, so

@@ -281,3 +281,113 @@ begin
       revised_at = revised_at - p_age
   where poll_id = p_poll;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Multi-question polls
+-- ---------------------------------------------------------------------------
+
+-- One question of a multi-question poll: what it asks, and what it offers.
+do $$
+begin
+  if not exists (select 1 from pg_type t
+                 join pg_namespace n on n.oid = t.typnamespace
+                 where n.nspname = 'tests' and t.typname = 'question') then
+    create type tests.question as (title text, options text[]);
+  end if;
+end $$;
+
+-- Creates a poll that asks several questions and returns their poll ids, in
+-- the order they are asked.
+--
+-- p_questions is one entry per question: a title, and that question's option
+-- names.
+--
+--   tests.seed_group(array[
+--     row('Lunch', array['Pizza', 'Salad'])::tests.question,
+--     row('Time',  array['Noon',  'One'])::tests.question
+--   ], array['voter1@example.com'])
+--
+-- Like seed_poll, it goes through create_poll_group() rather than inserting
+-- rows, so a case cannot build a group the app itself could not.
+create or replace function tests.seed_group(
+  p_questions tests.question[],
+  p_emails text[],
+  p_title text default 'Test poll',
+  p_mode text default 'invite',
+  p_show_voters boolean default true
+)
+returns uuid[] language plpgsql as $$
+declare
+  v_payload jsonb := '[]'::jsonb;
+  v_first uuid;
+  v_question tests.question;
+  v_options jsonb;
+  v_name text;
+begin
+  foreach v_question in array p_questions loop
+    v_options := '[]'::jsonb;
+    foreach v_name in array v_question.options loop
+      v_options := v_options || jsonb_build_array(jsonb_build_object('name', v_name));
+    end loop;
+    v_payload := v_payload || jsonb_build_array(
+      jsonb_build_object('title', v_question.title, 'options', v_options));
+  end loop;
+
+  perform tests.sign_in('creator@example.com');
+  v_first := create_poll_group(p_title, null, v_payload, p_emails, p_mode, p_show_voters, false);
+
+  return tests.group_questions(v_first);
+end $$;
+
+-- The poll ids of every question in one poll's group, in order.
+create or replace function tests.group_questions(p_poll_id uuid)
+returns uuid[] language sql stable as $$
+  select array_agg(q.id order by q.question_position)
+  from polls p
+  join polls q on q.group_id = p.group_id
+  where p.id = p_poll_id;
+$$;
+
+-- Casts one ballot in one question, scoring its options in the order they
+-- were written. The caller signs in first, as a voter would.
+create or replace function tests.cast_ballot(p_poll_id uuid, p_scores int[])
+returns void language plpgsql as $$
+declare
+  v_candidates uuid[];
+  v_scores jsonb := '[]'::jsonb;
+  j int;
+begin
+  select array_agg(id order by sort_order, name)
+  into v_candidates
+  from candidates where poll_id = p_poll_id;
+
+  for j in 1 .. array_length(p_scores, 1) loop
+    v_scores := v_scores || jsonb_build_array(jsonb_build_object(
+      'candidate_id', v_candidates[j],
+      'score', p_scores[j]));
+  end loop;
+
+  perform submit_ballot(p_poll_id, v_scores);
+end $$;
+
+-- The scores payload open_poll_submit takes, for one question's options in
+-- the order they were written.
+create or replace function tests.open_scores(p_poll_id uuid, p_scores int[])
+returns jsonb language plpgsql stable as $$
+declare
+  v_candidates uuid[];
+  v_scores jsonb := '[]'::jsonb;
+  j int;
+begin
+  select array_agg(id order by sort_order, name)
+  into v_candidates
+  from candidates where poll_id = p_poll_id;
+
+  for j in 1 .. array_length(p_scores, 1) loop
+    v_scores := v_scores || jsonb_build_array(jsonb_build_object(
+      'candidate_id', v_candidates[j],
+      'score', p_scores[j]));
+  end loop;
+
+  return v_scores;
+end $$;

@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { VOTER_NAME_MAX } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
+import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
 import { badgeColor } from '../lib/badgeColors'
 import { Ballots } from './Ballots'
 import { CollectOptions } from './CollectOptions'
@@ -100,7 +101,13 @@ export function OpenPollPanel({
   if (view.is_closed) {
     return (
       <Card withBorder>
-        <Text fw={500}>This poll was closed before anyone voted, so there are no results.</Text>
+        {/* Closing acts on the whole poll, so one question of several can end
+            with nothing in it while the rest have results. */}
+        <Text fw={500}>
+          {view.poll.group_id
+            ? 'The poll was closed before anyone answered this question, so it has no results.'
+            : 'This poll was closed before anyone voted, so there are no results.'}
+        </Text>
       </Card>
     )
   }
@@ -254,7 +261,14 @@ function OpenBallot({
   onCancel?: () => void
 }) {
   const revising = initial !== undefined
-  const [name, setName] = useState('')
+  // Offered rather than imposed: a name this browser has voted under before,
+  // editable like any other, and blank for a browser that has not. It is what
+  // lets a poll of several questions be answered without typing the same name
+  // onto every one of them — the questions are separate polls and nothing on
+  // the server connects one ballot to the next, deliberately, so the
+  // continuity has to come from the only place that legitimately has it. See
+  // lib/voterName.ts.
+  const [name, setName] = useState(rememberedVoterName)
   const [values, setValues] = useState<Record<string, number>>(initial ?? {})
   const [submitting, setSubmitting] = useState(false)
   // The name is the one thing on this ballot that can be wrong, so it is
@@ -314,6 +328,9 @@ function OpenBallot({
       setError(rpcError.message)
       return
     }
+    // Remembered only once a ballot has actually gone in under it, so a name
+    // typed into a form that was refused is not offered back on the next one.
+    if (needsName) rememberVoterName(trimmedName)
     notifications.show({ message: revising ? 'Vote updated' : 'Vote submitted', color: 'green' })
     onVoted()
   }
