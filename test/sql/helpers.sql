@@ -277,6 +277,7 @@ begin
   where id = p_poll;
 
   update ballots
-  set submitted_at = submitted_at - p_age
+  set submitted_at = submitted_at - p_age,
+      revised_at = revised_at - p_age
   where poll_id = p_poll;
 end $$;

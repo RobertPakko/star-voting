@@ -117,6 +117,14 @@ export interface OpenPollView {
   /** This browser's voter_key has already submitted a ballot. */
   voted: boolean
   your_name: string | null
+  /**
+   * This browser's own scores, keyed by option id, so a voter changing their
+   * mind gets their ballot back filled in without a second request. Null when
+   * this voter_key has cast no ballot, and undefined against a database whose
+   * open_poll_view predates the field — the same reason PollStatus.expires_at
+   * is optional. Nobody else's ballot is reachable here at any stage.
+   */
+  your_scores?: Record<string, number> | null
   /** Names of everyone who has responded; null when the poll hides them. */
   voters: string[] | null
 }
