@@ -1001,6 +1001,37 @@ another at the same length. Being told to try again is the safe half of that
 trade; the unsafe half would be a ballot silently scoring an option nobody
 showed the voter.
 
+### Scoring an option
+
+The stars on a ballot are `src/components/StarRating.tsx`, not Mantine's
+`Rating`, and the difference is entirely about phones. Mantine's control sets
+the score from `touchstart`, working out which star was meant from the
+finger's x coordinate against the row's bounding box, and then the click the
+browser synthesises afterwards applies the tap a second time — a click
+Mantine tries to swallow with a `preventDefault` in `touchend`, which
+browsers honour unevenly. On a touch screen that produced two things nobody
+could reproduce on a desktop, both reported as *scoring one option changed
+another*:
+
+- A finger that lands on a star row only to **scroll** scores that option on
+  the way past. Scrolling down the ballot to reach option 2 could therefore
+  rewrite option 1 — and since pressing the star that is already picked
+  clears an option back to 0, landing on it wiped that score outright.
+- Where the synthesised click is not swallowed, the same tap both sets the
+  score and, running into the clear again, takes it back to 0.
+
+So the ballot draws its own stars: a button per score, one event path
+(`click`), and no coordinate arithmetic — a star says which score it is. A
+swipe that starts on the stars scrolls the page and changes nothing. The
+buttons carry padding around the star so the target is bigger than the 20px
+it draws, which is the other half of being right on a phone, and the group is
+a radio group to a screen reader — one tab stop, arrow keys between the
+scores.
+
+0 is a real score rather than the absence of one, and pressing the star
+already picked is the only way back to it, which is what the line above the
+options tells the voter.
+
 ### What a form checks before it sends
 
 Every form in the app used to fail the same way: one red line, in one place,

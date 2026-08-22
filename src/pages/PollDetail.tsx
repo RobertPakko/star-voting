@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Badge, Button, Card, Group, Progress, Rating, Stack, Text, Title } from '@mantine/core'
+import { Badge, Button, Card, Group, Progress, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -16,6 +16,7 @@ import { OptionDescription } from '../components/OptionDescription'
 import { PollHeading } from '../components/PollHeading'
 import { RetentionNote } from '../components/RetentionNote'
 import { PollPageSkeleton } from '../components/Skeletons'
+import { StarRating } from '../components/StarRating'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
@@ -414,14 +415,7 @@ function VoteForm({
   const [error, setError] = useState<string | null>(null)
 
   function setScore(optionId: string, score: number) {
-    // Mantine's Rating only applies allowClear (re-tap-to-zero) on the click
-    // path; on touch it calls onChange straight from touch coordinates and
-    // suppresses the click that would carry the clear logic. Reimplement the
-    // clear here so tapping the already-selected star still zeroes it out.
-    setValues((prev) => ({
-      ...prev,
-      [optionId]: score !== 0 && (prev[optionId] ?? 0) === score ? 0 : score,
-    }))
+    setValues((prev) => ({ ...prev, [optionId]: score }))
   }
 
   async function handleSubmit() {
@@ -459,14 +453,8 @@ function VoteForm({
               <Text fw={500}>{option.name}</Text>
               {option.description && <OptionDescription description={option.description} />}
             </div>
-            {/* 0 is a real score here, not the absence of one, and without
-                allowClear it has no reachable target: the 0 hit area is an
-                overlay that only wins a click while the score is already 0,
-                so a voter who picked any star could never take it back.
-                allowClear makes clicking the chosen star again return it. */}
-            <Rating
-              count={5}
-              allowClear
+            <StarRating
+              label={`Score for ${option.name}`}
               value={values[option.id] ?? 0}
               onChange={(v) => setScore(option.id, v)}
             />

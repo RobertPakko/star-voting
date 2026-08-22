@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Badge, Button, Card, Group, Rating, Stack, Text, TextInput, Title } from '@mantine/core'
+import { Badge, Button, Card, Group, Stack, Text, TextInput, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { VOTER_NAME_MAX } from '../lib/limits'
@@ -9,6 +9,7 @@ import { Ballots } from './Ballots'
 import { CollectOptions } from './CollectOptions'
 import { OptionDescription } from './OptionDescription'
 import { Results } from './Results'
+import { StarRating } from './StarRating'
 import type { OpenPollView, PollOption } from '../lib/types'
 
 /**
@@ -177,17 +178,6 @@ function OpenBallot({
 }) {
   const [name, setName] = useState('')
   const [values, setValues] = useState<Record<string, number>>({})
-
-  function setScore(optionId: string, score: number) {
-    // Mantine's Rating only applies allowClear (re-tap-to-zero) on the click
-    // path; on touch it calls onChange straight from touch coordinates and
-    // suppresses the click that would carry the clear logic. Reimplement the
-    // clear here so tapping the already-selected star still zeroes it out.
-    setValues((prev) => ({
-      ...prev,
-      [optionId]: score !== 0 && (prev[optionId] ?? 0) === score ? 0 : score,
-    }))
-  }
   const [submitting, setSubmitting] = useState(false)
   // The name is the one thing on this ballot that can be wrong, so it is
   // marked on the box rather than as a line above the submit button, where
@@ -198,11 +188,10 @@ function OpenBallot({
 
   /**
    * Dismissing the on-screen keyboard on a phone does not blur the field it
-   * belongs to, and Rating cancels the default action of the tap that picks a
-   * star, so focus never moves off the name box on its own. Left alone, every
-   * score a voter gives pops the keyboard back up over the ballot. Dropping
-   * focus as the tap starts, before the browser decides whether to re-open
-   * the keyboard, leaves the stars tappable in peace.
+   * belongs to, so focus never moves off the name box on its own. Left alone,
+   * every score a voter gives pops the keyboard back up over the ballot.
+   * Dropping focus as the tap starts, before the browser decides whether to
+   * re-open the keyboard, leaves the stars tappable in peace.
    *
    * The same blur is what Enter needs: the name field stands alone rather than
    * in a form, so there is nothing for Enter to submit and the keyboard simply
@@ -210,6 +199,10 @@ function OpenBallot({
    */
   function releaseNameFocus() {
     nameRef.current?.blur()
+  }
+
+  function setScore(optionId: string, score: number) {
+    setValues((prev) => ({ ...prev, [optionId]: score }))
   }
 
   async function handleSubmit() {
@@ -273,11 +266,8 @@ function OpenBallot({
               <Text fw={500}>{option.name}</Text>
               {option.description && <OptionDescription description={option.description} />}
             </div>
-            {/* See the note on the invite-poll ballot: without allowClear a
-                score of 0 is unreachable once any star is picked. */}
-            <Rating
-              count={5}
-              allowClear
+            <StarRating
+              label={`Score for ${option.name}`}
               value={values[option.id] ?? 0}
               onChange={(v) => setScore(option.id, v)}
               onPointerDown={releaseNameFocus}
