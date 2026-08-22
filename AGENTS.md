@@ -250,7 +250,8 @@ Covered: the score round, finalist selection, both score-round tie-break rules,
 the runoff and its tie-breaks, the genuine-tie result, the full ranking, the
 `create_poll` / `submit_ballot` write path the seeding runs through, the two
 windows in which a poll's option list may move — the collecting stage, and the
-creator's own corrections before the first vote, that an open poll's share
+creator's own corrections before the first vote, the window in which a voter
+may change their vote and the reveal that closes it, that an open poll's share
 link discloses no email address, its creator's included, and which changes
 announce themselves to which topics for [Live updates](#live-updates) — counts
 as well as topics, since a change that announces itself once per row rather
@@ -351,6 +352,13 @@ Six rules keep it honest:
   one whose results are out, has taken its last vote. The poll list is the
   exception and stays subscribed for as long as it is on screen: any poll on
   it can take a vote, and a new invite can add a row.
+- **A vote *changed* says nothing at all.** The one deliberate silence here,
+  and the reasoning is in [Changing your vote until the results are
+  out](#changing-your-vote-until-the-results-are-out): nothing a watcher can
+  see before the results unlock is derived from a score, and past the unlock
+  no vote can change. A signal would wake everyone connected to re-read a poll
+  and hand each of them the answer they already had. There is no trigger on
+  `scores` and none on `UPDATE` of `ballots`.
 
 **There is still no live indicator, and there is now one notice.** A page that
 updates itself demonstrates that by updating itself; a dot claiming it does is
@@ -1000,6 +1008,102 @@ whether the list got longer, got shorter, or had one option swapped for
 another at the same length. Being told to try again is the safe half of that
 trade; the unsafe half would be a ballot silently scoring an option nobody
 showed the voter.
+
+### Changing your vote until the results are out
+
+A ballot used to be final the second it was cast. Nothing about this app
+needed it to be: while the results are still sealed nobody has learned
+anything from anybody's vote, so a voter changing their mind steers nothing
+and is worth what it costs them to click twice. **Change my vote** sits on the
+card you come back to after voting, on both kinds of poll.
+
+**The window is "the results are not out". It is not "the poll is still
+open",** and that difference is the whole design rather than a quibble about
+wording. An invite poll reveals itself the moment its last invitee votes, with
+nobody closing anything — see [Who can vote](#who-can-vote) — so a window
+phrased on `closed_at` would be wide open on a poll whose tally, ranking and
+winner are already on screen for everyone in it. Every voter could then go
+back and re-score against the result. That is the one thing a revision must
+never be able to do, and it is the only way this feature could have harmed an
+election that the old rule protected.
+
+It is also not a new line. `guard_invitee_changes` has always drawn it in this
+exact place — an invitee may be added until the results are out, not until the
+poll is closed — so the two features now rest on one rule rather than two that
+agree by coincidence. `0031` writes that rule down once, as
+`poll_results_revealed(polls)`, taking a poll row the way `poll_expires_at()`
+does. `revise_ballot` and `open_poll_revise` refuse on it, and `poll_status`
+and `open_poll_view` — which is where the screen offering the button learns
+whether the results are out — now answer from it instead of from their own
+copy. Two copies that agree today are a button that offers something the
+database will refuse tomorrow.
+
+The cost is worth stating plainly: **on an invite poll the window shuts for
+everyone the instant the last invitee votes**, so the person who votes last
+never gets one. There is no way to give them one that does not hand somebody a
+tally to score against, and the wait card says "until everyone invited has
+voted" rather than "until voting closes" precisely so it is not making a
+promise it breaks for whoever is last through the door.
+
+**A vote is replaced and never withdrawn.** Every revision is an `update` of
+the scores already on the ballot; the ballot row itself never moves. So
+turnout does not change, an invite poll cannot be pushed back below the
+completion that revealed it, and `is_complete`, the respondent roster and the
+invitee guards see nothing at all. A delete would undo a reveal, and a reveal
+in this app is one-way — [Settled polls](#settled-polls) caches a finished
+poll's tally for the life of the tab on exactly that promise. There is no
+"take my vote back" button and there is deliberately no function behind one.
+
+**Nothing broadcasts, and that is the finding rather than an omission.** Every
+trigger in [Live updates](#live-updates) exists because something on
+somebody's screen went stale. Nothing here does: what a watcher can see before
+the reveal is the turnout, the completion and the roster of who has answered,
+all read off `ballots` rows that an `update` does not move — and everything
+derived from `scores` is behind the reveal, past which no revision can happen.
+A signal would wake every subscriber to re-read a poll and hand each of them
+the answer they already had, which is the cost that section is written to
+avoid rather than a freshness it is written to buy. There is still no trigger
+on `scores`, and `ballots` still has triggers on `INSERT` and `DELETE` only.
+
+Two conditions hold that up, and both are enforced rather than assumed:
+
+- **A revision changes scores and nothing else.** In particular
+  `open_poll_revise` does not take a name. A name on an open poll is on the
+  roster other people are already reading, so changing it would be the one
+  part of a revision somebody else could see — and a name quietly becoming a
+  different name mid-poll reads as another person voting rather than as the
+  same person having second thoughts.
+- **It updates in place and never deletes and re-inserts the ballot.** The
+  lazy version is invisible at the RPC boundary and would fire
+  `ballots_broadcast_delete` and then `ballots_broadcast_insert`: two spurious
+  signals for the no-op this is careful not to send, a new ballot id, and a
+  moment in which withdrawal is representable.
+
+`replace_scores()` is the scoring half, shared by both paths the way
+`ballot_sheet()` is shared by the two ways of reading a poll's ballots.
+It checks what `submit_ballot` checks and one thing more: that the payload
+names each option **once**. That check does no work on an insert-only path and
+real work here — a ballot sent two scores for one option would keep its old
+score on another and go in looking complete, which is a half-rewritten ballot
+rather than a rejected one.
+
+Reading your own ballot back is two different cheap things rather than one
+uniform one. An open poll's arrives inside `open_poll_view` as `your_scores`,
+reached with the same `voter_key` that had to be held to cast it, so the panel
+already has it and changing a vote costs no request until there is a changed
+vote to send. An invite poll's comes from `poll_ballot_scores()`, asked for
+only when somebody presses the button, because almost nobody does and a poll
+page should still cost what it always did to open. `authenticated` has no read
+of `scores` anywhere, which is why that is a function at all.
+
+**The open-poll trade is the one this feature actually costs.** `voter_key`
+was a dedupe token: holding it proved nothing except that this browser had
+voted, and `src/lib/voterKey.ts` says as much. It is now also what hands a
+ballot back, so on a shared browser the next person sees the previous one's
+scores filled in where they used to see "your vote is in". The key is
+per-poll, in that browser's `localStorage`, and never leaves it; open polls
+already promise less than invite polls do, and this is inside what they
+promise rather than a new hole in it.
 
 ### Scoring an option
 

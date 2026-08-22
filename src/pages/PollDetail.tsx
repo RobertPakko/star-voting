@@ -44,6 +44,11 @@ export function PollDetail() {
   // Two timers would drift, and a roster a few seconds ahead of the count
   // sitting above it reads as a bug rather than as a refresh in flight.
   const [liveTick, setLiveTick] = useState(0)
+  // The scores on this reader's own ballot while they are changing it, or
+  // null when they are not. Read from the database at the moment they ask
+  // rather than alongside the poll: almost nobody changes their vote, and a
+  // poll page should still cost what it always did to open.
+  const [revising, setRevising] = useState<Record<string, number> | null>(null)
   // Whether the creator is correcting the option list, which stands in for
   // the ballot while they are. Owned here rather than in CreatorControls
   // because it is this page that swaps one for the other; the button that
@@ -159,6 +164,10 @@ export function PollDetail() {
 
   useEffect(() => {
     loadedOnce.current = false
+    // Navigating from one poll to another remounts nothing, so a ballot
+    // half-changed in the poll being left would otherwise turn up on the
+    // poll being arrived at, scored against somebody else's options.
+    setRevising(null)
   }, [pollId])
 
   // Nothing about a closed poll changes again, and a poll whose results are
@@ -202,6 +211,16 @@ export function PollDetail() {
   useEffect(() => {
     if (!editable) setEditingOptions(false)
   }, [editable])
+
+  // And a ballot that stops existing takes the form changing it with it: the
+  // creator can clear every vote in the poll while somebody is part-way
+  // through. Same shape as the effect above and there for the same reason —
+  // left set, it would put scores from a deleted ballot back on screen the
+  // moment this reader voted again.
+  const hasVoted = status?.voted === true
+  useEffect(() => {
+    if (!hasVoted) setRevising(null)
+  }, [hasVoted])
 
   // The shape of the page that is coming: a title, the poll's terms, and
   // the cards of a ballot. See the note in Skeletons.tsx.
@@ -319,7 +338,27 @@ export function PollDetail() {
           <Text fw={500}>This poll was closed before anyone voted, so there are no results.</Text>
         </Card>
       ) : status.voted ? (
-        <Waiting status={status} />
+        /* You have voted and the results are still sealed, which is exactly
+           the window a vote can be changed in — this branch is only reached
+           when results_available and is_closed are both false, so the gate
+           the database applies is the gate that decides what renders here.
+           A ballot arriving from someone else while this is open takes the
+           window away by moving the page on to the results, and the form
+           goes with it. */
+        revising ? (
+          <VoteForm
+            poll={poll}
+            options={options}
+            initial={revising}
+            onVoted={() => {
+              setRevising(null)
+              load()
+            }}
+            onCancel={() => setRevising(null)}
+          />
+        ) : (
+          <Waiting status={status} pollId={poll.id} onRevise={setRevising} />
+        )
       ) : (
         /* Keyed like the open-poll panel, and for the same reason: a
            correction to the option list invalidates a half-filled ballot,
@@ -370,8 +409,46 @@ export function PollDetail() {
   )
 }
 
-function Waiting({ status }: { status: PollStatus }) {
+/**
+ * Your vote is in and the group is still voting — which is also the whole of
+ * the window in which you may change it.
+ *
+ * The card says so in the same breath as it says the results unlock on their
+ * own, because those two facts are one fact: the moment the last invitee
+ * votes is the moment the standings are on screen, and a vote that could be
+ * changed after that would be a vote changed against a tally its voter had
+ * read. There is no "until voting closes" here to offer, and saying there was
+ * would be a promise this page breaks for whoever votes last.
+ */
+function Waiting({
+  status,
+  pollId,
+  onRevise,
+}: {
+  status: PollStatus
+  pollId: string
+  /** The ballot came back: hand it to the page, which puts the form up. */
+  onRevise: (scores: Record<string, number>) => void
+}) {
+  const [loading, setLoading] = useState(false)
   const pct = status.invited_count === 0 ? 0 : (status.voted_count / status.invited_count) * 100
+
+  async function handleRevise() {
+    setLoading(true)
+    const { data, error } = await supabase.rpc('poll_ballot_scores', { p_poll_id: pollId })
+    setLoading(false)
+
+    // The one thing that can realistically have gone wrong is that the last
+    // invitee voted while this card was on screen, so the results are out and
+    // the ballot is no longer anybody's to change. Say what the database
+    // said; the next live tick replaces this card with the results anyway.
+    if (error) {
+      notifications.show({ message: error.message, color: 'red' })
+      return
+    }
+    onRevise((data as Record<string, number>) ?? {})
+  }
+
   return (
     <Card withBorder>
       <Stack gap="sm">
@@ -382,35 +459,55 @@ function Waiting({ status }: { status: PollStatus }) {
           </Badge>
         </Group>
         <Progress value={pct} />
-        <Text size="sm" c="dimmed">
-          Results unlock automatically once everyone invited has voted.
-        </Text>
+        <Group justify="space-between" wrap="wrap" gap="sm">
+          <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 220 }}>
+            Results unlock automatically once everyone invited has voted. You can change your vote
+            until then.
+          </Text>
+          <Button variant="light" onClick={handleRevise} loading={loading}>
+            Change my vote
+          </Button>
+        </Group>
       </Stack>
     </Card>
   )
 }
 
 /**
- * The ballot for an invite poll.
+ * The ballot for an invite poll, whether it is being filled in for the first
+ * time or filled in again.
  *
  * Submitting re-reads the poll rather than leaving it. A vote is not the end
  * of anybody's interest in a poll, the results are, and this page is
  * where they arrive, on its own, as the rest of the group votes. Being sent
  * back to the list threw that away and made the poll something you had to
  * find your way back to.
+ *
+ * One form for both jobs, because they are the same job: the second time
+ * around the stars start where the voter left them instead of at zero, and
+ * the scores go to `revise_ballot` instead of `submit_ballot`. A ballot you
+ * are changing that looked or behaved unlike the ballot you cast would be two
+ * things to learn rather than one.
  */
 function VoteForm({
   poll,
   options,
+  initial,
   onVoted,
+  onCancel,
 }: {
   poll: Pick<Poll, 'id'>
   options: PollOption[]
+  /** The scores already on this voter's ballot; absent when casting a new one. */
+  initial?: Record<string, number>
   /** The ballot is in: re-read the poll so this page becomes the wait. */
   onVoted: () => void
+  /** Offered only when changing a vote; leaves the ballot as it stands. */
+  onCancel?: () => void
 }) {
   const pollId = poll.id
-  const [values, setValues] = useState<Record<string, number>>({})
+  const revising = initial !== undefined
+  const [values, setValues] = useState<Record<string, number>>(initial ?? {})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -426,12 +523,12 @@ function VoteForm({
         candidate_id: o.id,
         score: values[o.id] ?? 0,
       }))
-      const { error: rpcError } = await supabase.rpc('submit_ballot', {
+      const { error: rpcError } = await supabase.rpc(revising ? 'revise_ballot' : 'submit_ballot', {
         p_poll_id: pollId,
         p_scores: payload,
       })
       if (rpcError) throw rpcError
-      notifications.show({ message: 'Vote submitted', color: 'green' })
+      notifications.show({ message: revising ? 'Vote updated' : 'Vote submitted', color: 'green' })
       onVoted()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit vote.')
@@ -443,8 +540,9 @@ function VoteForm({
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Score each option from 0 (worst) to 5 (best). Unscored options count as 0, and clicking the
-        star you picked returns an option to 0.
+        {revising
+          ? 'Your ballot as it stands. Change whatever you like and save; the group is told nothing until the results unlock.'
+          : 'Score each option from 0 (worst) to 5 (best). Unscored options count as 0, and clicking the star you picked returns an option to 0.'}
       </Text>
       {options.map((option) => (
         <Card key={option.id} withBorder>
@@ -469,8 +567,13 @@ function VoteForm({
       )}
 
       <Group justify="flex-end">
+        {onCancel && (
+          <Button variant="subtle" onClick={onCancel} disabled={submitting}>
+            Cancel
+          </Button>
+        )}
         <Button onClick={handleSubmit} loading={submitting}>
-          Submit vote
+          {revising ? 'Save changes' : 'Submit vote'}
         </Button>
       </Group>
     </Stack>
