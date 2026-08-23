@@ -24,6 +24,7 @@ declare
   v_poll uuid;
   v_open uuid;
   v_old uuid;
+  v_questions uuid[];
   v_token text;
   v_scores jsonb;
 begin
@@ -40,14 +41,34 @@ begin
   select jsonb_agg(jsonb_build_object('candidate_id', id, 'score', 5))
   into v_scores from candidates where poll_id = v_poll;
 
+  -- Both invitees get an account before anything is measured. Being invited
+  -- is an address on a list; being *told* needs somewhere to tell, which is
+  -- the distinction the stranger further down is about.
+  perform tests.sign_in('voter2@example.com');
+
   perform tests.forget_signals();
   perform tests.sign_in('voter1@example.com');
   perform submit_ballot(v_poll, v_scores);
 
   perform tests.assert_eq('a vote announces the poll it was cast in',
     tests.signals(tests.poll_topic(v_poll)), 1);
-  perform tests.assert_eq('and announces it to nobody else',
-    tests.signalled(), array[tests.poll_topic(v_poll)]);
+
+  -- And the list of everyone the poll is on. A poll list holds no poll id
+  -- until it has read one, so it watches its reader rather than the polls in
+  -- front of them -- which is what lets it subscribe before its first read
+  -- instead of after, and so read once rather than twice.
+  --
+  -- voter2 has never opened this poll and is told anyway: the question a list
+  -- asks is "did anything on me move", and their turnout column just did.
+  perform tests.assert_eq('and reaches the list of everyone who can see it',
+    tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_poll),
+      tests.user_topic('creator@example.com'),
+      tests.user_topic('voter1@example.com'),
+      tests.user_topic('voter2@example.com')]));
+
+  perform tests.assert_eq('and tells each of those lists exactly once',
+    tests.signals(tests.user_topic('voter1@example.com')), 1);
 
   -- The whole design in one assertion: the message says that the poll moved
   -- and refuses to say how. Everyone who hears it re-reads the poll through
@@ -105,9 +126,10 @@ begin
     tests.signals(tests.poll_topic(v_poll)), 2);
 
   -- ------------------------------------------------------------------
-  -- An invite, the one change that has to reach somebody who has never seen
-  -- the poll. Their list is subscribed to the polls in front of them, and
-  -- this is not one of them yet.
+  -- An invite, the change that has to reach somebody who has never seen the
+  -- poll. It is no longer a special case: a list watches its reader, the
+  -- newly invited are on the poll by the time the trigger runs, and so they
+  -- are told by the same fan-out that tells everybody else.
   -- ------------------------------------------------------------------
 
   perform tests.sign_in('newcomer@example.com');
@@ -120,16 +142,68 @@ begin
     tests.signals(tests.poll_topic(v_poll)), 1);
   perform tests.assert_eq('and reaches the list of the person invited',
     tests.signals(tests.user_topic('newcomer@example.com')), 1);
+  perform tests.assert_eq('exactly once, not once as an invitee and again as a new one',
+    tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_poll),
+      tests.user_topic('creator@example.com'),
+      tests.user_topic('voter1@example.com'),
+      tests.user_topic('voter2@example.com'),
+      tests.user_topic('voter3@example.com'),
+      tests.user_topic('newcomer@example.com')]));
 
   perform tests.forget_signals();
   insert into invited_voters (poll_id, email) values (v_poll, 'stranger@example.com');
   perform tests.assert_eq('somebody with no account yet has no list to reach',
-    tests.signalled(), array[tests.poll_topic(v_poll)]);
+    tests.signals(tests.user_topic('stranger@example.com')), 0);
+  perform tests.assert_eq('though the poll itself is still announced',
+    tests.signals(tests.poll_topic(v_poll)), 1);
 
   perform tests.forget_signals();
   delete from invited_voters where poll_id = v_poll and email = 'stranger@example.com';
   perform tests.assert_eq('and an invite withdrawn announces the poll',
     tests.signals(tests.poll_topic(v_poll)), 1);
+
+  -- ------------------------------------------------------------------
+  -- A poll that asks several questions.
+  --
+  -- The list carries one row per group -- the first question -- and that
+  -- row's "everyone has answered" state is an aggregate over all of them. A
+  -- list watching poll ids would be watching the first question's, so a vote
+  -- in the second announced itself to a topic no list was listening on and
+  -- the row went stale. Watching the reader instead is what fixes it: the
+  -- question that moved is on their list whichever one it was.
+  -- ------------------------------------------------------------------
+
+  v_questions := tests.seed_group(array[
+    row('Lunch', array['Pizza', 'Salad'])::tests.question,
+    row('Time', array['Noon', 'One'])::tests.question
+  ], array['voter1@example.com']);
+
+  perform tests.forget_signals();
+  perform tests.sign_in('voter1@example.com');
+  perform tests.cast_ballot(v_questions[2], array[5, 0]);
+
+  perform tests.assert_eq('a vote in the second question announces that question',
+    tests.signals(tests.poll_topic(v_questions[2])), 1);
+  perform tests.assert_eq('and reaches the lists the group is on, not only the first question''s watchers',
+    tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_questions[2]),
+      tests.user_topic('creator@example.com'),
+      tests.user_topic('voter1@example.com')]));
+
+  -- ------------------------------------------------------------------
+  -- A creator who invited themselves is one reader with one list.
+  -- ------------------------------------------------------------------
+
+  perform tests.sign_in('creator@example.com');
+  v_poll := create_poll('Own poll', null, array['Yes', 'No'],
+                        array['creator@example.com', 'voter1@example.com'],
+                        'invite', true, false);
+
+  perform tests.forget_signals();
+  perform close_poll(v_poll);
+  perform tests.assert_eq('being both creator and invitee is still one message',
+    tests.signals(tests.user_topic('creator@example.com')), 1);
 
   -- ------------------------------------------------------------------
   -- An open poll is announced twice, because it is watched from two sides:
@@ -153,10 +227,15 @@ begin
   perform tests.assert_eq('and the page holding only the link',
     tests.signals('poll:' || v_token), 1);
 
+  -- Nobody is invited to an open poll, so the only list it is on is its
+  -- creator's -- the voters holding the link have no account and no list.
   perform tests.forget_signals();
   perform close_poll(v_open);
   perform tests.assert_eq('closing it reaches both as well',
-    tests.signalled(), tests.sorted(array[tests.poll_topic(v_open), 'poll:' || v_token]));
+    tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_open),
+      'poll:' || v_token,
+      tests.user_topic('creator@example.com')]));
 
   -- ------------------------------------------------------------------
   -- Nothing is announced on behalf of a poll that is going away. Its rows

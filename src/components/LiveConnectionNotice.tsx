@@ -31,8 +31,8 @@ export function LiveConnectionNotice({ status }: { status: LiveStatus }) {
 
   return (
     <Alert color="yellow" variant="light" title="Not receiving live updates">
-      This page has lost its connection to the server, so updates will not appear on
-      their own. Refresh the page manually to see new updates.
+      This page has lost its connection to the server, so updates will not appear on their own.
+      Refresh the page manually to see new updates.
     </Alert>
   )
 }

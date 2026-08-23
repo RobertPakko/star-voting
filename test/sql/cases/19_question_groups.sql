@@ -58,9 +58,9 @@ begin
   perform tests.sign_in('creator@example.com');
 
   perform tests.assert_eq('the list shows the poll once, not once per question',
-    (select count(*)::int from list_polls()), 1);
+    (select count(*)::int from list_polls(10, 0)), 1);
 
-  select * into v_listed from list_polls();
+  select * into v_listed from list_polls(10, 0);
 
   perform tests.assert_eq('the row is the first question', v_listed.id, v_q1);
   perform tests.assert_eq('and it says how many questions there are',
@@ -199,9 +199,9 @@ begin
   perform tests.assert_eq('and its group reads as empty, not as a group of one',
     jsonb_array_length(poll_group(v_poll)), 0);
   perform tests.assert_eq('it still appears on the list',
-    (select count(*)::int from list_polls() where id = v_poll), 1);
+    (select count(*)::int from list_polls(10, 0) where id = v_poll), 1);
   perform tests.assert_eq('counted as the single question it is',
-    (select question_count from list_polls() where id = v_poll), 1);
+    (select question_count from list_polls(10, 0) where id = v_poll), 1);
 
   perform tests.assert_raises('a group of one is refused',
     'select create_poll_group(''T'', null, ''[{"title":"Only","options":[{"name":"A"},{"name":"B"}]}]''::jsonb, array[''voter1@example.com''])',

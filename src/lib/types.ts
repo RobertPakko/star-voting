@@ -139,6 +139,15 @@ export interface PollListItem extends Poll, PollStatus {
    * asks of every question.
    */
   question_count: number
+  /**
+   * How many polls the caller can see in total, not just on this page.
+   *
+   * Repeated on every row because a set-returning function has nowhere else
+   * to put it. It is what the pager counts pages from — and the reason a page
+   * of the list is one request rather than one for the rows and one for the
+   * count.
+   */
+  total_count: number
 }
 
 export interface Invitee {

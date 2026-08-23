@@ -256,7 +256,10 @@ link discloses no email address, its creator's included, and which changes
 announce themselves to which topics for [Live updates](#live-updates) — counts
 as well as topics, since a change that announces itself once per row rather
 than once per statement passes any assertion phrased as "did it say
-anything".
+anything" — and that a page of the poll list is a page of the same list every
+time: that two pages partition it with nothing on both and nothing on neither,
+that the total is of the list rather than the page, and that asking past the
+end lands on the last page there is.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. Nor the
 delivery half of live updates: `test/sql/shim.sql` keeps `realtime.send()`'s
@@ -279,8 +282,10 @@ the ones that ship.
 Poll pages hold a websocket and re-read themselves when the database says
 something moved, so votes appear without a reload.
 [`src/lib/useLiveStream.ts`](src/lib/useLiveStream.ts) is the listening half;
-[`supabase/migrations/0030_broadcast_poll_changes.sql`](supabase/migrations/0030_broadcast_poll_changes.sql)
-is the telling half. This needs Realtime enabled on the Supabase project and
+`broadcast_poll_change()` and the triggers around it — in the squashed
+baseline, then widened by
+[`0035_broadcast_polls_to_watchers.sql`](supabase/migrations/0035_broadcast_polls_to_watchers.sql)
+— are the telling half. This needs Realtime enabled on the Supabase project and
 nothing else: broadcasting from the database writes to `realtime.messages`,
 which needs no publication changes and no table grants.
 
@@ -304,15 +309,44 @@ poll — and it is still the RPC, not the socket, that decides what comes back.
 
 There are three kinds of topic:
 
-- `poll:<id>`, for pages that know the poll's id: a poll's own page, and the
-  rows of a poll list.
+- `poll:<id>`, for pages that know the poll's id — a poll's own page.
 - `poll:<share token>`, for `/p/:token`, which holds only a link. Every open
   poll is announced under both, and the second is what lets that page
   subscribe *before* its first read instead of after it — see below.
-- `user:<id>`, for one person's poll list. It carries invites, which are the
-  one change that has to reach somebody who has never seen the poll: a list is
-  subscribed to the polls in front of its reader, and a poll they were invited
-  to a moment ago is not one of them.
+- `user:<id>`, for one person's poll list: every change to every poll on it,
+  invites included.
+
+**The list watches its reader, not its rows, and that is what keeps it to one
+request.** It used to subscribe to one topic per poll on the page — a set it
+could not name until it had read the list. So it read to learn its polls,
+subscribed to them, and (because the first read happens on subscribe) read
+again: two requests to draw one list, and a third every time a page was
+turned. The circularity was never in the socket, it was in the topics.
+`user:<id>` is known from the session before anything is read, so the page
+subscribes on mount and reads once.
+
+Widening that topic from "you were invited to something" to "something on your
+list moved" also fixed two things that were quietly wrong. A vote in the
+*second* question of a multi-question poll announced itself on that question's
+topic, and the list carries the *first* question's row, so the group's "everyone
+has answered" state moved with nobody listening. And turning a page cost a
+re-subscribe on top of the read, where it now costs only the read — which,
+since `0036`, is a read it genuinely needs.
+
+**It does mean some reads are wasted, and that is the accepted trade.** The
+topic wakes you for any poll you can see, while the page in front of you holds
+ten — so a vote in a poll on page four re-reads page one to find it unchanged.
+The alternative is subscribing to the polls on screen, which is the scheme this
+replaced: it cannot name its topics until it has read, so it costs two requests
+to draw the list and a re-subscribe on every page turn. One stable topic and an
+occasional wasted read is the cheaper end of that trade, and each read is now a
+page rather than a whole history.
+
+The cost is worth stating plainly: a poll with forty invitees writes forty-one
+messages per change rather than one. The fan-out to *sockets* is unchanged —
+those forty were each already subscribed to the poll's own topic and each
+already woke up — so what those extra rows in `realtime.messages` buy is one
+round trip per reader, and the three fixes above.
 
 Six rules keep it honest:
 
@@ -351,7 +385,8 @@ Six rules keep it honest:
 - **Watching stops when there is nothing left to watch.** A closed poll, or
   one whose results are out, has taken its last vote. The poll list is the
   exception and stays subscribed for as long as it is on screen: any poll on
-  it can take a vote, and a new invite can add a row.
+  it can take a vote, and a new invite can add a row — which is why it watches
+  its reader rather than any particular poll.
 - **A vote *changed* says nothing at all.** The one deliberate silence here,
   and the reasoning is in [Changing your vote until the results are
   out](#changing-your-vote-until-the-results-are-out): nothing a watcher can
@@ -374,15 +409,15 @@ wait for a reconnection that is not coming. `useLiveStream` sits on the state
 for several seconds first, so a socket that drops and comes straight back
 never reaches the screen.
 
-One request per page on a first read, and one per change after that. The pages
-carrying a state badge can make a second: they ask `poll_winners()` for the
-finished polls whose result they cannot already name, which is a request on a
-first look and nothing afterwards. See [The poll's high-level
+One request per page on a first read, and one per change after that — the poll
+list included. Turning a page of it costs one more, for the page itself; what
+it no longer costs is a re-subscription, because the topic the list watches
+does not depend on which polls are on screen. The pages carrying a
+state badge can make a second: they ask `poll_winners()` for the finished polls
+whose result they cannot already name, which is a request on a first look and
+nothing afterwards. See [The poll's high-level
 details](#the-polls-high-level-details) for why that is a request of its own,
-and [Settled polls](#settled-polls) for why it stops. The poll list makes one
-more when its page of polls changes, because that changes the set of topics it
-is subscribed to; turning a page is a deliberate act and the list is a single
-request that answers for every poll at once.
+and [Settled polls](#settled-polls) for why it stops.
 
 In `npm run dev` every one of those appears twice: React's `StrictMode` mounts
 each component, unmounts it and mounts it again, so every effect that fetches
@@ -676,12 +711,49 @@ The poll page asks the same function through `useWinner`, and through the same
 cache, so opening a poll from the list — which is how most people open one —
 costs no request at all and cannot disagree with the card it was opened from.
 
-**Ten polls to a page.** The list is read whole and paged in the browser:
-`list_polls()` returns the polls you were invited to, which is a number in the
-tens for anyone this app is for, and paging in the database would cost the
-live refresh its one round trip for nothing. The page number is clamped at
-render rather than reset, so a poll deleted from page three leaves the reader
-on page three — or on the last page there is, if that was it.
+**Ten polls to a page, taken in the database.** `list_polls(p_limit,
+p_offset)` returns that page and the total, in one round trip.
+
+It used to return everything and let the browser slice it, defended on the
+grounds that a poll history is "a number in the tens". The flaw in that was
+never the row count — it was that the expensive half of `list_polls()` is a
+set of correlated subqueries run *per poll* (the invited, voted and option
+counts, plus a `bool_and` pass over every question in a group for each of
+`voted`, `is_complete` and `is_closed`). Reading the list whole paid that for
+every poll you had ever been invited to in order to draw ten. So the page is
+taken before the aggregates run: `page` slices `visible`, and `tallied` reads
+from `page`. What still costs one pass over everything visible is the total,
+which is a count and cannot be anything else.
+
+**The index matters more than the paging did.** `polls.created_by` had a
+foreign key and no index, and Postgres does not create one for a foreign key —
+so the "mine" half of the visibility test had nothing to use, an `OR` with an
+unindexable side cannot become a bitmap union, and the planner was left
+scanning `polls` in full, every user's polls included, to answer a question
+about one person's. That was the only cost here that grew with *other
+people's* data, and paging could never have touched it: the filter runs before
+the page is taken. `0036` adds the index.
+
+**Asking past the end lands on the last page there is**, and the clamp is in
+the database. The browser derives its page count from the same total, so the
+page it claims to be showing and the page it was handed cannot drift apart —
+and an empty answer means an empty list rather than a page number that
+overshot. A poll deleted from page three still leaves the reader on page
+three, or on the last page if that was it.
+
+**Paging is ordered by `created_at desc, id desc`.** Offset paging is only
+correct over a total order — two rows that compare equal may come back either
+way round, and then a row lands on two pages or on none, silently. In the app
+polls are created one at a time and their timestamps differ, so the tiebreak is
+insurance; nothing *enforces* that they differ. In the suite it is
+load-bearing, because a case is one transaction and every poll a case creates
+shares a `created_at` to the microsecond — which is why
+`20_paging_the_poll_list` can assert that two pages partition the list at all.
+
+**Both arguments are required, and there is no "all of them" mode.** A default
+page size in the database would be a second copy of `PAGE_SIZE` to keep in step
+with the browser's, and an unlimited mode would be the whole-list read this
+change exists to stop being the normal path.
 
 ### Option descriptions
 

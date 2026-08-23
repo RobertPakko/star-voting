@@ -71,7 +71,8 @@ export type LiveStatus = 'connecting' | 'live' | 'offline'
  *
  * **Streaming, not polling.** Pages used to re-read themselves every few
  * seconds. They now hold a websocket and re-read when told to; the telling
- * half is `supabase/migrations/0030_broadcast_poll_changes.sql`.
+ * half is `broadcast_poll_change()` and the triggers around it, in the
+ * squashed baseline and `0035_broadcast_polls_to_watchers.sql`.
  *
  * **The message is a knock on the door, not the news.** Every broadcast is
  * empty. It says a poll changed, and this hook answers by calling the same
@@ -218,9 +219,7 @@ export function useLiveStream(
         missed = true
         return
       }
-      const delay = lastReadAt === undefined
-        ? 0
-        : Math.max(0, lastReadAt + SETTLE_MS - Date.now())
+      const delay = lastReadAt === undefined ? 0 : Math.max(0, lastReadAt + SETTLE_MS - Date.now())
       again(delay)
     }
 
@@ -267,9 +266,19 @@ export function useLiveStream(
             first = undefined
             subscribed = true
             setStatus('live')
-            // Both the first read and the catch-up after a reconnect. With
-            // more than one topic this fires once per channel; the settle
-            // window collapses them into a single read.
+            // Both the first read and the catch-up after a reconnect. Every
+            // SUBSCRIBED reads, unconditionally: a redundant read is a wasted
+            // round trip, where a suppressed one is a page left showing votes
+            // that have since been overtaken.
+            //
+            // That is affordable because every page subscribes to exactly one
+            // topic. A caller passing several would get one read per channel
+            // -- and worse, any that landed while the first was still in
+            // flight would each queue a trailing read behind it, because
+            // `missed` cannot tell a genuine signal from a wave of channels
+            // arriving. The poll list used to do exactly that and cost three
+            // reads to draw itself once; the fix was to give it a topic it
+            // could name before its first read, not to second-guess this.
             soon()
           } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
             subscribed = false
@@ -347,9 +356,10 @@ export function shareTopic(token: string): string {
 /**
  * The topic a person's own poll list is announced on.
  *
- * A list is subscribed to the polls in front of its reader, which cannot
- * cover a poll they have just been invited to: they have never seen it. The
- * invite is announced here instead.
+ * Everything that moves on that list arrives here: a vote in any poll on it, a
+ * poll closing, and an invite to one they have never seen. It is the whole of
+ * what `PollList` subscribes to, because it is the one topic the page can name
+ * before it has read anything — which is what keeps that read to one.
  */
 export function userTopic(userId: string): string {
   return `user:${userId}`

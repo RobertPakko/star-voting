@@ -216,7 +216,7 @@ begin
     (select poll_results_revealed(p) from polls p where p.id = v_poll),
     (select results_available from poll_status(v_poll)));
   perform tests.assert_eq('and with the one the poll list shows',
-    (select results_available from list_polls() where id = v_poll), true);
+    (select results_available from list_polls(10, 0) where id = v_poll), true);
   -- 0031's gate answers from the same function now, so the results opening
   -- and the revisions closing are one event rather than two that coincide.
   -- get_poll_results goes through that gate, so reading a tally out of it at

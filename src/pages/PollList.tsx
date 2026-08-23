@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button, Card, Group, Pagination, Stack, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { pollTopic, userTopic, useLiveStream } from '../lib/useLiveStream'
+import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
 import { PollListSkeleton } from '../components/Skeletons'
@@ -13,11 +13,13 @@ import type { PollListItem } from '../lib/types'
 /**
  * How many polls a page of the list holds.
  *
- * The list is read whole and paged in the browser rather than by the
- * database: list_polls() returns the polls you can see, which is the polls
- * you were invited to, and that is a number in the tens for anyone this app
- * is for. Paging it server-side would buy nothing and cost the live refresh
- * its one round trip.
+ * The page is taken in the database, not here: `list_polls()` is handed this
+ * and an offset, and answers with those rows and the total. It used to return
+ * everything and let the browser slice it, on the grounds that a poll history
+ * is a number in the tens — but the expensive half of that function is a set
+ * of correlated subqueries run *per poll*, so reading it whole meant paying
+ * for every poll you had ever been invited to in order to draw ten of them.
+ * See 0036_page_the_poll_list.sql.
  */
 const PAGE_SIZE = 10
 
@@ -32,14 +34,30 @@ export function PollList() {
   const [winners, setWinners] = useState<ReadonlyMap<string, string | null>>(
     () => new Map(knownWinners()),
   )
+  // How many polls there are in total, which only a read can tell us: it
+  // arrives on every row (see PollListItem.total_count) because that is the
+  // only place a set-returning function can put it.
+  const [total, setTotal] = useState(0)
   // Whether a read has ever come back; see the note in PublicPoll.
   const loaded = useRef(false)
+  // The page the rows on screen were read for. Kept in a ref so `load` never
+  // changes identity — `useLiveStream` calls whatever it holds, and a fresh
+  // function every render would be a fresh subscription every render.
+  const chosen = useRef(page)
+  chosen.current = page
+  // The page most recently *asked* for, which is how turning a page tells
+  // itself apart from the first read. 0 until the first read lands.
+  const fetched = useRef(0)
 
-  // One round trip for the polls and their status. This used to be a
-  // select plus one poll_status RPC per poll; which is also what makes it
-  // cheap enough to re-read whenever anything on it moves.
+  // One round trip for a page of polls, their status, and the total. This
+  // used to be a select plus one poll_status RPC per poll; which is also what
+  // makes it cheap enough to re-read whenever anything on it moves.
   const load = useCallback(async () => {
-    const { data, error: rpcError } = await supabase.rpc('list_polls')
+    const asked = chosen.current
+    const { data, error: rpcError } = await supabase.rpc('list_polls', {
+      p_limit: PAGE_SIZE,
+      p_offset: (asked - 1) * PAGE_SIZE,
+    })
     if (rpcError) {
       // A refresh that fails keeps the list already on screen; only a first
       // read that fails leaves nothing to show.
@@ -51,39 +69,64 @@ export function PollList() {
     // again, so a connection that comes back brings the list with it instead
     // of leaving the reader looking at a dead end.
     setError(null)
-    setPolls((data as PollListItem[]) ?? [])
+    const rows = (data as PollListItem[]) ?? []
+    setPolls(rows)
+    // No rows means no total to read off one, and that can only be an empty
+    // list: the database clamps a page request past the end onto the last
+    // page there is, so a page that comes back empty is a list with nothing
+    // in it rather than a page number that overshot.
+    const count = rows[0]?.total_count ?? 0
+    setTotal(count)
+    // The page these rows are actually of, which is not always the page that
+    // was asked for — the database clamps a request past the end. Recording
+    // the clamped one is what stops the effect below from reading again the
+    // moment `page` is brought down to match.
+    fetched.current = Math.min(asked, Math.max(1, Math.ceil(count / PAGE_SIZE)))
     return true
   }, [])
 
+  // Turning a page is the one change the socket will not bring: the topic
+  // does not depend on which page is on screen, so nothing announces it. The
+  // first read is deliberately left to the subscription — see useLiveStream
+  // — which is why this waits for one to have landed before it fires.
+  useEffect(() => {
+    if (fetched.current === 0 || fetched.current === page) return
+    load()
+  }, [page, load])
+
   // Clamped rather than reset: a poll deleted from page three should leave
   // the reader on page three, or on the last page there is if that was it.
-  // Derived at render so a live refresh that shortens the list can never
-  // leave the page pointing past the end of it.
-  const pageCount = Math.max(1, Math.ceil((polls?.length ?? 0) / PAGE_SIZE))
+  // Derived at render from the same total the database clamps its own offset
+  // against, so the page this claims to be showing and the page it was handed
+  // cannot drift apart.
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const current = Math.min(page, pageCount)
-  const shown = polls?.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE) ?? []
+  const shown = polls ?? []
+
+  // And brought down in state as well, not only in what is drawn. A `page`
+  // left pointing past the end is invisible until the list grows back, at
+  // which point the reader would be silently thrown forward to a page they
+  // were moved off. This costs no read: `load` already recorded the clamped
+  // page as the one on screen.
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount)
+  }, [page, pageCount])
 
   // Unlike a single poll, a list has no settled state to stop at: any poll on
-  // it can take a vote, and a new invite can add a row. So it watches two
-  // different things.
+  // it can take a vote, and a new invite can add a row. So it watches one
+  // thing, and that thing is the reader rather than the polls.
   //
-  // The polls in front of the reader, for the counts and the badges. A page
-  // of them, not all of them: the list is read whole and paged in the browser
-  // (see PAGE_SIZE), and subscribing to every poll somebody has ever been
-  // invited to would be an unbounded number of channels to keep a number
-  // moving on ten rows they can see.
+  // Watching the polls would mean holding one channel per row, which the page
+  // cannot even name until it has read the list — so it would read once to
+  // learn them, subscribe, and read again on subscribing. The reader's own
+  // topic is known from the session before anything is read, so the page
+  // subscribes on mount and its first read is its only read. It also does not
+  // change when the reader turns a page, so a page turn costs the one read it
+  // genuinely needs and no re-subscription on top of it.
   //
-  // And the reader themselves, for the rows that do not exist yet. A poll
-  // they were invited to a moment ago cannot be on the list they are
-  // subscribed to, because it was not on the list; the invite is announced to
-  // them personally instead.
-  //
-  // Turning a page changes the set and so costs one more read of the list.
-  // That is a deliberate trade against holding tens of channels open, and
-  // list_polls() is a single request that answers for every poll at once —
-  // the same one request this page used to make every five seconds.
-  const topics = shown.map((poll) => pollTopic(poll.id))
-  if (session?.user.id) topics.push(userTopic(session.user.id))
+  // It carries every change to every poll on the list, invites included; see
+  // 0035_broadcast_polls_to_watchers.sql for the fan-out that makes it so.
+  const topics = session?.user.id ? [userTopic(session.user.id)] : []
 
   const liveStatus = useLiveStream(topics, load)
 
