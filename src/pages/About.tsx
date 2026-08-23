@@ -29,9 +29,9 @@ import { SAMPLE_POLL_TOKEN, SAMPLE_RESULT_TOKEN } from '../lib/samplePoll'
  * are the fastest way to understand any of this, scrolled away from the only
  * paragraph that says why you would want them.
  *
- * What stays outside the tabs is what every reader needs: the sentence that
- * says what this is, the two samples, and the footnotes -- which are numbered
- * across two of the tabs and so belong to none of them.
+ * What stays outside the tabs is what every reader needs on arrival: the
+ * sentence that says what this is, and the two samples. Each tab carries its
+ * own footnotes, numbered from 1; see `Footnotes`.
  */
 export function About() {
   const [tab, setTab] = useState<string | null>('procedure')
@@ -69,6 +69,7 @@ export function About() {
               algorithms. The following procedure is used to resolve an election:
             </Text>
             <Cards items={STEPS} />
+            <Footnotes notes={PROCEDURE_NOTES} />
           </Stack>
         </Tabs.Panel>
 
@@ -92,53 +93,78 @@ export function About() {
                 these stay in order and read as one argument rather than a
                 shuffleable feature list. */}
             <Cards items={PROPERTIES} />
+            <Footnotes notes={BENEFIT_NOTES} />
           </Stack>
         </Tabs.Panel>
       </Tabs>
+    </Stack>
+  )
+}
 
-      <Stack gap="sm">
-        <Title order={3} size="h5">
-          Footnotes
-        </Title>
-        <List type="ordered" spacing="xs" size="sm" withPadding c="dimmed">
-          <List.Item>
-            A tie in the scoring round is broken in favor of the option that is preferred by the
-            most voters among the tied options. That's decided by comparing the tied options one
-            pair at a time. For each pair, we check which option is preferred by more voters. An
-            option is 'preferred by more voters' when it receives a higher score than the other
-            option on a greater number of ballots than the other option. Whichever option is
-            preferred in the most of these one-on-one comparisons wins the tie. If the options are
-            still tied, the tie is broken in favor of the option given five stars on the most
-            ballots. If they remain tied after both rules, a finalist is chosen randomly between
-            them.
-          </List.Item>
-          <List.Item>
-            A tie in the runoff is broken in favor of the option with the higher total score. If
-            both finalists also have the same score, it goes to the one given five stars on more
-            ballots. If they are level on all three, the election has no winner.
-          </List.Item>
-          <List.Item>
-            <Ext href="https://en.wikipedia.org/wiki/Gibbard%27s_theorem">
-              Gibbard&rsquo;s theorem
-            </Ext>{' '}
-            demonstrates that no deterministic, non-dictatorial voting method can be entirely immune
-            from tactical voting.
-          </List.Item>
-          <List.Item>
-            STAR voting is not perfectly accurate, but all perfectly accurate voting systems either
-            can&rsquo;t be computed reliably, can&rsquo;t be understood reliably, or can&rsquo;t be
-            audited reliably.
-          </List.Item>
-          <List.Item>
-            If you want to audit and verify things yourself, the complete implementation of this
-            site is available at{' '}
-            <Ext href="https://github.com/RobertPakko/star-voting">
-              github.com/RobertPakko/star-voting
-            </Ext>
-            .
-          </List.Item>
-        </List>
-      </Stack>
+/**
+ * The two tie-break rules, which are the two places the procedure above says
+ * "and if that is level, then what?".
+ */
+const PROCEDURE_NOTES: ReactNode[] = [
+  <>
+    A tie in the scoring round is broken in favor of the option that is preferred by the most voters
+    among the tied options. That's decided by comparing the tied options one pair at a time. For
+    each pair, we check which option is preferred by more voters. An option is 'preferred by more
+    voters' when it receives a higher score than the other option on a greater number of ballots
+    than the other option. Whichever option is preferred in the most of these one-on-one comparisons
+    wins the tie. If the options are still tied, the tie is broken in favor of the option given five
+    stars on the most ballots. If they remain tied after both rules, a finalist is chosen randomly
+    between them.
+  </>,
+  <>
+    A tie in the runoff is broken in favor of the option with the higher total score. If both
+    finalists also have the same score, it goes to the one given five stars on more ballots. If they
+    are level on all three, the election has no winner.
+  </>,
+]
+
+/** The three caveats the case for STAR makes on its own behalf. */
+const BENEFIT_NOTES: ReactNode[] = [
+  <>
+    <Ext href="https://en.wikipedia.org/wiki/Gibbard%27s_theorem">Gibbard&rsquo;s theorem</Ext>{' '}
+    demonstrates that no deterministic, non-dictatorial voting method can be entirely immune from
+    tactical voting.
+  </>,
+  <>
+    STAR voting is not perfectly accurate, but all perfectly accurate voting systems either
+    can&rsquo;t be computed reliably, can&rsquo;t be understood reliably, or can&rsquo;t be audited
+    reliably.
+  </>,
+  <>
+    If you want to audit and verify things yourself, the complete implementation of this site is
+    available at{' '}
+    <Ext href="https://github.com/RobertPakko/star-voting">github.com/RobertPakko/star-voting</Ext>.
+  </>,
+]
+
+/**
+ * The notes belonging to one tab, under the cards they annotate.
+ *
+ * Each tab numbers its own from 1, which is the reason there are two lists
+ * rather than one: a single list shared by two tabs has to be readable from
+ * either, so it sat under both of them and made every reader of the procedure
+ * scroll past three notes about a case they had not read yet. Nothing here is
+ * cross-referenced between tabs, so nothing is lost by splitting it -- and the
+ * markers now sit a screen away from what they mark instead of a page.
+ */
+function Footnotes({ notes }: { notes: ReactNode[] }) {
+  return (
+    <Stack gap="sm" mt="md">
+      <Title order={3} size="h5">
+        Footnotes
+      </Title>
+      <List type="ordered" spacing="xs" size="sm" withPadding c="dimmed">
+        {notes.map((note, i) => (
+          // Static prose in source order: there is nothing else to key on,
+          // and no reordering for a better key to survive.
+          <List.Item key={i}>{note}</List.Item>
+        ))}
+      </List>
     </Stack>
   )
 }
@@ -290,7 +316,7 @@ const PROPERTIES: Entry[] = [
         problems, but it incentivizes dishonesty. The optimal strategy is often to give the highest
         score to your preferred candidate and no points to their rivals, potentially degrading into
         plurality voting. STAR voting is strategy-resistant because the optimal strategy is almost
-        <Footnote n={3} /> always to vote honestly.
+        <Footnote n={1} /> always to vote honestly.
       </>
     ),
   },
@@ -302,7 +328,7 @@ const PROPERTIES: Entry[] = [
         solves the above problems, but it&rsquo;s simply inaccurate in some cases. It's vulnerable
         to 'center squeeze' and 'spoiler' effects in common scenarios. STAR voting is accurate
         because it addresses most
-        <Footnote n={4} /> situations where ranked choice voting becomes inaccurate.
+        <Footnote n={2} /> situations where ranked choice voting becomes inaccurate.
       </>
     ),
   },
@@ -336,7 +362,7 @@ const PROPERTIES: Entry[] = [
         <Ext href="https://en.wikipedia.org/wiki/Random_ballot">Random ballot</Ext> solves the above
         problems but it&rsquo;s completely unauditable since true randomness is unverifiable. STAR
         voting is transparent because its election result can be audited and verified
-        <Footnote n={5} />.
+        <Footnote n={3} />.
       </>
     ),
   },

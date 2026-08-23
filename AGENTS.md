@@ -1822,20 +1822,28 @@ them is worse than the window is.
 ### The About page and its sample poll
 
 The [About](src/pages/About.tsx) page is public, and the people who most need
-it arrived from a share link and have never heard of the method. It is in four
-parts, and only one of them is a tab:
+it arrived from a share link and have never heard of the method. It is in
+three parts, and only one of them is a tab:
 
 - the sentence saying what this is,
 - **the two sample links**,
 - the procedure, the site's features and the case for STAR, behind
-  `Procedure` / `Site features` / `Benefits` tabs,
-- the footnotes, which are numbered across two of those tabs and so sit under
-  all of them.
+  `Procedure` / `Site features` / `Benefits` tabs.
 
 The three tabbed parts are reference rather than argument: nobody reads all
 three in order, and stacked one after another they made a page long enough
 that the sample links scrolled away from the paragraph that says why you would
 want them. What is *not* tabbed is what every reader needs on arrival.
+
+**Each tab carries its own footnotes, numbered from 1.** The procedure's two
+are the tie-break rules; the case for STAR has three caveats of its own; the
+site's features have none. One shared list has to be readable from whichever
+tab is open, so it sat under all of them and made every reader of the
+procedure scroll past three notes about an argument they had not read yet.
+Nothing is cross-referenced between the tabs, so there is nothing to lose by
+splitting it. If you move a note from one tab to the other, renumber the
+`<Footnote n={…} />` markers in both: they are written down rather than
+derived, because they sit inside prose.
 
 #### The sample poll is a recording, not rows
 
