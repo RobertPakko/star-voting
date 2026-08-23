@@ -663,16 +663,30 @@ Nothing else on the badge waits. *Collecting options*, *In progress* and
 already in the browser — which is every poll opened from a list that has
 already asked — draws it immediately.
 
-**The badge and the title share a row until they can't.** The badge is sized
-to the name it may be carrying, up to `min(320px, 100%)`, and does not shrink
-below its text: a long title used to take the badge's width rather than
-wrapping, leaving two letters and an ellipsis where the answer to the poll
-should be. Pinning it beside the title (`wrap="nowrap"`) then moved the problem
-one step along — on a phone, a winner's name held 220px of a 330px card and the
-title wrapped one or two characters at a time down the side of it. The row
-wraps now, so a title too long to share the line takes the whole of it and the
-badge drops underneath, which is the same two things in the same order with
-neither side squeezed.
+**The badge and the title share a row, sixty/forty.** Two earlier attempts came
+apart on a phone. Left free to give, the title took min-content and wrapped one
+or two characters at a time down the side of a badge holding 220px of a 330px
+card; pinned so the badge could not shrink, the row had to wrap and the badge
+dropped onto a line of its own — a lot of vertical space for a word or two, and
+it read as a second thing rather than as part of the heading.
+
+So the split is stated rather than negotiated, in a `Flex` that never wraps:
+the title's flex *basis* is 60% and the badge's ceiling is 40%. The slack goes
+to whoever needs it, which is the half that matters — the badge is only as wide
+as its text, so *In progress* asks for a fifth of the row rather than two
+fifths, and the title grows into everything left over. Sixty is a floor, not a
+serving. Past the ceiling it is the title that gives, wrapping inside its own
+share, because a wrapped title is still readable and an elected option
+ellipsised to two letters is not an answer at all.
+
+**Only the badge carrying a poll's own text takes the ceiling.** Every other
+state — *Collecting options* is the longest — is a fixed phrase the app wrote
+and knows the length of, and keeps its width. Capping those at the same share
+would ellipsise the app's own label to make room for a title, on exactly the
+screens narrow enough for 40% to bite. The share answers "how much of the
+heading may a poll's own text take", which is the only place the question is
+really asked, so it lives on that one badge (`maw="40%"`, against the row)
+rather than in a box around all of them.
 
 Three decisions hold that shape:
 
@@ -1463,6 +1477,12 @@ a creator lays the poll out the way their voters will walk through it.
 
 Three things keep the tabs from hiding anything:
 
+- **A `+` is the last tab**, rather than a button under the strip. Adding a
+  question *is* adding a tab, and the strip is where a reader already looks to
+  see how many there are. It is never the selected tab: the open tab is only
+  ever a question's key, so pressing `+` makes a question and opens that
+  instead. One `onChange` handles both, telling them apart by a sentinel value
+  no question key can collide with.
 - **Every question is validated on every submit**, on screen or not; the tabs
   changed what is rendered, not what is checked.
 - **A tab whose question has something wrong with it is marked**, and a submit

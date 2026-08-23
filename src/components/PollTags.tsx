@@ -230,26 +230,26 @@ export function PollStateBadge({
       )
     }
     // The only badge here whose text belongs to the poll rather than to the
-    // app: an elected option can be a sentence, so this is the one that
-    // needs a ceiling. `maw` is that ceiling, and past it the name
-    // ellipsises with the whole of it on the `title` attribute. It is
-    // relative as well as fixed, because the badge is no longer always
-    // sharing its line: 100% is the whole row on a phone, where the row is
-    // usually the badge's alone, and 320px is what it takes of a poll page
-    // wide enough for both.
+    // app, and so the only one with a ceiling: an elected option can be a
+    // sentence, and past 40% of the heading's row the name ellipsises with
+    // the whole of it on the `title` attribute.
     //
-    // It does not shrink below its text, though. Both sides of this row used
-    // to be free to give, and a long title on a narrow screen took the
-    // badge's width rather than wrapping; leaving two letters and an
-    // ellipsis where the answer to the poll should be. So the badge is as
-    // wide as the name it carries and no wider, and where that leaves no
-    // usable room for the title beside it, PollHeading's row wraps and the
-    // badge takes a line of its own rather than either side being squeezed.
+    // Every other badge on this row is a fixed phrase of the app's own —
+    // *Collecting options* is the longest — and keeps its width instead.
+    // Capping those at the same share would ellipsise a label the app wrote
+    // and knows the length of, to make room for a title, on the one screen
+    // narrow enough for 40% to bite. So the share is the answer to "how much
+    // of the title may a poll's own text take", which is the only place the
+    // question is actually asked.
+    //
+    // 40% is a *max-width* against the row rather than a basis, which is what
+    // makes the badge exactly as wide as its name up to that point and the
+    // title's 60% a floor rather than a serving. See PollHeading.
     return (
       <Badge
         color={badgeColor.done}
         variant="light"
-        maw="min(320px, 100%)"
+        maw="40%"
         style={{ flexShrink: 0 }}
         title={winner}
       >

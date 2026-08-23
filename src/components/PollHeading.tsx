@@ -1,4 +1,4 @@
-import { Group, Stack, Text, Title } from '@mantine/core'
+import { Flex, Stack, Text, Title } from '@mantine/core'
 import { PollStateBadge, PollTags } from './PollTags'
 import type { Turnout } from './PollTags'
 import type { PollMode } from '../lib/types'
@@ -64,32 +64,46 @@ export function PollHeading({
 }) {
   return (
     <Stack gap={compact ? 4 : 8}>
-      {/* The badge sits beside the title while both fit, and drops onto its
-          own line under it when they don't. It used to be pinned there
-          (`wrap="nowrap"`), which on a phone left a winner's name holding
-          220px of a 330px card and the title wrapping one or two characters
-          at a time down the side of it — the title was technically the side
-          that gave, and what it gave was legibility. Letting the row wrap
-          means the narrow case is a title across the full width with its
-          badge below, which is the same two things in the same order, and the
-          badge keeps its own width rather than being squeezed in turn. See
-          PollStateBadge. */}
-      <Group justify="space-between" wrap="wrap" align="flex-start" gap="sm">
-        {/* `minWidth` lets the title wrap past its longest word, which one
-            with no spaces in it otherwise would not. */}
+      {/* The title and the badge share one row, sixty/forty, and neither is
+          allowed to take the other's half.
+
+          Both earlier attempts came apart on a phone. Left free to give, the
+          title took min-content and wrapped one or two characters at a time
+          down the side of a badge holding 220px of a 330px card; pinned so
+          the badge could not shrink, the row had to wrap and the badge
+          dropped onto a line of its own, which is a lot of vertical space for
+          a word or two and reads as a second thing rather than as part of the
+          heading.
+
+          So the split is stated instead of negotiated. The title's *basis* is
+          60% and the badge's ceiling is 40%, and the slack goes to whoever
+          needs it: the badge takes only as much as its text — *In progress*
+          asks for a fifth of the row, not two fifths — and the title grows
+          into everything left over, so sixty is a floor rather than a
+          serving. Past the ceiling it is the title that gives, wrapping
+          inside its own share, because a wrapped title is still readable and
+          an elected option ellipsised to two letters is not an answer at
+          all. */}
+      <Flex align="flex-start" gap="sm" wrap="nowrap">
+        {/* `minWidth: 0` is what lets a flex item shrink below its longest
+            word at all; without it a title with no spaces in it would push
+            the row wider than the card. */}
         {compact ? (
           <Text
             fw={600}
             c="var(--mantine-color-text)"
-            style={{ minWidth: 0, wordBreak: 'break-word' }}
+            style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}
           >
             {title}
           </Text>
         ) : (
-          <Title order={2} style={{ minWidth: 0, wordBreak: 'break-word' }}>
+          <Title order={2} style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}>
             {title}
           </Title>
         )}
+        {/* The forty is the badge's own ceiling rather than a box around it;
+            see PollStateBadge, where only the badge carrying a poll's own
+            text takes it. */}
         <PollStateBadge
           soliciting={state.soliciting}
           resultsAvailable={state.resultsAvailable}
@@ -97,7 +111,7 @@ export function PollHeading({
           winner={state.winner}
           awaitingWinner={state.awaitingWinner}
         />
-      </Group>
+      </Flex>
 
       {description && (
         <Text size={compact ? 'sm' : undefined} c="dimmed">

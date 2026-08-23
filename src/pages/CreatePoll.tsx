@@ -73,6 +73,17 @@ interface QuestionDraft {
 /** Only has to be unique within one open form, and never leaves it. */
 let questionSeq = 0
 
+/**
+ * The value of the `+` tab, which adds a question rather than opening one.
+ *
+ * A tab and not a button under the strip: adding a question *is* adding a
+ * tab, and the row of tabs is where a reader is already looking to see how
+ * many there are. It cannot collide with a question — those are keyed
+ * `question-N` — so the one `onChange` can tell "open this" from "make
+ * another" by the value alone.
+ */
+const ADD_QUESTION = 'add-question'
+
 function blankQuestion(): QuestionDraft {
   questionSeq += 1
   return { key: `question-${questionSeq}`, title: '', options: [blankOption(), blankOption()] }
@@ -460,6 +471,17 @@ export function CreatePoll() {
 
   function updateQuestionTitle(index: number, value: string) {
     setQuestions((prev) => prev.map((q, i) => (i === index ? { ...q, title: value } : q)))
+  }
+
+  /**
+   * What pressing a tab means, which is one of two things: open that
+   * question, or — for the `+` — make one and open that. One handler because
+   * Mantine gives the strip one `onChange`, and the sentinel value is what
+   * tells the two apart; see ADD_QUESTION.
+   */
+  function openOrAddQuestion(value: string | null) {
+    if (value === ADD_QUESTION) addQuestion()
+    else setOpenKey(value)
   }
 
   function addQuestion() {
@@ -868,7 +890,7 @@ export function CreatePoll() {
              something wrong with it says so, because validating a question
              nobody can see is only worth doing if the reader is told where to
              look. */
-          <Tabs value={openQuestion} onChange={setOpenKey} keepMounted={false}>
+          <Tabs value={openQuestion} onChange={openOrAddQuestion} keepMounted={false}>
             <Tabs.List>
               {questions.map((question, questionIndex) => (
                 <Tabs.Tab
@@ -891,26 +913,32 @@ export function CreatePoll() {
                   </Text>
                 </Tabs.Tab>
               ))}
+              {/* Last in the row, where a new tab lands. It is never the open
+                  tab — `openQuestion` is only ever a question's key — so
+                  pressing it makes a question and opens that instead, and a
+                  selected `+` is a state the strip cannot be in. */}
+              <Tabs.Tab
+                value={ADD_QUESTION}
+                disabled={questions.length >= MAX_QUESTIONS}
+                aria-label="Add a question"
+                title={
+                  questions.length >= MAX_QUESTIONS
+                    ? `A poll can ask ${MAX_QUESTIONS} questions.`
+                    : 'Add a question to this poll'
+                }
+              >
+                +
+              </Tabs.Tab>
             </Tabs.List>
 
-            {/* Under the strip rather than under the fields: it adds a tab,
-                not an option, and what it acts on is the row above it. */}
-            <Stack gap="xs" mt="sm">
-              <Button
-                variant="light"
-                size="xs"
-                onClick={addQuestion}
-                w="fit-content"
-                disabled={questions.length >= MAX_QUESTIONS}
-              >
-                Add question
-              </Button>
-              {shown.questions && (
-                <Text c="var(--mantine-color-error)" size="sm">
-                  {shown.questions}
-                </Text>
-              )}
-            </Stack>
+            {/* Wrong with the poll's list of questions rather than with any
+                one of them, so it sits under the strip rather than in a
+                panel. */}
+            {shown.questions && (
+              <Text c="var(--mantine-color-error)" size="sm" mt="xs">
+                {shown.questions}
+              </Text>
+            )}
 
             {questions.map((question, questionIndex) => (
               <Tabs.Panel key={question.key} value={question.key} pt="md">
