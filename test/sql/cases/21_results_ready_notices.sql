@@ -13,6 +13,7 @@ declare
   v_creator uuid;
   v_poll uuid;
   v_open uuid;
+  v_closed uuid;
   v_group uuid[];
   v_scores jsonb;
 begin
@@ -46,10 +47,10 @@ begin
   perform tests.assert_eq('and the poll is announced, once',
     (select count(*)::int from results_notices where poll_id = v_poll), 1);
 
-  -- Everyone in the poll, creator included, and each of them once: the
-  -- creator invited themselves nowhere here, but the union is what makes
-  -- that case one address rather than two.
-  perform tests.assert_eq('everybody in the poll is told',
+  -- Everyone in the poll, creator included, because nobody closed it: the
+  -- last vote is what ended it, and that is news to the creator like anybody
+  -- else. Every invitee is on the list whether or not they voted.
+  perform tests.assert_eq('everybody in a poll that finished on its own is told',
     (select array_agg(a order by a)
        from poll_results_audience((select p from polls p where p.id = v_poll)) a),
     array['creator@example.com', 'voter1@example.com', 'voter2@example.com']);
@@ -92,12 +93,37 @@ begin
 
   perform close_poll(v_open);
 
-  perform tests.assert_eq('closing announces it',
+  perform tests.assert_eq('closing crosses the line',
     (select count(*)::int from results_notices where poll_id = v_open), 1);
-  perform tests.assert_eq('to the one person in it the app has an address for',
+  -- And there is nobody to write to. Its voters gave no addresses, and the
+  -- one person it could have written to is the person who closed it.
+  perform tests.assert_null('but an open poll has nobody left to tell',
     (select array_agg(a order by a)
-       from poll_results_audience((select p from polls p where p.id = v_open)) a),
-    array['creator@example.com']);
+       from poll_results_audience((select p from polls p where p.id = v_open)) a));
+
+  -- ---------------------------------------------------------------------
+  -- An invite poll closed by hand: everyone but the creator, who did the
+  -- closing and is on the invite list besides.
+  -- ---------------------------------------------------------------------
+  v_closed := create_poll('Offsite', null, array['Lisbon', 'Porto'],
+                          array['creator@example.com', 'voter1@example.com',
+                                'voter2@example.com'],
+                          'invite', true, false);
+
+  perform tests.sign_in('voter1@example.com');
+  perform tests.cast_ballot(v_closed, array[5, 2]);
+
+  perform tests.sign_in('creator@example.com');
+  perform close_poll(v_closed);
+
+  perform tests.assert_eq('a poll closed by hand has a result too',
+    poll_results_ready((select p from polls p where p.id = v_closed)), true);
+  perform tests.assert_eq('and is announced like any other',
+    (select count(*)::int from results_notices where poll_id = v_closed), 1);
+  perform tests.assert_eq('to everyone invited except the creator, who closed it',
+    (select array_agg(a order by a)
+       from poll_results_audience((select p from polls p where p.id = v_closed)) a),
+    array['voter1@example.com', 'voter2@example.com']);
 
   -- ---------------------------------------------------------------------
   -- A poll of several questions is one result and one announcement, filed

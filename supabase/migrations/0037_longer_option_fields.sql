@@ -1,22 +1,25 @@
--- An option name may be 250 characters, not 100.
+-- An option name may be 150 characters and its description 900, not 100 and
+-- 500.
 --
--- 100 was chosen when suggestions were the only way into `candidates`, and it
--- was a *label's* length rather than an option's. Real options turn out to
--- carry a subtitle, an author, a year, a "(vegetarian)" -- and people were
--- hitting the ceiling on ordinary polls, where the only thing to do about it
--- is to abbreviate the thing being voted on so that the ballot reads worse.
+-- Both were chosen when suggestions were the only way into `candidates`, and
+-- both turned out to be a size smaller than what people write. 100 was a
+-- *label's* length rather than an option's: real options carry a subtitle, an
+-- author, a year, a "(vegetarian)", and a writer eight characters over the
+-- line was being asked to abbreviate the thing being voted on so that the
+-- ballot read worse. 500 was one paragraph of description where people were
+-- writing two -- and a description is the one field on a ballot that is
+-- allowed to be prose: the case for an option, a menu, a couple of caveats.
 --
 -- The reason a ceiling exists at all is unchanged, and is not about taste:
 -- the suggestion path lets a whole group write to this table, so every field
--- it can reach needs a bound. 250 is still a label rather than an essay, and
--- the description under it -- capped separately at 500, and untouched here --
--- is still where anything longer belongs.
+-- it can reach needs a bound. A name is still a label rather than an essay,
+-- and the description under it is still where anything longer belongs.
 --
 -- One function changes, because there has been only one place to change since
 -- the creator's own edits started going through it: `insert_option` holds the
 -- field rules for both paths, and `create_poll`, `create_poll_group`,
 -- `suggest_option`, `open_poll_suggest_option` and `creator_add_option` all
--- arrive here. `src/lib/limits.ts` carries the same number for the form,
+-- arrive here. `src/lib/limits.ts` carries the same numbers for the form,
 -- which is where a writer is told which field is too long and by how much;
 -- the database is still what decides.
 CREATE OR REPLACE FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") RETURNS "void"
@@ -36,11 +39,11 @@ begin
   -- A name is a label on a ballot and a description is a couple of lines
   -- under it. Neither cap is near what a real option needs; they are here
   -- because the suggestion path lets a whole group write to this table.
-  if length(v_name) > 250 then
+  if length(v_name) > 150 then
     raise exception 'That option name is too long';
   end if;
 
-  if length(v_description) > 500 then
+  if length(v_description) > 900 then
     raise exception 'That description is too long';
   end if;
 

@@ -878,15 +878,17 @@ Four things hold it together:
   the text, and the `href` is either the matched URL or `https://` glued onto
   the `www.` form, so a description cannot produce a `javascript:` link.
 
-**An option name may be 250 characters**, and was 100 until
-[`0037`](supabase/migrations/0037_longer_option_names.sql). 100 was chosen when
-suggestions were the only way into `candidates`, and it turned out to be a
-*label's* length rather than an option's: real options carry a subtitle, an
-author, a year, a "(vegetarian)", and a writer eight characters over the line
-was being asked to abbreviate the thing being voted on so that the ballot read
-worse. The reason for a ceiling is unchanged and is not about taste — the
-suggestion path lets a whole group write to this table, so every field it can
-reach needs a bound. The description's own cap is untouched at 500, and
+**An option name may be 150 characters and its description 900**, and they
+were 100 and 500 until
+[`0037`](supabase/migrations/0037_longer_option_fields.sql). Both were chosen
+when suggestions were the only way into `candidates`, and both turned out to
+be a size smaller than what people write: 100 was a *label's* length rather
+than an option's — real options carry a subtitle, an author, a year, a
+"(vegetarian)", and a writer eight characters over the line was being asked to
+abbreviate the thing being voted on so that the ballot read worse — and 500
+was one paragraph of description where people were writing two. The reason for
+a ceiling is unchanged and is not about taste: the suggestion path lets a whole
+group write to this table, so every field it can reach needs a bound.
 `insert_option` is the one place either is applied, because both the creator's
 path and the suggestion path arrive there; `src/lib/limits.ts` carries the same
 numbers for the form, which is where a writer is told which field is too long
@@ -1526,11 +1528,20 @@ noticed exactly once.
   of the group: at least one ballot somewhere in it, and every question's gate
   open.
 
-- **The audience is the creator and every invitee**, deduplicated and
-  lowercased. Not "everybody who voted": an invitee who did not vote is still
-  in the poll — it was closed around them, and the result is a decision they
-  are subject to. An open poll has no addresses at all, because its voters were
-  never asked for one, so its creator is the whole of the list.
+- **Every invitee is told**, deduplicated and lowercased, and not just the ones
+  who voted: an invitee who did not vote is still in the poll — it finished
+  around them, and the result is a decision they are subject to.
+
+- **The creator is told only if the poll finished on its own.** A poll ends one
+  of two ways: the last invitee votes, or somebody closes it — and only the
+  creator can close it. Telling them the news they just made themselves is an
+  email whose entire content they already have, so `closed_at` is the test:
+  set means closed by hand, and the creator comes off the list — as an invitee
+  too, on a poll they invited themselves to, since the reason they need no
+  email does not stop applying because they are also on the invite list. An
+  open poll only ever ends by being closed, so its audience is empty and it
+  sends nothing at all: its voters gave no addresses, and the one person it
+  could have written to is the person who closed it.
 
 - **One request per address.** Resend would take the whole list in one `to`,
   and that would show every invitee every other invitee's address — precisely
@@ -1557,10 +1568,10 @@ Releasing the claim on a failed send was the alternative, and it would turn
 every transient Resend outage into a duplicate on the next vote.
 
 `test/sql/cases/21_results_ready_notices.sql` covers everything but the send
-itself: whether a poll has a result, who would be told, that the notice appears
-exactly once when the poll crosses the line, that a reset takes it back and a
-second finish announces again, and that a group is one notice filed against
-question 1.
+itself: whether a poll has a result, who would be told for each of the two ways
+a poll can end, that the notice appears exactly once when the poll crosses the
+line, that a reset takes it back and a second finish announces again, and that
+a group is one notice filed against question 1.
 
 ### Polls are deleted after six months
 

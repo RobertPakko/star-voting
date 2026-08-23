@@ -41,6 +41,11 @@
 --     which is precisely what a poll with respondents hidden promises not to
 --     do. The fan-out is the price of the promise.
 --
+--   * **The creator is told only when the poll finished on its own.** Closing
+--     is theirs to do, so a poll with a `closed_at` on it ended by their own
+--     hand and the email would be news they just made. See
+--     `poll_results_audience` below.
+--
 -- The email says the results are ready and links to them; it does not name
 -- the winner. A poll of several questions has one winner per question and no
 -- single one to name, an email cannot be un-read by somebody who wanted to
@@ -99,14 +104,26 @@ ALTER FUNCTION "public"."poll_results_ready"("p_poll" "public"."polls") OWNER TO
 COMMENT ON FUNCTION "public"."poll_results_ready"("p_poll" "public"."polls") IS 'Whether this poll, as a whole, has a result: a ballot somewhere in the group, and every question in it stopped. The email''s question, where poll_results_revealed is the page''s. Internal.';
 
 
--- Everyone the app has an address for and a reason to tell: the creator, and
--- everybody invited.
+-- Everyone the app has an address for and a reason to tell.
 --
--- Not "everybody who voted", which is the list somebody might expect. An
--- invitee who did not vote is still in the poll -- it was closed around them,
--- and the result is a decision they are subject to -- and an open poll has no
--- addresses at all, because its voters were never asked for one. The creator
--- is on the list for both, and on an open poll is the whole of it.
+-- **Every invitee**, and not just the ones who voted. An invitee who did not
+-- vote is still in the poll -- it finished around them, and the result is a
+-- decision they are subject to. An open poll has no invitees at all, because
+-- its voters were never asked for an address.
+--
+-- **The creator, only if the poll finished on its own.** A poll ends one of
+-- two ways: the last invitee votes, or somebody closes it -- and only the
+-- creator can close it. Telling them the news they just made themselves is an
+-- email whose entire content they already have, so `closed_at` is the test:
+-- set means closed by hand, and the creator is dropped from the list. It
+-- drops them as an invitee too, on a poll they invited themselves to; the
+-- reason they need no email is that they closed the poll, and it does not stop
+-- being the reason because they are also on the invite list.
+--
+-- An open poll only ever ends by being closed, so its audience is empty and
+-- nothing is sent. That is the rule landing where it points rather than a case
+-- missed: an open poll's voters gave no addresses, and the one person it could
+-- have written to is the person who closed it.
 --
 -- Lowercased and unioned, so a creator who invited themselves is one person
 -- with one email. Addresses come out of `invited_voters`, which
@@ -116,19 +133,25 @@ CREATE OR REPLACE FUNCTION "public"."poll_results_audience"("p_poll" "public"."p
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-  select lower(p_poll.created_by_email)
-  where p_poll.created_by_email is not null
-  union
-  select lower(iv.email)
-  from invited_voters iv
-  where iv.poll_id = p_poll.id;
+  with told as (
+    select lower(p_poll.created_by_email) as email
+    where p_poll.created_by_email is not null
+    union
+    select lower(iv.email)
+    from invited_voters iv
+    where iv.poll_id = p_poll.id
+  )
+  select email
+  from told
+  where p_poll.closed_at is null
+     or email is distinct from lower(p_poll.created_by_email);
 $$;
 
 
 ALTER FUNCTION "public"."poll_results_audience"("p_poll" "public"."polls") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."poll_results_audience"("p_poll" "public"."polls") IS 'Every address to tell that this poll has finished: its creator and its invitees, deduplicated. An open poll has only its creator. Internal.';
+COMMENT ON FUNCTION "public"."poll_results_audience"("p_poll" "public"."polls") IS 'Every address to tell that this poll has finished: every invitee, plus the creator only where the poll unlocked on its own rather than being closed by hand. Internal.';
 
 
 -- The email itself, for one address.

@@ -33,12 +33,17 @@ export const POLL_DESCRIPTION_MAX = 500
  * be a label's length rather than an option's: real options carry a subtitle,
  * an author, a date, a "(vegetarian)" — and a writer who is over the line by
  * eight characters is being asked to abbreviate the thing being voted on so
- * that the ballot reads worse. 250 is still a label rather than an essay, and
+ * that the ballot reads worse. 150 is still a label rather than an essay, and
  * the description below it is still where anything longer belongs.
  */
-export const OPTION_NAME_MAX = 250
-/** Matches `add_suggested_option`; see above. */
-export const OPTION_DESCRIPTION_MAX = 500
+export const OPTION_NAME_MAX = 150
+/**
+ * Matches `add_suggested_option`; see above. Raised from 500 alongside the
+ * name: a description is the one field on a ballot that is allowed to be
+ * prose — the case for an option, a menu, a couple of caveats — and 500 was
+ * a paragraph where people were writing two.
+ */
+export const OPTION_DESCRIPTION_MAX = 900
 /**
  * Matches `add_suggested_option`. A ballot is a list somebody has to read to
  * the end before scoring any of it, and one nobody reads to the end is not

@@ -126,7 +126,7 @@ begin
   perform tests.assert_eq('and says so in the view its voters read',
     (open_poll_view(v_token) ->> 'soliciting')::boolean, true);
   perform tests.assert_raises('a suggestion is a label, not an essay',
-    format('select open_poll_suggest_option(%L, %L)', v_token, repeat('x', 251)),
+    format('select open_poll_suggest_option(%L, %L)', v_token, repeat('x', 151)),
     'too long');
 
   select jsonb_agg(jsonb_build_object('candidate_id', id, 'score', 5))
