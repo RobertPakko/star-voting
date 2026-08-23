@@ -15,11 +15,12 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, …)
-src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, shared types
+src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, the About page's sample poll, shared types
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
-scripts/         squash.sh, which squashes the migrations and replays the above
-test/            tally tests, run against a throwaway Postgres
+scripts/         squash.sh, which squashes the migrations and replays the above;
+                 sample-poll.sh, which records the About page's sample poll
+test/            tally tests, run against a throwaway Postgres; build-db.sh, which builds one
 ```
 
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
@@ -223,7 +224,10 @@ The election logic is the part of this app that can be wrong without looking
 wrong: a bad tie-break produces a plausible winner, not an error. It also lives
 almost entirely in Postgres, so that is where the tests are. `test/run.sh`
 builds a throwaway database from `supabase/migrations/`, runs everything in
-`test/sql/cases/`, and reports each assertion.
+`test/sql/cases/`, and reports each assertion. The building itself is
+`test/build-db.sh`, which is its own script because `scripts/sample-poll.sh`
+needs the same database (see [The About page and its sample
+poll](#the-about-page-and-its-sample-poll)).
 
 Requirements are a Postgres server and a role that can create databases —
 `PGHOST`, `PGUSER` and friends are honoured, and with none set it falls back to
@@ -1814,3 +1818,80 @@ There is deliberately no fallback for a browser holding this code against an
 older `star_round`: the app deploys on push and the migration applies on the
 same merge, so that window is minutes long, and a branch nothing reaches after
 them is worse than the window is.
+
+### The About page and its sample poll
+
+The [About](src/pages/About.tsx) page is public, and the people who most need
+it arrived from a share link and have never heard of the method. It is in four
+parts, and only one of them is a tab:
+
+- the sentence saying what this is,
+- **the two sample links**,
+- the procedure, the site's features and the case for STAR, behind
+  `Procedure` / `Site features` / `Benefits` tabs,
+- the footnotes, which are numbered across two of those tabs and so sit under
+  all of them.
+
+The three tabbed parts are reference rather than argument: nobody reads all
+three in order, and stacked one after another they made a page long enough
+that the sample links scrolled away from the paragraph that says why you would
+want them. What is *not* tabbed is what every reader needs on arrival.
+
+#### The sample poll is a recording, not rows
+
+`/#/p/sample-host` is a three-question poll ("Movie night") still taking
+votes; `/#/p/sample-result-host` is the same poll after nine people finished
+it. Neither exists in Supabase. Both are answered in the browser from
+[`src/lib/samplePollData.ts`](src/lib/samplePollData.ts), which
+`scripts/sample-poll.sh` generates by building a throwaway database from the
+migrations, creating the poll in it **through the app's own write path**
+(`create_poll_group`, `open_poll_submit`, `close_poll`), and recording what
+`open_poll_view`, `open_poll_results`, `open_poll_ranking` and
+`open_poll_ballots` answer about it.
+
+Two rules, and everything else here follows from them.
+
+**Nothing about the sample is computed in the browser.** Every tally,
+tie-break, runoff and placing in that file came out of `star_round()` and
+`poll_ranking()`. A TypeScript reimplementation of STAR for the sample would
+be a second answer to the only question this app exists to answer, free to
+disagree with the first — and it would disagree silently, since the page it
+renders looks equally plausible either way. To change what the sample shows,
+change the ballots in [`scripts/sample-poll.sql`](scripts/sample-poll.sql) and
+run `scripts/sample-poll.sh`; whatever STAR then makes of them is what the
+page shows.
+
+**Nothing about the sample is in the database.** Rows there would be deleted
+by the nightly retention purge six months after they were created (see [Polls
+are deleted after six months](#polls-are-deleted-after-six-months)), and until
+then anyone holding the link could vote in the poll the About page promises to
+explain, which would move the tie-break out from under the explanation. A file
+has neither problem, and a sample poll is content: it belongs with the page
+that links to it.
+
+The generator pins what would otherwise churn — option ids, poll ids, group
+ids and the closing timestamp are all derived from the share token — so
+regenerating the file produces a diff only where the poll actually changed.
+
+#### How the pages know
+
+They do not. `PublicPoll` renders a sample token exactly as it renders a share
+token, because every open-poll call goes through `openPollRpc` in
+[`src/lib/samplePoll.ts`](src/lib/samplePoll.ts) and that function is the only
+thing in the app that can tell them apart. A real share token is 32 hex digits,
+so the `sample-` prefix cannot collide with one — which is also why the tokens
+are words rather than hex: these two links are meant to be read in an address
+bar and said out loud.
+
+Three consequences worth knowing:
+
+- **The data is `import()`ed**, not bundled. It is forty-odd kilobytes of
+  recorded JSON and most readers never open the sample.
+- **The open copy takes a vote**, and behaves afterwards exactly as a real poll
+  does — your vote is in, you can change it, you are on the roster. The ballot
+  is kept in `localStorage` and goes nowhere else, which the poll's own
+  description says in the first line a voter reads.
+- **The sample is never watched.** Subscribing is also what triggers every
+  other poll's first read (see [Live updates](#live-updates)), so `PublicPoll`
+  reads the sample itself, once. There is nothing on the other end of a
+  subscription to a file.

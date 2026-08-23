@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { supabase } from '../lib/supabase'
+import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
 import { recall, remember } from '../lib/settled'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
@@ -69,10 +70,10 @@ export function FullRanking({ source, results }: { source: RankingSource; result
 
     let cancelled = false
 
-    const request =
+    const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
         ? supabase.rpc('get_poll_ranking', { p_poll_id: key })
-        : supabase.rpc('open_poll_ranking', { p_token: key })
+        : openPollRpc('open_poll_ranking', { p_token: key })
 
     request.then(({ data, error: rpcError }) => {
       // Remembered whether or not this component still wants it: the answer

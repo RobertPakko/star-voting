@@ -11,6 +11,7 @@ import {
   Title,
 } from '@mantine/core'
 import { supabase } from '../lib/supabase'
+import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
 import { recall, remember, rememberWinner } from '../lib/settled'
 import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
@@ -89,10 +90,10 @@ export function Results({
 
     let cancelled = false
 
-    const request =
+    const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
         ? supabase.rpc('get_poll_results', { p_poll_id: key })
-        : supabase.rpc('open_poll_results', { p_token: key })
+        : openPollRpc('open_poll_results', { p_token: key })
 
     request.then(({ data, error: rpcError }) => {
       // Remembered whether or not this component still wants it: the answer

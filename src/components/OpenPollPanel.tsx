@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Badge, Button, Card, Group, Stack, Text, TextInput, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { supabase } from '../lib/supabase'
+import { openPollRpc } from '../lib/samplePoll'
 import { VOTER_NAME_MAX } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
 import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
@@ -311,12 +311,12 @@ function OpenBallot({
     setSubmitting(true)
     const scores = options.map((o) => ({ candidate_id: o.id, score: values[o.id] ?? 0 }))
     const { error: rpcError } = revising
-      ? await supabase.rpc('open_poll_revise', {
+      ? await openPollRpc('open_poll_revise', {
           p_token: token,
           p_scores: scores,
           p_voter_key: voterKeyFor(token),
         })
-      : await supabase.rpc('open_poll_submit', {
+      : await openPollRpc('open_poll_submit', {
           p_token: token,
           p_scores: scores,
           p_voter_key: voterKeyFor(token),
