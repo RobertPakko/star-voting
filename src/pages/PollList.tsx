@@ -147,6 +147,14 @@ export function PollList() {
     .map((poll) => poll.id)
   const wantedKey = wanted.join(',')
 
+  // Which of those have been asked about and answered — either way. A poll
+  // still in the first group and not yet in this one has a badge whose final
+  // state is not known, and PollStateBadge draws nothing for it rather than
+  // *Results ready* rewritten into a name a moment later. Failures land here
+  // too: nothing was learned, so the badge settles on *Results ready*, which
+  // is what that state is for.
+  const [asked, setAsked] = useState<ReadonlySet<string>>(() => new Set())
+
   // The winners are their own request rather than a column on list_polls,
   // because a column would re-run every finished poll's election on every
   // read. This asks once per poll, for the polls on screen, and a settled
@@ -161,11 +169,13 @@ export function PollList() {
       // here is swallowed: it is also what a browser sees when it is running
       // ahead of the migration that adds the function. The next read asks
       // again, since nothing was remembered.
-      if (rpcError || !data) return
-      const answered = data as { poll_id: string; winner_name: string | null }[]
-      for (const row of answered) rememberWinner(row.poll_id, row.winner_name)
+      if (!rpcError && data) {
+        const answered = data as { poll_id: string; winner_name: string | null }[]
+        for (const row of answered) rememberWinner(row.poll_id, row.winner_name)
+      }
       if (cancelled) return
-      setWinners(new Map(knownWinners()))
+      if (!rpcError && data) setWinners(new Map(knownWinners()))
+      setAsked((before) => new Set([...before, ...ids]))
     })
 
     return () => {
@@ -234,6 +244,10 @@ export function PollList() {
                 // Deliberately never asked for on a multi-question poll, so
                 // this stays undefined and the badge reads "Results ready".
                 winner: winners.get(poll.id),
+                // And for the same reason that poll never waits: nothing is
+                // in flight for it, so "Results ready" is its final state
+                // rather than a placeholder for one.
+                awaitingWinner: wanted.includes(poll.id) && !asked.has(poll.id),
               }}
             />
           </Card>

@@ -157,18 +157,30 @@ function turnoutLabel({
  *    can genuinely produce and the app reports rather than inventing a
  *    result. It carries the colour of a tie-break that decided nothing,
  *    which is the same claim one level up;
- *  - *Results ready*: the poll is finished and this page has not been told
- *    which of the two it is. That is a real state, not a fallback: the name
- *    arrives in a request behind the list, and a browser talking to a
- *    database older than `poll_winners()` never learns it at all. It must
- *    never read as *Tied*, which would be a wrong answer rather than a
- *    missing one.
+ *  - *Results ready*: the poll is finished and this page is never going to be
+ *    told which of the two it is. That is a real state, not a fallback: a poll
+ *    of several questions has a winner per question and no single one to name,
+ *    a browser talking to a database older than `poll_winners()` never learns
+ *    it at all, and a request can simply fail. It must never read as *Tied*,
+ *    which would be a wrong answer rather than a missing one.
+ *
+ * **A badge that is still resolving renders nothing at all**, which is what
+ * `awaitingWinner` is for. The name arrives in a request behind the page, so
+ * a finished poll used to draw *Results ready* for the hundred milliseconds
+ * before its answer landed and then rewrite itself into the winner's name —
+ * every load of every finished poll flickering through a state that was
+ * true for nobody. Waiting costs a badge that appears a moment late; not
+ * waiting costs one that is read and then contradicted. Nothing else on this
+ * badge waits: *Collecting options*, *In progress* and *Closed* are decided
+ * by the same read that drew the page, and a poll with an answer already in
+ * hand draws it immediately.
  */
 export function PollStateBadge({
   soliciting,
   resultsAvailable,
   closed,
   winner,
+  awaitingWinner = false,
 }: {
   soliciting: boolean
   resultsAvailable: boolean
@@ -178,6 +190,12 @@ export function PollStateBadge({
    * `undefined` for one whose result this page has not been told.
    */
   winner?: string | null
+  /**
+   * Whether an answer is still coming. `undefined` covers both "not yet" and
+   * "not ever", and only the caller knows which it is holding; see the note
+   * above on why the first of those draws nothing.
+   */
+  awaitingWinner?: boolean
 }) {
   if (soliciting) {
     return (
@@ -188,6 +206,9 @@ export function PollStateBadge({
   }
 
   if (resultsAvailable) {
+    // Still resolving: no badge rather than one that will be rewritten.
+    if (winner === undefined && awaitingWinner) return null
+
     if (winner === null) {
       return (
         <Badge color={badgeColor.unsettled} variant="light" style={{ flexShrink: 0 }}>
@@ -195,11 +216,12 @@ export function PollStateBadge({
         </Badge>
       )
     }
-    // Finished, and this page has not been told what it decided. Either the
-    // request naming the winner is still in flight, or nothing is going to
-    // ask: a poll of several questions has a winner per question and no
-    // single one to name, so its card says the results are ready and leaves
-    // naming them to the question the reader opens.
+    // Finished, and nothing is going to tell this page what it decided: a
+    // poll of several questions has a winner per question and no single one
+    // to name, so its card says the results are ready and leaves naming them
+    // to the question the reader opens; and a request that failed, or a
+    // database older than poll_winners(), ends here too. A request that is
+    // merely still in flight was caught above.
     if (winner === undefined) {
       return (
         <Badge color={badgeColor.done} variant="light" style={{ flexShrink: 0 }}>
@@ -210,19 +232,24 @@ export function PollStateBadge({
     // The only badge here whose text belongs to the poll rather than to the
     // app: an elected option can be a sentence, so this is the one that
     // needs a ceiling. `maw` is that ceiling, and past it the name
-    // ellipsises with the whole of it on the `title` attribute.
+    // ellipsises with the whole of it on the `title` attribute. It is
+    // relative as well as fixed, because the badge is no longer always
+    // sharing its line: 100% is the whole row on a phone, where the row is
+    // usually the badge's alone, and 320px is what it takes of a poll page
+    // wide enough for both.
     //
     // It does not shrink below its text, though. Both sides of this row used
     // to be free to give, and a long title on a narrow screen took the
     // badge's width rather than wrapping; leaving two letters and an
-    // ellipsis where the answer to the poll should be. The title is the side
-    // that gives now (see the call sites, which let it), so the badge is as
-    // wide as the name it carries and no wider.
+    // ellipsis where the answer to the poll should be. So the badge is as
+    // wide as the name it carries and no wider, and where that leaves no
+    // usable room for the title beside it, PollHeading's row wraps and the
+    // badge takes a line of its own rather than either side being squeezed.
     return (
       <Badge
         color={badgeColor.done}
         variant="light"
-        maw={220}
+        maw="min(320px, 100%)"
         style={{ flexShrink: 0 }}
         title={winner}
       >

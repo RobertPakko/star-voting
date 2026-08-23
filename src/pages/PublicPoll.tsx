@@ -91,8 +91,7 @@ export function PublicPoll() {
   // than asked for: the Results card fetches that tally for itself and files
   // the winner under the poll, so the badge costs no request. It asks nobody,
   // because `poll_winners()` answers only to an account and this page has
-  // none; until the card lands, the badge says the results are ready without
-  // saying what they were, which is exactly what that state is for.
+  // none.
   const winner = useKnownWinner(view?.poll.id)
 
   if (!token || error) {
@@ -150,6 +149,14 @@ export function PublicPoll() {
           resultsAvailable: view.results_available,
           closed: view.is_closed,
           winner,
+          // The answer is coming from the card below rather than from a
+          // request of this page's own, so "still loading" here is simply
+          // "the card has not filed one yet" — and the badge stays off until
+          // it does, instead of saying the results are ready and then
+          // rewriting itself into the name. If that card fails there is no
+          // badge at all, which is the honest end of the same rule: it says
+          // so itself, in red, where the tally would have been.
+          awaitingWinner: view.results_available && winner === undefined,
         }}
       />
 

@@ -9,6 +9,7 @@ import {
   SegmentedControl,
   Stack,
   Switch,
+  Tabs,
   TagsInput,
   Text,
   Textarea,
@@ -57,12 +58,24 @@ function blankOption(): OptionDraft {
  * never read; turning the switch on is what starts reading it.
  */
 interface QuestionDraft {
+  /**
+   * Identity, so the tab strip can point at a question rather than at a
+   * position. Index would do for rendering and does not do for selection:
+   * removing question 2 of four slides 3 and 4 down one, and a tab holding
+   * the number would silently be looking at a different question afterwards.
+   * Never sent anywhere — `create_poll_group` takes the questions in order.
+   */
+  key: string
   title: string
   options: OptionDraft[]
 }
 
+/** Only has to be unique within one open form, and never leaves it. */
+let questionSeq = 0
+
 function blankQuestion(): QuestionDraft {
-  return { title: '', options: [blankOption(), blankOption()] }
+  questionSeq += 1
+  return { key: `question-${questionSeq}`, title: '', options: [blankOption(), blankOption()] }
 }
 
 /**
@@ -72,6 +85,29 @@ function blankQuestion(): QuestionDraft {
  */
 function optionKey(question: number, option: number): string {
   return `${question}:${option}`
+}
+
+/**
+ * Whether one question has anything wrong with it, for the mark on its tab.
+ * Its own title, its option list as a whole, or any field in it — a tab is
+ * the only thing on screen for a question that isn't, so it has to answer for
+ * all three.
+ *
+ * Takes the errors rather than reading the ones being rendered, because it is
+ * asked twice and the two askers hold different sets: the tab strip asks
+ * about the messages on screen, and the submit that has just failed asks
+ * about the ones it has this instant computed — which are not on screen yet,
+ * and are exactly the ones it needs in order to say where to go.
+ */
+function questionHasError(errors: FormErrors, questionIndex: number): boolean {
+  if (errors.questionTitles[questionIndex] || errors.options[questionIndex]) return true
+  // "1:" cannot match "10:0", since the character after the 1 is a 0 rather
+  // than the colon.
+  const prefix = `${questionIndex}:`
+  return (
+    Object.keys(errors.optionNames).some((key) => key.startsWith(prefix)) ||
+    Object.keys(errors.optionDescriptions).some((key) => key.startsWith(prefix))
+  )
 }
 
 /**
@@ -262,6 +298,13 @@ export function CreatePoll() {
   // what is held.
   const [questions, setQuestions] = useState<QuestionDraft[]>([blankQuestion()])
   const [multiQuestion, setMultiQuestion] = useState(false)
+  // Which question's fields are on screen, by key rather than by position;
+  // see QuestionDraft.key. Never trusted on its own: what is rendered is
+  // `openQuestion` below, which falls back to the first question whenever
+  // this points at one that is no longer in the list — which is what happens
+  // when a duplicate replaces the whole list, and when the open tab is the
+  // one being removed.
+  const [openKey, setOpenKey] = useState<string | null>(null)
   const [mode, setMode] = useState<PollMode>('invite')
   const [showVoters, setShowVoters] = useState(true)
   const [showBallots, setShowBallots] = useState(false)
@@ -293,6 +336,14 @@ export function CreatePoll() {
   // What the fields actually render. Held back until the first submit, then
   // live: fixing a field clears its message as it is fixed.
   const shown: FormErrors = showErrors ? errors : noErrors()
+
+  // The question the tab strip is actually showing. Derived rather than kept
+  // in step by an effect: `openKey` is a wish, and a wish about a question
+  // that has been removed — or replaced wholesale, which is what loading a
+  // duplicate does — is answered with the first question there is.
+  const openQuestion = questions.some((question) => question.key === openKey)
+    ? openKey
+    : (questions[0]?.key ?? null)
 
   // Duplicating copies the source poll's settings into the form and stops
   // there; nothing is created until the user submits, so the copy can be
@@ -353,12 +404,15 @@ export function CreatePoll() {
         setMultiQuestion(true)
         setQuestions(
           group.map((question) => ({
+            ...blankQuestion(),
             title: question.question_title,
             options: draftFrom(rows.filter((o) => o.poll_id === question.id)),
           })),
         )
       } else {
-        setQuestions([{ title: '', options: draftFrom((optionsRes.data as PollOption[]) ?? []) }])
+        setQuestions([
+          { ...blankQuestion(), options: draftFrom((optionsRes.data as PollOption[]) ?? []) },
+        ])
       }
 
       if (source.mode === 'invite') {
@@ -409,11 +463,25 @@ export function CreatePoll() {
   }
 
   function addQuestion() {
-    setQuestions((prev) => [...prev, blankQuestion()])
+    const added = blankQuestion()
+    setQuestions((prev) => [...prev, added])
+    // Adding a question is asking for somewhere to write one, so the strip
+    // goes there. Leaving it on the question being left would make the button
+    // look like it had done nothing.
+    setOpenKey(added.key)
   }
 
   function removeQuestion(index: number) {
-    setQuestions((prev) => prev.filter((_, i) => i !== index))
+    setQuestions((prev) => {
+      const left = prev.filter((_, i) => i !== index)
+      // Removing the question on screen leaves the strip pointing at nothing,
+      // so it moves to the one before it — the neighbour the reader was last
+      // looking at — or to the first if this was the first.
+      if (prev[index]?.key === openKey) {
+        setOpenKey(left[Math.max(0, index - 1)]?.key ?? null)
+      }
+      return left
+    })
   }
 
   /**
@@ -457,7 +525,19 @@ export function CreatePoll() {
     // Every rule is checked in one pass and every failure is shown at once:
     // fixing one problem only to be told about the next is how a form of
     // this size turns into four round trips.
-    if (hasErrors(errors)) return
+    if (hasErrors(errors)) {
+      // And on a poll of several questions, the tab strip goes to the first
+      // question with something wrong in it. Every question is checked
+      // whether or not it is on screen, so without this a creator could press
+      // Create, watch nothing happen, and have no way of knowing the problem
+      // was two tabs away. The mark on the tabs says which ones; this puts
+      // them in front of the one to fix first.
+      if (multiQuestion) {
+        const firstBad = questions.findIndex((_, index) => questionHasError(errors, index))
+        if (firstBad >= 0) setOpenKey(questions[firstBad].key)
+      }
+      return
+    }
 
     // Blank rows are dropped here and in the database alike, and the
     // descriptions travel with their option rather than beside it, so a
@@ -512,6 +592,135 @@ export function CreatePoll() {
 
     notifications.show({ message: 'Poll created', color: 'green' })
     navigate(`/polls/${data as string}`)
+  }
+
+  /**
+   * One question's fields: what it asks, and the options it offers.
+   *
+   * Pulled out of the render because there are now two frames it can sit in —
+   * a tab panel on a poll that asks several, and the bare form on a poll that
+   * asks one — and the fields themselves must not differ between them. What a
+   * frame decides is which questions are on screen, never what a question
+   * looks like.
+   */
+  function questionFields(question: QuestionDraft, questionIndex: number) {
+    return (
+      <Stack gap="xs">
+        {/* A question of a multi-question poll is titled and can be removed;
+            the single question of an ordinary poll is neither, because the
+            poll's own title names it and there is nothing to remove it
+            from. */}
+        {multiQuestion && (
+          <Group gap="xs" align="flex-end" wrap="nowrap">
+            <TextInput
+              label={`Question ${questionIndex + 1}`}
+              placeholder="What is this question asking?"
+              value={question.title}
+              onChange={(e) => updateQuestionTitle(questionIndex, e.currentTarget.value)}
+              error={shown.questionTitles[questionIndex]}
+              style={{ flex: 1 }}
+              required
+            />
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              onClick={() => removeQuestion(questionIndex)}
+              disabled={questions.length <= 2}
+              aria-label={`Remove question ${questionIndex + 1}`}
+            >
+              &times;
+            </ActionIcon>
+          </Group>
+        )}
+
+        <Stack gap={2}>
+          <Text fw={500} size="sm">
+            {solicitOptions ? 'Starting options' : 'Options'}
+          </Text>
+          {/* The + is one small icon on a row of them, so it gets one line
+              saying what it is for. Most polls need none. */}
+          <Text size="xs" c="dimmed">
+            {solicitOptions
+              ? 'Voters will be able to add to this list later.'
+              : 'Use + to add a description to an option.'}
+          </Text>
+        </Stack>
+
+        {question.options.map((option, index) => (
+          <Group key={index} gap="xs" align="flex-start" wrap="nowrap">
+            <Stack gap={4} style={{ flex: 1 }}>
+              <TextInput
+                value={option.name}
+                onChange={(e) =>
+                  updateOption(questionIndex, index, { name: e.currentTarget.value })
+                }
+                placeholder={`Option ${index + 1}`}
+                error={shown.optionNames[optionKey(questionIndex, index)]}
+              />
+              {option.description !== null && (
+                <DescriptionField
+                  value={option.description}
+                  onChange={(e) =>
+                    updateOption(questionIndex, index, { description: e.currentTarget.value })
+                  }
+                  placeholder={`Option ${index + 1} description`}
+                  error={shown.optionDescriptions[optionKey(questionIndex, index)]}
+                  autoFocus
+                />
+              )}
+            </Stack>
+            <Tooltip
+              label={option.description === null ? 'Add description' : 'Remove description'}
+              withArrow
+            >
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                onClick={() => toggleDescription(questionIndex, index)}
+                aria-label={
+                  option.description === null
+                    ? `Add a description to option ${index + 1}`
+                    : `Remove the description from option ${index + 1}`
+                }
+              >
+                {option.description === null ? '+' : '−'}
+              </ActionIcon>
+            </Tooltip>
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              onClick={() => removeOption(questionIndex, index)}
+              /* Two rows is the floor for a poll that ships its options with
+             it, and no floor at all for one that collects them. */
+              disabled={!solicitOptions && question.options.length <= 2}
+              aria-label="Remove option"
+            >
+              &times;
+            </ActionIcon>
+          </Group>
+        ))}
+
+        <Group gap="sm" align="center">
+          <Button
+            variant="light"
+            size="xs"
+            onClick={() => addOption(questionIndex)}
+            w="fit-content"
+            disabled={question.options.length >= MAX_OPTIONS}
+          >
+            Add option
+          </Button>
+        </Group>
+
+        {/* Wrong with the list rather than with a row in it, so it sits under
+            the list rather than under any one field. */}
+        {shown.options[questionIndex] && (
+          <Text c="var(--mantine-color-error)" size="sm">
+            {shown.options[questionIndex]}
+          </Text>
+        )}
+      </Stack>
+    )
   }
 
   // Only ever on a duplicate, and only until the source poll comes back:
@@ -643,141 +852,76 @@ export function CreatePoll() {
           with none at all, and the rows here become a head start rather than
           the ballot. */}
       <Stack gap="lg">
-        {questions.map((question, questionIndex) => (
-          <Stack key={questionIndex} gap="xs">
-            {/* A question of a multi-question poll is titled and can be
-                removed; the single question of an ordinary poll is neither,
-                because the poll's own title names it and there is nothing to
-                remove it from. */}
-            {multiQuestion && (
-              <Group gap="xs" align="flex-end" wrap="nowrap">
-                <TextInput
-                  label={`Question ${questionIndex + 1}`}
-                  placeholder="What is this question asking?"
-                  value={question.title}
-                  onChange={(e) => updateQuestionTitle(questionIndex, e.currentTarget.value)}
-                  error={shown.questionTitles[questionIndex]}
-                  style={{ flex: 1 }}
-                  required
-                />
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  onClick={() => removeQuestion(questionIndex)}
-                  disabled={questions.length <= 2}
-                  aria-label={`Remove question ${questionIndex + 1}`}
-                >
-                  &times;
-                </ActionIcon>
-              </Group>
-            )}
+        {multiQuestion ? (
+          /* One question at a time, behind a strip of tabs. Every question
+             laid out at once was a form that grew with the poll: five
+             questions of five options each is fifty fields in one scroll,
+             with no way to see the shape of what is being asked, and no way
+             back from question four to question one except past everything in
+             between. The tabs are also the shape the poll wears once it
+             exists — QuestionStrip, on the voting side — so a creator lays
+             the poll out the way their voters will walk through it.
 
-            <Stack gap={2}>
-              <Text fw={500} size="sm">
-                {solicitOptions ? 'Starting options' : 'Options'}
-              </Text>
-              {/* The + is one small icon on a row of them, so it gets one line
-                  saying what it is for. Most polls need none. */}
-              <Text size="xs" c="dimmed">
-                {solicitOptions
-                  ? 'Voters will be able to add to this list later.'
-                  : 'Use + to add a description to an option.'}
-              </Text>
-            </Stack>
-
-            {question.options.map((option, index) => (
-              <Group key={index} gap="xs" align="flex-start" wrap="nowrap">
-                <Stack gap={4} style={{ flex: 1 }}>
-                  <TextInput
-                    value={option.name}
-                    onChange={(e) =>
-                      updateOption(questionIndex, index, { name: e.currentTarget.value })
-                    }
-                    placeholder={`Option ${index + 1}`}
-                    error={shown.optionNames[optionKey(questionIndex, index)]}
-                  />
-                  {option.description !== null && (
-                    <DescriptionField
-                      value={option.description}
-                      onChange={(e) =>
-                        updateOption(questionIndex, index, { description: e.currentTarget.value })
-                      }
-                      placeholder={`Option ${index + 1} description`}
-                      error={shown.optionDescriptions[optionKey(questionIndex, index)]}
-                      autoFocus
-                    />
-                  )}
-                </Stack>
-                <Tooltip
-                  label={option.description === null ? 'Add description' : 'Remove description'}
-                  withArrow
+             Nothing about what is submitted changes: the questions are one
+             list in order, and all of them are validated on every submit
+             whether or not they are on screen. A tab whose question has
+             something wrong with it says so, because validating a question
+             nobody can see is only worth doing if the reader is told where to
+             look. */
+          <Tabs value={openQuestion} onChange={setOpenKey} keepMounted={false}>
+            <Tabs.List>
+              {questions.map((question, questionIndex) => (
+                <Tabs.Tab
+                  key={question.key}
+                  value={question.key}
+                  rightSection={
+                    questionHasError(shown, questionIndex) ? (
+                      <Text component="span" c="var(--mantine-color-error)" fw={700} size="sm">
+                        !
+                      </Text>
+                    ) : undefined
+                  }
                 >
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    onClick={() => toggleDescription(questionIndex, index)}
-                    aria-label={
-                      option.description === null
-                        ? `Add a description to option ${index + 1}`
-                        : `Remove the description from option ${index + 1}`
-                    }
-                  >
-                    {option.description === null ? '+' : '−'}
-                  </ActionIcon>
-                </Tooltip>
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  onClick={() => removeOption(questionIndex, index)}
-                  /* Two rows is the floor for a poll that ships its options with
-                     it, and no floor at all for one that collects them. */
-                  disabled={!solicitOptions && question.options.length <= 2}
-                  aria-label="Remove option"
-                >
-                  &times;
-                </ActionIcon>
-              </Group>
-            ))}
+                  {/* The question's own title once it has one, since that is
+                      what a creator coming back to it is looking for; its
+                      position until then, because "Question 3" is the only
+                      name an empty question has. */}
+                  <Text component="span" size="sm" truncate maw={160}>
+                    {question.title.trim() || `Question ${questionIndex + 1}`}
+                  </Text>
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
 
-            <Group gap="sm" align="center">
+            {/* Under the strip rather than under the fields: it adds a tab,
+                not an option, and what it acts on is the row above it. */}
+            <Stack gap="xs" mt="sm">
               <Button
                 variant="light"
                 size="xs"
-                onClick={() => addOption(questionIndex)}
+                onClick={addQuestion}
                 w="fit-content"
-                disabled={question.options.length >= MAX_OPTIONS}
+                disabled={questions.length >= MAX_QUESTIONS}
               >
-                Add option
+                Add question
               </Button>
-            </Group>
+              {shown.questions && (
+                <Text c="var(--mantine-color-error)" size="sm">
+                  {shown.questions}
+                </Text>
+              )}
+            </Stack>
 
-            {/* Wrong with the list rather than with a row in it, so it sits under
-                the list rather than under any one field. */}
-            {shown.options[questionIndex] && (
-              <Text c="var(--mantine-color-error)" size="sm">
-                {shown.options[questionIndex]}
-              </Text>
-            )}
-          </Stack>
-        ))}
-
-        {multiQuestion && (
-          <Stack gap="xs">
-            <Button
-              variant="light"
-              size="xs"
-              onClick={addQuestion}
-              w="fit-content"
-              disabled={questions.length >= MAX_QUESTIONS}
-            >
-              Add question
-            </Button>
-            {shown.questions && (
-              <Text c="var(--mantine-color-error)" size="sm">
-                {shown.questions}
-              </Text>
-            )}
-          </Stack>
+            {questions.map((question, questionIndex) => (
+              <Tabs.Panel key={question.key} value={question.key} pt="md">
+                {questionFields(question, questionIndex)}
+              </Tabs.Panel>
+            ))}
+          </Tabs>
+        ) : (
+          /* One question and no strip at all: the poll's own title names it,
+             and a single tab is a frame around nothing. */
+          questionFields(questions[0], 0)
         )}
       </Stack>
 

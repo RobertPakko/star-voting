@@ -39,8 +39,15 @@ begin
     format('select creator_add_option(%L, %L)', v_poll, 'tacos'),
     'is already on the list');
   perform tests.assert_raises('an option name is a label, not an essay',
-    format('select creator_add_option(%L, %L)', v_poll, repeat('x', 101)),
+    format('select creator_add_option(%L, %L)', v_poll, repeat('x', 251)),
     'too long');
+  -- The ceiling itself, not just some length above it: it moved from 100 to
+  -- 250 because real options ran past 100, and a case that only asserts a
+  -- refusal would have passed before the move as well as after it.
+  perform creator_add_option(v_poll, repeat('y', 250));
+  perform tests.assert_eq('but 250 characters of one is still a name',
+    (select count(*)::int from candidates where poll_id = v_poll and length(name) = 250), 1);
+  delete from candidates where poll_id = v_poll and length(name) = 250;
   perform tests.assert_raises('and it needs a name at all',
     format('select creator_add_option(%L, %L)', v_poll, '   '),
     'Give the option a name');

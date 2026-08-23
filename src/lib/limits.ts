@@ -26,8 +26,17 @@
 export const TITLE_MAX = 100
 export const POLL_DESCRIPTION_MAX = 500
 
-/** Matches `add_suggested_option`; see above. */
-export const OPTION_NAME_MAX = 100
+/**
+ * Matches `add_suggested_option`; see above.
+ *
+ * It was 100 for as long as suggestions have existed, and 100 turned out to
+ * be a label's length rather than an option's: real options carry a subtitle,
+ * an author, a date, a "(vegetarian)" — and a writer who is over the line by
+ * eight characters is being asked to abbreviate the thing being voted on so
+ * that the ballot reads worse. 250 is still a label rather than an essay, and
+ * the description below it is still where anything longer belongs.
+ */
+export const OPTION_NAME_MAX = 250
 /** Matches `add_suggested_option`; see above. */
 export const OPTION_DESCRIPTION_MAX = 500
 /**

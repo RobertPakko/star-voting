@@ -70,10 +70,15 @@ export function CollectOptions({
   onChanged: () => void
 }) {
   const [name, setName] = useState('')
-  // null is "no description field on screen", exactly as in the create form:
-  // showing one means giving it an empty string to type into, and hiding one
-  // throws away what was in it.
-  const [description, setDescription] = useState<string | null>(null)
+  // Always on screen here, unlike the create form, where a `+` opens one per
+  // row. That form shows a dozen option rows at once and a description field
+  // under every one of them would bury the list; this box is one option at a
+  // time, so the field costs two rows of a card that has nothing else in it —
+  // and the alternative was a `+` that had to be found and pressed before the
+  // most useful thing a suggestion can carry could be typed. So there is
+  // nothing to open, and no state for whether it is open: the string is the
+  // whole of it, and empty means no description, the same as it always did.
+  const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   // What is wrong with the suggestion being typed, against the field it is
   // wrong in rather than as a line of red under the whole card, which is
@@ -94,7 +99,7 @@ export function CollectOptions({
     if (busy) return
 
     const trimmed = name.trim()
-    const trimmedDescription = description?.trim() ?? ''
+    const trimmedDescription = description.trim()
 
     // The same four rules add_suggested_option applies, checked here so the
     // one that fails is marked on the field it failed in. The database is
@@ -145,7 +150,7 @@ export function CollectOptions({
       return
     }
     setName('')
-    setDescription(null)
+    setDescription('')
     notifications.show({ message: `Added “${trimmed}”`, color: 'green' })
     onChanged()
   }
@@ -227,36 +232,19 @@ export function CollectOptions({
                 addOption()
               }}
             />
-            {description !== null && (
-              <DescriptionField
-                value={description}
-                onChange={(e) => {
-                  setDescription(e.currentTarget.value)
-                  setDescriptionError(null)
-                }}
-                placeholder="Option description"
-                error={descriptionError}
-                autoFocus
-              />
-            )}
+            {/* No autoFocus: the field is here on arrival rather than
+                opened, so taking the cursor off the name field would be
+                taking it off the one thing every option needs. */}
+            <DescriptionField
+              value={description}
+              onChange={(e) => {
+                setDescription(e.currentTarget.value)
+                setDescriptionError(null)
+              }}
+              placeholder="Description (optional)"
+              error={descriptionError}
+            />
           </Stack>
-          <Tooltip
-            label={description === null ? 'Add description' : 'Remove description'}
-            withArrow
-          >
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              onClick={() => setDescription((d) => (d === null ? '' : null))}
-              aria-label={
-                description === null
-                  ? 'Add a description to this option'
-                  : 'Remove this option’s description'
-              }
-            >
-              {description === null ? '+' : '−'}
-            </ActionIcon>
-          </Tooltip>
           <Button variant="light" onClick={addOption} disabled={full}>
             Add
           </Button>

@@ -119,14 +119,21 @@ npm run dev
    GitHub picks up the domain from `site-root/CNAME` in the published
    artifact.
 
-### 4. Invite emails
+### 4. Emails
 
-Inviting someone to a poll (`create_poll` inserting into `invited_voters`)
-sends them an email through [Resend](https://resend.com), via a trigger
-(`send_invite_email`, in the squashed baseline under
-[`supabase/migrations/`](supabase/migrations)) that calls Resend's HTTP API
-directly using `pg_net`. The API key is never
-committed — the trigger reads it from Supabase Vault at send time:
+The app sends two, and both go through [Resend](https://resend.com) from
+inside Postgres, calling Resend's HTTP API directly with `pg_net`:
+
+- **the invitation**, when a poll is created with invitees (`create_poll`
+  inserting into `invited_voters`), through the `send_invite_email` trigger in
+  the squashed baseline under [`supabase/migrations/`](supabase/migrations);
+- **the results**, when a poll finishes, through
+  [`0038_results_ready_emails.sql`](supabase/migrations/0038_results_ready_emails.sql)
+  — see [Telling people the results are
+  ready](#telling-people-the-results-are-ready).
+
+Both read the same key, and the API key is never
+committed — they read it from Supabase Vault at send time:
 
 1. In the Supabase dashboard, open the **SQL Editor** on the project (not a
    migration file — this is a secret, so it doesn't belong in the repo) and
@@ -142,12 +149,17 @@ committed — the trigger reads it from Supabase Vault at send time:
    name = 'resend_api_key';` instead.
 2. That's it — no redeploy needed. The next row inserted into
    `invited_voters` (i.e. the next poll created with invitees) will pick up
-   the key automatically.
+   the key automatically, and so will the next poll to finish.
 
 This only works against a real Supabase project: `pg_net` and Vault don't
-exist in the throwaway database `npm test` builds, so the trigger checks for
-both schemas first and quietly does nothing if either is missing — invite
-emails are best-effort and never block or fail an invitation itself.
+exist in the throwaway database `npm test` builds, so both triggers check for
+the schemas first and quietly do nothing if either is missing — the emails are
+best-effort and never block or fail the thing that triggered them.
+
+One asymmetry is worth knowing before the key is in place: an invitation is
+sent per insert, so a poll created later still sends its invitations, while
+the results email is sent once per poll and a poll that finished before the
+key existed is never announced. Neither is retried.
 
 ## Database migrations
 
@@ -259,9 +271,16 @@ than once per statement passes any assertion phrased as "did it say
 anything" — and that a page of the poll list is a page of the same list every
 time: that two pages partition it with nothing on both and nothing on neither,
 that the total is of the list rather than the page, and that asking past the
-end lands on the last page there is.
+end lands on the last page there is; and everything about the results-ready
+announcement except the sending — whether a poll has a result at all, who
+would be told, and that the notice is made exactly once, forgotten on reset
+and made again when the poll finishes a second time.
 
-Not covered: RLS policies and the `auth.jwt()`-gated access rules. Nor the
+Not covered: RLS policies and the `auth.jwt()`-gated access rules. Nor either
+email: `pg_net` and Vault do not exist in the throwaway database, so both
+senders find no mailer and return without doing anything — the suite can say
+who *would* have been emailed and never that anybody was, exactly as it can for
+live updates. Nor the
 delivery half of live updates: `test/sql/shim.sql` keeps `realtime.send()`'s
 write to `realtime.messages` and drops the service that fans it out, so the
 suite can say who would have been told and never that anyone was. Everything
@@ -612,12 +631,48 @@ The two can never disagree: `winner_id` is `star_round()`'s first place, and
 poll that elected nobody is `null` from both, which is a real answer and not a
 missing one — see the table above.
 
-Until that card lands, the badge reads *Results ready*, which is the state
-that means precisely "finished, and this page has not been told which". So the
-badge fills itself in a moment after the page paints, while the results
-underneath it are still a skeleton. That is the whole cost, and it buys the
+Until that card lands, the badge renders **nothing at all** — see *The badge
+waits for its own answer* below. That is the whole cost, and it buys the
 public page a request it never makes and the server an election it never
 runs.
+
+**The badge waits for its own answer.** *Results ready* is a real state — it
+means "finished, and nothing is going to tell this page what it decided",
+which is true of a poll of several questions, of a browser talking to a
+database older than `poll_winners()`, and of a request that failed. It is not
+a loading state, and it used to be used as one: every finished poll drew
+*Results ready* for the hundred milliseconds its winner was in flight and then
+rewrote itself into a name, so every load of every finished poll flickered
+through a state that was true for nobody. `PollStateBadge` now takes
+`awaitingWinner` alongside `winner`, and draws nothing while an answer is
+still coming. Each of the three screens knows its own answer to that:
+
+- the poll page and the list ask `poll_winners()`, so "still coming" is "the
+  request has not settled" — and it stops being pending **whether or not the
+  request succeeded**, because a failure leaves the winner unknown and
+  *Results ready* is exactly what unknown looks like;
+- the list never asks about a multi-question poll at all, so that poll is
+  never pending and its badge is there from the first paint;
+- the public page's answer arrives from the tally card below it, so it waits
+  for that card — and if that card fails there is no badge, which is the
+  honest end of the same rule: the card says so itself, in red, where the
+  tally would have been.
+
+Nothing else on the badge waits. *Collecting options*, *In progress* and
+*Closed* are decided by the read that drew the page, and a poll whose answer is
+already in the browser — which is every poll opened from a list that has
+already asked — draws it immediately.
+
+**The badge and the title share a row until they can't.** The badge is sized
+to the name it may be carrying, up to `min(320px, 100%)`, and does not shrink
+below its text: a long title used to take the badge's width rather than
+wrapping, leaving two letters and an ellipsis where the answer to the poll
+should be. Pinning it beside the title (`wrap="nowrap"`) then moved the problem
+one step along — on a phone, a winner's name held 220px of a 330px card and the
+title wrapped one or two characters at a time down the side of it. The row
+wraps now, so a title too long to share the line takes the whole of it and the
+badge drops underneath, which is the same two things in the same order with
+neither side squeezed.
 
 Three decisions hold that shape:
 
@@ -759,12 +814,21 @@ change exists to stop being the normal path.
 
 An option can carry a description as well as a name: a caveat, a couple of
 lines of detail, a link to whatever is being voted on. It is optional and
-nearly always absent, so it is not a field that is always on screen — each row
-of the create form has a `+` beside it that opens one, and `0019` is the
-migration that gave `create_poll` somewhere to put the text. The column itself
-predates that by a long way: `candidates.description` and both ballots'
-rendering of it were written first, and nothing had ever been able to fill it
-in.
+nearly always absent, and `0019` is the migration that gave `create_poll`
+somewhere to put the text. The column itself predates that by a long way:
+`candidates.description` and both ballots' rendering of it were written first,
+and nothing had ever been able to fill it in.
+
+**Whether the field is on screen depends on how many options are.** The create
+form lays out a dozen option rows at once, so a description under every one of
+them would bury the list the creator is trying to read; each row has a `+`
+beside it that opens one instead. `CollectOptions` — the box on a poll
+collecting its options, and the creator's own correction of a settled list — is
+one option at a time, so the field is simply there, costing two rows of a card
+with nothing else in it. The `+` was a control that had to be found and pressed
+before the most useful thing a suggestion can carry could be typed, in the one
+place where nothing was competing for the room. It has no open/closed state
+there at all: the string is the whole of it, and empty means no description.
 
 The field it opens says what it is by its shape. It is indented under the
 option it belongs to, with an elbow drawn from the bottom of the name field
@@ -784,11 +848,13 @@ Four things hold it together:
   one option up — not an error anywhere, just the wrong text under the wrong
   name. `CreatePoll` filters the pairs and `create_poll` aggregates both
   columns in one pass, and neither ever filters one array alone.
-- **Hidden means gone.** Collapsing the field discards what was in it rather
-  than remembering it, so a poll can never carry a description its creator can
-  no longer see. It is also why "no description" is `null` rather than an empty
-  string in the form state: the same value collapses the field and means there
-  is nothing to store.
+- **Hidden means gone.** In the create form, collapsing the field discards what
+  was in it rather than remembering it, so a poll can never carry a description
+  its creator can no longer see. It is also why "no description" is `null`
+  rather than an empty string there: the same value collapses the field and
+  means there is nothing to store. `CollectOptions` has no collapsed state to
+  represent, so its description is a plain string and empty is the whole of
+  "none".
 - **They belong to the ballot, and are folded away everywhere else.** Both
   ballots show one under the option's name, because that is where the detail is
   a voting aid. The results do not: a paragraph beside a bar of points is noise
@@ -811,6 +877,20 @@ Four things hold it together:
   `www.` runs into anchors as React elements — no HTML is ever parsed out of
   the text, and the `href` is either the matched URL or `https://` glued onto
   the `www.` form, so a description cannot produce a `javascript:` link.
+
+**An option name may be 250 characters**, and was 100 until
+[`0037`](supabase/migrations/0037_longer_option_names.sql). 100 was chosen when
+suggestions were the only way into `candidates`, and it turned out to be a
+*label's* length rather than an option's: real options carry a subtitle, an
+author, a year, a "(vegetarian)", and a writer eight characters over the line
+was being asked to abbreviate the thing being voted on so that the ballot read
+worse. The reason for a ceiling is unchanged and is not about taste — the
+suggestion path lets a whole group write to this table, so every field it can
+reach needs a bound. The description's own cap is untouched at 500, and
+`insert_option` is the one place either is applied, because both the creator's
+path and the suggestion path arrive there; `src/lib/limits.ts` carries the same
+numbers for the form, which is where a writer is told which field is too long
+and by how much.
 
 Like everything else about a poll, a description is fixed at creation; the
 options of a poll with votes in it cannot change at all
@@ -1368,6 +1448,30 @@ The creator's *Open poll* button applies the same rule from the option counts
 and turned down. A poll asking one question has no name to give and raises
 exactly the message it always did.
 
+**Writing one.** `CreatePoll` holds a list of `QuestionDraft`s whether or not
+the poll asks more than one — a single-question poll is one entry whose title
+is never read — so every rule about an option list is written once and applied
+to every list there is. Turning the switch on puts that list behind a strip of
+tabs, one per question. Laid out all at once it was a form that grew with the
+poll: five questions of five options each is fifty fields in one scroll, with
+no way to see the shape of what is being asked and no way back from question
+four to question one except past everything in between. The tabs are also the
+shape the poll wears once it exists — `QuestionStrip`, on the voting side — so
+a creator lays the poll out the way their voters will walk through it.
+
+Three things keep the tabs from hiding anything:
+
+- **Every question is validated on every submit**, on screen or not; the tabs
+  changed what is rendered, not what is checked.
+- **A tab whose question has something wrong with it is marked**, and a submit
+  that fails opens the first of them. Validating a question nobody can see is
+  only worth doing if the reader is told where to look, and "press Create,
+  watch nothing happen" is what the mark and the jump exist to prevent.
+- **A question is identified by a key rather than by its position.** Removing
+  question 2 of four slides 3 and 4 down one, and a tab holding the number
+  would quietly be looking at a different question afterwards. The key never
+  leaves the form: `create_poll_group` takes the questions in order.
+
 **On screen.** The poll list shows position 1 and hides the rest
 (`list_polls`), with the count badge reading *N questions* instead of a
 turnout — the turnouts come apart the moment somebody answers three of five,
@@ -1376,6 +1480,87 @@ stays *Results ready* rather than naming a winner, because there is one per
 question; the winner is named on each question's own page. `QuestionStrip`
 carries the walking between them, and renders nothing at all below two
 questions, so every existing poll looks exactly as it did.
+
+### Telling people the results are ready
+
+An invitation was the only thing this app ever emailed, which meant it
+announced the one moment nobody was waiting for and stayed silent through the
+one everybody was. A poll's results unlock on their own — when the last invitee
+votes, or when the creator closes it — and the only way to find out used to be
+to keep opening the poll. The people most likely to miss it are the ones who
+voted early, which is to say the ones who cared enough to answer first.
+[`0038_results_ready_emails.sql`](supabase/migrations/0038_results_ready_emails.sql)
+is the whole of it.
+
+The delivery half is the invitation's, deliberately: `pg_net` posting to
+Resend with the key read from Vault at send time, best-effort, never blocking
+or failing whatever triggered it — see [Emails](#4-emails). What is new is that
+this is a **transition** rather than an insert, and a transition has to be
+noticed exactly once.
+
+- **Once per poll, not once per question.** A group's questions unlock
+  together, so five questions are one result and one email, pointing at
+  question 1 — the same rule and the same landing place as the invitation.
+
+- **The claim is a row, not a column.** `results_notices` holds one row per
+  poll that has been announced, and its primary key *is* the once-only rule:
+  two ballots landing in the same instant both try to insert it, one wins, one
+  email goes. A column on `polls` would have done the same job and would also
+  have widened every `select *` the app makes and woken every watcher of the
+  poll a second time, for bookkeeping nothing on screen reads. The table has no
+  grants and RLS on with no policies; only the `SECURITY DEFINER` functions
+  that maintain it can see it.
+
+- **A reset takes the notice back.** Reset deletes every vote and reopens the
+  poll, which can then finish again with a different answer; that is a second
+  result, and the people in it are told about it. So anything that puts a poll
+  back to taking votes drops its notice row, and being announced is a property
+  of the poll *being* finished rather than of it having once been finished.
+
+- **`poll_results_ready()` is not `poll_results_revealed()`**, and the
+  difference is the one that matters to an inbox. The latter answers about one
+  question: *this* question has taken a ballot, and every question in its group
+  has stopped. A poll closed before anybody reached question 5 has results for
+  question 1 and none for question 5 — right on the page, wrong in an email,
+  where there is one result and it is the poll's. So the ballot test is asked
+  of the group: at least one ballot somewhere in it, and every question's gate
+  open.
+
+- **The audience is the creator and every invitee**, deduplicated and
+  lowercased. Not "everybody who voted": an invitee who did not vote is still
+  in the poll — it was closed around them, and the result is a decision they
+  are subject to. An open poll has no addresses at all, because its voters were
+  never asked for one, so its creator is the whole of the list.
+
+- **One request per address.** Resend would take the whole list in one `to`,
+  and that would show every invitee every other invitee's address — precisely
+  what a poll with respondents hidden promises not to do. The fan-out is the
+  price of the promise.
+
+- **The email does not name the winner.** A poll of several questions has one
+  winner per question and no single one to name; an email cannot be un-read by
+  somebody who wanted to see the tally first; and the link is one tap from the
+  answer either way.
+
+`notify_results_ready()` is the whole rule in one function, called from four
+triggers — a ballot arriving, a ballot leaving, an invitee leaving, and
+`closed_at` moving — and idempotent by construction, so none of them has to
+know what the others have done. It re-derives whether the poll has a result and
+reconciles the notice row with that answer; called on a poll nothing has
+changed about, it does nothing. Nothing is needed for an invitee *arriving*,
+because `guard_invitee_changes` already refuses to widen the list of a poll
+whose results are out.
+
+The claim comes before the send, so a mailer that is not configured leaves a
+notice row with no email behind it — the same bargain the invitation makes.
+Releasing the claim on a failed send was the alternative, and it would turn
+every transient Resend outage into a duplicate on the next vote.
+
+`test/sql/cases/21_results_ready_notices.sql` covers everything but the send
+itself: whether a poll has a result, who would be told, that the notice appears
+exactly once when the poll crosses the line, that a reset takes it back and a
+second finish announces again, and that a group is one notice filed against
+question 1.
 
 ### Polls are deleted after six months
 
@@ -1432,15 +1617,21 @@ does not know about is `undefined` and says nothing, where a select naming a
 column that does not exist yet fails outright and takes the poll page with it.
 
 `RetentionNote` (`src/components/RetentionNote.tsx`) is the line at the foot
-of the poll page, shown to everyone the poll admits rather than to its creator
-alone — an invitee's ballot is in there too. It is quiet for almost all of a
-poll's life and becomes an orange warning in the last month, when there is
-still time to act on it. Only the creator is pointed at **Duplicate** there:
-an invitee has no such button, and being told to press one you do not have is
-worse than being told nothing. An automatic deletion is only fair if it was
-never a surprise, which is the whole reason the date is on the poll from the
-day it is created — and why it is the same date on the last day as on the
-first.
+of the poll page, **shown to the poll's creator and to nobody else**. It used
+to be shown to everyone the poll admits, on the grounds that an invitee's
+ballot goes on the same day — but a retention date is a thing to *act* on, and
+the only act there is belongs to the creator: **Duplicate**, which nobody else
+has a button for. For a respondent it was a deadline about somebody else's
+poll with nothing on the other end of it, on a page they had come to in order
+to vote or to read a result. The policy itself is still public, on the
+[About](src/pages/About.tsx) page, which is where somebody who wants the rule
+rather than this poll's date will look.
+
+It is quiet for almost all of a poll's life and becomes an orange warning in
+the last month, when there is still time to act on it — which is also when it
+names Duplicate. An automatic deletion is only fair if it was never a surprise,
+which is the whole reason the date is on the poll from the day it is created —
+and why it is the same date on the last day as on the first.
 
 The public voting page carries no date, and `open_poll_view` no field for
 one: it answers to a link rather than to an account, and it is read once by

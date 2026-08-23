@@ -57,17 +57,26 @@ export function PollHeading({
     closed: boolean
     /** Absent where the page cannot ask; see PollStateBadge. */
     winner?: string | null
+    /** An answer is coming: the badge waits rather than flickering. */
+    awaitingWinner?: boolean
   }
   compact?: boolean
 }) {
   return (
     <Stack gap={compact ? 4 : 8}>
-      <Group justify="space-between" wrap="nowrap" align="flex-start" gap="sm">
-        {/* The side of this row that gives: the state badge is sized to the
-            name it may be carrying, so a title too long for what is left
-            wraps rather than squeezing it. `minWidth` lets it wrap past its
-            longest word, which a title with no spaces in it otherwise would
-            not. See PollStateBadge. */}
+      {/* The badge sits beside the title while both fit, and drops onto its
+          own line under it when they don't. It used to be pinned there
+          (`wrap="nowrap"`), which on a phone left a winner's name holding
+          220px of a 330px card and the title wrapping one or two characters
+          at a time down the side of it — the title was technically the side
+          that gave, and what it gave was legibility. Letting the row wrap
+          means the narrow case is a title across the full width with its
+          badge below, which is the same two things in the same order, and the
+          badge keeps its own width rather than being squeezed in turn. See
+          PollStateBadge. */}
+      <Group justify="space-between" wrap="wrap" align="flex-start" gap="sm">
+        {/* `minWidth` lets the title wrap past its longest word, which one
+            with no spaces in it otherwise would not. */}
         {compact ? (
           <Text
             fw={600}
@@ -86,6 +95,7 @@ export function PollHeading({
           resultsAvailable={state.resultsAvailable}
           closed={state.closed}
           winner={state.winner}
+          awaitingWinner={state.awaitingWinner}
         />
       </Group>
 

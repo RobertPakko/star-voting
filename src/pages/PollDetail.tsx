@@ -193,7 +193,7 @@ export function PollDetail() {
   // For the state badge beside the title. Almost always already known: the
   // list this poll was opened from asked the same question through the same
   // cache.
-  const winner = useWinner(pollId, status?.results_available === true)
+  const { winner, pending: awaitingWinner } = useWinner(pollId, status?.results_available === true)
 
   // Close and reset invalidate a ballot half-filled in the open-poll panel,
   // so they remount it as well as re-reading the poll. A vote doesn't: the
@@ -290,6 +290,7 @@ export function PollDetail() {
           resultsAvailable: status.results_available,
           closed: status.is_closed,
           winner,
+          awaitingWinner,
         }}
       />
 
@@ -458,11 +459,10 @@ export function PollDetail() {
         />
       )}
 
-      {/* Last thing on the page, for everyone who can see the poll rather
-          than its creator alone: a voter's ballot is in here too, and the
-          result they came back to read goes on the same day. Only the
-          creator is pointed at Duplicate, since only they have it. */}
-      <RetentionNote expiresAt={status.expires_at} canDuplicate={isCreator} />
+      {/* Last thing on the page, and the creator's alone: it is a date to
+          act on, and Duplicate — the only act there is — is a button nobody
+          else has. See RetentionNote. */}
+      {isCreator && <RetentionNote expiresAt={status.expires_at} />}
     </Stack>
   )
 }
