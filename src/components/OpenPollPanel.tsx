@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications'
 import { openPollRpc } from '../lib/samplePoll'
 import { VOTER_NAME_MAX } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
+import { useBallotOrder } from '../lib/ballotOrder'
 import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
 import { badgeColor } from '../lib/badgeColors'
 import { Ballots } from './Ballots'
@@ -261,6 +262,10 @@ function OpenBallot({
   onCancel?: () => void
 }) {
   const revising = initial !== undefined
+  // Shown in this browser's own order rather than the creator's; see
+  // lib/ballotOrder.ts. The scores below are keyed by option id, so this
+  // changes what the voter reads and nothing about what they send.
+  const ballot = useBallotOrder(options)
   // Offered rather than imposed: a name this browser has voted under before,
   // editable like any other, and blank for a browser that has not. It is what
   // lets a poll of several questions be answered without typing the same name
@@ -309,7 +314,7 @@ function OpenBallot({
     }
 
     setSubmitting(true)
-    const scores = options.map((o) => ({ candidate_id: o.id, score: values[o.id] ?? 0 }))
+    const scores = ballot.map((o) => ({ candidate_id: o.id, score: values[o.id] ?? 0 }))
     const { error: rpcError } = revising
       ? await openPollRpc('open_poll_revise', {
           p_token: token,
@@ -361,7 +366,7 @@ function OpenBallot({
         />
       )}
 
-      {options.map((option) => (
+      {ballot.map((option) => (
         <Card key={option.id} withBorder>
           <Group justify="space-between" wrap="nowrap" gap="sm">
             <div style={{ minWidth: 0 }}>

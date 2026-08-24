@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, …)
-src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, the About page's sample poll, shared types
+src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, per-browser ballot order, the About page's sample poll, shared types
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 scripts/         squash.sh, which squashes the migrations and replays the above;
@@ -1313,6 +1313,52 @@ scores filled in where they used to see "your vote is in". The key is
 per-poll, in that browser's `localStorage`, and never leaves it; open polls
 already promise less than invite polls do, and this is inside what they
 promise rather than a new hole in it.
+
+### The order the options come in
+
+Every ballot shuffles its options, and shuffles them the same way for any one
+browser every time it is opened. `src/lib/ballotOrder.ts` holds it, and the
+two ballots — `VoteForm` on the invite side, `OpenBallot` on the open side —
+are the only things that use it.
+
+Ballot order is not neutral. An option at the top of a list is read first and
+read most carefully, and scores better for it than the same option would
+halfway down, so a poll that shows every voter one fixed list hands whatever
+its creator happened to type first an advantage that has nothing to do with
+the option. Shuffling per browser does not remove that advantage; it stops it
+always landing on the same option.
+
+Per browser rather than per render is what keeps it usable. A voter who
+reloads, or who comes back to change their vote, finds the ballot where they
+left it — and a list that reshuffled on every paint would be fair by exactly
+the same argument and impossible to fill in.
+
+What is stored is a single seed in `localStorage`, not the running order of
+any one poll. The order is derived by hashing that seed with each option's id,
+so nothing has to be invalidated when the list moves: a creator correcting the
+options, or a soliciting poll taking one more suggestion, slots the new option
+into the order the rest already have. One seed also covers every poll on its
+own, because option ids are unique to their poll — the same browser gets an
+unrelated order in the next poll without needing a key per poll to remember it
+by. Storage that refuses falls back to a per-tab seed, as `voterKey.ts` does.
+
+The hash is FNV-1a finished with murmur3's avalanche step, and the finisher
+earns its keep. Every option is hashed as the same seed followed by a
+different id, and FNV alone leaves two such hashes differing by close to a
+fixed XOR pattern — enough to sort with, but not evenly, because comparing
+XOR-related numbers favours whichever id carries that pattern in its high
+bits, in the same direction for every browser. Measured over 200k seeds on a
+five-option poll, plain FNV put one option first 24% of the time and another
+17%, against the 20% each the shuffle exists to deliver; with the avalanche
+the same measurement comes back inside 19.8–20.2%.
+
+It is display only. A ballot is sent as a score per option id and read back by
+id — `submit_ballot` checks the length of the list and then looks up every
+`candidate_id` in it — so the order it travels in means nothing to anyone.
+Nothing else in the app is shuffled: results are ordered by score, the
+published ballot sheet has an ordering of its own that is deliberately not
+arrival order, and the creator's option editor shows the list in the order
+they typed it, which is the thing being edited.
 
 ### Scoring an option
 

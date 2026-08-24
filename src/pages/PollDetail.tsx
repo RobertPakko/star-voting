@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth'
 import { pollTopic, useLiveStream } from '../lib/useLiveStream'
 import { useWinner } from '../lib/useWinner'
 import { voterKeyFor } from '../lib/voterKey'
+import { useBallotOrder } from '../lib/ballotOrder'
 import { Ballots } from '../components/Ballots'
 import { CollectOptions } from '../components/CollectOptions'
 import { CreatorControls } from '../components/CreatorControls'
@@ -565,6 +566,10 @@ function VoteForm({
 }) {
   const pollId = poll.id
   const revising = initial !== undefined
+  // Shown in this browser's own order rather than the creator's; see
+  // lib/ballotOrder.ts. The scores below are keyed by option id, so this
+  // changes what the voter reads and nothing about what they send.
+  const ballot = useBallotOrder(options)
   const [values, setValues] = useState<Record<string, number>>(initial ?? {})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -577,7 +582,7 @@ function VoteForm({
     setError(null)
     setSubmitting(true)
     try {
-      const payload = options.map((o) => ({
+      const payload = ballot.map((o) => ({
         candidate_id: o.id,
         score: values[o.id] ?? 0,
       }))
@@ -602,7 +607,7 @@ function VoteForm({
           ? 'Your ballot as it stands. Change whatever you like and save; the group is told nothing until the results unlock.'
           : 'Score each option from 0 (worst) to 5 (best). Unscored options count as 0, and clicking the star you picked returns an option to 0.'}
       </Text>
-      {options.map((option) => (
+      {ballot.map((option) => (
         <Card key={option.id} withBorder>
           <Group justify="space-between" wrap="nowrap" gap="sm">
             <div style={{ minWidth: 0 }}>
