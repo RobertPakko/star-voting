@@ -229,16 +229,26 @@ builds a throwaway database from `supabase/migrations/`, runs everything in
 needs the same database (see [The About page and its sample
 poll](#the-about-page-and-its-sample-poll)).
 
-Requirements are a Postgres server and a role that can create databases —
-`PGHOST`, `PGUSER` and friends are honoured, and with none set it falls back to
-a local cluster. `test/build-db.sh` starts that cluster if it is not already
-running (Debian's or Homebrew's), creates a role for you if the install has
-none, and otherwise prints the command for your platform. Both this suite and
-`scripts/sample-poll.sh` get there through that one file, so neither can be
-the one that fails unhelpfully. There is no test
-framework and nothing to `npm install`. CI runs the same script against a
-`postgres` service container
+Requirements are a Postgres server and a superuser role that can create
+databases. `PGHOST`, `PGUSER` and friends are honoured, and with none set it
+falls back to a local cluster. There is no test framework and nothing to `npm
+install`. CI runs the same script against a `postgres` service container
 ([`.github/workflows/test.yml`](.github/workflows/test.yml)).
+
+Getting to a server is `test/build-db.sh`'s job, and it is the same job for
+`scripts/sample-poll.sh`, which arrives through the same file: start the local
+cluster if one is installed and stopped (Debian's or Homebrew's), create a
+role for whoever is running this if the install has none, and otherwise print
+the install-and-start command for the platform rather than a sentence about
+`PGHOST`.
+
+**Superuser, because of who owns the schema.** Every table, function and view
+in the migrations is `ALTER ... OWNER TO "postgres"`, and on a Homebrew or
+Postgres.app cluster the bootstrap superuser is named after you instead. So
+`test/sql/shim.sql` mints `postgres` alongside `anon`, `authenticated` and
+`service_role`, as a superuser: the SECURITY DEFINER functions run as it and
+read tables the shim itself owns, so an ordinary role only moves the failure
+somewhere less legible.
 
 ### How a case is written
 
