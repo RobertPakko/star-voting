@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Stack, Text, Title } from '@mantine/core'
-import { supabase } from '../lib/supabase'
+import { isSampleToken, openPollRpc } from '../lib/samplePoll'
 import { voterKeyFor } from '../lib/voterKey'
 import { shareTopic, useLiveStream } from '../lib/useLiveStream'
 import { useKnownWinner } from '../lib/useWinner'
@@ -34,7 +34,7 @@ export function PublicPoll() {
   // copy, re-read on one signal, is what keeps them agreeing.
   const load = useCallback(async () => {
     if (!token) return true
-    const { data, error: rpcError } = await supabase.rpc('open_poll_view', {
+    const { data, error: rpcError } = await openPollRpc('open_poll_view', {
       p_token: token,
       p_voter_key: voterKeyFor(token),
     })
@@ -63,7 +63,7 @@ export function PublicPoll() {
       return
     }
     let cancelled = false
-    supabase.rpc('open_poll_group', { p_token: token }).then(({ data, error: rpcError }) => {
+    openPollRpc('open_poll_group', { p_token: token }).then(({ data, error: rpcError }) => {
       // Swallowed like the winner lookup on the list: a browser running
       // ahead of the migration gets no strip, and a poll with no strip is a
       // poll of one question.
@@ -84,8 +84,23 @@ export function PublicPoll() {
   // A closed poll takes no more votes, and one whose results are out has
   // stopped moving, so the watching stops with it. Before the first read
   // there is nothing to stop for: that read is what the subscription is for.
+  //
+  // The sample poll is answered out of a file in this browser, so there is
+  // nothing on the other end of a subscription to it and nothing that could
+  // ever change: it is the one open poll on this page that is never watched.
   const live = !view || (!view.is_closed && !view.results_available)
-  const liveStatus = useLiveStream(token ? [shareTopic(token)] : [], load, { enabled: live })
+  const sample = !!token && isSampleToken(token)
+  const liveStatus = useLiveStream(token ? [shareTopic(token)] : [], load, {
+    enabled: live && !sample,
+  })
+
+  // Subscribing is also what makes every other poll's first read happen, so
+  // the sample -- which subscribes to nothing -- reads for itself. Once: the
+  // file it is answered from cannot change under it, and a vote cast in it
+  // re-reads through `load` like any other.
+  useEffect(() => {
+    if (sample) void load()
+  }, [sample, load])
 
   // What the tally below this heading elected, read out of the browser rather
   // than asked for: the Results card fetches that tally for itself and files

@@ -17,8 +17,22 @@ create extension if not exists "uuid-ossp" with schema extensions;
 -- to be put where the same unqualified calls will find them.
 alter database :"db" set search_path to public, extensions;
 
+-- The roles the schema dump names. `postgres` is the one that is easy to
+-- miss and hard to diagnose: every table, function and view in the migrations
+-- is `ALTER ... OWNER TO "postgres"`, so on a cluster whose superuser is
+-- called something else -- which is every Homebrew and Postgres.app install,
+-- where it is named after you -- the very first migration stops on `role
+-- "postgres" does not exist`. It is a superuser here because that is what it
+-- is on Supabase: the SECURITY DEFINER functions run as it, and they read
+-- tables this shim owns (auth._session, realtime.messages), so an ordinary
+-- role would trade one permission error for a later, stranger one.
 do $$
 begin
+  if not exists (select 1 from pg_roles where rolname = 'postgres') then
+    -- Only a superuser can mint one. Anyone who is not one cannot own the
+    -- schema either, so failing here is failing in the right place.
+    create role postgres superuser login;
+  end if;
   if not exists (select 1 from pg_roles where rolname = 'anon') then
     create role anon nologin;
   end if;

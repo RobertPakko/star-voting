@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Stack, Table, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
+import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { recall, remember } from '../lib/settled'
 import { BallotsSkeleton } from './Skeletons'
 import type { BallotSheet } from '../lib/types'
@@ -46,10 +47,10 @@ export function Ballots({ source }: { source: BallotsSource }) {
 
     let cancelled = false
 
-    const request =
+    const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
         ? supabase.rpc('poll_ballots', { p_poll_id: key })
-        : supabase.rpc('open_poll_ballots', { p_token: key })
+        : openPollRpc('open_poll_ballots', { p_token: key })
 
     request.then(({ data, error: rpcError }) => {
       if (!rpcError) remember(rpc, key, data)
