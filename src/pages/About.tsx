@@ -42,8 +42,7 @@ export function About() {
       <Text>
         <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is a mechanism for
         conducting elections and this website allows you to create and respond to polls using STAR
-        voting. Check out the sample poll and sample results to see it in action, or read on to
-        learn more.
+        voting. Check out the samples to see it in action, read on to learn more about STAR, or sign in to try it yourself.
       </Text>
       <Samples />
 
