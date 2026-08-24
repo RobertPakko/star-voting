@@ -821,53 +821,23 @@ export function CreatePoll() {
         label="Show who has voted"
       />
 
-      {/* Independent of the switch above: this one is about the scores, that
-          one about the names. Off gives the behaviour the app has always
-          had, so an untouched form still creates a secret-ballot poll. */}
-      <Stack gap={4}>
-        <Switch
-          checked={showBallots}
-          onChange={(e) => setShowBallots(e.currentTarget.checked)}
-          label="Publish ballots"
-        />
-        {showBallots && (
-          <Text size="xs" c="dimmed">
-            Voters are told this on the ballot before they submit it. Like every other poll setting
-            it is fixed at creation, so nobody's ballot can be published after the fact.
-          </Text>
-        )}
-      </Stack>
+      <Switch
+        checked={showBallots}
+        onChange={(e) => setShowBallots(e.currentTarget.checked)}
+        label="Publish ballots"
+      />
 
-      {/* The one setting that decides what the poll does *before* anyone
-          votes. Off is the behaviour the app has always had. */}
-      <Stack gap={4}>
-        <Switch
-          checked={solicitOptions}
-          onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
-          label="Solicit options from voters"
-        />
-        {solicitOptions && multiQuestion && (
-          <Text size="xs" c="dimmed">
-            Each question collects its own options, and opening the poll opens all of them at once.
-          </Text>
-        )}
-      </Stack>
+      <Switch
+        checked={solicitOptions}
+        onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
+        label="Solicit options from voters"
+      />
 
-      {/* Below the settings and above the options, because it is what decides
-          the shape of everything under it: one option list, or one per
-          question. Off is the behaviour the app has always had. */}
-      <Stack gap={4}>
-        <Switch
-          checked={multiQuestion}
-          onChange={(e) => toggleMultiQuestion(e.currentTarget.checked)}
-          label="Ask several questions"
-        />
-        <Text size="xs" c="dimmed">
-          {multiQuestion
-            ? 'Each question is scored on its own ballot and elects its own winner. Voters answer them one after another.'
-            : 'One ballot, one winner. Turn this on to ask more than one question in the same poll.'}
-        </Text>
-      </Stack>
+      <Switch
+        checked={multiQuestion}
+        onChange={(e) => toggleMultiQuestion(e.currentTarget.checked)}
+        label="Multiple questions"
+      />
 
       {/* Last, because it is the only part of the form whose shape depends on
           the answers above it: a poll collecting its options can be created

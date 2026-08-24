@@ -14,7 +14,7 @@
   position: absolute;
   /* Starts inside the gap above, so the line meets the option field rather
      than floating below it. */
-  top: -6px;
+  top: -5px;
   left: 9px;
   /* Reaches the description's own border rather than stopping short of
      it, so the two read as one connected pair. */

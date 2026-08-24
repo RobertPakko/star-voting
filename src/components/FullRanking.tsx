@@ -167,11 +167,6 @@ function Place({
           <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
             {total} pts
           </Text>
-          {scoreRank !== entry.place && (
-            <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-              #{scoreRank} on score
-            </Text>
-          )}
         </Group>
 
         <Text size="sm" c="dimmed">

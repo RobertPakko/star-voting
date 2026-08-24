@@ -250,7 +250,7 @@ export function PollStateBadge({
         color={badgeColor.done}
         variant="light"
         maw="40%"
-        style={{ flexShrink: 0 }}
+        style={{ flexShrink: 0, flexGrow: 0 }}
         title={winner}
       >
         {winner}

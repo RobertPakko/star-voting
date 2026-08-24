@@ -192,7 +192,7 @@ function Voted({
           </Text>
           {scores && (
             <Button variant="light" onClick={() => setRevising(true)}>
-              Change my vote
+              Edit vote
             </Button>
           )}
         </Group>

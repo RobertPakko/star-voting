@@ -14,7 +14,7 @@ import {
   ThemeIcon,
   Title,
 } from '@mantine/core'
-import { ArrowRightIcon, ChartBarIcon, SignInIcon, StarIcon } from '@phosphor-icons/react'
+import { ArrowRightIcon, ArrowSquareOutIcon, ChartBarIcon, SignInIcon, StarIcon } from '@phosphor-icons/react'
 import { SAMPLE_POLL_TOKEN, SAMPLE_RESULT_TOKEN } from '../lib/samplePoll'
 
 /**
@@ -175,11 +175,11 @@ interface Entry {
 
 const STEPS: Entry[] = [
   {
-    name: '1: Options are defined',
-    body: <>Define what options are available to vote on.</>,
+    name: '1: Options defined',
+    body: <>Decide what options are available to vote on.</>,
   },
   {
-    name: '2: Options are rated',
+    name: '2: Votes cast',
     body: (
       <>
         Each voter gives each option a number of stars from 0 up to 5, with 0 being the worst score
@@ -188,7 +188,7 @@ const STEPS: Entry[] = [
     ),
   },
   {
-    name: '3: Scores are tallied',
+    name: '3: Scores tallied',
     body: (
       <>
         Once all votes are cast, a score for each option is calculated reflecting the total number
@@ -197,7 +197,7 @@ const STEPS: Entry[] = [
     ),
   },
   {
-    name: '4: Finalists are selected',
+    name: '4: Finalists determined',
     body: (
       <>
         The two options with the highest scores are selected as finalists
@@ -206,7 +206,7 @@ const STEPS: Entry[] = [
     ),
   },
   {
-    name: '5: A winner is selected',
+    name: '5: Winner determined',
     body: (
       <>
         Among the two finalists, the option that is preferred by more voters is selected as the
@@ -467,7 +467,7 @@ function Sample({
           mt="xs"
           variant="gradient"
           gradient={gradientValue}
-          rightSection={<ArrowRightIcon size={16} aria-hidden />}
+          rightSection={newTab ? <ArrowSquareOutIcon size={16} aria-hidden /> : <ArrowRightIcon size={16} aria-hidden />}
         >
           {action}
         </Button>

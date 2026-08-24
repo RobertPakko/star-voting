@@ -524,7 +524,7 @@ function Waiting({
             until then.
           </Text>
           <Button variant="light" onClick={handleRevise} loading={loading}>
-            Change my vote
+            Edit vote
           </Button>
         </Group>
       </Stack>
@@ -602,11 +602,6 @@ function VoteForm({
 
   return (
     <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        {revising
-          ? 'Your ballot as it stands. Change whatever you like and save; the group is told nothing until the results unlock.'
-          : 'Score each option from 0 (worst) to 5 (best). Unscored options count as 0, and clicking the star you picked returns an option to 0.'}
-      </Text>
       {ballot.map((option) => (
         <Card key={option.id} withBorder>
           <Group justify="space-between" wrap="nowrap" gap="sm">
