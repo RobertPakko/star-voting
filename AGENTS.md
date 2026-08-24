@@ -229,7 +229,10 @@ builds a throwaway database from `supabase/migrations/`, runs everything in
 needs the same database (see [The About page and its sample
 poll](#the-about-page-and-its-sample-poll)).
 
-Requirements are a Postgres server and a role that can create databases —
+Requirements are a Postgres server and a **superuser** role that can create
+databases — superuser because the migrations set every object's owner to
+`postgres`, and the shim mints that role when the cluster has no such
+superuser of its own, which is every Homebrew and Postgres.app install.
 `PGHOST`, `PGUSER` and friends are honoured, and with none set it falls back to
 a local cluster. `test/build-db.sh` starts that cluster if it is not already
 running (Debian's or Homebrew's), creates a role for you if the install has
