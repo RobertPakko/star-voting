@@ -14,7 +14,13 @@ import {
   ThemeIcon,
   Title,
 } from '@mantine/core'
-import { ArrowRightIcon, ArrowSquareOutIcon, ChartBarIcon, SignInIcon, StarIcon } from '@phosphor-icons/react'
+import {
+  ArrowRightIcon,
+  ArrowSquareOutIcon,
+  ChartBarIcon,
+  SignInIcon,
+  StarIcon,
+} from '@phosphor-icons/react'
 import { SAMPLE_POLL_TOKEN, SAMPLE_RESULT_TOKEN } from '../lib/samplePoll'
 
 /**
@@ -467,7 +473,13 @@ function Sample({
           mt="xs"
           variant="gradient"
           gradient={gradientValue}
-          rightSection={newTab ? <ArrowSquareOutIcon size={16} aria-hidden /> : <ArrowRightIcon size={16} aria-hidden />}
+          rightSection={
+            newTab ? (
+              <ArrowSquareOutIcon size={16} aria-hidden />
+            ) : (
+              <ArrowRightIcon size={16} aria-hidden />
+            )
+          }
         >
           {action}
         </Button>

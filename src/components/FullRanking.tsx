@@ -140,7 +140,6 @@ function Places({ ranking, results }: { ranking: RankingEntry[]; results: PollRe
 
 function Place({
   entry,
-  results,
   nameById,
 }: {
   entry: RankingEntry
@@ -148,11 +147,6 @@ function Place({
   nameById: Map<string, string>
 }) {
   const total = entry.options[0].total_score
-
-  // Standard competition rank on score alone, so options level on points
-  // share a number. Shown only where it disagrees with the placing; which
-  // is the whole reason this ranking isn't just the score round re-sorted.
-  const scoreRank = 1 + results.options.filter((o) => o.total_score > total).length
 
   return (
     <Group align="flex-start" wrap="nowrap" gap="sm">
