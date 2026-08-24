@@ -14,6 +14,7 @@ import {
   ThemeIcon,
   Title,
 } from '@mantine/core'
+import { ArrowRightIcon, ChartBarIcon, SignInIcon, StarIcon } from '@phosphor-icons/react'
 import { SAMPLE_POLL_TOKEN, SAMPLE_RESULT_TOKEN } from '../lib/samplePoll'
 
 /**
@@ -42,7 +43,8 @@ export function About() {
       <Text>
         <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is a mechanism for
         conducting elections and this website allows you to create and respond to polls using STAR
-        voting. Check out the samples to see it in action, read on to learn more about STAR, or sign in to try it yourself.
+        voting. Check out the samples to see it in action, read on to learn more about STAR, or sign
+        in to try it yourself.
       </Text>
       <Samples />
 
@@ -384,7 +386,7 @@ function Samples() {
       <Sample
         newTab
         to={`/p/${SAMPLE_POLL_TOKEN}`}
-        icon={<StarIcon />}
+        icon={<StarIcon size={22} weight="fill" aria-hidden />}
         gradient="standard"
         title="See a sample poll"
         body="This is what a voter sees when they open a poll."
@@ -393,7 +395,7 @@ function Samples() {
       <Sample
         newTab
         to={`/p/${SAMPLE_RESULT_TOKEN}`}
-        icon={<TallyIcon />}
+        icon={<ChartBarIcon size={22} aria-hidden />}
         gradient="alt"
         title="Read an example result"
         body="What everyone sees after a poll is decided."
@@ -401,7 +403,7 @@ function Samples() {
       />
       <Sample
         to="/"
-        icon={<SignInIcon />}
+        icon={<SignInIcon size={22} aria-hidden />}
         gradient="create"
         title="Try it yourself"
         body="Sign in to try making and sending your own polls."
@@ -465,7 +467,7 @@ function Sample({
           mt="xs"
           variant="gradient"
           gradient={gradientValue}
-          rightSection={<ArrowIcon />}
+          rightSection={<ArrowRightIcon size={16} aria-hidden />}
         >
           {action}
         </Button>
@@ -492,78 +494,6 @@ function Cards({ items }: { items: Entry[] }) {
         </Paper>
       ))}
     </Stack>
-  )
-}
-
-function StarIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={22}
-      height={22}
-      fill="currentColor"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
-    </svg>
-  )
-}
-
-function TallyIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={22}
-      height={22}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      aria-hidden
-    >
-      <path d="M4 20h16" />
-      <path d="M7 20V9M12 20V4M17 20v-7" />
-    </svg>
-  )
-}
-
-function SignInIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={22}
-      height={22}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M14 4h5v16h-5" />
-      <path d="M3 12h11M10 8l4 4-4 4" />
-    </svg>
-  )
-}
-
-function ArrowIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={16}
-      height={16}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
   )
 }
 

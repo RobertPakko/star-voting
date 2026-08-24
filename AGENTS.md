@@ -8,6 +8,7 @@ it" — everything technical belongs here.
 ## Stack and layout
 
 React 19 + Vite, [Mantine](https://mantine.dev) for UI,
+[Phosphor](https://phosphoricons.com) for icons,
 [Supabase](https://supabase.com) for Postgres and auth, `react-router-dom` with
 hash-based routing, deployed to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
@@ -31,6 +32,18 @@ The formatter is configured in `.oxfmtrc.json` to the style the code was
 already written in — no semicolons, single quotes, a hundred columns — and
 skips Markdown, since this file and the README are wrapped by hand and the
 wrapping carries meaning.
+
+Icons come from [`@phosphor-icons/react`](https://phosphoricons.com), imported
+by name: `<StarIcon size={20} weight="fill" />` rather than a `<path d="…">`
+nobody can read at a glance. Import from the package root — it is ESM and
+marked side-effect-free, so the bundler keeps only the icons actually named,
+and the seven the app uses cost about 5 kB gzipped against a library of
+several thousand. Mind the `Icon` suffix: the bare `Star`/`Sun` exports still
+exist in v2 but are deprecated in favour of `StarIcon`/`SunIcon`.
+
+The one `<svg>` left in `src/` is the QR code in `ShareQr.tsx`, which is a
+path generated from the share link rather than an icon. `public/favicon.svg`
+is a file the browser fetches, so it has no component to import either.
 
 Two files exist only to keep a lint rule honest, and the rule is worth the
 split: a module that exports both a component and a hook cannot be

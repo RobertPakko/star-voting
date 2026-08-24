@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { StarIcon } from '@phosphor-icons/react'
 import classes from './StarRating.module.css'
 
 const COUNT = 5
@@ -100,28 +101,10 @@ export function StarRating({
             onClick={() => onChange(star === value ? 0 : star)}
             onKeyDown={(event) => handleKeyDown(event, star)}
           >
-            <StarIcon />
+            <StarIcon size={20} weight="fill" aria-hidden />
           </button>
         )
       })}
     </div>
-  )
-}
-
-function StarIcon() {
-  return (
-    // The same star Mantine's Rating drew, so the ballot looks unchanged.
-    <svg
-      viewBox="0 0 24 24"
-      width={20}
-      height={20}
-      fill="currentColor"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873z" />
-    </svg>
   )
 }

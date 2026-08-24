@@ -10,6 +10,7 @@ import {
   Text,
   Title,
 } from '@mantine/core'
+import { InfoIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
@@ -419,7 +420,7 @@ function OptionNote({ name, description }: { name: string; description: string }
           radius="xl"
           aria-label={`What ${name} said`}
         >
-          <InfoIcon />
+          <InfoIcon size={14} aria-hidden />
         </ActionIcon>
       </Popover.Target>
       <Popover.Dropdown>
@@ -431,23 +432,5 @@ function OptionNote({ name, description }: { name: string; description: string }
         </Stack>
       </Popover.Dropdown>
     </Popover>
-  )
-}
-
-function InfoIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={14}
-      height={14}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 11v5M12 7.5v.5" />
-    </svg>
   )
 }
