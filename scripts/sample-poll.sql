@@ -72,11 +72,11 @@ select $json${
       "slug": "dinner",
       "title": "What are we eating?",
       "options": [
-        { "name": "Two big pizzas", "description": "One meat, one veg. Nobody has to cook." },
-        { "name": "Taco bar", "description": "Everything laid out, build your own." },
-        { "name": "Everyone brings a dish", "description": "Cheapest, and the most coordination." },
-        { "name": "Thai delivery", "description": "Forty minutes and a delivery fee." },
-        { "name": "Just snacks", "description": "Popcorn, crisps, whatever is in the cupboard." }
+        { "name": "Two big pizzas", "description": "One pepperoni, one cheese." },
+        { "name": "Taco bar", "description": "Build your own tacos!" },
+        { "name": "Everyone brings a dish" },
+        { "name": "Thai delivery", "description": "Will take like 40 minutes to get here, we can have an intermission rather than eating beforehand." },
+        { "name": "Just snacks", "description": "Popcorn, chips, whatever." }
       ],
       "ballots": [
         [1, 5, 2, 3, 1],
@@ -94,12 +94,12 @@ select $json${
       "slug": "movie",
       "title": "What are we watching?",
       "options": [
-        { "name": "Knives Out", "description": "Everyone has seen it. Nobody minds seeing it again." },
-        { "name": "Spirited Away", "description": "Subtitles." },
-        { "name": "The Matrix", "description": "Ben has been pushing for this since March." },
-        { "name": "Paddington 2", "description": "Yes, really." },
-        { "name": "Whatever is trending", "description": "Roll the dice on the front page." },
-        { "name": "A documentary about bees", "description": "Chloe insists it is fascinating." }
+        { "name": "Knives Out", "description": "When renowned crime novelist Harlan Thrombey is found dead at his estate just after his 85th birthday, the inquisitive and debonair Detective Benoit Blanc is mysteriously enlisted to investigate." },
+        { "name": "Spirited Away", "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts." },
+        { "name": "The Matrix", "description": "A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI." },
+        { "name": "Paddington 2", "description": "Paddington, now happily settled with the Brown family and a popular member of the local community, picks up a series of odd jobs to buy the perfect present for his Aunt Lucy's 100th birthday, only for the gift to be stolen." },
+        { "name": "Whatever is trending", "description": "Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George." },
+        { "name": "Honeyland", "description": "The last female bee-hunter in Europe must save the bees and return the natural balance in Honeyland, when a family of nomadic beekeepers invade her land and threaten her livelihood." }
       ],
       "ballots": [
         [5, 4, 3, 2, 1, 0],
@@ -281,12 +281,12 @@ do $$
 begin
   perform sample.build(
     'sample',
-    'A sample poll, so you can see what voting looks like. Nothing here is recorded anywhere: your ballot stays in this browser.',
+    'A simple sample poll, so you can see what voting looks like. Submitting your vote won''t do anything.',
     false
   );
   perform sample.build(
     'sample-result',
-    'A sample poll that has already run. Nine people voted, and each question was harder to settle than the one before it.',
+    'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
     true
   );
 end $$;
