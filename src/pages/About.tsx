@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Anchor,
-  Badge,
   Button,
   Card,
   Group,
@@ -37,24 +36,22 @@ export function About() {
   const [tab, setTab] = useState<string | null>('procedure')
 
   return (
-    <Stack gap="xl" maw={720} mx="auto">
+    <Stack gap="md" maw={720} mx="auto">
       <Title order={1}>About</Title>
 
-      <Stack gap="md">
-        <Text>
-          <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is a mechanism for
-          conducting elections and this website allows you to create and respond to polls using STAR
-          voting. Check out the sample poll and sample results to see it in action, or read on to
-          learn more.
-        </Text>
-        <Samples />
-      </Stack>
+      <Text>
+        <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is a mechanism for
+        conducting elections and this website allows you to create and respond to polls using STAR
+        voting. Check out the sample poll and sample results to see it in action, or read on to
+        learn more.
+      </Text>
+      <Samples />
 
       <Tabs value={tab} onChange={setTab} keepMounted={false}>
         <Tabs.List grow>
-          <Tabs.Tab value="procedure">Procedure</Tabs.Tab>
+          <Tabs.Tab value="procedure">STAR procedure</Tabs.Tab>
           <Tabs.Tab value="features">Site features</Tabs.Tab>
-          <Tabs.Tab value="benefits">Benefits</Tabs.Tab>
+          <Tabs.Tab value="benefits">STAR benefits</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="procedure" pt="lg">
@@ -193,7 +190,7 @@ const STEPS: Entry[] = [
     name: '3: Scores are tallied',
     body: (
       <>
-        Once all votes are cast, a score for reach option is calculated reflecting the total number
+        Once all votes are cast, a score for each option is calculated reflecting the total number
         of stars that it received.
       </>
     ),
@@ -230,7 +227,7 @@ const FEATURES: Entry[] = [
     ),
   },
   {
-    name: 'Choose your own balance of privacy and transparency',
+    name: 'Configurable balance of privacy and transparency',
     body: <>Keep either voters or votes hidden for privacy or published for transparency.</>,
   },
   {
@@ -243,7 +240,20 @@ const FEATURES: Entry[] = [
     ),
   },
   {
-    name: 'See the full ranking of results',
+    name: 'Real-time results',
+    body: <>No need to ever refresh; all updates are streamed to your browser in real-time.</>,
+  },
+  {
+    name: 'Robust poll management',
+    body: (
+      <>
+        Multi-question support, share with a QR code, add descriptions to options, solicit options
+        from voters, and more. This site is designed to be a full-featured poll management system.
+      </>
+    ),
+  },
+  {
+    name: 'Full results ranking',
     body: (
       <>
         If any options become unavailable after the poll closes, you can see their full ranking to
@@ -256,30 +266,18 @@ const FEATURES: Entry[] = [
     body: (
       <>
         Voters can't update their votes after the poll closes, creators can't change options after
-        votes have been cast, and new votes can't be added after the poll closes. The system is
+        votes have been cast, and results are inaccessible until the poll is over. The system is
         designed to ensure that polls can't be tampered with unfairly, even by their creator.
       </>
     ),
-  },
-  {
-    name: 'Robust poll management',
-    body: (
-      <>
-        Multi-question support, share with a QR code, add descriptions to options, solicit options
-        from voters, and more. This site is designed to be a full-featured poll management system.
-      </>
-    ),
-  },
-  {
-    name: 'Real-time results',
-    body: <>No need to ever refresh; all updates are streamed to your browser in real-time.</>,
   },
   {
     name: 'Free and open-source',
     body: (
       <>
         This site is free to use and not monetized. It does not contain ads, trackers, or any other
-        monetization scheme. It is a free and open-source project.
+        monetization scheme. It is a free and{' '}
+        <Ext href="https://github.com/RobertPakko/star-voting">open-source</Ext> project.
       </>
     ),
   },
@@ -383,23 +381,32 @@ const PROPERTIES: Entry[] = [
  */
 function Samples() {
   return (
-    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+    <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
       <Sample
+        newTab
         to={`/p/${SAMPLE_POLL_TOKEN}`}
-        badge="Takes a minute"
         icon={<StarIcon />}
-        gradient
-        title="Vote in a sample poll"
-        body="Three questions about a movie night: who hosts, what everyone eats, and what goes on. Rate the options and see what becomes of your ballot."
-        action="Open the sample poll"
+        gradient="standard"
+        title="See a sample poll"
+        body="This is what a voter sees when they open a poll."
+        action="Sample poll"
       />
       <Sample
+        newTab
         to={`/p/${SAMPLE_RESULT_TOKEN}`}
-        badge="Already decided"
         icon={<TallyIcon />}
-        title="Read a sample result"
-        body="The same poll after nine people voted: every score, a runoff that overturns one of them, and a three-way tie broken head to head."
-        action="See the sample results"
+        gradient="alt"
+        title="Read an example result"
+        body="What everyone sees after a poll is decided."
+        action="Example result"
+      />
+      <Sample
+        to="/"
+        icon={<SignInIcon />}
+        gradient="create"
+        title="Try it yourself"
+        body="Sign in to try making and sending your own polls."
+        action="Sign in"
       />
     </SimpleGrid>
   )
@@ -412,37 +419,36 @@ function Samples() {
  */
 function Sample({
   to,
-  badge,
   icon,
   title,
   body,
   action,
-  gradient = false,
+  gradient,
+  newTab = false,
 }: {
   to: string
-  badge: string
   icon: ReactNode
   title: string
   body: string
   action: string
-  gradient?: boolean
+  gradient: 'standard' | 'alt' | 'create'
+  newTab?: boolean
 }) {
+  const gradientValue =
+    gradient === 'alt'
+      ? SAMPLE_ALT_GRADIENT
+      : gradient === 'create'
+        ? SAMPLE_CREATE_GRADIENT
+        : SAMPLE_GRADIENT
+
   return (
     <Card withBorder radius="md" p="lg">
       <Stack gap="sm" h="100%" justify="space-between">
         <Stack gap="sm">
           <Group justify="space-between" wrap="nowrap" align="flex-start">
-            <ThemeIcon
-              size={42}
-              radius="md"
-              variant={gradient ? 'gradient' : 'light'}
-              gradient={SAMPLE_GRADIENT}
-            >
+            <ThemeIcon size={42} radius="md" variant="gradient" gradient={gradientValue}>
               {icon}
             </ThemeIcon>
-            <Badge variant="light" color="gray" size="sm">
-              {badge}
-            </Badge>
           </Group>
           <Stack gap={4}>
             <Text fw={700}>{title}</Text>
@@ -454,10 +460,12 @@ function Sample({
         <Button
           component={Link}
           to={to}
+          target={newTab ? '_blank' : undefined}
+          rel={newTab ? 'noopener noreferrer' : undefined}
           fullWidth
           mt="xs"
-          variant={gradient ? 'gradient' : 'light'}
-          gradient={SAMPLE_GRADIENT}
+          variant="gradient"
+          gradient={gradientValue}
           rightSection={<ArrowIcon />}
         >
           {action}
@@ -469,6 +477,8 @@ function Sample({
 
 /** The gradient the results email already uses, so the site matches its post. */
 const SAMPLE_GRADIENT = { from: 'violet', to: 'cyan', deg: 135 }
+const SAMPLE_ALT_GRADIENT = { from: 'yellow', to: 'red', deg: 135 }
+const SAMPLE_CREATE_GRADIENT = { from: 'green', to: 'dark', deg: 135 }
 
 /** The bordered list every tab is made of; three lists, one shape. */
 function Cards({ items }: { items: Entry[] }) {
@@ -517,6 +527,25 @@ function TallyIcon() {
     >
       <path d="M4 20h16" />
       <path d="M7 20V9M12 20V4M17 20v-7" />
+    </svg>
+  )
+}
+
+function SignInIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={22}
+      height={22}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M14 4h5v16h-5" />
+      <path d="M3 12h11M10 8l4 4-4 4" />
     </svg>
   )
 }
