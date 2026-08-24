@@ -25,11 +25,6 @@ OUT="src/lib/samplePollData.ts"
 red()  { printf '\033[31m%s\033[0m\n' "$1"; }
 bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 
-if ! pg_isready -q 2>/dev/null; then
-  red "No Postgres server reachable. Start one, or set PGHOST/PGPORT/PGUSER."
-  exit 1
-fi
-
 bold "Building $DB from supabase/migrations ..."
 test/build-db.sh "$DB"
 

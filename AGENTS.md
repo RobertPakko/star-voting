@@ -231,7 +231,11 @@ poll](#the-about-page-and-its-sample-poll)).
 
 Requirements are a Postgres server and a role that can create databases —
 `PGHOST`, `PGUSER` and friends are honoured, and with none set it falls back to
-a local cluster and starts one if it is not already running. There is no test
+a local cluster. `test/build-db.sh` starts that cluster if it is not already
+running (Debian's or Homebrew's), creates a role for you if the install has
+none, and otherwise prints the command for your platform. Both this suite and
+`scripts/sample-poll.sh` get there through that one file, so neither can be
+the one that fails unhelpfully. There is no test
 framework and nothing to `npm install`. CI runs the same script against a
 `postgres` service container
 ([`.github/workflows/test.yml`](.github/workflows/test.yml)).
@@ -1852,7 +1856,8 @@ votes; `/#/p/sample-result-host` is the same poll after nine people finished
 it. Neither exists in Supabase. Both are answered in the browser from
 [`src/lib/samplePollData.ts`](src/lib/samplePollData.ts), which
 `scripts/sample-poll.sh` generates by building a throwaway database from the
-migrations, creating the poll in it **through the app's own write path**
+migrations (the same one `npm test` uses, and with the same requirements),
+creating the poll in it **through the app's own write path**
 (`create_poll_group`, `open_poll_submit`, `close_poll`), and recording what
 `open_poll_view`, `open_poll_results`, `open_poll_ranking` and
 `open_poll_ballots` answer about it.
