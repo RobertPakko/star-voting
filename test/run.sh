@@ -28,34 +28,6 @@ report() {
     | sed -E 's/^psql:[^ ]+ ERROR:  /    FAILED  /'
 }
 
-if ! pg_isready -q 2>/dev/null; then
-  if command -v pg_ctlcluster >/dev/null 2>&1; then
-    echo "Postgres is not running; starting the local cluster..."
-    pg_ctlcluster "$(pg_lsclusters -h | awk 'NR==1{print $1}')" \
-                  "$(pg_lsclusters -h | awk 'NR==1{print $2}')" start
-  else
-    red "No Postgres server reachable. Start one, or set PGHOST/PGPORT/PGUSER."
-    exit 1
-  fi
-fi
-
-# A Debian-packaged Postgres authenticates local connections by operating
-# system user, so a freshly installed one is running but has no role for
-# whoever is running this -- every psql call below would fail on "role does
-# not exist". Create the role instead of leaving each caller to work it out.
-# Anywhere the connection already works, including CI, this does nothing.
-if ! psql -XtAqd postgres -c 'select 1' >/dev/null 2>&1; then
-  me="$(id -un)"
-  if [[ "$(id -u)" -eq 0 ]] && su postgres -c 'psql -XtAqc "select 1"' >/dev/null 2>&1; then
-    echo "No Postgres role for '$me'; creating one."
-    su postgres -c "psql -qc 'create role \"$me\" superuser login'"
-  else
-    red "Cannot connect to Postgres as '$me'."
-    red "Set PGUSER and PGPASSWORD, or create a Postgres role for this user."
-    exit 1
-  fi
-fi
-
 echo "Building $DB from supabase/migrations ..."
 test/build-db.sh "$DB"
 
