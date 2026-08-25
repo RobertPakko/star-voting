@@ -17,12 +17,29 @@ import { badgeColor, countBadge } from '../lib/badgeColors'
  * common case and it must look exactly as it always has: no strip, no
  * counter, no empty row where a strip would be.
  *
- * **Answered marks are shown only where they are honest.** On an invite poll
- * the server knows which questions this account has answered and says so. On
- * an open poll it does not and must not: a share-link ballot is identified by
- * a key minted per question so that one browser's ballots cannot be joined,
- * and `open_poll_group` returns no such flag. So `answered` simply arrives
- * undefined there and no question is marked, rather than being guessed at.
+ * **Answered marks are shown only where they are honest, and the two ways in
+ * are honest about different things.** On an invite poll the server knows
+ * which questions this account has answered and says so: `poll_group`
+ * returns a flag per question, because an invite ballot carries the voter's
+ * account and nothing has to be linked to find it. On an open poll it does
+ * not and must not — a share-link ballot is identified by a key minted per
+ * question so that one browser's ballots cannot be joined, and
+ * `open_poll_group` returns no such flag on purpose.
+ *
+ * That is a rule about *the server*, not about the reader, and it was read as
+ * both: `answered` arrived undefined on every open poll, so no question was
+ * ever marked on the public route and none was marked on the creator's own
+ * page either, since an open poll's ballots carry no account for `poll_group`
+ * to match. The tick a voter was owed was withheld from the one party
+ * entitled to it. `open_poll_group`'s own comment says as much — the browser
+ * already knows which questions it has answered, and is the one place
+ * entitled to — so the flag comes from `lib/answeredQuestions.ts` there, out
+ * of this browser's own storage, and reaches the server no more than the
+ * remembered voter name does.
+ *
+ * This component asks for none of that. It takes a boolean per question and
+ * colours a badge with it; where the boolean came from is the page's
+ * business, and the two pages answer it the way each honestly can.
  */
 export function QuestionStrip({
   questions,
@@ -75,7 +92,21 @@ export function QuestionStrip({
           {questions.map((question) => {
             const isCurrent = question.key === current
             return isCurrent ? (
-              <Badge key={question.key} variant="filled" color={badgeColor.outstanding} maw={220}>
+              // Filled says which question is open; the hue says whether it
+              // has been answered, exactly as it does on every other badge in
+              // the row. The two are separate claims and the badge used to
+              // make only one of them — the open question was drawn
+              // `outstanding` whether or not a ballot was in it, so answering
+              // the question you were looking at changed nothing you could
+              // see. See lib/badgeColors.ts: a progress colour carries one
+              // meaning everywhere, and "still owed" is not what a question
+              // you have just answered is.
+              <Badge
+                key={question.key}
+                variant="filled"
+                color={question.answered ? badgeColor.done : badgeColor.outstanding}
+                maw={220}
+              >
                 {question.title}
               </Badge>
             ) : (

@@ -38,6 +38,7 @@ export function OpenPollPanel({
   view,
   isCreator = false,
   onChanged,
+  onFirstVote,
 }: {
   token: string
   view: OpenPollView
@@ -45,6 +46,20 @@ export function OpenPollPanel({
   isCreator?: boolean
   /** A ballot went in, or the option list moved: the page re-reads the poll. */
   onChanged: () => void
+  /**
+   * A *first* ballot went in from this browser, as against a changed one.
+   * Offered so a poll of several questions can move the voter on to the next
+   * one, which is the whole of what a voter does next; a revision is a
+   * deliberate return to a question already behind them and moving them on
+   * from it would undo the trip they made.
+   *
+   * It **replaces** `onChanged` on that path rather than joining it: the page
+   * that takes this is leaving the question, and a re-read of the question
+   * being left would land after the next one had loaded. Absent on the last
+   * question and on a poll that asks one, where there is nowhere to go and
+   * re-reading is exactly right.
+   */
+  onFirstVote?: () => void
 }) {
   // Before anything else, because a poll still collecting its options has no
   // ballot to show and no result to show either.
@@ -123,7 +138,7 @@ export function OpenPollPanel({
           options={view.options}
           needsName={view.poll.show_voters}
           showBallots={view.poll.show_ballots}
-          onVoted={onChanged}
+          onVoted={onFirstVote ?? onChanged}
         />
       )}
 

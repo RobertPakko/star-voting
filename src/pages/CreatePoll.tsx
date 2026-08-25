@@ -628,31 +628,19 @@ export function CreatePoll() {
   function questionFields(question: QuestionDraft, questionIndex: number) {
     return (
       <Stack gap="xs">
-        {/* A question of a multi-question poll is titled and can be removed;
-            the single question of an ordinary poll is neither, because the
-            poll's own title names it and there is nothing to remove it
-            from. */}
+        {/* A question of a multi-question poll is titled; the single question
+            of an ordinary poll is not, because the poll's own title names it.
+            Full width, with nothing beside it: what used to sit here was the
+            button that removes the question, and see where it went. */}
         {multiQuestion && (
-          <Group gap="xs" align="flex-end" wrap="nowrap">
-            <TextInput
-              label={`Question ${questionIndex + 1}`}
-              placeholder="What is this question asking?"
-              value={question.title}
-              onChange={(e) => updateQuestionTitle(questionIndex, e.currentTarget.value)}
-              error={shown.questionTitles[questionIndex]}
-              style={{ flex: 1 }}
-              required
-            />
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={() => removeQuestion(questionIndex)}
-              disabled={questions.length <= 2}
-              aria-label={`Remove question ${questionIndex + 1}`}
-            >
-              &times;
-            </ActionIcon>
-          </Group>
+          <TextInput
+            label={`Question ${questionIndex + 1}`}
+            placeholder="What is this question asking?"
+            value={question.title}
+            onChange={(e) => updateQuestionTitle(questionIndex, e.currentTarget.value)}
+            error={shown.questionTitles[questionIndex]}
+            required
+          />
         )}
 
         <Stack gap={2}>
@@ -722,7 +710,22 @@ export function CreatePoll() {
           </Group>
         ))}
 
-        <Group gap="sm" align="center">
+        {/* Removing the question sits opposite adding an option, at the end
+            of the question it acts on, and says in words what it removes.
+            It was a bare red × beside the title field before, which put a
+            control that discards a whole question — its title, its options,
+            its descriptions — inside the row for editing that question's
+            title, where the nearest reading of it was "clear this field".
+            Two buttons that destroy different amounts should not look alike
+            and should not sit together, so this one is named and the option
+            row's × keeps the row it belongs to.
+
+            Adding a question stays in the tab strip, where the tabs it adds
+            to are; removing one cannot live there without either nesting a
+            button inside a tab or making a tab that is not a question. What
+            the two share is not a row — it is that each is next to what it
+            acts on. */}
+        <Group gap="sm" align="center" justify="space-between">
           <Button
             variant="light"
             size="xs"
@@ -732,6 +735,26 @@ export function CreatePoll() {
           >
             Add option
           </Button>
+          {multiQuestion && (
+            <Button
+              variant="subtle"
+              size="xs"
+              color="red"
+              onClick={() => removeQuestion(questionIndex)}
+              w="fit-content"
+              /* Two questions is the floor: below it the poll asks one
+                 question, which is what the switch above is for rather than
+                 something to arrive at by removing the second. */
+              disabled={questions.length <= 2}
+              title={
+                questions.length <= 2
+                  ? 'A poll of several questions asks at least two; turn off Multiple questions instead.'
+                  : undefined
+              }
+            >
+              Remove question
+            </Button>
+          )}
         </Group>
 
         {/* Wrong with the list rather than with a row in it, so it sits under

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Badge, Button, Card, Group, Progress, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth'
 import { pollTopic, useLiveStream } from '../lib/useLiveStream'
 import { useWinner } from '../lib/useWinner'
 import { voterKeyFor } from '../lib/voterKey'
+import { answeredQuestions, forgetAnswered, rememberAnswered } from '../lib/answeredQuestions'
 import { useBallotOrder } from '../lib/ballotOrder'
 import { Ballots } from '../components/Ballots'
 import { CollectOptions } from '../components/CollectOptions'
@@ -14,7 +15,6 @@ import { CreatorControls } from '../components/CreatorControls'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { OptionDescription } from '../components/OptionDescription'
-import { NextQuestion } from '../components/NextQuestion'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { RetentionNote } from '../components/RetentionNote'
@@ -28,6 +28,7 @@ import type { GroupQuestion, OpenPollView, Poll, PollOption, PollStatus } from '
 export function PollDetail() {
   const { pollId } = useParams<{ pollId: string }>()
   const { session } = useAuth()
+  const navigate = useNavigate()
   const [poll, setPoll] = useState<Poll | null>(null)
   const [options, setOptions] = useState<PollOption[]>([])
   const [status, setStatus] = useState<PollStatus | null>(null)
@@ -42,6 +43,12 @@ export function PollDetail() {
   // this that moves is which of them this reader has answered — and that
   // moves when they vote, which re-reads the page anyway.
   const [questions, setQuestions] = useState<GroupQuestion[]>([])
+  // Which questions this browser has answered, for the strip's marks on an
+  // *open* poll. `poll_group` answers this for an invite poll and cannot for
+  // an open one — it matches ballots on `voter_id`, and a share-link ballot
+  // carries no account — so the creator's own page had the same unmarked
+  // strip the public route did. See lib/answeredQuestions.ts.
+  const [answered, setAnswered] = useState<ReadonlySet<string>>(answeredQuestions)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Bumped only by creator actions, and used as OpenPollPanel's key so it
@@ -108,7 +115,14 @@ export function PollDetail() {
         setLoading(false)
         return false
       }
-      setView(data as OpenPollView)
+      const openView = data as OpenPollView
+      setView(openView)
+      // Under both names this question goes by: the id this page reads it
+      // under and the token the public route does, so a question answered
+      // through the share link is marked here and the other way round.
+      if (openView.voted) rememberAnswered(loaded.id, loaded.public_token)
+      else forgetAnswered(loaded.id, loaded.public_token)
+      setAnswered(answeredQuestions())
     }
 
     loadedOnce.current = true
@@ -169,20 +183,18 @@ export function PollDetail() {
 
   // What a signal on this poll means, which depends on whether this page has
   // ever read it: the whole poll the first time, and only the parts that can
-  // move on every one after that. Navigating from one poll to another
-  // remounts nothing, so the flag is cleared alongside the poll it describes.
+  // move on every one after that. The flag is per page rather than per poll,
+  // because the page and the poll now begin together — App keys this route on
+  // its poll id, so moving between the questions of one poll mounts a page
+  // each rather than pointing one page at a second poll. See KeyedPollDetail
+  // for what that is worth: it is what stops the question being left from
+  // rendering under the address of the question being opened, and it takes
+  // with it the two things this page used to have to undo by hand on the way
+  // across — this flag, and a ballot half-changed in the poll being left.
   const onSignal = useCallback(async () => {
     if (loadedOnce.current) return refresh()
     return load()
   }, [load, refresh])
-
-  useEffect(() => {
-    loadedOnce.current = false
-    // Navigating from one poll to another remounts nothing, so a ballot
-    // half-changed in the poll being left would otherwise turn up on the
-    // poll being arrived at, scored against somebody else's options.
-    setRevising(null)
-  }, [pollId])
 
   // Nothing about a closed poll changes again, and a poll whose results are
   // out has taken its last vote either way; so the watching stops. Before the
@@ -255,10 +267,19 @@ export function PollDetail() {
   // the page changes.
   const here = questions.findIndex((question) => question.id === poll.id)
   const nextQuestion = here >= 0 && here < questions.length - 1 ? questions[here + 1] : null
-  // Whether this reader has finished with this question, and so whether the
-  // way on is the obvious thing to offer. An open poll answers for the browser
-  // holding the key, an invite poll for the account.
-  const answeredHere = isOpen ? view?.voted === true : status.voted
+  // The way on, taken rather than offered: a first ballot on a question with
+  // another after it opens that one. Undefined on the last question and on a
+  // poll of one, where the ballot's own page is where the voter stays and the
+  // page re-reads itself into "your vote is in" as it always did.
+  const advance = nextQuestion
+    ? () => {
+        // This path does not re-read the question being left, so nothing else
+        // will record the ballot that was just cast; the strip on the page
+        // being opened needs it recorded to mark this question behind them.
+        if (isOpen) rememberAnswered(poll.id, poll.public_token)
+        navigate(`/polls/${nextQuestion.id}`)
+      }
+    : undefined
   // One option list for this page. An open poll's arrives inside its view,
   // which is what its ballot is scored from; every other poll's is the table
   // read directly. The heading counts it and the option editor edits it, and
@@ -303,7 +324,9 @@ export function PollDetail() {
           key: question.id,
           position: question.question_position,
           title: question.question_title,
-          answered: question.voted,
+          // The server for an invite poll, this browser for an open one --
+          // where each can honestly answer. See QuestionStrip.
+          answered: isOpen ? answered.has(question.id) : question.voted,
         }))}
         current={poll.id}
         hrefFor={(id) => `/polls/${id}`}
@@ -352,6 +375,7 @@ export function PollDetail() {
             view={view}
             isCreator={isCreator}
             onChanged={load}
+            onFirstVote={advance}
           />
         )
       ) : status.soliciting ? (
@@ -415,14 +439,7 @@ export function PollDetail() {
         /* Keyed like the open-poll panel, and for the same reason: a
            correction to the option list invalidates a half-filled ballot,
            and remounting is what discards it. */
-        <VoteForm key={refreshKey} poll={poll} options={options} onVoted={load} />
-      )}
-
-      {/* The way on, once this question is behind them. The strip at the top
-          can already reach every question; this is the one that is where a
-          voter is looking at the moment they finish a ballot. */}
-      {nextQuestion && answeredHere && (
-        <NextQuestion title={nextQuestion.question_title} href={`/polls/${nextQuestion.id}`} />
+        <VoteForm key={refreshKey} poll={poll} options={options} onVoted={advance ?? load} />
       )}
 
       {/* Held back until you have voted, for the reasons set out where the

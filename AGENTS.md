@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, …)
-src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, per-browser ballot order, the About page's sample poll, shared types
+src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, per-browser ballot order and answered questions, the About page's sample poll, shared types
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 scripts/         squash.sh, which squashes the migrations and replays the above;
@@ -1469,6 +1469,20 @@ out before anyone, the creator included, has voted. Open polls also offer it on
 the thank-you card once you have voted, where passing it on is a reasonable
 thing to want.
 
+**The label and the caption span the row, not the box.** They were the text
+field's own `label` and `description` once, which put them inside a field
+sharing a no-wrap row with two buttons: the field is the part of that row that
+gives, so on a phone it was squeezed to a few words wide and the caption — a
+full sentence — unspooled down the column. Nothing in the caption was ever
+only about the box, either. *Anyone with this link can vote without signing
+in* is as true of the link **Copy** lifts and of the one the QR code carries;
+the three are one control for handing the poll out, and the sentence is about
+the link rather than about the widget it happens to be printed in. So an
+`Input.Wrapper` holds the whole row, the label still reaches the box through
+`htmlFor` — hence the generated id, since this renders on the creator's page
+and inside the open-poll panel alike — and the sentence gets the width it was
+written for.
+
 ### A poll can ask more than one question
 
 A multi-question poll is **several ordinary polls that know they belong
@@ -1520,6 +1534,33 @@ never linked on the server. `open_poll_group` accordingly returns the sibling
 tokens and **no "answered" flag**; `poll_group` does return one, because an
 invite ballot carries an account and nothing has to be linked to find it.
 
+**The tick a voter is owed comes from the browser, for the same reason the
+name does.** That rule about `open_poll_group` is a rule about *the server*,
+and it was read for a while as a rule about the reader: `answered` arrived
+undefined on every open poll, so the question strip marked nothing on the
+public route — and nothing on the creator's own page either, since
+`poll_group` matches ballots on `voter_id` and an open poll's carry no
+account. A voter who had answered three of five questions was shown a strip
+that said they had answered none, which is not the promise being kept, it is
+the promise being kept against the one person it was never about.
+`open_poll_group`'s own comment already said where the answer lives — *the
+browser already knows which questions it has answered; it is the one place
+entitled to* — so `src/lib/answeredQuestions.ts` is that place, alongside the
+remembered name and read the same way: written on a ballot going in, never
+sent anywhere, and load-bearing for nothing. Being wrong about it colours a
+badge. It cannot let anybody vote twice, read a sealed result, or reach a poll
+they hold no link to; the server decides all three from the key it is shown,
+on every call.
+
+Two details make it work across both ways into a poll. A question is recorded
+**under every name it goes by** — the share token the public route knows it
+by, and the poll id the creator's page does — because the two pages draw the
+same strip from different halves of the same question, and `open_poll_view`
+returns the id beside the view so both are always to hand. And a record is
+**erased as well as written**: a creator who clears the poll's votes leaves a
+browser holding a ballot that no longer exists, so a read that comes back *not
+voted* takes the record with it rather than letting a stale tick outlive it.
+
 What this costs, knowingly: nobody can tell whether the six people who
 answered question 2 are among the eight who answered question 1. That is an
 aggregate over other people on an anonymous poll, which is exactly the
@@ -1560,6 +1601,21 @@ Three things keep the tabs from hiding anything:
   ever a question's key, so pressing `+` makes a question and opens that
   instead. One `onChange` handles both, telling them apart by a sentinel value
   no question key can collide with.
+- **Removing a question does not live in the strip, and is named rather than
+  drawn.** It sits at the foot of the question it removes, opposite *Add
+  option*. It was a bare red `×` beside the title field before, which put the
+  control that discards a whole question — its title, its options, their
+  descriptions — inside the row for editing that question's *title*, where the
+  nearest reading of it was "clear this field"; and it sat a few pixels from
+  the option rows' own `×`, which discards one line. Two buttons that destroy
+  different amounts should not look alike and should not sit together. The
+  asymmetry with `+` is real and is the lesser cost: a remove control in the
+  strip is either a button nested inside a tab's button, or a tab that is not
+  a question. What the two controls actually share is not a row — it is that
+  each sits beside what it acts on, `+` beside the tabs it adds to and this
+  beside the question it ends. **Two questions is the floor**, since below it
+  the poll asks one, which is what the *Multiple questions* switch is for
+  rather than something to arrive at by removing the second.
 - **Every question is validated on every submit**, on screen or not; the tabs
   changed what is rendered, not what is checked.
 - **A tab whose question has something wrong with it is marked**, and a submit
@@ -1579,6 +1635,43 @@ stays *Results ready* rather than naming a winner, because there is one per
 question; the winner is named on each question's own page. `QuestionStrip`
 carries the walking between them, and renders nothing at all below two
 questions, so every existing poll looks exactly as it did.
+
+**Answering a question opens the next one.** There was a card at the foot of
+the page offering to — *Next question: …*, with a button — and it was one
+press and a scroll standing between a voter and the thing they had already
+decided to do. A voter working through five questions wants the sixth screen
+to be question 2, every time; asking them five times is four presses that
+answer a question nobody was asking. So the card is gone and the page moves
+by itself, on three conditions, each of which is a case where moving would be
+wrong:
+
+- **A first ballot only.** Changing a vote is a deliberate trip back to a
+  question already behind you, and carrying you forward again undoes the trip
+  you just made. `OpenPollPanel` takes `onFirstVote` separately from
+  `onChanged` for exactly this, and the revision path never calls it.
+- **Not on the last question**, which has nowhere to go. It re-reads itself
+  into *your vote is in*, as every single-question poll always has.
+- **Nothing else changes**, and that is the point: the strip above still
+  reaches every question in either direction, so a voter who wanted to stay is
+  one tap from back.
+
+Advancing replaces the re-read rather than joining it. The page being left is
+left at once, and a read of the question being left would land after the next
+question had loaded.
+
+**Each question is its own page, keyed on its own address.** A question is a
+poll of its own at an address of its own, so moving between two of them
+changes the route's *parameter* and not the route — and React, left alone,
+keeps the component mounted across that and hands it everything it was
+holding. Until the next read came back, the question being left went on
+rendering under the address of the question being opened: the previous
+question's options, or its *your vote is in*, beneath the next question's
+title. `PollDetail` used to undo two pieces of that by hand on the way across.
+`App` now keys both routes on their parameter (`KeyedPublicPoll`,
+`KeyedPollDetail`), which makes the crossing a mount rather than a
+reassignment: the skeleton shows, and nothing of the last question survives
+into the next. That was always true of the strip's *Next* link; it matters
+more now that answering is what crosses.
 
 ### Telling people the results are ready
 

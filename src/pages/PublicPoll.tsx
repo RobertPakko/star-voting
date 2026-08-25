@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Stack, Text, Title } from '@mantine/core'
 import { isSampleToken, openPollRpc } from '../lib/samplePoll'
 import { voterKeyFor } from '../lib/voterKey'
+import { answeredQuestions, forgetAnswered, rememberAnswered } from '../lib/answeredQuestions'
 import { shareTopic, useLiveStream } from '../lib/useLiveStream'
 import { useKnownWinner } from '../lib/useWinner'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
-import { NextQuestion } from '../components/NextQuestion'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
@@ -21,8 +21,16 @@ import type { OpenGroupQuestion, OpenPollView } from '../lib/types'
  */
 export function PublicPoll() {
   const { token } = useParams<{ token: string }>()
+  const navigate = useNavigate()
   const [view, setView] = useState<OpenPollView | null>(null)
   const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
+  // Which questions of this poll this browser has answered, for the strip's
+  // marks. It has to be read into state rather than off storage at render
+  // time because storage is what changes when a ballot goes in and React is
+  // not watching it; `load` below refreshes this on the same read that
+  // learns the ballot landed. See lib/answeredQuestions.ts for why the
+  // browser is the only party that can answer this on an open poll.
+  const [answered, setAnswered] = useState<ReadonlySet<string>>(answeredQuestions)
   const [error, setError] = useState<string | null>(null)
   // Whether a read has ever come back, so a refresh that fails can be told
   // apart from a first read that did. A ref rather than `view` itself,
@@ -47,7 +55,17 @@ export function PublicPoll() {
       return false
     }
     loaded.current = true
-    setView(data as OpenPollView)
+    const openView = data as OpenPollView
+    setView(openView)
+    // Recorded under both names the question goes by — the token this page
+    // reads it under, and the poll id the creator's own page does — so the
+    // strip is marked whichever page draws it next. Erased rather than only
+    // written: a creator who clears the poll's votes leaves this browser
+    // holding a record of a ballot that no longer exists, and a read that
+    // comes back "not voted" is what says so.
+    if (openView.voted) rememberAnswered(token, openView.poll.id)
+    else forgetAnswered(token, openView.poll.id)
+    setAnswered(answeredQuestions())
     return true
   }, [token])
 
@@ -176,16 +194,19 @@ export function PublicPoll() {
       />
 
       {/* The rest of the poll, reached by the tokens open_poll_group hands
-          back to whoever already holds one of them. No question is marked
-          answered here, and that is the design rather than an omission: an
-          open ballot is identified by a key minted per question so that one
-          browser's ballots cannot be joined to each other, and the server is
-          not asked to undo that for a tick. */}
+          back to whoever already holds one of them. The marks come out of
+          this browser rather than off the server, and that is the design
+          rather than a workaround: an open ballot is identified by a key
+          minted per question so that one browser's ballots cannot be joined
+          to each other, so the server is not asked to undo that for a tick --
+          and the browser, which holds every one of those keys already, is
+          told to answer for itself. See lib/answeredQuestions.ts. */}
       <QuestionStrip
         questions={questions.map((question) => ({
           key: question.token,
           position: question.question_position,
           title: question.question_title,
+          answered: answered.has(question.token),
         }))}
         current={token}
         hrefFor={(next) => `/p/${next}`}
@@ -195,14 +216,33 @@ export function PublicPoll() {
           title, which every question shares. */}
       {view.poll.question_title && <Title order={3}>{view.poll.question_title}</Title>}
 
-      <OpenPollPanel token={token} view={view} onChanged={load} />
-
-      {/* Offered once this browser's ballot is in, which open_poll_view knows
-          for this question because it was shown the key that cast it. It
-          knows nothing about the other questions and is not asked to. */}
-      {nextQuestion && view.voted && (
-        <NextQuestion title={nextQuestion.question_title} href={`/p/${nextQuestion.token}`} />
-      )}
+      {/* A first ballot on a question that has another after it moves the
+          voter straight on to it, in place of the card that used to sit at
+          the foot of this page offering to. A voter working through a poll of
+          five questions wants the next one, every time; asking five times
+          whether they would like what they came for is four presses and a
+          scroll each, and the one press that answered it was never a
+          decision. Changing a vote does not advance — that is a deliberate
+          trip back to a question already behind them, and carrying them
+          forward again would undo it. Neither does the last question, which
+          has nowhere to go and re-reads itself into "your vote is in". */}
+      <OpenPollPanel
+        token={token}
+        view={view}
+        onChanged={load}
+        onFirstVote={
+          nextQuestion
+            ? () => {
+                // Recorded here as well as in `load`, because this path is
+                // the one that does not re-read: the page being left is left
+                // at once, and the strip on the page being opened has to know
+                // the ballot went in.
+                rememberAnswered(token, view.poll.id)
+                navigate(`/p/${nextQuestion.token}`)
+              }
+            : undefined
+        }
+      />
     </Stack>
   )
 }
