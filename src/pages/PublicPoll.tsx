@@ -4,6 +4,7 @@ import { Stack, Text, Title } from '@mantine/core'
 import { isSampleToken, openPollRpc } from '../lib/samplePoll'
 import { voterKeyFor } from '../lib/voterKey'
 import { answeredQuestions, forgetAnswered, rememberAnswered } from '../lib/answeredQuestions'
+import { nextUnansweredKey } from '../lib/nextQuestion'
 import { shareTopic, useLiveStream } from '../lib/useLiveStream'
 import { useKnownWinner } from '../lib/useWinner'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
@@ -140,8 +141,17 @@ export function PublicPoll() {
 
   if (!view) return <PollPageSkeleton />
 
-  const here = questions.findIndex((question) => question.token === token)
-  const nextQuestion = here >= 0 && here < questions.length - 1 ? questions[here + 1] : null
+  // The poll's questions as the strip draws them, built once: the strip
+  // renders this and the way on is chosen from it, so the question a voter is
+  // carried to is by construction one the strip in front of them shows as
+  // outstanding rather than one that merely ought to agree.
+  const strip = questions.map((question) => ({
+    key: question.token,
+    position: question.question_position,
+    title: question.question_title,
+    answered: answered.has(question.token),
+  }))
+  const onwards = nextUnansweredKey(strip, token)
 
   return (
     <Stack gap="lg" maw={720} mx="auto">
@@ -201,44 +211,35 @@ export function PublicPoll() {
           to each other, so the server is not asked to undo that for a tick --
           and the browser, which holds every one of those keys already, is
           told to answer for itself. See lib/answeredQuestions.ts. */}
-      <QuestionStrip
-        questions={questions.map((question) => ({
-          key: question.token,
-          position: question.question_position,
-          title: question.question_title,
-          answered: answered.has(question.token),
-        }))}
-        current={token}
-        hrefFor={(next) => `/p/${next}`}
-      />
+      <QuestionStrip questions={strip} current={token} hrefFor={(next) => `/p/${next}`} />
 
       {/* What this question asks; the heading above carries the poll's own
           title, which every question shares. */}
       {view.poll.question_title && <Title order={3}>{view.poll.question_title}</Title>}
 
-      {/* A first ballot on a question that has another after it moves the
-          voter straight on to it, in place of the card that used to sit at
-          the foot of this page offering to. A voter working through a poll of
-          five questions wants the next one, every time; asking five times
-          whether they would like what they came for is four presses and a
-          scroll each, and the one press that answered it was never a
-          decision. Changing a vote does not advance — that is a deliberate
-          trip back to a question already behind them, and carrying them
-          forward again would undo it. Neither does the last question, which
-          has nowhere to go and re-reads itself into "your vote is in". */}
+      {/* A first ballot opens the question this voter still owes, in place of
+          the card that used to sit at the foot of this page offering to. A
+          voter working through a poll of five wants the next one, every time;
+          asking five times whether they would like what they came for is four
+          presses and a scroll each, and the one press that answered it was
+          never a decision. Which question that is comes from
+          lib/nextQuestion.ts, including what happens when the answer is none.
+          Changing a vote does not advance — that is a deliberate trip back to
+          a question already behind them, and carrying them forward again
+          would undo it. */}
       <OpenPollPanel
         token={token}
         view={view}
         onChanged={load}
         onFirstVote={
-          nextQuestion
+          onwards
             ? () => {
                 // Recorded here as well as in `load`, because this path is
                 // the one that does not re-read: the page being left is left
                 // at once, and the strip on the page being opened has to know
                 // the ballot went in.
                 rememberAnswered(token, view.poll.id)
-                navigate(`/p/${nextQuestion.token}`)
+                navigate(`/p/${onwards}`)
               }
             : undefined
         }

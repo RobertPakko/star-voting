@@ -1636,24 +1636,38 @@ question; the winner is named on each question's own page. `QuestionStrip`
 carries the walking between them, and renders nothing at all below two
 questions, so every existing poll looks exactly as it did.
 
-**Answering a question opens the next one.** There was a card at the foot of
-the page offering to — *Next question: …*, with a button — and it was one
+**Answering a question opens the next one owed.** There was a card at the foot
+of the page offering to — *Next question: …*, with a button — and it was one
 press and a scroll standing between a voter and the thing they had already
-decided to do. A voter working through five questions wants the sixth screen
-to be question 2, every time; asking them five times is four presses that
-answer a question nobody was asking. So the card is gone and the page moves
-by itself, on three conditions, each of which is a case where moving would be
-wrong:
+decided to do. A voter working through five questions wants the sixth screen to
+be question 2, every time; asking them five times is four presses that answer a
+question nobody was asking. So the card is gone and the page moves by itself, on
+three conditions, each of which is a case where moving would be wrong:
 
 - **A first ballot only.** Changing a vote is a deliberate trip back to a
   question already behind you, and carrying you forward again undoes the trip
   you just made. `OpenPollPanel` takes `onFirstVote` separately from
   `onChanged` for exactly this, and the revision path never calls it.
-- **Not on the last question**, which has nowhere to go. It re-reads itself
-  into *your vote is in*, as every single-question poll always has.
-- **Nothing else changes**, and that is the point: the strip above still
-  reaches every question in either direction, so a voter who wanted to stay is
-  one tap from back.
+- **To a question still outstanding**, which is not the same as the next one
+  along — `nextUnansweredKey` in `src/lib/nextQuestion.ts` decides. The two
+  agree for anybody working a poll front to back, which is nearly everybody;
+  they come apart for the voter who jumped into the middle from the strip, and
+  for them "the next one" is a ballot already cast. **The search rounds**:
+  forward from the question just answered, then wrapping to the ones before
+  it, so a voter who started at question 3 is taken back to question 1 rather
+  than stranded on the last question with two unanswered ones behind them. The
+  card that used to offer the way on is gone, so stopping at the end would be
+  a dead end — the strip says what is outstanding but does not act.
+- **Only while something is owed.** Every other question answered leaves the
+  voter where they are, and the page does what a single-question poll always
+  has: re-reads itself into *your vote is in*.
+
+The list it chooses from is the list the strip is drawn from — both pages build
+it once and pass it to both — so a voter is only ever carried to a question the
+strip in front of them shows as outstanding. That is a construction rather than
+a promise the two have to keep separately. The question just answered is
+excluded by key rather than by its flag, because the choice is made as the
+ballot goes in and no read has yet come back to say so.
 
 Advancing replaces the re-read rather than joining it. The page being left is
 left at once, and a read of the question being left would land after the next

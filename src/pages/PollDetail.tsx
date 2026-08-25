@@ -8,6 +8,7 @@ import { pollTopic, useLiveStream } from '../lib/useLiveStream'
 import { useWinner } from '../lib/useWinner'
 import { voterKeyFor } from '../lib/voterKey'
 import { answeredQuestions, forgetAnswered, rememberAnswered } from '../lib/answeredQuestions'
+import { nextUnansweredKey } from '../lib/nextQuestion'
 import { useBallotOrder } from '../lib/ballotOrder'
 import { Ballots } from '../components/Ballots'
 import { CollectOptions } from '../components/CollectOptions'
@@ -262,22 +263,31 @@ export function PollDetail() {
 
   const isCreator = poll.created_by === session?.user.id
   const isOpen = poll.mode === 'open'
-  // The question after this one, when there is one. `questions` is empty on a
-  // poll that asks a single question, so this is null there and nothing about
-  // the page changes.
-  const here = questions.findIndex((question) => question.id === poll.id)
-  const nextQuestion = here >= 0 && here < questions.length - 1 ? questions[here + 1] : null
-  // The way on, taken rather than offered: a first ballot on a question with
-  // another after it opens that one. Undefined on the last question and on a
-  // poll of one, where the ballot's own page is where the voter stays and the
-  // page re-reads itself into "your vote is in" as it always did.
-  const advance = nextQuestion
+  // The poll's questions as the strip draws them, built once so that the way
+  // on is chosen from the same list the voter is looking at. `questions` is
+  // empty on a poll that asks a single question, so there is no strip and no
+  // way on, and nothing about the page changes. Answered comes from the
+  // server for an invite poll and from this browser for an open one — where
+  // each can honestly answer; see QuestionStrip.
+  const strip = questions.map((question) => ({
+    key: question.id,
+    position: question.question_position,
+    title: question.question_title,
+    answered: isOpen ? answered.has(question.id) : question.voted,
+  }))
+  // The way on, taken rather than offered: a first ballot opens whichever
+  // question this reader still owes. Undefined when they owe none and on a
+  // poll of one, where the ballot's own page is where they stay and the page
+  // re-reads itself into "your vote is in" as it always did. See
+  // lib/nextQuestion.ts for which question that is and why it rounds.
+  const onwards = nextUnansweredKey(strip, poll.id)
+  const advance = onwards
     ? () => {
         // This path does not re-read the question being left, so nothing else
         // will record the ballot that was just cast; the strip on the page
         // being opened needs it recorded to mark this question behind them.
         if (isOpen) rememberAnswered(poll.id, poll.public_token)
-        navigate(`/polls/${nextQuestion.id}`)
+        navigate(`/polls/${onwards}`)
       }
     : undefined
   // One option list for this page. An open poll's arrives inside its view,
@@ -319,18 +329,7 @@ export function PollDetail() {
       {/* Where in the poll this question sits, and the way to the rest of
           it. Renders nothing at all on a poll that asks one question, which
           is what keeps every existing poll looking exactly as it did. */}
-      <QuestionStrip
-        questions={questions.map((question) => ({
-          key: question.id,
-          position: question.question_position,
-          title: question.question_title,
-          // The server for an invite poll, this browser for an open one --
-          // where each can honestly answer. See QuestionStrip.
-          answered: isOpen ? answered.has(question.id) : question.voted,
-        }))}
-        current={poll.id}
-        hrefFor={(id) => `/polls/${id}`}
-      />
+      <QuestionStrip questions={strip} current={poll.id} hrefFor={(id) => `/polls/${id}`} />
 
       {/* What this one question asks, above the ballot that answers it. The
           heading above carries the poll's title, which every question in the
