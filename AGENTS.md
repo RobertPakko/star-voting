@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, …)
+src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
 src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, per-browser ballot order and answered questions, the About page's sample poll, shared types
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -293,7 +293,10 @@ Covered: the score round, finalist selection, both score-round tie-break rules,
 the runoff and its tie-breaks, the genuine-tie result, the full ranking, the
 `create_poll` / `submit_ballot` write path the seeding runs through, the two
 windows in which a poll's option list may move — the collecting stage, and the
-creator's own corrections before the first vote, the window in which a voter
+creator's own corrections before the first vote, who may say they are done
+adding to that list and what happens when the last of them does — the two ways
+a poll runs out of people to wait for, and the two reasons it can be waited on
+after everyone has confirmed, the window in which a voter
 may change their vote and the reveal that closes it, that an open poll's share
 link discloses no email address, its creator's included, and which changes
 announce themselves to which topics for [Live updates](#live-updates) — counts
@@ -1074,6 +1077,13 @@ invite polls it is also where the invite list is managed. And a **poll whose
 results are out**, to everyone in it: the embargo exists because a ballot might
 still be cast, and on that poll none can.
 
+A third is exempt for a reason of its own: a poll **still collecting its
+options** has taken no ballots at all, so there is no arrival order to protect,
+and the roster there answers *who has said they are done* rather than *who has
+voted*. Everyone in the poll reads it while that stage runs. See [Saying you
+are done adding options](#saying-you-are-done-adding-options) for what the
+badge says there, and why it is the same disclosure under the same setting.
+
 On open polls "you have voted" is the `localStorage` voter key, so clearing site
 data hides the roster again. That is the same deliberately-weak signal behind
 "your vote is in" — a convenience, not a guard, and accepted as such here.
@@ -1202,7 +1212,11 @@ score honestly.
 
 The stage is surfaced by `CollectOptions` (`src/components/CollectOptions.tsx`)
 in place of the ballot, on all three pages that can carry one. Everyone sees
-the same list and the same box to add to it; the creator additionally gets a
+the same list, the same box to add to it, and the same button to say they are
+done with it — see [Saying you are done adding
+options](#saying-you-are-done-adding-options), which is where that button comes
+from and why it belongs in this card rather than beside the poll's other
+controls. The creator additionally gets a
 `×` on each row, which sits beside the list it acts on rather than in
 `CreatorControls`, the same way the invite controls sit inside `Respondents`.
 Ending the stage is the other way round — that is something the creator does
@@ -1212,6 +1226,110 @@ to the *poll*, so **Open poll** is in `CreatorControls`.
 poll with its votes cleared, and the list everyone was shown is part of the
 same poll. A poll closed while it was still collecting does reopen collecting,
 because that is the stage it was in.
+
+### Saying you are done adding options
+
+The collecting stage reported one number and it was the wrong one. "Seven
+options" is seven people with an idea each or one person with seven, and
+neither is distinguishable from a poll nobody has opened — so the only way to
+end the stage was to guess when the list had stopped moving, and the person
+guessing was the one who could least afford to be wrong about it. **Confirm
+options** is the missing half: one press per person saying they have looked and
+have nothing more to add. `0041` adds it.
+
+**It says "I have had my say", not "I approve this list".** That is
+deliberately the weaker of the two readings, and it is what makes the signal
+stable: a suggestion arriving after somebody confirmed does not un-confirm
+them, so one late idea cannot keep a poll collecting for ever. The promise that
+**everyone who votes scores the same list** is kept where it always was, by the
+moment the list is finalized — this changes nothing about it and is not a
+second mechanism for it.
+
+**A confirmation is per question, like a ballot**, because a question is a poll
+here and each one carries a list to have a say about. Opening is the act that
+spans the group, so the poll opens itself only when every invitee has confirmed
+every question in it.
+
+**Only invitees confirm, exactly as only invitees vote.** `submit_ballot`
+refuses anybody off the list and `confirm_options` refuses them in the same
+words, which is what keeps the roster complete: everyone who *can* confirm is
+on it, so a page can render "3 of 6" and mean it. A creator who did not invite
+themselves adds options like anyone else and says they are done by pressing
+**Open poll**, which was always their version of this. One who invited
+themselves is an invitee like any other and confirms with everybody else —
+`poll_status` returns `invited` to tell the page which of the two it is looking
+at, since being able to *read* a poll is not the same question.
+
+**It can be taken back, for exactly as long as it can be given.** Confirming is
+one click that can open a poll for everybody, and the honest counterpart of a
+button that does something irreversible is one that undoes it while it still
+means anything. Once the poll opens there is nothing left to be done adding to,
+and both functions refuse — the same door `suggest_option` closes, in the
+same words, at the same moment.
+
+**A poll with participants opens itself when the last one confirms.** That is
+the whole point of collecting the signal, and `open_options_when_all_confirmed`
+is the whole of it. Two things about that function matter more than what it
+does:
+
+- **It returns rather than raises on every reason not to open.** It runs inside
+  somebody else's confirmation, and neither that person nor the person being
+  removed from an invite list asked for the poll to open. The case this is
+  really about is the two-option floor: a group whose questions do not all
+  clear it would otherwise fail one person's button for a rule about a question
+  they were not looking at. The creator still has **Open poll**, which names
+  the short question and says why.
+- **Taking somebody off the invite list runs the same check**, because that is
+  the other way a poll runs out of people to wait for — "we are waiting on
+  Bob, and Bob is not coming". Their confirmation leaves with them, so
+  re-inviting somebody asks again rather than counting an answer they gave to
+  another list.
+
+**An open poll opens itself never.** It has no participant list, so there is no
+set of people who could all have confirmed; anyone holding the link can confirm
+and no number of them means the stage is over. Its creator ends it, as before.
+
+**A share link asks for a name, because it has nothing else to go on.** An
+invite poll knows who is confirming from the session and annotates the invite
+list it already draws. Behind a link there is no account, so a bare count would
+answer *how many* when the question being asked is *who* —
+`open_poll_confirm_options` demands one and refuses without it, in the same
+words and the same order `open_poll_submit` demands one for a ballot. A poll
+that **hides its respondents** is the exception and keeps the promise
+[Whether ballots are published](#whether-ballots-are-published) makes for it:
+no field, no name stored whatever the client sends, and a count. The name is
+offered back from `lib/voterName.ts` like a ballot's, so confirming and then
+voting is one name typed once.
+
+**Who reads it is the roster question, answered by the roster's setting.** Who
+has confirmed is the same disclosure as who has voted — a list of names — so
+it is held back on the same terms, by `show_voters`, through the same column
+of `poll_invitees`. What it does *not* carry is [the
+embargo](#whether-respondents-are-shown) that withholds the voter roster until
+you have voted: what that protects is the order ballots arrived in, and a poll
+still collecting its options has no ballots to attach an order to. So everyone
+in the poll reads it while the stage runs, which is what makes it worth
+collecting.
+
+**The badge answers the question the poll is asking.** `Respondents` draws
+*Confirmed*/*Pending* while the poll is collecting and *Voted*/*Pending*
+afterwards, off `status.soliciting` rather than an idea of its own, and the
+heading above it reads *Participants* rather than *Voters* for the same reason:
+nobody can vote yet, so a column of *Pending* would be answering a question
+nobody asked. The count sits in one line under the option list — the header's
+turnout badge still counts options, which is what
+[PollTags](#the-polls-high-level-details) has always said is the number moving
+at this stage.
+
+**A confirmation announces itself as loudly as a vote**, and the one that opens
+the poll announces twice: once for the roster moving, once for the option list
+becoming a ballot. Both are worth hearing, and `16_live_update_signals` asserts
+both counts — a page told nothing would be offering a box to suggest options to
+a poll that had started taking votes.
+
+**What the button does not do is un-confirm anybody else.** There is no
+"the list changed, please look again" round trip, and adding that would be a
+poll that can never open: every confirmation would invite one more suggestion.
 
 ### The creator can correct the options until somebody votes
 

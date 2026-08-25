@@ -12,6 +12,7 @@ import { nextUnansweredKey } from '../lib/nextQuestion'
 import { useBallotOrder } from '../lib/ballotOrder'
 import { Ballots } from '../components/Ballots'
 import { CollectOptions } from '../components/CollectOptions'
+import { ConfirmOptions } from '../components/ConfirmOptions'
 import { CreatorControls } from '../components/CreatorControls'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
@@ -345,6 +346,36 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   // read directly. The heading counts it and the option editor edits it, and
   // neither should have to know which poll it is looking at.
   const optionList = isOpen ? (view?.options ?? []) : options
+  // The way to say you are done adding, on an invite poll that is still
+  // collecting. Three things have to be true and none of them is cosmetic:
+  //
+  //  - the reader is on the **invite list**. Only invitees confirm, exactly as
+  //    only invitees vote, which is what keeps the roster complete — everyone
+  //    who can confirm is on it. A creator who did not invite themselves says
+  //    "I am done" with *Open poll*, which they have had all along.
+  //  - the poll is **collecting**, since a confirmation is about a list that
+  //    can still grow and means nothing once it is a ballot.
+  //  - the database **knows what a confirmation is**. This app deploys on push
+  //    and its migrations apply on merge, so `confirmed` arrives undefined
+  //    against a database one merge behind; offering a button that could only
+  //    fail would be worse than offering none.
+  //
+  // The count beside it is the invitees', which is who the poll is waiting on,
+  // so the denominator is the same number the header's turnout badge counts
+  // votes towards later.
+  const confirmation =
+    !isOpen && status.soliciting && status.invited && status.confirmed !== undefined ? (
+      <ConfirmOptions
+        source={{ kind: 'poll', pollId: poll.id }}
+        confirmed={status.confirmed}
+        progress={
+          status.confirmed_count === undefined
+            ? undefined
+            : { confirmed: status.confirmed_count, of: status.invited_count }
+        }
+        onChanged={reloadAll}
+      />
+    ) : null
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -450,6 +481,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
                     : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
                 </Text>
               }
+              confirm={confirmation}
               onChanged={load}
             />
           ) : status.results_available ? (
@@ -502,16 +534,19 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
       )}
 
       {/* Held back until you have voted, for the reasons set out where the
-          open-poll panel does the same; including the two exemptions. The
+          open-poll panel does the same; including the exemptions. The
           creator is exempt twice over: they decide when to close, and this
           is also where they manage the invite list. A poll whose results are
           out is exempt because the embargo exists to keep a roster away from
           somebody still holding a ballot, and there are no ballots left to
-          hold. It is also where turnout is reported now that the results
-          above it no longer state it themselves. */}
-      {!isOpen && (status.voted || isCreator || status.results_available) && (
+          hold. And a poll still *collecting* is exempt because it has taken
+          no ballots at all, so there is no arrival order to protect — there
+          the card answers who has said they are done adding options, which is
+          the one thing moving at that stage and the reason it is worth
+          collecting. The heading says whichever of the two the card is. */}
+      {!isOpen && (status.soliciting || status.voted || isCreator || status.results_available) && (
         <Stack gap="xs">
-          <Title order={4}>Voters</Title>
+          <Title order={4}>{status.soliciting ? 'Participants' : 'Voters'}</Title>
           <Respondents
             pollId={poll.id}
             isCreator={isCreator}

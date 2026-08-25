@@ -21,6 +21,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * appears on, and a card restating it directly underneath is the same fact
  * arriving twice looking like two.
  *
+ * **What "who" means depends on where the poll has got to.** While it is still
+ * collecting its options nobody can vote, so a column of *Pending* would be
+ * answering a question the poll is not asking; the badge says who is done
+ * *adding* instead, which is the only thing moving at that stage and the thing
+ * a creator deciding whether to open the poll actually needs. It is the same
+ * disclosure either way — a roster — so it is held back on exactly the same
+ * terms, by the same setting, through the same column of `poll_invitees`.
+ *
  * So a poll that hides its respondents renders no card at all for anyone but
  * its creator; the header has already said how many voted, and the
  * "Respondents hidden" tag beside it has already said why there are no names
@@ -173,7 +181,17 @@ export function Respondents({
     ) : null
   }
 
-  const showsStatus = invitees.some((i) => i.has_voted !== null)
+  // Which question the badges are answering. `soliciting` is the poll's own
+  // stage rather than this card's idea of one, so the roster and the list
+  // above it can never disagree about whether voting has started.
+  const collecting = status.soliciting
+  // Whether the poll is telling this reader anything per person at all. Read
+  // off whichever column is being drawn: a poll that hides its respondents
+  // nulls both, and a database that predates has_confirmed sends it undefined,
+  // which is the same "nothing to show" and gets the same line underneath.
+  const showsStatus = invitees.some((i) =>
+    collecting ? (i.has_confirmed ?? null) !== null : i.has_voted !== null,
+  )
 
   return (
     <Card withBorder>
@@ -184,13 +202,23 @@ export function Respondents({
               {invitee.email}
             </Text>
             <Group gap="xs" wrap="nowrap">
-              {invitee.has_voted !== null && (
+              {(collecting ? (invitee.has_confirmed ?? null) : invitee.has_voted) !== null && (
                 <Badge
                   size="sm"
                   variant="light"
-                  color={invitee.has_voted ? badgeColor.done : badgeColor.outstanding}
+                  color={
+                    (collecting ? invitee.has_confirmed : invitee.has_voted)
+                      ? badgeColor.done
+                      : badgeColor.outstanding
+                  }
                 >
-                  {invitee.has_voted ? 'Voted' : 'Pending'}
+                  {collecting
+                    ? invitee.has_confirmed
+                      ? 'Confirmed'
+                      : 'Pending'
+                    : invitee.has_voted
+                      ? 'Voted'
+                      : 'Pending'}
                 </Badge>
               )}
               {isCreator && (
@@ -214,8 +242,8 @@ export function Respondents({
 
         {!showsStatus && (
           <Text size="xs" c="dimmed">
-            This poll hides who has responded, so you cannot can see which of these people have
-            voted.
+            This poll hides who has responded, so you cannot can see which of these people have{' '}
+            {collecting ? 'confirmed the options' : 'voted'}.
           </Text>
         )}
 

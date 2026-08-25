@@ -105,6 +105,48 @@ begin
     tests.signals(tests.poll_topic(v_poll)), 1);
 
   -- ------------------------------------------------------------------
+  -- A confirmation, which moves a roster everyone in the poll is reading and
+  -- can move the poll itself. The last one in opens the poll for voting, so
+  -- a page that heard nothing would be offering a box to suggest options to
+  -- a poll that had started taking votes.
+  -- ------------------------------------------------------------------
+
+  v_poll := create_poll('Collecting', null, array['Pizza', 'Sushi'],
+                        array['voter1@example.com', 'voter2@example.com'],
+                        'invite', true, false, null, true);
+
+  perform tests.forget_signals();
+  perform tests.sign_in('voter1@example.com');
+  perform confirm_options(v_poll);
+  perform tests.assert_eq('a confirmation announces the poll',
+    tests.signals(tests.poll_topic(v_poll)), 1);
+  perform tests.assert_eq('and reaches the list of everyone who can see it',
+    tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_poll),
+      tests.user_topic('creator@example.com'),
+      tests.user_topic('voter1@example.com'),
+      tests.user_topic('voter2@example.com')]));
+
+  perform tests.forget_signals();
+  perform unconfirm_options(v_poll);
+  perform tests.assert_eq('and taking one back announces it just as loudly',
+    tests.signals(tests.poll_topic(v_poll)), 1);
+
+  -- Two statements: the confirmation, and the poll opening behind it. Both
+  -- are worth hearing -- the first moves the roster, the second replaces the
+  -- option list with a ballot.
+  perform confirm_options(v_poll);
+  perform tests.forget_signals();
+  perform tests.sign_in('voter2@example.com');
+  perform confirm_options(v_poll);
+  perform tests.assert_eq('the confirmation that opens the poll announces both',
+    tests.signals(tests.poll_topic(v_poll)), 2);
+  perform tests.assert_eq('and the poll really did open',
+    (select soliciting from poll_status(v_poll)), false);
+
+  perform tests.sign_in('creator@example.com');
+
+  -- ------------------------------------------------------------------
   -- One statement, one signal.
   --
   -- reset_poll clears every ballot in one delete and reopens the poll in one

@@ -1,6 +1,16 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { ActionIcon, Button, Card, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
+import {
+  ActionIcon,
+  Button,
+  Card,
+  Divider,
+  Group,
+  Stack,
+  Text,
+  TextInput,
+  Tooltip,
+} from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
@@ -49,12 +59,20 @@ export type OptionsSource =
  * Opening the poll does not: it is what the creator does to the *poll*, so it
  * is in `CreatorControls` with the rest of the lifecycle, and this component
  * has nothing to say about when the stage ends.
+ *
+ * Saying you are *done* with the list is a third thing again, and it belongs
+ * here: it is about this list rather than about the poll, and the person
+ * pressing it is looking at what they are confirming. It arrives as
+ * `confirm` — see `ConfirmOptions` — rather than being built here, because
+ * only the page knows which of the two ways into the poll this reader came
+ * by and whether the database is new enough to be asked at all.
  */
 export function CollectOptions({
   source,
   options,
   isCreator,
   footer,
+  confirm,
   onChanged,
 }: {
   source: OptionsSource
@@ -66,6 +84,14 @@ export function CollectOptions({
    * belongs to the page's situation rather than to the list.
    */
   footer?: ReactNode
+  /**
+   * The way to say you have finished adding, ruled off from the box that
+   * adds: they are the two things this card is for and the line is what stops
+   * "Add" and "Confirm options" reading as one row of buttons. Absent on the
+   * creator's own correction of a list that is already a ballot, which has
+   * nobody to collect a confirmation from.
+   */
+  confirm?: ReactNode
   /** An option arrived or left: re-read the poll. */
   onChanged: () => void
 }) {
@@ -257,6 +283,13 @@ export function CollectOptions({
         )}
 
         {footer}
+
+        {confirm && (
+          <>
+            <Divider />
+            {confirm}
+          </>
+        )}
 
         {full && (
           <Text size="xs" c="dimmed">

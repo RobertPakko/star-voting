@@ -120,6 +120,26 @@ export interface PollStatus {
    * than guessing one.
    */
   expires_at?: string | null
+  /**
+   * Whether the signed-in reader is on this poll's invite list, which is not
+   * the same as being able to read it: a creator who did not invite
+   * themselves reads every word of the poll and is not one of the people it
+   * is waiting on. It is what decides whether to offer them the confirm
+   * button, and only the invite list can answer it.
+   */
+  invited?: boolean
+  /** The signed-in reader has said they are done adding options. */
+  confirmed?: boolean
+  /**
+   * How many of this question's invitees have. Not withheld on a poll that
+   * hides its respondents, on the same reasoning the vote count is not: a
+   * count names nobody. What that setting withholds is the roster.
+   *
+   * These three are optional for the same reason `expires_at` is; a browser
+   * running ahead of the migration gets none of them, and the page then
+   * offers no confirm button at all rather than one that cannot work.
+   */
+  confirmed_count?: number
 }
 
 /** One row from list_polls(): a poll and its status, fetched together. */
@@ -152,6 +172,17 @@ export interface Invitee {
   email: string
   /** null when the poll hides respondents; show no badge, not "pending". */
   has_voted: boolean | null
+  /**
+   * Whether this person has said they are done adding options, which is what
+   * the badge says instead of `has_voted` while the poll is still collecting
+   * them: nobody can vote yet, so a row of "Pending" would be answering a
+   * question the poll is not asking.
+   *
+   * Held back on exactly the same terms as `has_voted`, and null on the same
+   * polls, because it is the same disclosure: a roster. Undefined against a
+   * database whose poll_invitees predates the column.
+   */
+  has_confirmed?: boolean | null
 }
 
 /** Everything the public voting page needs, from one open_poll_view call. */
@@ -199,6 +230,27 @@ export interface OpenPollView {
   your_scores?: Record<string, number> | null
   /** Names of everyone who has responded; null when the poll hides them. */
   voters: string[] | null
+  /** This browser's voter_key has said it is done adding options. */
+  confirmed?: boolean
+  /**
+   * The name it confirmed under, so the page can draw the mark back rather
+   * than only the fact of it. Null on a poll that hides its respondents,
+   * which stores no name whatever the client sends.
+   */
+  your_confirmed_name?: string | null
+  /** How many browsers have confirmed; a count, so never withheld. */
+  confirmed_count?: number
+  /**
+   * Everyone who has confirmed, by name, or null when the poll hides its
+   * respondents. Unlike `voters` this carries no embargo: what the roster
+   * embargo protects is the order ballots arrived in, and a poll still
+   * collecting its options has no ballots to attach an order to.
+   *
+   * These four are optional for the reason `your_scores` is: a browser
+   * talking to a database whose open_poll_view predates them reads none of
+   * them, and the page then offers no confirm button rather than a broken one.
+   */
+  confirmations?: string[] | null
 }
 
 export interface ResultOption {

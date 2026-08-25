@@ -9,6 +9,7 @@ import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
 import { badgeColor } from '../lib/badgeColors'
 import { Ballots } from './Ballots'
 import { CollectOptions } from './CollectOptions'
+import { Confirmations, ConfirmOptions } from './ConfirmOptions'
 import { OptionDescription } from './OptionDescription'
 import { Results } from './Results'
 import { StarRating } from './StarRating'
@@ -66,19 +67,54 @@ export function OpenPollPanel({
   // ballot to show and no result to show either.
   if (view.soliciting) {
     return (
-      <CollectOptions
-        source={{ kind: 'open', pollId }}
-        options={view.options}
-        isCreator={isCreator}
-        footer={
-          <Text size="sm" c="dimmed">
-            {isCreator
-              ? 'Voting hasn’t started. Everyone can add options until you open the poll.'
-              : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
-          </Text>
-        }
-        onChanged={onChanged}
-      />
+      <Stack gap="md">
+        <CollectOptions
+          source={{ kind: 'open', pollId }}
+          options={view.options}
+          isCreator={isCreator}
+          footer={
+            <Text size="sm" c="dimmed">
+              {isCreator
+                ? 'Voting hasn’t started. Everyone can add options until you open the poll.'
+                : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
+            </Text>
+          }
+          confirm={
+            // Undefined against a database whose open_poll_view predates the
+            // field, and then there is no button rather than one that could
+            // only fail; the same rule `your_scores` follows for "Edit vote".
+            view.confirmed === undefined ? undefined : (
+              <ConfirmOptions
+                source={{ kind: 'open', pollId }}
+                confirmed={view.confirmed}
+                confirmedName={view.your_confirmed_name}
+                // A share link has no account to name whoever is confirming,
+                // so a poll that shows its respondents asks for a name here
+                // exactly as its ballot does. One that hides them asks for
+                // none and stores none.
+                needsName={view.poll.show_voters}
+                // No denominator: an open poll has no list of people, so
+                // there is no set of them to have all confirmed and nothing
+                // this count can reach. Its creator ends the stage.
+                progress={
+                  view.confirmed_count === undefined
+                    ? undefined
+                    : { confirmed: view.confirmed_count }
+                }
+                onChanged={onChanged}
+              />
+            )
+          }
+          onChanged={onChanged}
+        />
+
+        {/* Who is done, on a poll that names them. No embargo, unlike the
+            voter roster below: what that one withholds is the order ballots
+            arrived in, and a poll still collecting its options has no ballots
+            to attach an order to. Knowing who has finished is the whole point
+            of the stage. */}
+        {view.confirmations && <Confirmations names={view.confirmations} />}
+      </Stack>
     )
   }
 
