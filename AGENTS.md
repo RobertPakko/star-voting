@@ -353,16 +353,18 @@ first.
 **The topics are public, and that is a decision rather than an oversight.** A
 listener needs no authorization because there is nothing to authorize: the
 payload is `{}`, and the most anyone gains by guessing a topic is knowing that
-a poll whose id or share token they already held changed at some moment. The
-share token is what it always was — the thing you must hold to read an open
-poll — and it is still the RPC, not the socket, that decides what comes back.
+a poll whose id they already held changed at some moment. It is still the RPC,
+not the socket, that decides what comes back.
 
-There are three kinds of topic:
+There are two kinds of topic:
 
-- `poll:<id>`, for pages that know the poll's id — a poll's own page.
-- `poll:<share token>`, for `/p/:token`, which holds only a link. Every open
-  poll is announced under both, and the second is what lets that page
-  subscribe *before* its first read instead of after it — see below.
+- `poll:<id>`, for every page watching one poll, whichever side of it they are
+  on. There were three kinds and this was two of them: an open poll was
+  announced under its id *and* under its share token, because somebody
+  arriving on `/p/:token` did not learn the id until they had read the poll
+  once — and reading once before subscribing is what the second topic existed
+  to avoid. A poll's id is its link now, so a voter arrives holding the topic
+  and there is nothing left to bridge.
 - `user:<id>`, for one person's poll list: every change to every poll on it,
   invites included.
 
@@ -949,7 +951,7 @@ explanations intact.
 
 |  | **Invited people** | **Anyone with the link** |
 | --- | --- | --- |
-| Access | Email addresses on the invite list | An unguessable share link |
+| Access | Email addresses on the invite list | An unguessable link — the poll's id |
 | Voter signs in | Yes, magic link | No |
 | Results unlock | When everyone invited has voted, or when the creator closes the poll | Only when the creator closes the poll |
 | One vote each | Enforced — one ballot per account | **Not** enforced |
@@ -963,6 +965,68 @@ matters.
 
 Results stay hidden until they unlock in both modes, so nobody ever votes
 knowing how it is going.
+
+### A poll's link is its id
+
+**One address, `#/polls/<id>`, for every poll and every reader of it.** There
+were two: open polls lived at `#/p/<share token>` and everything else at
+`#/polls/<id>`, so an open poll's creator was permanently looking at an
+address that was not the one to hand out. Copying what was in front of them
+sent the recipient to a sign-in screen and then to *poll not found* — a
+failure with no clue in it, arrived at by doing the obvious thing.
+
+**The token and the id were the same thing twice.** `insert_poll_row` minted
+the token as `replace(gen_random_uuid()::text, '-', '')`: 122 bits from the
+same generator that fills the primary key. Neither was guessable and neither
+was more unguessable than the other, so the separation never bought entropy.
+It bought exactly one thing, and it is the thing that was given up here.
+
+**What did not change: who can reach an open poll.** For an open poll the id
+was never the wider of the two. `polls_select` is `created_by = auth.uid() or
+is_invited_to_poll(id)` and an open poll has no invitees, so its creator was
+the only person who could learn the id without holding the link — and
+`open_poll_view` has always returned the id to anyone presenting the token.
+The set of people who can vote in a poll is the set it was.
+
+**What was given up, plainly.** Two things, and neither is hypothetical:
+
+- **A leaked link can no longer be replaced.** The id is referenced by
+  `candidates`, `ballots`, `invited_voters` and `polls.group_id`, so there is
+  no rotating it. "I pasted my poll link in the wrong channel, send me a new
+  one" now has no answer but to duplicate the poll and lose its votes. With a
+  separate token that was an `UPDATE`.
+- **A primary key travels where a single-purpose secret does not.** This
+  schema already writes poll ids into email bodies — `trg_send_invite_email`
+  and the results-ready notice both link to `#/polls/<id>`. Those only fire
+  for invite polls, so nothing leaks today; but the pattern is established,
+  and every future thing that logs, exports, or reports an id is now handling
+  a ballot rather than a row number. That is the standing cost of the merge
+  and the reason to think twice before adding the next one.
+
+**Deployed links broke.** There was no compatibility shim: `0039` drops the
+column, so an `#/p/<token>` link already out in the world has nothing left to
+resolve against. That was a deliberate call, taken while the polls in flight
+were few enough to be worth less than the shim.
+
+**One address means the route has to decide what the reader may see**, since
+the URL no longer says. `App.tsx`'s `PollPage` does it in the order that costs
+least:
+
+1. **Signed in?** Render `PollDetail`, which reads the `polls` row as its
+   first act anyway. Row-level security answers exactly the question being
+   asked — a row for the creator and for an invitee, nothing for anyone else —
+   so it reports *I cannot see this* rather than drawing *poll not found*, and
+   `PollPage` falls back to the public reading. Probing first would have
+   charged every creator opening their own poll a round trip to learn what the
+   read they were about to make already knew.
+2. **Not signed in, or refused above?** Render `PublicPoll`, which reads
+   through the anon RPCs and can therefore only ever show an open poll.
+3. **Refused there too, and signed out?** Offer the sign-in screen rather than
+   a dead end. The visitor may be on an invite poll's list — every invitation
+   email links to exactly this address — so where they were headed is stashed
+   through `rememberDestination` and the magic link brings them back to it.
+   Signed in and refused twice, the link really is dead, and `PublicPoll` says
+   so.
 
 ### Whether respondents are shown
 
@@ -1450,7 +1514,7 @@ they do to the *poll*:
   invitees, all four settings). Nothing is created until submit, so the copy
   can be edited first, and the original is untouched.
 - **Reset votes** — deletes every vote and reopens the poll, keeping its id,
-  options, invitee list and share link. Anyone who already voted can vote again,
+  options, invitee list and link. Anyone who already voted can vote again,
   and they aren't told the poll was reset.
 - **Delete poll** — removes the poll and every vote cast, permanently.
 
@@ -1525,13 +1589,13 @@ existing rule widened rather than a second rule to keep in step:
 
 **Ballots, voter keys and voter names stay per question**, and this is the
 part most likely to look like an oversight. A voter gets one ballot and one
-`voter_key` per question, because `voterKeyFor()` is scoped to a share token
-and keeping it that way is what stops one browser's ballots being joined to
-each other — see `src/lib/voterKey.ts`. The continuity a voter actually
+`voter_key` per question, because `voterKeyFor()` is scoped to one poll — and
+a question is a poll — which is what stops one browser's ballots being joined
+to each other; see `src/lib/voterKey.ts`. The continuity a voter actually
 notices is the name, and that lives in the browser instead
 (`src/lib/voterName.ts`): typed once, offered back on the next question,
 never linked on the server. `open_poll_group` accordingly returns the sibling
-tokens and **no "answered" flag**; `poll_group` does return one, because an
+ids and **no "answered" flag**; `poll_group` does return one, because an
 invite ballot carries an account and nothing has to be linked to find it.
 
 **The tick a voter is owed comes from the browser, for the same reason the
@@ -1552,14 +1616,13 @@ badge. It cannot let anybody vote twice, read a sealed result, or reach a poll
 they hold no link to; the server decides all three from the key it is shown,
 on every call.
 
-Two details make it work across both ways into a poll. A question is recorded
-**under every name it goes by** — the share token the public route knows it
-by, and the poll id the creator's page does — because the two pages draw the
-same strip from different halves of the same question, and `open_poll_view`
-returns the id beside the view so both are always to hand. And a record is
-**erased as well as written**: a creator who clears the poll's votes leaves a
-browser holding a ballot that no longer exists, so a read that comes back *not
-voted* takes the record with it rather than letting a stale tick outlive it.
+A record is **erased as well as written**: a creator who clears the poll's
+votes leaves a browser holding a ballot that no longer exists, so a read that
+comes back *not voted* takes the record with it rather than letting a stale
+tick outlive it. It is keyed by poll id, which is all a question has — it used
+to take two entries, the share token the public route knew a question by and
+the poll id the creator's page knew it by, and it does not any more for the
+same reason those two pages are now one address.
 
 What this costs, knowingly: nobody can tell whether the six people who
 answered question 2 are among the eight who answered question 1. That is an
@@ -1697,13 +1760,13 @@ question's half — what it asks and the ballot answering it — is replaced**,
 and shows `QuestionSkeleton` until the read for *this* question lands.
 
 Each page draws the line with one value. `PublicPoll` holds its read as
-`{ token, view }` rather than a bare view, so `view` is that pair only when
-the token matches the address and `shell` falls back to the last read of a
-*sibling* question — established by the strip's own list holding both tokens.
+`{ pollId, view }` rather than a bare view, so `view` is that pair only when
+the id matches the address and `shell` falls back to the last read of a
+*sibling* question — established by the strip's own list holding both ids.
 `PollDetail` keeps `loadedFor` beside its state and gates on `showing`. Both
 fall back to the whole-page skeleton when the address names a poll they hold
 no group for, which is a page load rather than a crossing. `open_poll_group`
-answers the same list for every token in a group, so crossing between them
+answers the same list for every question in a group, so crossing between them
 also costs no request at all.
 
 ### Telling people the results are ready
@@ -2077,19 +2140,27 @@ explain, which would move the tie-break out from under the explanation. A file
 has neither problem, and a sample poll is content: it belongs with the page
 that links to it.
 
-The generator pins what would otherwise churn — option ids, poll ids, group
-ids and the closing timestamp are all derived from the share token — so
-regenerating the file produces a diff only where the poll actually changed.
+The generator pins what would otherwise churn — option ids, group ids and the
+closing timestamp are all derived from the readable name each question is
+recorded under, and the poll ids simply *are* that name — so regenerating the
+file produces a diff only where the poll actually changed.
 
 #### How the pages know
 
-They do not. `PublicPoll` renders a sample token exactly as it renders a share
-token, because every open-poll call goes through `openPollRpc` in
+They do not. `PublicPoll` renders a sample id exactly as it renders a real
+one, because every open-poll call goes through `openPollRpc` in
 [`src/lib/samplePoll.ts`](src/lib/samplePoll.ts) and that function is the only
-thing in the app that can tell them apart. A real share token is 32 hex digits,
-so the `sample-` prefix cannot collide with one — which is also why the tokens
-are words rather than hex: these two links are meant to be read in an address
-bar and said out loud.
+thing in the app that can tell them apart. A real poll id is a v4 UUID, so the
+`sample-` prefix cannot collide with one — which is also why the sample's ids
+are words: a poll's id is its link, and these two links are meant to be read in
+an address bar and said out loud. They are ids the `polls` table would refuse,
+which is safe precisely because the sample never reaches it.
+
+`scripts/sample-poll.sql` therefore keeps a `sample.link` table of its own for
+the length of a run, standing in for the `public_token` column that used to
+hold those words. The poll is built and voted through the real functions
+against real uuids; the readable name is substituted into the recorded text
+afterwards, which is where the ids were already being made deterministic.
 
 Three consequences worth knowing:
 

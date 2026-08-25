@@ -18,7 +18,11 @@
  * but it is a promise that changed, not one that was always this.
  *
  * Scoped per poll rather than one id per browser, so it can't be used to
- * link the same person's votes across different polls.
+ * link the same person's votes across different polls -- and, since a
+ * question of a multi-question poll is a poll of its own, not across the
+ * questions of one either. It was keyed by the share token before there was
+ * one address per poll, which came to the same thing: a token reached one
+ * ballot, and so does an id.
  */
 
 const memoryKeys = new Map<string, string>()
@@ -30,8 +34,8 @@ function randomKey(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-export function voterKeyFor(token: string): string {
-  const storageKey = `star-voting:voter-key:${token}`
+export function voterKeyFor(pollId: string): string {
+  const storageKey = `star-voting:voter-key:${pollId}`
 
   try {
     const existing = localStorage.getItem(storageKey)

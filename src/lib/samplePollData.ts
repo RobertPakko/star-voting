@@ -14,7 +14,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
   'sample-host': {
     view: {
       poll: {
-        id: '98ae3358-7cf4-2df2-08fc-0fb867f4819a',
+        id: 'sample-host',
         mode: 'open',
         title: 'Movie night',
         group_id: '340edd82-ab8f-bbe4-8a89-c65f8d87c1f8',
@@ -33,21 +33,21 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: 'cf21e76f-bd55-7bc3-2aa9-ccdf4b469f43',
           name: "Ana's place",
-          poll_id: '98ae3358-7cf4-2df2-08fc-0fb867f4819a',
+          poll_id: 'sample-host',
           sort_order: 0,
           description: null,
         },
         {
           id: '052db122-d5b8-0bf6-af46-bf8b3295fd0c',
           name: "Ben's loft",
-          poll_id: '98ae3358-7cf4-2df2-08fc-0fb867f4819a',
+          poll_id: 'sample-host',
           sort_order: 1,
           description: null,
         },
         {
           id: 'e03670fc-7afb-25e2-7cf8-8c8833df9270',
           name: "Chloe's basement",
-          poll_id: '98ae3358-7cf4-2df2-08fc-0fb867f4819a',
+          poll_id: 'sample-host',
           sort_order: 2,
           description: null,
         },
@@ -61,17 +61,17 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     },
     group: [
       {
-        token: 'sample-host',
+        id: 'sample-host',
         question_title: "Who's hosting?",
         question_position: 1,
       },
       {
-        token: 'sample-dinner',
+        id: 'sample-dinner',
         question_title: 'What are we eating?',
         question_position: 2,
       },
       {
-        token: 'sample-movie',
+        id: 'sample-movie',
         question_title: 'What are we watching?',
         question_position: 3,
       },
@@ -80,7 +80,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
   'sample-movie': {
     view: {
       poll: {
-        id: '40f094c1-ca35-31c9-f556-10829d059f9a',
+        id: 'sample-movie',
         mode: 'open',
         title: 'Movie night',
         group_id: '340edd82-ab8f-bbe4-8a89-c65f8d87c1f8',
@@ -99,7 +99,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: 'd11848b2-a3e8-f3ca-64c4-e26a6df68d69',
           name: 'Knives Out',
-          poll_id: '40f094c1-ca35-31c9-f556-10829d059f9a',
+          poll_id: 'sample-movie',
           sort_order: 0,
           description:
             'When renowned crime novelist Harlan Thrombey is found dead at his estate just after his 85th birthday, the inquisitive and debonair Detective Benoit Blanc is mysteriously enlisted to investigate.',
@@ -107,7 +107,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: 'e2ebadef-98e8-958d-5afe-b63f4609a8e6',
           name: 'Spirited Away',
-          poll_id: '40f094c1-ca35-31c9-f556-10829d059f9a',
+          poll_id: 'sample-movie',
           sort_order: 1,
           description:
             "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts.",
@@ -115,7 +115,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '652fb1be-f52f-fd5a-6334-9f662e8b06d8',
           name: 'The Matrix',
-          poll_id: '40f094c1-ca35-31c9-f556-10829d059f9a',
+          poll_id: 'sample-movie',
           sort_order: 2,
           description:
             'A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI.',
@@ -123,7 +123,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: 'ef43c5ae-50c3-03cd-8c14-64b05146386c',
           name: 'Paddington 2',
-          poll_id: '40f094c1-ca35-31c9-f556-10829d059f9a',
+          poll_id: 'sample-movie',
           sort_order: 3,
           description:
             "Paddington, now happily settled with the Brown family and a popular member of the local community, picks up a series of odd jobs to buy the perfect present for his Aunt Lucy's 100th birthday, only for the gift to be stolen.",
@@ -131,7 +131,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '37d6bbad-38b0-2277-0c21-53a78cf0bb06',
           name: 'Whatever is trending',
-          poll_id: '40f094c1-ca35-31c9-f556-10829d059f9a',
+          poll_id: 'sample-movie',
           sort_order: 4,
           description:
             'Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George.',
@@ -139,7 +139,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '02e60972-37c3-14cd-31ad-01bb9d14fd78',
           name: 'Honeyland',
-          poll_id: '40f094c1-ca35-31c9-f556-10829d059f9a',
+          poll_id: 'sample-movie',
           sort_order: 5,
           description:
             'The last female bee-hunter in Europe must save the bees and return the natural balance in Honeyland, when a family of nomadic beekeepers invade her land and threaten her livelihood.',
@@ -154,17 +154,17 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     },
     group: [
       {
-        token: 'sample-host',
+        id: 'sample-host',
         question_title: "Who's hosting?",
         question_position: 1,
       },
       {
-        token: 'sample-dinner',
+        id: 'sample-dinner',
         question_title: 'What are we eating?',
         question_position: 2,
       },
       {
-        token: 'sample-movie',
+        id: 'sample-movie',
         question_title: 'What are we watching?',
         question_position: 3,
       },
@@ -173,7 +173,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
   'sample-dinner': {
     view: {
       poll: {
-        id: 'c425892f-38b1-0996-18b2-7f46cc3a2cf2',
+        id: 'sample-dinner',
         mode: 'open',
         title: 'Movie night',
         group_id: '340edd82-ab8f-bbe4-8a89-c65f8d87c1f8',
@@ -192,28 +192,28 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '343e0cd9-9e1f-cf6a-5101-3253a606ffd1',
           name: 'Two big pizzas',
-          poll_id: 'c425892f-38b1-0996-18b2-7f46cc3a2cf2',
+          poll_id: 'sample-dinner',
           sort_order: 0,
           description: 'One pepperoni, one cheese.',
         },
         {
           id: '3ff039b5-b8d6-2e21-1287-53d822ac75e4',
           name: 'Taco bar',
-          poll_id: 'c425892f-38b1-0996-18b2-7f46cc3a2cf2',
+          poll_id: 'sample-dinner',
           sort_order: 1,
           description: 'Build your own tacos!',
         },
         {
           id: '0a7f809d-87fc-6495-6647-d1d9466a9f08',
           name: 'Everyone brings a dish',
-          poll_id: 'c425892f-38b1-0996-18b2-7f46cc3a2cf2',
+          poll_id: 'sample-dinner',
           sort_order: 2,
           description: null,
         },
         {
           id: 'd91bca7c-f67d-9ef3-6a92-574491877abf',
           name: 'Thai delivery',
-          poll_id: 'c425892f-38b1-0996-18b2-7f46cc3a2cf2',
+          poll_id: 'sample-dinner',
           sort_order: 3,
           description:
             'Will take like 40 minutes to get here, we can have an intermission rather than eating beforehand.',
@@ -221,7 +221,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '6c8662c9-4ebf-ba0a-3c23-aff1c720152f',
           name: 'Just snacks',
-          poll_id: 'c425892f-38b1-0996-18b2-7f46cc3a2cf2',
+          poll_id: 'sample-dinner',
           sort_order: 4,
           description: 'Popcorn, chips, whatever.',
         },
@@ -235,17 +235,17 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     },
     group: [
       {
-        token: 'sample-host',
+        id: 'sample-host',
         question_title: "Who's hosting?",
         question_position: 1,
       },
       {
-        token: 'sample-dinner',
+        id: 'sample-dinner',
         question_title: 'What are we eating?',
         question_position: 2,
       },
       {
-        token: 'sample-movie',
+        id: 'sample-movie',
         question_title: 'What are we watching?',
         question_position: 3,
       },
@@ -254,11 +254,11 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
   'sample-result-host': {
     view: {
       poll: {
-        id: '7bca0c9b-195e-01e0-ac77-af052ffe3e5d',
+        id: 'sample-result-host',
         mode: 'open',
         title: 'Movie night',
         group_id: '7e523dbb-5277-a3f2-8787-50d8c915bb57',
-        closed_at: '2026-02-13T13:37:00-08:00',
+        closed_at: '2026-02-13T21:37:00+00:00',
         description:
           'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
         show_voters: true,
@@ -273,21 +273,21 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: 'f3932a5d-fc0a-f630-a10e-b8d9c998eeea',
           name: "Ana's place",
-          poll_id: '7bca0c9b-195e-01e0-ac77-af052ffe3e5d',
+          poll_id: 'sample-result-host',
           sort_order: 0,
           description: null,
         },
         {
           id: '8ba9f494-f35f-991b-5eba-425e9244c504',
           name: "Ben's loft",
-          poll_id: '7bca0c9b-195e-01e0-ac77-af052ffe3e5d',
+          poll_id: 'sample-result-host',
           sort_order: 1,
           description: null,
         },
         {
           id: '2d668a54-9c3a-4f35-71ff-730c9ed75e0e',
           name: "Chloe's basement",
-          poll_id: '7bca0c9b-195e-01e0-ac77-af052ffe3e5d',
+          poll_id: 'sample-result-host',
           sort_order: 2,
           description: null,
         },
@@ -301,17 +301,17 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     },
     group: [
       {
-        token: 'sample-result-host',
+        id: 'sample-result-host',
         question_title: "Who's hosting?",
         question_position: 1,
       },
       {
-        token: 'sample-result-dinner',
+        id: 'sample-result-dinner',
         question_title: 'What are we eating?',
         question_position: 2,
       },
       {
-        token: 'sample-result-movie',
+        id: 'sample-result-movie',
         question_title: 'What are we watching?',
         question_position: 3,
       },
@@ -507,11 +507,11 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
   'sample-result-movie': {
     view: {
       poll: {
-        id: 'ab828afc-5a42-ec89-93ee-74ca5fe8f8f9',
+        id: 'sample-result-movie',
         mode: 'open',
         title: 'Movie night',
         group_id: '7e523dbb-5277-a3f2-8787-50d8c915bb57',
-        closed_at: '2026-02-13T13:37:00-08:00',
+        closed_at: '2026-02-13T21:37:00+00:00',
         description:
           'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
         show_voters: true,
@@ -526,7 +526,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
           name: 'Knives Out',
-          poll_id: 'ab828afc-5a42-ec89-93ee-74ca5fe8f8f9',
+          poll_id: 'sample-result-movie',
           sort_order: 0,
           description:
             'When renowned crime novelist Harlan Thrombey is found dead at his estate just after his 85th birthday, the inquisitive and debonair Detective Benoit Blanc is mysteriously enlisted to investigate.',
@@ -534,7 +534,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
           name: 'Spirited Away',
-          poll_id: 'ab828afc-5a42-ec89-93ee-74ca5fe8f8f9',
+          poll_id: 'sample-result-movie',
           sort_order: 1,
           description:
             "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts.",
@@ -542,7 +542,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
           name: 'The Matrix',
-          poll_id: 'ab828afc-5a42-ec89-93ee-74ca5fe8f8f9',
+          poll_id: 'sample-result-movie',
           sort_order: 2,
           description:
             'A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI.',
@@ -550,7 +550,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
           name: 'Paddington 2',
-          poll_id: 'ab828afc-5a42-ec89-93ee-74ca5fe8f8f9',
+          poll_id: 'sample-result-movie',
           sort_order: 3,
           description:
             "Paddington, now happily settled with the Brown family and a popular member of the local community, picks up a series of odd jobs to buy the perfect present for his Aunt Lucy's 100th birthday, only for the gift to be stolen.",
@@ -558,7 +558,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
           name: 'Whatever is trending',
-          poll_id: 'ab828afc-5a42-ec89-93ee-74ca5fe8f8f9',
+          poll_id: 'sample-result-movie',
           sort_order: 4,
           description:
             'Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George.',
@@ -566,7 +566,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '39a0de7f-1759-b30e-263f-30c1cb117e16',
           name: 'Honeyland',
-          poll_id: 'ab828afc-5a42-ec89-93ee-74ca5fe8f8f9',
+          poll_id: 'sample-result-movie',
           sort_order: 5,
           description:
             'The last female bee-hunter in Europe must save the bees and return the natural balance in Honeyland, when a family of nomadic beekeepers invade her land and threaten her livelihood.',
@@ -581,17 +581,17 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     },
     group: [
       {
-        token: 'sample-result-host',
+        id: 'sample-result-host',
         question_title: "Who's hosting?",
         question_position: 1,
       },
       {
-        token: 'sample-result-dinner',
+        id: 'sample-result-dinner',
         question_title: 'What are we eating?',
         question_position: 2,
       },
       {
-        token: 'sample-result-movie',
+        id: 'sample-result-movie',
         question_title: 'What are we watching?',
         question_position: 3,
       },
@@ -1181,11 +1181,11 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
   'sample-result-dinner': {
     view: {
       poll: {
-        id: 'b6b4ad33-467c-2caf-24bf-84f8cf19a938',
+        id: 'sample-result-dinner',
         mode: 'open',
         title: 'Movie night',
         group_id: '7e523dbb-5277-a3f2-8787-50d8c915bb57',
-        closed_at: '2026-02-13T13:37:00-08:00',
+        closed_at: '2026-02-13T21:37:00+00:00',
         description:
           'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
         show_voters: true,
@@ -1200,28 +1200,28 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '366ce86b-5939-fbb4-8407-df63fd2c4aca',
           name: 'Two big pizzas',
-          poll_id: 'b6b4ad33-467c-2caf-24bf-84f8cf19a938',
+          poll_id: 'sample-result-dinner',
           sort_order: 0,
           description: 'One pepperoni, one cheese.',
         },
         {
           id: 'd14066b2-1042-18f5-9a47-ce68843ef18c',
           name: 'Taco bar',
-          poll_id: 'b6b4ad33-467c-2caf-24bf-84f8cf19a938',
+          poll_id: 'sample-result-dinner',
           sort_order: 1,
           description: 'Build your own tacos!',
         },
         {
           id: 'b5b174ab-85ae-0fe4-da06-05c3e04186e0',
           name: 'Everyone brings a dish',
-          poll_id: 'b6b4ad33-467c-2caf-24bf-84f8cf19a938',
+          poll_id: 'sample-result-dinner',
           sort_order: 2,
           description: null,
         },
         {
           id: '33b51896-f06b-3ce0-c3e8-6299859b60ce',
           name: 'Thai delivery',
-          poll_id: 'b6b4ad33-467c-2caf-24bf-84f8cf19a938',
+          poll_id: 'sample-result-dinner',
           sort_order: 3,
           description:
             'Will take like 40 minutes to get here, we can have an intermission rather than eating beforehand.',
@@ -1229,7 +1229,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b',
           name: 'Just snacks',
-          poll_id: 'b6b4ad33-467c-2caf-24bf-84f8cf19a938',
+          poll_id: 'sample-result-dinner',
           sort_order: 4,
           description: 'Popcorn, chips, whatever.',
         },
@@ -1243,17 +1243,17 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     },
     group: [
       {
-        token: 'sample-result-host',
+        id: 'sample-result-host',
         question_title: "Who's hosting?",
         question_position: 1,
       },
       {
-        token: 'sample-result-dinner',
+        id: 'sample-result-dinner',
         question_title: 'What are we eating?',
         question_position: 2,
       },
       {
-        token: 'sample-result-movie',
+        id: 'sample-result-movie',
         question_title: 'What are we watching?',
         question_position: 3,
       },

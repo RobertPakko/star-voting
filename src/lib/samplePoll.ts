@@ -28,13 +28,13 @@ import type {
  * change the ballots in `scripts/sample-poll.sql` and rerun the script and the
  * page follows.
  *
- * The pages themselves know none of this. `PublicPoll` renders a sample token
- * exactly as it renders a share token, because every open-poll read goes
+ * The pages themselves know none of this. `PublicPoll` renders a sample id
+ * exactly as it renders a real one, because every open-poll read goes
  * through `openPollRpc` below and it is the only thing that can tell them
  * apart.
  */
 
-/** The three questions of one copy of the sample, keyed by share token. */
+/** The three questions of one copy of the sample, keyed by poll id. */
 export interface SampleQuestion {
   view: OpenPollView
   group: OpenGroupQuestion[]
@@ -47,17 +47,19 @@ export interface SampleQuestion {
 export type SamplePayloads = Record<string, SampleQuestion>
 
 /** Question 1 of each copy: where the About page's two links point. */
-export const SAMPLE_POLL_TOKEN = 'sample-host'
-export const SAMPLE_RESULT_TOKEN = 'sample-result-host'
+export const SAMPLE_POLL_ID = 'sample-host'
+export const SAMPLE_RESULT_ID = 'sample-result-host'
 
 /**
- * A real share token is 32 hex digits (see `insert_poll_row`), so nothing the
- * database can mint begins with this and no poll can be shadowed by the
- * sample. It is also why the tokens are words: the sample's links are meant to
- * be read in the address bar and pasted into a talk.
+ * A real poll id is a v4 UUID, so nothing the database can mint begins with
+ * this and no poll can be shadowed by the sample. It is also why the sample's
+ * ids are words: a poll's id is its link now, and the sample's links are meant
+ * to be read in the address bar and pasted into a talk. They are ids that the
+ * `polls` table would refuse, which is safe because the sample never reaches
+ * it -- see `openPollRpc` below, the one thing that can tell them apart.
  */
-export function isSampleToken(token: string): boolean {
-  return token.startsWith('sample-')
+export function isSampleId(pollId: string): boolean {
+  return pollId.startsWith('sample-')
 }
 
 /**
@@ -71,7 +73,7 @@ export interface RpcAnswer {
 }
 
 interface OpenPollArgs {
-  p_token: string
+  p_poll_id: string
   p_voter_key?: string
   p_scores?: { candidate_id: string; score: number }[]
   p_voter_name?: string | null
@@ -86,20 +88,20 @@ interface OpenPollArgs {
  * readers never open the sample at all.
  */
 export function openPollRpc(fn: string, args: OpenPollArgs): PromiseLike<RpcAnswer> {
-  if (!isSampleToken(args.p_token)) return supabase.rpc(fn, args)
+  if (!isSampleId(args.p_poll_id)) return supabase.rpc(fn, args)
   return import('./samplePollData').then(({ SAMPLE_PAYLOADS }) => answer(SAMPLE_PAYLOADS, fn, args))
 }
 
 function answer(payloads: SamplePayloads, fn: string, args: OpenPollArgs): RpcAnswer {
-  const question = payloads[args.p_token]
+  const question = payloads[args.p_poll_id]
 
-  // The same message a mistyped share link gets from the server, because a
+  // The same message a mistyped link gets from the server, because a
   // mistyped sample link is the same mistake.
   if (!question) return failed('Poll not found')
 
   switch (fn) {
     case 'open_poll_view':
-      return ok(withYourBallot(question.view, args.p_token))
+      return ok(withYourBallot(question.view, args.p_poll_id))
     case 'open_poll_group':
       return ok(question.group)
     case 'open_poll_results':
@@ -155,8 +157,8 @@ function castLocally(question: SampleQuestion, args: OpenPollArgs): RpcAnswer {
   for (const { candidate_id, score } of args.p_scores ?? []) scores[candidate_id] = score
 
   const ballots = storedBallots()
-  const existing = ballots[args.p_token]
-  ballots[args.p_token] = {
+  const existing = ballots[args.p_poll_id]
+  ballots[args.p_poll_id] = {
     // A revision keeps the name given when the ballot went in, which is what
     // open_poll_revise does: it takes no name at all.
     name: existing ? existing.name : (args.p_voter_name ?? null),
@@ -179,8 +181,8 @@ function castLocally(question: SampleQuestion, args: OpenPollArgs): RpcAnswer {
  * the three fields `open_poll_view` fills in for whoever presents the voter
  * key that cast one, plus the two counts that a ballot moves.
  */
-function withYourBallot(view: OpenPollView, token: string): OpenPollView {
-  const ballot = storedBallots()[token]
+function withYourBallot(view: OpenPollView, pollId: string): OpenPollView {
+  const ballot = storedBallots()[pollId]
   if (!ballot) return view
 
   return {

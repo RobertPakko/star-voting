@@ -62,43 +62,45 @@ begin
     'Poll not found');
 end $$;
 
--- An open poll, read by share token.
+-- An open poll, read by its id -- which is its link.
 do $$
 declare
   v_poll uuid;
-  v_token text;
   v_scores jsonb;
 begin
   perform tests.sign_in('creator@example.com');
   v_poll := create_poll('Movie night', null,
                         array['Dune', 'Arrival', 'Solaris'],
                         array[]::text[], 'open', true, true);
-  select public_token into v_token from polls where id = v_poll;
 
   select jsonb_agg(jsonb_build_object(
            'candidate_id', id,
            'score', case name when 'Dune' then 5 when 'Arrival' then 3 else 1 end))
   into v_scores from candidates where poll_id = v_poll;
-  perform open_poll_submit(v_token, v_scores, 'voter-key-1', 'Robin');
+  perform open_poll_submit(v_poll, v_scores, 'voter-key-1', 'Robin');
 
   perform tests.assert_raises('an open poll shows no tally until it closes',
-    format('select open_poll_results(%L)', v_token),
+    format('select open_poll_results(%L)', v_poll),
     'Results are not available until the poll is closed');
   perform tests.assert_raises('and no ranking either',
-    format('select open_poll_ranking(%L)', v_token),
+    format('select open_poll_ranking(%L)', v_poll),
     'Results are not available until the poll is closed');
 
-  perform tests.assert_raises('a token that opens nothing gets nothing',
-    'select open_poll_ranking(''not-a-token'')',
+  -- A well-formed id for no poll, rather than a string that is not an id at
+  -- all: the parameter is a uuid now, so anything else is refused by the type
+  -- before the function has an opinion, and the case worth covering is the
+  -- one an attacker can actually present.
+  perform tests.assert_raises('an id that opens nothing gets nothing',
+    format('select open_poll_ranking(%L)', gen_random_uuid()),
     'Poll not found');
 
   perform close_poll(v_poll);
 
   perform tests.assert_eq('a closed one ranks its whole field',
-    jsonb_array_length(open_poll_ranking(v_token)), 3);
+    jsonb_array_length(open_poll_ranking(v_poll)), 3);
   perform tests.assert_eq('agreeing with its own tally about the winner',
-    tests.placed_at(open_poll_ranking(v_token), 1),
-    array[tests.winner(open_poll_results(v_token))]);
+    tests.placed_at(open_poll_ranking(v_poll), 1),
+    array[tests.winner(open_poll_results(v_poll))]);
 end $$;
 
 -- A poll nobody voted in has no ranking to give, and says so the way the

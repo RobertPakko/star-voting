@@ -12,9 +12,9 @@ import { voters } from '../lib/plural'
 /**
  * Which ranking endpoint to read. Same split as ResultsSource and
  * BallotsSource, and for the same reason: a session proves the caller's
- * right to an invite poll, the share token proves it for an open one.
+ * right to an invite poll, the link proves it for an open one.
  */
-export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'token'; token: string }
+export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
 /**
  * The whole field in placed order, behind a button.
@@ -45,7 +45,7 @@ export function FullRanking({ source, results }: { source: RankingSource; result
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
-  const key = source.kind === 'poll' ? source.pollId : source.token
+  const key = source.pollId
   const rpc = kind === 'poll' ? 'get_poll_ranking' : 'open_poll_ranking'
 
   const [ranking, setRanking] = useState<RankingEntry[] | null>(
@@ -73,7 +73,7 @@ export function FullRanking({ source, results }: { source: RankingSource; result
     const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
         ? supabase.rpc('get_poll_ranking', { p_poll_id: key })
-        : openPollRpc('open_poll_ranking', { p_token: key })
+        : openPollRpc('open_poll_ranking', { p_poll_id: key })
 
     request.then(({ data, error: rpcError }) => {
       // Remembered whether or not this component still wants it: the answer

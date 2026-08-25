@@ -24,9 +24,9 @@ import { voters } from '../lib/plural'
 /**
  * Which tally endpoint to read. Both return the same shape; the split is
  * only about how the caller proves it's allowed to see it: a session for
- * invite polls, the share token for open ones.
+ * invite polls, the poll's own link for open ones.
  */
-export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'token'; token: string }
+export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
 /**
  * File the option this tally elected under its poll, for the state badge
@@ -67,7 +67,7 @@ export function Results({
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
-  const key = source.kind === 'poll' ? source.pollId : source.token
+  const key = source.pollId
   const rpc = kind === 'poll' ? 'get_poll_results' : 'open_poll_results'
 
   // A tally this tab has already been given, rendered without a request and
@@ -94,7 +94,7 @@ export function Results({
     const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
         ? supabase.rpc('get_poll_results', { p_poll_id: key })
-        : openPollRpc('open_poll_results', { p_token: key })
+        : openPollRpc('open_poll_results', { p_poll_id: key })
 
     request.then(({ data, error: rpcError }) => {
       // Remembered whether or not this component still wants it: the answer

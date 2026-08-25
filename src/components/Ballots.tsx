@@ -9,9 +9,9 @@ import type { BallotSheet } from '../lib/types'
 /**
  * Which ballot endpoint to read. Same split as ResultsSource, and for the
  * same reason: a session proves the caller's right to an invite poll, the
- * share token proves it for an open one.
+ * link proves it for an open one.
  */
-export type BallotsSource = { kind: 'poll'; pollId: string } | { kind: 'token'; token: string }
+export type BallotsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
 /**
  * Every ballot in the poll, so the tally can be checked rather than trusted.
@@ -27,7 +27,7 @@ export function Ballots({ source }: { source: BallotsSource }) {
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
-  const key = source.kind === 'poll' ? source.pollId : source.token
+  const key = source.pollId
   const rpc = kind === 'poll' ? 'poll_ballots' : 'open_poll_ballots'
 
   // Ballots unlock on the same terms as the results and are as final: the
@@ -50,7 +50,7 @@ export function Ballots({ source }: { source: BallotsSource }) {
     const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
         ? supabase.rpc('poll_ballots', { p_poll_id: key })
-        : openPollRpc('open_poll_ballots', { p_token: key })
+        : openPollRpc('open_poll_ballots', { p_poll_id: key })
 
     request.then(({ data, error: rpcError }) => {
       if (!rpcError) remember(rpc, key, data)

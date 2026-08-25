@@ -13,7 +13,7 @@ import type { PollOption } from '../lib/types'
  *
  * The first two are the suggestion path, and are the same split as
  * ResultsSource and BallotsSource for the same reason: a session proves the
- * caller belongs to an invite poll, the share token proves it for an open
+ * caller belongs to an invite poll, the link proves it for an open
  * one. `creator` is the other path entirely; the poll's own creator
  * correcting a list that is already a ballot, on a poll nobody has voted in
  * yet. See 0028_creator_edits_options.sql for why that is allowed and where
@@ -21,7 +21,7 @@ import type { PollOption } from '../lib/types'
  */
 export type OptionsSource =
   | { kind: 'poll'; pollId: string }
-  | { kind: 'token'; token: string }
+  | { kind: 'open'; pollId: string }
   | { kind: 'creator'; pollId: string }
 
 /**
@@ -142,7 +142,7 @@ export function CollectOptions({
         ? await supabase.rpc('suggest_option', { p_poll_id: source.pollId, ...body })
         : source.kind === 'creator'
           ? await supabase.rpc('creator_add_option', { p_poll_id: source.pollId, ...body })
-          : await supabase.rpc('open_poll_suggest_option', { p_token: source.token, ...body })
+          : await supabase.rpc('open_poll_suggest_option', { p_poll_id: source.pollId, ...body })
     setBusy(false)
 
     if (rpcError) {

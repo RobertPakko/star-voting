@@ -26,7 +26,17 @@ import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
 import type { GroupQuestion, OpenPollView, Poll, PollOption, PollStatus } from '../lib/types'
 
-export function PollDetail() {
+/**
+ * A poll read as an account: the creator's own, or one they were invited to.
+ *
+ * It is reached through `PollPage`, which hands every poll address to this
+ * first and falls back to the public reading when this says it cannot see the
+ * poll. That is what `onUnreadable` is for, and why the failure is reported
+ * rather than drawn: an open poll's link now goes to the same address for
+ * everybody, so "no row came back" no longer means "no such poll" -- it means
+ * this reader is not in the poll, which for an open one is no obstacle at all.
+ */
+export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   const { pollId } = useParams<{ pollId: string }>()
   const { session } = useAuth()
   const navigate = useNavigate()
@@ -93,11 +103,20 @@ export function PollDetail() {
     setError(null)
 
     const [pollRes, optionsRes, statusRes, groupRes] = await Promise.all([
-      supabase.from('polls').select('*').eq('id', pollId).single(),
+      supabase.from('polls').select('*').eq('id', pollId).maybeSingle(),
       supabase.from('candidates').select('*').eq('poll_id', pollId).order('sort_order'),
       supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
       supabase.rpc('poll_group', { p_poll_id: pollId }),
     ])
+
+    // No row and no error is row-level security answering precisely: the poll
+    // exists or it does not, but either way it is not this account's to read.
+    // `PollPage` takes it from here -- an open poll is readable by anyone
+    // holding the link, and this reader is holding it.
+    if (!pollRes.error && !pollRes.data) {
+      onUnreadable()
+      return true
+    }
 
     if (pollRes.error || statusRes.error) {
       setError((pollRes.error ?? statusRes.error)!.message)
@@ -114,10 +133,10 @@ export function PollDetail() {
     // no strip is a poll of one question — which every poll was until now.
     setQuestions(groupRes.error ? [] : ((groupRes.data as GroupQuestion[]) ?? []))
 
-    if (loaded.mode === 'open' && loaded.public_token) {
+    if (loaded.mode === 'open') {
       const { data, error: viewError } = await supabase.rpc('open_poll_view', {
-        p_token: loaded.public_token,
-        p_voter_key: voterKeyFor(loaded.public_token),
+        p_poll_id: loaded.id,
+        p_voter_key: voterKeyFor(loaded.id),
       })
       if (viewError) {
         setError(viewError.message)
@@ -126,11 +145,11 @@ export function PollDetail() {
       }
       const openView = data as OpenPollView
       setView(openView)
-      // Under both names this question goes by: the id this page reads it
-      // under and the token the public route does, so a question answered
-      // through the share link is marked here and the other way round.
-      if (openView.voted) rememberAnswered(loaded.id, loaded.public_token)
-      else forgetAnswered(loaded.id, loaded.public_token)
+      // The public reading of this same question is at this same address and
+      // marks the same entry, so a question answered either way is marked
+      // both ways without either page knowing about the other.
+      if (openView.voted) rememberAnswered(loaded.id)
+      else forgetAnswered(loaded.id)
       setAnswered(answeredQuestions())
     }
 
@@ -138,7 +157,7 @@ export function PollDetail() {
     setLoadedFor(pollId)
     setLoading(false)
     return true
-  }, [pollId])
+  }, [pollId, onUnreadable])
 
   // Whether this page has to re-read the option list on the live tick. Open
   // polls get theirs inside open_poll_view, so this is about invite polls.
@@ -163,11 +182,11 @@ export function PollDetail() {
     // asks at the same moment this does and the two agree on screen.
     setLiveTick((t) => t + 1)
 
-    const token = poll?.mode === 'open' ? poll.public_token : null
+    const openId = poll?.mode === 'open' ? poll.id : null
     const [statusRes, viewRes, optionsRes] = await Promise.all([
       supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
-      token
-        ? supabase.rpc('open_poll_view', { p_token: token, p_voter_key: voterKeyFor(token) })
+      openId
+        ? supabase.rpc('open_poll_view', { p_poll_id: openId, p_voter_key: voterKeyFor(openId) })
         : null,
       optionsMayMove
         ? supabase.from('candidates').select('*').eq('poll_id', pollId).order('sort_order')
@@ -189,7 +208,7 @@ export function PollDetail() {
     // allowed to have missed: an option list that arrives one signal late
     // costs nothing, and a poll can only be waiting on one of them anyway.
     return !statusRes.error
-  }, [pollId, poll?.mode, poll?.public_token, optionsMayMove])
+  }, [pollId, poll?.mode, poll?.id, optionsMayMove])
 
   // What a signal on this poll means, which depends on whether this page has
   // ever read it: the whole poll the first time, and only the parts that can
@@ -317,7 +336,7 @@ export function PollDetail() {
         // This path does not re-read the question being left, so nothing else
         // will record the ballot that was just cast; the strip on the page
         // being opened needs it recorded to mark this question behind them.
-        if (isOpen) rememberAnswered(poll.id, poll.public_token)
+        if (isOpen) rememberAnswered(poll.id)
         navigate(`/polls/${onwards}`)
       }
     : undefined
@@ -416,7 +435,7 @@ export function PollDetail() {
               // leaves a half-filled ballot inside the panel alone.
               <OpenPollPanel
                 key={refreshKey}
-                token={poll.public_token!}
+                pollId={poll.id}
                 view={view}
                 isCreator={isCreator}
                 onChanged={load}

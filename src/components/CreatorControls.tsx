@@ -38,7 +38,7 @@ export function CreatorControls({
   onEditOptions,
   onChange,
 }: {
-  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token' | 'closed_at' | 'group_id'>
+  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'closed_at' | 'group_id'>
   status: PollStatus
   /** How many options the poll holds: the floor "Open poll" has to clear. */
   optionCount: number
@@ -84,7 +84,7 @@ export function CreatorControls({
     // also the one thing that has to throw away what the browser remembered
     // about it; the tally, the ballot grid and the elected option. See
     // lib/settled.ts for what that cache does and does not promise.
-    forgetPoll(pollId, poll.public_token)
+    forgetPoll(pollId)
     notifications.show({ message: 'Votes cleared', color: 'green' })
     onChange()
   }
@@ -139,7 +139,7 @@ export function CreatorControls({
       return
     }
     // Nothing left to remember it by.
-    forgetPoll(pollId, poll.public_token)
+    forgetPoll(pollId)
     notifications.show({ message: 'Poll deleted', color: 'green' })
     navigate('/')
   }

@@ -19,12 +19,12 @@
  * link to. The server decides all three, on every call, from the key it is
  * shown.
  *
- * **A question is recorded under every name it goes by.** The public route
- * knows a question by its share token, the creator's own poll page knows the
- * same question by its poll id, and both draw the same strip; writing both
- * on every read is what lets either page answer for a question the other one
- * visited. `open_poll_view` returns the poll id alongside the view and the
- * creator's page holds the token, so both are always to hand.
+ * **A question is recorded by its poll id**, which is the only name it has:
+ * the public page and the creator's own page reach the same question at the
+ * same address, so a question answered on either is marked on both. This used
+ * to take two entries per ballot -- the share token the public route knew a
+ * question by, and the poll id the creator's page knew it by -- and it does
+ * not any more, for the same reason the two pages are now one address.
  *
  * It is also kept honest rather than only appended to: a creator who clears
  * a poll's votes leaves this browser holding a ballot that no longer exists,
@@ -77,23 +77,15 @@ export function answeredQuestions(): ReadonlySet<string> {
   return new Set(stored())
 }
 
-/**
- * Record a ballot against every name the question goes by; see the note
- * above on why there are two. Nulls are passed through so a caller can hand
- * over a token that a poll may not have without checking first.
- */
-export function rememberAnswered(...ids: (string | null | undefined)[]) {
-  const adding = ids.filter((id): id is string => !!id)
-  if (adding.length === 0) return
-  const kept = stored().filter((id) => !adding.includes(id))
-  persist([...kept, ...adding])
+/** Record that a ballot of this browser's is in for this question. */
+export function rememberAnswered(pollId: string) {
+  const kept = stored().filter((id) => id !== pollId)
+  persist([...kept, pollId])
 }
 
-/** Forget one, under every name: the ballot it stood for is gone. */
-export function forgetAnswered(...ids: (string | null | undefined)[]) {
-  const dropping = ids.filter((id): id is string => !!id)
-  if (dropping.length === 0) return
+/** Forget one: the ballot it stood for is gone. */
+export function forgetAnswered(pollId: string) {
   const before = stored()
-  const kept = before.filter((id) => !dropping.includes(id))
+  const kept = before.filter((id) => id !== pollId)
   if (kept.length !== before.length) persist(kept)
 }

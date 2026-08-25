@@ -9,15 +9,21 @@ function appRoot(): string {
 }
 
 /**
- * Open polls link to the tokenized public route; that link IS the
- * capability. Invite polls link to the ordinary poll page: the recipient
- * still has to sign in and still has to be on the invite list, so the link
- * is a convenience, not access.
+ * One address per poll, whoever is reading it.
+ *
+ * There used to be two: open polls lived at `#/p/<share token>` and invite
+ * polls at `#/polls/<id>`, so an open poll's creator was looking at an
+ * address that was not the one to hand out -- copying what was in front of
+ * them sent the recipient to a sign-in screen and then to "poll not found".
+ * The share token is gone and a poll's id is its link, so this is the same
+ * string for both modes and for both sides of the poll.
+ *
+ * What the link grants still differs sharply, and that is a fact about the
+ * poll rather than about the URL: an open poll's link is the capability, and
+ * an invite poll's is a convenience, since the recipient must still sign in
+ * and still be on the list. `ShareLink` says which in so many words.
  */
-export function shareLinkFor(poll: Pick<Poll, 'id' | 'mode' | 'public_token'>): string {
-  if (poll.mode === 'open' && poll.public_token) {
-    return `${appRoot()}#/p/${poll.public_token}`
-  }
+export function shareLinkFor(poll: Pick<Poll, 'id'>): string {
   return `${appRoot()}#/polls/${poll.id}`
 }
 

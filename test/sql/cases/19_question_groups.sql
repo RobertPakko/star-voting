@@ -225,8 +225,6 @@ begin;
 do $$
 declare
   v_questions uuid[];
-  v_t1 text;
-  v_t2 text;
   v_group jsonb;
   v_view jsonb;
 begin
@@ -237,19 +235,15 @@ begin
     ],
     array[]::text[], 'Lunch', 'open');
 
-  select public_token into v_t1 from polls where id = v_questions[1];
-  select public_token into v_t2 from polls where id = v_questions[2];
-
-  perform tests.assert_eq('every question gets its own share token',
-    (select count(distinct public_token)::int from polls where id = any(v_questions)), 2);
-
-  -- Holding one token reaches the rest of the poll; that is what makes the
-  -- next question reachable from a link to the first.
-  v_group := open_poll_group(v_t1);
-  perform tests.assert_eq('one token reaches every question',
+  -- Holding one question's link reaches the rest of the poll; that is what
+  -- makes the next question reachable from a link to the first. Every
+  -- question is a poll row of its own, so its link is its own id and the
+  -- distinctness the old share tokens had to be checked for comes free.
+  v_group := open_poll_group(v_questions[1]);
+  perform tests.assert_eq('one question reaches every question',
     jsonb_array_length(v_group), 2);
-  perform tests.assert_eq('and hands back the next one''s token',
-    v_group -> 1 ->> 'token', v_t2);
+  perform tests.assert_eq('and hands back the next one''s id',
+    v_group -> 1 ->> 'id', v_questions[2]::text);
   perform tests.assert_eq('with what it asks',
     v_group -> 1 ->> 'question_title', 'What time?');
 
@@ -260,8 +254,8 @@ begin
 
   -- ---- voting question by question ----------------------------------------
 
-  perform open_poll_submit(v_t1, tests.open_scores(v_questions[1], array[5, 0]), 'key-a-1', 'Ada');
-  perform open_poll_submit(v_t2, tests.open_scores(v_questions[2], array[0, 5]), 'key-a-2', 'Ada');
+  perform open_poll_submit(v_questions[1], tests.open_scores(v_questions[1], array[5, 0]), 'key-a-1', 'Ada');
+  perform open_poll_submit(v_questions[2], tests.open_scores(v_questions[2], array[0, 5]), 'key-a-2', 'Ada');
 
   perform tests.assert_eq('a ballot lands on the question it was cast in',
     (select count(*)::int from ballots where poll_id = v_questions[1]), 1);
@@ -270,16 +264,16 @@ begin
   -- the questions are separate polls and nothing joins one ballot to the next.
   perform tests.assert_raises('one ballot per question, per key',
     format('select open_poll_submit(%L, %s, %L, %L)',
-           v_t1, quote_literal(tests.open_scores(v_questions[1], array[1, 1])) || '::jsonb',
+           v_questions[1], quote_literal(tests.open_scores(v_questions[1], array[1, 1])) || '::jsonb',
            'key-a-1', 'Ada'),
     'You have already voted in this poll');
 
-  perform open_poll_submit(v_t1, tests.open_scores(v_questions[1], array[0, 5]), 'key-b-1', 'Bo');
-  perform open_poll_submit(v_t1, tests.open_scores(v_questions[1], array[4, 1]), 'key-c-1', 'Cy');
+  perform open_poll_submit(v_questions[1], tests.open_scores(v_questions[1], array[0, 5]), 'key-b-1', 'Bo');
+  perform open_poll_submit(v_questions[1], tests.open_scores(v_questions[1], array[4, 1]), 'key-c-1', 'Cy');
 
   -- ---- the reveal still waits for the whole poll ---------------------------
 
-  v_view := open_poll_view(v_t1, 'key-a-1');
+  v_view := open_poll_view(v_questions[1], 'key-a-1');
   perform tests.assert_eq('a question of an open poll stays sealed while it is open',
     (v_view ->> 'results_available')::boolean, false);
   perform tests.assert_eq('and knows which question it is',
@@ -290,7 +284,7 @@ begin
   perform tests.sign_in('creator@example.com');
   perform close_poll(v_questions[2]);
 
-  v_view := open_poll_view(v_t1, 'key-a-1');
+  v_view := open_poll_view(v_questions[1], 'key-a-1');
   perform tests.assert_eq('closing from any question opens all of them',
     (v_view ->> 'results_available')::boolean, true);
 

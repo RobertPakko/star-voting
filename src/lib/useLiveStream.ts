@@ -336,21 +336,19 @@ export function useLiveStream(
   return status
 }
 
-/** The topic a poll is announced on, for a page that knows the poll's id. */
+/**
+ * The topic a poll is announced on.
+ *
+ * One topic, for every page that watches the poll. There were two until a
+ * poll's id became its link: the same poll was announced under its id and
+ * again under its share token, because somebody arriving on `/p/:token` did
+ * not learn the id until they had read the poll once — and reading it once
+ * before subscribing is exactly what the second topic existed to avoid. A
+ * voter now arrives holding the id, so there is nothing left to bridge and
+ * `broadcast_poll_change` sends one message where it sent two.
+ */
 export function pollTopic(pollId: string): string {
   return `poll:${pollId}`
-}
-
-/**
- * The topic a poll is announced on, for a page that holds only a share link.
- *
- * The same poll is announced twice, under its id and under its token, because
- * somebody arriving on `/p/:token` does not learn the poll's id until they
- * have read it once — and reading it once is what this exists to avoid having
- * to do before subscribing.
- */
-export function shareTopic(token: string): string {
-  return `poll:${token}`
 }
 
 /**

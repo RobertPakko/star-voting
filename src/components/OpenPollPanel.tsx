@@ -15,12 +15,13 @@ import { StarRating } from './StarRating'
 import type { OpenPollView, PollOption } from '../lib/types'
 
 /**
- * The whole voting experience for an open poll, driven by the share token.
+ * The whole voting experience for an open poll, driven by the poll's id --
+ * which, on an open poll, is the link.
  *
- * Used twice: on the public /p/:token route for people who never sign in,
- * and inside the creator's own poll page so they can vote in their own poll
- * without going through the link. Both go through the same anon-callable
- * RPCs, so there is one code path and one set of rules.
+ * Used twice: for people who never sign in, and inside the creator's own
+ * poll page so they can vote in their own poll without going through the
+ * link. Both go through the same anon-callable RPCs, so there is one code
+ * path and one set of rules.
  *
  * It covers every stage an open poll can be in, because every one of them
  * is reached through the same link: collecting options, taking votes, and
@@ -34,13 +35,13 @@ import type { OpenPollView, PollOption } from '../lib/types'
  * The page owns the poll; this renders it and reports a vote back.
  */
 export function OpenPollPanel({
-  token,
+  pollId,
   view,
   isCreator = false,
   onChanged,
   onFirstVote,
 }: {
-  token: string
+  pollId: string
   view: OpenPollView
   /** Creators see participation before voting; see where it's rendered. */
   isCreator?: boolean
@@ -66,7 +67,7 @@ export function OpenPollPanel({
   if (view.soliciting) {
     return (
       <CollectOptions
-        source={{ kind: 'token', token }}
+        source={{ kind: 'open', pollId }}
         options={view.options}
         isCreator={isCreator}
         footer={
@@ -105,11 +106,11 @@ export function OpenPollPanel({
   if (view.results_available) {
     return (
       <Stack gap="lg">
-        <Results source={{ kind: 'token', token }} pollId={view.poll.id} />
+        <Results source={{ kind: 'open', pollId }} pollId={view.poll.id} />
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}
-        {view.poll.show_ballots && <Ballots source={{ kind: 'token', token }} />}
+        {view.poll.show_ballots && <Ballots source={{ kind: 'open', pollId }} />}
       </Stack>
     )
   }
@@ -131,10 +132,10 @@ export function OpenPollPanel({
   return (
     <Stack gap="md">
       {view.voted ? (
-        <Voted token={token} view={view} isCreator={isCreator} onRevised={onChanged} />
+        <Voted pollId={pollId} view={view} isCreator={isCreator} onRevised={onChanged} />
       ) : (
         <OpenBallot
-          token={token}
+          pollId={pollId}
           options={view.options}
           needsName={view.poll.show_voters}
           showBallots={view.poll.show_ballots}
@@ -159,12 +160,12 @@ export function OpenPollPanel({
  * which is the same window `open_poll_revise` will accept a change in.
  */
 function Voted({
-  token,
+  pollId,
   view,
   isCreator,
   onRevised,
 }: {
-  token: string
+  pollId: string
   view: OpenPollView
   isCreator: boolean
   /** A changed ballot went in: the page re-reads the poll. */
@@ -180,7 +181,7 @@ function Voted({
   if (revising && scores) {
     return (
       <OpenBallot
-        token={token}
+        pollId={pollId}
         options={view.options}
         needsName={false}
         showBallots={view.poll.show_ballots}
@@ -259,14 +260,14 @@ function VoterList({ voters }: { voters: string[]; final: boolean }) {
  * only part of that ballot nobody has seen.
  */
 function OpenBallot({
-  token,
+  pollId,
   options,
   needsName,
   initial,
   onVoted,
   onCancel,
 }: {
-  token: string
+  pollId: string
   options: PollOption[]
   needsName: boolean
   showBallots: boolean
@@ -332,14 +333,14 @@ function OpenBallot({
     const scores = ballot.map((o) => ({ candidate_id: o.id, score: values[o.id] ?? 0 }))
     const { error: rpcError } = revising
       ? await openPollRpc('open_poll_revise', {
-          p_token: token,
+          p_poll_id: pollId,
           p_scores: scores,
-          p_voter_key: voterKeyFor(token),
+          p_voter_key: voterKeyFor(pollId),
         })
       : await openPollRpc('open_poll_submit', {
-          p_token: token,
+          p_poll_id: pollId,
           p_scores: scores,
-          p_voter_key: voterKeyFor(token),
+          p_voter_key: voterKeyFor(pollId),
           p_voter_name: needsName ? trimmedName : null,
         })
     setSubmitting(false)

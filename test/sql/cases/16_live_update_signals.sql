@@ -25,7 +25,6 @@ declare
   v_open uuid;
   v_old uuid;
   v_questions uuid[];
-  v_token text;
   v_scores jsonb;
 begin
   perform tests.sign_in('creator@example.com');
@@ -206,35 +205,37 @@ begin
     tests.signals(tests.user_topic('creator@example.com')), 1);
 
   -- ------------------------------------------------------------------
-  -- An open poll is announced twice, because it is watched from two sides:
-  -- its creator has the id, and everyone holding the link has only the
-  -- token. Announcing the token is what lets the public page subscribe
-  -- before its first read instead of after it.
+  -- An open poll is announced once, on the poll's own topic, because both
+  -- sides watching it hold the same thing: the link to an open poll is its
+  -- id. It used to be announced twice -- once under the id for its creator
+  -- and once under the share token for everyone holding the link, who could
+  -- not know the id until they had read the poll once. There is nothing left
+  -- to bridge, so the second message is gone rather than merely unread.
   -- ------------------------------------------------------------------
 
   v_open := create_poll('Movie night', null, array['Dune', 'Arrival'],
                         array[]::text[], 'open', true, false);
-  select public_token into v_token from polls where id = v_open;
 
   select jsonb_agg(jsonb_build_object('candidate_id', id, 'score', 4))
   into v_scores from candidates where poll_id = v_open;
 
   perform tests.forget_signals();
-  perform open_poll_submit(v_token, v_scores, 'voter-key-1', 'Ada');
+  perform open_poll_submit(v_open, v_scores, 'voter-key-1', 'Ada');
 
-  perform tests.assert_eq('a vote through the link reaches the page holding the id',
+  perform tests.assert_eq('a vote through the link reaches the poll''s topic',
     tests.signals(tests.poll_topic(v_open)), 1);
-  perform tests.assert_eq('and the page holding only the link',
-    tests.signals('poll:' || v_token), 1);
+  perform tests.assert_eq('and reaches the creator''s list, and nothing else',
+    tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_open),
+      tests.user_topic('creator@example.com')]));
 
   -- Nobody is invited to an open poll, so the only list it is on is its
   -- creator's -- the voters holding the link have no account and no list.
   perform tests.forget_signals();
   perform close_poll(v_open);
-  perform tests.assert_eq('closing it reaches both as well',
+  perform tests.assert_eq('closing it reaches the poll and its creator''s list',
     tests.signalled(), tests.sorted(array[
       tests.poll_topic(v_open),
-      'poll:' || v_token,
       tests.user_topic('creator@example.com')]));
 
   -- ------------------------------------------------------------------

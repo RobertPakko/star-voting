@@ -84,7 +84,7 @@ begin
                         array[]::text[], 'open', true, false);
 
   perform open_poll_submit(
-    (select public_token from polls where id = v_open),
+    v_open,
     tests.open_scores(v_open, array[5, 2]),
     'voter-key-1', 'Robin');
 

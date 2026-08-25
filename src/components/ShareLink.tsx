@@ -26,11 +26,7 @@ import { ShareQr } from './ShareQr'
  * block and inside the open-poll thank-you card, both of which already have
  * a surface.
  */
-export function ShareLink({
-  poll,
-}: {
-  poll: Pick<Poll, 'id' | 'title' | 'mode' | 'public_token' | 'closed_at'>
-}) {
+export function ShareLink({ poll }: { poll: Pick<Poll, 'id' | 'title' | 'mode' | 'closed_at'> }) {
   const url = shareLinkFor(poll)
   const isOpen = poll.mode === 'open'
   // The label sits outside the field now, so the two need an id between them

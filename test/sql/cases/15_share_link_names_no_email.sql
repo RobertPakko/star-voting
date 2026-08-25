@@ -16,7 +16,6 @@ begin;
 do $$
 declare
   v_poll uuid;
-  v_token text;
   v_scores jsonb;
   v_view jsonb;
 begin
@@ -24,9 +23,8 @@ begin
 
   v_poll := create_poll('Movie night', 'Pick one', array['Dune', 'Arrival'],
                         array[]::text[], 'open', true, true);
-  select public_token into v_token from polls where id = v_poll;
 
-  v_view := open_poll_view(v_token);
+  v_view := open_poll_view(v_poll);
   perform tests.assert_null('the link does not name who made the poll',
     v_view -> 'poll' ->> 'created_by_email');
   perform tests.assert_eq('though it says everything else about its terms',
@@ -37,9 +35,9 @@ begin
   select jsonb_agg(jsonb_build_object('candidate_id', id,
                                       'score', case when name = 'Dune' then 5 else 1 end))
   into v_scores from candidates where poll_id = v_poll;
-  perform open_poll_submit(v_token, v_scores, 'voter-key-1', 'Robin');
+  perform open_poll_submit(v_poll, v_scores, 'voter-key-1', 'Robin');
 
-  v_view := open_poll_view(v_token);
+  v_view := open_poll_view(v_poll);
   perform tests.assert_eq('a named voter is named by what they typed',
     v_view -> 'voters' ->> 0, 'Robin');
   perform tests.assert_null('and the creator is still not named at all',
@@ -48,9 +46,9 @@ begin
   -- Nor once the poll is over and the whole tally is public.
   perform close_poll(v_poll);
   perform tests.assert_eq('the results are out',
-    (open_poll_view(v_token) ->> 'results_available')::boolean, true);
+    (open_poll_view(v_poll) ->> 'results_available')::boolean, true);
   perform tests.assert_null('and name nobody either',
-    open_poll_view(v_token) -> 'poll' ->> 'created_by_email');
+    open_poll_view(v_poll) -> 'poll' ->> 'created_by_email');
 end $$;
 
 rollback;

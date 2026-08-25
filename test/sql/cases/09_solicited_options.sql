@@ -14,7 +14,6 @@ declare
   v_poll uuid;
   v_fixed uuid;
   v_open uuid;
-  v_token text;
   v_scores jsonb;
 begin
   perform tests.sign_in('creator@example.com');
@@ -116,33 +115,31 @@ begin
 
   v_open := create_poll('Movie night', null, array[]::text[], array[]::text[],
                         'open', false, false, null, true);
-  select public_token into v_token from polls where id = v_open;
-
-  perform open_poll_suggest_option(v_token, 'Dune');
-  perform open_poll_suggest_option(v_token, 'Arrival', 'the good one');
+  perform open_poll_suggest_option(v_open, 'Dune');
+  perform open_poll_suggest_option(v_open, 'Arrival', 'the good one');
 
   perform tests.assert_eq('an open poll collects options through its link',
     (select count(*)::int from candidates where poll_id = v_open), 2);
   perform tests.assert_eq('and says so in the view its voters read',
-    (open_poll_view(v_token) ->> 'soliciting')::boolean, true);
+    (open_poll_view(v_open) ->> 'soliciting')::boolean, true);
   perform tests.assert_raises('a suggestion is a label, not an essay',
-    format('select open_poll_suggest_option(%L, %L)', v_token, repeat('x', 151)),
+    format('select open_poll_suggest_option(%L, %L)', v_open, repeat('x', 151)),
     'too long');
 
   select jsonb_agg(jsonb_build_object('candidate_id', id, 'score', 5))
   into v_scores from candidates where poll_id = v_open;
 
   perform tests.assert_raises('nobody votes in it until the list is settled',
-    format('select open_poll_submit(%L, %L::jsonb, %L)', v_token, v_scores, 'voter-key-1'),
+    format('select open_poll_submit(%L, %L::jsonb, %L)', v_open, v_scores, 'voter-key-1'),
     'still collecting options');
 
   perform finalize_options(v_open);
-  perform open_poll_submit(v_token, v_scores, 'voter-key-1');
+  perform open_poll_submit(v_open, v_scores, 'voter-key-1');
 
   perform tests.assert_eq('then it votes like any other open poll',
-    (open_poll_view(v_token) ->> 'voted_count')::int, 1);
+    (open_poll_view(v_open) ->> 'voted_count')::int, 1);
   perform tests.assert_eq('and has stopped collecting',
-    (open_poll_view(v_token) ->> 'soliciting')::boolean, false);
+    (open_poll_view(v_open) ->> 'soliciting')::boolean, false);
 end $$;
 
 rollback;

@@ -106,17 +106,17 @@ export function subscribeWinners(listener: () => void): () => void {
  * Forget everything about a poll, because it is no longer the poll that was
  * cached; it was reset, or deleted outright.
  *
- * Takes the share token as well as the id: an open poll's tally is fetched
- * through the token by the same page that resets it through the id, and
- * clearing one while leaving the other would leave the creator's own copy of
- * their own poll stale in exactly the place they are looking.
+ * One id clears the lot. It used to take the share token as well, because an
+ * open poll's tally was fetched under the token by the same page that reset
+ * it under the id, so clearing one left the other stale in exactly the place
+ * the creator was looking. A poll has one identifier now, and the two entries
+ * it can hold -- the participant's tally and the open one -- differ by which
+ * RPC answered rather than by what was asked about.
  */
-export function forgetPoll(pollId: string, token?: string | null): void {
+export function forgetPoll(pollId: string): void {
   winners.delete(pollId)
   for (const key of responses.keys()) {
-    if (key.endsWith(`:${pollId}`) || (token && key.endsWith(`:${token}`))) {
-      responses.delete(key)
-    }
+    if (key.endsWith(`:${pollId}`)) responses.delete(key)
   }
   // A badge naming an option that this poll no longer elected has to stop
   // saying so now, not on whatever re-render happens next.

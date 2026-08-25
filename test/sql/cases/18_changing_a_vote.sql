@@ -21,7 +21,6 @@ declare
   v_other uuid;
   v_closed uuid;
   v_open uuid;
-  v_token text;
   v_pizza uuid;
   v_sushi uuid;
   v_tacos uuid;
@@ -258,33 +257,32 @@ begin
   perform tests.sign_in('creator@example.com');
   v_open := create_poll('Film night', null, array['Alien', 'Aliens'],
                         null, 'open', true, false);
-  select public_token into v_token from polls where id = v_open;
 
   select id into v_pizza from candidates where poll_id = v_open and name = 'Alien';
   select id into v_sushi from candidates where poll_id = v_open and name = 'Aliens';
 
-  perform open_poll_submit(v_token, jsonb_build_array(
+  perform open_poll_submit(v_open, jsonb_build_array(
     jsonb_build_object('candidate_id', v_pizza, 'score', 5),
     jsonb_build_object('candidate_id', v_sushi, 'score', 1)), 'key-a', 'Ada');
 
-  v_view := open_poll_view(v_token, 'key-a');
+  v_view := open_poll_view(v_open, 'key-a');
   perform tests.assert_eq('the link hands a voter their own ballot back',
     v_view -> 'your_scores',
     jsonb_build_object(v_pizza::text, 5, v_sushi::text, 1));
 
   -- A json null rather than a missing key, like `your_name` beside it: the
   -- shape of the answer does not depend on who is asking.
-  v_view := open_poll_view(v_token, 'key-b');
+  v_view := open_poll_view(v_open, 'key-b');
   perform tests.assert_eq('and hands nobody else one',
     v_view -> 'your_scores', 'null'::jsonb);
 
   perform tests.forget_signals();
 
-  perform open_poll_revise(v_token, jsonb_build_array(
+  perform open_poll_revise(v_open, jsonb_build_array(
     jsonb_build_object('candidate_id', v_pizza, 'score', 2),
     jsonb_build_object('candidate_id', v_sushi, 'score', 5)), 'key-a');
 
-  v_view := open_poll_view(v_token, 'key-a');
+  v_view := open_poll_view(v_open, 'key-a');
   perform tests.assert_eq('a revision through the link replaces the scores',
     v_view -> 'your_scores',
     jsonb_build_object(v_pizza::text, 2, v_sushi::text, 5));
@@ -299,14 +297,14 @@ begin
     tests.signalled(), array[]::text[]);
 
   perform tests.assert_raises('a key that cast no ballot has none to change',
-    format('select open_poll_revise(%L, %L::jsonb, %L)', v_token,
+    format('select open_poll_revise(%L, %L::jsonb, %L)', v_open,
       jsonb_build_array(
         jsonb_build_object('candidate_id', v_pizza, 'score', 5),
         jsonb_build_object('candidate_id', v_sushi, 'score', 5)), 'key-b'),
     'not voted in this poll yet');
 
   perform tests.assert_raises('and no key at all reaches no ballot',
-    format('select open_poll_revise(%L, %L::jsonb, %L)', v_token,
+    format('select open_poll_revise(%L, %L::jsonb, %L)', v_open,
       jsonb_build_array(
         jsonb_build_object('candidate_id', v_pizza, 'score', 5),
         jsonb_build_object('candidate_id', v_sushi, 'score', 5)), '  '),
@@ -318,7 +316,7 @@ begin
   perform close_poll(v_open);
 
   perform tests.assert_raises('closing an open poll ends its revisions',
-    format('select open_poll_revise(%L, %L::jsonb, %L)', v_token,
+    format('select open_poll_revise(%L, %L::jsonb, %L)', v_open,
       jsonb_build_array(
         jsonb_build_object('candidate_id', v_pizza, 'score', 5),
         jsonb_build_object('candidate_id', v_sushi, 'score', 5)), 'key-a'),

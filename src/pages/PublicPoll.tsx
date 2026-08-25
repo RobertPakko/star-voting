@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Stack, Text, Title } from '@mantine/core'
-import { isSampleToken, openPollRpc } from '../lib/samplePoll'
+import { isSampleId, openPollRpc } from '../lib/samplePoll'
 import { voterKeyFor } from '../lib/voterKey'
 import { answeredQuestions, forgetAnswered, rememberAnswered } from '../lib/answeredQuestions'
 import { nextUnansweredKey } from '../lib/nextQuestion'
-import { shareTopic, useLiveStream } from '../lib/useLiveStream'
+import { pollTopic, useLiveStream } from '../lib/useLiveStream'
 import { useKnownWinner } from '../lib/useWinner'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
@@ -15,19 +15,32 @@ import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import type { OpenGroupQuestion, OpenPollView } from '../lib/types'
 
 /**
- * The /p/:token route: an open poll seen by someone who is not signed in,
- * and may never be. It renders inside the ordinary app shell: landing here
- * is how plenty of people first meet the site, and the header is what tells
- * them there is a site, with the way to sign in on it.
+ * An open poll as somebody outside it sees it: not signed in, and possibly
+ * never going to be. It renders inside the ordinary app shell, because
+ * landing here is how plenty of people first meet the site and the header is
+ * what tells them there is one, with the way to sign in on it.
+ *
+ * It reads the poll through the anon RPCs and nothing else, so this is also
+ * exactly what a signed-in stranger holding the link can see; `PollPage`
+ * sends them here when the poll is not theirs to read as an account. The
+ * address is the same either way, since a poll's id is its link.
+ *
+ * When even that read fails it says so upward as well as on screen, because
+ * the two readers it can fail for want different things. A signed-in one has
+ * now been refused both ways and the link really is dead, which is what the
+ * card below says. A signed-out one has been told only that the poll is not
+ * public -- it may be an invite poll they are on the list for, which is what
+ * every invitation email links to -- so `PollPage` offers them the sign-in
+ * screen instead of a dead end.
  */
-export function PublicPoll() {
-  const { token } = useParams<{ token: string }>()
+export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
+  const { pollId } = useParams<{ pollId: string }>()
   const navigate = useNavigate()
   // The most recent read, and which question it was of, held as one value so
   // the two cannot drift. A poll of several questions is served by one page
   // whose parameter changes, so "the view" and "the view of what is on screen"
   // are different things for as long as a read is in flight.
-  const [read, setRead] = useState<{ token: string; view: OpenPollView } | null>(null)
+  const [read, setRead] = useState<{ pollId: string; view: OpenPollView } | null>(null)
   const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
   // Which questions of this poll this browser has answered, for the strip's
   // marks. It has to be read into state rather than off storage at render
@@ -36,50 +49,50 @@ export function PublicPoll() {
   // learns the ballot landed. See lib/answeredQuestions.ts for why the
   // browser is the only party that can answer this on an open poll.
   const [answered, setAnswered] = useState<ReadonlySet<string>>(answeredQuestions)
-  const [failed, setFailed] = useState<{ token: string; message: string } | null>(null)
+  const [failed, setFailed] = useState<{ pollId: string; message: string } | null>(null)
   // Which question a read has come back for, so a refresh that fails can be
   // told apart from a first read that did — and told apart per question, since
   // one page serves every question of a poll and a question nobody has read
   // yet is a first read whatever came before it. A ref rather than `read`
   // itself, which would put the poll in load()'s dependencies.
-  const loadedToken = useRef<string | null>(null)
+  const loadedFor = useRef<string | null>(null)
 
   // The whole poll, read once here and handed to the panel below: this page
   // needs the title and the tags, the panel needs everything else, and one
   // copy, re-read on one signal, is what keeps them agreeing.
   const load = useCallback(async () => {
-    if (!token) return true
+    if (!pollId) return true
     const { data, error: rpcError } = await openPollRpc('open_poll_view', {
-      p_token: token,
-      p_voter_key: voterKeyFor(token),
+      p_poll_id: pollId,
+      p_voter_key: voterKeyFor(pollId),
     })
     if (rpcError) {
       // Only a first read that fails says anything about the link. A later
       // one keeps the poll already on screen; turning a page somebody has
       // been voting on into "poll not found" because one request lost a
       // race with a flaky connection would be a lie about their link.
-      if (loadedToken.current !== token) setFailed({ token, message: rpcError.message })
+      if (loadedFor.current !== pollId) {
+        setFailed({ pollId, message: rpcError.message })
+        onUnreadable()
+      }
       return false
     }
-    loadedToken.current = token
+    loadedFor.current = pollId
     const openView = data as OpenPollView
-    setRead({ token, view: openView })
-    // Recorded under both names the question goes by — the token this page
-    // reads it under, and the poll id the creator's own page does — so the
-    // strip is marked whichever page draws it next. Erased rather than only
-    // written: a creator who clears the poll's votes leaves this browser
-    // holding a record of a ballot that no longer exists, and a read that
-    // comes back "not voted" is what says so.
-    if (openView.voted) rememberAnswered(token, openView.poll.id)
-    else forgetAnswered(token, openView.poll.id)
+    setRead({ pollId, view: openView })
+    // Erased rather than only written: a creator who clears the poll's votes
+    // leaves this browser holding a record of a ballot that no longer exists,
+    // and a read that comes back "not voted" is what says so.
+    if (openView.voted) rememberAnswered(pollId)
+    else forgetAnswered(pollId)
     setAnswered(answeredQuestions())
     return true
-  }, [token])
+  }, [pollId, onUnreadable])
 
   // This question's own view. Null while a read for it is still in flight,
   // which is what stops the question being left from rendering under the
   // address of the question being opened.
-  const view = read && read.token === token ? read.view : null
+  const view = read && read.pollId === pollId ? read.view : null
   // The poll around the question, and the reason the two are separated at
   // all. Every question in a group shares the poll's title, its description
   // and its terms, so a read of any of them describes the poll — and the
@@ -88,35 +101,35 @@ export function PublicPoll() {
   // on screen rather than blinking away and back, which is exactly what a
   // reader is doing when they cross between questions: using the strip.
   //
-  // Only within one poll, though: a token this page holds no group for is a
+  // Only within one poll, though: a pollId this page holds no group for is a
   // different poll, and the last poll's heading is not a stand-in for it.
   const sibling =
     read &&
-    questions.some((question) => question.token === read.token) &&
-    questions.some((question) => question.token === token)
+    questions.some((question) => question.id === read.pollId) &&
+    questions.some((question) => question.id === pollId)
       ? read.view
       : null
   const shell = view ?? sibling
-  const error = failed && failed.token === token ? failed.message : null
+  const error = failed && failed.pollId === pollId ? failed.message : null
 
-  // The poll's other questions, with the share token of each. Read once per
+  // The poll's other questions, with the share pollId of each. Read once per
   // poll rather than once per question, and never on the live tick: which
   // questions a poll asks is frozen at creation, and this side has nothing
   // per-reader in it — an open poll's ballots are deliberately not linkable
   // across questions, so there is no "answered" flag here to keep up to date.
-  // See open_poll_group, which answers the same list for every token in the
+  // See open_poll_group, which answers the same list for every pollId in the
   // group; that is what makes crossing between them free, and free is what
   // keeps the strip on screen while it happens.
   const groupId = shell?.poll.group_id
-  const known = questions.some((question) => question.token === token)
+  const known = questions.some((question) => question.id === pollId)
   useEffect(() => {
     if (known) return
-    if (!token || !groupId) {
+    if (!pollId || !groupId) {
       setQuestions([])
       return
     }
     let cancelled = false
-    openPollRpc('open_poll_group', { p_token: token }).then(({ data, error: rpcError }) => {
+    openPollRpc('open_poll_group', { p_poll_id: pollId }).then(({ data, error: rpcError }) => {
       // Swallowed like the winner lookup on the list: a browser running
       // ahead of the migration gets no strip, and a poll with no strip is a
       // poll of one question.
@@ -126,10 +139,10 @@ export function PublicPoll() {
     return () => {
       cancelled = true
     }
-  }, [token, groupId, known])
+  }, [pollId, groupId, known])
 
   // This page can subscribe before it has read anything, because the poll is
-  // announced under its share token as well as under its id and the token is
+  // announced under its share pollId as well as under its id and the pollId is
   // in the URL. That is the whole reason for the second topic: without it
   // this page would have to read the poll to learn its id, and then read it
   // again on subscribing to close the gap in between.
@@ -142,8 +155,8 @@ export function PublicPoll() {
   // nothing on the other end of a subscription to it and nothing that could
   // ever change: it is the one open poll on this page that is never watched.
   const live = !view || (!view.is_closed && !view.results_available)
-  const sample = !!token && isSampleToken(token)
-  const liveStatus = useLiveStream(token ? [shareTopic(token)] : [], load, {
+  const sample = !!pollId && isSampleId(pollId)
+  const liveStatus = useLiveStream(pollId ? [pollTopic(pollId)] : [], load, {
     enabled: live && !sample,
   })
 
@@ -165,7 +178,7 @@ export function PublicPoll() {
   // badge and the poll it sits beside always describe the same question.
   const winner = useKnownWinner(shell?.poll.id)
 
-  if (!token || error) {
+  if (!pollId || error) {
     return (
       <Stack gap="xs" align="center" maw={720} mx="auto">
         <Title order={3}>Poll not found</Title>
@@ -186,12 +199,12 @@ export function PublicPoll() {
   // carried to is by construction one the strip in front of them shows as
   // outstanding rather than one that merely ought to agree.
   const strip = questions.map((question) => ({
-    key: question.token,
+    key: question.id,
     position: question.question_position,
     title: question.question_title,
-    answered: answered.has(question.token),
+    answered: answered.has(question.id),
   }))
-  const onwards = nextUnansweredKey(strip, token)
+  const onwards = nextUnansweredKey(strip, pollId)
 
   return (
     <Stack gap="lg" maw={720} mx="auto">
@@ -243,7 +256,7 @@ export function PublicPoll() {
         }}
       />
 
-      {/* The rest of the poll, reached by the tokens open_poll_group hands
+      {/* The rest of the poll, reached by the pollIds open_poll_group hands
           back to whoever already holds one of them. The marks come out of
           this browser rather than off the server, and that is the design
           rather than a workaround: an open ballot is identified by a key
@@ -251,7 +264,7 @@ export function PublicPoll() {
           to each other, so the server is not asked to undo that for a tick --
           and the browser, which holds every one of those keys already, is
           told to answer for itself. See lib/answeredQuestions.ts. */}
-      <QuestionStrip questions={strip} current={token} hrefFor={(next) => `/p/${next}`} />
+      <QuestionStrip questions={strip} current={pollId} hrefFor={(next) => `/polls/${next}`} />
 
       {/* Everything below the strip belongs to one question rather than to
           the poll, so it is the only part that waits: a crossing keeps the
@@ -274,7 +287,7 @@ export function PublicPoll() {
               is a deliberate trip back to a question already behind them, and
               carrying them forward again would undo it. */}
           <OpenPollPanel
-            token={token}
+            pollId={pollId}
             view={view}
             onChanged={load}
             onFirstVote={
@@ -284,8 +297,8 @@ export function PublicPoll() {
                     // is the one that does not re-read: the page being left
                     // is left at once, and the strip on the page being opened
                     // has to know the ballot went in.
-                    rememberAnswered(token, view.poll.id)
-                    navigate(`/p/${onwards}`)
+                    rememberAnswered(pollId)
+                    navigate(`/polls/${onwards}`)
                   }
                 : undefined
             }

@@ -35,8 +35,6 @@ export interface Poll {
    * creator wrote the options.
    */
   options_finalized_at: string | null
-  /** Set for open polls only; the capability in their share link. */
-  public_token: string | null
   /**
    * The multi-question poll this question belongs to, or null on a poll that
    * asks one question. Every question in a group shares its title,
@@ -58,7 +56,7 @@ export interface Poll {
  *
  * Two shapes for the two ways into a poll, and the difference is not
  * cosmetic. An invited voter is an account, so the server can say which
- * questions they have answered; a voter behind a share link is a `voter_key`
+ * questions they have answered; a voter behind a link is a `voter_key`
  * minted separately for every question precisely so those ballots cannot be
  * joined, and `open_poll_group` will not undo that to fill in a tick. The
  * browser knows its own answers either way.
@@ -79,7 +77,7 @@ export interface GroupQuestion {
 
 /** One question of an open multi-question poll; see GroupQuestion. */
 export interface OpenGroupQuestion {
-  token: string
+  id: string
   question_position: number
   question_title: string
 }
