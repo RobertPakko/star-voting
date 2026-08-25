@@ -43,7 +43,7 @@ export function About() {
   const [tab, setTab] = useState<string | null>('procedure')
 
   return (
-    <Stack gap="md" maw={720} mx="auto">
+    <Stack maw={720} mx="auto" gap="md">
       <Title order={1}>About</Title>
 
       <Text>

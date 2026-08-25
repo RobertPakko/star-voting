@@ -104,7 +104,7 @@ export function FullRanking({ source, results }: { source: RankingSource; result
       </Group>
 
       <Modal opened={opened} onClose={modal.close} title="Full ranking" size="lg" centered>
-        <Stack gap="lg">
+        <Stack gap="md">
           <Text size="sm" c="dimmed">
             STAR names one winner. To order the rest, the method runs again on the options left
             standing: the winner steps out, the two highest scorers remaining go to a runoff for the

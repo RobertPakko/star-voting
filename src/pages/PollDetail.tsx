@@ -347,7 +347,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   const optionList = isOpen ? (view?.options ?? []) : options
 
   return (
-    <Stack maw={640} mx="auto" gap="lg">
+    <Stack maw={720} mx="auto" gap="md">
       <LiveConnectionNotice status={liveStatus} />
 
       {/* The same heading a poll wears on the list it was opened from, down
@@ -396,12 +396,6 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
           navigate. */}
       {showing ? (
         <>
-          {/* What this one question asks, above the ballot that answers it. The
-          heading above carries the poll's title, which every question in the
-          poll shares; this is the part that is only true of this one, so it
-          sits with the options rather than with the poll's terms. */}
-          {poll.question_title && <Title order={3}>{poll.question_title}</Title>}
-
           {/* The creator's correction to an option list that is already a ballot,
           in place of that ballot while it is open. It replaces the ballot
           rather than sitting beside it because they are two readings of one
@@ -459,12 +453,9 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
               onChanged={load}
             />
           ) : status.results_available ? (
-            <Stack gap="lg">
+            <>
               <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />
-              {/* Gated in the database on the same terms as the results, so this
-              condition only decides whether to ask. */}
-              {poll.show_ballots && <Ballots source={{ kind: 'poll', pollId: poll.id }} />}
-            </Stack>
+            </>
           ) : status.is_closed ? (
             <Card withBorder>
               {/* Closing acts on the whole poll, so one question of several can
@@ -519,7 +510,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
           hold. It is also where turnout is reported now that the results
           above it no longer state it themselves. */}
       {!isOpen && (status.voted || isCreator || status.results_available) && (
-        <Stack gap="sm">
+        <Stack gap="xs">
           <Title order={4}>Voters</Title>
           <Respondents
             pollId={poll.id}
@@ -530,6 +521,10 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
             onChange={reloadAll}
           />
         </Stack>
+      )}
+
+      {status.results_available && poll.show_ballots && (
+        <Ballots source={{ kind: 'poll', pollId: poll.id }} />
       )}
 
       {/* The share link is inside Manage poll now; see the note there. */}

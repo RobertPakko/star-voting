@@ -177,7 +177,7 @@ export function CreatorControls({
   const pending = Math.max(0, status.invited_count - status.voted_count)
 
   return (
-    <Stack gap="sm">
+    <Stack gap="xs">
       <Title order={4}>Manage poll</Title>
       <Card withBorder>
         <Stack gap="xs">
@@ -231,7 +231,7 @@ export function CreatorControls({
             )}
             {canReset && (
               <Button variant="light" color="orange" onClick={resetModal.open}>
-                Reset votes
+                Reset
               </Button>
             )}
             {/* Opens the create form prefilled from this poll, so the copy can
@@ -240,7 +240,7 @@ export function CreatorControls({
               Duplicate
             </Button>
             <Button variant="subtle" color="red" onClick={deleteModal.open} ml="auto">
-              Delete poll
+              Delete
             </Button>
           </Group>
         </Stack>
@@ -271,7 +271,7 @@ export function CreatorControls({
                   resetModal.open()
                 }}
               >
-                Reset votes
+                Reset
               </Button>
             </Group>
           </Stack>
@@ -324,7 +324,7 @@ export function CreatorControls({
           </Stack>
         </Modal>
 
-        <Modal opened={resetOpened} onClose={resetModal.close} title="Delete votes?" centered>
+        <Modal opened={resetOpened} onClose={resetModal.close} title="Reset poll?" centered>
           <Stack gap="md">
             <Text size="sm">
               {status.voted_count === 0
@@ -341,8 +341,8 @@ export function CreatorControls({
               <Button variant="default" onClick={resetModal.close}>
                 Cancel
               </Button>
-              <Button color="red" onClick={resetPoll} loading={busy}>
-                Delete votes
+              <Button color="orange" onClick={resetPoll} loading={busy}>
+                Reset poll
               </Button>
             </Group>
           </Stack>

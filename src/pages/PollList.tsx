@@ -194,7 +194,7 @@ export function PollList() {
   if (!polls) return <PollListSkeleton />
 
   return (
-    <Stack gap="lg" maw={720} mx="auto">
+    <Stack maw={720} mx="auto" gap="md">
       <LiveConnectionNotice status={liveStatus} />
 
       <Group justify="space-between">
@@ -210,7 +210,7 @@ export function PollList() {
         </Text>
       )}
 
-      <Stack gap="sm">
+      <Stack gap="md">
         {shown.map((poll) => (
           <Card
             key={poll.id}

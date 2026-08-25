@@ -84,7 +84,7 @@ export function Ballots({ source }: { source: BallotsSource }) {
   )
 
   return (
-    <Stack gap="sm">
+    <Stack gap="xs">
       <Title order={4}>Ballots</Title>
       <Table.ScrollContainer minWidth={120 + sheet.options.length * 90}>
         <Table striped withTableBorder withColumnBorders>

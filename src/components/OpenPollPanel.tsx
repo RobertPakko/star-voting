@@ -105,7 +105,7 @@ export function OpenPollPanel({
 
   if (view.results_available) {
     return (
-      <Stack gap="lg">
+      <Stack gap="md">
         <Results source={{ kind: 'open', pollId }} pollId={view.poll.id} />
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
@@ -202,9 +202,14 @@ function Voted({
         <Group justify="space-between" wrap="wrap" gap="sm">
           <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 220 }}>
             {isCreator
-              ? 'Results are revealed once you close the poll'
-              : "Results are revealed once the poll's creator closes it"}
-            {scores && ', and you can change your vote until then'}
+              ? 'Results are revealed once you close the poll.'
+              : 'Results are revealed once the poll is closed by its creator.'}
+            {scores && (
+              <>
+                <br />
+                You can change your vote until then.
+              </>
+            )}
           </Text>
           {scores && (
             <Button variant="light" onClick={() => setRevising(true)}>
@@ -227,7 +232,7 @@ function Voted({
  */
 function VoterList({ voters }: { voters: string[]; final: boolean }) {
   return (
-    <Stack gap="sm">
+    <Stack gap="xs">
       <Title order={4}>Voters</Title>
       <Card withBorder>
         {voters.length === 0 ? (

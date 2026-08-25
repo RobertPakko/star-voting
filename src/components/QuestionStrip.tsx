@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Anchor, Badge, Card, Group, Stack, Text } from '@mantine/core'
-import { badgeColor, countBadge } from '../lib/badgeColors'
+import { badgeColor } from '../lib/badgeColors'
 
 /**
  * Where you are in a poll that asks more than one question, and how to reach
@@ -93,14 +93,7 @@ export function QuestionStrip({
             const isCurrent = question.key === current
             return isCurrent ? (
               // Filled says which question is open; the hue says whether it
-              // has been answered, exactly as it does on every other badge in
-              // the row. The two are separate claims and the badge used to
-              // make only one of them — the open question was drawn
-              // `outstanding` whether or not a ballot was in it, so answering
-              // the question you were looking at changed nothing you could
-              // see. See lib/badgeColors.ts: a progress colour carries one
-              // meaning everywhere, and "still owed" is not what a question
-              // you have just answered is.
+              // has been answered
               <Badge
                 key={question.key}
                 variant="filled"
@@ -117,9 +110,8 @@ export function QuestionStrip({
                 underline="never"
               >
                 <Badge
-                  {...(question.answered
-                    ? { variant: 'light', color: badgeColor.done }
-                    : countBadge)}
+                  variant="light"
+                  color={question.answered ? badgeColor.done : badgeColor.outstanding}
                   maw={220}
                   style={{ cursor: 'pointer' }}
                 >

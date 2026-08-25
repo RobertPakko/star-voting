@@ -180,7 +180,7 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
 
   if (!pollId || error) {
     return (
-      <Stack gap="xs" align="center" maw={720} mx="auto">
+      <Stack maw={720} mx="auto" gap="md" align="center">
         <Title order={3}>Poll not found</Title>
         <Text c="dimmed" ta="center">
           This link may be mistyped, or the poll may have been deleted.
@@ -207,7 +207,7 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
   const onwards = nextUnansweredKey(strip, pollId)
 
   return (
-    <Stack gap="lg" maw={720} mx="auto">
+    <Stack maw={720} mx="auto" gap="md">
       <LiveConnectionNotice status={liveStatus} />
 
       {/* The same heading the signed-in poll page and the poll list carry,
@@ -272,10 +272,6 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
           whole poll away and back at the moment the strip is being used. */}
       {view ? (
         <>
-          {/* What this question asks; the heading above carries the poll's
-              own title, which every question shares. */}
-          {view.poll.question_title && <Title order={3}>{view.poll.question_title}</Title>}
-
           {/* A first ballot opens the question this voter still owes, in
               place of the card that used to sit at the foot of this page
               offering to. A voter working through a poll of five wants the

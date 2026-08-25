@@ -4,6 +4,7 @@ import {
   ActionIcon,
   Alert,
   Button,
+  Card,
   Checkbox,
   Group,
   SegmentedControl,
@@ -643,18 +644,11 @@ export function CreatePoll() {
           />
         )}
 
-        <Stack gap={2}>
-          <Text fw={500} size="sm">
-            {solicitOptions ? 'Starting options' : 'Options'}
-          </Text>
-          {/* The + is one small icon on a row of them, so it gets one line
-              saying what it is for. Most polls need none. */}
-          <Text size="xs" c="dimmed">
-            {solicitOptions
-              ? 'Voters will be able to add to this list later.'
-              : 'Use + to add a description to an option.'}
-          </Text>
-        </Stack>
+        <Text size="xs" c="dimmed">
+          {solicitOptions
+            ? 'Voters will be able to add to this list later.'
+            : 'Use + to add a description to an option.'}
+        </Text>
 
         {question.options.map((option, index) => (
           <Group key={index} gap="xs" align="flex-start" wrap="nowrap">
@@ -737,9 +731,9 @@ export function CreatePoll() {
           </Button>
           {multiQuestion && (
             <Button
-              variant="subtle"
+              variant="light"
               size="xs"
-              color="red"
+              color="orange"
               onClick={() => removeQuestion(questionIndex)}
               w="fit-content"
               /* Two questions is the floor: below it the poll asks one
@@ -774,101 +768,118 @@ export function CreatePoll() {
 
   return (
     <Stack maw={560} mx="auto" gap="md">
-      <Stack gap={4}>
-        <Title order={2}>{duplicateOf ? 'Duplicate poll' : 'New poll'}</Title>
-      </Stack>
-
-      <TextInput
-        label="Title"
-        placeholder="A title for your poll"
-        value={title}
-        onChange={(e) => setTitle(e.currentTarget.value)}
-        error={shown.title}
-        required
-      />
-      <Textarea
-        label="Description"
-        placeholder="Optional additional details"
-        value={description}
-        onChange={(e) => setDescription(e.currentTarget.value)}
-        error={shown.description}
-        autosize
-        minRows={2}
-      />
+      <Title order={2} ta="center">
+        {duplicateOf ? 'Duplicate poll' : 'New poll'}
+      </Title>
 
       <Stack gap="xs">
-        <Text fw={500} size="sm">
-          Who can vote
-        </Text>
-        <SegmentedControl
-          value={mode}
-          onChange={(v) => setMode(v as PollMode)}
-          data={[
-            { value: 'invite', label: 'Invited people' },
-            { value: 'open', label: 'Anyone with the link' },
-          ]}
+        <Title order={4} id="poll-title-label">
+          Title
+        </Title>
+        <TextInput
+          placeholder="A title for your poll"
+          value={title}
+          onChange={(e) => setTitle(e.currentTarget.value)}
+          aria-labelledby="poll-title-label"
+          error={shown.title}
+          required
         />
-        <Text size="xs" c="dimmed">
-          {isOpen
-            ? 'Anyone with the link can see and vote in the poll.'
-            : 'Voters must sign in with their email. Only addresses on the invite list can see or vote in the poll.'}
-        </Text>
-        {isOpen && (
-          <Alert color="yellow" title="Unauthenticated">
-            <Stack gap={4}>
-              <Text size="sm">People can vote more than once by using multiple browsers.</Text>
-            </Stack>
-          </Alert>
-        )}
-        {!isOpen && (
-          <Stack gap="xs">
-            <TagsInput
-              description="Type an email and press Enter to add it or paste a comma separated list of emails."
-              placeholder="them@example.com"
-              value={emails}
-              onChange={setEmails}
-              error={shown.emails}
-            />
-            <Checkbox
-              label={`Include me as a voter (${myEmail})`}
-              checked={includeSelf}
-              onChange={(e) => setIncludeSelf(e.currentTarget.checked)}
-            />
-          </Stack>
-        )}
       </Stack>
 
-      <Switch
-        checked={showVoters}
-        onChange={(e) => setShowVoters(e.currentTarget.checked)}
-        label="Show who has voted"
-      />
+      <Stack gap="sm">
+        <Title order={4} id="poll-title-description">
+          Description
+        </Title>
+        <Textarea
+          placeholder="Optional additional details"
+          value={description}
+          onChange={(e) => setDescription(e.currentTarget.value)}
+          aria-labelledby="poll-title-description"
+          error={shown.description}
+          autosize
+          minRows={2}
+        />
+      </Stack>
 
-      <Switch
-        checked={showBallots}
-        onChange={(e) => setShowBallots(e.currentTarget.checked)}
-        label="Publish ballots"
-      />
+      <Stack gap="xs">
+        <Title order={4}>Voters</Title>
+        <Card withBorder p="sm">
+          <Stack gap="xs">
+            <SegmentedControl
+              value={mode}
+              onChange={(v) => setMode(v as PollMode)}
+              data={[
+                { value: 'invite', label: 'Invited people' },
+                { value: 'open', label: 'Anyone with the link' },
+              ]}
+            />
+            {isOpen ? (
+              <Alert color="yellow" title="Unauthenticated">
+                <Stack gap={4}>
+                  <Text size="sm">People can vote more than once by using multiple browsers.</Text>
+                </Stack>
+              </Alert>
+            ) : (
+              <>
+                <TagsInput
+                  description="Type an email and press Enter to add it or paste a comma separated list of emails."
+                  placeholder="them@example.com"
+                  value={emails}
+                  onChange={setEmails}
+                  error={shown.emails}
+                />
+                <Checkbox
+                  label={`Include me as a voter (${myEmail})`}
+                  checked={includeSelf}
+                  onChange={(e) => setIncludeSelf(e.currentTarget.checked)}
+                />
+              </>
+            )}
+          </Stack>
+        </Card>
+      </Stack>
 
-      <Switch
-        checked={solicitOptions}
-        onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
-        label="Solicit options from voters"
-      />
+      <Stack gap="xs">
+        <Title order={4}>Configuration</Title>
+        <Card withBorder p="sm">
+          <Stack gap="sm">
+            <Switch
+              checked={showVoters}
+              onChange={(e) => setShowVoters(e.currentTarget.checked)}
+              label={mode === 'invite' ? 'Show voter emails' : 'Show voter names'}
+            />
 
-      <Switch
-        checked={multiQuestion}
-        onChange={(e) => toggleMultiQuestion(e.currentTarget.checked)}
-        label="Multiple questions"
-      />
+            <Switch
+              checked={showBallots}
+              onChange={(e) => setShowBallots(e.currentTarget.checked)}
+              label="Publish ballots"
+            />
 
-      {/* Last, because it is the only part of the form whose shape depends on
+            <Switch
+              checked={solicitOptions}
+              onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
+              label="Solicit options from voters"
+            />
+
+            <Switch
+              checked={multiQuestion}
+              onChange={(e) => toggleMultiQuestion(e.currentTarget.checked)}
+              label="Multiple questions"
+            />
+          </Stack>
+        </Card>
+      </Stack>
+
+      <Stack gap="xs">
+        <Title order={4}>{solicitOptions ? 'Starting options' : 'Options'}</Title>
+        <Card withBorder p="sm">
+          {/* Last, because it is the only part of the form whose shape depends on
           the answers above it: a poll collecting its options can be created
           with none at all, and the rows here become a head start rather than
           the ballot. */}
-      <Stack gap="lg">
-        {multiQuestion ? (
-          /* One question at a time, behind a strip of tabs. Every question
+          <Stack gap="sm">
+            {multiQuestion ? (
+              /* One question at a time, behind a strip of tabs. Every question
              laid out at once was a form that grew with the poll: five
              questions of five options each is fifty fields in one scroll,
              with no way to see the shape of what is being asked, and no way
@@ -883,67 +894,69 @@ export function CreatePoll() {
              something wrong with it says so, because validating a question
              nobody can see is only worth doing if the reader is told where to
              look. */
-          <Tabs value={openQuestion} onChange={openOrAddQuestion} keepMounted={false}>
-            <Tabs.List>
-              {questions.map((question, questionIndex) => (
-                <Tabs.Tab
-                  key={question.key}
-                  value={question.key}
-                  rightSection={
-                    questionHasError(shown, questionIndex) ? (
-                      <Text component="span" c="var(--mantine-color-error)" fw={700} size="sm">
-                        !
-                      </Text>
-                    ) : undefined
-                  }
-                >
-                  {/* The question's own title once it has one, since that is
+              <Tabs value={openQuestion} onChange={openOrAddQuestion} keepMounted={false}>
+                <Tabs.List>
+                  {questions.map((question, questionIndex) => (
+                    <Tabs.Tab
+                      key={question.key}
+                      value={question.key}
+                      rightSection={
+                        questionHasError(shown, questionIndex) ? (
+                          <Text component="span" c="var(--mantine-color-error)" fw={700} size="sm">
+                            !
+                          </Text>
+                        ) : undefined
+                      }
+                    >
+                      {/* The question's own title once it has one, since that is
                       what a creator coming back to it is looking for; its
                       position until then, because "Question 3" is the only
                       name an empty question has. */}
-                  <Text component="span" size="sm" truncate maw={160}>
-                    {question.title.trim() || `Question ${questionIndex + 1}`}
-                  </Text>
-                </Tabs.Tab>
-              ))}
-              {/* Last in the row, where a new tab lands. It is never the open
+                      <Text component="span" size="sm" truncate maw={160}>
+                        {question.title.trim() || `Question ${questionIndex + 1}`}
+                      </Text>
+                    </Tabs.Tab>
+                  ))}
+                  {/* Last in the row, where a new tab lands. It is never the open
                   tab — `openQuestion` is only ever a question's key — so
                   pressing it makes a question and opens that instead, and a
                   selected `+` is a state the strip cannot be in. */}
-              <Tabs.Tab
-                value={ADD_QUESTION}
-                disabled={questions.length >= MAX_QUESTIONS}
-                aria-label="Add a question"
-                title={
-                  questions.length >= MAX_QUESTIONS
-                    ? `A poll can ask ${MAX_QUESTIONS} questions.`
-                    : 'Add a question to this poll'
-                }
-              >
-                +
-              </Tabs.Tab>
-            </Tabs.List>
+                  <Tabs.Tab
+                    value={ADD_QUESTION}
+                    disabled={questions.length >= MAX_QUESTIONS}
+                    aria-label="Add a question"
+                    title={
+                      questions.length >= MAX_QUESTIONS
+                        ? `A poll can ask ${MAX_QUESTIONS} questions.`
+                        : 'Add a question to this poll'
+                    }
+                  >
+                    +
+                  </Tabs.Tab>
+                </Tabs.List>
 
-            {/* Wrong with the poll's list of questions rather than with any
+                {/* Wrong with the poll's list of questions rather than with any
                 one of them, so it sits under the strip rather than in a
                 panel. */}
-            {shown.questions && (
-              <Text c="var(--mantine-color-error)" size="sm" mt="xs">
-                {shown.questions}
-              </Text>
-            )}
+                {shown.questions && (
+                  <Text c="var(--mantine-color-error)" size="sm" mt="xs">
+                    {shown.questions}
+                  </Text>
+                )}
 
-            {questions.map((question, questionIndex) => (
-              <Tabs.Panel key={question.key} value={question.key} pt="md">
-                {questionFields(question, questionIndex)}
-              </Tabs.Panel>
-            ))}
-          </Tabs>
-        ) : (
-          /* One question and no strip at all: the poll's own title names it,
+                {questions.map((question, questionIndex) => (
+                  <Tabs.Panel key={question.key} value={question.key} pt="xs">
+                    {questionFields(question, questionIndex)}
+                  </Tabs.Panel>
+                ))}
+              </Tabs>
+            ) : (
+              /* One question and no strip at all: the poll's own title names it,
              and a single tab is a frame around nothing. */
-          questionFields(questions[0], 0)
-        )}
+              questionFields(questions[0], 0)
+            )}
+          </Stack>
+        </Card>
       </Stack>
 
       {error && (

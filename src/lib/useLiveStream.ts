@@ -37,8 +37,8 @@ const GRACE_MS = 8000
  * re-reads. So this is short and gives up quickly: past that, the honest
  * thing is to stop guessing and tell the reader.
  */
-const RETRY_MS = 3000
-const RETRY_LIMIT = 4
+const RETRY_MS = 5000
+const RETRY_LIMIT = 5
 
 /**
  * How long a page waits for a subscription before reading anyway.
@@ -56,7 +56,7 @@ const RETRY_LIMIT = 4
  * timer creeping back in. A healthy socket subscribes in a fraction of this
  * and cancels it on the way past.
  */
-const FIRST_READ_MS = 3000
+const FIRST_READ_MS = 5000
 
 /**
  * Whether the page in front of the reader is still being told about changes.

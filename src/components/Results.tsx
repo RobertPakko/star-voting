@@ -127,18 +127,7 @@ export function Results({
   const maxScore = Math.max(1, ...results.options.map((o) => o.total_score))
 
   return (
-    <Stack gap="lg">
-      {/* Turnout is reported once, by the participation card below the
-          results, and not again here: the same two numbers stated twice on
-          one screen read as two different facts that happen to agree. What
-          is left is the one thing that card cannot say: that the numbers
-          are smaller than they were going to be. */}
-      {results.closed_early && (
-        <Text size="sm" c="dimmed">
-          Voting was closed early, so these results count the ballots cast up to that point.
-        </Text>
-      )}
-
+    <Stack gap="md">
       {results.winner_id && (
         <Card withBorder bg="var(--mantine-color-green-light)">
           <Text fw={700} size="lg">
@@ -154,7 +143,7 @@ export function Results({
         </Card>
       )}
 
-      <Stack gap="sm">
+      <Stack gap="xs">
         <Title order={4}>Score round</Title>
         <Card withBorder p="sm">
           <Stack gap="xs">
@@ -182,7 +171,7 @@ export function Results({
       </Stack>
 
       {results.tiebreaks.length > 0 && (
-        <Stack gap="sm">
+        <Stack gap="xs">
           <Title order={4}>Tie-break{results.tiebreaks.length > 1 ? 's' : ''}</Title>
           {results.tiebreaks.map((tb, i) => (
             <Card withBorder key={i} p="sm">
@@ -251,7 +240,7 @@ export function Results({
       )}
 
       {results.runoff && results.finalists.length === 2 && (
-        <Stack gap="sm">
+        <Stack gap="xs">
           <Title order={4}>Automatic runoff round</Title>
           <Card withBorder p="sm">
             <Stack gap="xs">
