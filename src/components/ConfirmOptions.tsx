@@ -47,7 +47,6 @@ export type ConfirmSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
 export function ConfirmOptions({
   source,
   confirmed,
-  confirmedName,
   needsName,
   opensWhenEveryoneHas,
   onChanged,
@@ -127,83 +126,47 @@ export function ConfirmOptions({
     onChanged()
   }
 
-  async function undo() {
-    if (busy) return
-    setError(null)
-    setBusy(true)
-    const { error: rpcError } =
-      source.kind === 'poll'
-        ? await supabase.rpc('unconfirm_options', { p_poll_id: source.pollId })
-        : await openPollRpc('open_poll_unconfirm_options', {
-            p_poll_id: source.pollId,
-            p_voter_key: voterKeyFor(source.pollId),
-          })
-    setBusy(false)
-
-    if (rpcError) {
-      setError(rpcError.message)
-      return
-    }
-    notifications.show({ message: 'Confirmation withdrawn', color: 'green' })
-    onChanged()
-  }
-
-  return (
+  return confirmed ? (
+    <></>
+  ) : (
     <Stack gap="xs">
-      {confirmed ? (
-        <Group justify="space-between" wrap="wrap" gap="sm">
-          <Text size="sm" style={{ flex: 1, minWidth: 200 }}>
-            <Badge variant="light" color={badgeColor.done} mr="xs">
-              Confirmed
-            </Badge>
-            {confirmedName
-              ? `You confirmed these options as ${confirmedName}.`
-              : 'You have confirmed these options.'}
-          </Text>
-          <Button variant="subtle" onClick={undo} loading={busy}>
-            Undo
-          </Button>
-        </Group>
-      ) : (
-        <Group justify="space-between" wrap="wrap" gap="sm" align="flex-start">
-          <Stack gap={4} style={{ flex: 1, minWidth: 200 }}>
+      <Group justify="space-between" wrap="wrap" gap="sm" align="flex-end">
+        <Stack gap={4} style={{ flex: 1, minWidth: 200 }}>
+          {needsName ? (
+            <TextInput
+              label="Your name"
+              description="Confirm the options once you have nothing more to add."
+              placeholder="Your name"
+              value={name}
+              onChange={(e) => {
+                setName(e.currentTarget.value)
+                setNameError(null)
+              }}
+              error={nameError}
+              maxLength={VOTER_NAME_MAX}
+              required
+              /* The field stands alone rather than in a form, so Enter has
+                  nothing to submit unless it is given something. */
+              enterKeyHint="done"
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                confirm()
+              }}
+            />
+          ) : (
             <Text size="sm" c="dimmed">
               Confirm the options once you have nothing more to add.
+              {opensWhenEveryoneHas && <br />}
+              {opensWhenEveryoneHas &&
+                'The poll opens for voting as soon as everyone has confirmed.'}
             </Text>
-            {needsName && (
-              <TextInput
-                label="Your name"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => {
-                  setName(e.currentTarget.value)
-                  setNameError(null)
-                }}
-                error={nameError}
-                maxLength={VOTER_NAME_MAX}
-                required
-                /* The field stands alone rather than in a form, so Enter has
-                   nothing to submit unless it is given something. */
-                enterKeyHint="done"
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter') return
-                  e.preventDefault()
-                  confirm()
-                }}
-              />
-            )}
-          </Stack>
-          <Button onClick={confirm} loading={busy}>
-            Confirm options
-          </Button>
-        </Group>
-      )}
-
-      {opensWhenEveryoneHas && (
-        <Text size="xs" c="dimmed">
-          The poll opens for voting as soon as everyone has confirmed.
-        </Text>
-      )}
+          )}
+        </Stack>
+        <Button onClick={confirm} loading={busy}>
+          Confirm options
+        </Button>
+      </Group>
 
       {error && (
         <Text c="red" size="sm">

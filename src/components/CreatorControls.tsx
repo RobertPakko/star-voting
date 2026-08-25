@@ -291,7 +291,7 @@ export function CreatorControls({
             </Text>
             <Text size="sm" c="dimmed">
               Nobody can suggest an option after this. You can still correct the{' '}
-              {questions.length > 0 ? 'lists' : 'list'} yourself, up until the first vote comes in.
+              {questions.length > 0 ? 'lists' : 'list'} yourself until the first vote comes in.
             </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={openModal.close}>
