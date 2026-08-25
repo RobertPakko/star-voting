@@ -1673,19 +1673,38 @@ Advancing replaces the re-read rather than joining it. The page being left is
 left at once, and a read of the question being left would land after the next
 question had loaded.
 
-**Each question is its own page, keyed on its own address.** A question is a
-poll of its own at an address of its own, so moving between two of them
-changes the route's *parameter* and not the route — and React, left alone,
-keeps the component mounted across that and hands it everything it was
-holding. Until the next read came back, the question being left went on
-rendering under the address of the question being opened: the previous
-question's options, or its *your vote is in*, beneath the next question's
-title. `PollDetail` used to undo two pieces of that by hand on the way across.
-`App` now keys both routes on their parameter (`KeyedPublicPoll`,
-`KeyedPollDetail`), which makes the crossing a mount rather than a
-reassignment: the skeleton shows, and nothing of the last question survives
-into the next. That was always true of the strip's *Next* link; it matters
-more now that answering is what crosses.
+**A crossing between two questions replaces the question, not the poll.** A
+question is a poll of its own at an address of its own, so moving between two
+of them changes the route's *parameter* and not the route, and React keeps the
+page mounted across that with everything it was holding. Two opposite mistakes
+are available here and the first draft of this made the second one:
+
+- **Keep it all** and the question being left goes on rendering under the
+  address of the question being opened — the previous question's options, or
+  its *your vote is in*, beneath the next question's title, for as long as the
+  read takes. That is what the page did before auto-advance, and auto-advance
+  turned it from something you saw on the occasional *Next* click into
+  something you saw on every vote.
+- **Throw it all away** — by keying the route on its parameter, so the
+  crossing is a mount — and the question strip goes with it, blinking out and
+  back at the exact moment a reader is using it to navigate. Measurably: two
+  frames, one of them a bare page with no strip at all.
+
+Neither is necessary, because the page is two things and only one of them
+changes. **The poll's own half — the heading, its terms, the strip — is the
+same for every question in the group**, so it stays on screen. **The
+question's half — what it asks and the ballot answering it — is replaced**,
+and shows `QuestionSkeleton` until the read for *this* question lands.
+
+Each page draws the line with one value. `PublicPoll` holds its read as
+`{ token, view }` rather than a bare view, so `view` is that pair only when
+the token matches the address and `shell` falls back to the last read of a
+*sibling* question — established by the strip's own list holding both tokens.
+`PollDetail` keeps `loadedFor` beside its state and gates on `showing`. Both
+fall back to the whole-page skeleton when the address names a poll they hold
+no group for, which is a page load rather than a crossing. `open_poll_group`
+answers the same list for every token in a group, so crossing between them
+also costs no request at all.
 
 ### Telling people the results are ready
 

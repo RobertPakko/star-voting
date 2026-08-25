@@ -57,6 +57,41 @@ export function PollPageSkeleton({ rows = 3 }: { rows?: number }) {
   )
 }
 
+/**
+ * One question of a poll, while the poll around it stays on screen.
+ *
+ * The only stand-in here for part of a page rather than a whole one, and the
+ * reason is that the pages of a multi-question poll are mostly the same page.
+ * The heading, the poll's terms and the question strip belong to the poll
+ * rather than to the question, so they are already right for the question
+ * being opened and stay where they are; this fills the hole underneath them
+ * while that question's own ballot is read. Crossing between two questions
+ * would otherwise blink the whole poll away and back, and a strip that
+ * vanishes at the moment it is being used to navigate is the one part of the
+ * page that must not.
+ *
+ * It claims a title and a row per option, which is what every question has.
+ */
+export function QuestionSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <Loading>
+      <Stack gap="lg">
+        <Skeleton height={22} width="45%" radius="sm" />
+        <Stack gap="md">
+          {Array.from({ length: rows }, (_, i) => (
+            <Card withBorder key={i}>
+              <Group justify="space-between" wrap="nowrap">
+                <Skeleton height={14} width="45%" radius="sm" />
+                <Skeleton height={20} width={110} radius="sm" />
+              </Group>
+            </Card>
+          ))}
+        </Stack>
+      </Stack>
+    </Loading>
+  )
+}
+
 /** The poll list: its heading, its button, and a page of cards. */
 export function PollListSkeleton({ rows = 3 }: { rows?: number }) {
   return (

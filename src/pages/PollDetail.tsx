@@ -19,7 +19,7 @@ import { OptionDescription } from '../components/OptionDescription'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { RetentionNote } from '../components/RetentionNote'
-import { PollPageSkeleton } from '../components/Skeletons'
+import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { StarRating } from '../components/StarRating'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
@@ -50,6 +50,14 @@ export function PollDetail() {
   // carries no account — so the creator's own page had the same unmarked
   // strip the public route did. See lib/answeredQuestions.ts.
   const [answered, setAnswered] = useState<ReadonlySet<string>>(answeredQuestions)
+  // Which question everything above describes. One page serves every question
+  // of a poll and its parameter is what changes between them, so for as long
+  // as a read is in flight "the poll this page holds" and "the poll this page
+  // is showing" are two different questions. What they share — the poll's
+  // title, its terms, the strip of questions — is drawn from what is held;
+  // the ballot, which is the part that differs, waits for this to agree. See
+  // where it is used below.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Bumped only by creator actions, and used as OpenPollPanel's key so it
@@ -127,6 +135,7 @@ export function PollDetail() {
     }
 
     loadedOnce.current = true
+    setLoadedFor(pollId)
     setLoading(false)
     return true
   }, [pollId])
@@ -184,18 +193,26 @@ export function PollDetail() {
 
   // What a signal on this poll means, which depends on whether this page has
   // ever read it: the whole poll the first time, and only the parts that can
-  // move on every one after that. The flag is per page rather than per poll,
-  // because the page and the poll now begin together — App keys this route on
-  // its poll id, so moving between the questions of one poll mounts a page
-  // each rather than pointing one page at a second poll. See KeyedPollDetail
-  // for what that is worth: it is what stops the question being left from
-  // rendering under the address of the question being opened, and it takes
-  // with it the two things this page used to have to undo by hand on the way
-  // across — this flag, and a ballot half-changed in the poll being left.
+  // move on every one after that. Navigating from one question to another
+  // remounts nothing — the poll around them is the same page and must not
+  // blink — so the flag is cleared alongside the poll it describes, in the
+  // effect below.
   const onSignal = useCallback(async () => {
     if (loadedOnce.current) return refresh()
     return load()
   }, [load, refresh])
+
+  // Moving to another question of the same poll remounts nothing — that is
+  // the point, since the heading and the strip belong to the poll and must
+  // not blink — so the two things that are about the question rather than the
+  // poll are cleared by hand on the way across. The flag, because the
+  // question being opened has not been read even though the last one had; and
+  // a ballot half-changed in the question being left, which would otherwise
+  // turn up in the next one scored against a different list of options.
+  useEffect(() => {
+    loadedOnce.current = false
+    setRevising(null)
+  }, [pollId])
 
   // Nothing about a closed poll changes again, and a poll whose results are
   // out has taken its last vote either way; so the watching stops. Before the
@@ -263,6 +280,20 @@ export function PollDetail() {
 
   const isCreator = poll.created_by === session?.user.id
   const isOpen = poll.mode === 'open'
+  // Whether everything read above is about the question in the address bar.
+  // False only while a crossing between two questions of one poll is in
+  // flight, and what it gates is the ballot: the heading, the terms and the
+  // strip are the poll's rather than the question's, so they are already
+  // right for the question being opened and stay put. See `loadedFor`.
+  const showing = loadedFor === pollId
+  // ...and only within one poll. A poll this page holds no group for is a
+  // different poll rather than another question of this one, and the last
+  // poll's heading is no stand-in for it: that is a page load, not a
+  // crossing. A poll asking one question has an empty group, so arriving at
+  // one from the list always lands here.
+  if (!showing && !questions.some((question) => question.id === pollId)) {
+    return <PollPageSkeleton />
+  }
   // The poll's questions as the strip draws them, built once so that the way
   // on is chosen from the same list the voter is looking at. `questions` is
   // empty on a poll that asks a single question, so there is no strip and no
@@ -329,116 +360,135 @@ export function PollDetail() {
       {/* Where in the poll this question sits, and the way to the rest of
           it. Renders nothing at all on a poll that asks one question, which
           is what keeps every existing poll looking exactly as it did. */}
-      <QuestionStrip questions={strip} current={poll.id} hrefFor={(id) => `/polls/${id}`} />
+      {/* Marked from the address rather than from the poll that has been
+          read, so the question being opened is the one shown open from the
+          first frame of the crossing. */}
+      <QuestionStrip
+        questions={strip}
+        current={pollId ?? poll.id}
+        hrefFor={(id) => `/polls/${id}`}
+      />
 
-      {/* What this one question asks, above the ballot that answers it. The
+      {/* One question's worth of the page, and the only part that waits on a
+          crossing between two of them: what the question asks, and the ballot
+          that answers it. Everything above belongs to the poll and is the
+          same whichever question is open, so it stays on screen rather than
+          blinking away and back at the moment the strip is being used to
+          navigate. */}
+      {showing ? (
+        <>
+          {/* What this one question asks, above the ballot that answers it. The
           heading above carries the poll's title, which every question in the
           poll shares; this is the part that is only true of this one, so it
           sits with the options rather than with the poll's terms. */}
-      {poll.question_title && <Title order={3}>{poll.question_title}</Title>}
+          {poll.question_title && <Title order={3}>{poll.question_title}</Title>}
 
-      {/* The creator's correction to an option list that is already a ballot,
+          {/* The creator's correction to an option list that is already a ballot,
           in place of that ballot while it is open. It replaces the ballot
           rather than sitting beside it because they are two readings of one
           list, and a poll with no votes in it has no ballot anybody is
           part-way through. See 0028_creator_edits_options.sql for when this
           is allowed at all. */}
-      {editingOptions && editable ? (
-        <CollectOptions
-          source={{ kind: 'creator', pollId: poll.id }}
-          options={optionList}
-          isCreator
-          footer={
-            <Group justify="space-between" wrap="wrap" gap="sm">
-              <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
-                Nobody has voted yet, so options can still be updated.
-              </Text>
-              <Button variant="light" onClick={() => setEditingOptions(false)}>
-                Done
-              </Button>
-            </Group>
-          }
-          onChanged={reloadAll}
-        />
-      ) : /* Open polls are voted through the same anon RPCs the public route
+          {editingOptions && editable ? (
+            <CollectOptions
+              source={{ kind: 'creator', pollId: poll.id }}
+              options={optionList}
+              isCreator
+              footer={
+                <Group justify="space-between" wrap="wrap" gap="sm">
+                  <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
+                    Nobody has voted yet, so options can still be updated.
+                  </Text>
+                  <Button variant="light" onClick={() => setEditingOptions(false)}>
+                    Done
+                  </Button>
+                </Group>
+              }
+              onChanged={reloadAll}
+            />
+          ) : /* Open polls are voted through the same anon RPCs the public route
              uses, so the creator votes in their own poll exactly as everyone
              else does; one code path, one set of rules. */
-      isOpen ? (
-        view && (
-          // Keyed so a close or a reset remounts it; see where refreshKey
-          // is declared. A live refresh only replaces the view prop, which
-          // leaves a half-filled ballot inside the panel alone.
-          <OpenPollPanel
-            key={refreshKey}
-            token={poll.public_token!}
-            view={view}
-            isCreator={isCreator}
-            onChanged={load}
-            onFirstVote={advance}
-          />
-        )
-      ) : status.soliciting ? (
-        /* No ballot yet: the poll is a list everyone in it can add to, and
+          isOpen ? (
+            view && (
+              // Keyed so a close or a reset remounts it; see where refreshKey
+              // is declared. A live refresh only replaces the view prop, which
+              // leaves a half-filled ballot inside the panel alone.
+              <OpenPollPanel
+                key={refreshKey}
+                token={poll.public_token!}
+                view={view}
+                isCreator={isCreator}
+                onChanged={load}
+                onFirstVote={advance}
+              />
+            )
+          ) : status.soliciting ? (
+            /* No ballot yet: the poll is a list everyone in it can add to, and
            the creator decides when it becomes a ballot. */
-        <CollectOptions
-          source={{ kind: 'poll', pollId: poll.id }}
-          options={options}
-          isCreator={isCreator}
-          footer={
-            <Text size="sm" c="dimmed">
-              {isCreator
-                ? 'Voting hasn’t started. Everyone can add options until you open the poll.'
-                : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
-            </Text>
-          }
-          onChanged={load}
-        />
-      ) : status.results_available ? (
-        <Stack gap="lg">
-          <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />
-          {/* Gated in the database on the same terms as the results, so this
+            <CollectOptions
+              source={{ kind: 'poll', pollId: poll.id }}
+              options={options}
+              isCreator={isCreator}
+              footer={
+                <Text size="sm" c="dimmed">
+                  {isCreator
+                    ? 'Voting hasn’t started. Everyone can add options until you open the poll.'
+                    : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
+                </Text>
+              }
+              onChanged={load}
+            />
+          ) : status.results_available ? (
+            <Stack gap="lg">
+              <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />
+              {/* Gated in the database on the same terms as the results, so this
               condition only decides whether to ask. */}
-          {poll.show_ballots && <Ballots source={{ kind: 'poll', pollId: poll.id }} />}
-        </Stack>
-      ) : status.is_closed ? (
-        <Card withBorder>
-          {/* Closing acts on the whole poll, so one question of several can
+              {poll.show_ballots && <Ballots source={{ kind: 'poll', pollId: poll.id }} />}
+            </Stack>
+          ) : status.is_closed ? (
+            <Card withBorder>
+              {/* Closing acts on the whole poll, so one question of several can
               end with nothing in it while the rest have results. Saying "this
               poll" there would be wrong about the poll and about the question
               alike. */}
-          <Text fw={500}>
-            {poll.group_id
-              ? 'The poll was closed before anyone answered this question, so it has no results.'
-              : 'This poll was closed before anyone voted, so there are no results.'}
-          </Text>
-        </Card>
-      ) : status.voted ? (
-        /* You have voted and the results are still sealed, which is exactly
+              <Text fw={500}>
+                {poll.group_id
+                  ? 'The poll was closed before anyone answered this question, so it has no results.'
+                  : 'This poll was closed before anyone voted, so there are no results.'}
+              </Text>
+            </Card>
+          ) : status.voted ? (
+            /* You have voted and the results are still sealed, which is exactly
            the window a vote can be changed in — this branch is only reached
            when results_available and is_closed are both false, so the gate
            the database applies is the gate that decides what renders here.
            A ballot arriving from someone else while this is open takes the
            window away by moving the page on to the results, and the form
            goes with it. */
-        revising ? (
-          <VoteForm
-            poll={poll}
-            options={options}
-            initial={revising}
-            onVoted={() => {
-              setRevising(null)
-              load()
-            }}
-            onCancel={() => setRevising(null)}
-          />
-        ) : (
-          <Waiting status={status} pollId={poll.id} onRevise={setRevising} />
-        )
-      ) : (
-        /* Keyed like the open-poll panel, and for the same reason: a
+            revising ? (
+              <VoteForm
+                poll={poll}
+                options={options}
+                initial={revising}
+                onVoted={() => {
+                  setRevising(null)
+                  load()
+                }}
+                onCancel={() => setRevising(null)}
+              />
+            ) : (
+              <Waiting status={status} pollId={poll.id} onRevise={setRevising} />
+            )
+          ) : (
+            /* Keyed like the open-poll panel, and for the same reason: a
            correction to the option list invalidates a half-filled ballot,
            and remounting is what discards it. */
-        <VoteForm key={refreshKey} poll={poll} options={options} onVoted={advance ?? load} />
+            <VoteForm key={refreshKey} poll={poll} options={options} onVoted={advance ?? load} />
+          )}
+        </>
+      ) : (
+        <QuestionSkeleton />
       )}
 
       {/* Held back until you have voted, for the reasons set out where the
