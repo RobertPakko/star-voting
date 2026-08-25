@@ -30,8 +30,12 @@ import type {
  *
  * The pages themselves know none of this. `PublicPoll` renders a sample id
  * exactly as it renders a real one, because every open-poll read goes
- * through `openPollRpc` below and it is the only thing that can tell them
- * apart.
+ * through `openPollRpc` below and it is the only thing that decides what
+ * answers it. The one place outside this file that has to know a sample id
+ * when it sees one is `PollPage` in App.tsx, which routes it to `PublicPoll`
+ * rather than offering it to the account reading first: there is no `polls`
+ * row for that read to find, and asking for one got the reader a uuid
+ * syntax error instead of the sample.
  */
 
 /** The three questions of one copy of the sample, keyed by poll id. */
@@ -54,9 +58,13 @@ export const SAMPLE_RESULT_ID = 'sample-result-host'
  * A real poll id is a v4 UUID, so nothing the database can mint begins with
  * this and no poll can be shadowed by the sample. It is also why the sample's
  * ids are words: a poll's id is its link now, and the sample's links are meant
- * to be read in the address bar and pasted into a talk. They are ids that the
- * `polls` table would refuse, which is safe because the sample never reaches
- * it -- see `openPollRpc` below, the one thing that can tell them apart.
+ * to be read in the address bar and pasted into a talk.
+ *
+ * They are ids the `polls` table would refuse -- it would not merely fail to
+ * find them, it errors on the cast -- so this has to be asked before anything
+ * puts one in front of the database. Two places do: `openPollRpc` below, for
+ * every open-poll call, and `PollPage` in App.tsx, for which of the two
+ * readings of a poll address to render at all.
  */
 export function isSampleId(pollId: string): boolean {
   return pollId.startsWith('sample-')
@@ -80,7 +88,7 @@ interface OpenPollArgs {
 }
 
 /**
- * Every read and write an open poll's share token makes, sent to the server
+ * Every read and write an open poll makes under its id, sent to the server
  * or, for the sample, answered here.
  *
  * The sample's data is `import()`ed rather than bundled with the app: it is

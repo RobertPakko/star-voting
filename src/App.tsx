@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Center, Loader } from '@mantine/core'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './lib/auth'
+import { isSampleId } from './lib/samplePoll'
 import { rememberDestination, takeDestination } from './lib/shareLink'
 import { SignIn } from './pages/SignIn'
 import { Layout } from './components/Layout'
@@ -88,6 +89,16 @@ function App() {
  * fails too -- an invite poll, or nothing at all -- `PublicPoll` says the link
  * is not one, and the sign-in route below is what a visitor gets for every
  * other address.
+ *
+ * **The About page's sample poll is the one address that skips all of this.**
+ * Its ids are words rather than uuids and it is answered out of a file in the
+ * browser, so there is no row for the account reading to find and no sign-in
+ * that could produce one: `PollDetail` asked the `polls` table about
+ * `sample-host` and got back Postgres complaining that it is not a uuid,
+ * which is what a signed-in reader saw where the sample should have been.
+ * Under the two routes this replaced the question never came up, because
+ * `#/p/:token` went to the public reading and nowhere else. See
+ * `isSampleId` in lib/samplePoll.ts.
  */
 function PollPage() {
   const { session } = useAuth()
@@ -107,6 +118,18 @@ function PollPage() {
     if (!session) rememberDestination(location.pathname)
     setNotPublic(pollId ?? null)
   }, [session, location.pathname, pollId])
+  // Nothing to fall back to when the sample cannot be read: a sample id that
+  // `samplePollData.ts` holds no question for is a mistyped sample link, and
+  // there is no account and no sign-in that would turn it into a poll.
+  // `PublicPoll` draws "poll not found" for it, which is the whole of the
+  // answer.
+  const noFallback = useCallback(() => {}, [])
+
+  // The sample, ahead of both readings below: it is served from a file rather
+  // than from the database, so the public reading is the only reading it has
+  // — for a signed-in account as much as for a stranger's browser, since it
+  // is nobody's poll and never was a row.
+  if (pollId && isSampleId(pollId)) return <PublicPoll onUnreadable={noFallback} />
 
   // Signed out, and this is not a poll that can be read without an account:
   // it is invite-only, or it is nothing at all. The visitor may well be on

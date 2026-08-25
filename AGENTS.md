@@ -1012,16 +1012,22 @@ were few enough to be worth less than the shim.
 the URL no longer says. `App.tsx`'s `PollPage` does it in the order that costs
 least:
 
-1. **Signed in?** Render `PollDetail`, which reads the `polls` row as its
+1. **A sample id?** Render `PublicPoll` and stop, whoever is reading. The
+   About page's sample is answered from a file in this browser and is not a
+   row anywhere, so there is no account reading of it to try — and `polls.id`
+   is a `uuid`, so asking the table about `sample-host` does not come back
+   empty, it errors. See [The About page and its sample
+   poll](#the-about-page-and-its-sample-poll).
+2. **Signed in?** Render `PollDetail`, which reads the `polls` row as its
    first act anyway. Row-level security answers exactly the question being
    asked — a row for the creator and for an invitee, nothing for anyone else —
    so it reports *I cannot see this* rather than drawing *poll not found*, and
    `PollPage` falls back to the public reading. Probing first would have
    charged every creator opening their own poll a round trip to learn what the
    read they were about to make already knew.
-2. **Not signed in, or refused above?** Render `PublicPoll`, which reads
+3. **Not signed in, or refused above?** Render `PublicPoll`, which reads
    through the anon RPCs and can therefore only ever show an open poll.
-3. **Refused there too, and signed out?** Offer the sign-in screen rather than
+4. **Refused there too, and signed out?** Offer the sign-in screen rather than
    a dead end. The visitor may be on an invite poll's list — every invitation
    email links to exactly this address — so where they were headed is stashed
    through `rememberDestination` and the magic link brings them back to it.
@@ -2109,9 +2115,9 @@ derived, because they sit inside prose.
 
 #### The sample poll is a recording, not rows
 
-`/#/p/sample-host` is a three-question poll ("Movie night") still taking
-votes; `/#/p/sample-result-host` is the same poll after nine people finished
-it. Neither exists in Supabase. Both are answered in the browser from
+`/#/polls/sample-host` is a three-question poll ("Movie night") still taking
+votes; `/#/polls/sample-result-host` is the same poll after nine people
+finished it. Neither exists in Supabase. Both are answered in the browser from
 [`src/lib/samplePollData.ts`](src/lib/samplePollData.ts), which
 `scripts/sample-poll.sh` generates by building a throwaway database from the
 migrations (the same one `npm test` uses, and with the same requirements),
@@ -2150,11 +2156,33 @@ file produces a diff only where the poll actually changed.
 They do not. `PublicPoll` renders a sample id exactly as it renders a real
 one, because every open-poll call goes through `openPollRpc` in
 [`src/lib/samplePoll.ts`](src/lib/samplePoll.ts) and that function is the only
-thing in the app that can tell them apart. A real poll id is a v4 UUID, so the
-`sample-` prefix cannot collide with one — which is also why the sample's ids
-are words: a poll's id is its link, and these two links are meant to be read in
-an address bar and said out loud. They are ids the `polls` table would refuse,
-which is safe precisely because the sample never reaches it.
+thing in the app that decides what answers it. A real poll id is a v4 UUID, so
+the `sample-` prefix cannot collide with one — which is also why the sample's
+ids are words: a poll's id is its link, and these two links are meant to be
+read in an address bar and said out loud. They are ids the `polls` table would
+refuse, which is safe precisely because the sample never reaches it.
+
+**One thing outside that file has to recognise a sample id: the router.**
+`PollPage` in [`src/App.tsx`](src/App.tsx) sends a sample id straight to
+`PublicPoll` instead of offering it to the account reading first. Every other
+address is offered to `PollDetail` and falls back when row-level security
+returns nothing (see [A poll's link is its id](#a-polls-link-is-its-id)), but a
+sample id has no row for that read to miss — `select * from polls where id =
+'sample-host'` does not come back empty, it errors on the cast, and
+`invalid input syntax for type uuid: "sample-host"` is what a signed-in reader
+got where the sample should have been. The `sample-` prefix has to be checked
+before anything puts one of these ids in front of the database, which is why
+`isSampleId` is exported rather than private to `openPollRpc`.
+
+It is the one address with nothing to fall back to, and deliberately so: a
+`sample-` id no question is recorded under is a mistyped sample link and
+nothing else, so it gets `PublicPoll`'s own *poll not found* rather than the
+sign-in screen a signed-out reader is offered for a poll they might turn out
+to be invited to.
+
+This never came up under the two routes that preceded one address per poll:
+`#/p/:token` went to the public reading and nowhere else, so the sample could
+not reach `PollDetail` however it was linked.
 
 `scripts/sample-poll.sql` therefore keeps a `sample.link` table of its own for
 the length of a run, standing in for the `public_token` column that used to
