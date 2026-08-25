@@ -85,7 +85,21 @@ export interface Turnout {
   mode: PollMode
   votedCount: number
   invitedCount: number
-  /** Only read while collecting, when it is the number that is moving. */
+  /**
+   * How many people have said they are done adding options. It is the count
+   * badge's whole content while the poll is collecting them, because it is
+   * the number that is moving at that stage — see turnoutLabel.
+   *
+   * Undefined against a database whose `poll_status` and `list_polls` predate
+   * the column, which is the only reason `optionCount` below is still here.
+   */
+  confirmedCount?: number
+  /**
+   * How many options the poll holds. Read only as the fallback for the line
+   * above: it is what this badge counted while collecting before there was
+   * anything better to count, and it is what a browser running ahead of the
+   * migration still gets.
+   */
   optionCount: number
   /**
    * How many questions the poll asks. Above one it takes the badge over
@@ -113,6 +127,7 @@ function turnoutLabel({
   mode,
   votedCount,
   invitedCount,
+  confirmedCount,
   optionCount,
   questionCount,
 }: Turnout): string {
@@ -126,9 +141,26 @@ function turnoutLabel({
     return `${questionCount} questions`
   }
   if (soliciting) {
-    // Turnout is zero and stays zero until the list is settled, so this
-    // stage counts what is actually moving: the options coming in.
-    return `${optionCount} ${optionCount === 1 ? 'option' : 'options'}`
+    // Turnout is zero and stays zero until the list is settled, so this stage
+    // counts what is actually moving. That used to be the options coming in,
+    // and the options coming in are the wrong number: seven of them is seven
+    // people with an idea each or one person with seven, and neither is
+    // distinguishable from a poll nobody has opened. So it counts the people
+    // who have said they are done instead — the same shape as the turnout it
+    // gives way to, out of the same denominator, so a card carrying "2/5
+    // confirmed" today and "5/5 votes" next week is counting the same list of
+    // people both times.
+    //
+    // The option count is the fallback and nothing else: a browser talking to
+    // a database that predates the confirmations reports what this badge
+    // always reported rather than a confident zero.
+    if (confirmedCount === undefined) {
+      return `${optionCount} ${optionCount === 1 ? 'option' : 'options'}`
+    }
+    // No invite list, so no denominator to count towards — the same reason
+    // an open poll's turnout below is a bare number.
+    if (mode === 'open') return `${confirmedCount} confirmed`
+    return `${confirmedCount}/${invitedCount} confirmed`
   }
   if (mode === 'open') {
     // No invite list, so no denominator to count towards.

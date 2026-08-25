@@ -238,6 +238,7 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
           mode: shell.poll.mode,
           votedCount: shell.voted_count,
           invitedCount: 0,
+          confirmedCount: shell.confirmed_count,
           optionCount: shell.options.length,
         }}
         state={{

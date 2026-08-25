@@ -83,29 +83,45 @@ alter table public.option_confirmations enable row level security;
 -- Reading the state
 -- ---------------------------------------------------------------------------
 
--- How many of this question's invitees are done. Counted off the invite list
--- rather than off the confirmations, so somebody uninvited after confirming
--- cannot push the count past the number of people it is counting towards.
+-- How many people are done adding to this question's list, which is the number
+-- the count badge reports while the stage is running -- so it has to be the
+-- number the same badge's denominator is counting towards, and that differs by
+-- the kind of poll.
+--
+-- An invite poll is counted **off the invite list** rather than off the
+-- confirmations: it reports "3 of 6", and somebody uninvited after confirming
+-- must not be able to push the numerator past the denominator. An open poll
+-- has no list to count off and no denominator to exceed, so it counts the
+-- confirmations themselves.
 create or replace function public.poll_confirmed_count(p_poll_id uuid)
 returns int
 language sql stable security definer set search_path to 'public'
 as $$
-  select count(*)::int
-  from invited_voters iv
-  where iv.poll_id = p_poll_id
-    and exists (
-      select 1
-      from option_confirmations oc
-      join auth.users u on u.id = oc.voter_id
-      where oc.poll_id = iv.poll_id and lower(u.email) = iv.email
-    );
+  select case
+    when p.mode = 'invite' then (
+      select count(*)::int
+      from invited_voters iv
+      where iv.poll_id = p.id
+        and exists (
+          select 1
+          from option_confirmations oc
+          join auth.users u on u.id = oc.voter_id
+          where oc.poll_id = p.id and lower(u.email) = iv.email
+        )
+    )
+    else (
+      select count(*)::int from option_confirmations oc where oc.poll_id = p.id
+    )
+  end
+  from polls p
+  where p.id = p_poll_id;
 $$;
 
 alter function public.poll_confirmed_count(uuid) owner to postgres;
 revoke all on function public.poll_confirmed_count(uuid) from public;
 
 comment on function public.poll_confirmed_count(uuid) is
-  'How many of this question''s invitees have said they are done adding options. Internal: it answers about a poll the caller has already established it may read.';
+  'How many people have said they are done adding options to this question: invitees who have confirmed on an invite poll, browsers that have on an open one. Internal: it answers about a poll the caller has already established it may read.';
 
 
 -- Whether this poll has run out of people to wait for: it collects options, it
@@ -613,6 +629,171 @@ revoke all on function public.poll_invitees(uuid) from public;
 grant all on function public.poll_invitees(uuid) to authenticated;
 
 
+-- And the poll list, which carries the count badge on every card and so has to
+-- be able to fill it in. One more column, so it is dropped and rebuilt like
+-- the two above; everything else about it is unchanged, down to its being a
+-- SQL function rather than plpgsql for the reason its own comment gives.
+drop function if exists public.list_polls(integer, integer);
+
+create or replace function public.list_polls(p_limit integer, p_offset integer)
+returns table(
+  id uuid,
+  title text,
+  description text,
+  created_by uuid,
+  created_by_email text,
+  created_at timestamp with time zone,
+  closed_at timestamp with time zone,
+  mode text,
+  show_voters boolean,
+  show_ballots boolean,
+  solicit_options boolean,
+  options_finalized_at timestamp with time zone,
+  invited_count integer,
+  voted_count integer,
+  option_count integer,
+  confirmed_count integer,
+  is_complete boolean,
+  voted boolean,
+  is_closed boolean,
+  results_available boolean,
+  soliciting boolean,
+  group_id uuid,
+  question_position integer,
+  question_title text,
+  question_count integer,
+  total_count integer
+)
+language sql stable security definer set search_path to 'public'
+as $$
+  -- Left as a SQL function rather than plpgsql, as it always was. In plpgsql
+  -- the names in RETURNS TABLE become variables that shadow same-named
+  -- columns -- `id`, `title`, `voted` and `total_count` all appear below --
+  -- and the failure is silent rather than an error. See the note on
+  -- poll_winners(), which is plpgsql and has to alias around exactly that.
+  with args as (
+    -- Floored rather than trusted: a limit of zero or less would ask for an
+    -- empty page of a list that has rows in it, and a negative offset is a
+    -- syntax error rather than a page.
+    select
+      greatest(coalesce(p_limit, 1), 1) as lim,
+      greatest(coalesce(p_offset, 0), 0) as want
+  ), visible as (
+    -- The whole row alongside its columns, so the aggregates below can be
+    -- handed a poll rather than rebuilding one.
+    --
+    -- Written out here rather than behind a helper on purpose: a function
+    -- call in this predicate is opaque to the planner unless it happens to
+    -- inline, and the index 0036 added is only reachable while the
+    -- comparison is written where the planner can see it.
+    select p.*, p as poll_row
+    from polls p
+    where (p.group_id is null or p.question_position = 1)
+      and (
+        p.created_by = auth.uid()
+        or exists (
+          select 1 from invited_voters iv
+          where iv.poll_id = p.id and iv.email = lower(auth.jwt() ->> 'email')
+        )
+      )
+  ), counted as (
+    -- The one pass over everything the caller can see. It is the price of
+    -- reporting a total at all, and it is the cheap half: one predicate and
+    -- no subqueries, against that same index.
+    select count(*)::int as total from visible
+  ), bounds as (
+    -- Where the requested page actually starts. Asking past the end lands on
+    -- the last page there is rather than on nothing: a poll deleted from page
+    -- three leaves its reader on page three, or on the last page if that was
+    -- it. The browser clamps the page number it displays the same way, from
+    -- the same total, so the two cannot disagree about what is on screen.
+    select
+      c.total,
+      least(a.want, greatest(((c.total - 1) / a.lim) * a.lim, 0)) as page_start
+    from counted c, args a
+  ), page as (
+    -- The page is taken here, before a single aggregate has run.
+    --
+    -- `id` breaks ties on `created_at`, because offset paging is only correct
+    -- over a total order: two rows that compare equal may come back in either
+    -- order, and then a row can land on two pages or on none, silently. In
+    -- the app polls are made one at a time and their timestamps differ, so
+    -- this is insurance -- nothing *enforces* that they differ. In the test
+    -- suite it is load-bearing: a case is one transaction, so every poll a
+    -- case creates shares a created_at to the microsecond.
+    select v.*
+    from visible v
+    order by v.created_at desc, v.id desc
+    limit (select a.lim from args a)
+    offset (select b.page_start from bounds b)
+  ), tallied as (
+    select
+      v.id as poll_id,
+      -- Per question, and the question is the first one: the invite list is
+      -- the same on every question, and a turnout that differs between them
+      -- is not a number this list has room to reconcile. The card shows the
+      -- question count in its place on a grouped poll.
+      (select count(*)::int from invited_voters iv where iv.poll_id = v.id) as invited_count,
+      (select count(*)::int from ballots b where b.poll_id = v.id) as voted_count,
+      (select count(*)::int from candidates c where c.poll_id = v.id) as option_count,
+      -- The same, and per question for the same reason. It is what the count
+      -- badge reports while the poll is still collecting, in place of the
+      -- turnout that has not started moving yet.
+      poll_confirmed_count(v.id) as confirmed_count,
+      (select count(*)::int from poll_group_members(v.poll_row)) as question_count,
+      -- Asked of every question: a poll is answered when all of it is.
+      (select bool_and(
+                exists (select 1 from ballots b where b.poll_id = q.id and b.voter_id = auth.uid()))
+         from poll_group_members(v.poll_row) q) as voted,
+      (select bool_and(
+                (select count(*) from invited_voters iv where iv.poll_id = q.id) > 0
+                and (select count(*) from ballots b where b.poll_id = q.id)
+                    >= (select count(*) from invited_voters iv where iv.poll_id = q.id))
+         from poll_group_members(v.poll_row) q) as is_complete,
+      (select bool_and(q.closed_at is not null)
+         from poll_group_members(v.poll_row) q) as is_closed
+    from page v
+  )
+  select
+    v.id,
+    v.title,
+    v.description,
+    v.created_by,
+    v.created_by_email,
+    v.created_at,
+    v.closed_at,
+    v.mode,
+    v.show_voters,
+    v.show_ballots,
+    v.solicit_options,
+    v.options_finalized_at,
+    t.invited_count,
+    t.voted_count,
+    t.option_count,
+    t.confirmed_count,
+    t.is_complete,
+    t.voted,
+    t.is_closed,
+    poll_results_revealed(v.poll_row),
+    v.solicit_options and v.options_finalized_at is null and v.closed_at is null,
+    v.group_id,
+    v.question_position,
+    v.question_title,
+    t.question_count,
+    (select c.total from counted c)
+  from page v
+  join tallied t on t.poll_id = v.id
+  order by v.created_at desc, v.id desc;
+$$;
+
+alter function public.list_polls(integer, integer) owner to postgres;
+revoke all on function public.list_polls(integer, integer) from public;
+grant all on function public.list_polls(integer, integer) to authenticated;
+
+comment on function public.list_polls(integer, integer) is
+  'One page of the caller''s poll list, newest first, with the total on every row. The page is taken before the per-poll aggregates run, so the work is proportional to the rows returned rather than to everything the caller can see. An offset past the end returns the last page there is.';
+
+
 -- The share link's own view of the same three facts. It returns jsonb, so
 -- nothing has to be dropped: a browser holding the old code simply reads none
 -- of the new keys.
@@ -677,8 +858,9 @@ begin
     v_confirmations := null;
   end if;
 
-  select count(*)::int into v_confirmed_count
-  from option_confirmations where poll_id = v_poll.id;
+  -- Through the shared function rather than counted here, so the number the
+  -- share link reads and the number an account reads are one number.
+  v_confirmed_count := poll_confirmed_count(v_poll.id);
 
   -- Your own ballot comes back with it, so "change my vote" can hand it to
   -- you filled in without a second request. Reaching it needs the voter_key,

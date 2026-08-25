@@ -234,6 +234,7 @@ export function PollList() {
                 mode: poll.mode,
                 votedCount: poll.voted_count,
                 invitedCount: poll.invited_count,
+                confirmedCount: poll.confirmed_count,
                 optionCount: poll.option_count,
                 questionCount: poll.question_count,
               }}

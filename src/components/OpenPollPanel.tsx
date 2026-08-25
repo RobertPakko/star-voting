@@ -44,7 +44,13 @@ export function OpenPollPanel({
 }: {
   pollId: string
   view: OpenPollView
-  /** Creators see participation before voting; see where it's rendered. */
+  /**
+   * The creator reading their own open poll. It buys them the `×` on each
+   * option while the list is still being collected, and the second person in
+   * the sentences below — "once you close the poll" rather than "once the
+   * poll's creator does". It no longer buys an early look at the roster,
+   * because nobody's is late any more; see `participation`.
+   */
   isCreator?: boolean
   /** A ballot went in, or the option list moved: the page re-reads the poll. */
   onChanged: () => void
@@ -93,14 +99,11 @@ export function OpenPollPanel({
                 // exactly as its ballot does. One that hides them asks for
                 // none and stores none.
                 needsName={view.poll.show_voters}
-                // No denominator: an open poll has no list of people, so
-                // there is no set of them to have all confirmed and nothing
-                // this count can reach. Its creator ends the stage.
-                progress={
-                  view.confirmed_count === undefined
-                    ? undefined
-                    : { confirmed: view.confirmed_count }
-                }
+                // Never: an open poll has no list of people, so there is no
+                // set of them who could all have confirmed and no press that
+                // could be the last one. Its creator ends the stage. How many
+                // have is in the count badge above, like everywhere else.
+                opensWhenEveryoneHas={false}
                 onChanged={onChanged}
               />
             )
@@ -121,23 +124,22 @@ export function OpenPollPanel({
   // Who has voted, on a poll that names them. Only the names: how many is in
   // the header badge above, once, on every screen the poll appears on.
   //
-  // Held back until you have voted, because watching a roster fill up is a
-  // live feed of the arrival order, names attached to the moment each one
-  // arrived, which is what the published ballots work to keep off the
-  // record by ordering themselves on a hash instead of on time. The count on
-  // its own carries no name and is not withheld anywhere.
-  //
-  // Two exemptions. The creator, because the roster is what "close voting
-  // now" gets decided on and a creator who isn't voting could never earn the
-  // view. And a poll whose results are out, because the reason for the
-  // embargo is that a ballot might still be cast, and on that poll none can.
+  // One condition and no second one. It used to be held back until you had
+  // voted, because watching a roster fill up is a live feed of the arrival
+  // order — names attached to the moment each one arrived, which is what the
+  // published ballots work to keep off the record by ordering themselves on a
+  // hash instead of on time. That bought a narrower version of a leak it could
+  // not close (a voter still sees everyone who arrives after them) at the
+  // price of one card behaving three ways, and of the same card in the
+  // collecting stage above answering a question about options that no rule
+  // about ballots can sensibly embargo. A poll that says it shows who has
+  // responded shows it, to everyone in it, whichever stage it is at.
   //
   // A poll that hides respondents renders nothing here at all: it has no
   // names to show, and the header has already said how many and why.
-  const participation =
-    view.voters && (view.voted || isCreator || view.results_available) ? (
-      <VoterList voters={view.voters} final={view.results_available} />
-    ) : null
+  const participation = view.voters ? (
+    <VoterList voters={view.voters} final={view.results_available} />
+  ) : null
 
   if (view.results_available) {
     return (

@@ -1048,19 +1048,35 @@ least:
 
 This controls *who responded*, never *how they voted*.
 
-**The roster is held back until you have voted; the count never is.** The two
-used to be withheld together, which was one rule too many — they are not the
-same disclosure.
+**A poll that shows its respondents shows them, and there is no second rule
+about when.** One setting decides, and it is the setting stated on the tag
+beside the title; everyone in the poll reads the roster from the moment the
+poll exists, whatever stage it is at and whether or not they have voted
+themselves.
 
-What the roster leaks is *names attached to the moment each one arrived*.
-Watching it fill up is a live feed of the arrival order, and that order is
-what the published ballots work to keep off the record by sorting themselves
-on `md5(id)` rather than on time. Note that the roster itself is alphabetical
-(`order by lower(voter_name)`) — the leak is in watching it grow, not in
-reading it once. Withholding it until you vote leaves that order visible only
-to people actually in the poll rather than to anyone holding a link. It
-narrows the leak without closing it: a voter still sees everyone who arrives
-after them.
+It was not always this. The roster used to be held back until you had voted,
+on the reasoning that watching it fill up is a live feed of the *arrival
+order* — names attached to the moment each one arrived, which is what the
+published ballots work to keep off the record by sorting themselves on
+`md5(id)` rather than on time. The roster itself is alphabetical (`order by
+lower(voter_name)`), so the leak was in watching it grow rather than in reading
+it once, and withholding it until you voted narrowed that window without
+closing it: a voter still saw everyone who arrived after them. What it bought
+was a partial fix to a leak the *setting* already opts into; what it cost was
+one card behaving three different ways depending on who was reading it, how far
+through they were, and whether the results were out — and, once the collecting
+stage grew a roster of its own, a rule about ballots being applied to a card
+that was answering a question about options. The trade came out the other way
+round, so the embargo is gone and the two exemptions that used to soften it
+(the creator, and a poll whose results are out) are gone with it: there is
+nothing left for them to be exemptions from.
+
+The setting is what a poll promises and it is on screen before anybody votes,
+so nothing here is discovered after the fact. The one guarantee this does
+weaken is the arrival-order one, and the place that guarantee is actually kept
+is the ballot ordering — see [Whether ballots are
+published](#whether-ballots-are-published), which is why that ordering is a
+hash rather than a nicety.
 
 A bare count leaks neither half. It names nobody, and it says nothing about
 any ballot — so it is on every screen a poll appears on, before you vote and
@@ -1070,30 +1086,23 @@ modes, and no count moves them. The poll list has shown `3/6 voted` for polls
 you had not voted in since long before this was written down, which is the
 app's actual position on whether the number is secret.
 
-Two things are exempt. The **creator**, who sees participation whether or not
-they have voted: the roster is what *Close voting now* gets decided on, and a
-creator who isn't on the invite list could never earn the view by voting. On
-invite polls it is also where the invite list is managed. And a **poll whose
-results are out**, to everyone in it: the embargo exists because a ballot might
-still be cast, and on that poll none can.
-
-A third is exempt for a reason of its own: a poll **still collecting its
-options** has taken no ballots at all, so there is no arrival order to protect,
-and the roster there answers *who has said they are done* rather than *who has
-voted*. Everyone in the poll reads it while that stage runs. See [Saying you
-are done adding options](#saying-you-are-done-adding-options) for what the
-badge says there, and why it is the same disclosure under the same setting.
-
-On open polls "you have voted" is the `localStorage` voter key, so clearing site
-data hides the roster again. That is the same deliberately-weak signal behind
-"your vote is in" — a convenience, not a guard, and accepted as such here.
+**What the roster answers changes with the stage; who may read it does not.**
+While a poll is still collecting its options nobody can vote, so the badge
+beside each name says *Confirmed* or *Pending* rather than *Voted* or
+*Pending* — see [Saying you are done adding
+options](#saying-you-are-done-adding-options). The heading over it says
+*Voters* throughout, because it is one card about one set of people and
+renaming it halfway through the poll would read as two.
 
 **Turnout is reported in exactly one place on any screen**, and that place is
 the count badge in the poll's header — the same badge, in the same position,
 on the list and on the poll's own page. One fact stated twice reads as two
 facts that happen to agree, which is why the results no longer open with "6 of
-6 invited voters participated" and why neither roster carries a count of its
-own any more.
+6 invited voters participated", why neither roster carries a count of its own,
+and why the **Confirm options** button says what pressing it will do rather
+than how many people have already pressed it. The badge counts confirmations
+while the poll is collecting its options and votes once it is taking them; it
+is the same badge counting the same list of people either way.
 
 That leaves the roster answering *who* and nothing else, and it means a poll
 that hides its respondents renders no card at all for anyone but its creator:
@@ -1142,10 +1151,13 @@ Four rules hold the published setting together:
   skip both. The requirement is that the voter can read the terms before
   submitting, not that they are said twice.
 - **Anonymous ballots are ordered by a hash of their row id, never by submission
-  time.** This matters: on an open poll that shows respondents, names appear in
-  the voter list as people vote, so anyone refreshing the page while voting is
-  open learns the arrival order. Handing ballots back in submission order would
-  re-attach those names to ballots the poll deliberately left unnamed.
+  time.** This matters, and it matters more than it used to: on an open poll
+  that shows respondents, names appear in the voter list as people vote, and
+  since the roster is no longer [held back until you have
+  voted](#whether-respondents-are-shown) anyone refreshing the page while
+  voting is open learns the arrival order. Handing ballots back in submission
+  order would re-attach those names to ballots the poll deliberately left
+  unnamed. This ordering is now the whole of what keeps them apart.
 
 One honest caveat about "anonymous": it describes what the app publishes, not
 what the database forgets. An open poll that hides respondents genuinely never
@@ -1303,23 +1315,42 @@ voting is one name typed once.
 
 **Who reads it is the roster question, answered by the roster's setting.** Who
 has confirmed is the same disclosure as who has voted — a list of names — so
-it is held back on the same terms, by `show_voters`, through the same column
-of `poll_invitees`. What it does *not* carry is [the
-embargo](#whether-respondents-are-shown) that withholds the voter roster until
-you have voted: what that protects is the order ballots arrived in, and a poll
-still collecting its options has no ballots to attach an order to. So everyone
-in the poll reads it while the stage runs, which is what makes it worth
-collecting.
+it is decided by the same setting, through the same column of
+`poll_invitees`, and read by everyone in the poll from the moment there is
+anything to read. There
+is no second rule about when, here or on the voter roster: needing one for this
+card is what finally settled that the other card should not have one either.
+See [Whether respondents are shown](#whether-respondents-are-shown) for the
+embargo that used to be there and why it went.
 
-**The badge answers the question the poll is asking.** `Respondents` draws
-*Confirmed*/*Pending* while the poll is collecting and *Voted*/*Pending*
-afterwards, off `status.soliciting` rather than an idea of its own, and the
-heading above it reads *Participants* rather than *Voters* for the same reason:
-nobody can vote yet, so a column of *Pending* would be answering a question
-nobody asked. The count sits in one line under the option list — the header's
-turnout badge still counts options, which is what
-[PollTags](#the-polls-high-level-details) has always said is the number moving
-at this stage.
+**The badge answers the question the poll is asking; the heading does not
+change.** `Respondents` draws *Confirmed*/*Pending* while the poll is
+collecting and *Voted*/*Pending* afterwards, off `status.soliciting` rather
+than an idea of its own — nobody can vote yet, so a column of *Pending* would
+be answering a question nobody asked. The heading over it stays *Voters*
+throughout: it is one card about one set of people, and renaming it halfway
+through the poll would read as two cards rather than as one card keeping up.
+
+**The count is in the count badge, and nowhere else.** While a poll is
+collecting, the badge beside its title reads `2/5 confirmed` on an invite poll
+and `3 confirmed` on an open one — the same shape as the `3/6 votes` and `3
+votes` it gives way to, out of the same denominator, so a card carrying one
+today and the other next week is counting the same list of people both times.
+It replaces the option count that badge used to show at this stage, which was
+the wrong number for the reason at the top of this section. `turnoutLabel` in
+`PollTags` still falls back to the option count when `confirmed_count` arrives
+undefined, which is a browser running ahead of the migration; a confident zero
+would be a lie where the old number is merely old.
+
+That is also why the **Confirm options** button carries no count of its own,
+only what pressing it will do: [turnout is reported in exactly one
+place](#whether-respondents-are-shown), and a line under the button restating
+the badge six inches above it would be the same fact arriving twice looking
+like two. The sentence it does carry — *the poll opens for voting as soon as
+everyone has confirmed* — is a rule rather than a number, it is the one thing
+about the button that the button cannot show, and it is dropped once everyone
+*has* confirmed, since a poll that stayed put there is one this line cannot
+explain and must not promise.
 
 **A confirmation announces itself as loudly as a vote**, and the one that opens
 the poll announces twice: once for the roster moving, once for the option list

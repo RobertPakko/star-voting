@@ -69,6 +69,16 @@ begin
   perform tests.assert_eq('confirming twice is one confirmation',
     (select confirmed_count from poll_status(v_poll)), 1);
 
+  -- The count badge reads off the poll list as well as off the poll's own
+  -- page, and one poll looks like one thing wherever it is read; so the list
+  -- has to be able to fill it in without the card asking a second question.
+  perform tests.sign_in('creator@example.com');
+  perform tests.assert_eq('the poll list carries the count the badge reports',
+    (select confirmed_count from list_polls(10, 0) where id = v_poll), 1);
+  perform tests.assert_eq('beside the invite count it is out of',
+    (select invited_count from list_polls(10, 0) where id = v_poll), 2);
+
+  perform tests.sign_in('voter1@example.com');
   perform tests.assert_eq('the roster says who it was',
     (select has_confirmed from poll_invitees(v_poll) where email = 'voter1@example.com'),
     true);
@@ -267,6 +277,12 @@ begin
     v_view ->> 'your_confirmed_name', 'Ana');
   perform tests.assert_eq('and named to everybody, on a poll that shows respondents',
     v_view -> 'confirmations', '["Ana"]'::jsonb);
+  -- An open poll has no invite list to count off, so the count is of the
+  -- confirmations themselves; counting them the invite way would report zero
+  -- for every open poll there is.
+  perform tests.sign_in('creator@example.com');
+  perform tests.assert_eq('an open poll counts its confirmations, not its invitees',
+    (select confirmed_count from list_polls(10, 0) where id = v_open), 1);
   perform tests.assert_eq('another browser sees the roster and not its own mark',
     (open_poll_view(v_open, 'key-2') ->> 'confirmed')::boolean, false);
 

@@ -18,7 +18,7 @@ export type ConfirmSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
 
 /**
  * "I have had my say" — the button that ends one person's part in the
- * option-collecting stage, and the count of how many have pressed it.
+ * option-collecting stage.
  *
  * The stage used to report one number, how many options were in, which says
  * nothing about how many people put them there: seven options is seven people
@@ -49,7 +49,7 @@ export function ConfirmOptions({
   confirmed,
   confirmedName,
   needsName,
-  progress,
+  opensWhenEveryoneHas,
   onChanged,
 }: {
   source: ConfirmSource
@@ -64,11 +64,21 @@ export function ConfirmOptions({
    */
   needsName?: boolean
   /**
-   * How many have confirmed, and out of how many where there is a list of
-   * people to be out of. Left off entirely rather than passed as zero where
-   * the poll has nobody to count towards.
+   * Whether pressing this could be the press that opens the poll — a poll with
+   * a participant list, still waiting on somebody. It is the one thing about
+   * the button that is not obvious from the button, and somebody deciding
+   * whether to press it should know it before they do.
+   *
+   * **How many have confirmed is deliberately not here.** That is the count
+   * badge's job, in the poll's header, on every screen the poll appears on;
+   * a line under this button restating it would be the same fact arriving
+   * twice looking like two. False once everybody has confirmed, which is a
+   * poll that stayed put for a reason this component cannot name — a question
+   * of the group nobody has finished, or a list still short of two options —
+   * so it promises nothing rather than promising an opening that has already
+   * not happened.
    */
-  progress?: { confirmed: number; of?: number }
+  opensWhenEveryoneHas?: boolean
   /** A confirmation went in or came back off: re-read the poll. */
   onChanged: () => void
 }) {
@@ -189,9 +199,9 @@ export function ConfirmOptions({
         </Group>
       )}
 
-      {progress && (
+      {opensWhenEveryoneHas && (
         <Text size="xs" c="dimmed">
-          {progressLine(progress)}
+          The poll opens for voting as soon as everyone has confirmed.
         </Text>
       )}
 
@@ -201,43 +211,6 @@ export function ConfirmOptions({
         </Text>
       )}
     </Stack>
-  )
-}
-
-/**
- * How far the stage has got, in the one sentence that says it.
- *
- * Three shapes, and the differences between them are all about what the count
- * is counting towards. An invite poll has a list of people, so it has a
- * denominator and a consequence worth stating: reaching it is what opens the
- * poll, and somebody deciding whether to press the button should know that
- * before they press it. An open poll has neither — anyone holding the link can
- * confirm and no number of them ends the stage — so it reports the count and
- * stops.
- *
- * **A full house promises nothing**, which is the third shape and the one that
- * is easy to get wrong. Everyone confirming usually opens the poll, and then
- * this line is gone with the stage it described. Reaching it means the poll
- * stayed put, for one of two reasons this component cannot tell apart: a
- * question of the group that somebody has not confirmed yet, or a list that
- * still has fewer than two options on it. Repeating "as soon as everyone has
- * confirmed" there would be promising an opening that has already not
- * happened.
- *
- * Not exported, and written here rather than at the call sites, for the reason
- * `turnoutLabel` is: one wording, in one place, so two screens counting the
- * same thing cannot come to describe it differently.
- */
-function progressLine({ confirmed, of }: { confirmed: number; of?: number }): string {
-  if (of === undefined) {
-    return `${confirmed} ${confirmed === 1 ? 'person has' : 'people have'} confirmed these options.`
-  }
-  if (confirmed >= of) {
-    return 'Everyone has confirmed these options.'
-  }
-  return (
-    `${confirmed} of ${of} ${of === 1 ? 'person has' : 'people have'} confirmed these options. ` +
-    'The poll opens for voting as soon as everyone has.'
   )
 }
 
