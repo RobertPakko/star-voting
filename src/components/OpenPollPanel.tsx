@@ -1,18 +1,16 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Badge, Button, Card, Divider, Group, Stack, Text, TextInput, Title } from '@mantine/core'
-import { notifications } from '@mantine/notifications'
+import { Button, Card, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import { openPollRpc } from '../lib/samplePoll'
 import { VOTER_NAME_MAX } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
-import { useBallotOrder } from '../lib/ballotOrder'
 import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
-import { badgeColor } from '../lib/badgeColors'
 import { Ballots } from './Ballots'
+import { BallotCard, type BallotScore } from './BallotCard'
 import { CollectOptions } from './CollectOptions'
 import { Confirmations, ConfirmOptions } from './ConfirmOptions'
-import { OptionDescription } from './OptionDescription'
+import { NameRoster } from './NameRoster'
+import { CollectingNote, NoResultsNotice, RevealNote } from './PollNotices'
 import { Results } from './Results'
-import { StarRating } from './StarRating'
 import type { OpenPollView, PollOption } from '../lib/types'
 
 /**
@@ -81,13 +79,7 @@ export function OpenPollPanel({
           source={{ kind: 'open', pollId }}
           options={view.options}
           isCreator={isCreator}
-          footer={
-            <Text size="sm" c="dimmed">
-              {isCreator
-                ? 'Voting hasn’t started. Everyone can add options until you open the poll.'
-                : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
-            </Text>
-          }
+          footer={<CollectingNote isCreator={isCreator} />}
           confirm={
             // Undefined against a database whose open_poll_view predates the
             // field, and then there is no button rather than one that could
@@ -141,7 +133,7 @@ export function OpenPollPanel({
   // A poll that hides respondents renders nothing here at all: it has no
   // names to show, and the header has already said how many and why.
   const participation = view.voters ? (
-    <VoterList voters={view.voters} final={view.results_available} />
+    <NameRoster title="Voters" names={view.voters} empty="Nobody has voted yet." />
   ) : null
 
   if (view.results_available) {
@@ -156,19 +148,7 @@ export function OpenPollPanel({
     )
   }
 
-  if (view.is_closed) {
-    return (
-      <Card withBorder>
-        {/* Closing acts on the whole poll, so one question of several can end
-            with nothing in it while the rest have results. */}
-        <Text fw={500}>
-          {view.poll.group_id
-            ? 'The poll was closed before anyone answered this question, so it has no results.'
-            : 'This poll was closed before anyone voted, so there are no results.'}
-        </Text>
-      </Card>
-    )
-  }
+  if (view.is_closed) return <NoResultsNotice inGroup={!!view.poll.group_id} />
 
   return (
     <Stack gap="md">
@@ -185,7 +165,6 @@ export function OpenPollPanel({
           pollId={pollId}
           options={view.options}
           needsName={view.poll.show_voters}
-          showBallots={view.poll.show_ballots}
           isCreator={isCreator}
           onVoted={onFirstVote ?? onChanged}
           questionStrip={questionStrip}
@@ -235,7 +214,6 @@ function Voted({
         pollId={pollId}
         options={view.options}
         needsName={false}
-        showBallots={view.poll.show_ballots}
         initial={scores}
         isCreator={isCreator}
         onVoted={() => {
@@ -255,17 +233,7 @@ function Voted({
         {questionStrip && <Divider />}
         <Text fw={500}>Your vote is in</Text>
         <Group justify="space-between" wrap="wrap" gap="sm">
-          <Text size="sm" c="dimmed">
-            {isCreator
-              ? 'Results are revealed once you close the poll.'
-              : 'Results are revealed once the poll is closed by its creator.'}
-            {scores && (
-              <>
-                <br />
-                You can change your vote until then.
-              </>
-            )}
-          </Text>
+          <RevealNote reveal={{ kind: 'open', isCreator }} canRevise={!!scores} />
           {scores && (
             <Button variant="light" onClick={() => setRevising(true)}>
               Edit vote
@@ -278,46 +246,19 @@ function Voted({
 }
 
 /**
- * Who has voted, on a poll that names them.
- *
- * "So far" is a promise that the list is still moving, and on a poll whose
- * results are out it is not: every ballot that will ever be cast is in it,
- * and the roster is a record rather than a progress report. The heading says
- * whichever of the two this poll is.
- */
-function VoterList({ voters }: { voters: string[]; final: boolean }) {
-  return (
-    <Stack gap="xs">
-      <Title order={4}>Voters</Title>
-      <Card withBorder>
-        {voters.length === 0 ? (
-          <Text size="sm" c="dimmed">
-            Nobody has voted yet.
-          </Text>
-        ) : (
-          <Group gap="xs">
-            {voters.map((name) => (
-              <Badge key={name} variant="light" color={badgeColor.done}>
-                {name}
-              </Badge>
-            ))}
-          </Group>
-        )}
-      </Card>
-    </Stack>
-  )
-}
-
-/**
  * The ballot behind a share link, filled in for the first time or filled in
  * again.
  *
- * One form for both, as on the invite side. The difference a revision makes
- * is that the stars start where the voter left them and the scores go to
- * `open_poll_revise`; the name field is gone, because a name on an open poll
- * is already on the roster everyone else is reading and `open_poll_revise`
- * will not change it. What somebody is changing is their vote, which is the
- * only part of that ballot nobody has seen.
+ * Everything a voter touches is `BallotCard`, which is the same card the
+ * invite side puts up; what is here is what an open poll's ballot alone has
+ * to deal with. That is the name — a share link carries no account, so a poll
+ * that shows who has responded has to ask — and the RPCs it goes to, which
+ * take a voter key in place of one.
+ *
+ * The name field is gone from a revision, because a name on an open poll is
+ * already on the roster everyone else is reading and `open_poll_revise` will
+ * not change it. What somebody is changing is their vote, which is the only
+ * part of that ballot nobody has seen.
  */
 function OpenBallot({
   pollId,
@@ -332,7 +273,6 @@ function OpenBallot({
   pollId: string
   options: PollOption[]
   needsName: boolean
-  showBallots: boolean
   isCreator: boolean
   /** The scores already on this browser's ballot; absent when casting one. */
   initial?: Record<string, number>
@@ -342,10 +282,6 @@ function OpenBallot({
   questionStrip?: ReactNode
 }) {
   const revising = initial !== undefined
-  // Shown in this browser's own order rather than the creator's; see
-  // lib/ballotOrder.ts. The scores below are keyed by option id, so this
-  // changes what the voter reads and nothing about what they send.
-  const ballot = useBallotOrder(options)
   // Offered rather than imposed: a name this browser has voted under before,
   // editable like any other, and blank for a browser that has not. It is what
   // lets a poll of several questions be answered without typing the same name
@@ -354,13 +290,10 @@ function OpenBallot({
   // continuity has to come from the only place that legitimately has it. See
   // lib/voterName.ts.
   const [name, setName] = useState(rememberedVoterName)
-  const [values, setValues] = useState<Record<string, number>>(initial ?? {})
-  const [submitting, setSubmitting] = useState(false)
   // The name is the one thing on this ballot that can be wrong, so it is
   // marked on the box rather than as a line above the submit button, where
   // it sat below the field it was about.
   const [nameError, setNameError] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
 
   /**
@@ -378,24 +311,18 @@ function OpenBallot({
     nameRef.current?.blur()
   }
 
-  function setScore(optionId: string, score: number) {
-    setValues((prev) => ({ ...prev, [optionId]: score }))
+  /** The one thing to be happy about before any of this is sent. */
+  function checkName() {
+    setNameError(null)
+    if (!needsName || name.trim()) return true
+    setNameError('Enter your name so the group can see who has voted.')
+    nameRef.current?.focus()
+    return false
   }
 
-  async function handleSubmit() {
-    setError(null)
-    setNameError(null)
-
+  async function send(scores: BallotScore[]) {
     const trimmedName = name.trim()
-    if (needsName && !trimmedName) {
-      setNameError('Enter your name so the group can see who has voted.')
-      nameRef.current?.focus()
-      return
-    }
-
-    setSubmitting(true)
-    const scores = ballot.map((o) => ({ candidate_id: o.id, score: values[o.id] ?? 0 }))
-    const { error: rpcError } = revising
+    const { error } = revising
       ? await openPollRpc('open_poll_revise', {
           p_poll_id: pollId,
           p_scores: scores,
@@ -407,23 +334,18 @@ function OpenBallot({
           p_voter_key: voterKeyFor(pollId),
           p_voter_name: needsName ? trimmedName : null,
         })
-    setSubmitting(false)
-
-    if (rpcError) {
-      setError(rpcError.message)
-      return
-    }
+    if (error) throw new Error(error.message)
     // Remembered only once a ballot has actually gone in under it, so a name
     // typed into a form that was refused is not offered back on the next one.
     if (needsName) rememberVoterName(trimmedName)
-    notifications.show({ message: revising ? 'Vote updated' : 'Vote submitted', color: 'green' })
-    onVoted()
   }
 
   return (
-    <Card withBorder>
-      <Stack gap="sm">
-        {needsName && (
+    <BallotCard
+      options={options}
+      initial={initial}
+      nameField={
+        needsName ? (
           <TextInput
             ref={nameRef}
             label="Your name"
@@ -445,56 +367,15 @@ function OpenBallot({
               releaseNameFocus()
             }}
           />
-        )}
-
-        {needsName && questionStrip && <Divider />}
-        {questionStrip}
-        {questionStrip && <Divider />}
-
-        {ballot.map((option) => (
-          <>
-            <Group justify="space-between" wrap="nowrap" gap="sm">
-              <div style={{ minWidth: 0 }}>
-                <Text fw={500}>{option.name}</Text>
-                {option.description && <OptionDescription description={option.description} />}
-              </div>
-              <StarRating
-                label={`Score for ${option.name}`}
-                value={values[option.id] ?? 0}
-                onChange={(v) => setScore(option.id, v)}
-                onPointerDown={releaseNameFocus}
-              />
-            </Group>
-            <Divider />
-          </>
-        ))}
-
-        {error && (
-          <Text c="red" size="sm">
-            {error}
-          </Text>
-        )}
-
-        <Group justify="space-between" wrap="wrap" gap="sm">
-          <Text size="sm" c="dimmed">
-            {isCreator
-              ? 'Results are revealed once you close the poll.'
-              : 'Results are revealed once the poll is closed by its creator.'}
-            <br />
-            You can change your vote until then.
-          </Text>
-          <Group gap="sm" align="flex-end">
-          {onCancel && (
-            <Button variant="subtle" onClick={onCancel} disabled={submitting}>
-              Cancel
-            </Button>
-          )}
-          <Button onClick={handleSubmit} loading={submitting}>
-            {revising ? 'Save changes' : 'Submit vote'}
-          </Button>
-          </Group>
-        </Group>
-      </Stack>
-    </Card>
+        ) : undefined
+      }
+      questionStrip={questionStrip}
+      note={<RevealNote reveal={{ kind: 'open', isCreator }} canRevise />}
+      beforeSubmit={checkName}
+      onSubmit={send}
+      onVoted={onVoted}
+      onCancel={onCancel}
+      onScorePointerDown={releaseNameFocus}
+    />
   )
 }

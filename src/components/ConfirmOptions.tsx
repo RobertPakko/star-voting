@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Badge, Button, Card, Group, Stack, Text, TextInput, Title } from '@mantine/core'
+import { Button, Group, Stack, Text, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { openPollRpc } from '../lib/samplePoll'
 import { VOTER_NAME_MAX } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
 import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
-import { badgeColor } from '../lib/badgeColors'
+import { NameRoster } from './NameRoster'
 
 /**
  * Which endpoint a confirmation goes through: the same split as
@@ -193,23 +193,10 @@ export function ConfirmOptions({
  */
 export function Confirmations({ names }: { names: string[] }) {
   return (
-    <Stack gap="xs">
-      <Title order={4}>Confirmed the options</Title>
-      <Card withBorder>
-        {names.length === 0 ? (
-          <Text size="sm" c="dimmed">
-            Nobody has confirmed the options yet.
-          </Text>
-        ) : (
-          <Group gap="xs">
-            {names.map((confirmedBy) => (
-              <Badge key={confirmedBy} variant="light" color={badgeColor.done}>
-                {confirmedBy}
-              </Badge>
-            ))}
-          </Group>
-        )}
-      </Card>
-    </Stack>
+    <NameRoster
+      title="Confirmed the options"
+      names={names}
+      empty="Nobody has confirmed the options yet."
+    />
   )
 }

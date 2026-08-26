@@ -30,10 +30,11 @@ import type { PollOption } from './types'
  * This is display only. A ballot is sent as a score per option id and read
  * back by id, so the order it travels in means nothing to anyone; see
  * submit_ballot, which checks the length of the list and then looks up every
- * candidate_id in it. Applied on the two ballots and nowhere else: results
- * are ordered by score, the published ballot sheet has an ordering of its own
- * that is deliberately not arrival order, and the creator's option editor
- * shows the list in the order they typed it, which is the thing being edited.
+ * candidate_id in it. Applied in BallotCard — the one ballot both kinds of
+ * poll are scored on — and nowhere else: results are ordered by score, the
+ * published ballot sheet has an ordering of its own that is deliberately not
+ * arrival order, and the creator's option editor shows the list in the order
+ * they typed it, which is the thing being edited.
  */
 
 const STORAGE_KEY = 'star-voting:ballot-order-seed'

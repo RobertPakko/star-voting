@@ -1,6 +1,6 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Badge, Button, Card, Divider, Group, Progress, Stack, Text, Title } from '@mantine/core'
+import { Badge, Button, Card, Group, Progress, Stack, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -9,19 +9,19 @@ import { useWinner } from '../lib/useWinner'
 import { voterKeyFor } from '../lib/voterKey'
 import { answeredQuestions, forgetAnswered, rememberAnswered } from '../lib/answeredQuestions'
 import { nextUnansweredKey } from '../lib/nextQuestion'
-import { useBallotOrder } from '../lib/ballotOrder'
 import { Ballots } from '../components/Ballots'
+import { BallotCard, type BallotScore } from '../components/BallotCard'
 import { CollectOptions } from '../components/CollectOptions'
 import { ConfirmOptions } from '../components/ConfirmOptions'
 import { CreatorControls } from '../components/CreatorControls'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
+import { RosterSection } from '../components/NameRoster'
 import { OpenPollPanel } from '../components/OpenPollPanel'
-import { OptionDescription } from '../components/OptionDescription'
+import { CollectingNote, NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { RetentionNote } from '../components/RetentionNote'
 import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
-import { StarRating } from '../components/StarRating'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
@@ -326,6 +326,14 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
     title: question.question_title,
     answered: isOpen ? answered.has(question.id) : question.voted,
   }))
+  // One strip for the page rather than one per branch that can carry a
+  // ballot. Three cards render it — the open-poll panel, a first ballot, a
+  // ballot being changed — and it is the same navigation in all three, so
+  // three copies of it were three chances to hand one of them a different
+  // list.
+  const questionStrip = (
+    <QuestionStrip questions={strip} current={pollId ?? poll.id} hrefFor={(id) => `/polls/${id}`} />
+  )
   // The way on, taken rather than offered: a first ballot opens whichever
   // question this reader still owes. Undefined when they owe none and on a
   // poll of one, where the ballot's own page is where they stay and the page
@@ -458,13 +466,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
                 isCreator={isCreator}
                 onChanged={load}
                 onFirstVote={advance}
-                questionStrip={
-                  <QuestionStrip
-                    questions={strip}
-                    current={pollId ?? poll.id}
-                    hrefFor={(id) => `/polls/${id}`}
-                  />
-                }
+                questionStrip={questionStrip}
               />
             )
           ) : status.soliciting ? (
@@ -474,32 +476,14 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
               source={{ kind: 'poll', pollId: poll.id }}
               options={options}
               isCreator={isCreator}
-              footer={
-                <Text size="sm" c="dimmed">
-                  {isCreator
-                    ? 'Voting hasn’t started. Everyone can add options until you open the poll.'
-                    : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
-                </Text>
-              }
+              footer={<CollectingNote isCreator={isCreator} />}
               confirm={confirmation}
               onChanged={load}
             />
           ) : status.results_available ? (
-            <>
-              <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />
-            </>
+            <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />
           ) : status.is_closed ? (
-            <Card withBorder>
-              {/* Closing acts on the whole poll, so one question of several can
-              end with nothing in it while the rest have results. Saying "this
-              poll" there would be wrong about the poll and about the question
-              alike. */}
-              <Text fw={500}>
-                {poll.group_id
-                  ? 'The poll was closed before anyone answered this question, so it has no results.'
-                  : 'This poll was closed before anyone voted, so there are no results.'}
-              </Text>
-            </Card>
+            <NoResultsNotice inGroup={!!poll.group_id} />
           ) : status.voted ? (
             /* You have voted and the results are still sealed, which is exactly
            the window a vote can be changed in — this branch is only reached
@@ -518,13 +502,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
                   load()
                 }}
                 onCancel={() => setRevising(null)}
-                questionStrip={
-                  <QuestionStrip
-                    questions={strip}
-                    current={pollId ?? poll.id}
-                    hrefFor={(id) => `/polls/${id}`}
-                  />
-                }
+                questionStrip={questionStrip}
               />
             ) : (
               <Waiting status={status} pollId={poll.id} onRevise={setRevising} />
@@ -538,13 +516,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
               poll={poll}
               options={options}
               onVoted={advance ?? load}
-              questionStrip={
-                <QuestionStrip
-                  questions={strip}
-                  current={pollId ?? poll.id}
-                  hrefFor={(id) => `/polls/${id}`}
-                />
-              }
+              questionStrip={questionStrip}
             />
           )}
         </>
@@ -568,8 +540,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
           respondents gets no card and no heading over it — the header's count
           badge has said how many and the tag has said why nobody is named. */}
       {!isOpen && (poll.show_voters || isCreator) && (
-        <Stack gap="xs">
-          <Title order={4}>Voters</Title>
+        <RosterSection title="Voters">
           <Respondents
             pollId={poll.id}
             isCreator={isCreator}
@@ -578,7 +549,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
             liveTick={liveTick}
             onChange={reloadAll}
           />
-        </Stack>
+        </RosterSection>
       )}
 
       {status.results_available && poll.show_ballots && (
@@ -657,10 +628,7 @@ function Waiting({
         </Group>
         <Progress value={pct} />
         <Group justify="space-between" wrap="wrap" gap="sm">
-          <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 220 }}>
-            Results unlock automatically once everyone invited has voted. You can change your vote
-            until then.
-          </Text>
+          <RevealNote reveal={{ kind: 'invite' }} canRevise grow />
           <Button variant="light" onClick={handleRevise} loading={loading}>
             Edit vote
           </Button>
@@ -674,17 +642,16 @@ function Waiting({
  * The ballot for an invite poll, whether it is being filled in for the first
  * time or filled in again.
  *
+ * The ballot on screen is `BallotCard`, the same one an open poll puts up;
+ * what is here is where this one's scores go. Signed in, so there is nobody
+ * to name and no key to carry: `submit_ballot` and `revise_ballot` know who
+ * is voting, and `initial` is the whole of the difference between them.
+ *
  * Submitting re-reads the poll rather than leaving it. A vote is not the end
  * of anybody's interest in a poll, the results are, and this page is
  * where they arrive, on its own, as the rest of the group votes. Being sent
  * back to the list threw that away and made the poll something you had to
  * find your way back to.
- *
- * One form for both jobs, because they are the same job: the second time
- * around the stars start where the voter left them instead of at zero, and
- * the scores go to `revise_ballot` instead of `submit_ballot`. A ballot you
- * are changing that looked or behaved unlike the ballot you cast would be two
- * things to learn rather than one.
  */
 function VoteForm({
   poll,
@@ -705,88 +672,25 @@ function VoteForm({
   /** Navigation for a multi-question ballot, rendered inside its card. */
   questionStrip?: ReactNode
 }) {
-  const pollId = poll.id
   const revising = initial !== undefined
-  // Shown in this browser's own order rather than the creator's; see
-  // lib/ballotOrder.ts. The scores below are keyed by option id, so this
-  // changes what the voter reads and nothing about what they send.
-  const ballot = useBallotOrder(options)
-  const [values, setValues] = useState<Record<string, number>>(initial ?? {})
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  function setScore(optionId: string, score: number) {
-    setValues((prev) => ({ ...prev, [optionId]: score }))
-  }
-
-  async function handleSubmit() {
-    setError(null)
-    setSubmitting(true)
-    try {
-      const payload = ballot.map((o) => ({
-        candidate_id: o.id,
-        score: values[o.id] ?? 0,
-      }))
-      const { error: rpcError } = await supabase.rpc(revising ? 'revise_ballot' : 'submit_ballot', {
-        p_poll_id: pollId,
-        p_scores: payload,
-      })
-      if (rpcError) throw rpcError
-      notifications.show({ message: revising ? 'Vote updated' : 'Vote submitted', color: 'green' })
-      onVoted()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit vote.')
-    } finally {
-      setSubmitting(false)
-    }
+  async function send(scores: BallotScore[]) {
+    const { error } = await supabase.rpc(revising ? 'revise_ballot' : 'submit_ballot', {
+      p_poll_id: poll.id,
+      p_scores: scores,
+    })
+    if (error) throw new Error(error.message)
   }
 
   return (
-    <Card withBorder>
-      <Stack gap="sm">
-        {questionStrip}
-        {questionStrip && <Divider />}
-        {ballot.map((option) => (
-          <>
-            <Group justify="space-between" wrap="nowrap" gap="sm">
-              <div style={{ minWidth: 0 }}>
-                <Text fw={500}>{option.name}</Text>
-                {option.description && <OptionDescription description={option.description} />}
-              </div>
-              <StarRating
-                label={`Score for ${option.name}`}
-                value={values[option.id] ?? 0}
-                onChange={(v) => setScore(option.id, v)}
-              />
-            </Group>
-            <Divider />
-          </>
-        ))}
-
-        {error && (
-          <Text c="red" size="sm">
-            {error}
-          </Text>
-        )}
-
-        <Group justify="space-between" wrap="wrap" gap="sm">
-          <Text size="sm" c="dimmed">
-            Results unlock automatically once everyone invited has voted.
-            <br/>
-            You can change your vote until then.
-          </Text>
-          <Group gap="sm" align="flex-end">
-            {onCancel && (
-              <Button variant="subtle" onClick={onCancel} disabled={submitting}>
-                Cancel
-              </Button>
-            )}
-            <Button onClick={handleSubmit} loading={submitting}>
-              {revising ? 'Save changes' : 'Submit vote'}
-            </Button>
-          </Group>
-        </Group>
-      </Stack>
-    </Card>
+    <BallotCard
+      options={options}
+      initial={initial}
+      questionStrip={questionStrip}
+      note={<RevealNote reveal={{ kind: 'invite' }} canRevise />}
+      onSubmit={send}
+      onVoted={onVoted}
+      onCancel={onCancel}
+    />
   )
 }

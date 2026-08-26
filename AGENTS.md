@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
+src/components/  poll UI pieces (BallotCard, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
 src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, per-browser ballot order and answered questions, the About page's sample poll, shared types
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -32,6 +32,36 @@ The formatter is configured in `.oxfmtrc.json` to the style the code was
 already written in — no semicolons, single quotes, a hundred columns — and
 skips Markdown, since this file and the README are wrapped by hand and the
 wrapping carries meaning.
+
+**One poll, two pages, one set of components.** A poll is read as an account
+on `PollDetail` and through its link on `PublicPoll`, and an open poll is read
+both ways by its own creator — so nearly everything a poll says about itself
+has two callers reading two different pieces of state, `poll_status` on one
+side and `open_poll_view` on the other. Anything both of them draw lives in
+`src/components/` and takes what differs as a prop, rather than being written
+out on each page:
+
+- `BallotCard` is the ballot — the shuffled option rows, the stars, the error
+  line, Cancel and Submit. The two pages keep a small component each
+  (`VoteForm`, `OpenBallot`) holding the one thing that really is different:
+  where the scores go. Those are genuinely two paths, with different grants
+  and different guards, exactly as `submit_ballot` and `open_poll_submit` are
+  two functions over one `replace_scores()`.
+- `PollNotices` holds the sentences about where a poll has got to: what a
+  collecting poll is waiting for, what a poll closed with nothing in it has to
+  show, and when the results come out. The last of those is the two kinds of
+  poll's one real difference at this point — an invite poll unlocks itself,
+  an open poll is closed by its creator — so it takes which of the two it is
+  as a prop and the wording is written once.
+- `NameRoster` is a heading over a card of people, which is how the app
+  answers *who* every time it is asked: who has voted, who has confirmed the
+  options, and the invite list `Respondents` manages.
+
+The rule this is holding up is that a poll cannot describe itself differently
+depending on which door the reader came in by. Copies drift silently — the
+same two sentences about changing your vote had already ended up laid out one
+way on the ballot and another on the card you come back to — and the drift
+always lands where nobody looks.
 
 Icons come from [`@phosphor-icons/react`](https://phosphoricons.com), imported
 by name: `<StarIcon size={20} weight="fill" />` rather than a `<path d="…">`
@@ -1536,9 +1566,9 @@ promise rather than a new hole in it.
 ### The order the options come in
 
 Every ballot shuffles its options, and shuffles them the same way for any one
-browser every time it is opened. `src/lib/ballotOrder.ts` holds it, and the
-two ballots — `VoteForm` on the invite side, `OpenBallot` on the open side —
-are the only things that use it.
+browser every time it is opened. `src/lib/ballotOrder.ts` holds it, and
+`BallotCard` — the one ballot both kinds of poll are scored on — is the only
+thing that uses it.
 
 Ballot order is not neutral. An option at the top of a list is read first and
 read most carefully, and scores better for it than the same option would
@@ -1574,7 +1604,9 @@ the same measurement comes back inside 19.8–20.2%.
 It is display only. A ballot is sent as a score per option id and read back by
 id — `submit_ballot` checks the length of the list and then looks up every
 `candidate_id` in it — so the order it travels in means nothing to anyone.
-Nothing else in the app is shuffled: results are ordered by score, the
+`BallotCard` is the only caller, which is the same statement as before it was
+extracted: there is one ballot on screen and it is shuffled, whichever kind of
+poll's RPC the scores end up going to. Nothing else in the app is shuffled: results are ordered by score, the
 published ballot sheet has an ordering of its own that is deliberately not
 arrival order, and the creator's option editor shows the list in the order
 they typed it, which is the thing being edited.
