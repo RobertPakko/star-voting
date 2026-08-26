@@ -49,13 +49,25 @@ import { badgeColor } from '../lib/badgeColors'
  * This component asks for none of that. It takes a boolean per question and
  * colours a badge with it; where the boolean came from is the page's
  * business, and the two pages answer it the way each honestly can.
+ *
+ * **And no boolean at all means no mark**, which is the third honest answer
+ * and the one a finished poll gives. A poll that has stopped taking votes has
+ * nothing to be done about a question the reader skipped, so *done* and
+ * *outstanding* are a distinction about a ballot nobody can still cast — and
+ * *outstanding* in particular is a nudge towards something the poll will no
+ * longer accept. The strip then says only which question is open and where
+ * the others are, in one neutral colour.
  */
 export function QuestionStrip({
   questions,
   current,
   hrefFor,
 }: {
-  /** Every question in the poll, in order. Fewer than two renders nothing. */
+  /**
+   * Every question in the poll, in order. Fewer than two renders nothing.
+   *
+   * `answered` left undefined marks nothing, in either direction; see above.
+   */
   questions: { key: string; position: number; title: string; answered?: boolean }[]
   /** The `key` of the question being read. */
   current: string
@@ -99,15 +111,18 @@ export function QuestionStrip({
       <Group gap="xs">
         {questions.map((question) => {
           const isCurrent = question.key === current
+          // Filled says which question is open; the hue says whether it has
+          // been answered, and says nothing where there is nothing left to
+          // say — which is the whole of the difference between a strip on a
+          // poll still taking votes and one on a poll that has finished.
+          const color =
+            question.answered === undefined
+              ? badgeColor.unmarked
+              : question.answered
+                ? badgeColor.done
+                : badgeColor.outstanding
           return isCurrent ? (
-            // Filled says which question is open; the hue says whether it
-            // has been answered
-            <Badge
-              key={question.key}
-              variant="filled"
-              color={question.answered ? badgeColor.done : badgeColor.outstanding}
-              maw={220}
-            >
+            <Badge key={question.key} variant="filled" color={color} maw={220}>
               {question.title}
             </Badge>
           ) : (
@@ -117,12 +132,7 @@ export function QuestionStrip({
               to={hrefFor(question.key)}
               underline="never"
             >
-              <Badge
-                variant="light"
-                color={question.answered ? badgeColor.done : badgeColor.outstanding}
-                maw={220}
-                style={{ cursor: 'pointer' }}
-              >
+              <Badge variant="light" color={color} maw={220} style={{ cursor: 'pointer' }}>
                 {question.title}
               </Badge>
             </Anchor>

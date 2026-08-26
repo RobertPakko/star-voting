@@ -505,11 +505,19 @@ Six rules keep it honest:
   twenty of them behind a closed lid should not each hold a connection open.
   Coming back re-subscribes, which re-reads, so returning to a tab shows what
   arrived while it was away rather than what was there when it left.
-- **Watching stops when there is nothing left to watch.** A closed poll, or
-  one whose results are out, has taken its last vote. The poll list is the
-  exception and stays subscribed for as long as it is on screen: any poll on
-  it can take a vote, and a new invite can add a row — which is why it watches
-  its reader rather than any particular poll.
+- **Watching stops when there is nothing left to watch — for the question in
+  the address bar, not for the page.** A closed poll, or one whose results are
+  out, has taken its last vote. But a question of a settled poll is still a
+  question this page has never read, and the first read happens on
+  subscribing: a page that had already stopped watching stayed stopped, so
+  crossing to another question of a *finished* poll changed the address and
+  nothing else and left the poll sitting behind a skeleton until somebody
+  reloaded. So both pages keep watching until the read for the question in
+  front of the reader has landed — `PublicPoll` through a `view` that is null
+  for exactly that long, `PollDetail` through `loadedFor`. The poll list is
+  the other exception and stays subscribed for as long as it is on screen:
+  any poll on it can take a vote, and a new invite can add a row — which is
+  why it watches its reader rather than any particular poll.
 - **A vote *changed* says nothing at all.** The one deliberate silence here,
   and the reasoning is in [Changing your vote until the results are
   out](#changing-your-vote-until-the-results-are-out): nothing a watcher can
@@ -1449,6 +1457,16 @@ be answering a question nobody asked. The heading over it stays *Voters*
 throughout: it is one card about one set of people, and renaming it halfway
 through the poll would read as two cards rather than as one card keeping up.
 
+**And once the poll has closed it says *Did not vote*.** *Pending* is a
+reminder, and a reminder is only honest while there is something to be
+reminded of: after the close that ballot is not late, it is never coming.
+Nobody can cast it and the creator cannot chase it, so the roster has stopped
+being a list of who to wait for and become a record of what happened. It
+carries the poll's own closed colour rather than the orange of something
+outstanding, which is the same fact said one level up — see `badgeColor` in
+`src/lib/badgeColors.ts`. The collecting stage needs no such reading: a poll
+is soliciting only while `closed_at` is null, so the two cannot both be true.
+
 **The count is in the count badge, and nowhere else.** While a poll is
 collecting, the badge beside its title reads `2/5 confirmed` on an invite poll
 and `3 confirmed` on an open one — the same shape as the `3/6 votes` and `3
@@ -2060,6 +2078,17 @@ with it.
 
 The strip is built once per page and passed to every branch, which is what
 stops six places from being handed six different lists.
+
+**On a poll that has stopped taking votes it marks nothing.** The badges are
+coloured *done* or *outstanding* by whether this reader has answered each
+question, and once the poll is closed or its results are out that is a
+distinction about a ballot nobody can still cast — with *outstanding* in
+particular reading as a nudge towards one the poll would now refuse. So both
+pages hand the strip an `answered` of `undefined` at that point, which is the
+third thing `QuestionStrip` already knew how to be told (the first two being
+the server's answer on an invite poll and the browser's on an open one) and
+which it draws in one neutral colour. Which question is open, and where the
+others are, is the whole of what a finished poll's strip is for.
 
 The list it chooses from is the list the strip is drawn from — both pages build
 it once and pass it to both — so a voter is only ever carried to a question the

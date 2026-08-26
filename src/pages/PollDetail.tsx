@@ -251,7 +251,23 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   // out has taken its last vote either way; so the watching stops. Before the
   // first read there is nothing to stop for — that read is what the
   // subscription is for.
-  const live = !status || (!status.is_closed && !status.results_available)
+  //
+  // "Before the first read" is per *question*, not per page, and that is the
+  // whole of the second clause. Crossing to another question of a settled
+  // poll changes the address and nothing else — no remount, no reset — so a
+  // page that had already stopped watching stayed stopped, and since a
+  // question's first read happens on subscribing, nothing ever read the
+  // question it had just been asked for: the poll stayed on screen with a
+  // skeleton where the question should be, until somebody reloaded. It is a
+  // question of a *closed* poll that shows this, because that is the poll
+  // whose watching has stopped; while votes are still coming in the page is
+  // subscribed anyway and the crossing reads on the way past.
+  //
+  // `PublicPoll` draws the same line with a `view` that is null for exactly
+  // as long. Here it is `loadedFor`, which is what the rest of the page
+  // already asks whether the read in hand is about the question in the
+  // address bar.
+  const live = loadedFor !== pollId || !status || (!status.is_closed && !status.results_available)
   const liveStatus = useLiveStream(pollId ? [pollTopic(pollId)] : [], onSignal, { enabled: live })
 
   // For the state badge beside the title. Almost always already known: the
@@ -344,11 +360,22 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   const done = status.soliciting
     ? { browser: confirmed, server: (question: GroupQuestion) => question.confirmed === true }
     : { browser: answered, server: (question: GroupQuestion) => question.voted }
+  // ...and whether it marks anything at all depends on whether the mark is
+  // still about something. A poll that has closed, or whose results are out,
+  // takes no more ballots, so "you have answered this one and not that one"
+  // is a distinction about a vote nobody can still cast — and the outstanding
+  // colour is a nudge towards one the poll would now refuse. Undefined marks
+  // neither way; see QuestionStrip.
+  const marking = !status.is_closed && !status.results_available
   const strip = questions.map((question) => ({
     key: question.id,
     position: question.question_position,
     title: question.question_title,
-    answered: isOpen ? done.browser.has(question.id) : done.server(question),
+    answered: marking
+      ? isOpen
+        ? done.browser.has(question.id)
+        : done.server(question)
+      : undefined,
   }))
   // One strip for the page rather than one per branch that can draw a
   // question. Every branch below renders it — the option list, a first

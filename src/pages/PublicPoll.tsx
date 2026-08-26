@@ -227,11 +227,18 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
   // The same badge either way, of whatever the reader currently owes.
   const collecting = shell.soliciting
   const done = collecting ? confirmed : answered
+  // And whether it marks anything at all depends on whether the mark is still
+  // about something: a poll that has closed, or whose results are out, takes
+  // no more ballots, so which questions this browser answered is a
+  // distinction about a vote nobody can still cast. Undefined marks neither
+  // way; see QuestionStrip. The invite reading stops marking on the same
+  // terms.
+  const marking = !shell.is_closed && !shell.results_available
   const strip = questions.map((question) => ({
     key: question.id,
     position: question.question_position,
     title: question.question_title,
-    answered: done.has(question.id),
+    answered: marking ? done.has(question.id) : undefined,
   }))
   // How many questions the poll asks, for the count badge: a poll of several
   // has no turnout, only turnouts, so the badge says how much there is to

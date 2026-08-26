@@ -38,6 +38,11 @@ export const badgeColor = {
    * last one.
    */
   collectingOptions: 'gray',
+  /**
+   * The poll has stopped. Beside the title it is the poll's own state; in the
+   * roster it is that same fact said about one person — *Did not vote*, which
+   * is what `outstanding` turns into once there is no longer anything owed.
+   */
   closed: 'dark',
 
   /**
@@ -55,6 +60,18 @@ export const badgeColor = {
    * whole election that elected nobody. The same claim one level up.
    */
   unsettled: 'yellow',
+  /**
+   * Nothing to claim. The question strip on a poll that has stopped taking
+   * votes marks no question as done or outstanding: whether this reader
+   * answered a given one is a fact about a ballot nobody can cast any more,
+   * so the strip is left saying only which question is open and where the
+   * others are.
+   *
+   * It shares `collectingOptions`' grey on purpose, and the two cannot be
+   * confused because they cannot appear together: a poll showing its results
+   * is not a poll collecting its options.
+   */
+  unmarked: 'gray',
 } as const
 
 /**

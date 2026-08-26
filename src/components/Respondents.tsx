@@ -196,49 +196,42 @@ export function Respondents({
   return (
     <Card withBorder>
       <Stack gap="xs">
-        {invitees.map((invitee) => (
-          <Group key={invitee.email} justify="space-between" wrap="nowrap" gap="xs">
-            <Text size="sm" truncate style={{ flex: 1, minWidth: 0 }}>
-              {invitee.email}
-            </Text>
-            <Group gap="xs" wrap="nowrap">
-              {(collecting ? (invitee.has_confirmed ?? null) : invitee.has_voted) !== null && (
-                <Badge
-                  size="sm"
-                  variant="light"
-                  color={
-                    (collecting ? invitee.has_confirmed : invitee.has_voted)
-                      ? badgeColor.done
-                      : badgeColor.outstanding
-                  }
-                >
-                  {collecting
-                    ? invitee.has_confirmed
-                      ? 'Confirmed'
-                      : 'Pending'
-                    : invitee.has_voted
-                      ? 'Voted'
-                      : 'Pending'}
-                </Badge>
-              )}
-              {isCreator && (
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  aria-label={`Remove ${invitee.email}`}
-                  // Someone who already voted can't be removed; their
-                  // ballot is counted and can't be honestly un-counted. On a
-                  // poll that hides respondents we don't know who that is,
-                  // so the database refuses and reports why.
-                  disabled={invitee.has_voted === true || status.is_closed || busy}
-                  onClick={() => removeInvitee(invitee.email)}
-                >
-                  &times;
-                </ActionIcon>
-              )}
+        {invitees.map((invitee) => {
+          // Whether this poll says anything about this person at all: the
+          // stage decides which column is being drawn, and a poll that hides
+          // its respondents nulls it.
+          const said = (collecting ? (invitee.has_confirmed ?? null) : invitee.has_voted) !== null
+          const mark = standing(collecting, status.is_closed, invitee)
+          return (
+            <Group key={invitee.email} justify="space-between" wrap="nowrap" gap="xs">
+              <Text size="sm" truncate style={{ flex: 1, minWidth: 0 }}>
+                {invitee.email}
+              </Text>
+              <Group gap="xs" wrap="nowrap">
+                {said && (
+                  <Badge size="sm" variant="light" color={mark.color}>
+                    {mark.label}
+                  </Badge>
+                )}
+                {isCreator && (
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    aria-label={`Remove ${invitee.email}`}
+                    // Someone who already voted can't be removed; their
+                    // ballot is counted and can't be honestly un-counted. On a
+                    // poll that hides respondents we don't know who that is,
+                    // so the database refuses and reports why.
+                    disabled={invitee.has_voted === true || status.is_closed || busy}
+                    onClick={() => removeInvitee(invitee.email)}
+                  >
+                    &times;
+                  </ActionIcon>
+                )}
+              </Group>
             </Group>
-          </Group>
-        ))}
+          )
+        })}
 
         {!showsStatus && (
           <Text size="xs" c="dimmed">
@@ -278,4 +271,36 @@ export function Respondents({
       </Stack>
     </Card>
   )
+}
+
+/**
+ * What one person's badge says, which is about what they still owe — until
+ * the poll stops asking, at which point it is about what they did.
+ *
+ * *Pending* is a reminder, and a reminder is only honest while there is
+ * something to be reminded of. Once the poll is closed the missing ballot is
+ * not late, it is never coming: nobody can cast it, the creator cannot chase
+ * it, and the roster has turned from a list of who to wait for into a record
+ * of what happened. So the badge says the thing that is true — *Did not
+ * vote* — in the colour of the poll's own closed state, which is the same
+ * fact said one level up.
+ *
+ * There is no closed reading of the collecting stage, and no need for one: a
+ * poll is only soliciting while `closed_at` is null, so the two cannot both
+ * be true. See poll_status.
+ */
+function standing(
+  collecting: boolean,
+  isClosed: boolean,
+  invitee: Invitee,
+): { label: string; color: string } {
+  if (collecting) {
+    return invitee.has_confirmed
+      ? { label: 'Confirmed', color: badgeColor.done }
+      : { label: 'Pending', color: badgeColor.outstanding }
+  }
+  if (invitee.has_voted) return { label: 'Voted', color: badgeColor.done }
+  return isClosed
+    ? { label: 'Did not vote', color: badgeColor.closed }
+    : { label: 'Pending', color: badgeColor.outstanding }
 }
