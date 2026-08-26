@@ -239,7 +239,7 @@ function Voted({
     <Card withBorder>
       <Stack gap="sm">
         {questionStrip}
-        <Stack gap={0}>
+        <Stack gap={2}>
           <Text fw={500}>Your vote is in</Text>
           <Group justify="space-between" wrap="wrap" gap="sm">
             <RevealNote reveal={{ kind: 'open', isCreator }} canRevise={!!scores} />

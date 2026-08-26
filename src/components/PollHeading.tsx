@@ -84,7 +84,7 @@ export function PollHeading({
           inside its own share, because a wrapped title is still readable and
           an elected option ellipsised to two letters is not an answer at
           all. */}
-      <Stack gap={0}>
+      <Stack gap={2}>
         <Group align="flex-start" gap="sm" wrap="nowrap">
           {/* `minWidth: 0` is what lets a flex item shrink below its longest
             word at all; without it a title with no spaces in it would push

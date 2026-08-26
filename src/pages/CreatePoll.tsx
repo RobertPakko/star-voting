@@ -772,7 +772,7 @@ export function CreatePoll() {
         {duplicateOf ? 'Duplicate poll' : 'New poll'}
       </Title>
 
-      <Stack gap={0}>
+      <Stack gap={2}>
         <Title order={4} id="poll-title-label">
           Title
         </Title>
@@ -786,7 +786,7 @@ export function CreatePoll() {
         />
       </Stack>
 
-      <Stack gap={0}>
+      <Stack gap={2}>
         <Title order={4} id="poll-title-description">
           Description
         </Title>
@@ -801,7 +801,7 @@ export function CreatePoll() {
         />
       </Stack>
 
-      <Stack gap={0}>
+      <Stack gap={2}>
         <Title order={4}>Voters</Title>
         <Card withBorder p="sm">
           <Stack gap="xs">
@@ -839,7 +839,7 @@ export function CreatePoll() {
         </Card>
       </Stack>
 
-      <Stack gap={0}>
+      <Stack gap={2}>
         <Title order={4}>Configuration</Title>
         <Card withBorder p="sm">
           <Stack gap="sm">
@@ -870,7 +870,7 @@ export function CreatePoll() {
         </Card>
       </Stack>
 
-      <Stack gap={0}>
+      <Stack gap={2}>
         <Title order={4}>{solicitOptions ? 'Starting options' : 'Options'}</Title>
         <Card withBorder p="sm">
           {/* Last, because it is the only part of the form whose shape depends on

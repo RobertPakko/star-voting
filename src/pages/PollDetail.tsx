@@ -572,7 +572,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
           respondents gets no card and no heading over it — the header's count
           badge has said how many and the tag has said why nobody is named. */}
       {!isOpen && (poll.show_voters || isCreator) && (
-        <Stack gap={0}>
+        <Stack gap={2}>
           <Title order={4}>Voters</Title>
           <Respondents
             pollId={poll.id}

@@ -143,7 +143,7 @@ export function Results({
         </Card>
       )}
 
-      <Stack gap={0}>
+      <Stack gap={2}>
         <Title order={4}>Score round</Title>
         <Card withBorder p="sm">
           <Stack gap="xs">
@@ -171,7 +171,7 @@ export function Results({
       </Stack>
 
       {results.tiebreaks.length > 0 && (
-        <Stack gap={0}>
+        <Stack gap={2}>
           <Title order={4}>Tie-break{results.tiebreaks.length > 1 ? 's' : ''}</Title>
           {results.tiebreaks.map((tb, i) => (
             <Card withBorder key={i} p="sm">
@@ -240,7 +240,7 @@ export function Results({
       )}
 
       {results.runoff && results.finalists.length === 2 && (
-        <Stack gap={0}>
+        <Stack gap={2}>
           <Title order={4}>Automatic runoff round</Title>
           <Card withBorder p="sm">
             <Stack gap="xs">

@@ -223,7 +223,7 @@ export function CollectOptions({
       <Card withBorder>
         <Stack gap="sm">
           {questionStrip}
-          <Stack gap={0}>
+          <Stack gap={2}>
             <Text fw={500}>You’ve confirmed the options</Text>
             <Group justify="space-between" wrap="wrap" gap="sm">
               <OpeningNote
