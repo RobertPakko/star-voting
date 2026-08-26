@@ -137,7 +137,7 @@ export function BallotCard({
 
         <Group justify="space-between" wrap="wrap" gap="sm">
           {note}
-          <Group gap="sm" align="flex-end">
+          <Group gap="sm" align="flex-end" style={{ marginLeft: 'auto' }}>
             {onCancel && (
               <Button variant="subtle" onClick={onCancel} disabled={submitting}>
                 Cancel

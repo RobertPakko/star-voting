@@ -45,7 +45,7 @@ export function OpeningNote({
   return (
     <Text size="sm" c="dimmed">
       {whenEveryoneHas
-        ? 'Voting opens as soon as everyone has confirmed the options.'
+        ? 'Voting opens once everyone has confirmed the options.'
         : isCreator
           ? 'Voting starts once you open the poll.'
           : 'Voting starts once the poll’s creator opens the poll.'}
@@ -53,27 +53,6 @@ export function OpeningNote({
         <>
           <br />
           You can add more options until then.
-        </>
-      )}
-    </Text>
-  )
-}
-
-/**
- * What the *Confirm options* button does, beside the button that does it.
- *
- * It sits where the ballot's `RevealNote` sits and says the same kind of
- * thing: press this when you have nothing more to add, and here is what
- * happens if you are the last one to.
- */
-export function ConfirmNote({ opensWhenEveryoneHas = false }: { opensWhenEveryoneHas?: boolean }) {
-  return (
-    <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
-      Confirm the options once you have nothing more to add.
-      {opensWhenEveryoneHas && (
-        <>
-          <br />
-          The poll opens for voting as soon as everyone has confirmed.
         </>
       )}
     </Text>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Badge, Button, Card, Divider, Group, Progress, Stack, Text } from '@mantine/core'
+import { Badge, Button, Card, Divider, Group, Progress, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -21,7 +21,6 @@ import { BallotCard, type BallotScore } from '../components/BallotCard'
 import { CollectOptions } from '../components/CollectOptions'
 import { CreatorControls } from '../components/CreatorControls'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
-import { RosterSection } from '../components/NameRoster'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
@@ -573,7 +572,8 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
           respondents gets no card and no heading over it — the header's count
           badge has said how many and the tag has said why nobody is named. */}
       {!isOpen && (poll.show_voters || isCreator) && (
-        <RosterSection title="Voters">
+        <Stack gap={0}>
+          <Title order={4}>Voters</Title>
           <Respondents
             pollId={poll.id}
             isCreator={isCreator}
@@ -582,7 +582,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
             liveTick={liveTick}
             onChange={reloadAll}
           />
-        </RosterSection>
+        </Stack>
       )}
 
       {status.results_available && poll.show_ballots && (
@@ -654,7 +654,7 @@ function Waiting({
     <Card withBorder>
       <Stack gap="sm">
         <Group justify="space-between" wrap="nowrap" gap="xs">
-          <Text fw={500}>Your vote is in. Waiting on the rest of the group.</Text>
+          <Text fw={500}>Your vote is in.</Text>
           <Badge {...countBadge}>
             {status.voted_count}/{status.invited_count} voted
           </Badge>
@@ -662,7 +662,12 @@ function Waiting({
         <Progress value={pct} />
         <Group justify="space-between" wrap="wrap" gap="sm">
           <RevealNote reveal={{ kind: 'invite' }} canRevise grow />
-          <Button variant="light" onClick={handleRevise} loading={loading}>
+          <Button
+            variant="light"
+            onClick={handleRevise}
+            loading={loading}
+            style={{ marginLeft: 'auto' }}
+          >
             Edit vote
           </Button>
         </Group>

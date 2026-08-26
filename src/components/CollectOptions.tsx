@@ -26,7 +26,7 @@ import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
 import { DescriptionField } from './DescriptionField'
 import { NameRoster } from './NameRoster'
 import { OptionDescription } from './OptionDescription'
-import { ConfirmNote, OpeningNote } from './PollNotices'
+import { OpeningNote } from './PollNotices'
 import type { PollOption } from '../lib/types'
 
 /**
@@ -223,22 +223,29 @@ export function CollectOptions({
       <Card withBorder>
         <Stack gap="sm">
           {questionStrip}
-          <Text fw={500}>You’re done adding options</Text>
-          <Group justify="space-between" wrap="wrap" gap="sm">
-            <OpeningNote
-              isCreator={isCreator}
-              whenEveryoneHas={confirm.opensWhenEveryoneHas}
-              canAdd
-            />
-            <Button variant="light" onClick={reopenList} loading={busy}>
-              Edit options
-            </Button>
-          </Group>
-          {error && (
-            <Text c="red" size="sm">
-              {error}
-            </Text>
-          )}
+          <Stack gap={0}>
+            <Text fw={500}>You’ve confirmed the options</Text>
+            <Group justify="space-between" wrap="wrap" gap="sm">
+              <OpeningNote
+                isCreator={isCreator}
+                whenEveryoneHas={confirm.opensWhenEveryoneHas}
+                canAdd
+              />
+              <Button
+                variant="light"
+                onClick={reopenList}
+                loading={busy}
+                style={{ marginLeft: 'auto' }}
+              >
+                Edit options
+              </Button>
+            </Group>
+            {error && (
+              <Text c="red" size="sm">
+                {error}
+              </Text>
+            )}
+          </Stack>
         </Stack>
       </Card>
     )
@@ -294,8 +301,20 @@ export function CollectOptions({
 
         {confirm ? (
           <Group justify="space-between" wrap="wrap" gap="sm" align="flex-end">
-            <ConfirmNote opensWhenEveryoneHas={confirm.opensWhenEveryoneHas} />
-            <Button onClick={confirmOptions} loading={busy}>
+            <Text size="sm" c="dimmed">
+              Confirm the options once you have nothing more to add.
+              <br />
+              {confirm.opensWhenEveryoneHas ? (
+                <>The poll opens for voting once everyone confirms.</>
+              ) : (
+                <>
+                  {isCreator
+                    ? 'Voting starts once you open the poll.'
+                    : 'Voting starts once the poll’s creator opens the poll.'}
+                </>
+              )}
+            </Text>
+            <Button onClick={confirmOptions} loading={busy} style={{ marginLeft: 'auto' }}>
               Confirm options
             </Button>
           </Group>

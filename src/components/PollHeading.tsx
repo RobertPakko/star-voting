@@ -1,4 +1,4 @@
-import { Flex, Stack, Text, Title } from '@mantine/core'
+import { Group, Stack, Text, Title } from '@mantine/core'
 import { PollStateBadge, PollTags } from './PollTags'
 import type { Turnout } from './PollTags'
 import type { PollMode } from '../lib/types'
@@ -63,7 +63,7 @@ export function PollHeading({
   compact?: boolean
 }) {
   return (
-    <Stack gap={compact ? 4 : 8}>
+    <Stack gap="xs">
       {/* The title and the badge share one row, sixty/forty, and neither is
           allowed to take the other's half.
 
@@ -84,53 +84,50 @@ export function PollHeading({
           inside its own share, because a wrapped title is still readable and
           an elected option ellipsised to two letters is not an answer at
           all. */}
-      <Flex align="flex-start" gap="sm" wrap="nowrap">
-        {/* `minWidth: 0` is what lets a flex item shrink below its longest
+      <Stack gap={0}>
+        <Group align="flex-start" gap="sm" wrap="nowrap">
+          {/* `minWidth: 0` is what lets a flex item shrink below its longest
             word at all; without it a title with no spaces in it would push
             the row wider than the card. */}
-        {compact ? (
-          <Text
-            fw={600}
-            c="var(--mantine-color-text)"
-            style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}
-          >
-            {title}
-          </Text>
-        ) : (
-          <Title order={2} style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}>
-            {title}
-          </Title>
-        )}
-        {/* The forty is the badge's own ceiling rather than a box around it;
+          {compact ? (
+            <Text
+              fw={600}
+              c="var(--mantine-color-text)"
+              style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}
+            >
+              {title}
+            </Text>
+          ) : (
+            <Title order={2} style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}>
+              {title}
+            </Title>
+          )}
+          {/* The forty is the badge's own ceiling rather than a box around it;
             see PollStateBadge, where only the badge carrying a poll's own
             text takes it. */}
-        <PollStateBadge
-          soliciting={state.soliciting}
-          resultsAvailable={state.resultsAvailable}
-          closed={state.closed}
-          winner={state.winner}
-          awaitingWinner={state.awaitingWinner}
-        />
-      </Flex>
+          <PollStateBadge
+            soliciting={state.soliciting}
+            resultsAvailable={state.resultsAvailable}
+            closed={state.closed}
+            winner={state.winner}
+            awaitingWinner={state.awaitingWinner}
+          />
+        </Group>
 
-      {description && (
-        <Text size={compact ? 'sm' : undefined} c="dimmed">
-          {description}
-        </Text>
-      )}
+        {description && (
+          <Text size={compact ? 'sm' : undefined} c="dimmed">
+            {description}
+          </Text>
+        )}
 
-      {createdBy && (
-        <Text size="xs" c="dimmed">
-          {createdBy === 'you' ? 'Created by you' : `Created by ${createdBy}`}
-        </Text>
-      )}
+        {createdBy && (
+          <Text size="xs" c="dimmed">
+            {createdBy === 'you' ? 'Created by you' : `Created by ${createdBy}`}
+          </Text>
+        )}
+      </Stack>
 
-      {/* The terms of the poll, at the top, whichever way each one is set:
-          people arrive here from a link with no other context, and these are
-          the only place a voter is told what happens to their ballot. */}
-      <div style={compact ? { marginTop: 4 } : undefined}>
-        <PollTags mode={mode} showVoters={showVoters} showBallots={showBallots} turnout={turnout} />
-      </div>
+      <PollTags mode={mode} showVoters={showVoters} showBallots={showBallots} turnout={turnout} />
     </Stack>
   )
 }

@@ -239,15 +239,21 @@ function Voted({
     <Card withBorder>
       <Stack gap="sm">
         {questionStrip}
-        <Text fw={500}>Your vote is in</Text>
-        <Group justify="space-between" wrap="wrap" gap="sm">
-          <RevealNote reveal={{ kind: 'open', isCreator }} canRevise={!!scores} />
-          {scores && (
-            <Button variant="light" onClick={() => setRevising(true)}>
-              Edit vote
-            </Button>
-          )}
-        </Group>
+        <Stack gap={0}>
+          <Text fw={500}>Your vote is in</Text>
+          <Group justify="space-between" wrap="wrap" gap="sm">
+            <RevealNote reveal={{ kind: 'open', isCreator }} canRevise={!!scores} />
+            {scores && (
+              <Button
+                variant="light"
+                onClick={() => setRevising(true)}
+                style={{ marginLeft: 'auto' }}
+              >
+                Edit vote
+              </Button>
+            )}
+          </Group>
+        </Stack>
       </Stack>
     </Card>
   )
