@@ -165,18 +165,30 @@ npm run dev
 
 ### 4. Emails
 
-The app sends two, and both go through [Resend](https://resend.com) from
-inside Postgres, calling Resend's HTTP API directly with `pg_net`:
+The app sends four, and every one of them goes through
+[Resend](https://resend.com) from inside Postgres, calling Resend's HTTP API
+directly with `pg_net`:
 
-- **the invitation**, when a poll is created with invitees (`create_poll`
-  inserting into `invited_voters`), through the `send_invite_email` trigger in
-  the squashed baseline under [`supabase/migrations/`](supabase/migrations);
-- **the results**, when a poll finishes, through
-  [`0038_results_ready_emails.sql`](supabase/migrations/0038_results_ready_emails.sql)
-  — see [Telling people the results are
+- **an invitation**, when an address is added to a poll's invite list
+  (`create_poll` inserting into `invited_voters`, or the creator adding
+  somebody later), through the `send_invite_email` trigger. It is two
+  letters, not one: a poll still collecting its options asks for options,
+  and a poll with a ballot on it asks for a vote;
+- **voting is open**, when a poll that collected its options stops
+  collecting, from `notify_poll_opened`;
+- **the results**, when a poll finishes, from `notify_results_ready` — see
+  [Telling people the results are
   ready](#telling-people-the-results-are-ready).
 
-Both read the same key, and the API key is never
+The senders themselves are in
+[`0043_the_emails_a_poll_sends.sql`](supabase/migrations/0043_the_emails_a_poll_sends.sql),
+which is also where the letterhead they share is written down; the triggers
+that call them are in the squashed baseline under
+[`supabase/migrations/`](supabase/migrations). Who hears which of them, and
+who is deliberately told nothing, is [What a poll writes to
+people](#what-a-poll-writes-to-people).
+
+They all read the same key, and the API key is never
 committed — they read it from Supabase Vault at send time:
 
 1. In the Supabase dashboard, open the **SQL Editor** on the project (not a
@@ -193,17 +205,20 @@ committed — they read it from Supabase Vault at send time:
    name = 'resend_api_key';` instead.
 2. That's it — no redeploy needed. The next row inserted into
    `invited_voters` (i.e. the next poll created with invitees) will pick up
-   the key automatically, and so will the next poll to finish.
+   the key automatically, and so will the next poll to open and the next to
+   finish.
 
 This only works against a real Supabase project: `pg_net` and Vault don't
-exist in the throwaway database `npm test` builds, so both triggers check for
-the schemas first and quietly do nothing if either is missing — the emails are
-best-effort and never block or fail the thing that triggered them.
+exist in the throwaway database `npm test` builds, so `send_poll_email` —
+the one place this app talks to a mailer — checks for the schemas first and
+quietly does nothing if either is missing. The emails are best-effort and
+never block or fail the thing that triggered them.
 
 One asymmetry is worth knowing before the key is in place: an invitation is
 sent per insert, so a poll created later still sends its invitations, while
-the results email is sent once per poll and a poll that finished before the
-key existed is never announced. Neither is retried.
+the other two are sent once, when the poll crosses the line — a poll that
+opened or finished before the key existed is never announced. Nothing is
+retried.
 
 ## Database migrations
 
@@ -335,16 +350,19 @@ than once per statement passes any assertion phrased as "did it say
 anything" — and that a page of the poll list is a page of the same list every
 time: that two pages partition it with nothing on both and nothing on neither,
 that the total is of the list rather than the page, and that asking past the
-end lands on the last page there is; and everything about the results-ready
+end lands on the last page there is; everything about the results-ready
 announcement except the sending — whether a poll has a result at all, who
 would be told, and that the notice is made exactly once, forgotten on reset
-and made again when the poll finishes a second time.
+and made again when the poll finishes a second time; and the same half of the
+other emails — which invitation an address is owed at each stage a poll goes
+through, that the creator is owed none, and who hears that a poll opened by
+hand as against one that opened itself.
 
-Not covered: RLS policies and the `auth.jwt()`-gated access rules. Nor either
-email: `pg_net` and Vault do not exist in the throwaway database, so both
-senders find no mailer and return without doing anything — the suite can say
-who *would* have been emailed and never that anybody was, exactly as it can for
-live updates. Nor the
+Not covered: RLS policies and the `auth.jwt()`-gated access rules. Nor the
+sending of any email: `pg_net` and Vault do not exist in the throwaway
+database, so `send_poll_email` finds no mailer and returns without doing
+anything — the suite can say who *would* have been emailed and never that
+anybody was, exactly as it can for live updates. Nor the
 delivery half of live updates: `test/sql/shim.sql` keeps `realtime.send()`'s
 write to `realtime.messages` and drops the service that fans it out, so the
 suite can say who would have been told and never that anyone was. Everything
@@ -1032,9 +1050,9 @@ The set of people who can vote in a poll is the set it was.
   one" now has no answer but to duplicate the poll and lose its votes. With a
   separate token that was an `UPDATE`.
 - **A primary key travels where a single-purpose secret does not.** This
-  schema already writes poll ids into email bodies — `trg_send_invite_email`
-  and the results-ready notice both link to `#/polls/<id>`. Those only fire
-  for invite polls, so nothing leaks today; but the pattern is established,
+  schema already writes poll ids into email bodies — every email this app
+  sends links to `#/polls/<id>`. Those only go to invite polls, so nothing
+  leaks today; but the pattern is established,
   and every future thing that logs, exports, or reports an id is now handling
   a ballot rather than a row number. That is the standing cost of the merge
   and the reason to think twice before adding the next one.
@@ -1430,6 +1448,13 @@ the poll announces twice: once for the roster moving, once for the option list
 becoming a ballot. Both are worth hearing, and `16_live_update_signals` asserts
 both counts — a page told nothing would be offering a box to suggest options to
 a poll that had started taking votes.
+
+**The poll opening is also an email**, and the last confirmation is what sends
+it: everybody in the poll is told that voting has started, the creator
+included, because the poll opened without them touching it. Pressing **Open
+poll** instead sends the same letter to everybody but the creator, who pressed
+it — see [What a poll writes to
+people](#what-a-poll-writes-to-people).
 
 **What the button does not do is un-confirm anybody else.** There is no
 "the list changed, please look again" round trip, and adding that would be a
@@ -2020,8 +2045,9 @@ one everybody was. A poll's results unlock on their own — when the last invite
 votes, or when the creator closes it — and the only way to find out used to be
 to keep opening the poll. The people most likely to miss it are the ones who
 voted early, which is to say the ones who cared enough to answer first.
-[`0038_results_ready_emails.sql`](supabase/migrations/0038_results_ready_emails.sql)
-is the whole of it.
+`notify_results_ready` and the four triggers that call it, in the squashed
+baseline under [`supabase/migrations/`](supabase/migrations), are the whole of
+it.
 
 The delivery half is the invitation's, deliberately: `pg_net` posting to
 Resend with the key read from Vault at send time, best-effort, never blocking
@@ -2067,7 +2093,11 @@ noticed exactly once.
   email whose entire content they already have, so `closed_at` is the test:
   set means closed by hand, and the creator comes off the list — as an invitee
   too, on a poll they invited themselves to, since the reason they need no
-  email does not stop applying because they are also on the invite list. An
+  email does not stop applying because they are also on the invite list. That
+  rule outgrew this email — see [What a poll writes to
+  people](#what-a-poll-writes-to-people) — so `poll_results_audience` now
+  says it in terms of `poll_email_audience`, which is the same sentence with
+  "finished on its own" left to the caller. An
   open poll only ever ends by being closed, so its audience is empty and it
   sends nothing at all: its voters gave no addresses, and the one person it
   could have written to is the person who closed it.
@@ -2101,6 +2131,82 @@ itself: whether a poll has a result, who would be told for each of the two ways
 a poll can end, that the notice appears exactly once when the poll crosses the
 line, that a reset takes it back and a second finish announces again, and that
 a group is one notice filed against question 1.
+
+### What a poll writes to people
+
+The results email came second, and by arriving it showed what was wrong with
+the first one. An invitation is worded for a poll you can vote in, and it is
+sent when the poll is created — which on a poll that collects its options is
+the one stage where there is nothing to vote on. It also went to the creator,
+who wrote it. So a poll had four moments in it and wrote about one and a half
+of them, in a letter whose subject line — *You're invited to vote* — is how
+bulk mail opens, which is how Gmail read it.
+[`0043_the_emails_a_poll_sends.sql`](supabase/migrations/0043_the_emails_a_poll_sends.sql)
+is the four letters and the two rules that decide them.
+
+- **The invitation says which stage the poll is at**, because that is what
+  the person reading it can act on. `poll_invite_kind` answers `options`
+  while the poll is still collecting them and `vote` once there is a ballot,
+  and it reads the poll at the moment the address is added — so somebody
+  invited to a soliciting poll on Monday is asked for options, and somebody
+  added to the same poll after it opens is asked for a vote.
+
+- **Nobody is told what they just did.** The creator set the poll up, so an
+  invitation is `none` for them — including on a poll they invited themselves
+  to, which the create form offers with a checkbox, since the reason they
+  need no email does not stop applying because they ticked a box. The same
+  rule decides the other two: a poll opened with the creator's own Open poll
+  button, or closed with their own Close button, is not news to them; a poll
+  that opens itself because the last invitee confirmed, or finishes because
+  the last invitee voted, is news to everybody in it.
+
+- **The rule is one function, and the caller supplies the answer.**
+  `poll_email_audience(poll, include_creator)` is every invitee plus the
+  creator, deduplicated and lowercased, minus the creator when the flag says
+  they already know; `poll_results_audience` is that with `closed_at is null`
+  passed in, and `notify_poll_opened` takes the flag from which of the two
+  openers called it. Nothing on the poll row records *how* it opened, and
+  adding a column to record it would widen every `select *` the app makes for
+  bookkeeping nothing on screen reads — the same argument that made the
+  results notice a row of its own. What the two callers know, they say.
+
+- **Opening needs no notice row, and finishing does.** `options_finalized_at`
+  is written once and nothing puts it back — a reset reopens voting, not the
+  option list — so the two functions that open a poll are the two openings
+  there are, and each writes once. `open_options_when_all_confirmed` still
+  has to check: it runs inside every confirmation and every invitee removal
+  on a soliciting poll, so it announces only where its update actually opened
+  something, and a second call after the poll is open writes to nobody.
+
+- **One letterhead, one mailer.** `poll_email_html` is the card — a heading, a
+  sentence, a button and the link under it — and `send_poll_email` is the only
+  place this app talks to Resend: it reads the key from Vault, builds the
+  link, and returns quietly where there is no mailer. Four copies of a table
+  layout would have been four places for a padding value to drift. The
+  fan-out is per address for the reason it always was: one request with every
+  invitee in the `to` would show each of them all the others, which is what a
+  poll with its respondents hidden promises not to do.
+
+- **Subjects name the letter; they do not sell it.** All four are the same
+  shape — *Your ballot for X*, *Help choose the options for X*, *Voting is
+  open for X*, *Results are available for X* — which is both less like bulk
+  mail and more use to somebody with three polls running. The bodies got the
+  same treatment: the results email described the scores, the runoff and the
+  full ranking to somebody one tap from all three, and now says that results
+  are available and stops.
+
+- **An open poll writes nothing at all**, and needs no special case to. It has
+  no invite list, so there is nobody to invite; it never opens itself, so its
+  opening is always its creator's own doing; and it only ever ends by being
+  closed, by the one person who would have been told. Every audience it has
+  is empty.
+
+`test/sql/cases/23_who_the_emails_go_to.sql` covers both decisions and neither
+send: which invitation each address is owed at each stage and that the creator
+is owed none, and who is in the audience for a poll opened by hand against one
+that opened itself. The sending is untestable here for the reason it always
+was — there is no `pg_net` in the throwaway database — so the suite can say
+who *would* have been written to and never that anybody was.
 
 ### Polls are deleted after six months
 
