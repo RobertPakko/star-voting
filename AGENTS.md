@@ -2037,15 +2037,29 @@ three conditions, each of which is a case where moving would be wrong:
   voter where they are, and the page does what a single-question poll always
   has: re-reads itself into *your vote is in*.
 
-**Every card that can be the last thing a voter sees carries the strip**, and
-that includes the one they see most: *your vote is in*. Answering question 3
-of five lands there, and the invite side's card was the one card in the app
-that did not carry it — so a voter who had just answered was left on a card
-with nowhere to go, two questions still owed and nothing on screen saying so.
-The open side's `Voted` had carried it all along; `Waiting` in `PollDetail` is
-that card's twin and now does too. The strip is built once per page and passed
-to each of them, which is what stops three cards from being handed three
-different lists.
+**Every stage a reader can be left standing in carries the strip**, on both
+readings, because a poll of several questions that offers no way to the others
+is a dead end wherever it happens. Two of them used not to.
+
+The first is the one a voter sees most: *your vote is in*. Answering question
+3 of five lands there, and the invite side's card was the one card in the app
+that did not carry it — so a voter who had just answered was left with two
+questions still owed and nothing on screen saying so. The open side's `Voted`
+had carried it all along; `Waiting` in `PollDetail` is that card's twin and
+now does too.
+
+The second is the end of the poll, and it was missing from *both* readings:
+the tally, and the notice a question closed with nothing in it puts up. That
+is the stage a poll is read in for the rest of its life — months later, by
+somebody who came back for the answer — and question 1's result was a page
+with no way to question 2's. Here the strip sits **above** the block rather
+than inside a card, which is the one place it does: there is no one card for
+it to be inside, and putting it inside `Results` would have meant a tally
+still loading, or a read of it that failed, taking the way out of the question
+with it.
+
+The strip is built once per page and passed to every branch, which is what
+stops six places from being handed six different lists.
 
 The list it chooses from is the list the strip is drawn from — both pages build
 it once and pass it to both — so a voter is only ever carried to a question the

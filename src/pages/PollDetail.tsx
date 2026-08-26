@@ -350,11 +350,14 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
     title: question.question_title,
     answered: isOpen ? done.browser.has(question.id) : done.server(question),
   }))
-  // One strip for the page rather than one per branch that can carry a
-  // ballot. Three cards render it — the open-poll panel, a first ballot, a
-  // ballot being changed — and it is the same navigation in all three, so
-  // three copies of it were three chances to hand one of them a different
-  // list.
+  // One strip for the page rather than one per branch that can draw a
+  // question. Every branch below renders it — the option list, a first
+  // ballot, a ballot being changed, the card a voter comes back to, the
+  // tally, and the notice a question closed empty puts up — because every one
+  // of them is a place a reader can be left standing, and a poll of several
+  // questions that offers no way to the others is a dead end wherever it
+  // happens. It is the same navigation in all of them, so a copy per branch
+  // was a chance per branch to hand one of them a different list.
   const questionStrip = (
     <>
       <QuestionStrip
@@ -519,9 +522,22 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
               onConfirmed={advance}
             />
           ) : status.results_available ? (
-            <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />
+            /* The strip sits above the tally rather than inside it, which is
+               the one place in this page it is not inside a card — because
+               here there is no one card for it to be inside, and because a
+               tally still loading, or a read of it that failed, must not take
+               the way out of the question with it. Everything else about it
+               is unchanged: the same list, in the same order, marking the
+               same questions. */
+            <>
+              {questionStrip}
+              <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />
+            </>
           ) : status.is_closed ? (
-            <NoResultsNotice inGroup={!!poll.group_id} />
+            <>
+              {questionStrip}
+              <NoResultsNotice inGroup={!!poll.group_id} />
+            </>
           ) : status.voted ? (
             /* You have voted and the results are still sealed, which is exactly
            the window a vote can be changed in — this branch is only reached

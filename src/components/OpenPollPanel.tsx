@@ -75,7 +75,12 @@ export function OpenPollPanel({
    * the next question. Absent where there is nowhere to go.
    */
   onFirstConfirm?: () => void
-  /** Navigation for a multi-question ballot, rendered inside its card. */
+  /**
+   * Navigation between the poll's questions, drawn at every stage this panel
+   * can be in. Inside the card wherever there is one card — the option list,
+   * the ballot, the card a voter comes back to — and above the block where
+   * there is not, which is the tally.
+   */
   questionStrip?: ReactNode
 }) {
   // Before anything else, because a poll still collecting its options has no
@@ -148,6 +153,12 @@ export function OpenPollPanel({
   if (view.results_available) {
     return (
       <Stack gap="md">
+        {/* Above the tally rather than inside it, which is the one place this
+            strip is not inside a card — there is no one card here for it to
+            be inside, and a tally still loading, or a read of it that failed,
+            must not take the way out of the question with it. The invite
+            reading places it the same way, for the same reason. */}
+        {questionStrip}
         <Results source={{ kind: 'open', pollId }} pollId={view.poll.id} />
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
@@ -157,7 +168,14 @@ export function OpenPollPanel({
     )
   }
 
-  if (view.is_closed) return <NoResultsNotice inGroup={!!view.poll.group_id} />
+  if (view.is_closed) {
+    return (
+      <Stack gap="md">
+        {questionStrip}
+        <NoResultsNotice inGroup={!!view.poll.group_id} />
+      </Stack>
+    )
+  }
 
   return (
     <Stack gap="md">
