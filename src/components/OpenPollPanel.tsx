@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Badge, Button, Card, Group, Stack, Text, TextInput, Title } from '@mantine/core'
+import { useRef, useState, type ReactNode } from 'react'
+import { Badge, Button, Card, Divider, Group, Stack, Text, TextInput, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { openPollRpc } from '../lib/samplePoll'
 import { VOTER_NAME_MAX } from '../lib/limits'
@@ -41,6 +41,7 @@ export function OpenPollPanel({
   isCreator = false,
   onChanged,
   onFirstVote,
+  questionStrip,
 }: {
   pollId: string
   view: OpenPollView
@@ -68,6 +69,8 @@ export function OpenPollPanel({
    * re-reading is exactly right.
    */
   onFirstVote?: () => void
+  /** Navigation for a multi-question ballot, rendered inside its card. */
+  questionStrip?: ReactNode
 }) {
   // Before anything else, because a poll still collecting its options has no
   // ballot to show and no result to show either.
@@ -170,14 +173,22 @@ export function OpenPollPanel({
   return (
     <Stack gap="md">
       {view.voted ? (
-        <Voted pollId={pollId} view={view} isCreator={isCreator} onRevised={onChanged} />
+        <Voted
+          pollId={pollId}
+          view={view}
+          isCreator={isCreator}
+          onRevised={onChanged}
+          questionStrip={questionStrip}
+        />
       ) : (
         <OpenBallot
           pollId={pollId}
           options={view.options}
           needsName={view.poll.show_voters}
           showBallots={view.poll.show_ballots}
+          isCreator={isCreator}
           onVoted={onFirstVote ?? onChanged}
+          questionStrip={questionStrip}
         />
       )}
 
@@ -202,12 +213,14 @@ function Voted({
   view,
   isCreator,
   onRevised,
+  questionStrip,
 }: {
   pollId: string
   view: OpenPollView
   isCreator: boolean
   /** A changed ballot went in: the page re-reads the poll. */
   onRevised: () => void
+  questionStrip?: ReactNode
 }) {
   const [revising, setRevising] = useState(false)
   // A database that predates `your_scores` returns undefined, and a ballot
@@ -224,11 +237,13 @@ function Voted({
         needsName={false}
         showBallots={view.poll.show_ballots}
         initial={scores}
+        isCreator={isCreator}
         onVoted={() => {
           setRevising(false)
           onRevised()
         }}
         onCancel={() => setRevising(false)}
+        questionStrip={questionStrip}
       />
     )
   }
@@ -236,9 +251,11 @@ function Voted({
   return (
     <Card withBorder>
       <Stack gap="sm">
+        {questionStrip}
+        {questionStrip && <Divider />}
         <Text fw={500}>Your vote is in</Text>
         <Group justify="space-between" wrap="wrap" gap="sm">
-          <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 220 }}>
+          <Text size="sm" c="dimmed">
             {isCreator
               ? 'Results are revealed once you close the poll.'
               : 'Results are revealed once the poll is closed by its creator.'}
@@ -306,19 +323,23 @@ function OpenBallot({
   pollId,
   options,
   needsName,
+  isCreator,
   initial,
   onVoted,
   onCancel,
+  questionStrip,
 }: {
   pollId: string
   options: PollOption[]
   needsName: boolean
   showBallots: boolean
+  isCreator: boolean
   /** The scores already on this browser's ballot; absent when casting one. */
   initial?: Record<string, number>
   onVoted: () => void
   /** Offered only when changing a vote; leaves the ballot as it stands. */
   onCancel?: () => void
+  questionStrip?: ReactNode
 }) {
   const revising = initial !== undefined
   // Shown in this browser's own order rather than the creator's; see
@@ -400,64 +421,80 @@ function OpenBallot({
   }
 
   return (
-    <Stack gap="md">
-      {needsName && (
-        <TextInput
-          ref={nameRef}
-          label="Your name"
-          placeholder="Your name"
-          value={name}
-          onChange={(e) => {
-            setName(e.currentTarget.value)
-            setNameError(null)
-          }}
-          error={nameError}
-          maxLength={VOTER_NAME_MAX}
-          required
-          /* Label the key "Done" rather than a Go/newline the field has no use
-             for, and honour that label by putting the keyboard away. */
-          enterKeyHint="done"
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter') return
-            e.preventDefault()
-            releaseNameFocus()
-          }}
-        />
-      )}
-
-      {ballot.map((option) => (
-        <Card key={option.id} withBorder>
-          <Group justify="space-between" wrap="nowrap" gap="sm">
-            <div style={{ minWidth: 0 }}>
-              <Text fw={500}>{option.name}</Text>
-              {option.description && <OptionDescription description={option.description} />}
-            </div>
-            <StarRating
-              label={`Score for ${option.name}`}
-              value={values[option.id] ?? 0}
-              onChange={(v) => setScore(option.id, v)}
-              onPointerDown={releaseNameFocus}
-            />
-          </Group>
-        </Card>
-      ))}
-
-      {error && (
-        <Text c="red" size="sm">
-          {error}
-        </Text>
-      )}
-
-      <Group justify="flex-end">
-        {onCancel && (
-          <Button variant="subtle" onClick={onCancel} disabled={submitting}>
-            Cancel
-          </Button>
+    <Card withBorder>
+      <Stack gap="sm">
+        {needsName && (
+          <TextInput
+            ref={nameRef}
+            label="Your name"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => {
+              setName(e.currentTarget.value)
+              setNameError(null)
+            }}
+            error={nameError}
+            maxLength={VOTER_NAME_MAX}
+            required
+            /* Label the key "Done" rather than a Go/newline the field has no use
+               for, and honour that label by putting the keyboard away. */
+            enterKeyHint="done"
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return
+              e.preventDefault()
+              releaseNameFocus()
+            }}
+          />
         )}
-        <Button onClick={handleSubmit} loading={submitting}>
-          {revising ? 'Save changes' : 'Submit vote'}
-        </Button>
-      </Group>
-    </Stack>
+
+        {needsName && questionStrip && <Divider />}
+        {questionStrip}
+        {questionStrip && <Divider />}
+
+        {ballot.map((option) => (
+          <>
+            <Group justify="space-between" wrap="nowrap" gap="sm">
+              <div style={{ minWidth: 0 }}>
+                <Text fw={500}>{option.name}</Text>
+                {option.description && <OptionDescription description={option.description} />}
+              </div>
+              <StarRating
+                label={`Score for ${option.name}`}
+                value={values[option.id] ?? 0}
+                onChange={(v) => setScore(option.id, v)}
+                onPointerDown={releaseNameFocus}
+              />
+            </Group>
+            <Divider />
+          </>
+        ))}
+
+        {error && (
+          <Text c="red" size="sm">
+            {error}
+          </Text>
+        )}
+
+        <Group justify="space-between" wrap="wrap" gap="sm">
+          <Text size="sm" c="dimmed">
+            {isCreator
+              ? 'Results are revealed once you close the poll.'
+              : 'Results are revealed once the poll is closed by its creator.'}
+            <br />
+            You can change your vote until then.
+          </Text>
+          <Group gap="sm" align="flex-end">
+          {onCancel && (
+            <Button variant="subtle" onClick={onCancel} disabled={submitting}>
+              Cancel
+            </Button>
+          )}
+          <Button onClick={handleSubmit} loading={submitting}>
+            {revising ? 'Save changes' : 'Submit vote'}
+          </Button>
+          </Group>
+        </Group>
+      </Stack>
+    </Card>
   )
 }

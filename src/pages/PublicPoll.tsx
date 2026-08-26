@@ -257,16 +257,6 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
         }}
       />
 
-      {/* The rest of the poll, reached by the pollIds open_poll_group hands
-          back to whoever already holds one of them. The marks come out of
-          this browser rather than off the server, and that is the design
-          rather than a workaround: an open ballot is identified by a key
-          minted per question so that one browser's ballots cannot be joined
-          to each other, so the server is not asked to undo that for a tick --
-          and the browser, which holds every one of those keys already, is
-          told to answer for itself. See lib/answeredQuestions.ts. */}
-      <QuestionStrip questions={strip} current={pollId} hrefFor={(next) => `/polls/${next}`} />
-
       {/* Everything below the strip belongs to one question rather than to
           the poll, so it is the only part that waits: a crossing keeps the
           heading and the strip and fills this in, instead of blinking the
@@ -298,6 +288,9 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
                     navigate(`/polls/${onwards}`)
                   }
                 : undefined
+            }
+            questionStrip={
+              <QuestionStrip questions={strip} current={pollId} hrefFor={(next) => `/polls/${next}`} />
             }
           />
         </>

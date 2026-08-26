@@ -130,7 +130,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         },
         {
           id: '37d6bbad-38b0-2277-0c21-53a78cf0bb06',
-          name: 'Whatever is trending',
+          name: 'Mean Girls',
           poll_id: 'sample-movie',
           sort_order: 4,
           description:
@@ -557,7 +557,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         },
         {
           id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
-          name: 'Whatever is trending',
+          name: 'Mean Girls',
           poll_id: 'sample-result-movie',
           sort_order: 4,
           description:
@@ -717,7 +717,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         },
         {
           id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
-          name: 'Whatever is trending',
+          name: 'Mean Girls',
         },
         {
           id: '39a0de7f-1759-b30e-263f-30c1cb117e16',
@@ -1007,7 +1007,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         options: [
           {
             id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
-            name: 'Whatever is trending',
+            name: 'Mean Girls',
             total_score: 12,
           },
         ],
@@ -1074,7 +1074,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         },
         {
           id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
-          name: 'Whatever is trending',
+          name: 'Mean Girls',
           description:
             'Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George.',
           total_score: 12,

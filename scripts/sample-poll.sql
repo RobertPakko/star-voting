@@ -120,7 +120,7 @@ select $json${
         { "name": "Spirited Away", "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts." },
         { "name": "The Matrix", "description": "A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI." },
         { "name": "Paddington 2", "description": "Paddington, now happily settled with the Brown family and a popular member of the local community, picks up a series of odd jobs to buy the perfect present for his Aunt Lucy's 100th birthday, only for the gift to be stolen." },
-        { "name": "Whatever is trending", "description": "Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George." },
+        { "name": "Mean Girls", "description": "Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George." },
         { "name": "Honeyland", "description": "The last female bee-hunter in Europe must save the bees and return the natural balance in Honeyland, when a family of nomadic beekeepers invade her land and threaten her livelihood." }
       ],
       "ballots": [

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
+import { Badge, Button, Divider, Group, Modal, Stack, Text } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
@@ -97,11 +97,13 @@ export function FullRanking({ source, results }: { source: RankingSource; result
 
   return (
     <>
-      <Group justify="center">
-        <Button variant="subtle" size="compact-sm" onClick={modal.open}>
-          See the full ranking
-        </Button>
-      </Group>
+      <Divider
+        label={
+          <Button variant="subtle" size="compact-sm" onClick={modal.open}>
+            See the full ranking
+          </Button>
+        }
+      />
 
       <Modal opened={opened} onClose={modal.close} title="Full ranking" size="lg" centered>
         <Stack gap="md">

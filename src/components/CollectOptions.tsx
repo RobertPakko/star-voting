@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActionIcon,
@@ -201,41 +201,44 @@ export function CollectOptions({
 
   return (
     <Card withBorder>
-      <Stack gap="md">
+      <Stack gap="sm">
         {options.length === 0 ? (
           <Text size="sm" c="dimmed">
             Nothing suggested yet. Add the first one.
           </Text>
         ) : (
-          <Stack gap="xs">
+          <>
             {options.map((option) => (
-              <Group key={option.id} justify="space-between" wrap="nowrap" gap="sm">
-                <div style={{ minWidth: 0 }}>
-                  <Text fw={500}>{option.name}</Text>
-                  {option.description && <OptionDescription description={option.description} />}
-                </div>
-                {isCreator && (
-                  <Tooltip label="A poll needs at least two options" disabled={!atFloor} withArrow>
-                    {/* The span is what a tooltip on a disabled button needs:
-                        a disabled control fires no pointer events of its
-                        own, so the reason it is disabled would never be
-                        readable without something around it that does. */}
-                    <span>
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        disabled={atFloor}
-                        aria-label={`Remove ${option.name}`}
-                        onClick={() => removeOption(option)}
-                      >
-                        &times;
-                      </ActionIcon>
-                    </span>
-                  </Tooltip>
-                )}
-              </Group>
+              <Fragment key={option.id}>
+                <Group justify="space-between" wrap="nowrap" gap="sm">
+                  <div style={{ minWidth: 0 }}>
+                    <Text fw={500}>{option.name}</Text>
+                    {option.description && <OptionDescription description={option.description} />}
+                  </div>
+                  {isCreator && (
+                    <Tooltip label="A poll needs at least two options" disabled={!atFloor} withArrow>
+                      {/* The span is what a tooltip on a disabled button needs:
+                          a disabled control fires no pointer events of its
+                          own, so the reason it is disabled would never be
+                          readable without something around it that does. */}
+                      <span>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          disabled={atFloor}
+                          aria-label={`Remove ${option.name}`}
+                          onClick={() => removeOption(option)}
+                        >
+                          &times;
+                        </ActionIcon>
+                      </span>
+                    </Tooltip>
+                  )}
+                </Group>
+                <Divider />
+              </Fragment>
             ))}
-          </Stack>
+          </>
         )}
 
         <Group gap="xs" align="flex-start" wrap="nowrap">
@@ -284,12 +287,9 @@ export function CollectOptions({
 
         {footer}
 
-        {confirm && (
-          <>
-            <Divider />
-            {confirm}
-          </>
-        )}
+        <Divider />
+
+        {confirm}
 
         {full && (
           <Text size="xs" c="dimmed">

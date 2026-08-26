@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Anchor, Badge, Card, Group, Stack, Text } from '@mantine/core'
+import { Anchor, Badge, Group, Stack, Text } from '@mantine/core'
 import { badgeColor } from '../lib/badgeColors'
 
 /**
@@ -60,68 +60,64 @@ export function QuestionStrip({
   const next = index >= 0 && index < questions.length - 1 ? questions[index + 1] : null
 
   return (
-    <Card withBorder p="sm">
-      <Stack gap="xs">
-        <Group justify="space-between" wrap="nowrap" gap="sm" align="center">
-          {/* The counter, not the title: the title is the page heading right
-              below this, and saying it twice would push the ballot down for
-              nothing. */}
-          <Text size="sm" fw={500}>
-            {index >= 0
-              ? `Question ${index + 1} of ${questions.length}`
-              : `${questions.length} questions`}
-          </Text>
-          <Group gap="xs" wrap="nowrap">
-            {previous && (
-              <Anchor component={Link} to={hrefFor(previous.key)} size="sm">
-                ← Previous
-              </Anchor>
-            )}
-            {next && (
-              <Anchor component={Link} to={hrefFor(next.key)} size="sm">
-                Next →
-              </Anchor>
-            )}
-          </Group>
+    <Stack gap="xs">
+      <Group justify="space-between" wrap="nowrap" gap="sm" align="center">
+        {/* The counter, not the title: the title is the page heading right
+            below this, and saying it twice would push the ballot down for
+            nothing. */}
+        <Text size="sm" fw={500}>
+          {index >= 0 ? `Question ${index + 1} of ${questions.length}` : `${questions.length} questions`}
+        </Text>
+        <Group gap="xs" wrap="nowrap">
+          {previous && (
+            <Anchor component={Link} to={hrefFor(previous.key)} size="sm">
+              ← Previous
+            </Anchor>
+          )}
+          {next && (
+            <Anchor component={Link} to={hrefFor(next.key)} size="sm">
+              Next →
+            </Anchor>
+          )}
         </Group>
+      </Group>
 
-        {/* Every question by name, so the poll can be taken in whole and any
-            part of it reached directly — a voter who wants to change one
-            answer should not have to walk back through the others. */}
-        <Group gap="xs">
-          {questions.map((question) => {
-            const isCurrent = question.key === current
-            return isCurrent ? (
-              // Filled says which question is open; the hue says whether it
-              // has been answered
+      {/* Every question by name, so the poll can be taken in whole and any
+          part of it reached directly — a voter who wants to change one
+          answer should not have to walk back through the others. */}
+      <Group gap="xs">
+        {questions.map((question) => {
+          const isCurrent = question.key === current
+          return isCurrent ? (
+            // Filled says which question is open; the hue says whether it
+            // has been answered
+            <Badge
+              key={question.key}
+              variant="filled"
+              color={question.answered ? badgeColor.done : badgeColor.outstanding}
+              maw={220}
+            >
+              {question.title}
+            </Badge>
+          ) : (
+            <Anchor
+              key={question.key}
+              component={Link}
+              to={hrefFor(question.key)}
+              underline="never"
+            >
               <Badge
-                key={question.key}
-                variant="filled"
+                variant="light"
                 color={question.answered ? badgeColor.done : badgeColor.outstanding}
                 maw={220}
+                style={{ cursor: 'pointer' }}
               >
                 {question.title}
               </Badge>
-            ) : (
-              <Anchor
-                key={question.key}
-                component={Link}
-                to={hrefFor(question.key)}
-                underline="never"
-              >
-                <Badge
-                  variant="light"
-                  color={question.answered ? badgeColor.done : badgeColor.outstanding}
-                  maw={220}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {question.title}
-                </Badge>
-              </Anchor>
-            )
-          })}
-        </Group>
-      </Stack>
-    </Card>
+            </Anchor>
+          )
+        })}
+      </Group>
+    </Stack>
   )
 }

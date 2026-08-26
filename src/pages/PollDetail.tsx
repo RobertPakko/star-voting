@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Badge, Button, Card, Group, Progress, Stack, Text, Title } from '@mantine/core'
+import { Badge, Button, Card, Divider, Group, Progress, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -412,18 +412,6 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
         }}
       />
 
-      {/* Where in the poll this question sits, and the way to the rest of
-          it. Renders nothing at all on a poll that asks one question, which
-          is what keeps every existing poll looking exactly as it did. */}
-      {/* Marked from the address rather than from the poll that has been
-          read, so the question being opened is the one shown open from the
-          first frame of the crossing. */}
-      <QuestionStrip
-        questions={strip}
-        current={pollId ?? poll.id}
-        hrefFor={(id) => `/polls/${id}`}
-      />
-
       {/* One question's worth of the page, and the only part that waits on a
           crossing between two of them: what the question asks, and the ballot
           that answers it. Everything above belongs to the poll and is the
@@ -470,6 +458,13 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
                 isCreator={isCreator}
                 onChanged={load}
                 onFirstVote={advance}
+                questionStrip={
+                  <QuestionStrip
+                    questions={strip}
+                    current={pollId ?? poll.id}
+                    hrefFor={(id) => `/polls/${id}`}
+                  />
+                }
               />
             )
           ) : status.soliciting ? (
@@ -523,6 +518,13 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
                   load()
                 }}
                 onCancel={() => setRevising(null)}
+                questionStrip={
+                  <QuestionStrip
+                    questions={strip}
+                    current={pollId ?? poll.id}
+                    hrefFor={(id) => `/polls/${id}`}
+                  />
+                }
               />
             ) : (
               <Waiting status={status} pollId={poll.id} onRevise={setRevising} />
@@ -531,7 +533,19 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
             /* Keyed like the open-poll panel, and for the same reason: a
            correction to the option list invalidates a half-filled ballot,
            and remounting is what discards it. */
-            <VoteForm key={refreshKey} poll={poll} options={options} onVoted={advance ?? load} />
+            <VoteForm
+              key={refreshKey}
+              poll={poll}
+              options={options}
+              onVoted={advance ?? load}
+              questionStrip={
+                <QuestionStrip
+                  questions={strip}
+                  current={pollId ?? poll.id}
+                  hrefFor={(id) => `/polls/${id}`}
+                />
+              }
+            />
           )}
         </>
       ) : (
@@ -678,6 +692,7 @@ function VoteForm({
   initial,
   onVoted,
   onCancel,
+  questionStrip,
 }: {
   poll: Pick<Poll, 'id'>
   options: PollOption[]
@@ -687,6 +702,8 @@ function VoteForm({
   onVoted: () => void
   /** Offered only when changing a vote; leaves the ballot as it stands. */
   onCancel?: () => void
+  /** Navigation for a multi-question ballot, rendered inside its card. */
+  questionStrip?: ReactNode
 }) {
   const pollId = poll.id
   const revising = initial !== undefined
@@ -725,39 +742,51 @@ function VoteForm({
   }
 
   return (
-    <Stack gap="md">
-      {ballot.map((option) => (
-        <Card key={option.id} withBorder>
-          <Group justify="space-between" wrap="nowrap" gap="sm">
-            <div style={{ minWidth: 0 }}>
-              <Text fw={500}>{option.name}</Text>
-              {option.description && <OptionDescription description={option.description} />}
-            </div>
-            <StarRating
-              label={`Score for ${option.name}`}
-              value={values[option.id] ?? 0}
-              onChange={(v) => setScore(option.id, v)}
-            />
-          </Group>
-        </Card>
-      ))}
+    <Card withBorder>
+      <Stack gap="sm">
+        {questionStrip}
+        {questionStrip && <Divider />}
+        {ballot.map((option) => (
+          <>
+            <Group justify="space-between" wrap="nowrap" gap="sm">
+              <div style={{ minWidth: 0 }}>
+                <Text fw={500}>{option.name}</Text>
+                {option.description && <OptionDescription description={option.description} />}
+              </div>
+              <StarRating
+                label={`Score for ${option.name}`}
+                value={values[option.id] ?? 0}
+                onChange={(v) => setScore(option.id, v)}
+              />
+            </Group>
+            <Divider />
+          </>
+        ))}
 
-      {error && (
-        <Text c="red" size="sm">
-          {error}
-        </Text>
-      )}
-
-      <Group justify="flex-end">
-        {onCancel && (
-          <Button variant="subtle" onClick={onCancel} disabled={submitting}>
-            Cancel
-          </Button>
+        {error && (
+          <Text c="red" size="sm">
+            {error}
+          </Text>
         )}
-        <Button onClick={handleSubmit} loading={submitting}>
-          {revising ? 'Save changes' : 'Submit vote'}
-        </Button>
-      </Group>
-    </Stack>
+
+        <Group justify="space-between" wrap="wrap" gap="sm">
+          <Text size="sm" c="dimmed">
+            Results unlock automatically once everyone invited has voted.
+            <br/>
+            You can change your vote until then.
+          </Text>
+          <Group gap="sm" align="flex-end">
+            {onCancel && (
+              <Button variant="subtle" onClick={onCancel} disabled={submitting}>
+                Cancel
+              </Button>
+            )}
+            <Button onClick={handleSubmit} loading={submitting}>
+              {revising ? 'Save changes' : 'Submit vote'}
+            </Button>
+          </Group>
+        </Group>
+      </Stack>
+    </Card>
   )
 }
