@@ -223,7 +223,6 @@ export function CollectOptions({
       <Card withBorder>
         <Stack gap="sm">
           {questionStrip}
-          {questionStrip && <Divider />}
           <Text fw={500}>You’re done adding options</Text>
           <Group justify="space-between" wrap="wrap" gap="sm">
             <OpeningNote
@@ -275,9 +274,8 @@ export function CollectOptions({
           />
         )}
 
-        {needsName && questionStrip && <Divider />}
+        {needsName && <Divider />}
         {questionStrip}
-        {questionStrip && <Divider />}
 
         <OptionList source={source} options={options} isCreator={isCreator} onChanged={onChanged} />
 

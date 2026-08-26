@@ -110,10 +110,7 @@ export function BallotCard({
     <Card withBorder>
       <Stack gap="sm">
         {nameField}
-        {nameField && questionStrip && <Divider />}
         {questionStrip}
-        {questionStrip && <Divider />}
-
         {ballot.map((option) => (
           <Fragment key={option.id}>
             <Group justify="space-between" wrap="nowrap" gap="sm">

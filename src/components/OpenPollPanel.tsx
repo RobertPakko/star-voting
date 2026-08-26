@@ -239,7 +239,6 @@ function Voted({
     <Card withBorder>
       <Stack gap="sm">
         {questionStrip}
-        {questionStrip && <Divider />}
         <Text fw={500}>Your vote is in</Text>
         <Group justify="space-between" wrap="wrap" gap="sm">
           <RevealNote reveal={{ kind: 'open', isCreator }} canRevise={!!scores} />
@@ -355,27 +354,30 @@ function OpenBallot({
       initial={initial}
       nameField={
         needsName ? (
-          <TextInput
-            ref={nameRef}
-            label="Your name"
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => {
-              setName(e.currentTarget.value)
-              setNameError(null)
-            }}
-            error={nameError}
-            maxLength={VOTER_NAME_MAX}
-            required
-            /* Label the key "Done" rather than a Go/newline the field has no use
+          <>
+            <TextInput
+              ref={nameRef}
+              label="Your name"
+              placeholder="Your name"
+              value={name}
+              onChange={(e) => {
+                setName(e.currentTarget.value)
+                setNameError(null)
+              }}
+              error={nameError}
+              maxLength={VOTER_NAME_MAX}
+              required
+              /* Label the key "Done" rather than a Go/newline the field has no use
                for, and honour that label by putting the keyboard away. */
-            enterKeyHint="done"
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return
-              e.preventDefault()
-              releaseNameFocus()
-            }}
-          />
+              enterKeyHint="done"
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                releaseNameFocus()
+              }}
+            />
+            <Divider />
+          </>
         ) : undefined
       }
       questionStrip={questionStrip}

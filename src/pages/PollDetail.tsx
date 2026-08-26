@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Badge, Button, Card, Group, Progress, Stack, Text } from '@mantine/core'
+import { Badge, Button, Card, Divider, Group, Progress, Stack, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -357,7 +357,14 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   // three copies of it were three chances to hand one of them a different
   // list.
   const questionStrip = (
-    <QuestionStrip questions={strip} current={pollId ?? poll.id} hrefFor={(id) => `/polls/${id}`} />
+    <>
+      <QuestionStrip
+        questions={strip}
+        current={pollId ?? poll.id}
+        hrefFor={(id) => `/polls/${id}`}
+      />
+      {strip.length > 1 && <Divider />}
+    </>
   )
   // The way on, taken rather than offered: a first ballot opens whichever
   // question this reader still owes. Undefined when they owe none and on a

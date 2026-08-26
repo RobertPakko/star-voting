@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Stack, Text, Title } from '@mantine/core'
+import { Divider, Stack, Text, Title } from '@mantine/core'
 import { isSampleId, openPollRpc } from '../lib/samplePoll'
 import { voterKeyFor } from '../lib/voterKey'
 import {
@@ -311,11 +311,14 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
             onFirstVote={advance}
             onFirstConfirm={advance}
             questionStrip={
-              <QuestionStrip
-                questions={strip}
-                current={pollId}
-                hrefFor={(next) => `/polls/${next}`}
-              />
+              <>
+                <QuestionStrip
+                  questions={strip}
+                  current={pollId}
+                  hrefFor={(next) => `/polls/${next}`}
+                />
+                {strip.length > 1 && <Divider />}
+              </>
             }
           />
         </>
