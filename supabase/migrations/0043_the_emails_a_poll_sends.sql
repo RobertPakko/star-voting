@@ -24,11 +24,15 @@
 -- value to drift, so the shell is `poll_email_html` and the posting to Resend
 -- is `send_poll_email`; what each email knows about itself is four strings.
 --
--- **Subjects say what the letter is about, not how exciting it is.**
--- "You're invited to vote" is how bulk mail opens, and Gmail reads it that
--- way. The four subjects are now the same shape -- a plain noun phrase and
--- the poll's title -- which is also how a person with three polls running
--- tells them apart in a list.
+-- **Subjects say what the letter is about, not how exciting it is, and they
+-- do not carry the poll's title.** "You're invited to vote" is how bulk mail
+-- opens, and Gmail reads it that way. Putting the title in the subject fixed
+-- that and broke something else: a title is as long as its author made it,
+-- and an inbox truncates -- so the one part of a subject that is always
+-- readable would have been spent on a title that might not be. The four
+-- subjects are short, plain and fixed, and the poll is named in the first
+-- line of the body, where there is room for it and where it is next to what
+-- to do about it.
 --
 -- Nothing here changes the bargain the senders make: `pg_net` and Vault may
 -- not be there, the key may not be set, and every one of these functions
@@ -302,20 +306,20 @@ begin
     perform send_poll_email(
       new.poll_id,
       new.email,
-      'Help choose the options for ' || coalesce(v_poll.title, 'a poll'),
-      'Help choose the options',
-      v_title_html || ' is collecting its options before voting opens. Sign in with this '
-        || 'email address to add yours, and to say when you have finished.',
+      'You''ve been added to a new poll',
+      'Choose the options',
+      'Choose options for ' || v_title_html || '. Sign in with this email address to add '
+        || 'yours, and to say when you have finished.',
       'Add options &rarr;');
   else
     perform send_poll_email(
       new.poll_id,
       new.email,
-      'Your ballot for ' || coalesce(v_poll.title, 'a poll'),
+      'You''ve been added to a new poll',
       'Your ballot is ready',
-      'You are on the list of voters for ' || v_title_html || '. Sign in with this email '
-        || 'address to see the options and cast your ballot.',
-      'View poll &rarr;');
+      'Vote now for ' || v_title_html || '. Sign in with this email address to see the '
+        || 'options and cast your ballot.',
+      'Open poll &rarr;');
   end if;
 
   return new;
@@ -345,11 +349,10 @@ begin
   perform send_poll_email(
     p_poll.id,
     p_email,
-    'Voting is open for ' || coalesce(p_poll.title, 'a poll'),
-    'Voting is open',
-    'The options for <strong>' || email_escape(coalesce(p_poll.title, 'a poll'))
-      || '</strong> are settled and voting has started. Sign in with this email address '
-      || 'to cast your ballot.',
+    'Voting is now open for your poll',
+    'Voting is now open',
+    'Options have been finalized and voting is now open for <strong>'
+      || email_escape(coalesce(p_poll.title, 'a poll')) || '</strong>.',
     'Cast your ballot &rarr;');
 end;
 $$;
@@ -547,7 +550,7 @@ begin
   perform send_poll_email(
     p_poll.id,
     p_email,
-    'Results are available for ' || coalesce(p_poll.title, 'a poll'),
+    'Results are available for your poll',
     'The results are in',
     'Results are available for <strong>'
       || email_escape(coalesce(p_poll.title, 'a poll')) || '</strong>.',

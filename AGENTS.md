@@ -2187,13 +2187,27 @@ is the four letters and the two rules that decide them.
   invitee in the `to` would show each of them all the others, which is what a
   poll with its respondents hidden promises not to do.
 
-- **Subjects name the letter; they do not sell it.** All four are the same
-  shape — *Your ballot for X*, *Help choose the options for X*, *Voting is
-  open for X*, *Results are available for X* — which is both less like bulk
-  mail and more use to somebody with three polls running. The bodies got the
-  same treatment: the results email described the scores, the runoff and the
-  full ranking to somebody one tap from all three, and now says that results
-  are available and stops.
+- **Subjects name the letter; they do not sell it, and they do not carry the
+  poll's title.** *You're invited to vote* is how bulk mail opens. The four
+  subjects are now short, plain and fixed — *You've been added to a new
+  poll*, *Voting is now open for your poll*, *Results are available for your
+  poll* — and the poll is named in the first line of the body instead:
+  *Choose options for X*, *Vote now for X*, *Options have been finalized and
+  voting is now open for X*, *Results are available for X*. A title is as
+  long as its author made it and an inbox truncates, so the part of a subject
+  that is always read would otherwise have been spent on a title that might
+  not be. The bodies got the same shortening: the results email described the
+  scores, the runoff and the full ranking to somebody one tap from all three,
+  and now says that results are available and stops.
+
+- **A poll of several questions is one letter per person at every stage.**
+  Every question in a group is a poll row carrying the whole invite list, so
+  five questions are five `invited_voters` rows per person — and the
+  invitation trigger fires for question 1 alone, which is what makes them one
+  letter. The other two are addressed about question 1 as well and take the
+  group's audience once: opening is a single statement over every question in
+  the group, and finishing is one notice row filed against the first. Nothing
+  in a group announces itself per question.
 
 - **An open poll writes nothing at all**, and needs no special case to. It has
   no invite list, so there is nobody to invite; it never opens itself, so its
@@ -2203,8 +2217,11 @@ is the four letters and the two rules that decide them.
 
 `test/sql/cases/23_who_the_emails_go_to.sql` covers both decisions and neither
 send: which invitation each address is owed at each stage and that the creator
-is owed none, and who is in the audience for a poll opened by hand against one
-that opened itself. The sending is untestable here for the reason it always
+is owed none, who is in the audience for a poll opened by hand against one
+that opened itself, and the three things that keep a poll of several questions
+to one letter per person — the invitation naming question 1 alone, the
+audience taken once for the group, and a poll that has opened not opening
+again. The sending is untestable here for the reason it always
 was — there is no `pg_net` in the throwaway database — so the suite can say
 who *would* have been written to and never that anybody was.
 

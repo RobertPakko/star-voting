@@ -22,6 +22,7 @@ declare
   v_open uuid;
   v_group uuid[];
   v_row polls;
+  v_opened timestamptz;
 begin
   perform tests.sign_in('creator@example.com');
 
@@ -122,8 +123,11 @@ begin
     array['creator@example.com', 'voter1@example.com']);
 
   -- ---------------------------------------------------------------------
-  -- A poll of several questions opens in one act, so it is one email, sent
-  -- about the question every other email about this poll names.
+  -- A poll of several questions is one letter per person at every stage,
+  -- never one per question. Three things keep it that way, and they are the
+  -- three assertions below: the invitation fires for question 1 alone, the
+  -- other two emails are addressed about question 1 and take the group's
+  -- audience once, and the thing that opens a poll by itself opens it once.
   -- ---------------------------------------------------------------------
   perform tests.sign_in('creator@example.com');
   v_group := tests.seed_group(array[
@@ -138,6 +142,24 @@ begin
   perform tests.assert_eq('with one audience for the whole poll',
     (select array_agg(a order by a) from poll_email_audience(v_row, false) a),
     array['voter1@example.com']);
+
+  -- Every question carries the whole invite list, so five questions are five
+  -- invited_voters rows per person; the trigger's WHEN clause is what makes
+  -- them one letter.
+  perform tests.assert_eq('an invitation names the first question',
+    poll_is_first_question(v_group[1]), true);
+  perform tests.assert_eq('and no invitation is sent for the rest of them',
+    (select bool_or(poll_is_first_question(q)) from unnest(v_group[2:]) q), false);
+
+  -- The other half of "once": a poll that has already opened is not opened
+  -- again, so nothing announces it again either. This runs inside every
+  -- confirmation and every invitee removal on a soliciting poll, which is
+  -- how often it would otherwise write.
+  v_opened := (select options_finalized_at from polls where id = v_auto);
+
+  perform open_options_when_all_confirmed(v_auto);
+  perform tests.assert_eq('a poll already open is not opened a second time',
+    (select options_finalized_at from polls where id = v_auto), v_opened);
 
   raise notice '  poll email audiences ok';
 end $$;
