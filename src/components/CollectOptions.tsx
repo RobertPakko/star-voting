@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActionIcon,
@@ -13,9 +13,20 @@ import {
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
-import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
+import { openPollRpc } from '../lib/samplePoll'
+import {
+  MAX_OPTIONS,
+  OPTION_DESCRIPTION_MAX,
+  OPTION_NAME_MAX,
+  VOTER_NAME_MAX,
+  tooLong,
+} from '../lib/limits'
+import { voterKeyFor } from '../lib/voterKey'
+import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
 import { DescriptionField } from './DescriptionField'
+import { NameRoster } from './NameRoster'
 import { OptionDescription } from './OptionDescription'
+import { ConfirmNote, OpeningNote } from './PollNotices'
 import type { PollOption } from '../lib/types'
 
 /**
@@ -28,6 +39,10 @@ import type { PollOption } from '../lib/types'
  * correcting a list that is already a ballot, on a poll nobody has voted in
  * yet. See 0028_creator_edits_options.sql for why that is allowed and where
  * the window closes.
+ *
+ * Confirming takes the same two ways in, so it takes the same value: the
+ * creator's correction is the one that cannot be confirmed, because a list
+ * that is already a ballot has nobody left to be done adding to it.
  */
 export type OptionsSource =
   | { kind: 'poll'; pollId: string }
@@ -35,7 +50,47 @@ export type OptionsSource =
   | { kind: 'creator'; pollId: string }
 
 /**
- * A poll's option list, and the box that adds to it.
+ * How this reader says they are done with the list, when they have a say in
+ * it at all. Absent for the creator correcting a ballot's options, and for an
+ * invite poll's creator who did not invite themselves — their "I am done" is
+ * *Open poll*, which they have had all along.
+ */
+export interface Confirmation {
+  /** Whether they have already said so; the card draws either way. */
+  confirmed: boolean
+  /**
+   * Whether a name has to be typed before confirming: an open poll that shows
+   * its respondents, and nothing else. `open_poll_confirm_options` applies
+   * exactly this rule, and discards a name on a poll that hides them.
+   */
+  needsName?: boolean
+  /**
+   * Whether this press could be the press that opens the poll — a poll with a
+   * participant list, still waiting on somebody. It is the one thing about the
+   * button that is not obvious from the button, and somebody deciding whether
+   * to press it should know it before they do.
+   *
+   * **How many have confirmed is deliberately not here.** That is the count
+   * badge's job, in the poll's header, on every screen the poll appears on. It
+   * is false once everybody has confirmed, which is a poll that stayed put for
+   * a reason this card cannot name — a question of the group nobody has
+   * finished, or a list still short of two options — so it says the creator
+   * ends the stage rather than promising an opening that has already not
+   * happened.
+   */
+  opensWhenEveryoneHas?: boolean
+}
+
+/**
+ * The option-collecting stage as one person sees it, laid out as the ballot
+ * that replaces it: name at the top, the poll's other questions under it, the
+ * thing being filled in, and what happens next beside the button that ends
+ * your part in it.
+ *
+ * That is the whole of why this looks the way it does. Collecting options is
+ * the ballot's stage, at the same address, in the same place on the page, and
+ * a reader who has done one should recognise the other — so the two cards are
+ * built the same way round rather than each in whatever order it grew in.
  *
  * It stands in for the ballot on two occasions, and they are not the same
  * occasion:
@@ -48,51 +103,252 @@ export type OptionsSource =
  *    way for the creator's list to be built under rules nobody else's is.
  *  - a poll whose creator is **correcting** a list that is already a ballot,
  *    which only they see, and only while nobody has voted. That path is
- *    `source.kind === 'creator'`; see `OptionsSource` above.
+ *    `source.kind === 'creator'`; see `OptionsSource` above. It confirms
+ *    nothing and carries its own way out, as `footer`.
  *
  * Suggestions carry no name. Who suggested what would be a third disclosure
  * question on top of "who responded" and "how they voted", and the poll's
- * tags answer neither of those about the option list.
+ * tags answer neither of those about the option list. The name field at the
+ * top is the confirmation's, on the one poll that has no account to read one
+ * from — the same field, in the same place, that the same poll's ballot asks
+ * for.
  *
  * Pruning the list is creator-only either way, and sits here beside the list
  * it acts on, the same place the invite controls sit inside `Respondents`.
  * Opening the poll does not: it is what the creator does to the *poll*, so it
  * is in `CreatorControls` with the rest of the lifecycle, and this component
  * has nothing to say about when the stage ends.
- *
- * Saying you are *done* with the list is a third thing again, and it belongs
- * here: it is about this list rather than about the poll, and the person
- * pressing it is looking at what they are confirming. It arrives as
- * `confirm` — see `ConfirmOptions` — rather than being built here, because
- * only the page knows which of the two ways into the poll this reader came
- * by and whether the database is new enough to be asked at all.
  */
 export function CollectOptions({
   source,
   options,
   isCreator,
+  questionStrip,
   footer,
   confirm,
+  onChanged,
+  onConfirmed,
+}: {
+  source: OptionsSource
+  options: PollOption[]
+  isCreator: boolean
+  /** Navigation for a multi-question poll, rendered inside the card as on the ballot. */
+  questionStrip?: ReactNode
+  /**
+   * What goes in the footer row when there is nothing to confirm: the way out
+   * of the creator's correction. Passed in because it belongs to the page's
+   * situation rather than to the list.
+   */
+  footer?: ReactNode
+  /** How this reader says they are done adding; see `Confirmation`. */
+  confirm?: Confirmation
+  /** An option arrived or left, or a confirmation moved: re-read the poll. */
+  onChanged: () => void
+  /**
+   * A *first* confirmation went in, as against one taken back. Offered so a
+   * poll of several questions can move on to the next list this reader still
+   * owes, which is the whole of what they do next — exactly as a first ballot
+   * moves them on. It **replaces** `onChanged` on that path: the page that
+   * takes this is leaving the question, and a re-read of the question being
+   * left would land after the next one had loaded.
+   */
+  onConfirmed?: () => void
+}) {
+  // Offered rather than imposed, exactly as on the ballot: the name this
+  // browser last voted or confirmed under, editable like any other. See
+  // lib/voterName.ts for why the browser is the one place entitled to carry
+  // it from one question to the next.
+  const [name, setName] = useState(rememberedVoterName)
+  const [busy, setBusy] = useState(false)
+  // Wrong with the name being typed, marked on the box it was typed in;
+  // `error` is a request that failed, which is about the poll rather than
+  // about the field.
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  const needsName = confirm?.needsName === true
+
+  async function confirmOptions() {
+    if (busy || !confirm) return
+    setError(null)
+    setNameError(null)
+
+    const trimmed = name.trim()
+    if (needsName && !trimmed) {
+      setNameError('Enter your name so the group can see who has confirmed.')
+      nameRef.current?.focus()
+      return
+    }
+
+    setBusy(true)
+    const { error: rpcError } = await sendConfirmation(source, needsName ? trimmed : null)
+    setBusy(false)
+
+    if (rpcError) {
+      setError(rpcError.message)
+      return
+    }
+    // Remembered only once a confirmation has actually gone in under it, so a
+    // name the server refused is not offered back on the next poll.
+    if (needsName) rememberVoterName(trimmed)
+    notifications.show({ message: 'Options confirmed', color: 'green' })
+    ;(onConfirmed ?? onChanged)()
+  }
+
+  async function reopenList() {
+    if (busy) return
+    setError(null)
+    setBusy(true)
+    const { error: rpcError } = await withdrawConfirmation(source)
+    setBusy(false)
+
+    if (rpcError) {
+      setError(rpcError.message)
+      return
+    }
+    // No notification: the card in front of them becoming the list again is
+    // the whole of what happened, and says so better than a message would.
+    onChanged()
+  }
+
+  // Done adding, and back to the list whenever they are not. The same pair as
+  // the ballot's "your vote is in" and the *Edit vote* behind it, and the same
+  // window: a confirmation can be taken back for exactly as long as it can be
+  // given, which is for as long as the poll is still collecting. The database
+  // draws that line in `assert_collecting_options`; this card is only ever
+  // rendered inside it.
+  if (confirm?.confirmed) {
+    return (
+      <Card withBorder>
+        <Stack gap="sm">
+          {questionStrip}
+          {questionStrip && <Divider />}
+          <Text fw={500}>You’re done adding options</Text>
+          <Group justify="space-between" wrap="wrap" gap="sm">
+            <OpeningNote
+              isCreator={isCreator}
+              whenEveryoneHas={confirm.opensWhenEveryoneHas}
+              canAdd
+            />
+            <Button variant="light" onClick={reopenList} loading={busy}>
+              Edit options
+            </Button>
+          </Group>
+          {error && (
+            <Text c="red" size="sm">
+              {error}
+            </Text>
+          )}
+        </Stack>
+      </Card>
+    )
+  }
+
+  return (
+    <Card withBorder>
+      <Stack gap="sm">
+        {needsName && (
+          <TextInput
+            ref={nameRef}
+            label="Your name"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => {
+              setName(e.currentTarget.value)
+              setNameError(null)
+            }}
+            error={nameError}
+            maxLength={VOTER_NAME_MAX}
+            required
+            /* Label the key "Done" rather than a Go/newline the field has no use
+               for, and honour that label by putting the keyboard away. The
+               ballot's name field does exactly this, and for the same reason:
+               the field stands alone rather than in a form, so Enter has
+               nothing to submit and would only leave the keyboard up. */
+            enterKeyHint="done"
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return
+              e.preventDefault()
+              nameRef.current?.blur()
+            }}
+          />
+        )}
+
+        {needsName && questionStrip && <Divider />}
+        {questionStrip}
+        {questionStrip && <Divider />}
+
+        <OptionList source={source} options={options} isCreator={isCreator} onChanged={onChanged} />
+
+        {error && (
+          <Text c="red" size="sm">
+            {error}
+          </Text>
+        )}
+
+        {/* The line is what stops *Add* and *Confirm options* reading as one
+            row of buttons: they are the two things this card is for, and one
+            adds to a list while the other says you are finished with it. The
+            ballot rules its footer off the same way, off the last option's
+            divider. */}
+        {confirm && <Divider />}
+
+        {confirm ? (
+          <Group justify="space-between" wrap="wrap" gap="sm" align="flex-end">
+            <ConfirmNote opensWhenEveryoneHas={confirm.opensWhenEveryoneHas} />
+            <Button onClick={confirmOptions} loading={busy}>
+              Confirm options
+            </Button>
+          </Group>
+        ) : (
+          footer
+        )}
+      </Stack>
+    </Card>
+  )
+}
+
+/** Saying you are done, by whichever of the two identities the poll has. */
+function sendConfirmation(source: OptionsSource, voterName: string | null) {
+  return source.kind === 'poll'
+    ? supabase.rpc('confirm_options', { p_poll_id: source.pollId })
+    : openPollRpc('open_poll_confirm_options', {
+        p_poll_id: source.pollId,
+        p_voter_key: voterKeyFor(source.pollId),
+        p_voter_name: voterName,
+      })
+}
+
+/** And taking it back, which the same two functions allow on the same terms. */
+function withdrawConfirmation(source: OptionsSource) {
+  return source.kind === 'poll'
+    ? supabase.rpc('unconfirm_options', { p_poll_id: source.pollId })
+    : openPollRpc('open_poll_unconfirm_options', {
+        p_poll_id: source.pollId,
+        p_voter_key: voterKeyFor(source.pollId),
+      })
+}
+
+/**
+ * The list itself, and the box that adds to it.
+ *
+ * Split from the card around it because they answer to different people: this
+ * is the poll's list, which everybody in the poll writes, and the card is one
+ * reader's part in it. Keeping the two apart is also what keeps a suggestion
+ * being typed clear of the name a confirmation is given under — two fields,
+ * two states, two things that can be wrong, and no way for one to clear the
+ * other's message.
+ */
+function OptionList({
+  source,
+  options,
+  isCreator,
   onChanged,
 }: {
   source: OptionsSource
   options: PollOption[]
   isCreator: boolean
-  /**
-   * What goes under the box: who may still add to this list and until when,
-   * or the way out of the creator's correction. Passed in because the answer
-   * belongs to the page's situation rather than to the list.
-   */
-  footer?: ReactNode
-  /**
-   * The way to say you have finished adding, ruled off from the box that
-   * adds: they are the two things this card is for and the line is what stops
-   * "Add" and "Confirm options" reading as one row of buttons. Absent on the
-   * creator's own correction of a list that is already a ballot, which has
-   * nobody to collect a confirmation from.
-   */
-  confirm?: ReactNode
-  /** An option arrived or left: re-read the poll. */
   onChanged: () => void
 }) {
   const [name, setName] = useState('')
@@ -200,103 +456,117 @@ export function CollectOptions({
   }
 
   return (
-    <Card withBorder>
-      <Stack gap="sm">
-        {options.length === 0 ? (
-          <Text size="sm" c="dimmed">
-            Nothing suggested yet. Add the first one.
-          </Text>
-        ) : (
-          <>
-            {options.map((option) => (
-              <Fragment key={option.id}>
-                <Group justify="space-between" wrap="nowrap" gap="sm">
-                  <div style={{ minWidth: 0 }}>
-                    <Text fw={500}>{option.name}</Text>
-                    {option.description && <OptionDescription description={option.description} />}
-                  </div>
-                  {isCreator && (
-                    <Tooltip label="A poll needs at least two options" disabled={!atFloor} withArrow>
-                      {/* The span is what a tooltip on a disabled button needs:
-                          a disabled control fires no pointer events of its
-                          own, so the reason it is disabled would never be
-                          readable without something around it that does. */}
-                      <span>
-                        <ActionIcon
-                          variant="subtle"
-                          color="red"
-                          disabled={atFloor}
-                          aria-label={`Remove ${option.name}`}
-                          onClick={() => removeOption(option)}
-                        >
-                          &times;
-                        </ActionIcon>
-                      </span>
-                    </Tooltip>
-                  )}
-                </Group>
-                <Divider />
-              </Fragment>
-            ))}
-          </>
-        )}
+    <Stack gap="sm">
+      {options.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          Nothing suggested yet. Add the first one.
+        </Text>
+      ) : (
+        options.map((option) => (
+          <Fragment key={option.id}>
+            <Group justify="space-between" wrap="nowrap" gap="sm">
+              <div style={{ minWidth: 0 }}>
+                <Text fw={500}>{option.name}</Text>
+                {option.description && <OptionDescription description={option.description} />}
+              </div>
+              {isCreator && (
+                <Tooltip label="A poll needs at least two options" disabled={!atFloor} withArrow>
+                  {/* The span is what a tooltip on a disabled button needs:
+                      a disabled control fires no pointer events of its
+                      own, so the reason it is disabled would never be
+                      readable without something around it that does. */}
+                  <span>
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      disabled={atFloor}
+                      aria-label={`Remove ${option.name}`}
+                      onClick={() => removeOption(option)}
+                    >
+                      &times;
+                    </ActionIcon>
+                  </span>
+                </Tooltip>
+              )}
+            </Group>
+            <Divider />
+          </Fragment>
+        ))
+      )}
 
-        <Group gap="xs" align="flex-start" wrap="nowrap">
-          <Stack gap={4} style={{ flex: 1 }}>
-            <TextInput
-              value={name}
-              onChange={(e) => {
-                setName(e.currentTarget.value)
-                // The message was about what was in the box; it stops being
-                // true the moment that changes.
-                setNameError(null)
-              }}
-              placeholder="Add an option"
-              error={nameError}
-              /* The field stands alone rather than in a form, so Enter has
-                 nothing to submit unless it is given something. */
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return
-                e.preventDefault()
-                addOption()
-              }}
-            />
-            {/* No autoFocus: the field is here on arrival rather than
-                opened, so taking the cursor off the name field would be
-                taking it off the one thing every option needs. */}
-            <DescriptionField
-              value={description}
-              onChange={(e) => {
-                setDescription(e.currentTarget.value)
-                setDescriptionError(null)
-              }}
-              placeholder="Description (optional)"
-              error={descriptionError}
-            />
-          </Stack>
-          <Button variant="light" onClick={addOption} disabled={full}>
-            Add
-          </Button>
-        </Group>
+      <Group gap="xs" align="flex-start" wrap="nowrap">
+        <Stack gap={4} style={{ flex: 1 }}>
+          <TextInput
+            value={name}
+            onChange={(e) => {
+              setName(e.currentTarget.value)
+              // The message was about what was in the box; it stops being
+              // true the moment that changes.
+              setNameError(null)
+            }}
+            placeholder="Add an option"
+            error={nameError}
+            /* The field stands alone rather than in a form, so Enter has
+               nothing to submit unless it is given something. */
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return
+              e.preventDefault()
+              addOption()
+            }}
+          />
+          {/* No autoFocus: the field is here on arrival rather than
+              opened, so taking the cursor off the name field would be
+              taking it off the one thing every option needs. */}
+          <DescriptionField
+            value={description}
+            onChange={(e) => {
+              setDescription(e.currentTarget.value)
+              setDescriptionError(null)
+            }}
+            placeholder="Description (optional)"
+            error={descriptionError}
+          />
+        </Stack>
+        <Button variant="light" onClick={addOption} disabled={full}>
+          Add
+        </Button>
+      </Group>
 
-        {error && (
-          <Text c="red" size="sm">
-            {error}
-          </Text>
-        )}
+      {full && (
+        <Text size="xs" c="dimmed">
+          A ballot may only have {MAX_OPTIONS} options.
+        </Text>
+      )}
 
-        {footer}
+      {error && (
+        <Text c="red" size="sm">
+          {error}
+        </Text>
+      )}
+    </Stack>
+  )
+}
 
-        <Divider />
-
-        {confirm}
-
-        {full && (
-          <Text size="xs" c="dimmed">
-            A ballot may only have {MAX_OPTIONS} options.
-          </Text>
-        )}
-      </Stack>
-    </Card>
+/**
+ * Who is done adding options, on an open poll that names its respondents.
+ *
+ * The invite side has no card of its own: its roster *is* the invite list, so
+ * `Respondents` says it there, on the card it already draws, with the badge
+ * answering "confirmed?" instead of "voted?" while the poll is still
+ * collecting. Behind a share link there is no list to annotate — the names
+ * exist only because people typed them — so there is a card.
+ *
+ * No embargo, unlike the voter roster it sits in place of. What that embargo
+ * protects is the order ballots arrived in; a poll still collecting its
+ * options has no ballots to attach an order to, and knowing who has finished
+ * is the entire point of the thing.
+ */
+export function Confirmations({ names }: { names: string[] }) {
+  return (
+    <NameRoster
+      title="Confirmed the options"
+      names={names}
+      empty="Nobody has confirmed the options yet."
+    />
   )
 }

@@ -25,6 +25,7 @@ declare
   v_q2 uuid;
   v_status record;
   v_view jsonb;
+  v_group jsonb;
 begin
   perform tests.sign_in('creator@example.com');
 
@@ -230,6 +231,29 @@ begin
     (select confirmed_count from poll_status(v_q1)), 2);
   perform tests.assert_eq('so a question everybody has finished with still waits',
     (select soliciting from poll_status(v_q1)), true);
+
+  -- The mark the question strip draws while the poll is still collecting.
+  -- Signed in as voter2, who has finished with the first question and not the
+  -- second, and it is read from the same call the strip is built from.
+  v_group := poll_group(v_q1);
+  perform tests.assert_eq('the strip marks a question this reader has finished with',
+    (v_group -> 0 ->> 'confirmed')::boolean, true);
+  perform tests.assert_eq('and leaves the one they have not',
+    (v_group -> 1 ->> 'confirmed')::boolean, false);
+  perform tests.assert_eq('the ballot mark says nothing yet, nobody having voted',
+    (v_group -> 0 ->> 'voted')::boolean, false);
+
+  perform tests.sign_in('voter1@example.com');
+  v_group := poll_group(v_q1);
+  perform tests.assert_eq('and it is this reader''s own, not the question''s',
+    (v_group -> 1 ->> 'confirmed')::boolean, true);
+
+  perform tests.sign_in('creator@example.com');
+  v_group := poll_group(v_q1);
+  perform tests.assert_eq('a creator off the invite list has confirmed nothing',
+    (v_group -> 0 ->> 'confirmed')::boolean, false);
+
+  perform tests.sign_in('voter2@example.com');
 
   perform confirm_options(v_q2);
 

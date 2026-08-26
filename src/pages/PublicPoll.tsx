@@ -3,7 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Stack, Text, Title } from '@mantine/core'
 import { isSampleId, openPollRpc } from '../lib/samplePoll'
 import { voterKeyFor } from '../lib/voterKey'
-import { answeredQuestions, forgetAnswered, rememberAnswered } from '../lib/answeredQuestions'
+import {
+  answeredQuestions,
+  confirmedQuestions,
+  forgetAnswered,
+  forgetConfirmed,
+  rememberAnswered,
+  rememberConfirmed,
+} from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
 import { pollTopic, useLiveStream } from '../lib/useLiveStream'
 import { useKnownWinner } from '../lib/useWinner'
@@ -42,13 +49,15 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
   // are different things for as long as a read is in flight.
   const [read, setRead] = useState<{ pollId: string; view: OpenPollView } | null>(null)
   const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
-  // Which questions of this poll this browser has answered, for the strip's
-  // marks. It has to be read into state rather than off storage at render
-  // time because storage is what changes when a ballot goes in and React is
-  // not watching it; `load` below refreshes this on the same read that
-  // learns the ballot landed. See lib/answeredQuestions.ts for why the
-  // browser is the only party that can answer this on an open poll.
+  // Which questions of this poll this browser has answered, and which it has
+  // finished adding options to, for the strip's marks. They have to be read
+  // into state rather than off storage at render time because storage is what
+  // changes when a ballot or a confirmation goes in and React is not watching
+  // it; `load` below refreshes both on the same read that learns it landed.
+  // See lib/questionMarks.ts for why the browser is the only party that can
+  // answer either on an open poll.
   const [answered, setAnswered] = useState<ReadonlySet<string>>(answeredQuestions)
+  const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(confirmedQuestions)
   const [failed, setFailed] = useState<{ pollId: string; message: string } | null>(null)
   // Which question a read has come back for, so a refresh that fails can be
   // told apart from a first read that did — and told apart per question, since
@@ -82,10 +91,14 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
     setRead({ pollId, view: openView })
     // Erased rather than only written: a creator who clears the poll's votes
     // leaves this browser holding a record of a ballot that no longer exists,
-    // and a read that comes back "not voted" is what says so.
+    // a confirmation can be taken back on the card that gave it, and a read
+    // that comes back "no" is what says so.
     if (openView.voted) rememberAnswered(pollId)
     else forgetAnswered(pollId)
+    if (openView.confirmed) rememberConfirmed(pollId)
+    else forgetConfirmed(pollId)
     setAnswered(answeredQuestions())
+    setConfirmed(confirmedQuestions())
     return true
   }, [pollId, onUnreadable])
 
@@ -198,13 +211,31 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
   // renders this and the way on is chosen from it, so the question a voter is
   // carried to is by construction one the strip in front of them shows as
   // outstanding rather than one that merely ought to agree.
+  //
+  // What counts as done depends on the stage: a poll still collecting its
+  // options has no ballots to have cast, so the mark is this browser's
+  // confirmation of that question's list, and the ballot's once there is one.
+  // The same badge either way, of whatever the reader currently owes.
+  const collecting = shell.soliciting
+  const done = collecting ? confirmed : answered
   const strip = questions.map((question) => ({
     key: question.id,
     position: question.question_position,
     title: question.question_title,
-    answered: answered.has(question.id),
+    answered: done.has(question.id),
   }))
   const onwards = nextUnansweredKey(strip, pollId)
+  // The way on, taken rather than offered, at both stages: whoever has just
+  // finished with this question's list or ballot is carried to the next one
+  // they owe. Recorded here as well as in `load`, because this path is the
+  // one that does not re-read: the page being left is left at once, and the
+  // strip on the page being opened has to know what went in.
+  const advance = onwards
+    ? () => {
+        ;(collecting ? rememberConfirmed : rememberAnswered)(pollId)
+        navigate(`/polls/${onwards}`)
+      }
+    : undefined
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -277,20 +308,14 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
             pollId={pollId}
             view={view}
             onChanged={load}
-            onFirstVote={
-              onwards
-                ? () => {
-                    // Recorded here as well as in `load`, because this path
-                    // is the one that does not re-read: the page being left
-                    // is left at once, and the strip on the page being opened
-                    // has to know the ballot went in.
-                    rememberAnswered(pollId)
-                    navigate(`/polls/${onwards}`)
-                  }
-                : undefined
-            }
+            onFirstVote={advance}
+            onFirstConfirm={advance}
             questionStrip={
-              <QuestionStrip questions={strip} current={pollId} hrefFor={(next) => `/polls/${next}`} />
+              <QuestionStrip
+                questions={strip}
+                current={pollId}
+                hrefFor={(next) => `/polls/${next}`}
+              />
             }
           />
         </>

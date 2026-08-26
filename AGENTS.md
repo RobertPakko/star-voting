@@ -609,8 +609,11 @@ like the other three and still true long after the poll ends, but it is the
 one setting nobody scans for, and the row it was in had grown past what
 anybody reads — five tags under a title is a row that gets skipped whole,
 which costs the two tags that tell a voter what happens to their ballot. It
-is stated in full while it matters, by the option-collecting stage itself
-(`CollectOptions`), and by the state badge reading *Collecting options*.
+is stated in full while it matters, by the state badge reading *Collecting
+options* and by the stage itself: a card that is a list with a box to add to
+it is a poll taking its options from the people reading it, and it says so
+better than the line of prose that used to sit under it — which is why that
+line is gone.
 
 `Collecting options` and `Closed` used to be appended to the same row as
 neutral tags. They are not settings, they are where the poll has *got to* —
@@ -1253,9 +1256,14 @@ about the ballot — a list nobody will read to the end is not one anybody can
 score honestly.
 
 The stage is surfaced by `CollectOptions` (`src/components/CollectOptions.tsx`)
-in place of the ballot, on all three pages that can carry one. Everyone sees
-the same list, the same box to add to it, and the same button to say they are
-done with it — see [Saying you are done adding
+in place of the ballot, on all three pages that can carry one, and **built the
+way the ballot is built**: the name field at the top, the strip of the poll's
+other questions under it, the list itself, and what happens next beside the
+button that ends your part in it. It is the ballot's stage, at the ballot's
+address, in the ballot's place on the page, so a reader who has done one should
+recognise the other rather than meet a second layout with the same parts in a
+different order. Everyone sees the same list, the same box to add to it, and
+the same button to say they are done with it — see [Saying you are done adding
 options](#saying-you-are-done-adding-options), which is where that button comes
 from and why it belongs in this card rather than beside the poll's other
 controls. The creator additionally gets a
@@ -1292,6 +1300,20 @@ here and each one carries a list to have a say about. Opening is the act that
 spans the group, so the poll opens itself only when every invitee has confirmed
 every question in it.
 
+**So the stage carries the question strip, and the strip marks it.** A poll of
+five questions collects five lists, and the card that collects them had no way
+between them at all — the strip arrived with the ballot, one stage too late,
+which left the other four lists reachable only by going back to the poll list
+and in. It is the same strip in the same place inside the card, and pressing
+*Confirm options* moves the reader to the next list they still owe exactly as a
+first ballot moves them to the next question. `0042` gives `poll_group` the
+flag it draws the mark from — `confirmed` per question, beside the `voted` it
+already returned — and the open side answers it from the browser for the reason
+it answers `voted` from the browser; see [A poll can ask more than one
+question](#a-poll-can-ask-more-than-one-question). The badge means *this
+question is behind you*, and which of the two facts makes that true is whichever
+stage the poll is in.
+
 **Only invitees confirm, exactly as only invitees vote.** `submit_ballot`
 refuses anybody off the list and `confirm_options` refuses them in the same
 words, which is what keeps the roster complete: everyone who *can* confirm is
@@ -1308,6 +1330,19 @@ button that does something irreversible is one that undoes it while it still
 means anything. Once the poll opens there is nothing left to be done adding to,
 and both functions refuse — the same door `suggest_option` closes, in the
 same words, at the same moment.
+
+That undo is **Edit options**, and for a while it was a promise the database
+kept and the screen did not: `unconfirm_options` and
+`open_poll_unconfirm_options` shipped with `0041` and nothing called them.
+Confirming replaced the card with the same card, minus its button, and the
+only way back to the list was to have not pressed it. It is now the ballot's
+own shape one stage earlier — **you're done adding options**, what happens
+next, and the way back to the list beside it, exactly as *your vote is in*
+carries *Edit vote* — because it is exactly the same promise: a decision that
+stands until the moment it stops meaning anything, and is yours until then.
+Pressing it withdraws the confirmation on the server rather than only on
+screen, so the count and the roster it was in move with it; there is nothing
+half-confirmed to leave behind.
 
 **A poll with participants opens itself when the last one confirms.** That is
 the whole point of collecting the signal, and `open_options_when_all_confirmed`
@@ -1371,6 +1406,14 @@ the wrong number for the reason at the top of this section. `turnoutLabel` in
 `PollTags` still falls back to the option count when `confirmed_count` arrives
 undefined, which is a browser running ahead of the migration; a confident zero
 would be a lie where the old number is merely old.
+
+The line under the name field went the same way, and for a nearer reason: it
+said *confirm the options once you have nothing more to add*, which is about
+the button rather than about the name, and it sat on a field that is now at the
+top of the card while the button is at the bottom of it. It says the same thing
+in the one place it belongs, beside the button, where the ballot puts the same
+kind of sentence — and it is now said to everybody rather than only to the
+readers a poll happened to ask a name from.
 
 That is also why the **Confirm options** button carries no count of its own,
 only what pressing it will do: [turnout is reported in exactly one
@@ -1796,20 +1839,33 @@ that said they had answered none, which is not the promise being kept, it is
 the promise being kept against the one person it was never about.
 `open_poll_group`'s own comment already said where the answer lives — *the
 browser already knows which questions it has answered; it is the one place
-entitled to* — so `src/lib/answeredQuestions.ts` is that place, alongside the
+entitled to* — so `src/lib/questionMarks.ts` is that place, alongside the
 remembered name and read the same way: written on a ballot going in, never
 sent anywhere, and load-bearing for nothing. Being wrong about it colours a
 badge. It cannot let anybody vote twice, read a sealed result, or reach a poll
 they hold no link to; the server decides all three from the key it is shown,
 on every call.
 
+**It holds two marks now, and they are the same mark one stage apart.** The
+strip marks the question a reader has finished with, and while the poll is
+still collecting its options that is the confirmation rather than the ballot —
+so `poll_group` answers both on the invite side (`0042` adds the second) and
+the browser answers both on the open side, where a confirmation is identified
+by the same per-question key a ballot is and is just as deliberately
+unlinkable. They are stored under separate keys because they are true at
+different times: a poll still collecting takes no ballots and a poll taking
+ballots collects nothing, so one key holding both would mean a question
+confirmed before the poll opened reading afterwards as a ballot nobody cast.
+
 A record is **erased as well as written**: a creator who clears the poll's
-votes leaves a browser holding a ballot that no longer exists, so a read that
-comes back *not voted* takes the record with it rather than letting a stale
-tick outlive it. It is keyed by poll id, which is all a question has — it used
-to take two entries, the share token the public route knew a question by and
-the poll id the creator's page knew it by, and it does not any more for the
-same reason those two pages are now one address.
+votes leaves a browser holding a ballot that no longer exists, and a
+confirmation can be taken back on the card that gave it, so a read that comes
+back *not voted* — or *not confirmed* — takes the record with it rather than
+letting a stale tick outlive it. Both are keyed by poll id, which is all a
+question has — the answered mark used to take two entries, the share token the
+public route knew a question by and the poll id the creator's page knew it by,
+and it does not any more for the same reason those two pages are now one
+address.
 
 What this costs, knowingly: nobody can tell whether the six people who
 answered question 2 are among the eight who answered question 1. That is an

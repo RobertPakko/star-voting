@@ -73,6 +73,14 @@ export interface GroupQuestion {
   option_count: number
   /** Whether the signed-in reader has cast a ballot in this question. */
   voted: boolean
+  /**
+   * Whether they have said they are done adding options to it: the same mark
+   * one stage earlier, and what the question strip draws while the poll is
+   * still collecting. Optional for the reason `PollStatus.expires_at` is — a
+   * browser running ahead of the migration that adds it marks nothing, which
+   * is what every strip did before it existed.
+   */
+  confirmed?: boolean
 }
 
 /** One question of an open multi-question poll; see GroupQuestion. */

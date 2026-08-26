@@ -7,17 +7,23 @@ import { useAuth } from '../lib/auth'
 import { pollTopic, useLiveStream } from '../lib/useLiveStream'
 import { useWinner } from '../lib/useWinner'
 import { voterKeyFor } from '../lib/voterKey'
-import { answeredQuestions, forgetAnswered, rememberAnswered } from '../lib/answeredQuestions'
+import {
+  answeredQuestions,
+  confirmedQuestions,
+  forgetAnswered,
+  forgetConfirmed,
+  rememberAnswered,
+  rememberConfirmed,
+} from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
 import { Ballots } from '../components/Ballots'
 import { BallotCard, type BallotScore } from '../components/BallotCard'
 import { CollectOptions } from '../components/CollectOptions'
-import { ConfirmOptions } from '../components/ConfirmOptions'
 import { CreatorControls } from '../components/CreatorControls'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { RosterSection } from '../components/NameRoster'
 import { OpenPollPanel } from '../components/OpenPollPanel'
-import { CollectingNote, NoResultsNotice, RevealNote } from '../components/PollNotices'
+import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { RetentionNote } from '../components/RetentionNote'
@@ -55,12 +61,14 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   // this that moves is which of them this reader has answered — and that
   // moves when they vote, which re-reads the page anyway.
   const [questions, setQuestions] = useState<GroupQuestion[]>([])
-  // Which questions this browser has answered, for the strip's marks on an
-  // *open* poll. `poll_group` answers this for an invite poll and cannot for
-  // an open one — it matches ballots on `voter_id`, and a share-link ballot
-  // carries no account — so the creator's own page had the same unmarked
-  // strip the public route did. See lib/answeredQuestions.ts.
+  // Which questions this browser has answered, and which it has finished
+  // adding options to, for the strip's marks on an *open* poll. `poll_group`
+  // answers both for an invite poll and can answer neither for an open one —
+  // it matches ballots and confirmations on `voter_id`, and a share-link
+  // ballot carries no account — so the creator's own page had the same
+  // unmarked strip the public route did. See lib/questionMarks.ts.
   const [answered, setAnswered] = useState<ReadonlySet<string>>(answeredQuestions)
+  const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(confirmedQuestions)
   // Which question everything above describes. One page serves every question
   // of a poll and its parameter is what changes between them, so for as long
   // as a read is in flight "the poll this page holds" and "the poll this page
@@ -147,11 +155,17 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
       const openView = data as OpenPollView
       setView(openView)
       // The public reading of this same question is at this same address and
-      // marks the same entry, so a question answered either way is marked
-      // both ways without either page knowing about the other.
+      // marks the same entries, so a question answered — or finished with —
+      // either way is marked both ways without either page knowing about the
+      // other. Erased as well as written: a confirmation can be taken back,
+      // and a creator can clear a poll's votes, so a read that comes back
+      // "no" is what stops a stale mark outliving what it stood for.
       if (openView.voted) rememberAnswered(loaded.id)
       else forgetAnswered(loaded.id)
+      if (openView.confirmed) rememberConfirmed(loaded.id)
+      else forgetConfirmed(loaded.id)
       setAnswered(answeredQuestions())
+      setConfirmed(confirmedQuestions())
     }
 
     loadedOnce.current = true
@@ -320,11 +334,22 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   // way on, and nothing about the page changes. Answered comes from the
   // server for an invite poll and from this browser for an open one — where
   // each can honestly answer; see QuestionStrip.
+  //
+  // What counts as done depends on the stage, because the strip marks the
+  // question a reader has finished with and a poll still collecting has no
+  // ballots to have cast. So it is the confirmation while the list is being
+  // built and the ballot afterwards — the same badge, of whatever the reader
+  // currently owes. `confirmed` is undefined against a database whose
+  // poll_group predates it, which marks nothing, exactly as every strip did
+  // before the flag existed.
+  const done = status.soliciting
+    ? { browser: confirmed, server: (question: GroupQuestion) => question.confirmed === true }
+    : { browser: answered, server: (question: GroupQuestion) => question.voted }
   const strip = questions.map((question) => ({
     key: question.id,
     position: question.question_position,
     title: question.question_title,
-    answered: isOpen ? answered.has(question.id) : question.voted,
+    answered: isOpen ? done.browser.has(question.id) : done.server(question),
   }))
   // One strip for the page rather than one per branch that can carry a
   // ballot. Three cards render it — the open-poll panel, a first ballot, a
@@ -343,9 +368,10 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   const advance = onwards
     ? () => {
         // This path does not re-read the question being left, so nothing else
-        // will record the ballot that was just cast; the strip on the page
-        // being opened needs it recorded to mark this question behind them.
-        if (isOpen) rememberAnswered(poll.id)
+        // will record what was just done in it; the strip on the page being
+        // opened needs it recorded to mark this question behind them. Which
+        // mark is whichever the stage is about, as above.
+        if (isOpen) (status.soliciting ? rememberConfirmed : rememberAnswered)(poll.id)
         navigate(`/polls/${onwards}`)
       }
     : undefined
@@ -373,18 +399,15 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   // whether this press could be the one that opens the poll, which is the part
   // of it the button cannot show by itself.
   const confirmation =
-    !isOpen && status.soliciting && status.invited && status.confirmed !== undefined ? (
-      <ConfirmOptions
-        source={{ kind: 'poll', pollId: poll.id }}
-        confirmed={status.confirmed}
-        opensWhenEveryoneHas={
-          status.confirmed_count !== undefined &&
-          status.invited_count > 0 &&
-          status.confirmed_count < status.invited_count
+    !isOpen && status.soliciting && status.invited && status.confirmed !== undefined
+      ? {
+          confirmed: status.confirmed,
+          opensWhenEveryoneHas:
+            status.confirmed_count !== undefined &&
+            status.invited_count > 0 &&
+            status.confirmed_count < status.invited_count,
         }
-        onChanged={reloadAll}
-      />
-    ) : null
+      : undefined
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -439,6 +462,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
               source={{ kind: 'creator', pollId: poll.id }}
               options={optionList}
               isCreator
+              questionStrip={questionStrip}
               footer={
                 <Group justify="space-between" wrap="wrap" gap="sm">
                   <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
@@ -466,6 +490,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
                 isCreator={isCreator}
                 onChanged={load}
                 onFirstVote={advance}
+                onFirstConfirm={advance}
                 questionStrip={questionStrip}
               />
             )
@@ -476,9 +501,10 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
               source={{ kind: 'poll', pollId: poll.id }}
               options={options}
               isCreator={isCreator}
-              footer={<CollectingNote isCreator={isCreator} />}
+              questionStrip={questionStrip}
               confirm={confirmation}
-              onChanged={load}
+              onChanged={reloadAll}
+              onConfirmed={advance}
             />
           ) : status.results_available ? (
             <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />

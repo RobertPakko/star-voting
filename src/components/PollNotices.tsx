@@ -18,16 +18,64 @@ import { Card, Text } from '@mantine/core'
  */
 
 /**
- * A poll that is still a list rather than a ballot, under the options it is
- * collecting. The creator is told they end the stage, because they do;
- * everyone else is told who will.
+ * When a poll that is still collecting its options starts taking votes, and —
+ * while it has not — that the list can still grow.
+ *
+ * The same two facts in the same order as `RevealNote` below, one stage
+ * earlier, because they are the same shape of fact: what ends the stage you
+ * are in, and what you may still do until it does. The card a confirmed
+ * reader comes back to says this beside *Edit options*, exactly as the card a
+ * voter comes back to says the other beside *Edit vote*.
+ *
+ * `whenEveryoneHas` is the invite poll that is waiting on confirmations and
+ * opens itself when it runs out of people to wait for. An open poll has no
+ * list of people, so nothing can be last through the door and its creator
+ * ends the stage, which is what the other sentence says.
  */
-export function CollectingNote({ isCreator }: { isCreator: boolean }) {
+export function OpeningNote({
+  isCreator,
+  whenEveryoneHas = false,
+  canAdd = false,
+}: {
+  isCreator: boolean
+  /** Every invitee confirming opens this poll, with nobody pressing anything. */
+  whenEveryoneHas?: boolean
+  canAdd?: boolean
+}) {
   return (
     <Text size="sm" c="dimmed">
-      {isCreator
-        ? 'Voting hasn’t started. Everyone can add options until you open the poll.'
-        : 'Voting hasn’t started. Everyone can add options until the poll’s creator opens the poll.'}
+      {whenEveryoneHas
+        ? 'Voting opens as soon as everyone has confirmed the options.'
+        : isCreator
+          ? 'Voting starts once you open the poll.'
+          : 'Voting starts once the poll’s creator opens the poll.'}
+      {canAdd && (
+        <>
+          <br />
+          You can add more options until then.
+        </>
+      )}
+    </Text>
+  )
+}
+
+/**
+ * What the *Confirm options* button does, beside the button that does it.
+ *
+ * It sits where the ballot's `RevealNote` sits and says the same kind of
+ * thing: press this when you have nothing more to add, and here is what
+ * happens if you are the last one to.
+ */
+export function ConfirmNote({ opensWhenEveryoneHas = false }: { opensWhenEveryoneHas?: boolean }) {
+  return (
+    <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
+      Confirm the options once you have nothing more to add.
+      {opensWhenEveryoneHas && (
+        <>
+          <br />
+          The poll opens for voting as soon as everyone has confirmed.
+        </>
+      )}
     </Text>
   )
 }

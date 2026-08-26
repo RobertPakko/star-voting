@@ -17,14 +17,23 @@ import { badgeColor } from '../lib/badgeColors'
  * common case and it must look exactly as it always has: no strip, no
  * counter, no empty row where a strip would be.
  *
- * **Answered marks are shown only where they are honest, and the two ways in
- * are honest about different things.** On an invite poll the server knows
- * which questions this account has answered and says so: `poll_group`
- * returns a flag per question, because an invite ballot carries the voter's
- * account and nothing has to be linked to find it. On an open poll it does
- * not and must not — a share-link ballot is identified by a key minted per
- * question so that one browser's ballots cannot be joined, and
- * `open_poll_group` returns no such flag on purpose.
+ * **The mark means "this question is behind you", and which fact makes that
+ * true is whichever stage the poll is in.** A poll still collecting its
+ * options has no ballots to have cast, so the mark is the reader's
+ * confirmation of that question's list; once it is taking votes it is their
+ * ballot. The strip is on both cards, in the same place inside each, because
+ * a poll of five questions collects five lists as surely as it takes five
+ * ballots.
+ *
+ * **Marks are shown only where they are honest, and the two ways in are honest
+ * about different things.** On an invite poll the server knows which questions
+ * this account has answered and finished adding to, and says so: `poll_group`
+ * returns a flag per question for each, because an invite ballot and an invite
+ * confirmation both carry the voter's account and nothing has to be linked to
+ * find them. On an open poll it does not and must not — a share-link ballot is
+ * identified by a key minted per question so that one browser's ballots cannot
+ * be joined, its confirmations the same, and `open_poll_group` returns no such
+ * flag on purpose.
  *
  * That is a rule about *the server*, not about the reader, and it was read as
  * both: `answered` arrived undefined on every open poll, so no question was
@@ -33,7 +42,7 @@ import { badgeColor } from '../lib/badgeColors'
  * to match. The tick a voter was owed was withheld from the one party
  * entitled to it. `open_poll_group`'s own comment says as much — the browser
  * already knows which questions it has answered, and is the one place
- * entitled to — so the flag comes from `lib/answeredQuestions.ts` there, out
+ * entitled to — so the flag comes from `lib/questionMarks.ts` there, out
  * of this browser's own storage, and reaches the server no more than the
  * remembered voter name does.
  *
@@ -66,7 +75,9 @@ export function QuestionStrip({
             below this, and saying it twice would push the ballot down for
             nothing. */}
         <Text size="sm" fw={500}>
-          {index >= 0 ? `Question ${index + 1} of ${questions.length}` : `${questions.length} questions`}
+          {index >= 0
+            ? `Question ${index + 1} of ${questions.length}`
+            : `${questions.length} questions`}
         </Text>
         <Group gap="xs" wrap="nowrap">
           {previous && (

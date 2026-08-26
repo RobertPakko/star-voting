@@ -6,10 +6,9 @@ import { voterKeyFor } from '../lib/voterKey'
 import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
 import { Ballots } from './Ballots'
 import { BallotCard, type BallotScore } from './BallotCard'
-import { CollectOptions } from './CollectOptions'
-import { Confirmations, ConfirmOptions } from './ConfirmOptions'
+import { CollectOptions, Confirmations } from './CollectOptions'
 import { NameRoster } from './NameRoster'
-import { CollectingNote, NoResultsNotice, RevealNote } from './PollNotices'
+import { NoResultsNotice, RevealNote } from './PollNotices'
 import { Results } from './Results'
 import type { OpenPollView, PollOption } from '../lib/types'
 
@@ -39,6 +38,7 @@ export function OpenPollPanel({
   isCreator = false,
   onChanged,
   onFirstVote,
+  onFirstConfirm,
   questionStrip,
 }: {
   pollId: string
@@ -67,11 +67,22 @@ export function OpenPollPanel({
    * re-reading is exactly right.
    */
   onFirstVote?: () => void
+  /**
+   * The same, one stage earlier: a *first* confirmation of this question's
+   * option list, as against one taken back. A poll of several questions
+   * collects a list for each, so the reader who has finished with this one is
+   * moved to the next list they owe exactly as a first ballot moves them to
+   * the next question. Absent where there is nowhere to go.
+   */
+  onFirstConfirm?: () => void
   /** Navigation for a multi-question ballot, rendered inside its card. */
   questionStrip?: ReactNode
 }) {
   // Before anything else, because a poll still collecting its options has no
-  // ballot to show and no result to show either.
+  // ballot to show and no result to show either. It carries the strip the
+  // ballot carries, in the same place: a poll of several questions collects a
+  // list for each of them, so this stage needs the way between them exactly
+  // as the next one does.
   if (view.soliciting) {
     return (
       <Stack gap="md">
@@ -79,31 +90,29 @@ export function OpenPollPanel({
           source={{ kind: 'open', pollId }}
           options={view.options}
           isCreator={isCreator}
-          footer={<CollectingNote isCreator={isCreator} />}
+          questionStrip={questionStrip}
           confirm={
             // Undefined against a database whose open_poll_view predates the
             // field, and then there is no button rather than one that could
             // only fail; the same rule `your_scores` follows for "Edit vote".
-            view.confirmed === undefined ? undefined : (
-              <ConfirmOptions
-                source={{ kind: 'open', pollId }}
-                confirmed={view.confirmed}
-                confirmedName={view.your_confirmed_name}
-                // A share link has no account to name whoever is confirming,
-                // so a poll that shows its respondents asks for a name here
-                // exactly as its ballot does. One that hides them asks for
-                // none and stores none.
-                needsName={view.poll.show_voters}
-                // Never: an open poll has no list of people, so there is no
-                // set of them who could all have confirmed and no press that
-                // could be the last one. Its creator ends the stage. How many
-                // have is in the count badge above, like everywhere else.
-                opensWhenEveryoneHas={false}
-                onChanged={onChanged}
-              />
-            )
+            view.confirmed === undefined
+              ? undefined
+              : {
+                  confirmed: view.confirmed,
+                  // A share link has no account to name whoever is confirming,
+                  // so a poll that shows its respondents asks for a name here
+                  // exactly as its ballot does. One that hides them asks for
+                  // none and stores none.
+                  needsName: view.poll.show_voters,
+                  // Never: an open poll has no list of people, so there is no
+                  // set of them who could all have confirmed and no press that
+                  // could be the last one. Its creator ends the stage. How many
+                  // have is in the count badge above, like everywhere else.
+                  opensWhenEveryoneHas: false,
+                }
           }
           onChanged={onChanged}
+          onConfirmed={onFirstConfirm ?? onChanged}
         />
 
         {/* Who is done, on a poll that names them. No embargo, unlike the

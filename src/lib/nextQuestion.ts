@@ -28,6 +28,12 @@
  * It takes the same list the strip is drawn from, deliberately: the voter is
  * only ever sent to a question the strip in front of them shows as
  * outstanding, and one list is what makes that true rather than a promise.
+ *
+ * **"Answered" is whatever the poll's stage is asking for**, which is how this
+ * serves the option-collecting stage without knowing there is one: while a
+ * poll is still collecting, the list handed in is marked by whose lists this
+ * reader has confirmed, so *Confirm options* carries them to the next list
+ * they owe exactly as a first ballot carries them to the next question.
  */
 export function nextUnansweredKey(
   questions: { key: string; answered?: boolean }[],
