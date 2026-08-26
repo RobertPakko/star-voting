@@ -439,6 +439,12 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
           // the same split the badge's denominator makes.
           confirmedCount: status.confirmed_count,
           optionCount: optionList.length,
+          // What the same poll's card on the list says, from the same count:
+          // a poll of several questions has no turnout, only turnouts, so the
+          // badge reports how much there is to answer instead. See
+          // turnoutLabel. `questions` is empty on a poll that asks one, and
+          // list_polls counts that poll as one question rather than none.
+          questionCount: questions.length || 1,
         }}
         state={{
           soliciting: status.soliciting,
@@ -537,7 +543,12 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
                 questionStrip={questionStrip}
               />
             ) : (
-              <Waiting status={status} pollId={poll.id} onRevise={setRevising} />
+              <Waiting
+                status={status}
+                pollId={poll.id}
+                onRevise={setRevising}
+                questionStrip={questionStrip}
+              />
             )
           ) : (
             /* Keyed like the open-poll panel, and for the same reason: a
@@ -585,7 +596,12 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
         </Stack>
       )}
 
-      {status.results_available && poll.show_ballots && (
+      {/* Only the invite side asks here. An open poll's ballots are already
+          on this page, drawn by OpenPollPanel from the link's own endpoint —
+          the panel is the whole of an open poll wherever it is read, this
+          page included, and a second grid under it was a second answer to a
+          question already answered. */}
+      {!isOpen && status.results_available && poll.show_ballots && (
         <Ballots source={{ kind: 'poll', pollId: poll.id }} />
       )}
 
@@ -620,16 +636,28 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
  * changed after that would be a vote changed against a tally its voter had
  * read. There is no "until voting closes" here to offer, and saying there was
  * would be a promise this page breaks for whoever votes last.
+ *
+ * It carries the question strip, in the same place inside the card as every
+ * other card on this page does — because this is the card a voter in a poll
+ * of several questions spends the most time looking at. Answering question 3
+ * of five lands here, and without the strip the poll would have taken its
+ * ballot and left the reader on a card with nowhere to go: the two questions
+ * they still owe are one tap away and nothing on screen said so. The open
+ * poll's own "your vote is in" card has carried it all along; see `Voted` in
+ * OpenPollPanel, which this is the invite side's twin of.
  */
 function Waiting({
   status,
   pollId,
   onRevise,
+  questionStrip,
 }: {
   status: PollStatus
   pollId: string
   /** The ballot came back: hand it to the page, which puts the form up. */
   onRevise: (scores: Record<string, number>) => void
+  /** Navigation for a multi-question ballot, rendered inside its card. */
+  questionStrip?: ReactNode
 }) {
   const [loading, setLoading] = useState(false)
   const pct = status.invited_count === 0 ? 0 : (status.voted_count / status.invited_count) * 100
@@ -653,6 +681,7 @@ function Waiting({
   return (
     <Card withBorder>
       <Stack gap="sm">
+        {questionStrip}
         <Group justify="space-between" wrap="nowrap" gap="xs">
           <Text fw={500}>Your vote is in.</Text>
           <Badge {...countBadge}>

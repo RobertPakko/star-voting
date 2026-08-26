@@ -281,20 +281,67 @@ begin
       tests.user_topic('creator@example.com')]));
 
   -- ------------------------------------------------------------------
-  -- Nothing is announced on behalf of a poll that is going away. Its rows
-  -- cascade out behind it, and without this every delete would broadcast
-  -- once per option, invitee and ballot on a poll nobody can read any more.
+  -- A poll on its way out, which is two halves and they point opposite ways.
+  --
+  -- Its **rows** say nothing: they cascade out behind it, and without that
+  -- every delete would broadcast once per option, invitee and ballot of a
+  -- poll nobody can read any more. Neither does the **poll's own topic**: a
+  -- page watching one poll answers a signal by re-reading it, and a re-read
+  -- of a poll that is gone is a read that fails, which useLiveStream retries
+  -- and then reports as a lost connection.
+  --
+  -- The **lists** are told, once each. A poll arrives on somebody's homepage
+  -- by itself the moment they are invited to it, so a homepage that adds
+  -- polls and never removes them leaves a card that opens onto "Poll not
+  -- found" until its reader thinks to reload.
   -- ------------------------------------------------------------------
 
   perform tests.forget_signals();
   delete from polls where id = v_open;
-  perform tests.assert_eq('a poll being deleted is silent, and so are its rows',
-    tests.signalled(), array[]::text[]);
+  perform tests.assert_eq('deleting a poll tells the lists it was on, and nothing else',
+    tests.signalled(), array[tests.user_topic('creator@example.com')]);
+
+  -- The one that would have been missed by an AFTER trigger: everyone on the
+  -- invite list is told, and the invite list is deleted by the same statement.
+  v_poll := tests.seed_poll(array['Apple', 'Banana'], array[[5, 0], [3, 2]]);
+  perform tests.sign_in('creator@example.com');
+
+  perform tests.forget_signals();
+  delete from polls where id = v_poll;
+  perform tests.assert_eq('and reaches everyone who could see it, not only its creator',
+    tests.signalled(), tests.sorted(array[
+      tests.user_topic('creator@example.com'),
+      tests.user_topic('voter1@example.com'),
+      tests.user_topic('voter2@example.com')]));
+  perform tests.assert_eq('once each, not once per option, invitee and ballot cascading out',
+    tests.signals(tests.user_topic('voter1@example.com')), 1);
+
+  -- One message per poll, which is what a question is: the Delete button acts
+  -- on the whole group, so a poll of two questions is two polls going.
+  v_questions := tests.seed_group(array[
+    row('Lunch', array['Pizza', 'Salad'])::tests.question,
+    row('Time', array['Noon', 'One'])::tests.question
+  ], array['voter1@example.com']);
+
+  perform tests.sign_in('creator@example.com');
+  perform tests.forget_signals();
+  delete from polls where id = any(v_questions);
+  perform tests.assert_eq('deleting a poll of two questions is two polls, so two messages',
+    tests.signals(tests.user_topic('voter1@example.com')), 2);
+  perform tests.assert_eq('and still says nothing on any question''s own topic',
+    tests.signalled(), tests.sorted(array[
+      tests.user_topic('creator@example.com'),
+      tests.user_topic('voter1@example.com')]));
 
   v_old := tests.seed_poll(array['Apple', 'Banana'], array[[5, 0]], 'Ancient');
   perform close_poll(v_old);
   perform tests.age_poll(v_old, interval '7 months');
 
+  -- And the purge is the one delete that stays silent, deliberately: it is
+  -- one statement that can take hundreds of expired polls at once, months
+  -- after anybody last opened them, and announcing every one of them to
+  -- everyone it was ever shared with is a burst of messages in the small
+  -- hours about polls nobody was waiting on.
   perform tests.forget_signals();
   perform tests.assert_eq('the purge takes the poll',
     purge_old_polls(), 1);

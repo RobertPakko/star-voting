@@ -49,6 +49,14 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
   // are different things for as long as a read is in flight.
   const [read, setRead] = useState<{ pollId: string; view: OpenPollView } | null>(null)
   const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
+  // Which question the group read has come back for, whatever it came back
+  // with. A failure is an answer too — it is swallowed, like the winner
+  // lookup on the list, and what it leaves is a poll with no strip, which is
+  // a poll of one question — so the count badge below stops waiting on it
+  // rather than staying blank for the life of the page. Compared against the
+  // address rather than held as a flag, so it clears itself on the way to a
+  // different poll.
+  const [groupRead, setGroupRead] = useState<string | null>(null)
   // Which questions of this poll this browser has answered, and which it has
   // finished adding options to, for the strip's marks. They have to be read
   // into state rather than off storage at render time because storage is what
@@ -146,8 +154,9 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
       // Swallowed like the winner lookup on the list: a browser running
       // ahead of the migration gets no strip, and a poll with no strip is a
       // poll of one question.
-      if (rpcError || !data || cancelled) return
-      setQuestions(data as OpenGroupQuestion[])
+      if (cancelled) return
+      if (!rpcError && data) setQuestions(data as OpenGroupQuestion[])
+      setGroupRead(pollId)
     })
     return () => {
       cancelled = true
@@ -224,6 +233,25 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
     title: question.question_title,
     answered: done.has(question.id),
   }))
+  // How many questions the poll asks, for the count badge: a poll of several
+  // has no turnout, only turnouts, so the badge says how much there is to
+  // answer instead. See turnoutLabel.
+  //
+  // Zero means "not known yet" rather than "none", and the badge is left off
+  // entirely until it is. The group arrives in a read behind this page, so a
+  // poll that has one would otherwise draw a turnout and rewrite itself into
+  // *5 questions* a moment later — the same thing the winner badge below
+  // waits to avoid. `known` is what says the list in hand is this poll's and
+  // not the last one's; a poll with no group asks one question and is
+  // answered immediately, and a group read that came back with nothing
+  // usable is answered the same way, because that is the poll it leaves.
+  const questionCount = !shell.poll.group_id
+    ? 1
+    : known
+      ? questions.length
+      : groupRead === pollId
+        ? 1
+        : 0
   const onwards = nextUnansweredKey(strip, pollId)
   // The way on, taken rather than offered, at both stages: whoever has just
   // finished with this question's list or ballot is carried to the next one
@@ -264,14 +292,19 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
         mode={shell.poll.mode}
         showVoters={shell.poll.show_voters}
         showBallots={shell.poll.show_ballots}
-        turnout={{
-          soliciting: shell.soliciting,
-          mode: shell.poll.mode,
-          votedCount: shell.voted_count,
-          invitedCount: 0,
-          confirmedCount: shell.confirmed_count,
-          optionCount: shell.options.length,
-        }}
+        turnout={
+          questionCount === 0
+            ? undefined
+            : {
+                soliciting: shell.soliciting,
+                mode: shell.poll.mode,
+                votedCount: shell.voted_count,
+                invitedCount: 0,
+                confirmedCount: shell.confirmed_count,
+                optionCount: shell.options.length,
+                questionCount,
+              }
+        }
         state={{
           soliciting: shell.soliciting,
           resultsAvailable: shell.results_available,

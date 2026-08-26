@@ -105,6 +105,15 @@ export interface Turnout {
    * How many questions the poll asks. Above one it takes the badge over
    * entirely; see turnoutLabel for why a multi-question poll has no turnout
    * number to report.
+   *
+   * Every screen that draws a poll passes it, so one poll wears one badge
+   * wherever it is read — the list it was opened from, its own page, and the
+   * public one. It used to come from the list alone, and a poll that said
+   * *5 questions* on the card said *2/7 votes* the moment it was opened,
+   * which is the drift `PollHeading` exists to prevent. A page that does not
+   * yet know the count leaves `turnout` off altogether rather than passing
+   * this undefined, since a turnout drawn now is a turnout rewritten in a
+   * moment.
    */
   questionCount?: number
 }

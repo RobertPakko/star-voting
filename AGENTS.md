@@ -347,7 +347,12 @@ link discloses no email address, its creator's included, and which changes
 announce themselves to which topics for [Live updates](#live-updates) — counts
 as well as topics, since a change that announces itself once per row rather
 than once per statement passes any assertion phrased as "did it say
-anything" — and that a page of the poll list is a page of the same list every
+anything", and including the two halves of a poll being deleted, whose lists
+are told once each while its own topic and its cascading rows stay silent, and
+the nightly purge that stays silent through all of it; who may read a
+published ballot sheet and on which of the two terms it unlocks, including
+that the account door and the link door hand back the same sheet on the same
+open poll — and that a page of the poll list is a page of the same list every
 time: that two pages partition it with nothing on both and nothing on neither,
 that the total is of the list rather than the page, and that asking past the
 end lands on the last page there is; everything about the results-ready
@@ -471,10 +476,25 @@ Six rules keep it honest:
   thrown away, which is a worse failure than being slow.
 - **One statement, one message.** The triggers are statement-level, so a reset
   clearing twenty ballots is one message rather than twenty, each of which
-  would otherwise land on everybody connected. A poll on its way out is silent
-  altogether: its rows cascade behind it, and `broadcast_poll_change` returns
-  early when the poll is already gone, which is also what keeps the nightly
-  purge quiet.
+  would otherwise land on everybody connected.
+- **A poll on its way out says one thing, to the lists it was on.** Its rows
+  are silent — they cascade behind it, and `broadcast_poll_change` returns
+  early when the poll is already gone, which is what stops a delete
+  broadcasting once per option, invitee and ballot. Its own topic is silent
+  too: a page watching one poll answers a signal by re-reading it, and a
+  re-read of a poll that has gone is a read that *fails*, so the watcher would
+  retry five times and then tell its reader they were offline. What is left is
+  the announcement the poll itself owes, and it goes to `user:<id>` —
+  `broadcast_poll_gone`, on a **BEFORE** DELETE row trigger, because the
+  audience is `invited_voters` and those rows are deleted by the same
+  statement. Without it a homepage added polls by itself, on the invite, and
+  never removed them: a deleted poll sat on everyone else's list as a card
+  that opens onto *Poll not found*. The unit is the poll, as everywhere else
+  here, so deleting a five-question group is five messages — the Delete
+  button acts on the group, and that is five polls going. **The nightly
+  purge is still silent**: it can take hundreds of expired polls in one
+  statement, months after anybody looked at them, so `purge_old_polls` raises
+  `app.purging_polls` over its own transaction and the trigger stands down.
 - **A read that fails is tried again, a few times, and then admitted to.**
   Polling used to cover this by accident — a dropped request was simply
   followed by another one five seconds later. Nothing follows a failed read
@@ -1188,6 +1208,21 @@ Four rules hold the published setting together:
 - **The creator gets no exception.** Hiding ballots is a promise made to the
   people who voted, not an access level, so an unpublished poll's ballots are
   unreadable by everybody.
+- **The route in is not one of the terms.** `poll_ballots` reads the sheet for
+  an account and `open_poll_ballots` reads it for a link, and they apply the
+  same three rules: who may see the poll, whether it publishes ballots, and
+  whether the results are out. `poll_ballots` used to refuse an open poll on
+  top of those — *its ballots are read through that link* — which read like
+  a rule and was not one. The only account that reaches an open poll through
+  that function is its creator's, since an open poll has no invite list; the
+  reveal gate for a poll with nobody on that list is `closed_at`, which is
+  exactly what the link's own function checks; and the creator's poll page
+  called it anyway, so the one screen showing an open poll's ballots showed
+  the grid and then that sentence in red underneath. The refusal is gone
+  (`0046`), the page stops asking for a second copy of a grid `OpenPollPanel`
+  has already drawn, and the "not unlocked yet" sentence now picks between the
+  two wordings the app already had — *until everyone has voted* for a poll
+  with an invite list, *until the poll is closed* for one without.
 - **Voters are told before they vote.** Whether the scores will be published,
   and whether a name will be attached, is on screen and readable before
   anything is sent — nothing about a ballot can be discovered only after it is
@@ -1961,11 +1996,20 @@ Three things keep the tabs from hiding anything:
 **On screen.** The poll list shows position 1 and hides the rest
 (`list_polls`), with the count badge reading *N questions* instead of a
 turnout — the turnouts come apart the moment somebody answers three of five,
-and the first question's number would read like the whole. Its state badge
-stays *Results ready* rather than naming a winner, because there is one per
-question; the winner is named on each question's own page. `QuestionStrip`
-carries the walking between them, and renders nothing at all below two
-questions, so every existing poll looks exactly as it did.
+and the first question's number would read like the whole. **So does the
+poll's own page, and the public one**: the badge is a fact about the poll
+rather than about the screen it is on, and a poll that said *5 questions* on
+the card and *2/7 votes* the moment it was opened was two different polls to
+learn instead of one. `PollDetail` counts `poll_group` and `PublicPoll`
+counts `open_poll_group`, which is the same count `list_polls` takes; a poll
+with no group asks one question and both fall back to that rather than to
+zero. The public page's group arrives in a read behind the poll, so until it
+lands there is **no badge** rather than a turnout that rewrites itself into
+*5 questions* a moment later — the same rule the winner badge follows. Its
+state badge stays *Results ready* rather than naming a winner, because there
+is one per question; the winner is named on each question's own page.
+`QuestionStrip` carries the walking between them, and renders nothing at all
+below two questions, so every existing poll looks exactly as it did.
 
 **Answering a question opens the next one owed.** There was a card at the foot
 of the page offering to — *Next question: …*, with a button — and it was one
@@ -1992,6 +2036,16 @@ three conditions, each of which is a case where moving would be wrong:
 - **Only while something is owed.** Every other question answered leaves the
   voter where they are, and the page does what a single-question poll always
   has: re-reads itself into *your vote is in*.
+
+**Every card that can be the last thing a voter sees carries the strip**, and
+that includes the one they see most: *your vote is in*. Answering question 3
+of five lands there, and the invite side's card was the one card in the app
+that did not carry it — so a voter who had just answered was left on a card
+with nowhere to go, two questions still owed and nothing on screen saying so.
+The open side's `Voted` had carried it all along; `Waiting` in `PollDetail` is
+that card's twin and now does too. The strip is built once per page and passed
+to each of them, which is what stops three cards from being handed three
+different lists.
 
 The list it chooses from is the list the strip is drawn from — both pages build
 it once and pass it to both — so a voter is only ever carried to a question the
@@ -2257,6 +2311,11 @@ The schema half of it is in the squashed baseline and the scheduling half in
   deletes the `polls` row and nothing else: every table hanging off a poll is
   `ON DELETE CASCADE`, which is what the creator's own **Delete poll** button
   already relies on, so there is one definition of what deleting a poll means.
+  It is also the one delete that says nothing to anybody — a deleted poll
+  otherwise announces itself to the lists it was on, and this one can take
+  hundreds at once in the small hours, about polls nobody was waiting on. It
+  raises `app.purging_polls` over its own transaction and the delete trigger
+  stands down; see [Live updates](#live-updates).
 - **pg_cron runs it nightly**, as the job `purge-old-polls`. The extension
   only exists on a real Supabase project, so both the `create extension` and
   the `cron.schedule` sit in `DO` blocks that degrade to a notice. They live in
