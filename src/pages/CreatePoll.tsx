@@ -23,6 +23,7 @@ import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { DescriptionField } from '../components/DescriptionField'
 import { FormSkeleton } from '../components/Skeletons'
+import styles from './CreatePoll.module.css'
 import {
   MAX_OPTIONS,
   MAX_QUESTIONS,
@@ -635,7 +636,7 @@ export function CreatePoll() {
             button that removes the question, and see where it went. */}
         {multiQuestion && (
           <TextInput
-            label={`Question ${questionIndex + 1}`}
+            label={`Title`}
             placeholder="What is this question asking?"
             value={question.title}
             onChange={(e) => updateQuestionTitle(questionIndex, e.currentTarget.value)}
@@ -775,6 +776,9 @@ export function CreatePoll() {
       <Stack gap={2}>
         <Title order={4} id="poll-title-label">
           Title
+          <span aria-hidden="true" style={{ color: 'var(--mantine-color-red-6)' }}>
+            {' *'}
+          </span>
         </Title>
         <TextInput
           placeholder="A title for your poll"
@@ -822,7 +826,17 @@ export function CreatePoll() {
             ) : (
               <>
                 <TagsInput
-                  description="Type an email and press Enter to add it or paste a comma separated list of emails."
+                  description={
+                    <>
+                      <span className={styles.emailDescriptionShort}>
+                        Type an email and press Enter to add it.
+                      </span>
+                      <span className={styles.emailDescriptionLong}>
+                        Type an email and press Enter to add it or paste a comma separated list of
+                        emails.
+                      </span>
+                    </>
+                  }
                   placeholder="them@example.com"
                   value={emails}
                   onChange={setEmails}
@@ -908,12 +922,8 @@ export function CreatePoll() {
                         ) : undefined
                       }
                     >
-                      {/* The question's own title once it has one, since that is
-                      what a creator coming back to it is looking for; its
-                      position until then, because "Question 3" is the only
-                      name an empty question has. */}
                       <Text component="span" size="sm" truncate maw={160}>
-                        {question.title.trim() || `Question ${questionIndex + 1}`}
+                        {`Question ${questionIndex + 1}`}
                       </Text>
                     </Tabs.Tab>
                   ))}

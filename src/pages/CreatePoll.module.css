@@ -1,0 +1,13 @@
+.emailDescriptionLong {
+  display: none;
+}
+
+@media (min-width: 531px) {
+  .emailDescriptionShort {
+    display: none;
+  }
+
+  .emailDescriptionLong {
+    display: inline;
+  }
+}
