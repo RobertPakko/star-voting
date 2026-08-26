@@ -273,7 +273,13 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   // For the state badge beside the title. Almost always already known: the
   // list this poll was opened from asked the same question through the same
   // cache.
-  const { winner, pending: awaitingWinner } = useWinner(pollId, status?.results_available === true)
+  // Not asked for on a poll of several questions: the badge names no winner
+  // for one of those, so the answer would be a round trip whose result is
+  // thrown away. The list has never asked for the same reason.
+  const { winner, pending: awaitingWinner } = useWinner(
+    pollId,
+    status?.results_available === true && !poll?.group_id,
+  )
 
   // Close and reset invalidate a ballot half-filled in the open-poll panel,
   // so they remount it as well as re-reading the poll. A vote doesn't: the
@@ -482,6 +488,11 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
           closed: status.is_closed,
           winner,
           awaitingWinner,
+          // The badge belongs to the poll, and a poll of several questions has
+          // an answer per question rather than one to put beside its title.
+          // The question in front of the reader names its own, in the green
+          // banner over its tally, a few inches below this.
+          inGroup: !!poll.group_id,
         }}
       />
 

@@ -59,6 +59,12 @@ export function PollHeading({
     winner?: string | null
     /** An answer is coming: the badge waits rather than flickering. */
     awaitingWinner?: boolean
+    /**
+     * This poll asks more than one question, so it has no one winner and the
+     * badge names none; see PollStateBadge, which decides that for all three
+     * screens rather than trusting each to withhold a name it holds.
+     */
+    inGroup?: boolean
   }
   compact?: boolean
 }) {
@@ -111,6 +117,7 @@ export function PollHeading({
             closed={state.closed}
             winner={state.winner}
             awaitingWinner={state.awaitingWinner}
+            inGroup={state.inGroup}
           />
         </Group>
 

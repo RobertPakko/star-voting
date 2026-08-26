@@ -242,13 +242,20 @@ export function PollList() {
                 soliciting: poll.soliciting,
                 resultsAvailable: poll.results_available,
                 closed: poll.is_closed,
-                // Deliberately never asked for on a multi-question poll, so
-                // this stays undefined and the badge reads "Results ready".
+                // Never asked for on a multi-question poll — but this map is
+                // filled from two places, and the other one is every Results
+                // card in the tab, which files what it read under the
+                // question's own id. A group's row here *is* its first
+                // question, so a reader who opened that question came back to
+                // a card naming the winner this list had never asked about.
+                // `inGroup` is what withholds it now, in the badge, for all
+                // three screens at once.
                 winner: winners.get(poll.id),
-                // And for the same reason that poll never waits: nothing is
-                // in flight for it, so "Results ready" is its final state
-                // rather than a placeholder for one.
+                // Nothing is in flight for a multi-question poll, so it never
+                // waits: "Results ready" is its final state rather than a
+                // placeholder for one.
                 awaitingWinner: wanted.includes(poll.id) && !asked.has(poll.id),
+                inGroup: poll.question_count > 1,
               }}
             />
           </Card>

@@ -727,11 +727,13 @@ An open poll's roster is no counter-example: those names are typed into the
 ballot by the voters themselves, not addresses the app knows about anybody.
 
 **The winner's name is a different kind of thing, and this page does name
-it** — in the badge, like everywhere else. It was never withheld here: the
-tally under the heading has always named it in full. What was missing was the
-name *in the badge*, because that comes from `poll_winners()` and that
-function answers only to an account, so the badge read *Results ready* next to
-a result sitting right underneath it.
+it** — in the badge, like everywhere else a single-question poll is read. It
+was never withheld here: the tally under the heading has always named it in
+full. What was missing was the name *in the badge*, because that comes from
+`poll_winners()` and that function answers only to an account, so the badge
+read *Results ready* next to a result sitting right underneath it. (A poll of
+several questions is the one that still reads *Results ready* here, and on
+every other screen with it; see the table below.)
 
 **It is filled in from the tally the page already has, not from a request of
 its own.** `Results` fetches that tally for itself on every screen that shows
@@ -766,8 +768,9 @@ still coming. Each of the three screens knows its own answer to that:
   request has not settled" — and it stops being pending **whether or not the
   request succeeded**, because a failure leaves the winner unknown and
   *Results ready* is exactly what unknown looks like;
-- the list never asks about a multi-question poll at all, so that poll is
-  never pending and its badge is there from the first paint;
+- a multi-question poll is never pending on any of the three, because none of
+  them is waiting on anything: the badge names no winner for one of those at
+  all, so its *Results ready* is there from the first paint;
 - the public page's answer arrives from the tally card below it, so it waits
   for that card — and if that card fails there is no badge, which is the
   honest end of the same rule: the card says so itself, in red, where the
@@ -849,6 +852,18 @@ tally on a page that shows one — and a browser talking to a database older
 than `poll_winners()` never learns it at all. It must never read as *Tied*,
 which would be a wrong answer where this is only a missing one.
 
+**A poll of several questions takes that row deliberately, on every screen.**
+It has an answer per question and none to put beside the poll's title, so the
+badge names none of them; the question a reader opens names its own, in the
+green banner over its tally, a few inches under the badge that declined to.
+`PollStateBadge` decides that from `inGroup` rather than trusting each caller
+to pass no winner, because one of them could not keep it: `Results` files what
+it read under the *question's* id, and a group's row on the poll list **is**
+its first question — so opening that question and walking back to the list
+handed the group's card the very name the list had never asked for. One poll
+read two ways said two different things, which is the failure this file's
+first paragraph is about.
+
 The name comes from `poll_winners()` (`0024`), which calls
 `poll_winner_name()`, which runs the same `star_round()` the results page
 runs — so the badge and the poll page cannot disagree about who won, because
@@ -883,7 +898,9 @@ public voting page could not anyway — it has no account to ask with. It takes
 the winner out of `Results`' own tally instead, through the same
 `rememberWinner` the list writes to. So the function is asked only where there
 is no tally on screen to read the answer off: the poll list, and a poll page
-opened before its results card has loaded.
+opened before its results card has loaded. And on neither of those for a poll
+of several questions, whose badge names no winner — asking would be a round
+trip for an answer thrown away.
 
 A browser holding a build newer than the database it is talking to reads
 *Results ready* too — the app deploys on push while migrations land on merge,
@@ -2024,8 +2041,10 @@ with no group asks one question and both fall back to that rather than to
 zero. The public page's group arrives in a read behind the poll, so until it
 lands there is **no badge** rather than a turnout that rewrites itself into
 *5 questions* a moment later — the same rule the winner badge follows. Its
-state badge stays *Results ready* rather than naming a winner, because there
-is one per question; the winner is named on each question's own page.
+state badge reads *Results ready* rather than naming a winner, on all three
+screens alike, because there is one winner per question and none for the
+poll; each question's own is in the green banner over its tally. See [The
+poll's high-level details](#the-polls-high-level-details).
 `QuestionStrip` carries the walking between them, and renders nothing at all
 below two questions, so every existing poll looks exactly as it did.
 

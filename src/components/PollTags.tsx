@@ -198,12 +198,14 @@ function turnoutLabel({
  *    can genuinely produce and the app reports rather than inventing a
  *    result. It carries the colour of a tie-break that decided nothing,
  *    which is the same claim one level up;
- *  - *Results ready*: the poll is finished and this page is never going to be
- *    told which of the two it is. That is a real state, not a fallback: a poll
- *    of several questions has a winner per question and no single one to name,
- *    a browser talking to a database older than `poll_winners()` never learns
- *    it at all, and a request can simply fail. It must never read as *Tied*,
- *    which would be a wrong answer rather than a missing one.
+ *  - *Results ready*: the poll is finished and no single option is this
+ *    badge's to name. That is a real state, not a fallback. A poll of several
+ *    questions is the deliberate case — it has a winner per question, so the
+ *    badge names none of them and the question the reader opens names its own,
+ *    in the green banner over its tally — and `inGroup` is what says so. A
+ *    browser talking to a database older than `poll_winners()`, and a request
+ *    that simply failed, arrive here too. It must never read as *Tied*, which
+ *    would be a wrong answer rather than a missing one.
  *
  * **A badge that is still resolving renders nothing at all**, which is what
  * `awaitingWinner` is for. The name arrives in a request behind the page, so
@@ -222,6 +224,7 @@ export function PollStateBadge({
   closed,
   winner,
   awaitingWinner = false,
+  inGroup = false,
 }: {
   soliciting: boolean
   resultsAvailable: boolean
@@ -237,6 +240,21 @@ export function PollStateBadge({
    * above on why the first of those draws nothing.
    */
   awaitingWinner?: boolean
+  /**
+   * Whether this poll asks more than one question, in which case there is no
+   * winner for this badge to name and it says so before it looks.
+   *
+   * Decided here rather than by each caller passing `winner: undefined`,
+   * because "a poll of several questions names none of them" is one rule and
+   * three screens draw this badge. It had been left to the callers, and the
+   * one that could not keep it was the poll list: a `Results` card files what
+   * it read under the question's own id, a group's list row *is* its first
+   * question, so opening that question and walking back to the list handed
+   * the group's card the name it had just been told to withhold. One poll
+   * read two ways said two different things, which is the whole thing this
+   * file exists to stop.
+   */
+  inGroup?: boolean
 }) {
   if (soliciting) {
     return (
@@ -247,6 +265,17 @@ export function PollStateBadge({
   }
 
   if (resultsAvailable) {
+    // A poll of several questions, whose answer is one per question rather
+    // than one at all. Ahead of everything below, including the wait: there
+    // is nothing in flight for it and nothing that could arrive, so this is
+    // its final state rather than a placeholder for one.
+    if (inGroup) {
+      return (
+        <Badge color={badgeColor.done} variant="light" style={{ flexShrink: 0 }}>
+          Results ready
+        </Badge>
+      )
+    }
     // Still resolving: no badge rather than one that will be rewritten.
     if (winner === undefined && awaitingWinner) return null
 
@@ -258,11 +287,9 @@ export function PollStateBadge({
       )
     }
     // Finished, and nothing is going to tell this page what it decided: a
-    // poll of several questions has a winner per question and no single one
-    // to name, so its card says the results are ready and leaves naming them
-    // to the question the reader opens; and a request that failed, or a
-    // database older than poll_winners(), ends here too. A request that is
-    // merely still in flight was caught above.
+    // request that failed, or a database older than poll_winners(). A request
+    // still in flight, and a poll with several answers rather than one, were
+    // both caught above.
     if (winner === undefined) {
       return (
         <Badge color={badgeColor.done} variant="light" style={{ flexShrink: 0 }}>

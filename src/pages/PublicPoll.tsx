@@ -325,6 +325,10 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
           // badge at all, which is the honest end of the same rule: it says
           // so itself, in red, where the tally would have been.
           awaitingWinner: shell.results_available && winner === undefined,
+          // Except on a poll of several questions, which waits for nothing:
+          // the badge names none of their winners, so there is no answer it
+          // could be waiting on. See PollStateBadge.
+          inGroup: !!shell.poll.group_id,
         }}
       />
 
