@@ -2178,14 +2178,20 @@ is the four letters and the two rules that decide them.
   on a soliciting poll, so it announces only where its update actually opened
   something, and a second call after the poll is open writes to nobody.
 
-- **One letterhead, one mailer.** `poll_email_html` is the card — a heading, a
-  sentence, a button and the link under it — and `send_poll_email` is the only
-  place this app talks to Resend: it reads the key from Vault, builds the
-  link, and returns quietly where there is no mailer. Four copies of a table
-  layout would have been four places for a padding value to drift. The
-  fan-out is per address for the reason it always was: one request with every
-  invitee in the `to` would show each of them all the others, which is what a
-  poll with its respondents hidden promises not to do.
+- **One letterhead, one mailer, one button.** `poll_email_html` is the card —
+  a heading, a sentence, and the button onto the poll with the link repeated
+  under it — and `send_poll_email` is the only place this app talks to
+  Resend: it reads the key from Vault, builds the link, and returns quietly
+  where there is no mailer. Four copies of a table layout would have been
+  four places for a padding value to drift. The button went the same way in
+  [`0044_one_button.sql`](supabase/migrations/0044_one_button.sql): it had
+  been named after each letter — *Add options*, *Cast your ballot*, *See the
+  results* — which read as four different doors onto the one page all four
+  open, so it says **Open poll** in every email and the letter's subject is
+  the sentence above it. The fan-out is per address for the reason it always
+  was: one request with every invitee in the `to` would show each of them all
+  the others, which is what a poll with its respondents hidden promises not
+  to do.
 
 - **Subjects name the letter; they do not sell it, and they do not carry the
   poll's title.** *You're invited to vote* is how bulk mail opens. The four
