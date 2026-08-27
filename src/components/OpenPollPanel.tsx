@@ -159,7 +159,7 @@ export function OpenPollPanel({
             must not take the way out of the question with it. The invite
             reading places it the same way, for the same reason. */}
         {questionStrip}
-        <Results source={{ kind: 'open', pollId }} pollId={view.poll.id} />
+        <Results source={{ kind: 'open', pollId }} />
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}

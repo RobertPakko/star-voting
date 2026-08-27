@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotCard, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
-src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, settled-poll cache, per-browser ballot order and answered questions, the About page's sample poll, shared types
+src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, shared types
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 scripts/         squash.sh, which squashes the migrations and replays the above;
@@ -543,12 +543,10 @@ never reaches the screen.
 One request per page on a first read, and one per change after that — the poll
 list included. Turning a page of it costs one more, for the page itself; what
 it no longer costs is a re-subscription, because the topic the list watches
-does not depend on which polls are on screen. The pages carrying a
-state badge can make a second: they ask `poll_winners()` for the finished polls
-whose result they cannot already name, which is a request on a first look and
-nothing afterwards. See [The poll's high-level
-details](#the-polls-high-level-details) for why that is a request of its own,
-and [Settled polls](#settled-polls) for why it stops.
+does not depend on which polls are on screen. The state badge costs nothing at
+all: the winner rides on the same read that draws the page it sits on. See
+[The winner is kept with the poll](#the-winner-is-kept-with-the-poll), which
+is also why it used to cost a second request and no longer does.
 
 In `npm run dev` every one of those appears twice: React's `StrictMode` mounts
 each component, unmounts it and mounts it again, so every effect that fetches
@@ -558,49 +556,86 @@ it once. Count requests against `npm run preview`, not `npm run dev`. Against a
 real Supabase project each request is also preceded by a CORS preflight
 `OPTIONS`, so the browser's network panel shows two entries per call.
 
-## Settled polls
+## The winner is kept with the poll
 
-Live updates are for what can change. This is its mirror image: a poll whose
-results are out has taken its last vote, so its tally, its full ranking, its
-ballot grid and the option it elected are fixed for good, and re-reading them
-is work that can only ever produce the same answer. `src/lib/settled.ts`
-remembers all four, and it is what makes the winner badge cost one request per
-poll rather than one per refresh — and the full ranking one per tab rather than
-one per time the modal is opened.
+A poll whose results are out has taken its last vote, so the option it elected
+is fixed for good and running STAR again can only ever produce the same
+answer. `polls.winner_name` holds it. `settle_winner()` fills it in when the
+poll crosses the line into having a result and empties it when a reset takes
+that result away, and the three reads that draw the three screens carrying the
+badge — `list_polls`, `poll_status`, `open_poll_view` — carry it with them.
+See `0047_the_winner_is_kept_with_the_poll.sql`.
 
-What it changes on screen: walking back into a finished poll draws it from
-memory, with no skeleton and no request, and the poll list stops asking about
-polls it has already asked about.
+That is one election per result rather than one per reader, and the badge is
+final on the first paint of every screen it appears on.
 
-**In memory, for the life of the tab, and no further.** Nothing is written to
-`localStorage`, and that is a decision rather than an omission. A settled poll
-is settled *unless its creator resets it* — reset deletes every vote and
-reopens the poll, which can then finish again with a different answer, and
-[nobody is told](#creator-controls). So the bound on a wrong answer is kept
-short:
+**It replaced a cache in the browser**, and the reason is worth keeping. The
+answer used to be fetched per tab from `poll_winners()` and remembered in
+`src/lib/settled.ts` for the life of that tab, along with the tally, the full
+ranking and the ballot grid. A settled poll is settled *unless its creator
+resets it* — reset deletes every vote and reopens the poll, which can then
+finish again with a different answer, and [nobody is told](#creator-controls).
+A tab that reset the poll itself threw its own copy away; every other tab, on
+every other device, kept the name of an option elected by votes that no longer
+existed and drew it as a settled green badge until it was reloaded. The
+answer's living in one place, owned by the thing it is about, is what closes
+that: a reset anywhere reaches everywhere on the next read.
 
-- A reset **in this tab** clears the entries outright: `CreatorControls`
-  calls `forgetPoll`, so the creator — the person most likely to look
-  immediately afterwards — never sees the old result.
-- A reset **somewhere else** leaves this tab holding a tally the poll no
-  longer has. Every screen that renders one reads `poll_status` or
-  `open_poll_view` first, and neither is ever cached, so a poll that has gone
-  back to taking votes shows its ballot rather than a stale result. What is
-  left is a poll reset elsewhere *and finished again* while this tab stayed
-  open, which shows the previous answer until it is reloaded. Persisting any
-  of this would turn that window into a permanent one, to save one request
-  per poll per session.
+Nothing in the browser is held on to now. `Results`, `Ballots` and
+`FullRanking` each read on every draw. The tally is cheap enough now that the
+[full ranking](#results-and-the-full-ranking) was split out behind its button,
+and the ranking is the most expensive thing this app asks for and the one
+asked for least often — so the wait for it is once per opening rather than
+once per reader, which is the trade that split was made to allow.
 
-Two properties make the cache safe to write to at all. Every RPC cached here
-refuses to answer until the results have unlocked, so **holding a response is
-itself proof the poll is finished** — there is no separate check to get
-wrong. And nothing in it is secret: every entry is a response the server had
-already decided this reader could have, dropped when the tab is.
+**Two columns, because there are three answers.** `winner_settled_at` says
+whether the poll has been asked at all; `winner_name` is the answer, and null
+is a real one — a genuine tie elects nobody, and so does a poll closed before
+anyone voted. A single nullable name could tell only two of the three apart,
+and the pair it would merge is exactly the pair that must not merge: *Tied* is
+a wrong answer where *Results ready* is only a missing one. The reads surface
+the pair as `winner_name` and `winner_settled`, and the browser reads an
+unsettled poll as `undefined` rather than null.
 
-`null` is a real answer in the winners map — a genuine tie elects nobody, and
-so does a poll closed before anyone voted — so it is a `Map` with a `has`
-check rather than a lookup treating *missing* and *empty* alike. Otherwise a
-poll with no winner would be asked about forever.
+**What settles it, and the one that could not be a trigger.** The events are
+the set `notify_results_ready` already reconciles the results-are-in email on,
+because it is the same question: a poll closing, the last ballot arriving, a
+ballot going away, and an invitee being removed — which can carry an invite
+poll over the line by lowering the number of people it is waiting for. Three
+are triggers, in the shapes of the notify triggers beside them.
+
+The fourth is the last ballot, and it is a call at the end of `submit_ballot`
+and `open_poll_submit` rather than a trigger, because the obvious
+implementation is quietly wrong. Both functions insert the ballot row first
+and its scores afterwards, in separate statements, so an `AFTER` trigger on
+`ballots` runs *between* the two and would elect a winner from a tally whose
+newest ballot had no scores on it. The ballot that opens the gate is precisely
+the last one, so that mistake would get the deciding vote of every invite poll
+wrong, silently and only there. `25_the_winner_kept_with_the_poll` guards it
+with three ballots where the third one changes the answer.
+
+Deferring the trigger to commit does fix the ordering — a constraint trigger
+sees the whole transaction — and it was tried. What it also does is leave
+`results_available` true and the winner unsettled for the rest of the
+transaction, so the invariant holds only between statements and not within
+them: invisible in the app, where every RPC is its own transaction, and
+load-bearing in the test suite, where a case is one transaction that never
+commits.
+
+**Settling a winner does not announce itself.** `broadcast_poll_updated` fires
+on any update to a poll row, so the write `settle_winner` makes was a second
+message and a second read of the same poll by every watcher, on top of the one
+the close had already sent — the failure `16_live_update_signals` exists to
+catch. It stays quiet when the winner columns are the only thing that changed,
+and nothing is lost by that: the settle only ever happens inside a transaction
+that has already announced the change which produced the result, and both
+writes commit together, so the re-read that message triggers sees the winner.
+
+**`poll_winners()` is still there and nothing calls it.** It reads the column
+now instead of running an election. The app deploys on push while migrations
+land on merge, so for a few minutes a browser can be holding the previous
+build; that build asks this function for its badges, and it has to keep
+answering. It can go once that window is well past.
 
 ## Waiting
 
@@ -729,57 +764,39 @@ ballot by the voters themselves, not addresses the app knows about anybody.
 **The winner's name is a different kind of thing, and this page does name
 it** — in the badge, like everywhere else a single-question poll is read. It
 was never withheld here: the tally under the heading has always named it in
-full. What was missing was the name *in the badge*, because that comes from
+full. What was missing was the name *in the badge*, because that came from
 `poll_winners()` and that function answers only to an account, so the badge
 read *Results ready* next to a result sitting right underneath it. (A poll of
 several questions is the one that still reads *Results ready* here, and on
 every other screen with it; see the table below.)
 
-**It is filled in from the tally the page already has, not from a request of
-its own.** `Results` fetches that tally for itself on every screen that shows
-one, and it carries `winner_id` and the option names — so the badge is drawn
-from it, and running an election server-side to answer a question the browser
-can already answer would be work for nothing. `Results` files what it learns
-under the poll through `rememberWinner`, exactly where `poll_winners()` files
-its answer, and the badge reads whichever arrives.
+**It arrives on `open_poll_view`, the read that draws the page.** It used to be
+taken out of the tally the `Results` card below the badge fetched for itself,
+because that card carries `winner_id` and the option names and this page could
+not ask a function that wants an account. That worked, and it made the badge a
+dependent of a card several inches below it: it appeared when that card
+appeared, and if that card failed there was no badge at all. The poll's own
+row carries the answer now (see [The winner is kept with the
+poll](#the-winner-is-kept-with-the-poll)), so the same read that draws the
+heading draws the badge beside it, with no account and no second request.
 
-The two can never disagree: `winner_id` is `star_round()`'s first place, and
-`poll_winner_name()` returns the *name* of `star_round()`'s first place. A
-poll that elected nobody is `null` from both, which is a real answer and not a
-missing one — see the table above.
+**Nothing on the badge waits.** *Results ready* is a real state — it means
+"finished, and nothing is going to tell this page what it decided", which is
+true of a poll of several questions, of a browser talking to a database older
+than the columns that carry the winner, and of a read that failed. It is not a
+loading state, and it was once used as one: every finished poll drew *Results
+ready* for the hundred milliseconds its winner was in flight and then rewrote
+itself into a name, so every load of every finished poll flickered through a
+state that was true for nobody. The fix at the time was a third input,
+`awaitingWinner`, and a badge that drew nothing while it was set.
 
-Until that card lands, the badge renders **nothing at all** — see *The badge
-waits for its own answer* below. That is the whole cost, and it buys the
-public page a request it never makes and the server an election it never
-runs.
-
-**The badge waits for its own answer.** *Results ready* is a real state — it
-means "finished, and nothing is going to tell this page what it decided",
-which is true of a poll of several questions, of a browser talking to a
-database older than `poll_winners()`, and of a request that failed. It is not
-a loading state, and it used to be used as one: every finished poll drew
-*Results ready* for the hundred milliseconds its winner was in flight and then
-rewrote itself into a name, so every load of every finished poll flickered
-through a state that was true for nobody. `PollStateBadge` now takes
-`awaitingWinner` alongside `winner`, and draws nothing while an answer is
-still coming. Each of the three screens knows its own answer to that:
-
-- the poll page and the list ask `poll_winners()`, so "still coming" is "the
-  request has not settled" — and it stops being pending **whether or not the
-  request succeeded**, because a failure leaves the winner unknown and
-  *Results ready* is exactly what unknown looks like;
-- a multi-question poll is never pending on any of the three, because none of
-  them is waiting on anything: the badge names no winner for one of those at
-  all, so its *Results ready* is there from the first paint;
-- the public page's answer arrives from the tally card below it, so it waits
-  for that card — and if that card fails there is no badge, which is the
-  honest end of the same rule: the card says so itself, in red, where the
-  tally would have been.
-
-Nothing else on the badge waits. *Collecting options*, *In progress* and
-*Closed* are decided by the read that drew the page, and a poll whose answer is
-already in the browser — which is every poll opened from a list that has
-already asked — draws it immediately.
+That input is gone, because the thing it was waiting for no longer arrives
+late. `list_polls`, `poll_status` and `open_poll_view` each carry
+`winner_name` and `winner_settled` beside the `results_available` the badge
+already reads, so every state the badge can draw is decided by the read that
+drew the page. There is no in-flight case left to hold it back — and no way
+for the name and the state beside it to be a step out of sync, since they came
+from the same row.
 
 **The badge and the title share a row, sixty/forty.** Two earlier attempts came
 apart on a phone. Left free to give, the title took min-content and wrapped one
@@ -846,71 +863,68 @@ collapse the three finished outcomes into one:
 | *Tied — no winner* | the election ran and settled nothing — see [Tie-breaks](#tie-breaks) |
 | *Results ready* | finished, and this page has not been told which of the two |
 
-That last row is a real state rather than a fallback: the name always arrives
-behind the page — in a `poll_winners()` request on the poll list, or with the
-tally on a page that shows one — and a browser talking to a database older
-than `poll_winners()` never learns it at all. It must never read as *Tied*,
-which would be a wrong answer where this is only a missing one.
+That last row is a real state rather than a fallback. It is what a poll of
+several questions reads, and what a browser talking to a database older than
+the columns carrying the winner reads, and what a read that failed leaves
+behind. It must never read as *Tied*, which would be a wrong answer where this
+is only a missing one — which is why the answer travels as a name *and* a
+`winner_settled` flag rather than as a name alone.
 
 **A poll of several questions takes that row deliberately, on every screen.**
 It has an answer per question and none to put beside the poll's title, so the
 badge names none of them; the question a reader opens names its own, in the
 green banner over its tally, a few inches under the badge that declined to.
 `PollStateBadge` decides that from `inGroup` rather than trusting each caller
-to pass no winner, because one of them could not keep it: `Results` files what
-it read under the *question's* id, and a group's row on the poll list **is**
-its first question — so opening that question and walking back to the list
-handed the group's card the very name the list had never asked for. One poll
-read two ways said two different things, which is the failure this file's
-first paragraph is about.
+to pass no winner, because a caller could not keep it. A group's row on the
+poll list **is** its first question, so `list_polls` hands that card the first
+question's `winner_name` like any other row — as it must, since it is one
+query and the row is a poll. Withholding it in the badge, in one place, is
+what stops one poll read two ways from saying two different things, which is
+the failure this file's first paragraph is about. (The rule was earned the
+harder way: the browser used to file what a `Results` card read under the
+*question's* id, so opening a group's first question and walking back to the
+list handed its card the very name the list had never asked for.)
 
-The name comes from `poll_winners()` (`0024`), which calls
-`poll_winner_name()`, which runs the same `star_round()` the results page
-runs — so the badge and the poll page cannot disagree about who won, because
-there is one implementation of the method and this is a second caller of it.
+The name is a column on the poll, filled in by `settle_winner()` when the poll
+finished. It runs `poll_winner_name()`, which runs the same `star_round()` the
+results page runs — so the badge and the tally cannot disagree about who won,
+because there is one implementation of the method and this is a second caller
+of it. See [The winner is kept with the
+poll](#the-winner-is-kept-with-the-poll) for how it is kept true.
 
-**It is a separate request, not a column on `list_polls()`, and that is the
-whole design.** Running STAR is not free, and the list re-reads itself every
-few seconds for as long as it is on screen; a `winner_name` column would have
-re-run every finished poll's election on every tick, for an answer that
-cannot change. Instead:
+**It is a column on `list_polls()`, and the argument that kept it off is worth
+recording because it was right about the wrong thing.** Running STAR is not
+free, and the list re-reads itself whenever anything on it moves; a column
+that *computed* the winner would have re-run every finished poll's election on
+every one of those reads, for an answer that cannot change. So the winner was
+a second request instead — `poll_winners()`, asked for the finished polls on
+the page being looked at, once per poll per tab, with a cache in the browser
+to make it once rather than once per read.
 
-- `list_polls()` stays what it was — one cheap `STABLE` query per tick, with
-  no election in it.
-- The page asks `poll_winners()` for the finished polls **on the page being
-  looked at** that the browser cannot already name. That is at most ten, it
-  happens the first time a page is looked at and on the tick a poll's results
-  unlock, and it happens not at all in between (see [Settled
-  polls](#settled-polls)).
+What that got wrong is that the answer being fixed is a fact about the
+*poll*, not about the reader looking at it. Held per tab, it had to be
+re-derived by every tab and could not be corrected in any of them: a reset
+elsewhere left the name of an option elected by votes that no longer existed
+on every other screen in the world until it was reloaded. Held on the row, it
+is derived once and correct everywhere. `list_polls()` is still one cheap
+`STABLE` query with no election in it — reading a column off a row it has
+already fetched is not one.
 
-So the cost is one election per poll per tab, rather than per poll per tick —
-it stops growing with the length of your poll history, which is what a badge
-on a list has to do.
+So the cost is one election per *result*, rather than one per poll per tab. It
+stops growing with the number of people looking, which is a stronger property
+than the one the old design bought.
 
-`poll_winners()` checks visibility itself, on exactly the terms `list_polls()`
-uses, and answers with **no row at all** for a poll the caller cannot see:
-*not yours* and *no winner* are different answers and must not arrive looking
-alike. It also refuses more than 200 ids in one request, because each one is
-an election.
-
-**A page that already shows a tally does not go through it at all**, and the
-public voting page could not anyway — it has no account to ask with. It takes
-the winner out of `Results`' own tally instead, through the same
-`rememberWinner` the list writes to. So the function is asked only where there
-is no tally on screen to read the answer off: the poll list, and a poll page
-opened before its results card has loaded. And on neither of those for a poll
-of several questions, whose badge names no winner — asking would be a round
-trip for an answer thrown away.
+**Every screen reads it off the row that drew it**, and that includes the
+public voting page, which has no account and so could never have called
+`poll_winners()` at all: `open_poll_view` carries it. That page used to take
+the winner out of the `Results` card below the badge, which made the badge
+wait on that card and disappear if it failed.
 
 A browser holding a build newer than the database it is talking to reads
-*Results ready* too — the app deploys on push while migrations land on merge,
-so for a few minutes `poll_winners()` may not exist yet. That failure is
-swallowed on purpose: a list with no winners named on it is a working list,
-where a list that 404s is not.
-
-The poll page asks the same function through `useWinner`, and through the same
-cache, so opening a poll from the list — which is how most people open one —
-costs no request at all and cannot disagree with the card it was opened from.
+*Results ready* — the app deploys on push while migrations land on merge, so
+for a few minutes the columns may not exist yet. `winner_settled` is
+`undefined` then rather than false, which is the same as *not told*, and a
+list with no winners named on it is a working list.
 
 **Ten polls to a page, taken in the database.** `list_polls(p_limit,
 p_offset)` returns that page and the total, in one round trip.
@@ -1646,9 +1660,10 @@ the scores already on the ballot; the ballot row itself never moves. So
 turnout does not change, an invite poll cannot be pushed back below the
 completion that revealed it, and `is_complete`, the respondent roster and the
 invitee guards see nothing at all. A delete would undo a reveal, and a reveal
-in this app is one-way — [Settled polls](#settled-polls) caches a finished
-poll's tally for the life of the tab on exactly that promise. There is no
-"take my vote back" button and there is deliberately no function behind one.
+in this app is one-way — [the winner kept with the
+poll](#the-winner-is-kept-with-the-poll) is settled once on exactly that
+promise, and never recomputed. There is no "take my vote back" button and
+there is deliberately no function behind one.
 
 **Nothing broadcasts, and that is the finding rather than an omission.** Every
 trigger in [Live updates](#live-updates) exists because something on
@@ -2040,7 +2055,8 @@ counts `open_poll_group`, which is the same count `list_polls` takes; a poll
 with no group asks one question and both fall back to that rather than to
 zero. The public page's group arrives in a read behind the poll, so until it
 lands there is **no badge** rather than a turnout that rewrites itself into
-*5 questions* a moment later — the same rule the winner badge follows. Its
+*5 questions* a moment later — the rule the winner badge used to need for the
+same reason, before its answer started arriving with the page. Its
 state badge reads *Results ready* rather than naming a winner, on all three
 screens alike, because there is one winner per question and none for the
 poll; each question's own is in the green banner over its tally. See [The
@@ -2503,9 +2519,11 @@ Two things follow, and neither is free:
 - **Opening the modal costs more than the old single call did**, not less.
   First place is part of the ranking, so `poll_ranking` runs the head round
   again rather than being handed it. The trade is 4–18% more for the readers
-  who ask, against 69–96% less for the readers who don't — and the answer is
-  cached like the tally is, so a reader pays it once per tab rather than once
-  per opening. The overhead is worst in relative terms on the smallest polls,
+  who ask, against 69–96% less for the readers who don't — and it is paid once
+  per opening, since nothing about a finished poll is held in the browser any
+  more ([The winner is kept with the
+  poll](#the-winner-is-kept-with-the-poll)). The overhead is worst in relative
+  terms on the smallest polls,
   where one round is a large fraction of the work and the whole thing is over
   in milliseconds anyway.
 - **The modal has a loading state now**, where it used to draw instantly from

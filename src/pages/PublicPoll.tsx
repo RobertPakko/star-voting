@@ -13,7 +13,6 @@ import {
 } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
 import { pollTopic, useLiveStream } from '../lib/useLiveStream'
-import { useKnownWinner } from '../lib/useWinner'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollHeading } from '../components/PollHeading'
@@ -190,16 +189,6 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
     if (sample) void load()
   }, [sample, load])
 
-  // What the tally below this heading elected, read out of the browser rather
-  // than asked for: the Results card fetches that tally for itself and files
-  // the winner under the poll, so the badge costs no request. It asks nobody,
-  // because `poll_winners()` answers only to an account and this page has
-  // none.
-  // Of the poll on screen, which during a crossing is still the question
-  // being left — the heading below is drawn from the same `shell`, so the
-  // badge and the poll it sits beside always describe the same question.
-  const winner = useKnownWinner(shell?.poll.id)
-
   if (!pollId || error) {
     return (
       <Stack maw={720} mx="auto" gap="md" align="center">
@@ -316,18 +305,19 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
           soliciting: shell.soliciting,
           resultsAvailable: shell.results_available,
           closed: shell.is_closed,
-          winner,
-          // The answer is coming from the card below rather than from a
-          // request of this page's own, so "still loading" here is simply
-          // "the card has not filed one yet" — and the badge stays off until
-          // it does, instead of saying the results are ready and then
-          // rewriting itself into the name. If that card fails there is no
-          // badge at all, which is the honest end of the same rule: it says
-          // so itself, in red, where the tally would have been.
-          awaitingWinner: shell.results_available && winner === undefined,
-          // Except on a poll of several questions, which waits for nothing:
-          // the badge names none of their winners, so there is no answer it
-          // could be waiting on. See PollStateBadge.
+          // Out of `shell`, which is the same read that drew the heading this
+          // badge sits beside — so during a crossing between questions the
+          // two describe the same question, and neither can be a step ahead
+          // of the other.
+          //
+          // It used to be taken out of the tally the card below fetched for
+          // itself, because `poll_winners()` answers only to an account and
+          // this page has none. That made the badge wait on that card and
+          // exist only because it did. `open_poll_view` carries the answer
+          // now, so it arrives with the page and needs no account to ask for.
+          winner: shell.winner_settled ? (shell.winner_name ?? null) : undefined,
+          // Except on a poll of several questions, whose badge names none of
+          // their winners. See PollStateBadge.
           inGroup: !!shell.poll.group_id,
         }}
       />

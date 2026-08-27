@@ -7,7 +7,6 @@ import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
 import { PollListSkeleton } from '../components/Skeletons'
-import { knownWinners, rememberWinner } from '../lib/settled'
 import type { PollListItem } from '../lib/types'
 
 /**
@@ -28,12 +27,6 @@ export function PollList() {
   const [polls, setPolls] = useState<PollListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
-  // Winners this tab has learned, seeded from what it learned before this
-  // page was last mounted. The Map in lib/settled.ts is the copy that
-  // outlives the component; this one is what re-renders when it grows.
-  const [winners, setWinners] = useState<ReadonlyMap<string, string | null>>(
-    () => new Map(knownWinners()),
-  )
   // How many polls there are in total, which only a read can tell us: it
   // arrives on every row (see PollListItem.total_count) because that is the
   // only place a set-returning function can put it.
@@ -130,58 +123,19 @@ export function PollList() {
 
   const liveStatus = useLiveStream(topics, load)
 
-  // Which polls on this page have finished without this tab knowing what they
-  // decided. Nearly always empty: it fills on a first look at a page and on
-  // the read where a poll's results unlock, and is empty on every read in
-  // between.
+  // The winner of a finished poll arrives on the row that draws the card.
   //
-  // Joined into a string to depend on, because `polls` is a fresh array after
-  // every read and an effect watching it would re-ask, every time anybody
-  // voted anywhere on the list, for an answer that cannot change.
-  //
-  // A poll that asks several questions is not asked about at all: it has a winner
-  // per question and no single one to name, so its badge stays "Results
-  // ready" and the answers are named on the question pages themselves.
-  const wanted = shown
-    .filter((poll) => poll.results_available && poll.question_count < 2 && !winners.has(poll.id))
-    .map((poll) => poll.id)
-  const wantedKey = wanted.join(',')
-
-  // Which of those have been asked about and answered — either way. A poll
-  // still in the first group and not yet in this one has a badge whose final
-  // state is not known, and PollStateBadge draws nothing for it rather than
-  // *Results ready* rewritten into a name a moment later. Failures land here
-  // too: nothing was learned, so the badge settles on *Results ready*, which
-  // is what that state is for.
-  const [asked, setAsked] = useState<ReadonlySet<string>>(() => new Set())
-
-  // The winners are their own request rather than a column on list_polls,
-  // because a column would re-run every finished poll's election on every
-  // read. This asks once per poll, for the polls on screen, and a settled
-  // poll never comes back into the question. See 0024_poll_winners.sql.
-  useEffect(() => {
-    if (!wantedKey) return
-    let cancelled = false
-    const ids = wantedKey.split(',')
-
-    supabase.rpc('poll_winners', { p_poll_ids: ids }).then(({ data, error: rpcError }) => {
-      // A list with no winners named on it is a working list, so a failure
-      // here is swallowed: it is also what a browser sees when it is running
-      // ahead of the migration that adds the function. The next read asks
-      // again, since nothing was remembered.
-      if (!rpcError && data) {
-        const answered = data as { poll_id: string; winner_name: string | null }[]
-        for (const row of answered) rememberWinner(row.poll_id, row.winner_name)
-      }
-      if (cancelled) return
-      if (!rpcError && data) setWinners(new Map(knownWinners()))
-      setAsked((before) => new Set([...before, ...ids]))
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [wantedKey])
+  // It used to be a second request — `poll_winners()`, asked for the finished
+  // polls on screen whose result this tab could not already name — and a
+  // module-level cache to stop it being asked twice. Both are gone. The
+  // objection to a column was that it would re-run every finished poll's
+  // election on every read of a list that re-reads itself whenever anything
+  // on it moves; what `list_polls` carries now is not an election but a
+  // column the database settled once, when the poll finished. So the badge is
+  // final on the first paint, there is nothing in flight for it to wait on,
+  // and a poll reset on another device cannot leave a name on this card that
+  // its votes no longer support. See
+  // 0047_the_winner_is_kept_with_the_poll.sql.
 
   if (error) {
     return (
@@ -242,19 +196,16 @@ export function PollList() {
                 soliciting: poll.soliciting,
                 resultsAvailable: poll.results_available,
                 closed: poll.is_closed,
-                // Never asked for on a multi-question poll — but this map is
-                // filled from two places, and the other one is every Results
-                // card in the tab, which files what it read under the
-                // question's own id. A group's row here *is* its first
-                // question, so a reader who opened that question came back to
-                // a card naming the winner this list had never asked about.
-                // `inGroup` is what withholds it now, in the badge, for all
-                // three screens at once.
-                winner: winners.get(poll.id),
-                // Nothing is in flight for a multi-question poll, so it never
-                // waits: "Results ready" is its final state rather than a
-                // placeholder for one.
-                awaitingWinner: wanted.includes(poll.id) && !asked.has(poll.id),
+                // `undefined` rather than null where the database has not
+                // settled an answer — including a database old enough not to
+                // carry the columns at all — because null is a real answer
+                // here and means a poll that elected nobody.
+                //
+                // A group's row on this list *is* its first question, so this
+                // is that question's winner rather than the poll's. The badge
+                // withholds it on `inGroup`, in one place for all three
+                // screens, rather than leaving three callers to remember.
+                winner: poll.winner_settled ? (poll.winner_name ?? null) : undefined,
                 inGroup: poll.question_count > 1,
               }}
             />

@@ -14,7 +14,6 @@ import { InfoIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
-import { recall, remember, rememberWinner } from '../lib/settled'
 import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { OptionDescription } from './OptionDescription'
@@ -28,67 +27,26 @@ import { voters } from '../lib/plural'
  */
 export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
-/**
- * File the option this tally elected under its poll, for the state badge
- * beside the title.
- *
- * The badge is the answer to the same question the card below it answers in
- * full, and this tally is already in the browser — so the badge is drawn from
- * it rather than from a second request that would re-run the same election on
- * the server. That is why `poll_winner_name()` is not reached from the public
- * voting page: the page it would serve has the answer already.
- *
- * It cannot disagree with `poll_winners()`, which is where a signed-in reader
- * gets the same badge from. `winner_id` is `star_round()`'s first place and
- * `poll_winner_name()` returns the name of `star_round()`'s first place; a
- * poll that elected nobody is `null` from both, which is a real answer and not
- * a missing one.
- */
-function publishWinner(pollId: string, results: PollResults): void {
-  const winner = results.winner_id
-  rememberWinner(
-    pollId,
-    winner ? (results.options.find((o) => o.id === winner)?.name ?? null) : null,
-  )
-}
-
-export function Results({
-  source,
-  pollId,
-}: {
-  source: ResultsSource
-  /**
-   * The poll this tally belongs to, which the token form of `source` does
-   * not carry. Only used to file the elected option under it; see the note
-   * on `publishWinner` below.
-   */
-  pollId: string
-}) {
+export function Results({ source }: { source: ResultsSource }) {
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
   const key = source.pollId
-  const rpc = kind === 'poll' ? 'get_poll_results' : 'open_poll_results'
 
-  // A tally this tab has already been given, rendered without a request and
-  // therefore without a skeleton: the poll it describes has taken its last
-  // vote, so there is nothing a second read could tell us. See lib/settled.ts
-  // for why that is in memory only.
-  const [results, setResults] = useState<PollResults | null>(
-    () => recall<PollResults>(rpc, key) ?? null,
-  )
+  // Read every time the card is drawn.
+  //
+  // This used to be remembered for the life of the tab, on the grounds that a
+  // poll whose results are out has taken its last vote and a second read could
+  // only say the same thing. True — unless the creator resets the poll, which
+  // deletes every vote and is announced to nobody, and then the tally held
+  // here was of votes that no longer exist. That window is gone rather than
+  // narrowed: nothing is held. The head round is cheap now that the full
+  // ranking is fetched only when somebody opens it (see FullRanking), which
+  // is what makes paying for it on every load the easy trade.
+  const [results, setResults] = useState<PollResults | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Checked again here rather than only in the initial state, because one
-    // mounted Results can be handed a different poll.
-    const cached = recall<PollResults>(rpc, key)
-    if (cached) {
-      setResults(cached)
-      publishWinner(pollId, cached)
-      return
-    }
-
     let cancelled = false
 
     const request: PromiseLike<RpcAnswer> =
@@ -97,12 +55,6 @@ export function Results({
         : openPollRpc('open_poll_results', { p_poll_id: key })
 
     request.then(({ data, error: rpcError }) => {
-      // Remembered whether or not this component still wants it: the answer
-      // is about the poll, not about who asked.
-      if (!rpcError) {
-        remember(rpc, key, data)
-        publishWinner(pollId, data as PollResults)
-      }
       if (cancelled) return
       if (rpcError) setError(rpcError.message)
       else setResults(data as PollResults)
@@ -111,7 +63,7 @@ export function Results({
     return () => {
       cancelled = true
     }
-  }, [kind, key, rpc, pollId])
+  }, [kind, key])
 
   if (error) {
     return (

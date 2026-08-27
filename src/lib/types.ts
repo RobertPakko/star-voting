@@ -148,6 +148,30 @@ export interface PollStatus {
    * offers no confirm button at all rather than one that cannot work.
    */
   confirmed_count?: number
+  /**
+   * The option this question elected, and whether the database has worked
+   * that out at all.
+   *
+   * Two fields rather than one because there are three answers and the badge
+   * draws a different thing for each: a name, *Tied* for a poll that elected
+   * nobody, and *Results ready* for one whose answer this page has not been
+   * told. A single nullable name could only tell two of them apart, and the
+   * pair it would merge is exactly the pair that must not merge — *Tied* is a
+   * wrong answer where *Results ready* is only a missing one.
+   *
+   * So: `winner_settled` false means not worked out; true with a null
+   * `winner_name` means worked out and nobody won. Both undefined against a
+   * database that predates the columns, which reads as the third case and is
+   * the same reason `expires_at` is optional.
+   *
+   * The database settles this once, when the poll crosses into having a
+   * result, and clears it when a reset takes that result away — so it arrives
+   * with the read that draws the page rather than in a request behind it, and
+   * a poll reset on another device cannot leave a name here that its votes no
+   * longer support. See 0047_the_winner_is_kept_with_the_poll.sql.
+   */
+  winner_name?: string | null
+  winner_settled?: boolean
 }
 
 /** One row from list_polls(): a poll and its status, fetched together. */
@@ -225,6 +249,17 @@ export interface OpenPollView {
   /** Still collecting options; see PollStatus.soliciting. */
   soliciting: boolean
   results_available: boolean
+  /**
+   * The option this poll elected, on the same terms as `PollStatus`.
+   *
+   * This page has no account, so it could never ask `poll_winners()` at all:
+   * its badge used to be filled in from whatever tally the results card
+   * underneath it happened to fetch, which meant the badge existed only
+   * because that card did and waited however long it waited. Now it arrives
+   * with the page.
+   */
+  winner_name?: string | null
+  winner_settled?: boolean
   /** This browser's voter_key has already submitted a ballot. */
   voted: boolean
   your_name: string | null

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Stack, Table, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
-import { recall, remember } from '../lib/settled'
 import { BallotsSkeleton } from './Skeletons'
 import type { BallotSheet } from '../lib/types'
 
@@ -28,23 +27,15 @@ export function Ballots({ source }: { source: BallotsSource }) {
   // depending on a fresh object identity every render.
   const kind = source.kind
   const key = source.pollId
-  const rpc = kind === 'poll' ? 'poll_ballots' : 'open_poll_ballots'
 
-  // Ballots unlock on the same terms as the results and are as final: the
-  // grid is cached for the life of the tab, like the tally. See
-  // lib/settled.ts.
-  const [sheet, setSheet] = useState<BallotSheet | null>(
-    () => recall<BallotSheet>(rpc, key) ?? null,
-  )
+  // Read every time the grid is drawn, like the tally above it and for the
+  // same reason: a reset takes a poll's ballots away and tells nobody, so a
+  // sheet held for the life of the tab is a sheet that can outlive the votes
+  // on it. See the note in Results.
+  const [sheet, setSheet] = useState<BallotSheet | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const cached = recall<BallotSheet>(rpc, key)
-    if (cached) {
-      setSheet(cached)
-      return
-    }
-
     let cancelled = false
 
     const request: PromiseLike<RpcAnswer> =
@@ -53,7 +44,6 @@ export function Ballots({ source }: { source: BallotsSource }) {
         : openPollRpc('open_poll_ballots', { p_poll_id: key })
 
     request.then(({ data, error: rpcError }) => {
-      if (!rpcError) remember(rpc, key, data)
       if (cancelled) return
       if (rpcError) setError(rpcError.message)
       else setSheet(data as BallotSheet)
@@ -62,7 +52,7 @@ export function Ballots({ source }: { source: BallotsSource }) {
     return () => {
       cancelled = true
     }
-  }, [kind, key, rpc])
+  }, [kind, key])
 
   if (error) {
     return (

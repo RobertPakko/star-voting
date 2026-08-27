@@ -5,7 +5,6 @@ import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { pollTopic, useLiveStream } from '../lib/useLiveStream'
-import { useWinner } from '../lib/useWinner'
 import { voterKeyFor } from '../lib/voterKey'
 import {
   answeredQuestions,
@@ -270,17 +269,6 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   const live = loadedFor !== pollId || !status || (!status.is_closed && !status.results_available)
   const liveStatus = useLiveStream(pollId ? [pollTopic(pollId)] : [], onSignal, { enabled: live })
 
-  // For the state badge beside the title. Almost always already known: the
-  // list this poll was opened from asked the same question through the same
-  // cache.
-  // Not asked for on a poll of several questions: the badge names no winner
-  // for one of those, so the answer would be a round trip whose result is
-  // thrown away. The list has never asked for the same reason.
-  const { winner, pending: awaitingWinner } = useWinner(
-    pollId,
-    status?.results_available === true && !poll?.group_id,
-  )
-
   // Close and reset invalidate a ballot half-filled in the open-poll panel,
   // so they remount it as well as re-reading the poll. A vote doesn't: the
   // ballot it was filling in is gone either way, and a remount would only
@@ -486,8 +474,18 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
           soliciting: status.soliciting,
           resultsAvailable: status.results_available,
           closed: status.is_closed,
-          winner,
-          awaitingWinner,
+          // Off the same read that drew the page. It used to be a request of
+          // its own behind it — `poll_winners()`, through a cache the poll
+          // list wrote to as well, so that arriving here from the list cost
+          // nothing. Now nothing costs anything: `poll_status` carries the
+          // answer the database settled when the poll finished, so the badge
+          // is final the moment the page is, and it cannot disagree with the
+          // card it was opened from because there is one copy of it.
+          //
+          // `undefined` where the answer has not been settled — a database
+          // older than the columns included — since null here means a poll
+          // that elected nobody.
+          winner: status.winner_settled ? (status.winner_name ?? null) : undefined,
           // The badge belongs to the poll, and a poll of several questions has
           // an answer per question rather than one to put beside its title.
           // The question in front of the reader names its own, in the green
@@ -569,7 +567,7 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
                same questions. */
             <>
               {questionStrip}
-              <Results source={{ kind: 'poll', pollId: poll.id }} pollId={poll.id} />
+              <Results source={{ kind: 'poll', pollId: poll.id }} />
             </>
           ) : status.is_closed ? (
             <>

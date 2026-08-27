@@ -203,27 +203,25 @@ function turnoutLabel({
  *    questions is the deliberate case — it has a winner per question, so the
  *    badge names none of them and the question the reader opens names its own,
  *    in the green banner over its tally — and `inGroup` is what says so. A
- *    browser talking to a database older than `poll_winners()`, and a request
- *    that simply failed, arrive here too. It must never read as *Tied*, which
- *    would be a wrong answer rather than a missing one.
+ *    browser talking to a database older than the columns that carry the
+ *    winner, and a read that simply failed, arrive here too. It must never
+ *    read as *Tied*, which would be a wrong answer rather than a missing one.
  *
- * **A badge that is still resolving renders nothing at all**, which is what
- * `awaitingWinner` is for. The name arrives in a request behind the page, so
- * a finished poll used to draw *Results ready* for the hundred milliseconds
- * before its answer landed and then rewrite itself into the winner's name —
- * every load of every finished poll flickering through a state that was
- * true for nobody. Waiting costs a badge that appears a moment late; not
- * waiting costs one that is read and then contradicted. Nothing else on this
- * badge waits: *Collecting options*, *In progress* and *Closed* are decided
- * by the same read that drew the page, and a poll with an answer already in
- * hand draws it immediately.
+ * **Nothing here waits on anything.** The name used to arrive in a request
+ * behind the page, so a finished poll drew *Results ready* for the hundred
+ * milliseconds before its answer landed and then rewrote itself into the
+ * winner's name — every load of every finished poll flickering through a
+ * state that was true for nobody. That needed a third input, `awaitingWinner`,
+ * and a badge that drew nothing while it was set. The winner now arrives on
+ * the same read as `resultsAvailable` — `list_polls`, `poll_status` and
+ * `open_poll_view` all carry it — so every state below is decided by the read
+ * that drew the page and there is no in-flight case left to draw.
  */
 export function PollStateBadge({
   soliciting,
   resultsAvailable,
   closed,
   winner,
-  awaitingWinner = false,
   inGroup = false,
 }: {
   soliciting: boolean
@@ -231,15 +229,10 @@ export function PollStateBadge({
   closed: boolean
   /**
    * The option that won, `null` for a poll that elected nobody, and
-   * `undefined` for one whose result this page has not been told.
+   * `undefined` for one whose result this page has not been told — a database
+   * older than the columns that carry it, or a read that failed.
    */
   winner?: string | null
-  /**
-   * Whether an answer is still coming. `undefined` covers both "not yet" and
-   * "not ever", and only the caller knows which it is holding; see the note
-   * above on why the first of those draws nothing.
-   */
-  awaitingWinner?: boolean
   /**
    * Whether this poll asks more than one question, in which case there is no
    * winner for this badge to name and it says so before it looks.
@@ -276,9 +269,6 @@ export function PollStateBadge({
         </Badge>
       )
     }
-    // Still resolving: no badge rather than one that will be rewritten.
-    if (winner === undefined && awaitingWinner) return null
-
     if (winner === null) {
       return (
         <Badge color={badgeColor.unsettled} variant="light" style={{ flexShrink: 0 }}>
@@ -287,9 +277,8 @@ export function PollStateBadge({
       )
     }
     // Finished, and nothing is going to tell this page what it decided: a
-    // request that failed, or a database older than poll_winners(). A request
-    // still in flight, and a poll with several answers rather than one, were
-    // both caught above.
+    // read that failed, or a database older than the columns carrying the
+    // answer. A poll with several answers rather than one was caught above.
     if (winner === undefined) {
       return (
         <Badge color={badgeColor.done} variant="light" style={{ flexShrink: 0 }}>

@@ -4,7 +4,6 @@ import { useDisclosure } from '@mantine/hooks'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
-import { recall, remember } from '../lib/settled'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
 import { RankingSkeleton } from './Skeletons'
 import { voters } from '../lib/plural'
@@ -35,9 +34,13 @@ export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
  * the ranking, so `poll_ranking` runs it again rather than being handed it.
  * See AGENTS.md, "Results and the full ranking", for the measurements.
  *
- * The answer is cached for the life of the tab like the tally is -- a poll
- * whose results are out has taken its last vote -- so the wait is once per
- * reader, not once per opening.
+ * The answer is not held on to. It used to be, for the life of the tab, on
+ * the grounds that a poll whose results are out has taken its last vote --
+ * true, unless its creator resets it, which deletes every vote and is
+ * announced to nobody. So the wait is once per opening rather than once per
+ * reader. It is the most expensive thing this app asks for and the one
+ * fetched least often, which is exactly the trade the split above was made
+ * to allow.
  */
 export function FullRanking({ source, results }: { source: RankingSource; results: PollResults }) {
   const [opened, modal] = useDisclosure(false)
@@ -46,23 +49,14 @@ export function FullRanking({ source, results }: { source: RankingSource; result
   // depending on a fresh object identity every render.
   const kind = source.kind
   const key = source.pollId
-  const rpc = kind === 'poll' ? 'get_poll_ranking' : 'open_poll_ranking'
 
-  const [ranking, setRanking] = useState<RankingEntry[] | null>(
-    () => recall<RankingEntry[]>(rpc, key) ?? null,
-  )
+  const [ranking, setRanking] = useState<RankingEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     // The whole point of the split: nothing is asked for until somebody
     // asks for it.
     if (!opened) return
-
-    const cached = recall<RankingEntry[]>(rpc, key)
-    if (cached) {
-      setRanking(cached)
-      return
-    }
 
     // Cleared rather than left standing, so closing a failed modal and
     // opening it again is a retry rather than a replay.
@@ -76,9 +70,6 @@ export function FullRanking({ source, results }: { source: RankingSource; result
         : openPollRpc('open_poll_ranking', { p_poll_id: key })
 
     request.then(({ data, error: rpcError }) => {
-      // Remembered whether or not this component still wants it: the answer
-      // is about the poll, not about who asked.
-      if (!rpcError) remember(rpc, key, data)
       if (cancelled) return
       if (rpcError) setError(rpcError.message)
       else setRanking(data as RankingEntry[])
@@ -87,7 +78,7 @@ export function FullRanking({ source, results }: { source: RankingSource; result
     return () => {
       cancelled = true
     }
-  }, [opened, kind, key, rpc])
+  }, [opened, kind, key])
 
   // With two options the ranking is the winner and the option it beat, both
   // already on screen; with one there is nothing to order. Decided from the

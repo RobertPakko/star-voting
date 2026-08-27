@@ -55,10 +55,8 @@ export function PollHeading({
     soliciting: boolean
     resultsAvailable: boolean
     closed: boolean
-    /** Absent where the page cannot ask; see PollStateBadge. */
+    /** Absent where the database has not settled one; see PollStateBadge. */
     winner?: string | null
-    /** An answer is coming: the badge waits rather than flickering. */
-    awaitingWinner?: boolean
     /**
      * This poll asks more than one question, so it has no one winner and the
      * badge names none; see PollStateBadge, which decides that for all three
@@ -116,7 +114,6 @@ export function PollHeading({
             resultsAvailable={state.resultsAvailable}
             closed={state.closed}
             winner={state.winner}
-            awaitingWinner={state.awaitingWinner}
             inGroup={state.inGroup}
           />
         </Group>
