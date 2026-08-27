@@ -91,10 +91,17 @@ function PollHeadingShape({ compact = false }: { compact?: boolean }) {
   )
 }
 
-/** The five stars an option is scored with; see StarRating. */
+/**
+ * The five stars an option is scored with; see StarRating.
+ *
+ * The padding is the tap target's rather than the star's: each star is a
+ * 20px icon in a button padded to 26 by 32, and it is the button that sets
+ * how tall an option's row is. Drawn as bare icons the rows came up 12px
+ * short each, so the card grew as the ballot landed in it.
+ */
 function StarsShape() {
   return (
-    <Group gap={6} wrap="nowrap" style={{ flex: 'none' }}>
+    <Group gap={6} px={3} py={6} wrap="nowrap" style={{ flex: 'none' }}>
       {Array.from({ length: 5 }, (_, i) => (
         <Skeleton key={i} height={20} width={20} radius="sm" />
       ))}
@@ -103,36 +110,9 @@ function StarsShape() {
 }
 
 /**
- * The way through a poll of several questions: which one is open, the links
- * either side of it, and every question by name.
- *
- * Three questions, for the reason the list draws three cards — a poll that
- * has a strip at all has at least two, and the wait is over before anybody
- * counts them.
- */
-function StripShape() {
-  return (
-    <Stack gap="xs">
-      <Group justify="space-between" wrap="nowrap" gap="sm">
-        <Skeleton height={bar.line} width={124} radius="sm" />
-        <Group gap="xs" wrap="nowrap">
-          <Skeleton height={bar.line} width={68} radius="sm" />
-          <Skeleton height={bar.line} width={48} radius="sm" />
-        </Group>
-      </Group>
-      <Group gap="xs">
-        {[104, 84, 120].map((w, i) => (
-          <Skeleton key={i} height={badge} width={w} radius="xl" />
-        ))}
-      </Group>
-    </Stack>
-  )
-}
-
-/**
- * The card a question is answered in: a row per option with its stars, ruled
- * off from the next, and the footer saying when the results come out beside
- * the button that sends the ballot.
+ * What fills the card a question is answered in: a row per option with its
+ * stars, ruled off from the next, and the footer saying when the results come
+ * out beside the button that sends the ballot.
  *
  * **One card, not a card per option.** The ballot was a stack of cards once
  * and this stood in for that stack long after it had become the single
@@ -140,37 +120,32 @@ function StripShape() {
  * every other card that can be in that slot — the option list still being
  * collected, and the card a voter who has already answered comes back to —
  * because those are the same card with different rows in it.
+ *
+ * The card itself is the caller's, because one of the two callers has
+ * something real to put in it; see `QuestionSkeleton`.
  */
-function BallotShape({ rows, strip = false }: { rows: number; strip?: boolean }) {
+function BallotShape({ rows }: { rows: number }) {
   return (
-    <Card withBorder>
-      <Stack gap="sm">
-        {strip && (
-          <>
-            <StripShape />
-            <Divider />
-          </>
-        )}
-        {Array.from({ length: rows }, (_, i) => (
-          <Fragment key={i}>
-            <Group justify="space-between" wrap="nowrap" gap="sm">
-              <Skeleton height={bar.name} width="45%" radius="sm" />
-              <StarsShape />
-            </Group>
-            <Divider />
-          </Fragment>
-        ))}
-        {/* Two lines of it: when the results unlock, and that the vote can be
-            changed until they do. See RevealNote. */}
-        <Group justify="space-between" wrap="wrap" gap="sm">
-          <Stack gap={2} maw="100%">
-            <Skeleton height={bar.line} width={360} maw="100%" radius="sm" />
-            <Skeleton height={bar.line} width={232} maw="100%" radius="sm" />
-          </Stack>
-          <Skeleton height={control} width={124} radius="md" />
-        </Group>
-      </Stack>
-    </Card>
+    <Stack gap="sm">
+      {Array.from({ length: rows }, (_, i) => (
+        <Fragment key={i}>
+          <Group justify="space-between" wrap="nowrap" gap="sm">
+            <Skeleton height={bar.name} width="45%" radius="sm" />
+            <StarsShape />
+          </Group>
+          <Divider />
+        </Fragment>
+      ))}
+      {/* Two lines of it: when the results unlock, and that the vote can be
+          changed until they do. See RevealNote. */}
+      <Group justify="space-between" wrap="wrap" gap="sm">
+        <Stack gap={2} maw="100%">
+          <Skeleton height={bar.line} width={360} maw="100%" radius="sm" />
+          <Skeleton height={bar.line} width={232} maw="100%" radius="sm" />
+        </Stack>
+        <Skeleton height={control} width={124} radius="md" />
+      </Group>
+    </Stack>
   )
 }
 
@@ -180,7 +155,9 @@ export function PollPageSkeleton({ rows = 3 }: { rows?: number }) {
     <Loading>
       <Stack maw={720} mx="auto" gap="md">
         <PollHeadingShape />
-        <BallotShape rows={rows} />
+        <Card withBorder>
+          <BallotShape rows={rows} />
+        </Card>
       </Stack>
     </Loading>
   )
@@ -197,17 +174,31 @@ export function PollPageSkeleton({ rows = 3 }: { rows?: number }) {
  * own ballot is read. Crossing between two questions would otherwise blink the
  * whole poll away and back.
  *
- * It is the ballot card and nothing else, because that is the whole of what a
- * crossing replaces — the strip included, which lives inside that card. It is
- * drawn here for the same reason the rest of it is: this stand-in is only ever
- * reached by crossing between two questions, so a strip is something the page
- * it is standing in for always has.
+ * **The strip is handed in and drawn for real**, in the card and in the place
+ * the ballot draws it, rather than being one more shape. It belongs to the
+ * poll like the heading above it does — the same questions in the same order,
+ * with the badge already moved to the one being opened — and only happens to
+ * live inside the card a crossing replaces. Standing in for it was a strip
+ * that greyed out and came back at the exact moment a reader was using it to
+ * navigate, which is the thing this whole stand-in exists to prevent, and it
+ * put the way out of the question behind the wait: the links are live while
+ * the ballot loads, so a reader who crossed to the wrong question can cross
+ * straight back.
+ *
+ * It is therefore outside the `Loading` wrapper, which hides what it holds
+ * from screen readers. Real links in there would be links nothing could reach
+ * — announced to nobody and still in the tab order.
  */
-export function QuestionSkeleton({ rows = 3 }: { rows?: number }) {
+export function QuestionSkeleton({ rows = 3, strip }: { rows?: number; strip?: ReactNode }) {
   return (
-    <Loading>
-      <BallotShape rows={rows} strip />
-    </Loading>
+    <Card withBorder>
+      <Stack gap="sm">
+        {strip}
+        <Loading>
+          <BallotShape rows={rows} />
+        </Loading>
+      </Stack>
+    </Card>
   )
 }
 

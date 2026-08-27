@@ -2351,15 +2351,25 @@ are available here and the first draft of this made the second one:
   frames, one of them a bare page with no strip at all.
 
 Neither is necessary, because the page is two things and only one of them
-changes. **The poll's own half — the heading and its terms — is the same for
-every question in the group**, so it stays on screen. **The question's half —
-what it asks and the ballot answering it — is replaced**, and shows
-`QuestionSkeleton` until the read for *this* question lands. The strip belongs
-to the poll but is drawn *inside* the card being replaced, so it is the one
-part of the poll's half that a crossing takes with it: `QuestionSkeleton`
-draws a strip of its own at the top of its card, which is the whole reason
-that stand-in has one — every page it stands in for is a poll of several
-questions, because a crossing is the only way to reach it.
+changes. **The poll's own half — the heading, its terms, the strip — is the
+same for every question in the group**, so it stays on screen. **The
+question's half — what it asks and the ballot answering it — is replaced**,
+and shows `QuestionSkeleton` until the read for *this* question lands.
+
+The strip is the awkward one, because it belongs to the poll's half and is
+drawn *inside* the card the question's half replaces — so it went with the
+card, and a crossing greyed it out and brought it back at the exact moment a
+reader was using it to navigate. **So it is handed to the stand-in and drawn
+there for real**: `QuestionSkeleton` takes the same `questionStrip` node the
+ballot takes and puts it in the same place inside its own card, which is why
+`PublicPoll` builds that node once beside `strip` rather than inline in the
+panel's prop, as `PollDetail` already did. Nothing about it moves or changes
+colour across the crossing except the badge marking which question is open,
+which has already moved because the address has; and its links stay live, so
+a reader who crossed to the wrong question can cross straight back without
+waiting for the ballot they did not want. It sits outside the stand-in's
+`Loading` wrapper, since that wrapper hides what it holds from screen readers
+and real links in there would be links nothing could reach.
 
 Each page draws the line with one value. `PublicPoll` holds its read as
 `{ pollId, view }` rather than a bare view, so `view` is that pair only when

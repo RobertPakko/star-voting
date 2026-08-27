@@ -305,6 +305,17 @@ export function PublicPoll({
         navigate(`/polls/${onwards}`)
       }
     : undefined
+  // One strip for the page, built here rather than inside the panel's prop,
+  // because the panel is not the only thing that draws it: the stand-in a
+  // crossing puts up carries the same strip, in the same place, so that the
+  // way between the poll's questions is never the part that is waiting. The
+  // invite reading keeps it in one place for the same reason.
+  const questionStrip = (
+    <>
+      <QuestionStrip questions={strip} current={pollId} hrefFor={(next) => `/polls/${next}`} />
+      {strip.length > 1 && <Divider />}
+    </>
+  )
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -389,20 +400,14 @@ export function PublicPoll({
             onChanged={load}
             onFirstVote={advance}
             onFirstConfirm={advance}
-            questionStrip={
-              <>
-                <QuestionStrip
-                  questions={strip}
-                  current={pollId}
-                  hrefFor={(next) => `/polls/${next}`}
-                />
-                {strip.length > 1 && <Divider />}
-              </>
-            }
+            questionStrip={questionStrip}
           />
         </>
       ) : (
-        <QuestionSkeleton />
+        // The strip goes in for real rather than as one more shape: it is the
+        // poll's, like the heading above it, and only happens to live inside
+        // the card being replaced. See QuestionSkeleton.
+        <QuestionSkeleton strip={questionStrip} />
       )}
     </Stack>
   )
