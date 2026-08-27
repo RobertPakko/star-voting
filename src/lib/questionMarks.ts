@@ -53,7 +53,7 @@ const CONFIRMED_KEY = 'star-voting:confirmed-options'
  * this without limit. Losing the oldest entry costs one badge on a poll from
  * last year.
  */
-const REMEMBERED_MAX = 500
+const REMEMBERED_MAX = 100
 
 /** The recorded ids under one key, oldest first. Anything unreadable reads as none. */
 function stored(key: string): string[] {

@@ -319,7 +319,7 @@ export function CreatePoll() {
   // one being removed.
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [mode, setMode] = useState<PollMode>('invite')
-  const [showVoters, setShowVoters] = useState(true)
+  const [showVoters, setShowVoters] = useState(false)
   const [showBallots, setShowBallots] = useState(false)
   const [solicitOptions, setSolicitOptions] = useState(false)
   const [emails, setEmails] = useState<string[]>([])
