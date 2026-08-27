@@ -48,6 +48,8 @@ const bar = {
   heading: 20,
   /** `Text` at its default size: an option's name, a poll's on a list card. */
   name: 16,
+  /** The option row in a ballot. */
+  option: 32,
   /** `Text size="sm"`: the sentences beside and under everything. */
   line: 12,
   /** `Text size="xs"`: who created the poll, and the notes in the form. */
@@ -66,9 +68,8 @@ const control = 36
  * PollHeading, whose shape this is, `compact` included.
  *
  * The description is left out on purpose — it is optional and most polls have
- * none — and so is who created the poll on the full-size heading, which the
- * public voting page never shows. The list card always names a creator, so
- * there it is drawn.
+ * none. The creator line is always drawn because every heading names who
+ * created the poll.
  */
 function PollHeadingShape({ compact = false }: { compact?: boolean }) {
   return (
@@ -78,7 +79,7 @@ function PollHeadingShape({ compact = false }: { compact?: boolean }) {
           <Skeleton height={compact ? bar.name : bar.title} width="55%" radius="sm" />
           <Skeleton height={badge} width={compact ? 88 : 104} radius="xl" />
         </Group>
-        {compact && <Skeleton height={bar.note} width={148} radius="sm" />}
+        <Skeleton height={bar.note} width={148} radius="sm" />
       </Stack>
       {/* Invite only / voters shown / ballots published / how many have
           answered: four badges, always, in that order. See PollTags. */}
@@ -327,7 +328,7 @@ export function RankingSkeleton({ places = 4 }: { places?: number }) {
             <Skeleton height={26} width={30} radius="xl" />
             <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
               <Group gap="xs" wrap="nowrap">
-                <Skeleton height={bar.name} width="45%" radius="sm" />
+                <Skeleton height={bar.option} width="45%" radius="sm" />
                 <Skeleton height={bar.line} width={56} radius="sm" />
               </Group>
               <Skeleton height={bar.line} width="70%" radius="sm" />
