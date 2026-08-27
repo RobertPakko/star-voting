@@ -1,15 +1,15 @@
-import { useRef, useState, type ReactNode } from 'react'
-import { Button, Card, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
+import { useState, type ReactNode } from 'react'
+import { Button, Card, Group, Stack, Text } from '@mantine/core'
 import { openPollRpc } from '../lib/samplePoll'
-import { VOTER_NAME_MAX } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
-import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
+import type { VoterName } from '../lib/voterName'
 import { Ballots } from './Ballots'
 import { BallotCard, type BallotScore } from './BallotCard'
 import { CollectOptions, Confirmations } from './CollectOptions'
 import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
 import { Results } from './Results'
+import { VoterNameField } from './VoterNameField'
 import type { OpenPollView, PollOption } from '../lib/types'
 
 /**
@@ -36,6 +36,7 @@ export function OpenPollPanel({
   pollId,
   view,
   isCreator = false,
+  voterName,
   onChanged,
   onFirstVote,
   onFirstConfirm,
@@ -43,6 +44,15 @@ export function OpenPollPanel({
 }: {
   pollId: string
   view: OpenPollView
+  /**
+   * The name this browser is answering under, held by the page. A share link
+   * carries no account, so a poll that shows its respondents has to ask for
+   * one — on the ballot and on the card the option list is confirmed from,
+   * which is why this is handed to both from here rather than kept in either.
+   * A poll that names nobody asks for nothing and is handed nothing; see
+   * VoterNameField for why the page is what holds it.
+   */
+  voterName?: VoterName
   /**
    * The creator reading their own open poll. It buys them the `×` on each
    * option while the list is still being collected, and the second person in
@@ -83,6 +93,13 @@ export function OpenPollPanel({
    */
   questionStrip?: ReactNode
 }) {
+  // Whether this poll asks a name at all, which is the one rule both stages
+  // apply: a share link has no account to name whoever is answering, so a
+  // poll that shows its respondents asks, and one that hides them asks for
+  // none and stores none. `open_poll_submit` and `open_poll_confirm_options`
+  // both discard the name on such a poll whatever the client sends.
+  const needsName = view.poll.show_voters
+
   // Before anything else, because a poll still collecting its options has no
   // ballot to show and no result to show either. It carries the strip the
   // ballot carries, in the same place: a poll of several questions collects a
@@ -95,6 +112,7 @@ export function OpenPollPanel({
           source={{ kind: 'open', pollId }}
           options={view.options}
           isCreator={isCreator}
+          voterName={needsName ? voterName : undefined}
           questionStrip={questionStrip}
           confirm={
             // Undefined against a database whose open_poll_view predates the
@@ -104,11 +122,6 @@ export function OpenPollPanel({
               ? undefined
               : {
                   confirmed: view.confirmed,
-                  // A share link has no account to name whoever is confirming,
-                  // so a poll that shows its respondents asks for a name here
-                  // exactly as its ballot does. One that hides them asks for
-                  // none and stores none.
-                  needsName: view.poll.show_voters,
                   // Never: an open poll has no list of people, so there is no
                   // set of them who could all have confirmed and no press that
                   // could be the last one. Its creator ends the stage. How many
@@ -191,7 +204,7 @@ export function OpenPollPanel({
         <OpenBallot
           pollId={pollId}
           options={view.options}
-          needsName={view.poll.show_voters}
+          voterName={needsName ? voterName : undefined}
           isCreator={isCreator}
           onVoted={onFirstVote ?? onChanged}
           questionStrip={questionStrip}
@@ -240,7 +253,6 @@ function Voted({
       <OpenBallot
         pollId={pollId}
         options={view.options}
-        needsName={false}
         initial={scores}
         isCreator={isCreator}
         onVoted={() => {
@@ -295,7 +307,7 @@ function Voted({
 function OpenBallot({
   pollId,
   options,
-  needsName,
+  voterName,
   isCreator,
   initial,
   onVoted,
@@ -304,7 +316,8 @@ function OpenBallot({
 }: {
   pollId: string
   options: PollOption[]
-  needsName: boolean
+  /** The name to vote under, on the polls that ask; absent on a revision. */
+  voterName?: VoterName
   isCreator: boolean
   /** The scores already on this browser's ballot; absent when casting one. */
   initial?: Record<string, number>
@@ -314,19 +327,6 @@ function OpenBallot({
   questionStrip?: ReactNode
 }) {
   const revising = initial !== undefined
-  // Offered rather than imposed: a name this browser has voted under before,
-  // editable like any other, and blank for a browser that has not. It is what
-  // lets a poll of several questions be answered without typing the same name
-  // onto every one of them — the questions are separate polls and nothing on
-  // the server connects one ballot to the next, deliberately, so the
-  // continuity has to come from the only place that legitimately has it. See
-  // lib/voterName.ts.
-  const [name, setName] = useState(rememberedVoterName)
-  // The name is the one thing on this ballot that can be wrong, so it is
-  // marked on the box rather than as a line above the submit button, where
-  // it sat below the field it was about.
-  const [nameError, setNameError] = useState<string | null>(null)
-  const nameRef = useRef<HTMLInputElement>(null)
 
   /**
    * Dismissing the on-screen keyboard on a phone does not blur the field it
@@ -334,26 +334,22 @@ function OpenBallot({
    * every score a voter gives pops the keyboard back up over the ballot.
    * Dropping focus as the tap starts, before the browser decides whether to
    * re-open the keyboard, leaves the stars tappable in peace.
-   *
-   * The same blur is what Enter needs: the name field stands alone rather than
-   * in a form, so there is nothing for Enter to submit and the keyboard simply
-   * stays up. See the key handler on the field.
    */
   function releaseNameFocus() {
-    nameRef.current?.blur()
+    voterName?.blur()
   }
 
-  /** The one thing to be happy about before any of this is sent. */
+  /**
+   * The one thing to be happy about before any of this is sent. The name is
+   * the one thing on this ballot that can be wrong, so it is marked on the
+   * box rather than as a line above the submit button, where it sat below the
+   * field it was about.
+   */
   function checkName() {
-    setNameError(null)
-    if (!needsName || name.trim()) return true
-    setNameError('Enter your name so the group can see who has voted.')
-    nameRef.current?.focus()
-    return false
+    return !voterName || voterName.check('Enter your name so the group can see who has voted.')
   }
 
   async function send(scores: BallotScore[]) {
-    const trimmedName = name.trim()
     const { error } = revising
       ? await openPollRpc('open_poll_revise', {
           p_poll_id: pollId,
@@ -364,46 +360,19 @@ function OpenBallot({
           p_poll_id: pollId,
           p_scores: scores,
           p_voter_key: voterKeyFor(pollId),
-          p_voter_name: needsName ? trimmedName : null,
+          p_voter_name: voterName?.trimmed ?? null,
         })
     if (error) throw new Error(error.message)
     // Remembered only once a ballot has actually gone in under it, so a name
     // typed into a form that was refused is not offered back on the next one.
-    if (needsName) rememberVoterName(trimmedName)
+    voterName?.remember()
   }
 
   return (
     <BallotCard
       options={options}
       initial={initial}
-      nameField={
-        needsName ? (
-          <>
-            <TextInput
-              ref={nameRef}
-              label="Your name"
-              placeholder="Your name"
-              value={name}
-              onChange={(e) => {
-                setName(e.currentTarget.value)
-                setNameError(null)
-              }}
-              error={nameError}
-              maxLength={VOTER_NAME_MAX}
-              required
-              /* Label the key "Done" rather than a Go/newline the field has no use
-               for, and honour that label by putting the keyboard away. */
-              enterKeyHint="done"
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return
-                e.preventDefault()
-                releaseNameFocus()
-              }}
-            />
-            <Divider />
-          </>
-        ) : undefined
-      }
+      nameField={voterName && <VoterNameField name={voterName} />}
       questionStrip={questionStrip}
       note={<RevealNote reveal={{ kind: 'open', isCreator }} canRevise />}
       beforeSubmit={checkName}

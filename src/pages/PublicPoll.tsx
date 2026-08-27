@@ -19,6 +19,8 @@ import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
+import { VoterNameField } from '../components/VoterNameField'
+import { useVoterName } from '../lib/voterName'
 import type { OpenGroupQuestion, OpenPollView, OpenRead, UnreadableRead } from '../lib/types'
 
 /**
@@ -80,6 +82,14 @@ export function PublicPoll({
   // dependencies would rebuild it whenever the group arrived, and rebuilding
   // `load` resubscribes.
   const covered = useRef<string[]>([])
+  // The name this browser is answering under, held here rather than inside
+  // the card that asks for it. A name belongs to the person rather than to
+  // the question — it is the same on question 5 as on question 1 — and a
+  // crossing between two questions replaces that card, so a name held in
+  // there was thrown away by the crossing and the box itself blinked out with
+  // it. Here it outlives the crossing, and the stand-in below draws the very
+  // same field. See VoterNameField.
+  const voterName = useVoterName(pollId)
   // The read `PollPage` already made for this question, waiting to be drawn
   // rather than made again. A ref rather than state because it is not
   // something this page renders from — it is one read's worth of work already
@@ -305,6 +315,24 @@ export function PublicPoll({
         navigate(`/polls/${onwards}`)
       }
     : undefined
+  // One strip for the page, built here rather than inside the panel's prop,
+  // because the panel is not the only thing that draws it: the stand-in a
+  // crossing puts up carries the same strip, in the same place, so the way
+  // between the poll's questions is never the part that is waiting. The
+  // invite reading keeps it in one place for the same reason.
+  const questionStrip = (
+    <>
+      <QuestionStrip questions={strip} current={pollId} hrefFor={(next) => `/polls/${next}`} />
+      {strip.length > 1 && <Divider />}
+    </>
+  )
+  // And whether the question being opened will ask for a name, which the
+  // stand-in has to know because the box is the first thing in the card. The
+  // same three facts the card itself goes on: a poll that names its
+  // respondents, still taking answers, from a reader who has not given this
+  // question one yet. Nothing is guessed — `done` is this browser's own
+  // record and the rest is the poll's.
+  const asksName = shell.poll.show_voters && marking && !done.has(pollId)
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -389,20 +417,18 @@ export function PublicPoll({
             onChanged={load}
             onFirstVote={advance}
             onFirstConfirm={advance}
-            questionStrip={
-              <>
-                <QuestionStrip
-                  questions={strip}
-                  current={pollId}
-                  hrefFor={(next) => `/polls/${next}`}
-                />
-                {strip.length > 1 && <Divider />}
-              </>
-            }
+            voterName={voterName}
+            questionStrip={questionStrip}
           />
         </>
       ) : (
-        <QuestionSkeleton />
+        // The strip and the name box go in for real rather than as two more
+        // shapes: both are the poll's, like the heading above, and only
+        // happen to live inside the card being replaced. See QuestionSkeleton.
+        <QuestionSkeleton
+          nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
+          strip={questionStrip}
+        />
       )}
     </Stack>
   )

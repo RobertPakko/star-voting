@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActionIcon,
@@ -14,19 +14,14 @@ import {
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { openPollRpc } from '../lib/samplePoll'
-import {
-  MAX_OPTIONS,
-  OPTION_DESCRIPTION_MAX,
-  OPTION_NAME_MAX,
-  VOTER_NAME_MAX,
-  tooLong,
-} from '../lib/limits'
+import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
-import { rememberVoterName, rememberedVoterName } from '../lib/voterName'
+import type { VoterName } from '../lib/voterName'
 import { DescriptionField } from './DescriptionField'
 import { NameRoster } from './NameRoster'
 import { OptionDescription } from './OptionDescription'
 import { OpeningNote } from './PollNotices'
+import { VoterNameField } from './VoterNameField'
 import type { PollOption } from '../lib/types'
 
 /**
@@ -58,12 +53,6 @@ export type OptionsSource =
 export interface Confirmation {
   /** Whether they have already said so; the card draws either way. */
   confirmed: boolean
-  /**
-   * Whether a name has to be typed before confirming: an open poll that shows
-   * its respondents, and nothing else. `open_poll_confirm_options` applies
-   * exactly this rule, and discards a name on a poll that hides them.
-   */
-  needsName?: boolean
   /**
    * Whether this press could be the press that opens the poll — a poll with a
    * participant list, still waiting on somebody. It is the one thing about the
@@ -123,6 +112,7 @@ export function CollectOptions({
   source,
   options,
   isCreator,
+  voterName,
   questionStrip,
   footer,
   confirm,
@@ -132,6 +122,15 @@ export function CollectOptions({
   source: OptionsSource
   options: PollOption[]
   isCreator: boolean
+  /**
+   * The name to confirm under, when the poll has to ask for one: an open poll
+   * that shows its respondents, and nothing else. `open_poll_confirm_options`
+   * applies exactly this rule and discards a name on a poll that hides them,
+   * so an invite poll — which reads the name off the account — is handed
+   * none and draws no field. Held by the page rather than here; see
+   * VoterNameField for why the name outlives the card asking for it.
+   */
+  voterName?: VoterName
   /** Navigation for a multi-question poll, rendered inside the card as on the ballot. */
   questionStrip?: ReactNode
   /**
@@ -154,35 +153,27 @@ export function CollectOptions({
    */
   onConfirmed?: () => void
 }) {
-  // Offered rather than imposed, exactly as on the ballot: the name this
-  // browser last voted or confirmed under, editable like any other. See
-  // lib/voterName.ts for why the browser is the one place entitled to carry
-  // it from one question to the next.
-  const [name, setName] = useState(rememberedVoterName)
   const [busy, setBusy] = useState(false)
-  // Wrong with the name being typed, marked on the box it was typed in;
-  // `error` is a request that failed, which is about the poll rather than
-  // about the field.
-  const [nameError, setNameError] = useState<string | null>(null)
+  // A request that failed, which is about the poll rather than about the
+  // field: what is wrong with the name is marked on the box it was typed in,
+  // by the field itself.
   const [error, setError] = useState<string | null>(null)
-  const nameRef = useRef<HTMLInputElement>(null)
 
-  const needsName = confirm?.needsName === true
+  // The name is what a confirmation is given under, so it is asked for only
+  // where there is something to confirm: the creator correcting a ballot's
+  // options confirms nothing and is handed no name to do it under.
+  const nameField = confirm && voterName ? <VoterNameField name={voterName} /> : null
 
   async function confirmOptions() {
     if (busy || !confirm) return
     setError(null)
-    setNameError(null)
 
-    const trimmed = name.trim()
-    if (needsName && !trimmed) {
-      setNameError('Enter your name so the group can see who has confirmed.')
-      nameRef.current?.focus()
+    if (voterName && !voterName.check('Enter your name so the group can see who has confirmed.')) {
       return
     }
 
     setBusy(true)
-    const { error: rpcError } = await sendConfirmation(source, needsName ? trimmed : null)
+    const { error: rpcError } = await sendConfirmation(source, voterName?.trimmed ?? null)
     setBusy(false)
 
     if (rpcError) {
@@ -191,7 +182,7 @@ export function CollectOptions({
     }
     // Remembered only once a confirmation has actually gone in under it, so a
     // name the server refused is not offered back on the next poll.
-    if (needsName) rememberVoterName(trimmed)
+    voterName?.remember()
     notifications.show({ message: 'Options confirmed', color: 'green' })
     ;(onConfirmed ?? onChanged)()
   }
@@ -254,34 +245,7 @@ export function CollectOptions({
   return (
     <Card withBorder>
       <Stack gap="sm">
-        {needsName && (
-          <TextInput
-            ref={nameRef}
-            label="Your name"
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => {
-              setName(e.currentTarget.value)
-              setNameError(null)
-            }}
-            error={nameError}
-            maxLength={VOTER_NAME_MAX}
-            required
-            /* Label the key "Done" rather than a Go/newline the field has no use
-               for, and honour that label by putting the keyboard away. The
-               ballot's name field does exactly this, and for the same reason:
-               the field stands alone rather than in a form, so Enter has
-               nothing to submit and would only leave the keyboard up. */
-            enterKeyHint="done"
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return
-              e.preventDefault()
-              nameRef.current?.blur()
-            }}
-          />
-        )}
-
-        {needsName && <Divider />}
+        {nameField}
         {questionStrip}
 
         <OptionList source={source} options={options} isCreator={isCreator} onChanged={onChanged} />

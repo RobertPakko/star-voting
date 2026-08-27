@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (BallotCard, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
+src/components/  poll UI pieces (BallotCard, VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
 src/lib/         supabase client, auth context, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -744,10 +744,15 @@ becoming a lie:
   cards because the wait is over long before anyone counts them; it does not
   draw a poll's description, which most polls do not have. A placeholder for
   something that then fails to appear is a small lie the reader has to
-  un-learn. The roster is the one stand-in that guesses at nothing: it is
-  drawn inside a page that has already read the poll, so how many people are
-  in it and what it will say about each of them are facts by then, and
-  `RosterSkeleton` is handed them rather than assuming a common case.
+  un-learn. The two stand-ins drawn *inside* a page that has already read the
+  poll guess at nothing at all, because by then there is nothing to guess:
+  `RosterSkeleton` is handed how many people are in the poll and what it will
+  say about each of them, and `QuestionSkeleton` is handed the strip and the
+  name box themselves, as real nodes, along with the answer to whether the
+  question being opened asks for a name. See [A poll can ask more than one
+  question](#a-poll-can-ask-more-than-one-question) for why those two are
+  handed over rather than drawn: they belong to the poll rather than to the question, so
+  they never had anything to wait for.
 - **They all live in that one file**, so a page and its stand-in get changed
   together. The failure mode of skeletons is that they slowly stop resembling
   anything.
@@ -764,7 +769,10 @@ becoming a lie:
 
 They are `aria-hidden`, wrapped in a `role="status"` that says *Loading* once:
 the shapes are decoration, and what a non-visual reader needs is the word
-they are miming. The one wait that is still a spinner is the app's own boot,
+they are miming. What is handed to `QuestionSkeleton` is drawn outside that
+wrapper, because it is not decoration — a real link or a real input under
+`aria-hidden` would be one nothing could reach, announced to nobody and still
+in the tab order. The one wait that is still a spinner is the app's own boot,
 before the session is known — at that point there is no page to draw the
 shape of.
 
@@ -2351,15 +2359,41 @@ are available here and the first draft of this made the second one:
   frames, one of them a bare page with no strip at all.
 
 Neither is necessary, because the page is two things and only one of them
-changes. **The poll's own half — the heading and its terms — is the same for
-every question in the group**, so it stays on screen. **The question's half —
-what it asks and the ballot answering it — is replaced**, and shows
-`QuestionSkeleton` until the read for *this* question lands. The strip belongs
-to the poll but is drawn *inside* the card being replaced, so it is the one
-part of the poll's half that a crossing takes with it: `QuestionSkeleton`
-draws a strip of its own at the top of its card, which is the whole reason
-that stand-in has one — every page it stands in for is a poll of several
-questions, because a crossing is the only way to reach it.
+changes. **The poll's own half — the heading, its terms, the strip, the name
+box — is the same for every question in the group**, so it stays on screen.
+**The question's half — what it asks and the ballot answering it — is
+replaced**, and shows `QuestionSkeleton` until the read for *this* question
+lands.
+
+The last two are the awkward ones, because they belong to the poll's half and
+are drawn *inside* the card the question's half replaces. Going with that card,
+the strip greyed out and came back at the exact moment a reader was using it to
+navigate — the thing this stand-in exists to prevent — and the name box did
+worse: it vanished, and took whatever had been typed into it with it, because
+the state was inside the card. **So both are handed to the stand-in and drawn
+there for real**, in the places the ballot draws them:
+
+- **The strip** is the `questionStrip` node the ballot already takes, so
+  `PublicPoll` builds it once beside `strip` rather than inline in the panel's
+  prop, as `PollDetail` already did. Nothing about it moves or changes colour
+  across a crossing except the badge marking which question is open, which has
+  already moved because the address has, and the tags' colours when the read
+  lands and says which questions are behind the reader. Its links stay live, so
+  a reader who crossed to the wrong question can cross straight back without
+  waiting for the ballot they did not want.
+- **The name box** is `VoterNameField`, whose state the *page* holds with
+  `useVoterName` — see `lib/voterName.ts`. A name is not a fact about a
+  question; it is what this person is called, which is the whole reason that
+  file carries it from one question to the next. Held in the page, which
+  survives a crossing, it is one field that goes on standing there with what
+  was typed still in it. The page knows whether the question being opened will
+  ask for one from the same three facts the card goes on — a poll that names
+  its respondents, still taking answers, from a reader who has not answered
+  *this* question yet — so the stand-in claims nothing it cannot deliver.
+
+Both sit outside the stand-in's `Loading` wrapper, which hides what it holds
+from screen readers: a real link or a real input in there would be one nothing
+could reach, announced to nobody and still in the tab order.
 
 Each page draws the line with one value. `PublicPoll` holds its read as
 `{ pollId, view }` rather than a bare view, so `view` is that pair only when

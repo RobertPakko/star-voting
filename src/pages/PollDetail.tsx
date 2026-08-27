@@ -26,6 +26,8 @@ import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { RetentionNote } from '../components/RetentionNote'
 import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
+import { VoterNameField } from '../components/VoterNameField'
+import { useVoterName } from '../lib/voterName'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
@@ -88,6 +90,14 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
   // the ballot, which is the part that differs, waits for this to agree. See
   // where it is used below.
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
+  // The name this browser is answering an *open* poll under — the creator
+  // votes in their own open poll through the same anon RPCs everybody else
+  // does, name included. Held here rather than inside the card that asks for
+  // it, because a name belongs to the person rather than to the question and
+  // a crossing between two questions replaces that card: held in there, a
+  // name typed but not yet sent went with the crossing, and the box itself
+  // blinked out with it. See VoterNameField.
+  const voterName = useVoterName(pollId)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Bumped only by creator actions, and used as OpenPollPanel's key so it
@@ -423,6 +433,13 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
       {strip.length > 1 && <Divider />}
     </>
   )
+  // Whether the question being opened will ask for a name, which the stand-in
+  // has to know because the box is the first thing in the card. The same
+  // facts the card itself goes on: an open poll that names its respondents,
+  // still taking answers, from a reader who has not given this question one
+  // yet. An invite poll asks for none — it has the account.
+  const asksName = isOpen && poll.show_voters && marking && !done.browser.has(pollId ?? poll.id)
+
   // The way on, taken rather than offered: a first ballot opens whichever
   // question this reader still owes. Undefined when they owe none and on a
   // poll of one, where the ballot's own page is where they stay and the page
@@ -573,6 +590,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
                 pollId={poll.id}
                 view={view}
                 isCreator={isCreator}
+                voterName={voterName}
                 onChanged={load}
                 onFirstVote={advance}
                 onFirstConfirm={advance}
@@ -650,7 +668,13 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
           )}
         </>
       ) : (
-        <QuestionSkeleton />
+        // The strip and the name box go in for real rather than as two more
+        // shapes: both are the poll's, like the heading above, and only
+        // happen to live inside the card being replaced. See QuestionSkeleton.
+        <QuestionSkeleton
+          nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
+          strip={questionStrip}
+        />
       )}
 
       {/* Everyone in the poll, for as long as the poll shows them: a poll that
