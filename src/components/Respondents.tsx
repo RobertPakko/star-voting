@@ -3,6 +3,7 @@ import { ActionIcon, Badge, Button, Card, Group, Stack, Text, TextInput } from '
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
+import { RosterSkeleton } from './Skeletons'
 import type { Invitee, PollStatus } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -173,12 +174,23 @@ export function Respondents({
   // nobody is named, so a card here would only repeat both.
   if (!rosterReadable || hidden) return null
 
+  // The shape of the card that is coming, under the heading the page has
+  // already drawn. Every number in it is a fact rather than a guess: the poll
+  // has been read, so it knows how many people are in it and what it will say
+  // about each of them. See the note in Skeletons.tsx.
   if (!invitees) {
     return error ? (
       <Text c="red" size="sm">
         {error}
       </Text>
-    ) : null
+    ) : (
+      <RosterSkeleton
+        rows={status.invited_count}
+        badges={showVoters}
+        controls={isCreator}
+        invite={isCreator && !status.is_closed && !status.results_available}
+      />
+    )
   }
 
   // Which question the badges are answering. `soliciting` is the poll's own

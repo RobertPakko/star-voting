@@ -737,13 +737,17 @@ ballot or a tally, with the page landing all at once underneath it.
 
 `src/components/Skeletons.tsx` draws the shape of the page instead: the
 list's cards, the poll's tag row, the ballot's starred rows, the score round's
-bars, the form's sections. Three rules keep them from becoming a lie:
+bars, the roster's people, the form's sections. Three rules keep them from
+becoming a lie:
 
 - **A skeleton claims only what the page always has.** The list draws three
   cards because the wait is over long before anyone counts them; it does not
   draw a poll's description, which most polls do not have. A placeholder for
   something that then fails to appear is a small lie the reader has to
-  un-learn.
+  un-learn. The roster is the one stand-in that guesses at nothing: it is
+  drawn inside a page that has already read the poll, so how many people are
+  in it and what it will say about each of them are facts by then, and
+  `RosterSkeleton` is handed them rather than assuming a common case.
 - **They all live in that one file**, so a page and its stand-in get changed
   together. The failure mode of skeletons is that they slowly stop resembling
   anything.
