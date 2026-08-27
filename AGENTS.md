@@ -16,7 +16,8 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotCard, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
-src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, shared types
+src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
+public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 scripts/         squash.sh, which squashes the migrations and replays the above;
@@ -662,6 +663,101 @@ the shapes are decoration, and what a non-visual reader needs is the word
 they are miming. The one wait that is still a spinner is the app's own boot,
 before the session is known — at that point there is no page to draw the
 shape of.
+
+## Installing it to a home screen
+
+The app is installable: Android and desktop Chrome offer to add it, iOS
+takes it through Share → Add to Home Screen, and either way it opens in its
+own window with no browser chrome around it. Three things have to be true
+for that, and they are the three files below.
+
+- **[`public/manifest.webmanifest`](public/manifest.webmanifest)** — the
+  name, the icons, and `display: standalone`. `start_url` and `scope` are
+  written as `./`, which resolves against the manifest's own URL: the app is
+  served from `/star-voting/` and the manifest sits in it, so the scope is
+  the app's directory without the base being spelled out a third time.
+  Hash-based routing means every address in the app is inside that scope
+  already, so a share link opens in the installed window rather than
+  bouncing out to the browser.
+- **[`public/sw.js`](public/sw.js)** — a service worker, because the install
+  prompt is only offered for a page that has one. What it caches is the
+  shell: the HTML, the hashed bundle and stylesheet, the icons. What it will
+  not touch is anything off-origin, which is every read of a poll — a cached
+  answer about a poll is a *wrong* answer, a closed poll drawn as still
+  collecting or a vote shown as cast that never left the phone. So offline
+  gets you the app saying it cannot reach the server, which is the honest
+  version, and not a stale poll.
+- **[`index.html`](index.html)** — the `<link rel="manifest">`, and the
+  `apple-` tags beside it. Safari only started reading the manifest's
+  `display` and icons in 16.4 and still takes the home-screen *name* from
+  `apple-mobile-web-app-title`, so those tags are not redundant with the
+  manifest; they are the iOS half of it.
+
+`src/lib/serviceWorker.ts` registers the worker, and only in the built app:
+`vite dev` serves modules straight from source, and a worker caching those
+hands you the previous edit on the next reload. `npm run build && npm run
+preview` is therefore the only way to see any of this working — including in
+DevTools under Application → Manifest and → Service Workers, which is where
+Chrome will also tell you *why* it thinks the app is not installable.
+
+**Bump `VERSION` in `sw.js` whenever that file changes.** The cache is named
+after it, and the new worker throws away every cache that is not its own on
+activate. Nothing else needs bumping for a deploy: the bundle and stylesheet
+carry a content hash in their names, so a new build simply asks for files the
+old cache does not have, and the page itself is fetched network-first because
+it is the one file whose name never changes and it is what names the current
+bundle.
+
+### The icons
+
+`public/icon-192.png`, `icon-512.png`, `icon-maskable-512.png` and
+`apple-touch-icon.png` (180px), all the same mark as `public/logo.png`: the
+star of `favicon.svg` on the diagonal gradient from `#7d14ff` to `#47bfff`.
+They are separate files rather than one scaled by the browser because each is
+a different shape of the same drawing, and getting that wrong is visible on
+somebody's home screen:
+
+- the two `any` icons have the logo's rounded corners, and are transparent
+  outside them;
+- the **maskable** one is square and full-bleed, because Android crops it to
+  whatever shape the launcher uses — a circle, a squircle, a rounded square —
+  and anything relying on its own corners loses them. Only the middle 80% is
+  guaranteed to survive, so the star is drawn a little smaller than in the
+  others to sit inside that circle;
+- the **apple-touch-icon** is square and opaque: iOS applies its own rounded
+  mask, so baked-in corners get rounded twice, and transparency is composited
+  onto black.
+
+### The colour of the status bar
+
+Installed, the app has no browser chrome, and the strip behind the status bar
+is drawn in `<meta name="theme-color">` — it is part of the app rather than
+part of the browser, so left at a default it is a white bar across the top of
+a dark app. It cannot be the media-query form of the tag either, because that
+follows the OS and the theme menu is free to disagree with the OS. The inline
+script in `index.html` sets it from the stored choice before first paint,
+alongside the Mantine colour-scheme attribute it was already setting, and
+`src/components/ThemeColorMeta.tsx` keeps it in step afterwards. Both write
+`--mantine-color-body` for the scheme being shown, spelled out, since a
+`<meta>` takes a colour and not a custom property.
+
+### The install button
+
+`src/components/InstallButton.tsx` in the header, which is the whole of the
+"easily" in installing this on a phone: without it, installing is an item in
+a menu nobody opens. Chromium hands over its `beforeinstallprompt` event —
+which is the only handle on the install dialog, and arrives on its own
+schedule, often before React has mounted, so `src/lib/installPrompt.ts`
+catches it at module scope and holds it.
+
+The button is absent far more often than it is there: on iOS, which has no
+such API; in an already-installed window; and in any browser that has not
+made up its mind. That is why it draws nothing at all rather than
+instructions for a menu the reader may not have — and why it sits next to the
+theme menu rather than in a leading position, where a control that comes and
+goes would leave a visible gap. It is also absent from the sign-in screen,
+which has no header by design; a voter arriving on a share link sees it,
+which is the reader most likely to want it.
 
 ## Behaviour worth preserving
 

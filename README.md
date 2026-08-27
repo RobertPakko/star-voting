@@ -4,6 +4,9 @@ Make a poll, share it, and get an easy an accurate result using [STAR voting](ht
 
 **[Open the app](https://choicelab.app/star-voting/)**  ·  [What is STAR voting, and why use it?](https://choicelab.app/star-voting/#/about)
 
+It installs to a phone's home screen and opens in its own window: the install
+button in the header on Android, Share → Add to Home Screen on an iPhone.
+
 ## The four choices you make up front
 
 | | |

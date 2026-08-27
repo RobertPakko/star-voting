@@ -5,6 +5,31 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>STAR Voting</title>
+    <meta
+      name="description"
+      content="Make a poll, share it, and get an easy and accurate result using STAR voting."
+    />
+
+    <!-- Installing the app: the manifest is what Android and desktop Chrome
+         read, and the two apple- tags below are what iOS reads instead, since
+         Safari only picked up `display` and the manifest's icons in 16.4 and
+         still takes the home-screen name and icon from these. The title is
+         given separately because iOS truncates the label under the icon hard,
+         and would otherwise cut into whatever <title> the page happened to
+         have when it was added. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="STAR Voting" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- The colour of the browser's toolbar, and of the status bar in an
+         installed window, where it is a strip of the app itself rather than
+         of the browser: left alone it is white above a dark page. It has to
+         follow the theme the app is actually showing rather than the one the
+         OS asked for, so it is set from the same stored choice below and kept
+         in step by ThemeColorMeta afterwards. -->
+    <meta name="theme-color" content="#ffffff" />
     <script>
       // Resolve the stored colour scheme before first paint. MantineProvider
       // sets this same attribute, but only once the bundle has run; by which
@@ -21,6 +46,10 @@
               ? 'dark'
               : 'light'
         document.documentElement.setAttribute('data-mantine-color-scheme', computed)
+        // --mantine-color-body, for the two schemes; see ThemeColorMeta.
+        document
+          .querySelector('meta[name="theme-color"]')
+          .setAttribute('content', computed === 'dark' ? '#242424' : '#ffffff')
       } catch (e) {}
     </script>
   </head>

@@ -1,6 +1,7 @@
 import { Anchor, AppShell, Button, Group, Text, Title } from '@mantine/core'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { InstallButton } from './InstallButton'
 import { ThemeToggle } from './ThemeToggle'
 
 /**
@@ -63,6 +64,7 @@ export function Layout() {
                 About
               </Anchor>
             )}
+            <InstallButton />
             <ThemeToggle />
             {/* Signed out this is an offer rather than a gate; voting on an
                 open poll needs no account; but it has to be visible to be
