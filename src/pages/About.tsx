@@ -57,8 +57,8 @@ export function About() {
       <Tabs value={tab} onChange={setTab} keepMounted={false}>
         <Tabs.List grow>
           <Tabs.Tab value="procedure">STAR procedure</Tabs.Tab>
-          <Tabs.Tab value="features">Site features</Tabs.Tab>
           <Tabs.Tab value="benefits">STAR benefits</Tabs.Tab>
+          <Tabs.Tab value="features">Site features</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="procedure" pt="lg">
