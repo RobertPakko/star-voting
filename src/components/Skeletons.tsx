@@ -124,7 +124,7 @@ function BallotShape({ rows }: { rows: number }) {
       {Array.from({ length: rows }, (_, i) => (
         <Fragment key={i}>
           <Group justify="space-between" wrap="nowrap" gap="sm">
-            <Skeleton height={bar.name} width="45%" radius="sm" />
+            <Skeleton height={bar.option} width="45%" radius="sm" />
             <StarsShape />
           </Group>
           <Divider />
@@ -328,7 +328,7 @@ export function RankingSkeleton({ places = 4 }: { places?: number }) {
             <Skeleton height={26} width={30} radius="xl" />
             <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
               <Group gap="xs" wrap="nowrap">
-                <Skeleton height={bar.option} width="45%" radius="sm" />
+                <Skeleton height={bar.name} width="45%" radius="sm" />
                 <Skeleton height={bar.line} width={56} radius="sm" />
               </Group>
               <Skeleton height={bar.line} width="70%" radius="sm" />
