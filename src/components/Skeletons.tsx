@@ -74,7 +74,7 @@ const control = 36
 function PollHeadingShape({ compact = false }: { compact?: boolean }) {
   return (
     <Stack gap="xs">
-      <Stack gap={2}>
+      <Stack gap="xs">
         <Group justify="space-between" align="flex-start" gap="sm" wrap="nowrap">
           <Skeleton height={compact ? bar.name : bar.title} width="55%" radius="sm" />
           <Skeleton height={badge} width={compact ? 88 : 104} radius="xl" />
