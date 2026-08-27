@@ -52,8 +52,25 @@ begin
   -- else. Every invitee is on the list whether or not they voted.
   perform tests.assert_eq('everybody in a poll that finished on its own is told',
     (select array_agg(a order by a)
-       from poll_results_audience((select p from polls p where p.id = v_poll)) a),
+       from poll_results_audience((select p from polls p where p.id = v_poll), null) a),
     array['creator@example.com', 'voter1@example.com', 'voter2@example.com']);
+
+  -- Except the one who finished it. voter2's own ballot is what crossed the
+  -- line, so the letter saying the line has been crossed is addressed to
+  -- somebody watching it happen -- the same email the creator is spared when
+  -- they close a poll themselves.
+  perform tests.assert_eq('but not the voter whose own ballot ended it',
+    (select array_agg(a order by a)
+       from poll_results_audience((select p from polls p where p.id = v_poll),
+                                  'voter2@example.com') a),
+    array['creator@example.com', 'voter1@example.com']);
+  -- The list is stored lowercased and an address off a token arrives that
+  -- way, but the same inbox in any other case is the same inbox.
+  perform tests.assert_eq('whatever case their address arrives in',
+    (select array_agg(a order by a)
+       from poll_results_audience((select p from polls p where p.id = v_poll),
+                                  'Voter2@Example.COM') a),
+    array['creator@example.com', 'voter1@example.com']);
 
   -- ---------------------------------------------------------------------
   -- A reset takes the announcement back, so a poll that finishes again is
@@ -99,7 +116,8 @@ begin
   -- one person it could have written to is the person who closed it.
   perform tests.assert_null('but an open poll has nobody left to tell',
     (select array_agg(a order by a)
-       from poll_results_audience((select p from polls p where p.id = v_open)) a));
+       from poll_results_audience((select p from polls p where p.id = v_open),
+                                  'creator@example.com') a));
 
   -- ---------------------------------------------------------------------
   -- An invite poll closed by hand: everyone but the creator, who did the
@@ -122,7 +140,8 @@ begin
     (select count(*)::int from results_notices where poll_id = v_closed), 1);
   perform tests.assert_eq('to everyone invited except the creator, who closed it',
     (select array_agg(a order by a)
-       from poll_results_audience((select p from polls p where p.id = v_closed)) a),
+       from poll_results_audience((select p from polls p where p.id = v_closed),
+                                  'creator@example.com') a),
     array['voter1@example.com', 'voter2@example.com']);
 
   -- ---------------------------------------------------------------------

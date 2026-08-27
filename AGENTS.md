@@ -358,11 +358,12 @@ time: that two pages partition it with nothing on both and nothing on neither,
 that the total is of the list rather than the page, and that asking past the
 end lands on the last page there is; everything about the results-ready
 announcement except the sending — whether a poll has a result at all, who
-would be told, and that the notice is made exactly once, forgotten on reset
-and made again when the poll finishes a second time; and the same half of the
-other emails — which invitation an address is owed at each stage a poll goes
-through, that the creator is owed none, and who hears that a poll opened by
-hand as against one that opened itself; and which of the three readings
+would be told and who is deliberately not, and that the notice is made exactly
+once, forgotten on reset and made again when the poll finishes a second time;
+and the same half of the other emails — which invitation an address is owed at
+each stage a poll goes through, that the creator is owed none, and who hears
+that a poll opened by hand as against one that opened itself, minus in each
+case whoever's own act was what did it; and which of the three readings
 `poll_page` gives each kind of reader — its creator, an invitee, a stranger
 holding an open poll's link, somebody outside an invite poll, and nobody at
 all — along with what the open reading refuses to carry and that a poll which
@@ -1741,10 +1742,10 @@ a poll that had started taking votes.
 
 **The poll opening is also an email**, and the last confirmation is what sends
 it: everybody in the poll is told that voting has started, the creator
-included, because the poll opened without them touching it. Pressing **Open
-poll** instead sends the same letter to everybody but the creator, who pressed
-it — see [What a poll writes to
-people](#what-a-poll-writes-to-people).
+included, because the poll opened without them touching it — everybody except
+whoever confirmed last, who watched it open. Pressing **Open poll** instead
+sends the same letter to everybody but the creator, who pressed it — see
+[What a poll writes to people](#what-a-poll-writes-to-people).
 
 **What the button does not do is un-confirm anybody else.** There is no
 "the list changed, please look again" round trip, and adding that would be a
@@ -2485,6 +2486,14 @@ noticed exactly once.
   sends nothing at all: its voters gave no addresses, and the one person it
   could have written to is the person who closed it.
 
+- **Nor is whoever's own ballot ended it.** A poll that finished on its own
+  finished because somebody pressed Submit, and that person is watching the
+  page turn into the results as the letter goes out. They come off the list
+  the same way the creator does and for the same reason, and the address is
+  read off the token: `notify_results_ready` runs inside the transaction that
+  crossed the line, so whoever is signed in is whoever crossed it. Nobody
+  signed in is nobody dropped — an open poll's voters sign nothing.
+
 - **One request per address.** Resend would take the whole list in one `to`,
   and that would show every invitee every other invitee's address — precisely
   what a poll with respondents hidden promises not to do. The fan-out is the
@@ -2511,9 +2520,11 @@ every transient Resend outage into a duplicate on the next vote.
 
 `test/sql/cases/21_results_ready_notices.sql` covers everything but the send
 itself: whether a poll has a result, who would be told for each of the two ways
-a poll can end, that the notice appears exactly once when the poll crosses the
-line, that a reset takes it back and a second finish announces again, and that
-a group is one notice filed against question 1.
+a poll can end and who is left out of each — the creator who closed it, the
+voter whose ballot ended it, in whatever case their address arrives — that the
+notice appears exactly once when the poll crosses the line, that a reset takes
+it back and a second finish announces again, and that a group is one notice
+filed against question 1.
 
 ### What a poll writes to people
 
@@ -2534,24 +2545,51 @@ is the four letters and the two rules that decide them.
   invited to a soliciting poll on Monday is asked for options, and somebody
   added to the same poll after it opens is asked for a vote.
 
-- **Nobody is told what they just did.** The creator set the poll up, so an
-  invitation is `none` for them — including on a poll they invited themselves
-  to, which the create form offers with a checkbox, since the reason they
-  need no email does not stop applying because they ticked a box. The same
-  rule decides the other two: a poll opened with the creator's own Open poll
-  button, or closed with their own Close button, is not news to them; a poll
-  that opens itself because the last invitee confirmed, or finishes because
-  the last invitee voted, is news to everybody in it.
+- **Nobody is told what they just did**, and *they* is whoever acted, not the
+  creator. The creator set the poll up, so an invitation is `none` for them —
+  including on a poll they invited themselves to, which the create form offers
+  with a checkbox, since the reason they need no email does not stop applying
+  because they ticked a box. A poll opened with their own Open poll button, or
+  closed with their own Close button, is not news to them either. And the two
+  transitions nobody presses a button for — the poll opening because the last
+  invitee confirmed, and finishing because the last invitee voted — are news
+  to everybody in the poll *except that invitee*, who has just watched the
+  thing the letter describes. Both were sent to them until
+  [`0049_nobody_is_told_what_they_just_did.sql`](supabase/migrations/0049_nobody_is_told_what_they_just_did.sql),
+  which is where the rule stopped being about the creator.
 
 - **The rule is one function, and the caller supplies the answer.**
-  `poll_email_audience(poll, include_creator)` is every invitee plus the
+  `poll_email_audience(poll, include_creator, actor)` is every invitee plus the
   creator, deduplicated and lowercased, minus the creator when the flag says
-  they already know; `poll_results_audience` is that with `closed_at is null`
-  passed in, and `notify_poll_opened` takes the flag from which of the two
-  openers called it. Nothing on the poll row records *how* it opened, and
-  adding a column to record it would widen every `select *` the app makes for
-  bookkeeping nothing on screen reads — the same argument that made the
-  results notice a row of its own. What the two callers know, they say.
+  they already know and minus the actor's address wherever it appears — as an
+  invitee, as the creator, or as a creator who invited themselves.
+  `poll_results_audience` is that with `closed_at is null` passed in, and
+  `notify_poll_opened` takes the flag from which of the two openers called it.
+  Nothing on the poll row records *how* it opened, and adding a column to
+  record it would widen every `select *` the app makes for bookkeeping nothing
+  on screen reads — the same argument that made the results notice a row of
+  its own. What the two callers know, they say.
+
+- **The actor is read off the token; the flag is not redundant.** Both
+  notifiers run inside the confirmation, the ballot, the removal or the button
+  press that caused the transition, so `lower(auth.jwt() ->> 'email')` in
+  `notify_poll_opened` and `notify_results_ready` *is* the person who caused
+  it, and null — an open poll's anonymous voter, the nightly purge — drops
+  nobody. That makes the flag redundant in both places that pass it today,
+  since the creator's own button and their own Close are the creator acting,
+  and it stays anyway: it says the transition was somebody's deliberate act
+  rather than a threshold being crossed, which a deadline closing a poll from
+  a cron job with no session behind it would need to say differently. The
+  audience itself takes the address as a parameter rather than reading the
+  token, so that the one function this rule lives in answers the same way
+  whoever is asking — including the tests, which ask it directly.
+
+- **Taking somebody off the invite list is the creator acting too.** A removal
+  is the third thing that can open a poll (nobody left to confirm) and the
+  other thing that can finish one (nobody left to vote), and only the creator
+  can do it — so a poll that opens or finishes because of one writes to its
+  invitees and not to them. Nothing special-cases it: it is the same address
+  rule, applied to the same session.
 
 - **Opening needs no notice row, and finishing does.** `options_finalized_at`
   is written once and nothing puts it back — a reset reopens voting, not the
@@ -2606,12 +2644,15 @@ is the four letters and the two rules that decide them.
 
 `test/sql/cases/23_who_the_emails_go_to.sql` covers both decisions and neither
 send: which invitation each address is owed at each stage and that the creator
-is owed none, who is in the audience for a poll opened by hand against one
-that opened itself, and the three things that keep a poll of several questions
-to one letter per person — the invitation naming question 1 alone, the
-audience taken once for the group, and a poll that has opened not opening
-again. The sending is untestable here for the reason it always
-was — there is no `pg_net` in the throwaway database — so the suite can say
+is owed none; who is in the audience for a poll opened by hand against one
+that opened itself, and which one person each of those leaves out — the
+creator who pressed the button, the invitee whose confirmation opened it, and
+the creator again where opening it was their own removal; and the three things
+that keep a poll of several questions to one letter per person — the
+invitation naming question 1 alone, the audience taken once for the group, and
+a poll that has opened not opening again. The sending is untestable here for
+the reason it always was — there is no `pg_net` in the throwaway
+database — so the suite can say
 who *would* have been written to and never that anybody was.
 
 ### Polls are deleted after six months

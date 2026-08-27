@@ -9,8 +9,8 @@
 -- Both come down to the same rule read twice. Nobody is told what they just
 -- did: the creator set the poll up, so an invitation is not news to them, and
 -- opening the poll with their own button is not either -- while a poll that
--- opens itself, because the last person confirmed, is news to everybody in it.
--- The results half of that rule is case 21's.
+-- opens itself, because the last person confirmed, is news to everybody in it
+-- but the person who confirmed. The results half of that rule is case 21's.
 
 begin;
 
@@ -92,15 +92,17 @@ begin
 
   perform tests.assert_null('the creator hears nothing about their own button',
     (select array_agg(a order by a)
-       from poll_email_audience(v_row, false) a
+       from poll_email_audience(v_row, false, 'creator@example.com') a
       where a = 'creator@example.com'));
   perform tests.assert_eq('and everybody else in the poll is told voting has started',
-    (select array_agg(a order by a) from poll_email_audience(v_row, false) a),
+    (select array_agg(a order by a)
+       from poll_email_audience(v_row, false, 'creator@example.com') a),
     array['voter1@example.com', 'voter2@example.com']);
 
   -- ---------------------------------------------------------------------
   -- The other way a poll opens: the last invitee confirms, and it opens
-  -- itself. That is news to the creator like anybody else.
+  -- itself. That is news to the creator like anybody else -- and not news at
+  -- all to the invitee whose confirmation opened it.
   -- ---------------------------------------------------------------------
   v_auto := create_poll('Offsite', null, array['Lisbon', 'Porto'],
                         array['creator@example.com', 'voter1@example.com'],
@@ -119,8 +121,23 @@ begin
   perform tests.assert_eq('the last confirmation opens the poll by itself',
     v_row.options_finalized_at is not null, true);
   perform tests.assert_eq('and everybody in it hears so, the creator included',
-    (select array_agg(a order by a) from poll_email_audience(v_row, true) a),
+    (select array_agg(a order by a) from poll_email_audience(v_row, true, null) a),
     array['creator@example.com', 'voter1@example.com']);
+  -- voter1 pressed the button that opened it, so the one thing the letter has
+  -- to say is the thing they were looking at when they pressed it.
+  perform tests.assert_eq('except whoever''s own confirmation opened it',
+    (select array_agg(a order by a)
+       from poll_email_audience(v_row, true, 'voter1@example.com') a),
+    array['creator@example.com']);
+  -- The creator is dropped by the same address rather than by the flag when
+  -- they are the one who acted on a poll that opened by itself -- their own
+  -- confirmation being the last one, or their taking the last person they
+  -- were waiting on off the invite list, which is the third thing that opens
+  -- a poll and is only ever theirs to do.
+  perform tests.assert_eq('and the creator where the act that opened it was theirs',
+    (select array_agg(a order by a)
+       from poll_email_audience(v_row, true, 'creator@example.com') a),
+    array['voter1@example.com']);
 
   -- ---------------------------------------------------------------------
   -- A poll of several questions is one letter per person at every stage,
@@ -140,7 +157,7 @@ begin
   perform tests.assert_eq('a group is written to about its first question',
     (select q.id from poll_group_members(v_row) q limit 1), v_group[1]);
   perform tests.assert_eq('with one audience for the whole poll',
-    (select array_agg(a order by a) from poll_email_audience(v_row, false) a),
+    (select array_agg(a order by a) from poll_email_audience(v_row, false, null) a),
     array['voter1@example.com']);
 
   -- Every question carries the whole invite list, so five questions are five
