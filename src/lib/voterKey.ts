@@ -34,8 +34,34 @@ function randomKey(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
+function storageKeyFor(pollId: string): string {
+  return `star-voting:voter-key:${pollId}`
+}
+
+/**
+ * The key this browser is already holding for a poll, or null if it has none.
+ *
+ * Minting one is right at the moment a ballot is cast, or a poll is read as
+ * an open poll -- by then it is known to be a poll this browser might vote
+ * in. `poll_page` is asked before that: it is the request that *establishes*
+ * which kind of poll the address leads to, so minting on the way into it
+ * would leave a key behind for every invite poll an account ever opened, none
+ * of which can ever be used for anything. A browser that has voted is holding
+ * its key already, so peeking answers the only question that read is asking
+ * -- and a browser that is not holding one has not voted, which is the answer
+ * a freshly minted key would have produced anyway.
+ */
+export function heldVoterKeyFor(pollId: string): string | null {
+  const storageKey = storageKeyFor(pollId)
+  try {
+    return localStorage.getItem(storageKey) ?? memoryKeys.get(storageKey) ?? null
+  } catch {
+    return memoryKeys.get(storageKey) ?? null
+  }
+}
+
 export function voterKeyFor(pollId: string): string {
-  const storageKey = `star-voting:voter-key:${pollId}`
+  const storageKey = storageKeyFor(pollId)
 
   try {
     const existing = localStorage.getItem(storageKey)

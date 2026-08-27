@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotCard, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
-src/lib/         supabase client, auth context, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
+src/lib/         supabase client, auth context, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -362,9 +362,17 @@ would be told, and that the notice is made exactly once, forgotten on reset
 and made again when the poll finishes a second time; and the same half of the
 other emails — which invitation an address is owed at each stage a poll goes
 through, that the creator is owed none, and who hears that a poll opened by
-hand as against one that opened itself.
+hand as against one that opened itself; and which of the three readings
+`poll_page` gives each kind of reader — its creator, an invitee, a stranger
+holding an open poll's link, somebody outside an invite poll, and nobody at
+all — along with what the open reading refuses to carry and that a poll which
+does not exist is refused in the same words as one that is simply not yours.
 
-Not covered: RLS policies and the `auth.jwt()`-gated access rules. Nor the
+Not covered: RLS policies and the `auth.jwt()`-gated access rules. The
+`poll_page` case above is the nearest thing and still not an exception to
+this: it drives the shim's stand-in session, so what it pins down is which
+branch that function takes for a given `auth.uid()`, not that Supabase's auth
+would put a real reader on that branch. Nor the
 sending of any email: `pg_net` and Vault do not exist in the throwaway
 database, so `send_poll_email` finds no mailer and returns without doing
 anything — the suite can say who *would* have been emailed and never that
@@ -638,6 +646,88 @@ land on merge, so for a few minutes a browser can be holding the previous
 build; that build asks this function for its badges, and it has to keep
 answering. It can go once that window is well past.
 
+## One read opens a poll
+
+A poll page used to be assembled from four requests and, on an open poll, a
+fifth behind them: `polls` and `candidates` read straight through row-level
+security, `poll_status` for the counts and the stage, `poll_group` for the
+question strip, and then `open_poll_view` — which could not be asked for until
+the first four came back, because nothing before them said the poll was open.
+
+The first four run together and cost one round trip between them. The fifth
+cost a second one, paid by every reader of every open poll, for a fact the
+server knew before it answered the first request.
+
+Worse was the reader nobody had designed for: somebody signed in, holding the
+link to an open poll that is not theirs. Every address went to the account
+reading first, so they spent a round trip on four queries that row-level
+security answered with nothing, got handed to the public reading, and started
+again. Three round trips and a discarded render to open a poll that was public
+all along.
+
+`poll_page(p_poll_id, p_voter_key)` — [`0048`](supabase/migrations/0048_one_read_opens_a_poll.sql),
+wrapped by [`src/lib/pollPage.ts`](src/lib/pollPage.ts) — answers the question
+the route is actually asking, *what may this reader see here*, and returns the
+page with it.
+
+**It returns a tagged union, not a superset, and that is the whole design.**
+`open_poll_group` deliberately answers less than `poll_group`: no `voted`, no
+`confirmed`, because an open poll's ballots are identified by a `voter_key`
+minted per question precisely so one browser's cannot be joined to each other.
+A single flat shape with those fields left null would put that joining one
+careless `coalesce` away, and whoever wrote it would think they were filling in
+a gap. Under a tag they have to build a different branch, which is a decision
+somebody takes rather than a hole somebody fills.
+
+- `account` — the creator, or somebody on the invite list: the poll row, its
+  options, its status, and its group with every per-reader mark on it. On an
+  *open* poll it carries `view` as well, because the creator manages the poll
+  through the same panel everybody else votes in.
+- `open` — an open poll to anyone else holding the link: the curated view and
+  the bare strip, and nothing that could say who has answered what.
+- `unreadable` — no such poll, or an invite poll this reader is not in, and
+  which of the two it is is not disclosed.
+
+**Nothing here is a new privilege.** Each branch returns what the caller could
+already have asked for one request at a time, from the functions that already
+decide it: `poll_status`, `poll_group`, `open_poll_view` and `open_poll_group`
+are called rather than reimplemented, so there is one copy of every rule. The
+visibility test is `is_poll_creator` / `is_invited_to_poll` — the same two
+functions `polls_select` is written in terms of — rather than a third
+hand-written copy of `created_by = auth.uid() or exists (...)`, which is what
+`poll_status` and `poll_group` each carry.
+
+**It does not replace them.** This is the *first* read. The live tick stays
+deliberately narrow — `poll_status` alone on an invite poll, plus
+`open_poll_view` on an open one — because a poll's title, its terms and the
+questions it asks are frozen at creation, and re-reading them on every signal
+would be a bigger waste than the round trip this saves.
+
+**The route reads, and the page it chooses draws what it read.** `PollPage`
+hands the result down as `initial`, and both pages apply it on mount rather
+than waiting to be asked. Every other read on a poll page happens on
+subscribing — see [Live updates](#live-updates), which explains why — but that
+reasoning is about not reading the same thing twice, and this read has already
+happened. Holding a drawn page behind a websocket would cost the five seconds
+`useLiveStream` waits before reading anyway on a network that blocks them.
+Subscribing then takes the narrow path instead, which is not a wasted request:
+it closes the gap between the route's read and the subscription going live,
+which is the one window in which a vote could otherwise land unheard.
+
+**A crossing is not an arrival.** Every question of a multi-question poll
+answers with the whole group, so the read that opened one question already
+describes its siblings. Walking between them re-decides nothing, keeps the same
+page mounted, and asks the server for nothing at all — which is what stops the
+heading and the strip blinking on the way through a poll.
+
+**The voter key is peeked at, never minted.** `poll_page` is the request that
+establishes whether an address even leads to an open poll, so `heldVoterKeyFor`
+reads the key without creating one; minting on the way in would leave a key in
+`localStorage` for every invite poll an account ever opened. A browser that has
+voted is already holding its key, and one that is not holding a key has not
+voted — the same answer either way. `voterKeyFor` still mints everywhere a
+ballot or a confirmation is actually being sent.
+
 ## Waiting
 
 A live page is the second read onwards; the first one has nothing to show at
@@ -646,17 +736,31 @@ empty column — the same mark whether what was coming was a poll list, a
 ballot or a tally, with the page landing all at once underneath it.
 
 `src/components/Skeletons.tsx` draws the shape of the page instead: the
-list's cards, the poll's tag row, the score round's bars, the form's fields.
-Two rules keep them from becoming a lie:
+list's cards, the poll's tag row, the ballot's starred rows, the score round's
+bars, the roster's people, the form's sections. Three rules keep them from
+becoming a lie:
 
 - **A skeleton claims only what the page always has.** The list draws three
   cards because the wait is over long before anyone counts them; it does not
-  draw a winner badge, which most polls do not have. A placeholder for
+  draw a poll's description, which most polls do not have. A placeholder for
   something that then fails to appear is a small lie the reader has to
-  un-learn.
+  un-learn. The roster is the one stand-in that guesses at nothing: it is
+  drawn inside a page that has already read the poll, so how many people are
+  in it and what it will say about each of them are facts by then, and
+  `RosterSkeleton` is handed them rather than assuming a common case.
 - **They all live in that one file**, so a page and its stand-in get changed
   together. The failure mode of skeletons is that they slowly stop resembling
   anything.
+- **They are built out of the containers the page is built out of** — the same
+  `maw`, the same `gap`, the same cards in the same order — so the shapes stand
+  where the content lands and the swap is a fill rather than a jump. Anything
+  the pages share a component for is one shape in that file too: `PollHeading`
+  is drawn once there and used by the poll page and the list card, exactly as
+  the pages use one heading, and the ballot's stand-in is one card of starred
+  rows because `BallotCard` is one card. Three copies of a shape are three
+  things to keep in step, which is how the stand-ins drifted last time: the
+  ballot had long since become a single card and its skeleton was still drawing
+  the stack of little ones it replaced.
 
 They are `aria-hidden`, wrapped in a `role="status"` that says *Loading* once:
 the shapes are decoration, and what a non-visual reader needs is the word
@@ -1218,8 +1322,8 @@ resolve against. That was a deliberate call, taken while the polls in flight
 were few enough to be worth less than the shim.
 
 **One address means the route has to decide what the reader may see**, since
-the URL no longer says. `App.tsx`'s `PollPage` does it in the order that costs
-least:
+the URL no longer says. `App.tsx`'s `PollPage` asks one question and reads the
+answer off the reply:
 
 1. **A sample id?** Render `PublicPoll` and stop, whoever is reading. The
    About page's sample is answered from a file in this browser and is not a
@@ -1227,21 +1331,18 @@ least:
    is a `uuid`, so asking the table about `sample-host` does not come back
    empty, it errors. See [The About page and its sample
    poll](#the-about-page-and-its-sample-poll).
-2. **Signed in?** Render `PollDetail`, which reads the `polls` row as its
-   first act anyway. Row-level security answers exactly the question being
-   asked — a row for the creator and for an invitee, nothing for anyone else —
-   so it reports *I cannot see this* rather than drawing *poll not found*, and
-   `PollPage` falls back to the public reading. Probing first would have
-   charged every creator opening their own poll a round trip to learn what the
-   read they were about to make already knew.
-3. **Not signed in, or refused above?** Render `PublicPoll`, which reads
-   through the anon RPCs and can therefore only ever show an open poll.
-4. **Refused there too, and signed out?** Offer the sign-in screen rather than
-   a dead end. The visitor may be on an invite poll's list — every invitation
-   email links to exactly this address — so where they were headed is stashed
+2. **Everything else: `poll_page`**, which answers *what may this reader see
+   here* and hands back the page along with the answer. `account` renders
+   `PollDetail`, `open` renders `PublicPoll`, and `unreadable` is a poll that
+   does not exist or an invite poll this reader is not on the list for —
+   deliberately the same answer for both, so the read cannot be used to find
+   out which ids are real. See [One read opens a
+   poll](#one-read-opens-a-poll).
+3. **Refused and signed out?** Offer the sign-in screen rather than a dead
+   end. The visitor may be on an invite poll's list — every invitation email
+   links to exactly this address — so where they were headed is stashed
    through `rememberDestination` and the magic link brings them back to it.
-   Signed in and refused twice, the link really is dead, and `PublicPoll` says
-   so.
+   Signed in and refused, the link really is dead, and `PublicPoll` says so.
 
 ### Whether respondents are shown
 
@@ -2254,6 +2355,21 @@ changes. **The poll's own half — the heading, its terms, the strip — is the
 same for every question in the group**, so it stays on screen. **The
 question's half — what it asks and the ballot answering it — is replaced**,
 and shows `QuestionSkeleton` until the read for *this* question lands.
+
+The strip is the awkward one, because it belongs to the poll's half and is
+drawn *inside* the card the question's half replaces — so it went with the
+card, and a crossing greyed it out and brought it back at the exact moment a
+reader was using it to navigate. **So it is handed to the stand-in and drawn
+there for real**: `QuestionSkeleton` takes the same `questionStrip` node the
+ballot takes and puts it in the same place inside its own card, which is why
+`PublicPoll` builds that node once beside `strip` rather than inline in the
+panel's prop, as `PollDetail` already did. Nothing about it moves or changes
+colour across the crossing except the badge marking which question is open,
+which has already moved because the address has; and its links stay live, so
+a reader who crossed to the wrong question can cross straight back without
+waiting for the ballot they did not want. It sits outside the stand-in's
+`Loading` wrapper, since that wrapper hides what it holds from screen readers
+and real links in there would be links nothing could reach.
 
 Each page draws the line with one value. `PublicPoll` holds its read as
 `{ pollId, view }` rather than a bare view, so `view` is that pair only when
