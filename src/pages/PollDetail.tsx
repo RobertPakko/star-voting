@@ -650,10 +650,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
           )}
         </>
       ) : (
-        // The strip goes in for real rather than as one more shape: it is the
-        // poll's, like the heading above it, and only happens to live inside
-        // the card being replaced. See QuestionSkeleton.
-        <QuestionSkeleton strip={questionStrip} />
+        <QuestionSkeleton />
       )}
 
       {/* Everyone in the poll, for as long as the poll shows them: a poll that
