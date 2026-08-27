@@ -736,17 +736,27 @@ empty column — the same mark whether what was coming was a poll list, a
 ballot or a tally, with the page landing all at once underneath it.
 
 `src/components/Skeletons.tsx` draws the shape of the page instead: the
-list's cards, the poll's tag row, the score round's bars, the form's fields.
-Two rules keep them from becoming a lie:
+list's cards, the poll's tag row, the ballot's starred rows, the score round's
+bars, the form's sections. Three rules keep them from becoming a lie:
 
 - **A skeleton claims only what the page always has.** The list draws three
   cards because the wait is over long before anyone counts them; it does not
-  draw a winner badge, which most polls do not have. A placeholder for
+  draw a poll's description, which most polls do not have. A placeholder for
   something that then fails to appear is a small lie the reader has to
   un-learn.
 - **They all live in that one file**, so a page and its stand-in get changed
   together. The failure mode of skeletons is that they slowly stop resembling
   anything.
+- **They are built out of the containers the page is built out of** — the same
+  `maw`, the same `gap`, the same cards in the same order — so the shapes stand
+  where the content lands and the swap is a fill rather than a jump. Anything
+  the pages share a component for is one shape in that file too: `PollHeading`
+  is drawn once there and used by the poll page and the list card, exactly as
+  the pages use one heading, and the ballot's stand-in is one card of starred
+  rows because `BallotCard` is one card. Three copies of a shape are three
+  things to keep in step, which is how the stand-ins drifted last time: the
+  ballot had long since become a single card and its skeleton was still drawing
+  the stack of little ones it replaced.
 
 They are `aria-hidden`, wrapped in a `role="status"` that says *Loading* once:
 the shapes are decoration, and what a non-visual reader needs is the word
@@ -2337,10 +2347,15 @@ are available here and the first draft of this made the second one:
   frames, one of them a bare page with no strip at all.
 
 Neither is necessary, because the page is two things and only one of them
-changes. **The poll's own half — the heading, its terms, the strip — is the
-same for every question in the group**, so it stays on screen. **The
-question's half — what it asks and the ballot answering it — is replaced**,
-and shows `QuestionSkeleton` until the read for *this* question lands.
+changes. **The poll's own half — the heading and its terms — is the same for
+every question in the group**, so it stays on screen. **The question's half —
+what it asks and the ballot answering it — is replaced**, and shows
+`QuestionSkeleton` until the read for *this* question lands. The strip belongs
+to the poll but is drawn *inside* the card being replaced, so it is the one
+part of the poll's half that a crossing takes with it: `QuestionSkeleton`
+draws a strip of its own at the top of its card, which is the whole reason
+that stand-in has one — every page it stands in for is a poll of several
+questions, because a crossing is the only way to reach it.
 
 Each page draws the line with one value. `PublicPoll` holds its read as
 `{ pollId, view }` rather than a bare view, so `view` is that pair only when
