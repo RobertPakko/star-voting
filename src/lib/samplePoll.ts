@@ -122,6 +122,13 @@ function answer(payloads: SamplePayloads, fn: string, args: OpenPollArgs): RpcAn
         kind: 'open',
         view: withYourBallot(question.view, args.p_poll_id),
         questions: question.group,
+        // Carried here for the same reason as everything else on this branch:
+        // the shape is the server's, so the page cannot come to depend on the
+        // sample answering it differently. Null on a question whose file holds
+        // no tally, which is the same "ask for yourself" the server means by
+        // it — and what the reader gets then is `open_poll_results` above,
+        // answered out of the same file.
+        results: question.results ?? null,
       })
     case 'open_poll_results':
       return question.results ? ok(question.results) : failed('Results are not available yet')

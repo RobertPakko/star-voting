@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActionIcon,
   Badge,
@@ -27,7 +27,25 @@ import { voters } from '../lib/plural'
  */
 export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
-export function Results({ source }: { source: ResultsSource }) {
+export function Results({
+  source,
+  initial = null,
+}: {
+  source: ResultsSource
+  /**
+   * The tally the read that opened this page already brought, or null when it
+   * brought none. `poll_page` carries it on exactly the polls whose page
+   * draws this card, so on a poll opened at its results the card is drawn
+   * from what is already in hand rather than from a request that could not
+   * even be sent until that read came back. See 0050.
+   *
+   * Null is where this card has always been: the sample poll, a poll that
+   * finished while somebody was watching it (the live tick carries no tally),
+   * and a crossing between two questions. It reads for itself, exactly as
+   * before.
+   */
+  initial?: PollResults | null
+}) {
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
@@ -45,10 +63,22 @@ export function Results({ source }: { source: ResultsSource }) {
   // is what makes paying for it on every load the easy trade.
   const [results, setResults] = useState<PollResults | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The handed-over tally, taken once and then gone. A ref rather than the
+  // prop read straight through, because one read's worth of work already done
+  // is a thing that gets used up: this card re-reads whenever it is drawn,
+  // deliberately — a reset takes a poll's votes away and tells nobody — and a
+  // re-read must never come back with the answer from before it.
+  const handoff = useRef(initial)
 
   useEffect(() => {
-    let cancelled = false
+    const given = handoff.current
+    handoff.current = null
+    if (given) {
+      setResults(given)
+      return
+    }
 
+    let cancelled = false
     const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
         ? supabase.rpc('get_poll_results', { p_poll_id: key })

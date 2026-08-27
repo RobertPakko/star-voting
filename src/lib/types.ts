@@ -214,6 +214,30 @@ export interface AccountRead {
    * on an invite poll, which has no such panel.
    */
   view: OpenPollView | null
+  /**
+   * The tally, on a poll whose results are out. Null on every other poll —
+   * and null is *not* how a page learns there is no result: `status
+   * .results_available` says that, and is what decides whether the card is
+   * drawn at all. This is one read's worth of work handed over so the card
+   * does not have to make it, and a card handed nothing reads for itself.
+   *
+   * Which is what keeps it working where no `poll_page` read is in hand: the
+   * live tick is deliberately narrow and carries no tally, so a poll that
+   * finishes while somebody is watching gets one the ordinary way.
+   */
+  results: PollResults | null
+  /**
+   * The invite list, on an invite poll whose roster this reader draws: its
+   * creator, who manages the list, or anybody in a poll that shows its
+   * respondents. Null on an open poll, which has no list, and on an invite
+   * poll that hides its roster from the reader asking — who renders no card,
+   * so there is nothing to carry.
+   *
+   * What each row may say is `poll_invitees`' business, unchanged: a poll
+   * that hides respondents nulls the per-person columns for everybody, its
+   * creator included.
+   */
+  invitees: Invitee[] | null
 }
 
 /** An open poll to somebody outside it, which is anyone holding the link. */
@@ -222,6 +246,13 @@ export interface OpenRead {
   view: OpenPollView
   /** See the note above on what this deliberately does not carry. */
   questions: OpenGroupQuestion[]
+  /**
+   * The tally, on the same terms as the account reading's and through the
+   * door this reader actually has — `open_poll_results`, which the poll's own
+   * link proves the right to. The same numbers either way: a tally says
+   * nothing about who is reading it.
+   */
+  results: PollResults | null
 }
 
 /**

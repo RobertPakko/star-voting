@@ -21,7 +21,13 @@ import { QuestionStrip } from '../components/QuestionStrip'
 import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
-import type { OpenGroupQuestion, OpenPollView, OpenRead, UnreadableRead } from '../lib/types'
+import type {
+  OpenGroupQuestion,
+  OpenPollView,
+  OpenRead,
+  PollResults,
+  UnreadableRead,
+} from '../lib/types'
 
 /**
  * An open poll as somebody outside it sees it: not signed in, and possibly
@@ -57,7 +63,14 @@ export function PublicPoll({
   // the two cannot drift. A poll of several questions is served by one page
   // whose parameter changes, so "the view" and "the view of what is on screen"
   // are different things for as long as a read is in flight.
-  const [read, setRead] = useState<{ pollId: string; view: OpenPollView } | null>(null)
+  // The tally travels in here too, rather than beside it: it is the same
+  // question's, from the same read, and holding it separately would let the
+  // two describe different questions for as long as a read is in flight.
+  const [read, setRead] = useState<{
+    pollId: string
+    view: OpenPollView
+    results: PollResults | null
+  } | null>(null)
   const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
   // Which questions of this poll this browser has answered, and which it has
   // finished adding options to, for the strip's marks. They have to be read
@@ -101,28 +114,41 @@ export function PublicPoll({
   // came from. One copy, because a page that recorded the ballot on one path
   // and not on another would leave the strip's marks depending on which read
   // happened to be first.
-  const finish = useCallback((of: string, openView: OpenPollView, strip?: OpenGroupQuestion[]) => {
-    if (strip) {
-      // The question just read as well as its siblings. A poll that asks one
-      // question has an empty group, and without the question itself here
-      // every later read of that poll would call itself an arrival and fetch
-      // the strip it already knows it does not have.
-      covered.current = [of, ...strip.map((question) => question.id)]
-      setQuestions(strip)
-    }
-    loadedFor.current = of
-    setRead({ pollId: of, view: openView })
-    // Erased rather than only written: a creator who clears the poll's votes
-    // leaves this browser holding a record of a ballot that no longer exists,
-    // a confirmation can be taken back on the card that gave it, and a read
-    // that comes back "no" is what says so.
-    if (openView.voted) rememberAnswered(of)
-    else forgetAnswered(of)
-    if (openView.confirmed) rememberConfirmed(of)
-    else forgetConfirmed(of)
-    setAnswered(answeredQuestions())
-    setConfirmed(confirmedQuestions())
-  }, [])
+  const finish = useCallback(
+    (
+      of: string,
+      openView: OpenPollView,
+      strip?: OpenGroupQuestion[],
+      // The tally, when the read that came back carried one. `poll_page` does
+      // on a poll whose results are out; `open_poll_view` never does, and
+      // passing nothing is what drops the last one — the card below then reads
+      // for itself, which is the honest answer for a read that did not bring
+      // an answer.
+      tally?: PollResults | null,
+    ) => {
+      if (strip) {
+        // The question just read as well as its siblings. A poll that asks one
+        // question has an empty group, and without the question itself here
+        // every later read of that poll would call itself an arrival and fetch
+        // the strip it already knows it does not have.
+        covered.current = [of, ...strip.map((question) => question.id)]
+        setQuestions(strip)
+      }
+      loadedFor.current = of
+      setRead({ pollId: of, view: openView, results: tally ?? null })
+      // Erased rather than only written: a creator who clears the poll's votes
+      // leaves this browser holding a record of a ballot that no longer exists,
+      // a confirmation can be taken back on the card that gave it, and a read
+      // that comes back "no" is what says so.
+      if (openView.voted) rememberAnswered(of)
+      else forgetAnswered(of)
+      if (openView.confirmed) rememberConfirmed(of)
+      else forgetConfirmed(of)
+      setAnswered(answeredQuestions())
+      setConfirmed(confirmedQuestions())
+    },
+    [],
+  )
 
   // The route's read, drawn at once rather than waiting to be asked for. See
   // the same effect in PollDetail for why this one does not wait to be
@@ -131,7 +157,7 @@ export function PublicPoll({
     const given = handoff.current
     if (!given || !pollId) return
     handoff.current = null
-    if (given.kind === 'open') finish(pollId, given.view, given.questions)
+    if (given.kind === 'open') finish(pollId, given.view, given.questions, given.results)
     // The link is not a link, which `PollPage` established rather than this
     // page having to be refused twice to find out. Same card either way.
     else setFailed({ pollId, message: 'Poll not found.' })
@@ -171,7 +197,7 @@ export function PublicPoll({
         return false
       }
       if (page.kind === 'open') {
-        finish(pollId, page.view, page.questions)
+        finish(pollId, page.view, page.questions, page.results)
         return true
       }
     }
@@ -197,6 +223,11 @@ export function PublicPoll({
   // which is what stops the question being left from rendering under the
   // address of the question being opened.
   const view = read && read.pollId === pollId ? read.view : null
+  // And its tally, on the same terms and from the same read: a card drawn
+  // from the question being left would be the wrong numbers under the right
+  // heading. Null on every read that did not bring one, which is `Results`
+  // reading for itself.
+  const results = read && read.pollId === pollId ? read.results : null
   // The poll around the question, and the reason the two are separated at
   // all. Every question in a group shares the poll's title, its description
   // and its terms, so a read of any of them describes the poll — and the
@@ -417,6 +448,7 @@ export function PublicPoll({
           <OpenPollPanel
             pollId={pollId}
             view={view}
+            results={results}
             onChanged={load}
             onFirstVote={advance}
             onFirstConfirm={advance}

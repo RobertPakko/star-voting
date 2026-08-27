@@ -551,7 +551,8 @@ for several seconds first, so a socket that drops and comes straight back
 never reaches the screen.
 
 One request per page on a first read, and one per change after that — the poll
-list included. Turning a page of it costs one more, for the page itself; what
+list included, and a finished poll included since
+[0050](#one-read-opens-a-poll) folded its tally and its roster into that read. Turning a page of it costs one more, for the page itself; what
 it no longer costs is a re-subscription, because the topic the list watches
 does not depend on which polls are on screen. The state badge costs nothing at
 all: the winner rides on the same read that draws the page it sits on. See
@@ -683,16 +684,19 @@ somebody takes rather than a hole somebody fills.
 - `account` — the creator, or somebody on the invite list: the poll row, its
   options, its status, and its group with every per-reader mark on it. On an
   *open* poll it carries `view` as well, because the creator manages the poll
-  through the same panel everybody else votes in.
+  through the same panel everybody else votes in. Plus `results` and
+  `invitees` where the page draws them; see below.
 - `open` — an open poll to anyone else holding the link: the curated view and
-  the bare strip, and nothing that could say who has answered what.
+  the bare strip, and nothing that could say who has answered what. Plus
+  `results` on the same terms.
 - `unreadable` — no such poll, or an invite poll this reader is not in, and
   which of the two it is is not disclosed.
 
 **Nothing here is a new privilege.** Each branch returns what the caller could
 already have asked for one request at a time, from the functions that already
-decide it: `poll_status`, `poll_group`, `open_poll_view` and `open_poll_group`
-are called rather than reimplemented, so there is one copy of every rule. The
+decide it: `poll_status`, `poll_group`, `open_poll_view`, `open_poll_group`,
+`get_poll_results`, `open_poll_results` and `poll_invitees` are called rather
+than reimplemented, so there is one copy of every rule. The
 visibility test is `is_poll_creator` / `is_invited_to_poll` — the same two
 functions `polls_select` is written in terms of — rather than a third
 hand-written copy of `created_by = auth.uid() or exists (...)`, which is what
@@ -714,6 +718,41 @@ happened. Holding a drawn page behind a websocket would cost the five seconds
 Subscribing then takes the narrow path instead, which is not a wasted request:
 it closes the gap between the route's read and the subscription going live,
 which is the one window in which a vote could otherwise land unheard.
+
+**And what the page then draws rides along with it** —
+[`0050`](supabase/migrations/0050_a_finished_poll_opens_in_one_read.sql). 0048
+answered what the *route* asks; a poll whose results are out draws two more
+cards, and each of them went and asked for itself the moment it mounted, which
+it could not do until `poll_page` came back. So opening a completed poll cost
+two round trips: `poll_page`, and then `get_poll_results` and `poll_invitees`
+together, landing on a skeleton the reader was already looking at.
+
+`results` and `invitees` close that, on the same terms as everything above:
+
+- **Only when the page will draw them.** The tally is gated on
+  `poll_results_revealed`, which is the same predicate the reads report as
+  `results_available` and the same one the cards are rendered behind — so what
+  the server carries and what the browser draws cannot come apart, and a poll
+  still taking votes pays nothing: STAR does not run. The roster is a
+  poll-and-reader question rather than a stage one, so its condition is the
+  client's exactly: an invite poll, read by its creator or showing its
+  respondents.
+- **Null means "ask for yourself", not "there is none".** `results_available`
+  is still the only thing that says whether a result exists, and is what the
+  pages branch on. These are a handoff of work already done, so
+  [`Results`](src/components/Results.tsx) and
+  [`Respondents`](src/components/Respondents.tsx) take theirs through a
+  consume-once ref and read for themselves when handed nothing — which is what
+  keeps them right where no `poll_page` read is in hand: a poll that finishes
+  while somebody is watching (the live tick carries neither), a crossing
+  between two questions, and the About page's sample. `PollDetail` drops both
+  on every narrow tick for the same reason: the tally belongs to the read that
+  fetched it, and a creator's reset takes the votes under it away.
+- **The published ballot sheet is deliberately left out.** `poll_ballots` gates
+  on this poll's own close where `results_available` gates on every question in
+  the group having stopped; on a group those need not agree, and a call that
+  raised inside `poll_page` would take the whole page down rather than one
+  card. Reconciling the two gates is a change to make on purpose.
 
 **A crossing is not an arrival.** Every question of a multi-question poll
 answers with the whole group, so the read that opened one question already

@@ -10,7 +10,7 @@ import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
 import { Results } from './Results'
 import { VoterNameField } from './VoterNameField'
-import type { OpenPollView, PollOption } from '../lib/types'
+import type { OpenPollView, PollOption, PollResults } from '../lib/types'
 
 /**
  * The whole voting experience for an open poll, driven by the poll's id --
@@ -35,6 +35,7 @@ import type { OpenPollView, PollOption } from '../lib/types'
 export function OpenPollPanel({
   pollId,
   view,
+  results = null,
   isCreator = false,
   voterName,
   onChanged,
@@ -44,6 +45,14 @@ export function OpenPollPanel({
 }: {
   pollId: string
   view: OpenPollView
+  /**
+   * The tally, when the page above already has it — handed down for the same
+   * reason `view` is, and by the same route: `poll_page` brings it on a poll
+   * whose results are out, so the card below draws it rather than asking for
+   * it a round trip later. Null everywhere else, which is where that card has
+   * always started. See 0050 and `Results`.
+   */
+  results?: PollResults | null
   /**
    * The name this browser is answering under, held by the page. A share link
    * carries no account, so a poll that shows its respondents has to ask for
@@ -172,7 +181,7 @@ export function OpenPollPanel({
             must not take the way out of the question with it. The invite
             reading places it the same way, for the same reason. */}
         {questionStrip}
-        <Results source={{ kind: 'open', pollId }} />
+        <Results source={{ kind: 'open', pollId }} initial={results} />
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}

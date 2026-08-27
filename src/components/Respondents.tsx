@@ -50,6 +50,7 @@ export function Respondents({
   isCreator,
   showVoters,
   status,
+  initial = null,
   liveTick = 0,
   onChange,
 }: {
@@ -61,6 +62,18 @@ export function Respondents({
    */
   showVoters: boolean
   status: PollStatus
+  /**
+   * The roster the read that opened this page already brought, or null when
+   * it brought none. `poll_page` carries it on exactly the polls and readers
+   * that draw this card, so the card is drawn from what is in hand rather
+   * than from a request that could not be sent until that read came back.
+   * See 0050.
+   *
+   * Used once, on the way in. Every read after it is this card's own, on the
+   * tick below, because who has answered is the half of the roster that
+   * moves.
+   */
+  initial?: Invitee[] | null
   /**
    * Bumped by the poll page on every live refresh. The roster reloads with
    * it rather than on a timer of its own, so who has voted and the count
@@ -76,6 +89,8 @@ export function Respondents({
   // from `invitees`, which would put the roster in load()'s dependencies
   // and have every load schedule the next one.
   const loaded = useRef(false)
+  // The handed-over roster, taken once and then gone; see `initial`.
+  const handoff = useRef(initial)
   const [newEmail, setNewEmail] = useState('')
   const [busy, setBusy] = useState(false)
   // Wrong with the address being typed, marked on the box it was typed in.
@@ -110,6 +125,16 @@ export function Respondents({
   }, [pollId, isCreator, rosterReadable])
 
   useEffect(() => {
+    // The route's read, drawn at once rather than asked for again. Only the
+    // first pass finds anything here: a tick, or a crossing to another
+    // question, is a read this card still owes.
+    const given = handoff.current
+    if (given) {
+      handoff.current = null
+      loaded.current = true
+      setInvitees(given)
+      return
+    }
     load()
   }, [load, liveTick])
 

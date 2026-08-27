@@ -35,9 +35,11 @@ import { readPollPage } from '../lib/pollPage'
 import type {
   AccountRead,
   GroupQuestion,
+  Invitee,
   OpenPollView,
   Poll,
   PollOption,
+  PollResults,
   PollStatus,
 } from '../lib/types'
 
@@ -74,6 +76,13 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
   // this that moves is which of them this reader has answered — and that
   // moves when they vote, which re-reads the page anyway.
   const [questions, setQuestions] = useState<GroupQuestion[]>([])
+  // The tally and the roster, when the read that brought the poll brought
+  // them too — which is on exactly the polls whose page draws them, because
+  // `poll_page` gates each on the condition the card below is rendered
+  // behind. Both are handed to their card once and are its business from
+  // there; see the note above `refresh`, which is the read that has neither.
+  const [results, setResults] = useState<PollResults | null>(null)
+  const [invitees, setInvitees] = useState<Invitee[] | null>(null)
   // Which questions this browser has answered, and which it has finished
   // adding options to, for the strip's marks on an *open* poll. `poll_group`
   // answers both for an invite poll and can answer neither for an open one —
@@ -155,6 +164,8 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
     setOptions(page.options)
     setStatus(page.status)
     setQuestions(page.questions)
+    setResults(page.results)
+    setInvitees(page.invitees)
 
     // An open poll read by its own creator: the panel they manage it through
     // is the one everybody else votes in, and it wants this.
@@ -207,6 +218,11 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
   const load = useCallback(async () => {
     if (!pollId) return true
     setError(null)
+    // Dropped for the length of the read, for the reason set out on `refresh`
+    // below: what is held is the read before this one's, and a creator action
+    // remounts the cards that draw them without waiting for this to land.
+    setResults(null)
+    setInvitees(null)
 
     // One request. `poll_page` answers with the poll, its options, its status,
     // its group and — on an open poll — the open view as well, which used to
@@ -252,6 +268,16 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
     // Bumped before the requests rather than after, so the roster below
     // asks at the same moment this does and the two agree on screen.
     setLiveTick((t) => t + 1)
+    // And the handed-over tally and roster are dropped, because this read is
+    // not the one that brought them. They belong to the `poll_page` that
+    // fetched them and to nothing after: a creator resetting the poll takes
+    // the results away and puts them back, and the card that draws them
+    // unmounts and mounts again with it — so a tally still lying here would
+    // be handed to that card second time round, of votes that have since been
+    // deleted. Null is the card reading for itself, which is the right answer
+    // for every read but the one that brought it.
+    setResults(null)
+    setInvitees(null)
 
     const openId = poll?.mode === 'open' ? poll.id : null
     const [statusRes, viewRes, optionsRes] = await Promise.all([
@@ -606,6 +632,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
                 key={refreshKey}
                 pollId={poll.id}
                 view={view}
+                results={results}
                 isCreator={isCreator}
                 voterName={voterName}
                 onChanged={load}
@@ -636,7 +663,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
                same questions. */
             <>
               {questionStrip}
-              <Results source={{ kind: 'poll', pollId: poll.id }} />
+              <Results source={{ kind: 'poll', pollId: poll.id }} initial={results} />
             </>
           ) : status.is_closed ? (
             <>
@@ -718,6 +745,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
             isCreator={isCreator}
             showVoters={poll.show_voters}
             status={status}
+            initial={invitees}
             liveTick={liveTick}
             onChange={reloadAll}
           />
