@@ -120,13 +120,25 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
   // sets it lives down there with the rest of what the creator does to the
   // poll.
   const [editingOptions, setEditingOptions] = useState(false)
-  // Whether the whole poll has been read yet. This page has two reads — the
-  // whole poll once, and the parts that move on every signal after that —
-  // and the socket cannot tell them apart, so something has to remember
-  // which one is next. A ref rather than state because the answer is needed
-  // during a read rather than at the next render: two signals arriving
-  // together must not both decide they are the first.
-  const loadedOnce = useRef(false)
+  // Which question this page has read in full, which is what decides whether
+  // the next signal is a first read or a live tick: this page has two reads —
+  // the whole poll once, and the parts that move on every signal after that —
+  // and the socket cannot tell them apart.
+  //
+  // The question rather than a yes/no, because one page serves every question
+  // of a poll and crossing between them remounts nothing: the answer is "yes,
+  // but of the question before this one", and a flag has nowhere to put the
+  // second half. It used to be a flag cleared by an effect on `pollId`, which
+  // was right about the crossing and wrong about the mount it also ran on —
+  // the route's read had just set it, so clearing it sent the subscription's
+  // signal down the full-read path and `poll_page` was asked a second time
+  // for a page already on screen.
+  //
+  // A ref rather than state because the answer is needed during a read rather
+  // than at the next render: two signals arriving together must not both
+  // decide they are the first. `loadedFor` is the same value for the render
+  // to go on, set beside it.
+  const readQuestion = useRef<string | null>(null)
 
   // The read `PollPage` already made for this question, waiting to be drawn
   // rather than made again. A ref rather than state because it is not
@@ -163,7 +175,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
       setConfirmed(confirmedQuestions())
     }
 
-    loadedOnce.current = true
+    readQuestion.current = page.poll.id
     setLoadedFor(page.poll.id)
     setLoading(false)
   }, [])
@@ -178,11 +190,13 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
   // blocks websockets outright it would hold it for the five seconds
   // useLiveStream waits before reading anyway.
   //
-  // What subscribing then does instead is the live tick — `loadedOnce` is
-  // already set, so the first signal takes the narrow path. That is not a
-  // wasted request: it closes the gap between the route's read and the
-  // subscription actually being live, which is the one window in which a
-  // vote could otherwise land unheard.
+  // What subscribing then does instead is the live tick — this read has
+  // already named the question in `readQuestion`, so the first signal takes
+  // the narrow path. That is not a wasted request: it closes the gap between
+  // the route's read and the subscription actually being live, which is the
+  // one window in which a vote could otherwise land unheard. What it must not
+  // be is `poll_page` over again, which is the whole reason the flag is set
+  // where the read is applied and cleared nowhere else.
   useEffect(() => {
     const given = handoff.current
     if (!given) return
@@ -267,26 +281,24 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
     return !statusRes.error
   }, [pollId, poll?.mode, poll?.id, optionsMayMove])
 
-  // What a signal on this poll means, which depends on whether this page has
-  // ever read it: the whole poll the first time, and only the parts that can
-  // move on every one after that. Navigating from one question to another
-  // remounts nothing — the poll around them is the same page and must not
-  // blink — so the flag is cleared alongside the poll it describes, in the
-  // effect below.
+  // What a signal on this poll means, which depends on whether the question
+  // in the address bar is the one this page has read: the whole poll the
+  // first time, and only the parts that can move on every one after that.
+  // Navigating from one question to another remounts nothing — the poll
+  // around them is the same page and must not blink — so a crossing arrives
+  // here as a read of the *previous* question, which is a first read of this
+  // one and says so by itself. Nothing has to remember to clear anything.
   const onSignal = useCallback(async () => {
-    if (loadedOnce.current) return refresh()
+    if (readQuestion.current === pollId) return refresh()
     return load()
-  }, [load, refresh])
+  }, [pollId, load, refresh])
 
-  // Moving to another question of the same poll remounts nothing — that is
-  // the point, since the heading and the strip belong to the poll and must
-  // not blink — so the two things that are about the question rather than the
-  // poll are cleared by hand on the way across. The flag, because the
-  // question being opened has not been read even though the last one had; and
-  // a ballot half-changed in the question being left, which would otherwise
-  // turn up in the next one scored against a different list of options.
+  // A ballot half-changed in the question being left, cleared on the way
+  // across: moving to another question of the same poll remounts nothing —
+  // that is the point, since the heading and the strip belong to the poll and
+  // must not blink — so it would otherwise turn up in the next question,
+  // scored against a different list of options.
   useEffect(() => {
-    loadedOnce.current = false
     setRevising(null)
   }, [pollId])
 
