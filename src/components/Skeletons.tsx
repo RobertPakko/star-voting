@@ -142,6 +142,22 @@ function BallotShape({ rows }: { rows: number }) {
   )
 }
 
+/**
+ * A card with one line in it: the banner naming a question's winner, and the
+ * notice a question nobody answered puts up in its place. One shape, because
+ * a finished question always has exactly one of the two and they are the same
+ * card — see `ResultsSkeleton`, which draws its tally under this, and
+ * `QuestionSkeleton`, which draws this alone because it cannot yet know which
+ * of the two is coming.
+ */
+function BannerShape() {
+  return (
+    <Card withBorder>
+      <Skeleton height={22} width="60%" radius="sm" />
+    </Card>
+  )
+}
+
 /** The heading over a poll and the card answering it: every poll page. */
 export function PollPageSkeleton({ rows = 3 }: { rows?: number }) {
   return (
@@ -189,15 +205,45 @@ export function PollPageSkeleton({ rows = 3 }: { rows?: number }) {
  */
 export function QuestionSkeleton({
   rows = 3,
+  finished = false,
   nameField,
   strip,
 }: {
   rows?: number
+  /**
+   * Whether the poll has stopped taking answers, which moves the strip out of
+   * the card: a question still being answered is one card with the strip
+   * inside it, and a question that is over is the strip and then a block —
+   * the tally, or the notice a question nobody answered puts up. The pages
+   * place the real strip on exactly this fact, so the stand-in has to as
+   * well, or a crossing between two finished questions boxes the strip up for
+   * as long as the read takes and lets it out again.
+   */
+  finished?: boolean
   /** The name box, on the polls that ask for one; see VoterNameField. */
   nameField?: ReactNode
   /** The way between the poll's questions; see QuestionStrip. */
   strip?: ReactNode
 }) {
+  // Nothing under the strip but the one card both endings share. Which of the
+  // two is coming is not knowable from here — a question of a finished poll
+  // has a tally if anybody answered it and the notice if nobody did, and that
+  // is a fact about the question being opened rather than about the poll — so
+  // this claims the card they have in common and lets the score round arrive
+  // under it. `Results` puts up `ResultsSkeleton` the moment it lands, whose
+  // first shape is this one, so the wait continues rather than starting over.
+  // A finished question asks for no name, which is why there is none here.
+  if (finished) {
+    return (
+      <>
+        {strip}
+        <Loading>
+          <BannerShape />
+        </Loading>
+      </>
+    )
+  }
+
   return (
     <Card withBorder>
       <Stack gap="sm">
@@ -239,9 +285,7 @@ export function ResultsSkeleton({ options = 4 }: { options?: number }) {
   return (
     <Loading>
       <Stack gap="md">
-        <Card withBorder>
-          <Skeleton height={22} width="60%" radius="sm" />
-        </Card>
+        <BannerShape />
         <Stack gap={2}>
           <Skeleton height={bar.heading} width={112} radius="sm" />
           <Card withBorder p="sm">

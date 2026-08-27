@@ -748,8 +748,9 @@ becoming a lie:
   poll guess at nothing at all, because by then there is nothing to guess:
   `RosterSkeleton` is handed how many people are in the poll and what it will
   say about each of them, and `QuestionSkeleton` is handed the strip and the
-  name box themselves, as real nodes, along with the answer to whether the
-  question being opened asks for a name. See [A poll can ask more than one
+  name box themselves, as real nodes, along with the answers to whether the
+  question being opened asks for a name and whether the poll it belongs to has
+  finished. See [A poll can ask more than one
   question](#a-poll-can-ask-more-than-one-question) for why those two are
   handed over rather than drawn: they belong to the poll rather than to the question, so
   they never had anything to wait for.
@@ -2381,6 +2382,20 @@ there for real**, in the places the ballot draws them:
   lands and says which questions are behind the reader. Its links stay live, so
   a reader who crossed to the wrong question can cross straight back without
   waiting for the ballot they did not want.
+
+  It has to be *placed* the way the page places it, too, and that depends on
+  the stage: inside the card wherever there is one card — the option list, the
+  ballot, the card a voter comes back to — and above the block where there is
+  not, which is the tally and the notice a question nobody answered puts up.
+  So the stand-in is told the same fact the branches go on, as `finished`, and
+  a crossing between two questions of a poll that is over no longer boxes the
+  strip up for the length of the read and lets it out again. What it draws
+  under the strip then is one bordered card holding one line, because that is
+  what both endings have — a winner's banner or that notice — and which of the
+  two is coming is a fact about the question being opened rather than about
+  the poll. `Results` puts `ResultsSkeleton` up the moment it lands, and that
+  starts with the same card, so the shape continues rather than starting
+  over.
 - **The name box** is `VoterNameField`, whose state the *page* holds with
   `useVoterName` — see `lib/voterName.ts`. A name is not a fact about a
   question; it is what this person is called, which is the whole reason that

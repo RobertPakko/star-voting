@@ -278,13 +278,16 @@ export function PublicPoll({
   // The same badge either way, of whatever the reader currently owes.
   const collecting = shell.soliciting
   const done = collecting ? confirmed : answered
-  // And whether it marks anything at all depends on whether the mark is still
-  // about something: a poll that has closed, or whose results are out, takes
-  // no more ballots, so which questions this browser answered is a
-  // distinction about a vote nobody can still cast. Undefined marks neither
-  // way; see QuestionStrip. The invite reading stops marking on the same
-  // terms.
-  const marking = !shell.is_closed && !shell.results_available
+  // Whether the poll has stopped taking answers, which decides two things at
+  // once. The strip marks nothing: a poll that has closed, or whose results
+  // are out, takes no more ballots, so which questions this browser answered
+  // is a distinction about a vote nobody can still cast, and undefined marks
+  // neither way; see QuestionStrip. And the question's half of the page stops
+  // being one card with the strip inside it and becomes the strip with a
+  // tally or a notice under it, which is where the stand-in below has to put
+  // it too. The invite reading draws both lines on the same fact.
+  const finished = shell.is_closed || shell.results_available
+  const marking = !finished
   const strip = questions.map((question) => ({
     key: question.id,
     position: question.question_position,
@@ -426,6 +429,7 @@ export function PublicPoll({
         // shapes: both are the poll's, like the heading above, and only
         // happen to live inside the card being replaced. See QuestionSkeleton.
         <QuestionSkeleton
+          finished={finished}
           nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
           strip={questionStrip}
         />

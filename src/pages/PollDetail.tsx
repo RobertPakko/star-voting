@@ -398,13 +398,18 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
   const done = status.soliciting
     ? { browser: confirmed, server: (question: GroupQuestion) => question.confirmed === true }
     : { browser: answered, server: (question: GroupQuestion) => question.voted }
-  // ...and whether it marks anything at all depends on whether the mark is
-  // still about something. A poll that has closed, or whose results are out,
-  // takes no more ballots, so "you have answered this one and not that one"
-  // is a distinction about a vote nobody can still cast — and the outstanding
-  // colour is a nudge towards one the poll would now refuse. Undefined marks
-  // neither way; see QuestionStrip.
-  const marking = !status.is_closed && !status.results_available
+  // ...and whether it marks anything at all depends on whether the poll has
+  // stopped taking answers, which decides two things at once. The mark: a
+  // poll that has closed, or whose results are out, takes no more ballots, so
+  // "you have answered this one and not that one" is a distinction about a
+  // vote nobody can still cast — and the outstanding colour is a nudge
+  // towards one the poll would now refuse. Undefined marks neither way; see
+  // QuestionStrip. And the shape of the question's half of the page: the
+  // branches below put the strip inside the card while there is one card and
+  // above the block when there is not, which is exactly this fact, so the
+  // stand-in has to be told it as well.
+  const finished = status.is_closed || status.results_available
+  const marking = !finished
   const strip = questions.map((question) => ({
     key: question.id,
     position: question.question_position,
@@ -672,6 +677,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
         // shapes: both are the poll's, like the heading above, and only
         // happen to live inside the card being replaced. See QuestionSkeleton.
         <QuestionSkeleton
+          finished={finished}
           nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
           strip={questionStrip}
         />
