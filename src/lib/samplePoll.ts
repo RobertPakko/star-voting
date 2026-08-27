@@ -112,6 +112,17 @@ function answer(payloads: SamplePayloads, fn: string, args: OpenPollArgs): RpcAn
       return ok(withYourBallot(question.view, args.p_poll_id))
     case 'open_poll_group':
       return ok(question.group)
+    // The sample is an open poll and its reader is outside it, always: it is
+    // nobody's poll and was never a row, so there is no account reading of it
+    // to be entitled to. That is the same answer `PollPage` hard-codes by
+    // routing a sample id straight to the public reading, said here as well
+    // so the two cannot disagree if that route is ever widened.
+    case 'poll_page':
+      return ok({
+        kind: 'open',
+        view: withYourBallot(question.view, args.p_poll_id),
+        questions: question.group,
+      })
     case 'open_poll_results':
       return question.results ? ok(question.results) : failed('Results are not available yet')
     case 'open_poll_ranking':

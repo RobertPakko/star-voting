@@ -29,19 +29,32 @@ import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { Results } from '../components/Results'
-import type { GroupQuestion, OpenPollView, Poll, PollOption, PollStatus } from '../lib/types'
+import { readPollPage } from '../lib/pollPage'
+import type {
+  AccountRead,
+  GroupQuestion,
+  OpenPollView,
+  Poll,
+  PollOption,
+  PollStatus,
+} from '../lib/types'
 
 /**
  * A poll read as an account: the creator's own, or one they were invited to.
  *
- * It is reached through `PollPage`, which hands every poll address to this
- * first and falls back to the public reading when this says it cannot see the
- * poll. That is what `onUnreadable` is for, and why the failure is reported
- * rather than drawn: an open poll's link now goes to the same address for
- * everybody, so "no row came back" no longer means "no such poll" -- it means
- * this reader is not in the poll, which for an open one is no obstacle at all.
+ * It is reached through `PollPage`, which has already read the poll by the
+ * time this mounts and hands the result over as `initial`. That read is what
+ * chose this page over the public one, so what arrives is by construction the
+ * account reading and this page never has to establish it: there is no "can I
+ * see this poll" question left for a first read to answer, and no reporting a
+ * refusal back up so the route can try the other way round. `poll_page`
+ * answered both at once.
+ *
+ * What this still owns is every read after the first — the live tick, a vote
+ * landing, a creator's action — because those are about the poll changing
+ * rather than about which poll it is.
  */
-export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
+export function PollDetail({ initial }: { initial: AccountRead | null }) {
   const { pollId } = useParams<{ pollId: string }>()
   const { session } = useAuth()
   const navigate = useNavigate()
@@ -105,52 +118,26 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
   // together must not both decide they are the first.
   const loadedOnce = useRef(false)
 
-  const load = useCallback(async () => {
-    if (!pollId) return true
-    setError(null)
+  // The read `PollPage` already made for this question, waiting to be drawn
+  // rather than made again. A ref rather than state because it is not
+  // something this page renders from — it is one read's worth of work already
+  // done, taken once and then gone. It describes the question it was made for
+  // at the moment it was made, so nothing later may be handed it: a poll
+  // re-read after a vote must never come back with the answer from before.
+  const handoff = useRef(initial)
 
-    const [pollRes, optionsRes, statusRes, groupRes] = await Promise.all([
-      supabase.from('polls').select('*').eq('id', pollId).maybeSingle(),
-      supabase.from('candidates').select('*').eq('poll_id', pollId).order('sort_order'),
-      supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
-      supabase.rpc('poll_group', { p_poll_id: pollId }),
-    ])
+  // What every read of the whole poll does with what it came back with,
+  // wherever it came from: the route's read, or one of this page's own.
+  const apply = useCallback((page: AccountRead) => {
+    setPoll(page.poll)
+    setOptions(page.options)
+    setStatus(page.status)
+    setQuestions(page.questions)
 
-    // No row and no error is row-level security answering precisely: the poll
-    // exists or it does not, but either way it is not this account's to read.
-    // `PollPage` takes it from here -- an open poll is readable by anyone
-    // holding the link, and this reader is holding it.
-    if (!pollRes.error && !pollRes.data) {
-      onUnreadable()
-      return true
-    }
-
-    if (pollRes.error || statusRes.error) {
-      setError((pollRes.error ?? statusRes.error)!.message)
-      setLoading(false)
-      return false
-    }
-
-    const loaded = pollRes.data as Poll
-    setPoll(loaded)
-    setOptions((optionsRes.data as PollOption[]) ?? [])
-    setStatus((statusRes.data as PollStatus) ?? null)
-    // A failure here is swallowed rather than shown: a browser running ahead
-    // of the migration that adds poll_group() gets no strip, and a poll with
-    // no strip is a poll of one question — which every poll was until now.
-    setQuestions(groupRes.error ? [] : ((groupRes.data as GroupQuestion[]) ?? []))
-
-    if (loaded.mode === 'open') {
-      const { data, error: viewError } = await supabase.rpc('open_poll_view', {
-        p_poll_id: loaded.id,
-        p_voter_key: voterKeyFor(loaded.id),
-      })
-      if (viewError) {
-        setError(viewError.message)
-        setLoading(false)
-        return false
-      }
-      const openView = data as OpenPollView
+    // An open poll read by its own creator: the panel they manage it through
+    // is the one everybody else votes in, and it wants this.
+    if (page.view) {
+      const openView = page.view
       setView(openView)
       // The public reading of this same question is at this same address and
       // marks the same entries, so a question answered — or finished with —
@@ -158,19 +145,66 @@ export function PollDetail({ onUnreadable }: { onUnreadable: () => void }) {
       // other. Erased as well as written: a confirmation can be taken back,
       // and a creator can clear a poll's votes, so a read that comes back
       // "no" is what stops a stale mark outliving what it stood for.
-      if (openView.voted) rememberAnswered(loaded.id)
-      else forgetAnswered(loaded.id)
-      if (openView.confirmed) rememberConfirmed(loaded.id)
-      else forgetConfirmed(loaded.id)
+      if (openView.voted) rememberAnswered(page.poll.id)
+      else forgetAnswered(page.poll.id)
+      if (openView.confirmed) rememberConfirmed(page.poll.id)
+      else forgetConfirmed(page.poll.id)
       setAnswered(answeredQuestions())
       setConfirmed(confirmedQuestions())
     }
 
     loadedOnce.current = true
-    setLoadedFor(pollId)
+    setLoadedFor(page.poll.id)
     setLoading(false)
+  }, [])
+
+  // The route's read, drawn at once rather than waiting to be asked for.
+  //
+  // Every other read this page makes happens on subscribing, which is what
+  // keeps a page to one read instead of two — see useLiveStream. That
+  // reasoning is about not reading the same thing twice, and this read has
+  // already happened: sitting on it until a websocket connects would hold a
+  // page that is ready to draw behind the network, and on a network that
+  // blocks websockets outright it would hold it for the five seconds
+  // useLiveStream waits before reading anyway.
+  //
+  // What subscribing then does instead is the live tick — `loadedOnce` is
+  // already set, so the first signal takes the narrow path. That is not a
+  // wasted request: it closes the gap between the route's read and the
+  // subscription actually being live, which is the one window in which a
+  // vote could otherwise land unheard.
+  useEffect(() => {
+    const given = handoff.current
+    if (!given) return
+    handoff.current = null
+    apply(given)
+  }, [apply])
+
+  const load = useCallback(async () => {
+    if (!pollId) return true
+    setError(null)
+
+    // One request. `poll_page` answers with the poll, its options, its status,
+    // its group and — on an open poll — the open view as well, which used to
+    // be a second round trip behind the first four because nothing before
+    // them said the poll was open. See lib/pollPage.ts.
+    const { page, error: readError } = await readPollPage(pollId)
+
+    // A poll that stopped being this account's to read while they were
+    // looking at it — deleted, or their invitation withdrawn — comes back
+    // under another tag. There is no falling back to the public reading from
+    // here: `PollPage` chose this page on a read that said `account`, so this
+    // is a poll that changed underneath the page rather than one the route
+    // guessed wrong about, and saying so is the honest answer.
+    if (readError || !page || page.kind !== 'account') {
+      setError(readError ?? 'Poll not found.')
+      setLoading(false)
+      return false
+    }
+
+    apply(page)
     return true
-  }, [pollId, onUnreadable])
+  }, [pollId, apply])
 
   // Whether this page has to re-read the option list on the live tick. Open
   // polls get theirs inside open_poll_view, so this is about invite polls.

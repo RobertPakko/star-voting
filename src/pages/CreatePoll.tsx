@@ -367,10 +367,17 @@ export function CreatePoll() {
     let cancelled = false
 
     async function prefill(sourceId: string) {
-      const [pollRes, optionsRes] = await Promise.all([
-        supabase.from('polls').select('*').eq('id', sourceId).single(),
-        supabase.from('candidates').select('*').eq('poll_id', sourceId).order('sort_order'),
-      ])
+      // The options come back embedded in the poll rather than alongside it.
+      // PostgREST resolves the foreign key from `candidates` to `polls`
+      // itself, so one request answers what two used to, and the row-level
+      // security on both tables is applied exactly as it is when they are
+      // asked separately -- an embedding widens nothing.
+      const pollRes = await supabase
+        .from('polls')
+        .select('*, candidates(*)')
+        .eq('id', sourceId)
+        .order('sort_order', { referencedTable: 'candidates' })
+        .single()
       if (cancelled) return
 
       if (pollRes.error) {
@@ -379,7 +386,7 @@ export function CreatePoll() {
         return
       }
 
-      const source = pollRes.data as Poll
+      const { candidates, ...source } = pollRes.data as Poll & { candidates: PollOption[] }
       setTitle(source.title)
       setDescription(source.description ?? '')
       setMode(source.mode)
@@ -423,9 +430,7 @@ export function CreatePoll() {
           })),
         )
       } else {
-        setQuestions([
-          { ...blankQuestion(), options: draftFrom((optionsRes.data as PollOption[]) ?? []) },
-        ])
+        setQuestions([{ ...blankQuestion(), options: draftFrom(candidates ?? []) }])
       }
 
       if (source.mode === 'invite') {

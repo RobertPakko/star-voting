@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Divider, Stack, Text, Title } from '@mantine/core'
 import { isSampleId, openPollRpc } from '../lib/samplePoll'
+import { readPollPage } from '../lib/pollPage'
 import { voterKeyFor } from '../lib/voterKey'
 import {
   answeredQuestions,
@@ -18,7 +19,7 @@ import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
-import type { OpenGroupQuestion, OpenPollView } from '../lib/types'
+import type { OpenGroupQuestion, OpenPollView, OpenRead, UnreadableRead } from '../lib/types'
 
 /**
  * An open poll as somebody outside it sees it: not signed in, and possibly
@@ -31,15 +32,23 @@ import type { OpenGroupQuestion, OpenPollView } from '../lib/types'
  * sends them here when the poll is not theirs to read as an account. The
  * address is the same either way, since a poll's id is its link.
  *
- * When even that read fails it says so upward as well as on screen, because
- * the two readers it can fail for want different things. A signed-in one has
- * now been refused both ways and the link really is dead, which is what the
- * card below says. A signed-out one has been told only that the poll is not
- * public -- it may be an invite poll they are on the list for, which is what
- * every invitation email links to -- so `PollPage` offers them the sign-in
- * screen instead of a dead end.
+ * `PollPage` has usually read the poll already by the time this mounts and
+ * hands the result over as `initial` — including the tag that says the link
+ * is not a link at all, which is what the card at the bottom of this file
+ * draws. The sample is the exception: it is answered out of a file and routed
+ * here without anybody asking the database anything, so it reads for itself,
+ * and a mistyped sample link fails that read and draws the same card.
  */
-export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
+export function PublicPoll({
+  initial,
+}: {
+  /**
+   * The read `PollPage` made on this question's behalf, or null when it had
+   * none to give: the sample, or a crossing to another question of the same
+   * poll. Used once and then dropped — see `handoff` below.
+   */
+  initial: OpenRead | UnreadableRead | null
+}) {
   const { pollId } = useParams<{ pollId: string }>()
   const navigate = useNavigate()
   // The most recent read, and which question it was of, held as one value so
@@ -48,14 +57,6 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
   // are different things for as long as a read is in flight.
   const [read, setRead] = useState<{ pollId: string; view: OpenPollView } | null>(null)
   const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
-  // Which question the group read has come back for, whatever it came back
-  // with. A failure is an answer too — it is swallowed, like the winner
-  // lookup on the list, and what it leaves is a poll with no strip, which is
-  // a poll of one question — so the count badge below stops waiting on it
-  // rather than staying blank for the life of the page. Compared against the
-  // address rather than held as a flag, so it clears itself on the way to a
-  // different poll.
-  const [groupRead, setGroupRead] = useState<string | null>(null)
   // Which questions of this poll this browser has answered, and which it has
   // finished adding options to, for the strip's marks. They have to be read
   // into state rather than off storage at render time because storage is what
@@ -72,42 +73,115 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
   // yet is a first read whatever came before it. A ref rather than `read`
   // itself, which would put the poll in load()'s dependencies.
   const loadedFor = useRef<string | null>(null)
+  // Which questions the strip in hand covers, which is what decides whether
+  // opening one needs the whole page or only its ballot. The same list as
+  // `questions`, kept as a ref beside it because `load` has to ask during a
+  // read rather than at the next render — and because a poll in load()'s
+  // dependencies would rebuild it whenever the group arrived, and rebuilding
+  // `load` resubscribes.
+  const covered = useRef<string[]>([])
+  // The read `PollPage` already made for this question, waiting to be drawn
+  // rather than made again. A ref rather than state because it is not
+  // something this page renders from — it is one read's worth of work already
+  // done, taken once and then gone. A poll re-read after a vote must never
+  // come back with the answer from before it.
+  const handoff = useRef(initial)
+
+  // What every read below does with the view it came back with, wherever it
+  // came from. One copy, because a page that recorded the ballot on one path
+  // and not on another would leave the strip's marks depending on which read
+  // happened to be first.
+  const finish = useCallback((of: string, openView: OpenPollView, strip?: OpenGroupQuestion[]) => {
+    if (strip) {
+      // The question just read as well as its siblings. A poll that asks one
+      // question has an empty group, and without the question itself here
+      // every later read of that poll would call itself an arrival and fetch
+      // the strip it already knows it does not have.
+      covered.current = [of, ...strip.map((question) => question.id)]
+      setQuestions(strip)
+    }
+    loadedFor.current = of
+    setRead({ pollId: of, view: openView })
+    // Erased rather than only written: a creator who clears the poll's votes
+    // leaves this browser holding a record of a ballot that no longer exists,
+    // a confirmation can be taken back on the card that gave it, and a read
+    // that comes back "no" is what says so.
+    if (openView.voted) rememberAnswered(of)
+    else forgetAnswered(of)
+    if (openView.confirmed) rememberConfirmed(of)
+    else forgetConfirmed(of)
+    setAnswered(answeredQuestions())
+    setConfirmed(confirmedQuestions())
+  }, [])
+
+  // The route's read, drawn at once rather than waiting to be asked for. See
+  // the same effect in PollDetail for why this one does not wait to be
+  // invited the way every other read on this page does.
+  useEffect(() => {
+    const given = handoff.current
+    if (!given || !pollId) return
+    handoff.current = null
+    if (given.kind === 'open') finish(pollId, given.view, given.questions)
+    // The link is not a link, which `PollPage` established rather than this
+    // page having to be refused twice to find out. Same card either way.
+    else setFailed({ pollId, message: 'Poll not found.' })
+  }, [pollId, finish])
 
   // The whole poll, read once here and handed to the panel below: this page
   // needs the title and the tags, the panel needs everything else, and one
   // copy, re-read on one signal, is what keeps them agreeing.
+  //
+  // The first read of a question is `poll_page`, which brings the strip with
+  // it; every read after that is `open_poll_view` alone. Which questions a
+  // poll asks is frozen at creation, so re-reading the strip on every signal
+  // would be asking for something that cannot have changed — and this page
+  // re-reads on every vote anybody casts.
   const load = useCallback(async () => {
     if (!pollId) return true
+
+    // A question this page holds no strip for is an arrival and needs the
+    // whole page; one the strip already names is a crossing, and the poll
+    // around it is already on screen and correct. That is the difference
+    // between the two reads below, and it is about the strip rather than
+    // about which question was read last: every question of a poll answers
+    // with the whole group, so arriving at any of them covers all of them.
+    if (!covered.current.includes(pollId)) {
+      const { page, error: readError } = await readPollPage(pollId)
+
+      if (readError || !page || page.kind === 'unreadable') {
+        // Only a first read that fails says anything about the link, and this
+        // is one. Reached by the sample, whose file holds no such question,
+        // and by a poll that stopped being readable while somebody was
+        // walking through it: `PollPage` establishes the rest before this page
+        // is ever rendered, and sends a signed-out reader to the sign-in
+        // screen rather than here.
+        if (loadedFor.current !== pollId) {
+          setFailed({ pollId, message: readError ?? 'Poll not found.' })
+        }
+        return false
+      }
+      if (page.kind === 'open') {
+        finish(pollId, page.view, page.questions)
+        return true
+      }
+    }
+
     const { data, error: rpcError } = await openPollRpc('open_poll_view', {
       p_poll_id: pollId,
       p_voter_key: voterKeyFor(pollId),
     })
     if (rpcError) {
-      // Only a first read that fails says anything about the link. A later
-      // one keeps the poll already on screen; turning a page somebody has
-      // been voting on into "poll not found" because one request lost a
-      // race with a flaky connection would be a lie about their link.
+      // A later read keeps the poll already on screen; turning a page
+      // somebody has been voting on into "poll not found" because one request
+      // lost a race with a flaky connection would be a lie about their link.
       if (loadedFor.current !== pollId) {
         setFailed({ pollId, message: rpcError.message })
-        onUnreadable()
       }
       return false
     }
-    loadedFor.current = pollId
-    const openView = data as OpenPollView
-    setRead({ pollId, view: openView })
-    // Erased rather than only written: a creator who clears the poll's votes
-    // leaves this browser holding a record of a ballot that no longer exists,
-    // a confirmation can be taken back on the card that gave it, and a read
-    // that comes back "no" is what says so.
-    if (openView.voted) rememberAnswered(pollId)
-    else forgetAnswered(pollId)
-    if (openView.confirmed) rememberConfirmed(pollId)
-    else forgetConfirmed(pollId)
-    setAnswered(answeredQuestions())
-    setConfirmed(confirmedQuestions())
+    finish(pollId, data as OpenPollView)
     return true
-  }, [pollId, onUnreadable])
+  }, [pollId, finish])
 
   // This question's own view. Null while a read for it is still in flight,
   // which is what stops the question being left from rendering under the
@@ -132,35 +206,13 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
   const shell = view ?? sibling
   const error = failed && failed.pollId === pollId ? failed.message : null
 
-  // The poll's other questions, with the share pollId of each. Read once per
-  // poll rather than once per question, and never on the live tick: which
-  // questions a poll asks is frozen at creation, and this side has nothing
-  // per-reader in it — an open poll's ballots are deliberately not linkable
-  // across questions, so there is no "answered" flag here to keep up to date.
-  // See open_poll_group, which answers the same list for every pollId in the
-  // group; that is what makes crossing between them free, and free is what
-  // keeps the strip on screen while it happens.
-  const groupId = shell?.poll.group_id
+  // The poll's other questions arrive with the poll itself, in the read that
+  // opened it: `poll_page` answers the same list for every question in the
+  // group, so crossing between them asks the server for nothing at all. That
+  // is what keeps the strip on screen while it happens — it used to be a
+  // second request behind this page, which could not even be sent until the
+  // first came back and said the poll had a group.
   const known = questions.some((question) => question.id === pollId)
-  useEffect(() => {
-    if (known) return
-    if (!pollId || !groupId) {
-      setQuestions([])
-      return
-    }
-    let cancelled = false
-    openPollRpc('open_poll_group', { p_poll_id: pollId }).then(({ data, error: rpcError }) => {
-      // Swallowed like the winner lookup on the list: a browser running
-      // ahead of the migration gets no strip, and a poll with no strip is a
-      // poll of one question.
-      if (cancelled) return
-      if (!rpcError && data) setQuestions(data as OpenGroupQuestion[])
-      setGroupRead(pollId)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [pollId, groupId, known])
 
   // This page can subscribe before it has read anything, because the poll is
   // announced under its share pollId as well as under its id and the pollId is
@@ -233,21 +285,14 @@ export function PublicPoll({ onUnreadable }: { onUnreadable: () => void }) {
   // has no turnout, only turnouts, so the badge says how much there is to
   // answer instead. See turnoutLabel.
   //
-  // Zero means "not known yet" rather than "none", and the badge is left off
-  // entirely until it is. The group arrives in a read behind this page, so a
-  // poll that has one would otherwise draw a turnout and rewrite itself into
-  // *5 questions* a moment later — the same thing the winner badge below
-  // waits to avoid. `known` is what says the list in hand is this poll's and
-  // not the last one's; a poll with no group asks one question and is
-  // answered immediately, and a group read that came back with nothing
-  // usable is answered the same way, because that is the poll it leaves.
-  const questionCount = !shell.poll.group_id
-    ? 1
-    : known
-      ? questions.length
-      : groupRead === pollId
-        ? 1
-        : 0
+  // There is no "not known yet" to draw around any more. The group used to
+  // arrive in a read behind this page, so a poll that had one drew a turnout
+  // and rewrote itself into *5 questions* a moment later unless the badge was
+  // held back — the same flicker the winner badge below still waits to avoid.
+  // Now the strip arrives with the poll, so `known` is true wherever there is
+  // a poll on screen to put a badge on, and a poll with no group asks one
+  // question.
+  const questionCount = !shell.poll.group_id ? 1 : known ? questions.length : 1
   const onwards = nextUnansweredKey(strip, pollId)
   // The way on, taken rather than offered, at both stages: whoever has just
   // finished with this question's list or ballot is carried to the next one

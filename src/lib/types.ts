@@ -174,6 +174,65 @@ export interface PollStatus {
   winner_settled?: boolean
 }
 
+/**
+ * Everything the first paint of a poll page needs, and which reading of the
+ * poll the reader turned out to be entitled to.
+ *
+ * One request answers both, which is the point: the address `#/polls/<id>` is
+ * the same for every poll and every reader of it, so the route cannot know
+ * which page to draw until something has looked the poll up. It used to find
+ * out by trying — offering every address to the account reading and falling
+ * back when row-level security returned nothing — which charged a signed-in
+ * stranger holding an open poll's link a whole round trip and a discarded
+ * render to learn a fact the server had before it answered.
+ *
+ * **The tag is the design, not a convenience.** `open` carries strictly less
+ * than `account` does, and deliberately: an open poll's ballots are
+ * identified by a voter_key minted per question so that one browser's cannot
+ * be joined to each other, so no per-question `voted` or `confirmed` mark can
+ * honestly appear on it — see `open_poll_group`, which says so at length. A
+ * single flat shape with those fields left null would put the joining one
+ * absent-minded `coalesce` away. Under a tag, restoring them means writing a
+ * different branch, which is a decision somebody takes rather than a hole
+ * somebody fills.
+ *
+ * See `poll_page` in 0048_one_read_opens_a_poll.sql, and `readPollPage`.
+ */
+export type PollRead = AccountRead | OpenRead | UnreadableRead
+
+/** The poll to somebody inside it: its creator, or somebody it invited. */
+export interface AccountRead {
+  kind: 'account'
+  poll: Poll
+  options: PollOption[]
+  status: PollStatus
+  /** Empty on a poll that asks one question, as `poll_group` returns it. */
+  questions: GroupQuestion[]
+  /**
+   * The open poll's own view of itself, for a poll in `open` mode — its
+   * creator manages it through the same panel everybody else votes in. Null
+   * on an invite poll, which has no such panel.
+   */
+  view: OpenPollView | null
+}
+
+/** An open poll to somebody outside it, which is anyone holding the link. */
+export interface OpenRead {
+  kind: 'open'
+  view: OpenPollView
+  /** See the note above on what this deliberately does not carry. */
+  questions: OpenGroupQuestion[]
+}
+
+/**
+ * No such poll, or an invite poll this reader is not in — and which of the
+ * two it is, is not disclosed. Telling them apart would make the function an
+ * oracle for whether any given id is a poll.
+ */
+export interface UnreadableRead {
+  kind: 'unreadable'
+}
+
 /** One row from list_polls(): a poll and its status, fetched together. */
 export interface PollListItem extends Poll, PollStatus {
   /** How many options the poll has; its turnout number while collecting. */
