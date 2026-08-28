@@ -134,18 +134,28 @@ Repo **Settings → Pages** should show the domain once DNS resolves, with
    no read or write grant on any table.
 3. Under **Project Settings → API**, copy the Project URL and `anon` public key.
 4. The **Email** auth provider is enabled by default — no extra provider
-   setup needed. Under **Authentication → Email Templates**, replace the
-   **Magic Link** template with the one in [Signing in](#signing-in): the
-   stock template can only send a link, and the sign-in screen offers a
-   choice of a link or a code.
+   setup needed. Two settings under it are not:
+   - **Authentication → Email Templates → Magic Link**: replace the stock
+     template with the one in [Signing in](#signing-in). The stock one can
+     only send a link, and the sign-in screen offers a choice of a link or a
+     code.
+   - **Authentication → Sign In / Providers → Email OTP Length**: whatever it
+     says, `CODE_LENGTH` in `src/lib/signInMethod.ts` has to say too. That is
+     how many boxes the code screen draws, and nothing in the app can ask.
+     Supabase's default is 6; this project uses 8.
 5. Under **Authentication → URL Configuration**, set the Site URL to
-   `https://choicelab.app/star-voting/` and add `https://choicelab.app/star-voting/**`
-   and your dev URL (`http://localhost:5173/star-voting/**`) to the allowed
-   redirect URLs. The wildcards are not optional and the `/**` is the point of them:
-   the code half of the sign-in carries its choice in a query parameter on
-   the redirect address, and an address that is not on the list is quietly
-   replaced with the Site URL — which sends a link to somebody who asked for
-   a code. Without any entry at all, links cannot redirect back to the app.
+   `https://choicelab.app/star-voting/`, and add your dev URL
+   (`http://localhost:5173/star-voting/**`) to the allowed redirect URLs.
+
+   **The dev entry is the one that matters**, and the `/**` is the point of
+   it. The code half of the sign-in carries its choice in a query parameter
+   on the redirect address, and Supabase accepts an address either because
+   its scheme and hostname match the Site URL's — which is why production
+   needs no entry of its own, and a `https://choicelab.app/star-voting/**`
+   alongside it is belt and braces rather than load-bearing — or because it
+   matches a pattern on this list, which is the only way `localhost` gets in.
+   A refused address is not an error and is not visible: see [Why the marker
+   goes missing](#why-the-marker-goes-missing-and-why-it-goes-missing-quietly).
 6. Under **Database → Extensions**, check that `pg_cron` is enabled. The
    migration that schedules the nightly purge of expired polls enables it
    itself and shrugs if it cannot, so a project where it was unavailable ends

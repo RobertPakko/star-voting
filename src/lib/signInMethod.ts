@@ -36,6 +36,29 @@ export type SignInMethod = 'link' | 'code'
  */
 export const CODE_METHOD_MARKER = 'method=code'
 
+/**
+ * How many digits the code has, which is **Authentication → Sign In /
+ * Providers → Email OTP Length** in the Supabase dashboard and not something
+ * the app can ask for. Supabase's own default is 6; this project is set to 8.
+ *
+ * It is the second setting on that dashboard this file has to be kept in step
+ * with, and it fails the same quiet way the first one does: too many boxes and
+ * the reader fills every digit they were sent without the last box ever
+ * filling, which is why `MIN_CODE_LENGTH` exists below.
+ */
+export const CODE_LENGTH = 8
+
+/**
+ * The shortest code Supabase will issue, and the point at which the button
+ * under the boxes unlocks.
+ *
+ * Typing the last digit submits on its own, which is the path nearly every
+ * reader takes. This is for the one who is looking at a screen built for more
+ * digits than they were sent: a dead end otherwise, and a button they can
+ * press once the code is in with `CODE_LENGTH` merely wrong.
+ */
+export const MIN_CODE_LENGTH = 6
+
 const STORAGE_KEY = 'star-voting:sign-in-method'
 
 /**

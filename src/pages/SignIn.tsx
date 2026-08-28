@@ -15,13 +15,14 @@ import {
 import { useAuth } from '../lib/auth'
 import { rememberDestination } from '../lib/shareLink'
 import {
+  CODE_LENGTH,
+  MIN_CODE_LENGTH,
   rememberedSignInMethod,
   rememberSignInMethod,
   type SignInMethod,
 } from '../lib/signInMethod'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const CODE_LENGTH = 6
 
 /**
  * The whole of the way in, and the choice of two ways in.
@@ -125,7 +126,10 @@ export function SignIn() {
               <PinInput
                 length={CODE_LENGTH}
                 type="number"
-                gap="xs"
+                // Sized to the card rather than to taste: eight boxes at the
+                // default size are wider than the 360px this sits in.
+                size="xs"
+                gap={6}
                 autoFocus
                 ariaLabel="Sign-in code"
                 value={code}
@@ -135,10 +139,11 @@ export function SignIn() {
                   setCode(value)
                   setError(null)
                 }}
-                // Six digits typed is the whole of the intent, and a phone
+                // A full set of boxes is the whole of the intent, and a phone
                 // filling them in from the notification should not then have
                 // to be told to go ahead. The button below is for a code that
-                // was wrong the first time.
+                // was wrong the first time — and for one shorter than the
+                // boxes built for it, which is the mismatch above.
                 onComplete={handleVerify}
               />
               {error && (
@@ -149,7 +154,7 @@ export function SignIn() {
               <Button
                 fullWidth
                 loading={verifying}
-                disabled={code.length < CODE_LENGTH}
+                disabled={code.length < MIN_CODE_LENGTH}
                 onClick={() => handleVerify(code)}
               >
                 Sign in
@@ -197,7 +202,7 @@ export function SignIn() {
               <Text size="xs" c="dimmed" ta="center">
                 {method === 'link'
                   ? 'One tap in the email signs you in.'
-                  : 'Six digits, typed in here. Use it if a link signs you in somewhere else, or if you have installed the app.'}
+                  : `${CODE_LENGTH} digits, typed in here. Use it if a link signs you in somewhere else, or if you have installed the app.`}
               </Text>
               {error && (
                 <Text c="red" size="sm">
