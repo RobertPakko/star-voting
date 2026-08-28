@@ -4,7 +4,7 @@ import { Badge, Button, Card, Divider, Group, Progress, Stack, Text, Title } fro
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { pollTopic, useLiveStream } from '../lib/useLiveStream'
+import type { LiveStatus } from '../lib/useLiveStream'
 import { voterKeyFor } from '../lib/voterKey'
 import {
   answeredQuestions,
@@ -59,7 +59,22 @@ import type {
  * landing, a creator's action — because those are about the poll changing
  * rather than about which poll it is.
  */
-export function PollDetail({ initial }: { initial: AccountRead | null }) {
+export function PollDetail({
+  initial,
+  live,
+  watch,
+}: {
+  initial: AccountRead | null
+  /** Whether the route's subscription is carrying, for the notice below. */
+  live: LiveStatus
+  /**
+   * Registers what this page does with a signal. The route holds the
+   * subscription — see `PollPage` — and calls this back in place of its own
+   * read once there is a page to ask; handing the function up rather than
+   * subscribing here is what keeps the poll to one topic and one read.
+   */
+  watch: (onSignal: (() => boolean | void | Promise<boolean | void>) | null) => void
+}) {
   const { pollId } = useParams<{ pollId: string }>()
   const { session } = useAuth()
   const navigate = useNavigate()
@@ -342,28 +357,16 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
     setRevising(null)
   }, [pollId])
 
-  // Nothing about a closed poll changes again, and a poll whose results are
-  // out has taken its last vote either way; so the watching stops. Before the
-  // first read there is nothing to stop for — that read is what the
-  // subscription is for.
-  //
-  // "Before the first read" is per *question*, not per page, and that is the
-  // whole of the second clause. Crossing to another question of a settled
-  // poll changes the address and nothing else — no remount, no reset — so a
-  // page that had already stopped watching stayed stopped, and since a
-  // question's first read happens on subscribing, nothing ever read the
-  // question it had just been asked for: the poll stayed on screen with a
-  // skeleton where the question should be, until somebody reloaded. It is a
-  // question of a *closed* poll that shows this, because that is the poll
-  // whose watching has stopped; while votes are still coming in the page is
-  // subscribed anyway and the crossing reads on the way past.
-  //
-  // `PublicPoll` draws the same line with a `view` that is null for exactly
-  // as long. Here it is `loadedFor`, which is what the rest of the page
-  // already asks whether the read in hand is about the question in the
-  // address bar.
-  const live = loadedFor !== pollId || !status || (!status.is_closed && !status.results_available)
-  const liveStatus = useLiveStream(pollId ? [pollTopic(pollId)] : [], onSignal, { enabled: live })
+  // Handed up to the route, which owns the subscription. Registered for as
+  // long as this page is on screen, including while it is showing a settled
+  // poll: a poll whose results are out has taken its last vote, but its
+  // creator can still reset it, and a reset is the one thing a page that had
+  // stopped listening would not hear — it would sit showing a tally of votes
+  // that no longer exist. See useLiveStream.
+  useEffect(() => {
+    watch(onSignal)
+    return () => watch(null)
+  }, [watch, onSignal])
 
   // Close and reset invalidate a ballot half-filled in the open-poll panel,
   // so they remount it as well as re-reading the poll. A vote doesn't: the
@@ -549,7 +552,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
 
   return (
     <Stack maw={720} mx="auto" gap="md">
-      <LiveConnectionNotice status={liveStatus} />
+      <LiveConnectionNotice status={live} />
 
       {/* The same heading a poll wears on the list it was opened from, down
           to who created it and the order the parts come in; see

@@ -13,7 +13,7 @@ import {
   rememberConfirmed,
 } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
-import { pollTopic, useLiveStream } from '../lib/useLiveStream'
+import type { LiveStatus } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollHeading } from '../components/PollHeading'
@@ -50,6 +50,8 @@ import type {
  */
 export function PublicPoll({
   initial,
+  live,
+  watch,
 }: {
   /**
    * The read `PollPage` made on this question's behalf, or null when it had
@@ -57,6 +59,14 @@ export function PublicPoll({
    * poll. Used once and then dropped — see `handoff` below.
    */
   initial: OpenRead | UnreadableRead | null
+  /** Whether the route's subscription is carrying, for the notice below. */
+  live: LiveStatus
+  /**
+   * Registers what this page does with a signal. The route holds the
+   * subscription — see `PollPage` — and calls this back in place of its own
+   * read once there is a page to ask.
+   */
+  watch: (onSignal: (() => boolean | void | Promise<boolean | void>) | null) => void
 }) {
   const { pollId } = useParams<{ pollId: string }>()
   const navigate = useNavigate()
@@ -260,29 +270,22 @@ export function PublicPoll({
   // first came back and said the poll had a group.
   const known = questions.some((question) => question.id === pollId)
 
-  // This page can subscribe before it has read anything, because the poll is
-  // announced under its share pollId as well as under its id and the pollId is
-  // in the URL. That is the whole reason for the second topic: without it
-  // this page would have to read the poll to learn its id, and then read it
-  // again on subscribing to close the gap in between.
-  //
-  // A closed poll takes no more votes, and one whose results are out has
-  // stopped moving, so the watching stops with it. Before the first read
-  // there is nothing to stop for: that read is what the subscription is for.
-  //
-  // The sample poll is answered out of a file in this browser, so there is
-  // nothing on the other end of a subscription to it and nothing that could
-  // ever change: it is the one open poll on this page that is never watched.
-  const live = !view || (!view.is_closed && !view.results_available)
   const sample = !!pollId && isSampleId(pollId)
-  const liveStatus = useLiveStream(pollId ? [pollTopic(pollId)] : [], load, {
-    enabled: live && !sample,
-  })
 
-  // Subscribing is also what makes every other poll's first read happen, so
-  // the sample -- which subscribes to nothing -- reads for itself. Once: the
-  // file it is answered from cannot change under it, and a vote cast in it
-  // re-reads through `load` like any other.
+  // Handed up to the route, which owns the subscription. Registered for as
+  // long as this page is on screen, a settled poll included: an open poll
+  // whose results are out has taken its last vote, but its creator can still
+  // reset it, and a reset is the one thing a page that had stopped listening
+  // would not hear. See useLiveStream.
+  useEffect(() => {
+    watch(load)
+    return () => watch(null)
+  }, [watch, load])
+
+  // The sample watches nothing — it is answered out of a file in this browser,
+  // so the route holds no topic for it and no signal is ever coming — so it
+  // reads for itself. Once: the file cannot change under it, and a vote cast
+  // in it re-reads through `load` like any other.
   useEffect(() => {
     if (sample) void load()
   }, [sample, load])
@@ -375,7 +378,7 @@ export function PublicPoll({
 
   return (
     <Stack maw={720} mx="auto" gap="md">
-      <LiveConnectionNotice status={liveStatus} />
+      <LiveConnectionNotice status={live} />
 
       {/* The same heading the signed-in poll page and the poll list carry,
           for the reason PollHeading exists: one poll should not be two

@@ -468,10 +468,19 @@ round trip per reader, and the three fixes above.
 
 Six rules keep it honest:
 
-- **The first read happens on subscribe, not on mount.** A page that loaded
-  itself and then subscribed would either read twice or leave a gap between
-  the two for a vote to slip through unseen. Waiting for the subscription
-  costs a handshake before anything appears and buys both problems away. It is
+- **The first read happens on subscribe, not on mount — on every page.** A
+  page that loaded itself and then subscribed would either read twice or leave
+  a gap between the two for a vote to slip through unseen. Waiting for the
+  subscription costs a handshake before anything appears and buys both problems
+  away. The poll page was the one page that could not follow this, because the
+  read that chose between `PollDetail` and `PublicPoll` had to happen before
+  either existed to subscribe: it read, rendered a page, and that page read
+  again the instant its own subscription went live — the second read being the
+  price of the window between the two. `PollPage` holds the subscription now
+  (the topic is `poll:<id>` and the id is in the URL, exactly as the list's
+  topic is its reader's id), so the route's own read *is* the read on
+  subscribing and the window is closed rather than paid for. See [One read
+  opens a poll](#one-read-opens-a-poll). It is
   also what makes reconnecting self-healing: Realtime does not replay what it
   sent while a socket was down, but rejoining a channel reports `SUBSCRIBED`
   again, and every one of those is a fresh read. A laptop that slept through
@@ -515,19 +524,22 @@ Six rules keep it honest:
   twenty of them behind a closed lid should not each hold a connection open.
   Coming back re-subscribes, which re-reads, so returning to a tab shows what
   arrived while it was away rather than what was there when it left.
-- **Watching stops when there is nothing left to watch — for the question in
-  the address bar, not for the page.** A closed poll, or one whose results are
-  out, has taken its last vote. But a question of a settled poll is still a
-  question this page has never read, and the first read happens on
-  subscribing: a page that had already stopped watching stayed stopped, so
-  crossing to another question of a *finished* poll changed the address and
-  nothing else and left the poll sitting behind a skeleton until somebody
-  reloaded. So both pages keep watching until the read for the question in
-  front of the reader has landed — `PublicPoll` through a `view` that is null
-  for exactly that long, `PollDetail` through `loadedFor`. The poll list is
-  the other exception and stays subscribed for as long as it is on screen:
-  any poll on it can take a vote, and a new invite can add a row — which is
-  why it watches its reader rather than any particular poll.
+- **Nothing stops watching while it is on screen.** A page used to drop its
+  subscription once its poll had settled — closed, or its results out — on the
+  reasoning that such a poll has taken its last vote. It has, but that is not
+  the same as nothing changing: its creator can reset it, which deletes every
+  ballot and puts the poll back to taking votes, and the reset broadcasts like
+  everything else (`ballots_broadcast_delete`, and `polls_broadcast_update` on
+  `closed_at`). The page that had stopped listening was the only one that
+  would not hear it, and it sat showing a tally of votes that no longer exist
+  — the window `Results` re-reads on every draw to narrow. So every page holds
+  its subscription for as long as it is on screen. That also deletes a rule
+  that had to be got exactly right: watching used to stop *per question*
+  rather than per page, because a question of a settled poll is still a
+  question nobody has read, and getting that wrong left a finished poll's
+  second question behind a skeleton until somebody reloaded. There is no
+  `enabled` on `useLiveStream` any more, and no liveness for a page to
+  compute.
 - **A vote *changed* says nothing at all.** The one deliberate silence here,
   and the reasoning is in [Changing your vote until the results are
   out](#changing-your-vote-until-the-results-are-out): nothing a watcher can
@@ -551,8 +563,10 @@ for several seconds first, so a socket that drops and comes straight back
 never reaches the screen.
 
 One request per page on a first read, and one per change after that — the poll
-list included, and a finished poll included since
-[0050](#one-read-opens-a-poll) folded its tally and its roster into that read. Turning a page of it costs one more, for the page itself; what
+list included, a finished poll included since [0050](#one-read-opens-a-poll)
+folded its tally and its roster into that read, and an in-progress one included
+since the route took over the subscription and stopped needing a second read to
+close the gap behind its first. Turning a page of it costs one more, for the page itself; what
 it no longer costs is a re-subscription, because the topic the list watches
 does not depend on which polls are on screen. The state badge costs nothing at
 all: the winner rides on the same read that draws the page it sits on. See
@@ -709,16 +723,30 @@ deliberately narrow — `poll_status` alone on an invite poll, plus
 questions it asks are frozen at creation, and re-reading them on every signal
 would be a bigger waste than the round trip this saves.
 
-**The route reads, and the page it chooses draws what it read.** `PollPage`
-hands the result down as `initial`, and both pages apply it on mount rather
-than waiting to be asked. Every other read on a poll page happens on
-subscribing — see [Live updates](#live-updates), which explains why — but that
-reasoning is about not reading the same thing twice, and this read has already
-happened. Holding a drawn page behind a websocket would cost the five seconds
-`useLiveStream` waits before reading anyway on a network that blocks them.
-Subscribing then takes the narrow path instead, which is not a wasted request:
-it closes the gap between the route's read and the subscription going live,
-which is the one window in which a vote could otherwise land unheard.
+**The route reads, subscribes, and the page it chooses draws what it read.**
+`PollPage` holds the poll's one subscription and makes this read on
+`SUBSCRIBED`, then hands the result down as `initial`; both pages apply it on
+mount rather than waiting to be asked, and neither subscribes to anything.
+Instead each hands its own reading of a signal *up* — `watch(onSignal)` — and
+the route calls that in place of its own read once there is a page to ask. So
+the first signal on an address is the read that opens the poll, and every one
+after it belongs to the page that read chose.
+
+It went the other way round at first: the route read, rendered a page, and that
+page read again the instant its own subscription went live. Not waste — the
+second read closed the window between the route's snapshot and the
+subscription, in which a vote could land unheard — but it made opening an
+in-progress poll three requests where a finished one took one, and the finished
+one only took one because it had stopped watching altogether. Subscribing
+before reading closes the window instead of paying for it, and it is the rule
+every other page in the app already followed; the poll page could not, only
+because the read that decides which page this is had to happen before that page
+existed to subscribe. Owning the channel one level up is what removes that.
+
+The cost is `FIRST_READ_MS`: on a network that blocks websockets outright,
+nothing ever reports `SUBSCRIBED` and the poll now waits for that floor before
+it appears. The poll list has always paid this; the poll page did not, and now
+does. A healthy socket subscribes in a fraction of it.
 
 **And what the page then draws rides along with it** —
 [`0050`](supabase/migrations/0050_a_finished_poll_opens_in_one_read.sql). 0048

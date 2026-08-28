@@ -98,6 +98,17 @@ export type LiveStatus = 'connecting' | 'live' | 'offline'
  * subscribing has not worked by then. Live updates are what such a network
  * costs; the poll is not.
  *
+ * **Nothing stops watching while it is on screen.** A page used to drop its
+ * subscription once its poll had settled — closed, or its results out — on
+ * the reasoning that nothing about such a poll changes again. It does: its
+ * creator can reset it, which deletes every ballot and puts the poll back to
+ * taking votes, and the reset broadcasts like everything else. A page that
+ * had stopped listening was the only one that would not hear it, and would
+ * sit showing a tally of votes that no longer exist. So every page holds its
+ * subscription for as long as it is on screen, and that is also what makes
+ * "one topic, one read on subscribing" one rule rather than one rule with a
+ * settled-poll exception hanging off it.
+ *
  * **A hidden tab holds no socket.** Nobody is reading a backgrounded poll,
  * and twenty of them behind a closed lid should not each hold a connection
  * open. Coming back re-subscribes, which re-reads — so returning to a tab
@@ -114,7 +125,6 @@ export function useLiveStream(
    * nothing at all, means it did.
    */
   onChange: () => boolean | void | Promise<boolean | void>,
-  { enabled = true }: { enabled?: boolean } = {},
 ): LiveStatus {
   const [status, setStatus] = useState<LiveStatus>('connecting')
 
@@ -133,7 +143,11 @@ export function useLiveStream(
   const key = topics.join(' ')
 
   useEffect(() => {
-    if (!enabled || key === '') return
+    // Nothing to watch. The About page's sample is the one poll this is ever
+    // true of: it is answered out of a file in this browser, so there is
+    // nothing on the other end of a subscription to it and nothing that could
+    // ever change. Its page reads for itself instead.
+    if (key === '') return
 
     let cancelled = false
     let channels: RealtimeChannel[] = []
@@ -331,7 +345,7 @@ export function useLiveStream(
       close()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [key, enabled])
+  }, [key])
 
   return status
 }
