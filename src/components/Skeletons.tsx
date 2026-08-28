@@ -160,7 +160,7 @@ function BannerShape() {
 }
 
 /** The heading over a poll and the card answering it: every poll page. */
-export function PollPageSkeleton({ rows = 3 }: { rows?: number }) {
+export function PollPageSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <Loading>
       <Stack maw={720} mx="auto" gap="md">
@@ -205,7 +205,7 @@ export function PollPageSkeleton({ rows = 3 }: { rows?: number }) {
  * nothing could reach: announced to nobody and still in the tab order.
  */
 export function QuestionSkeleton({
-  rows = 3,
+  rows = 5,
   finished = false,
   nameField,
   strip,
@@ -259,7 +259,7 @@ export function QuestionSkeleton({
 }
 
 /** The poll list: its heading, its button, and a page of cards. */
-export function PollListSkeleton({ rows = 3 }: { rows?: number }) {
+export function PollListSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <Loading>
       <Stack maw={720} mx="auto" gap="md">
@@ -319,7 +319,7 @@ export function ResultsSkeleton({ options = 4 }: { options?: number }) {
  * drawing for it would be the lie the note at the top of this file warns
  * about, one place too few rather than one too many.
  */
-export function RankingSkeleton({ places = 4 }: { places?: number }) {
+export function RankingSkeleton({ places = 5 }: { places?: number }) {
   return (
     <Loading>
       <Stack gap="md">
@@ -350,7 +350,7 @@ export function RankingSkeleton({ places = 4 }: { places?: number }) {
  * most polls — so it claims a table with a header, some ballots and a total,
  * which every one of them has.
  */
-export function BallotsSkeleton({ rows = 4 }: { rows?: number }) {
+export function BallotsSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <Loading>
       <Stack gap={2}>
