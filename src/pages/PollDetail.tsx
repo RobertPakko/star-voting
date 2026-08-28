@@ -499,6 +499,16 @@ export function PollDetail({
   // still taking answers, from a reader who has not given this question one
   // yet. An invite poll asks for none — it has the account.
   const asksName = isOpen && poll.show_voters && marking && !done.browser.has(pollId ?? poll.id)
+  // And what the stand-in for a finished question has to know: that the
+  // question being opened has a tally under the strip rather than the notice
+  // a question nobody answered puts up, and how many bars are in its score
+  // round. Both are about the question being opened rather than the one being
+  // left, and both are answerable from here — see QuestionSkeleton for why
+  // results out with the poll still unclosed means every question in it was
+  // answered by everyone invited, and `poll_group` for the option count the
+  // strip carries per question.
+  const tallied = status.results_available && !status.is_closed
+  const opening = questions.find((question) => question.id === pollId)
 
   // The way on, taken rather than offered: a first ballot opens whichever
   // question this reader still owes. Undefined when they owe none and on a
@@ -735,6 +745,8 @@ export function PollDetail({
         // happen to live inside the card being replaced. See QuestionSkeleton.
         <QuestionSkeleton
           finished={finished}
+          tallied={tallied}
+          rows={opening?.option_count}
           nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
           strip={questionStrip}
         />

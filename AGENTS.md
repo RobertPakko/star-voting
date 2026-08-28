@@ -859,10 +859,21 @@ bars, the form's sections. Three rules keep them from becoming a lie:
   poll guesses at nothing at all, because by then there is nothing to guess:
   `QuestionSkeleton` is handed the strip and the name box themselves, as real
   nodes, along with the answers to whether the question being opened asks for
-  a name and whether the poll it belongs to has finished. See [A poll can ask
-  more than one question](#a-poll-can-ask-more-than-one-question) for why they
-  are handed over rather than drawn: they belong to the poll rather than to
-  the question, so they never had anything to wait for.
+  a name, whether the poll it belongs to has finished, whether that question
+  is certain to have a tally, and how many options it holds. See [A poll can
+  ask more than one question](#a-poll-can-ask-more-than-one-question) for why
+  the first two are handed over rather than drawn — they belong to the poll
+  rather than to the question, so they never had anything to wait for — and
+  for how the page answers the last two about a question it has not read.
+
+  The other side of that rule is that a shape claims everything the page
+  *does* always have, and a condition in the source is not the same thing as a
+  case that happens. The runoff card is written behind
+  `results.runoff && results.finalists.length === 2` and cannot fail on a poll
+  with a tally at all: every question is held to at least two options, so
+  `star_round` always fills both finalist slots. It was left out of
+  `ResultsSkeleton` for years on the strength of that condition, and the tally
+  grew by a third every time the wait ended.
 - **A shape only exists for a wait that exists.** There was a second such
   stand-in, `RosterSkeleton`, and following that reasoning to the end deleted
   it: a card that guesses at nothing is a card whose content the page already
@@ -2697,13 +2708,38 @@ there for real**, in the places the ballot draws them:
   not, which is the tally and the notice a question nobody answered puts up.
   So the stand-in is told the same fact the branches go on, as `finished`, and
   a crossing between two questions of a poll that is over no longer boxes the
-  strip up for the length of the read and lets it out again. What it draws
-  under the strip then is one bordered card holding one line, because that is
-  what both endings have — a winner's banner or that notice — and which of the
-  two is coming is a fact about the question being opened rather than about
-  the poll. `Results` puts `ResultsSkeleton` up the moment it lands, and that
-  starts with the same card, so the shape continues rather than starting
+  strip up for the length of the read and lets it out again.
+
+  What it draws under the strip is as much of the ending as the page can be
+  sure of, which is a second fact it is told: `tallied`. A finished question
+  has a tally if anybody answered it and the notice a question nobody
+  answered puts up if not, and that is about the question being opened rather
+  than about the poll — but it is still answerable from the question being
+  left, because of how a question stops taking votes. `poll_gate_open` opens
+  on one of two things: the poll was closed, or every invitee answered that
+  question. Results need every question in the group gated open, and closing
+  is one act over all of them — `close_poll` writes one timestamp — so
+  **results out with no `closed_at` means every question was answered by
+  everyone invited**, and every one of them has a tally, the one being opened
+  included. `results_available && !is_closed` is that, and on a poll it holds
+  for the stand-in draws the whole tally: the banner, the score round and the
+  runoff, the same three cards `Results` is about to fill.
+
+  A poll closed early is what it is false for, honestly: closing settles the
+  group at whatever it had, so a question nobody got to really does end in
+  that notice, and the shape falls back to the one bordered card holding one
+  line that both endings share. An open poll is always in that case, since
+  its questions have no invite list to have finished and `poll_gate_open` has
+  nothing but `closed_at` to go on — so `PublicPoll` passes no `tallied` at
+  all. Either way `Results` puts `ResultsSkeleton` up the moment it lands and
+  that is the same shape again, so the wait continues rather than starting
   over.
+
+  The row count travels the same way and splits the same two ways: the invite
+  strip carries an `option_count` per question, so a crossing knows exactly
+  how many bars its score round and how many rows its ballot will have, and
+  `open_poll_group` deliberately carries no such thing, so the share-link
+  reading keeps the default.
 - **The name box** is `VoterNameField`, whose state the *page* holds with
   `useVoterName` — see `lib/voterName.ts`. A name is not a fact about a
   question; it is what this person is called, which is the whole reason that

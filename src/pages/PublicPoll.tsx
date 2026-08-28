@@ -469,6 +469,15 @@ export function PublicPoll({
         // The strip and the name box go in for real rather than as two more
         // shapes: both are the poll's, like the heading above, and only
         // happen to live inside the card being replaced. See QuestionSkeleton.
+        //
+        // No `tallied` and no row count, unlike the account reading, and
+        // neither is an omission. An open question has no invite list to have
+        // finished, so `poll_gate_open` has nothing but `closed_at` to go on
+        // and a finished one here was always closed — which settles the group
+        // at whatever it had, so a question nobody answered is a real ending
+        // and the one card both endings share is all this can claim. And the
+        // strip a share link is given carries no option count: see
+        // `open_poll_group` for what that list deliberately leaves out.
         <QuestionSkeleton
           finished={finished}
           nameField={asksName ? <VoterNameField name={voterName} /> : undefined}

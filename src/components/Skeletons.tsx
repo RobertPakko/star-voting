@@ -147,15 +147,81 @@ function BallotShape({ rows }: { rows: number }) {
  * A card with one line in it: the banner naming a question's winner, and the
  * notice a question nobody answered puts up in its place. One shape, because
  * a finished question always has exactly one of the two and they are the same
- * card — see `ResultsSkeleton`, which draws its tally under this, and
- * `QuestionSkeleton`, which draws this alone because it cannot yet know which
- * of the two is coming.
+ * card — see `TallyShape`, which draws the rounds under this, and
+ * `QuestionSkeleton`, which draws this alone on the crossings where which of
+ * the two is coming is not yet knowable.
  */
 function BannerShape() {
   return (
     <Card withBorder>
       <Skeleton height={22} width="60%" radius="sm" />
     </Card>
+  )
+}
+
+/**
+ * A finished question's tally: the banner naming the winner, the score round,
+ * and the automatic runoff that settled it. What `Results` draws, down to the
+ * order and the gaps, minus the two parts of it that are conditional.
+ *
+ * **All three cards, because a tally has all three.** The runoff used to be
+ * left out on the grounds that it is written behind a condition —
+ * `results.runoff && results.finalists.length === 2` — but that condition
+ * cannot fail on a poll that has a tally at all: every question is held to at
+ * least two options (`finalize_options` refuses to open one that is short,
+ * and the create form refuses to send it), so `star_round` always fills both
+ * finalist slots and always runs the runoff between them. The pool of one
+ * that the `is distinct from 2` branch in that function guards against is
+ * reachable only from the ranking, which walks down to a last option
+ * standing. So a card that always arrives now has a shape that always waits
+ * for it, rather than a page that grew by a third after the wait was over.
+ *
+ * The two that are left out are genuinely conditional and stay that way: the
+ * tie-breaks, which most polls do not have, and the full ranking's button,
+ * which is drawn only from three options up (see FullRanking) and so would
+ * need an option count this is not always given.
+ */
+function TallyShape({ options }: { options: number }) {
+  return (
+    <Stack gap="md">
+      <BannerShape />
+
+      <Stack gap={2}>
+        <Skeleton height={bar.heading} width={112} radius="sm" />
+        <Card withBorder p="sm">
+          <Stack gap="xs">
+            {Array.from({ length: options }, (_, i) => (
+              <div key={i}>
+                <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
+                  <Skeleton height={bar.line} width="35%" radius="sm" />
+                  <Skeleton height={bar.line} width={104} radius="sm" />
+                </Group>
+                {/* A Progress bar, at the height and radius Mantine draws
+                    one; the one shape here that is not a line of text. */}
+                <Skeleton height={8} radius="md" />
+              </div>
+            ))}
+          </Stack>
+        </Card>
+      </Stack>
+
+      {/* The runoff: the two finalists with what each was preferred by, and
+          the line counting the ballots that split them evenly. Three lines
+          and no more — the sentences under them explain a runoff that tied,
+          which is the rare ending rather than the ordinary one. */}
+      <Stack gap={2}>
+        <Skeleton height={bar.heading} width={192} radius="sm" />
+        <Card withBorder p="sm">
+          <Stack gap="xs">
+            {/* The finalists are named, so those two are a proportion; the
+                line under them is the same sentence on every poll. */}
+            <Skeleton height={bar.line} width="48%" radius="sm" />
+            <Skeleton height={bar.line} width="44%" radius="sm" />
+            <Skeleton height={bar.line} width={216} maw="100%" radius="sm" />
+          </Stack>
+        </Card>
+      </Stack>
+    </Stack>
   )
 }
 
@@ -207,9 +273,17 @@ export function PollPageSkeleton({ rows = 5 }: { rows?: number }) {
 export function QuestionSkeleton({
   rows = 5,
   finished = false,
+  tallied = false,
   nameField,
   strip,
 }: {
+  /**
+   * How many options the question being opened holds, which is a row on its
+   * ballot and a bar in its score round alike. The invite reading knows it
+   * before the read lands — the strip carries an `option_count` per question
+   * — and the share-link reading does not; see `open_poll_group` for why that
+   * list is the bare one.
+   */
   rows?: number
   /**
    * Whether the poll has stopped taking answers, which moves the strip out of
@@ -221,26 +295,53 @@ export function QuestionSkeleton({
    * as long as the read takes and lets it out again.
    */
   finished?: boolean
+  /**
+   * Whether the question being opened is certain to have a tally under the
+   * strip rather than the notice a question nobody answered puts up — which
+   * decides how much of the block below is claimed, and is the one thing
+   * about the question being opened that this can be told rather than shown.
+   *
+   * The fact behind it is `results_available && !is_closed`, read off the
+   * question being *left*, and it carries because of how a question stops
+   * taking votes. `poll_gate_open` opens on one of two things: the poll was
+   * closed, or every invitee has answered that question. Results need every
+   * question in the group gated open, and closing is one act over all of them
+   * — `close_poll` writes one timestamp — so a poll whose results are out
+   * with no `closed_at` is one where every question was answered by everyone
+   * invited. Every question in it therefore has ballots, including the one
+   * being opened, and a tally is what is coming.
+   *
+   * A poll that was closed early is the case this is false for, and it is
+   * false honestly: closing settles the group at whatever it had, so a
+   * question nobody got to has no tally and puts up the notice instead. An
+   * open poll is always in that case — its questions have no invite list to
+   * have finished, so `poll_gate_open` has nothing but `closed_at` to go on —
+   * which is why the share-link reading keeps the one card it always drew.
+   */
+  tallied?: boolean
   /** The name box, on the polls that ask for one; see VoterNameField. */
   nameField?: ReactNode
   /** The way between the poll's questions; see QuestionStrip. */
   strip?: ReactNode
 }) {
-  // Nothing under the strip but the one card both endings share. Which of the
-  // two is coming is not knowable from here — a question of a finished poll
-  // has a tally if anybody answered it and the notice if nobody did, and that
-  // is a fact about the question being opened rather than about the poll — so
-  // this claims the card they have in common and lets the score round arrive
-  // under it. `Results` puts up `ResultsSkeleton` the moment it lands, whose
-  // first shape is this one, so the wait continues rather than starting over.
+  // Under the strip, as much of the ending as is known to be coming. Where a
+  // tally is certain that is the whole of it, the same three cards `Results`
+  // will put up a beat later and then fill — the block under the strip used
+  // to be one card and then four, which is the jump these shapes exist to
+  // prevent, and it was the commonest crossing of the lot that took it: a
+  // poll everybody answered, read back question by question.
+  //
+  // Where it is not, this is still the one card both endings share, and the
+  // score round arrives under it. `Results` puts up `ResultsSkeleton` the
+  // moment it lands, whose first shape is this one, so the wait continues
+  // rather than starting over.
+  //
   // A finished question asks for no name, which is why there is none here.
   if (finished) {
     return (
       <>
         {strip}
-        <Loading>
-          <BannerShape />
-        </Loading>
+        <Loading>{tallied ? <TallyShape options={rows} /> : <BannerShape />}</Loading>
       </>
     )
   }
@@ -281,31 +382,17 @@ export function PollListSkeleton({ rows = 5 }: { rows?: number }) {
   )
 }
 
-/** The winner, then the score round: one labelled bar per option, in a card. */
-export function ResultsSkeleton({ options = 4 }: { options?: number }) {
+/**
+ * The tally, while `Results` reads it: the winner, the score round and the
+ * runoff. See `TallyShape`, which is the same three cards `QuestionSkeleton`
+ * puts up a beat earlier on the crossings that can be sure of them, so the
+ * two stages of that wait are one shape standing still rather than a page
+ * that fills in twice.
+ */
+export function ResultsSkeleton({ options = 5 }: { options?: number }) {
   return (
     <Loading>
-      <Stack gap="md">
-        <BannerShape />
-        <Stack gap={2}>
-          <Skeleton height={bar.heading} width={112} radius="sm" />
-          <Card withBorder p="sm">
-            <Stack gap="xs">
-              {Array.from({ length: options }, (_, i) => (
-                <div key={i}>
-                  <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
-                    <Skeleton height={bar.line} width="35%" radius="sm" />
-                    <Skeleton height={bar.line} width={104} radius="sm" />
-                  </Group>
-                  {/* A Progress bar, at the height and radius Mantine draws
-                      one; the one shape here that is not a line of text. */}
-                  <Skeleton height={8} radius="md" />
-                </div>
-              ))}
-            </Stack>
-          </Card>
-        </Stack>
-      </Stack>
+      <TallyShape options={options} />
     </Loading>
   )
 }
