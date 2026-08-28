@@ -1039,9 +1039,43 @@ you: Go templates have `eq` and no substring test, so each origin the app is
 served from is a term of its own. The two below are production and the dev
 server.
 
-Both forms of the address have to be on the allowed redirect list — see step
-5 of [Supabase setup](#1-supabase). On the code path nothing is ever tapped,
-so where that address points does not matter; that it is *recognised* does.
+### Why the marker goes missing, and why it goes missing quietly
+
+On the code path nothing is ever tapped, so where the redirect address
+*points* does not matter. That it is **recognised** does, and the rule is
+[`IsRedirectURLValid`](https://github.com/supabase/auth/blob/master/internal/utilities/request.go):
+an address is accepted if its scheme and hostname match the Site URL's, or
+if it matches a pattern on the allowed redirect list. The query string is
+not part of that test either way.
+
+Which means production needs nothing added for this: `https://choicelab.app/…`
+already shares a scheme and hostname with the Site URL, marker or no marker.
+**The dev server is the case that needs the list entry** — `localhost` is not
+`choicelab.app`, so `http://localhost:5173/star-voting/?method=code` gets in
+only by matching `http://localhost:5173/star-voting/**`.
+
+And when it does not get in, nothing anywhere says so. `GetReferrer` next to
+that function falls back, in order, to the request's own `Referer` header and
+then to the Site URL — and the `Referer` on a sign-in request is the page
+that made it, which is the app root *without the marker*. So a missing list
+entry does not produce an error, or a redirect somewhere surprising, or any
+sign at all: `{{ .RedirectTo }}` quietly becomes the address the reader was
+already on, the template's `eq` fails against it, and everybody is sent a
+link. The symptom is the feature not working; there is nothing to read.
+
+**The diagnostic is the template itself.** Nothing in the app can see any of
+this, so when a code does not arrive, put
+
+```html
+<p>RedirectTo: [{{ .RedirectTo }}] &mdash; Token: [{{ .Token }}]</p>
+```
+
+at the top of the Magic Link template and send yourself one. What comes back
+names the fault: the Site URL or the app root means the address was refused
+and the list entry is missing; the right address with the branch still not
+taken means the `eq` term does not match it character for character; the
+literal text `{{ .RedirectTo }}` means the variable is not being rendered at
+all.
 
 ### The Magic Link template
 
