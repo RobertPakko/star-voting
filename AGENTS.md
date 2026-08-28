@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotCard, VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
-src/lib/         supabase client, auth context, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -133,12 +133,19 @@ Repo **Settings → Pages** should show the domain once DNS resolves, with
    `ballots`) — it has
    no read or write grant on any table.
 3. Under **Project Settings → API**, copy the Project URL and `anon` public key.
-4. The **Email** auth provider (magic link) is enabled by default — no extra
-   provider setup needed.
+4. The **Email** auth provider is enabled by default — no extra provider
+   setup needed. Under **Authentication → Email Templates**, replace the
+   **Magic Link** template with the one in [Signing in](#signing-in): the
+   stock template can only send a link, and the sign-in screen offers a
+   choice of a link or a code.
 5. Under **Authentication → URL Configuration**, set the Site URL to
-   `https://choicelab.app/star-voting/` and add your dev URL
-   (`http://localhost:5173`) to the allowed redirect URLs, or magic links
-   won't be able to redirect back to the app.
+   `https://choicelab.app/star-voting/` and add `https://choicelab.app/star-voting/**`
+   and your dev URL (`http://localhost:5173/star-voting/**`) to the allowed
+   redirect URLs. The wildcards are not optional and the `/**` is the point of them:
+   the code half of the sign-in carries its choice in a query parameter on
+   the redirect address, and an address that is not on the list is quietly
+   replaced with the Site URL — which sends a link to somebody who asked for
+   a code. Without any entry at all, links cannot redirect back to the app.
 6. Under **Database → Extensions**, check that `pg_cron` is enabled. The
    migration that schedules the nightly purge of expired polls enables it
    itself and shrugs if it cannot, so a project where it was unavailable ends
@@ -976,6 +983,158 @@ theme menu rather than in a leading position, where a control that comes and
 goes would leave a visible gap. It is also absent from the sign-in screen,
 which has no header by design; a voter arriving on a share link sees it,
 which is the reader most likely to want it.
+
+## Signing in
+
+Email, and nothing else: no passwords, no providers, no account to create
+before there is one. What arrives in the inbox is one of two things, and the
+reader picks which on the sign-in screen before it is sent.
+
+- **A link.** One tap and they are signed in. The default, and the easier of
+  the two whenever it works.
+- **A code.** Six digits, typed back into the window that asked for them.
+
+The second exists because the first depends on something the reader does not
+control: that the tap lands back in *this* window. Two ordinary situations
+where it does not. An email client that opens links in a webview of its own
+signs them in inside that webview — a browser that is gone the moment the
+message is closed, leaving the one they started in signed out. And an
+installed copy of this app is a separate window with its own storage, which a
+link from an inbox has no way to reach; see [Installing it to a home
+screen](#installing-it-to-a-home-screen). Neither is detectable from here and
+neither is rare, so the choice is offered rather than guessed at.
+
+A code has none of that exposure, because nothing navigates: `verifyOtp`
+answers with the session on the same request, in the window that asked. That
+is the whole of its advantage, and it costs six digits of typing.
+
+**The choice is remembered per browser, not per account** —
+`star-voting:sign-in-method` in `localStorage`, in `src/lib/signInMethod.ts`.
+Whether a tap comes back to the window that asked is a fact about this device
+and this email client; the same person on their laptop is usually better off
+with the link they get there. Storing it against the account would also mean
+reading it before there is a session to read it from, which is the one thing
+a sign-in screen cannot do.
+
+### How the choice reaches the mailer
+
+Supabase renders **one** template for both. `signInWithOtp` has no argument
+for choosing between them: the same request sends whichever email the *Magic
+Link* template draws, and it draws whichever of `{{ .ConfirmationURL }}` and
+`{{ .Token }}` it mentions. Both are always minted — a link and a code are
+two ways of redeeming one OTP — so the template is the only thing that
+decides which of them the reader is shown.
+
+The one part of the request that is ours to set and reaches the template is
+the redirect address, as `{{ .RedirectTo }}`. So that is what carries it:
+`redirectFor` in `src/lib/AuthProvider.tsx` appends `?method=code` on the
+code path, and the template branches on exactly that. The marker is
+`CODE_METHOD_MARKER`, and it is one constant precisely because it has to
+match a string pasted into a dashboard — a template looking for the old
+marker sends a link to everybody and says nothing about it.
+
+Every deployment's own address must appear in the template's `or`, which is
+why it is a hand-edited file rather than something this repo can apply for
+you: Go templates have `eq` and no substring test, so each origin the app is
+served from is a term of its own. The two below are production and the dev
+server.
+
+Both forms of the address have to be on the allowed redirect list — see step
+5 of [Supabase setup](#1-supabase). On the code path nothing is ever tapped,
+so where that address points does not matter; that it is *recognised* does.
+
+### The Magic Link template
+
+Paste this into **Authentication → Email Templates → Magic Link**. Add a term
+to the `or` for every origin the app is served from.
+
+```html
+<!doctype html>
+<html>
+  <body style="margin:0; padding:0; background-color:#f2eefc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f2eefc; padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 24px rgba(126,20,255,0.12);">
+
+            <!-- Header -->
+            <tr>
+              <td align="center" style="background-color:#ffffff; padding:40px 24px 24px; border-bottom:1px solid #f0edf7;">
+                <img src="https://choicelab.app/star-voting/logo.png" width="72" height="72" alt="STAR Voting"
+                     style="display:block; width:72px; height:72px; border-radius:16px;">
+                <div style="margin-top:16px; font-size:20px; font-weight:700; color:#1a1523; letter-spacing:0.2px;">
+                  STAR Voting
+                </div>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding:36px 32px 28px;">
+{{ if or (eq .RedirectTo "https://choicelab.app/star-voting/?method=code") (eq .RedirectTo "http://localhost:5173/star-voting/?method=code") }}
+                <h1 style="margin:0 0 12px; font-size:22px; line-height:1.3; color:#1a1523; font-weight:700;">
+                  Your sign-in code
+                </h1>
+                <p style="margin:0 0 28px; font-size:15px; line-height:1.6; color:#5b5468;">
+                  Type this code into the window you asked for it in
+                </p>
+
+                <div style="margin:0 auto; padding:18px 24px; background-color:#f7f4fe; border:1px solid #ece5fd; border-radius:12px; text-align:center; font-size:34px; font-weight:700; letter-spacing:9px; color:#1a1523; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">
+                  {{ .Token }}
+                </div>
+
+                <p style="margin:28px 0 0; font-size:13px; line-height:1.6; color:#9691a3;">
+                  The code expires in an hour, and works once. If you did not
+                  ask to sign in, you can ignore this email.
+                </p>
+{{ else }}
+                <h1 style="margin:0 0 12px; font-size:22px; line-height:1.3; color:#1a1523; font-weight:700;">
+                  Your sign-in link
+                </h1>
+                <p style="margin:0 0 28px; font-size:15px; line-height:1.6; color:#5b5468;">
+                  Tap the button below to sign in
+                </p>
+
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                  <tr>
+                    <td align="center" style="border-radius:10px; background:linear-gradient(135deg,#7e14ff,#47bfff); background-color:#7e14ff;">
+                      <a href="{{ .ConfirmationURL }}"
+                         style="display:inline-block; padding:14px 36px; font-size:16px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:10px;">
+                        Sign in &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:28px 0 0; font-size:13px; line-height:1.6; color:#9691a3;">
+                  Button not working? Paste this link into your browser:<br>
+                  <a href="{{ .ConfirmationURL }}" style="color:#7e14ff; word-break:break-all;">{{ .ConfirmationURL }}</a>
+                </p>
+{{ end }}
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:20px 32px 28px; border-top:1px solid #f0edf7;">
+                <p style="margin:0; font-size:12px; line-height:1.6; color:#b3aec0; text-align:center;">
+                  Sent by ChoiceLab.app
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+```
+
+**Check both halves after pasting it**, by signing in each way once. A
+template whose branch never matches is not an error anywhere — it sends a
+link to a reader who asked for a code, and the code screen they are looking
+at has nothing to type into it.
 
 ## Behaviour worth preserving
 

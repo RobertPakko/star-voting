@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import type { SignInMethod } from './signInMethod'
 
 /**
  * The session, and the one way into it.
@@ -14,7 +15,23 @@ import type { Session } from '@supabase/supabase-js'
 export interface AuthContextValue {
   session: Session | null
   loading: boolean
-  signInWithEmail: (email: string) => Promise<void>
+  /**
+   * Sends the sign-in email. `method` decides which of the two goes out —
+   * see lib/signInMethod.ts — and is carried to the mailer by the redirect
+   * address, because it is the only part of the request the email template
+   * can read.
+   */
+  signInWithEmail: (email: string, method: SignInMethod) => Promise<void>
+  /**
+   * Redeems a code from the second of those emails, which is a sign-in that
+   * never leaves this window. It throws for a code that is wrong and for one
+   * that has expired, and Supabase deliberately does not say which.
+   *
+   * Nothing is returned: the session it mints is saved by the client and
+   * arrives here the way every other session does, through the provider's
+   * `onAuthStateChange` listener.
+   */
+  verifySignInCode: (email: string, code: string) => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined)
