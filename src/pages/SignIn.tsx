@@ -196,14 +196,6 @@ export function SignIn() {
                   { value: 'code', label: 'Email a code' },
                 ]}
               />
-              {/* What each one costs the reader, rather than what it is: the
-                  reason to pick the second is that the first has let them
-                  down before, and they will not know it by name. */}
-              <Text size="xs" c="dimmed" ta="center">
-                {method === 'link'
-                  ? 'One tap in the email signs you in.'
-                  : `${CODE_LENGTH} digits, typed in here. Use it if a link signs you in somewhere else, or if you have installed the app.`}
-              </Text>
               {error && (
                 <Text c="red" size="sm">
                   {error}
