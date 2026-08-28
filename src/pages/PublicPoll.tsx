@@ -22,6 +22,7 @@ import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
 import type {
+  BallotSheet,
   OpenGroupQuestion,
   OpenPollView,
   OpenRead,
@@ -70,6 +71,7 @@ export function PublicPoll({
     pollId: string
     view: OpenPollView
     results: PollResults | null
+    ballots: BallotSheet | null
   } | null>(null)
   const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
   // Which questions of this poll this browser has answered, and which it has
@@ -119,12 +121,13 @@ export function PublicPoll({
       of: string,
       openView: OpenPollView,
       strip?: OpenGroupQuestion[],
-      // The tally, when the read that came back carried one. `poll_page` does
-      // on a poll whose results are out; `open_poll_view` never does, and
-      // passing nothing is what drops the last one — the card below then reads
-      // for itself, which is the honest answer for a read that did not bring
-      // an answer.
+      // The tally and the published sheet, when the read that came back
+      // carried them. `poll_page` does on a poll whose results are out;
+      // `open_poll_view` never does, and passing nothing is what drops the
+      // last one — the cards below then read for themselves, which is the
+      // honest answer for a read that did not bring an answer.
       tally?: PollResults | null,
+      sheet?: BallotSheet | null,
     ) => {
       if (strip) {
         // The question just read as well as its siblings. A poll that asks one
@@ -135,7 +138,7 @@ export function PublicPoll({
         setQuestions(strip)
       }
       loadedFor.current = of
-      setRead({ pollId: of, view: openView, results: tally ?? null })
+      setRead({ pollId: of, view: openView, results: tally ?? null, ballots: sheet ?? null })
       // Erased rather than only written: a creator who clears the poll's votes
       // leaves this browser holding a record of a ballot that no longer exists,
       // a confirmation can be taken back on the card that gave it, and a read
@@ -157,7 +160,8 @@ export function PublicPoll({
     const given = handoff.current
     if (!given || !pollId) return
     handoff.current = null
-    if (given.kind === 'open') finish(pollId, given.view, given.questions, given.results)
+    if (given.kind === 'open')
+      finish(pollId, given.view, given.questions, given.results, given.ballots)
     // The link is not a link, which `PollPage` established rather than this
     // page having to be refused twice to find out. Same card either way.
     else setFailed({ pollId, message: 'Poll not found.' })
@@ -197,7 +201,7 @@ export function PublicPoll({
         return false
       }
       if (page.kind === 'open') {
-        finish(pollId, page.view, page.questions, page.results)
+        finish(pollId, page.view, page.questions, page.results, page.ballots)
         return true
       }
     }
@@ -228,6 +232,7 @@ export function PublicPoll({
   // heading. Null on every read that did not bring one, which is `Results`
   // reading for itself.
   const results = read && read.pollId === pollId ? read.results : null
+  const ballots = read && read.pollId === pollId ? read.ballots : null
   // The poll around the question, and the reason the two are separated at
   // all. Every question in a group shares the poll's title, its description
   // and its terms, so a read of any of them describes the poll — and the
@@ -449,6 +454,7 @@ export function PublicPoll({
             pollId={pollId}
             view={view}
             results={results}
+            ballots={ballots}
             onChanged={load}
             onFirstVote={advance}
             onFirstConfirm={advance}

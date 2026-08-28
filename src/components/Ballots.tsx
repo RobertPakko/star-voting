@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Stack, Table, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
@@ -22,7 +22,23 @@ export type BallotsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
  * Row order is decided in the database and deliberately carries no
  * information when the ballots are unnamed; nothing here re-sorts it.
  */
-export function Ballots({ source }: { source: BallotsSource }) {
+export function Ballots({
+  source,
+  initial = null,
+}: {
+  source: BallotsSource
+  /**
+   * The sheet the read that opened this page already brought, or null when it
+   * brought none. `poll_page` carries it on exactly the polls whose page
+   * draws this grid — see 0051, which made the sheet wait for the same gate
+   * the tally waits for, which is what let it travel with the page at all.
+   *
+   * Null is where this grid has always been: a poll that finished while
+   * somebody was watching it, a crossing between two questions, and the
+   * sample. It reads for itself, exactly as before.
+   */
+  initial?: BallotSheet | null
+}) {
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
@@ -34,10 +50,20 @@ export function Ballots({ source }: { source: BallotsSource }) {
   // on it. See the note in Results.
   const [sheet, setSheet] = useState<BallotSheet | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Taken once and then gone, for the reason this grid re-reads at all: a
+  // reset takes a poll's ballots away and tells nobody, so a re-read must
+  // never come back with the sheet from before it.
+  const handoff = useRef(initial)
 
   useEffect(() => {
-    let cancelled = false
+    const given = handoff.current
+    handoff.current = null
+    if (given) {
+      setSheet(given)
+      return
+    }
 
+    let cancelled = false
     const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
         ? supabase.rpc('poll_ballots', { p_poll_id: key })

@@ -129,6 +129,7 @@ function answer(payloads: SamplePayloads, fn: string, args: OpenPollArgs): RpcAn
         // it — and what the reader gets then is `open_poll_results` above,
         // answered out of the same file.
         results: question.results ?? null,
+        ballots: question.ballots ?? null,
       })
     case 'open_poll_results':
       return question.results ? ok(question.results) : failed('Results are not available yet')

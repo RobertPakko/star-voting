@@ -10,7 +10,7 @@ import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
 import { Results } from './Results'
 import { VoterNameField } from './VoterNameField'
-import type { OpenPollView, PollOption, PollResults } from '../lib/types'
+import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
 /**
  * The whole voting experience for an open poll, driven by the poll's id --
@@ -36,6 +36,7 @@ export function OpenPollPanel({
   pollId,
   view,
   results = null,
+  ballots = null,
   isCreator = false,
   voterName,
   onChanged,
@@ -53,6 +54,8 @@ export function OpenPollPanel({
    * always started. See 0050 and `Results`.
    */
   results?: PollResults | null
+  /** The published ballot sheet, handed down for the same reason. */
+  ballots?: BallotSheet | null
   /**
    * The name this browser is answering under, held by the page. A share link
    * carries no account, so a poll that shows its respondents has to ask for
@@ -185,7 +188,7 @@ export function OpenPollPanel({
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}
-        {view.poll.show_ballots && <Ballots source={{ kind: 'open', pollId }} />}
+        {view.poll.show_ballots && <Ballots source={{ kind: 'open', pollId }} initial={ballots} />}
       </Stack>
     )
   }

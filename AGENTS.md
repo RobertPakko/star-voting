@@ -684,19 +684,20 @@ somebody takes rather than a hole somebody fills.
 - `account` — the creator, or somebody on the invite list: the poll row, its
   options, its status, and its group with every per-reader mark on it. On an
   *open* poll it carries `view` as well, because the creator manages the poll
-  through the same panel everybody else votes in. Plus `results` and
-  `invitees` where the page draws them; see below.
+  through the same panel everybody else votes in. Plus `results`, `ballots`
+  and `invitees` where the page draws them; see below.
 - `open` — an open poll to anyone else holding the link: the curated view and
   the bare strip, and nothing that could say who has answered what. Plus
-  `results` on the same terms.
+  `results` and `ballots` on the same terms.
 - `unreadable` — no such poll, or an invite poll this reader is not in, and
   which of the two it is is not disclosed.
 
 **Nothing here is a new privilege.** Each branch returns what the caller could
 already have asked for one request at a time, from the functions that already
 decide it: `poll_status`, `poll_group`, `open_poll_view`, `open_poll_group`,
-`get_poll_results`, `open_poll_results` and `poll_invitees` are called rather
-than reimplemented, so there is one copy of every rule. The
+`get_poll_results`, `open_poll_results`, `poll_ballots`, `open_poll_ballots`
+and `poll_invitees` are called rather than reimplemented, so there is one copy
+of every rule. The
 visibility test is `is_poll_creator` / `is_invited_to_poll` — the same two
 functions `polls_select` is written in terms of — rather than a third
 hand-written copy of `created_by = auth.uid() or exists (...)`, which is what
@@ -724,10 +725,12 @@ which is the one window in which a vote could otherwise land unheard.
 answered what the *route* asks; a poll whose results are out draws two more
 cards, and each of them went and asked for itself the moment it mounted, which
 it could not do until `poll_page` came back. So opening a completed poll cost
-two round trips: `poll_page`, and then `get_poll_results` and `poll_invitees`
-together, landing on a skeleton the reader was already looking at.
+two round trips: `poll_page`, and then `get_poll_results`, `poll_invitees` and
+`poll_ballots` together, landing on skeletons the reader was already looking
+at.
 
-`results` and `invitees` close that, on the same terms as everything above:
+`results`, `ballots` and `invitees` close that, on the same terms as
+everything above:
 
 - **Only when the page will draw them.** The tally is gated on
   `poll_results_revealed`, which is the same predicate the reads report as
@@ -748,11 +751,35 @@ together, landing on a skeleton the reader was already looking at.
   between two questions, and the About page's sample. `PollDetail` drops both
   on every narrow tick for the same reason: the tally belongs to the read that
   fetched it, and a creator's reset takes the votes under it away.
-- **The published ballot sheet is deliberately left out.** `poll_ballots` gates
-  on this poll's own close where `results_available` gates on every question in
-  the group having stopped; on a group those need not agree, and a call that
-  raised inside `poll_page` would take the whole page down rather than one
-  card. Reconciling the two gates is a change to make on purpose.
+- **One gate over all three** —
+  [`0051`](supabase/migrations/0051_one_gate_over_the_results.sql). The sheet
+  could not travel until its gate agreed with the tally's, and the two did not
+  merely differ in wording. `poll_results_revealed` is group-wide on purpose —
+  a poll of five questions that revealed question one's result while question
+  three was still taking votes would let the early answers steer the late ones
+  — and both ballot functions asked `poll_gate_open` of their own question and
+  no other. So a finished question inside an unfinished poll handed out every
+  ballot cast in it while `get_poll_results` on that same question refused, and
+  a sheet of every ballot *is* that question's result in the form it can be
+  recomputed from. The pages never asked (both cards render behind
+  `results_available`), but these are functions any participant may call.
+  Both now refuse under `poll_results_revealed`: the same per-question
+  condition they already applied, and-ed across the group, so it can only
+  refuse where they used to answer, and on a poll of one question nothing
+  moves at all. The wording stays each function's own — one predicate is not
+  one sentence, and what is refused here is the sheet, not the tally.
+- **The roster went further than a handoff.** The other two are one read's
+  work handed to a card that can still do it itself. The roster is not: it is
+  the only one whose card had no other reason to fetch — it moves as people
+  answer, so it was re-read on a tick the page bumped purely to drive it, which
+  was the page's own request at the page's own moment with a second copy of the
+  poll's access rules behind it. `PollDetail` now holds the roster like the
+  poll and the status, `refresh` re-reads it in the same `Promise.all` as the
+  counts it sits under, and `Respondents` renders what it is given. The card
+  exists exactly when the page holds a roster, which is `poll_page`'s condition
+  and no longer a second reading of it in the browser; an invite added or
+  removed re-reads once rather than twice; and the shape that stood in for its
+  first read is gone. See [Waiting](#waiting).
 
 **A crossing is not an arrival.** Every question of a multi-question poll
 answers with the whole group, so the read that opened one question already
@@ -777,23 +804,33 @@ ballot or a tally, with the page landing all at once underneath it.
 
 `src/components/Skeletons.tsx` draws the shape of the page instead: the
 list's cards, the poll's tag row, the ballot's starred rows, the score round's
-bars, the roster's people, the form's sections. Three rules keep them from
-becoming a lie:
+bars, the form's sections. Three rules keep them from becoming a lie:
 
 - **A skeleton claims only what the page always has.** The list draws three
   cards because the wait is over long before anyone counts them; it does not
   draw a poll's description, which most polls do not have. A placeholder for
   something that then fails to appear is a small lie the reader has to
-  un-learn. The two stand-ins drawn *inside* a page that has already read the
-  poll guess at nothing at all, because by then there is nothing to guess:
-  `RosterSkeleton` is handed how many people are in the poll and what it will
-  say about each of them, and `QuestionSkeleton` is handed the strip and the
-  name box themselves, as real nodes, along with the answers to whether the
-  question being opened asks for a name and whether the poll it belongs to has
-  finished. See [A poll can ask more than one
-  question](#a-poll-can-ask-more-than-one-question) for why those two are
-  handed over rather than drawn: they belong to the poll rather than to the question, so
-  they never had anything to wait for.
+  un-learn. The one stand-in drawn *inside* a page that has already read the
+  poll guesses at nothing at all, because by then there is nothing to guess:
+  `QuestionSkeleton` is handed the strip and the name box themselves, as real
+  nodes, along with the answers to whether the question being opened asks for
+  a name and whether the poll it belongs to has finished. See [A poll can ask
+  more than one question](#a-poll-can-ask-more-than-one-question) for why they
+  are handed over rather than drawn: they belong to the poll rather than to
+  the question, so they never had anything to wait for.
+- **A shape only exists for a wait that exists.** There was a second such
+  stand-in, `RosterSkeleton`, and following that reasoning to the end deleted
+  it: a card that guesses at nothing is a card whose content the page already
+  has. Once `poll_page` carried the roster
+  ([0050](#one-read-opens-a-poll)) it did, so `Respondents` stopped fetching
+  its own copy — the page holds the roster and re-reads it in the same batch
+  as the counts above it — and the wait the shape stood in for stopped
+  existing. `ResultsSkeleton` and `BallotsSkeleton` did not go the same way,
+  and the difference is the test: both are still reachable with nothing in
+  hand, because a poll that finishes while somebody is watching it gets its
+  tally on the live tick, which carries neither, and because a crossing
+  between two questions of an open poll re-reads through `open_poll_view`,
+  which carries neither either.
 - **They all live in that one file**, so a page and its stand-in get changed
   together. The failure mode of skeletons is that they slowly stop resembling
   anything.

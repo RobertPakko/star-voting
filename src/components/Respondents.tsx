@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { ActionIcon, Badge, Button, Card, Group, Stack, Text, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
-import { RosterSkeleton } from './Skeletons'
 import type { Invitee, PollStatus } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -36,61 +35,44 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * under it. The creator still gets the list, because for them it is the
  * invite list they manage rather than a roster of who voted.
  *
- * Whether the roster is readable is taken from the poll rather than from a
- * failed request. The page already knows the setting, and asking anyway
- * meant one request per refresh that was expected to fail; with the further
- * problem that a request failing for any *other* reason would have been
- * reported to the reader as "this poll hides who has responded", which might
- * not be true.
+ * **The roster is handed in, not fetched here**, for the reason the open
+ * poll's view is handed to `OpenPollPanel`: the page owns the poll, and this
+ * renders it. `poll_page` brings the roster on the read that opens the page
+ * and the live tick brings it again in the same batch as the counts above it,
+ * so who has answered and how many have is one read and cannot disagree on
+ * screen. This card used to fetch its own copy on a tick the page bumped for
+ * it, which was the same request at the same moment with a second copy of the
+ * poll's rules — and a first read that had to be waited for, under a heading
+ * the page had already drawn, which is the stand-in that no longer exists.
  *
- * The add/remove controls are creator-only and unchanged in behaviour.
+ * Whether the roster is readable is therefore not asked here either. `poll_page`
+ * carries one exactly when there is a card to draw — an invite poll, read by
+ * its creator or showing its respondents — so the page renders this only when
+ * it holds one, and a reader with no roster gets no card rather than a request
+ * expected to fail.
+ *
+ * The add/remove controls are creator-only and unchanged in behaviour: they
+ * write, and then ask the page to re-read, which is what brings the list back
+ * changed.
  */
 export function Respondents({
   pollId,
   isCreator,
-  showVoters,
   status,
-  initial = null,
-  liveTick = 0,
+  invitees,
   onChange,
 }: {
   pollId: string
   isCreator: boolean
-  /**
-   * The poll's own setting. A participant on a poll that hides respondents
-   * has no roster to ask for, so this decides whether to ask at all.
-   */
-  showVoters: boolean
   status: PollStatus
   /**
-   * The roster the read that opened this page already brought, or null when
-   * it brought none. `poll_page` carries it on exactly the polls and readers
-   * that draw this card, so the card is drawn from what is in hand rather
-   * than from a request that could not be sent until that read came back.
-   * See 0050.
-   *
-   * Used once, on the way in. Every read after it is this card's own, on the
-   * tick below, because who has answered is the half of the roster that
-   * moves.
+   * Everyone in the poll, as the page read them. Never null: the page draws
+   * this card only when it holds a roster, so there is no "not yet" for this
+   * to be in.
    */
-  initial?: Invitee[] | null
-  /**
-   * Bumped by the poll page on every live refresh. The roster reloads with
-   * it rather than on a timer of its own, so who has voted and the count
-   * above it are always read at the same moment.
-   */
-  liveTick?: number
+  invitees: Invitee[]
   onChange: () => void
 }) {
-  const [invitees, setInvitees] = useState<Invitee[] | null>(null)
-  const [hidden, setHidden] = useState(false)
-  // Whether a read has ever succeeded, so a live refresh that fails can be
-  // told apart from a first read that did. Kept in a ref rather than read
-  // from `invitees`, which would put the roster in load()'s dependencies
-  // and have every load schedule the next one.
-  const loaded = useRef(false)
-  // The handed-over roster, taken once and then gone; see `initial`.
-  const handoff = useRef(initial)
   const [newEmail, setNewEmail] = useState('')
   const [busy, setBusy] = useState(false)
   // Wrong with the address being typed, marked on the box it was typed in.
@@ -98,45 +80,6 @@ export function Respondents({
   // rather than about the field, and stays where it was.
   const [emailError, setEmailError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  // Nobody but the creator can read the list on a poll that hides
-  // respondents, and the poll says so up front, so the request is not made
-  // rather than made and expected to fail.
-  const rosterReadable = showVoters || isCreator
-
-  const load = useCallback(async () => {
-    if (!rosterReadable) return
-    const { data, error: rpcError } = await supabase.rpc('poll_invitees', { p_poll_id: pollId })
-    if (rpcError) {
-      // A refresh that fails leaves the roster already on screen alone;
-      // only a first read tells us anything about access, and a dropped
-      // request should not make a list that has been there all along
-      // vanish or sprout an error.
-      if (loaded.current) return
-      // The creator always has access, so a failure for them is real and
-      // hiding their invite controls silently would be worse than noise.
-      // For anyone else it means there is nothing to render.
-      if (isCreator) setError(rpcError.message)
-      else setHidden(true)
-      return
-    }
-    loaded.current = true
-    setInvitees((data as Invitee[]) ?? [])
-  }, [pollId, isCreator, rosterReadable])
-
-  useEffect(() => {
-    // The route's read, drawn at once rather than asked for again. Only the
-    // first pass finds anything here: a tick, or a crossing to another
-    // question, is a read this card still owes.
-    const given = handoff.current
-    if (given) {
-      handoff.current = null
-      loaded.current = true
-      setInvitees(given)
-      return
-    }
-    load()
-  }, [load, liveTick])
 
   async function addInvitee() {
     const email = newEmail.trim().toLowerCase()
@@ -153,7 +96,7 @@ export function Respondents({
     }
     // Addresses are stored lowercased (normalize_invited_email), so this
     // catches the same duplicate the unique index would.
-    if (invitees?.some((i) => i.email === email)) {
+    if (invitees.some((i) => i.email === email)) {
       setEmailError('That person is already invited.')
       return
     }
@@ -170,7 +113,9 @@ export function Respondents({
     }
     setNewEmail('')
     notifications.show({ message: `Invited ${email}`, color: 'green' })
-    await load()
+    // One re-read, the page's. This used to ask for the roster itself and
+    // then ask the page to read the poll as well, which was the same list
+    // fetched twice for one insert.
     onChange()
   }
 
@@ -189,33 +134,7 @@ export function Respondents({
       return
     }
     notifications.show({ message: `Removed ${email}`, color: 'green' })
-    await load()
     onChange()
-  }
-
-  // No roster to show, either because the poll hides it or because the read
-  // came back saying so. Nothing takes its place: the header's count badge
-  // has said how many voted and its "Respondents hidden" tag has said why
-  // nobody is named, so a card here would only repeat both.
-  if (!rosterReadable || hidden) return null
-
-  // The shape of the card that is coming, under the heading the page has
-  // already drawn. Every number in it is a fact rather than a guess: the poll
-  // has been read, so it knows how many people are in it and what it will say
-  // about each of them. See the note in Skeletons.tsx.
-  if (!invitees) {
-    return error ? (
-      <Text c="red" size="sm">
-        {error}
-      </Text>
-    ) : (
-      <RosterSkeleton
-        rows={status.invited_count}
-        badges={showVoters}
-        controls={isCreator}
-        invite={isCreator && !status.is_closed && !status.results_available}
-      />
-    )
   }
 
   // Which question the badges are answering. `soliciting` is the poll's own

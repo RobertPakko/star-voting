@@ -34,6 +34,7 @@ import { Results } from '../components/Results'
 import { readPollPage } from '../lib/pollPage'
 import type {
   AccountRead,
+  BallotSheet,
   GroupQuestion,
   Invitee,
   OpenPollView,
@@ -82,6 +83,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
   // behind. Both are handed to their card once and are its business from
   // there; see the note above `refresh`, which is the read that has neither.
   const [results, setResults] = useState<PollResults | null>(null)
+  const [ballots, setBallots] = useState<BallotSheet | null>(null)
   const [invitees, setInvitees] = useState<Invitee[] | null>(null)
   // Which questions this browser has answered, and which it has finished
   // adding options to, for the strip's marks on an *open* poll. `poll_group`
@@ -113,11 +115,6 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
   // remounts. Closing or resetting invalidates a half-filled ballot in the
   // panel, and remounting is what discards it.
   const [refreshKey, setRefreshKey] = useState(0)
-  // Bumped on every live refresh, and watched by <Respondents> so the
-  // roster reloads on this page's clock instead of running one of its own.
-  // Two timers would drift, and a roster a few seconds ahead of the count
-  // sitting above it reads as a bug rather than as a refresh in flight.
-  const [liveTick, setLiveTick] = useState(0)
   // The scores on this reader's own ballot while they are changing it, or
   // null when they are not. Read from the database at the moment they ask
   // rather than alongside the poll: almost nobody changes their vote, and a
@@ -165,6 +162,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
     setStatus(page.status)
     setQuestions(page.questions)
     setResults(page.results)
+    setBallots(page.ballots)
     setInvitees(page.invitees)
 
     // An open poll read by its own creator: the panel they manage it through
@@ -222,7 +220,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
     // below: what is held is the read before this one's, and a creator action
     // remounts the cards that draw them without waiting for this to land.
     setResults(null)
-    setInvitees(null)
+    setBallots(null)
 
     // One request. `poll_page` answers with the poll, its options, its status,
     // its group and — on an open poll — the open view as well, which used to
@@ -259,28 +257,36 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
   // guard_options_frozen takes over from the first ballot on.
   const optionsMayMove = poll?.mode === 'invite' && status?.voted_count === 0
 
+  // Whether this reader has a roster at all, which the read that opened the
+  // page answered by carrying one or not: an invite poll, read by its creator
+  // or showing its respondents. The tick below re-reads it only where that is
+  // true, rather than asking and being refused.
+  const hasRoster = invitees !== null
+
   // The live tick, deliberately narrower than load(): a poll's title and
   // settings are frozen at creation, so what can change while someone
   // watches is the counts, the options of a poll collecting them, and
   // whether it has moved on to voting or closed.
   const refresh = useCallback(async () => {
     if (!pollId) return true
-    // Bumped before the requests rather than after, so the roster below
-    // asks at the same moment this does and the two agree on screen.
-    setLiveTick((t) => t + 1)
-    // And the handed-over tally and roster are dropped, because this read is
-    // not the one that brought them. They belong to the `poll_page` that
-    // fetched them and to nothing after: a creator resetting the poll takes
-    // the results away and puts them back, and the card that draws them
-    // unmounts and mounts again with it — so a tally still lying here would
-    // be handed to that card second time round, of votes that have since been
-    // deleted. Null is the card reading for itself, which is the right answer
-    // for every read but the one that brought it.
+    // The handed-over tally and sheet are dropped, because this read is not
+    // the one that brought them. They belong to the `poll_page` that fetched
+    // them and to nothing after: a creator resetting the poll takes the
+    // results away and puts them back, and the cards that draw them unmount
+    // and mount again with it — so a tally still lying here would be handed
+    // to that card second time round, of votes that have since been deleted.
+    // Null is the card reading for itself, which is the right answer for
+    // every read but the one that brought it.
+    //
+    // The roster is not dropped, because it is not handed over in that sense:
+    // this page holds it for as long as there is a card, and this read
+    // replaces it below. Dropping it would blink the card away and back on
+    // every vote anybody casts.
     setResults(null)
-    setInvitees(null)
+    setBallots(null)
 
     const openId = poll?.mode === 'open' ? poll.id : null
-    const [statusRes, viewRes, optionsRes] = await Promise.all([
+    const [statusRes, viewRes, optionsRes, inviteesRes] = await Promise.all([
       supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
       openId
         ? supabase.rpc('open_poll_view', { p_poll_id: openId, p_voter_key: voterKeyFor(openId) })
@@ -288,6 +294,12 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
       optionsMayMove
         ? supabase.from('candidates').select('*').eq('poll_id', pollId).order('sort_order')
         : null,
+      // The roster, in the same batch as the counts it sits under rather than
+      // fetched by the card on a tick this page bumped for it: one round trip
+      // either way, and now they cannot be a moment out of step. Asked only
+      // where there is a roster to ask for, which the read that opened the
+      // page settled — `poll_invitees` raises rather than answering empty.
+      hasRoster ? supabase.rpc('poll_invitees', { p_poll_id: pollId }) : null,
     ])
 
     // A refresh that fails changes nothing on screen: the page keeps the
@@ -299,13 +311,15 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
     if (viewRes && !viewRes.error && viewRes.data) setView(viewRes.data as OpenPollView)
     if (optionsRes && !optionsRes.error && optionsRes.data)
       setOptions(optionsRes.data as PollOption[])
+    if (inviteesRes && !inviteesRes.error && inviteesRes.data)
+      setInvitees(inviteesRes.data as Invitee[])
 
     // The status is what every other part of this page is derived from, so
-    // it decides whether this counts as a read at all. The other two are
-    // allowed to have missed: an option list that arrives one signal late
-    // costs nothing, and a poll can only be waiting on one of them anyway.
+    // it decides whether this counts as a read at all. The other three are
+    // allowed to have missed: an option list or a roster that arrives one
+    // signal late costs nothing, and the page keeps the copy it has.
     return !statusRes.error
-  }, [pollId, poll?.mode, poll?.id, optionsMayMove])
+  }, [pollId, poll?.mode, poll?.id, optionsMayMove, hasRoster])
 
   // What a signal on this poll means, which depends on whether the question
   // in the address bar is the one this page has read: the whole poll the
@@ -633,6 +647,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
                 pollId={poll.id}
                 view={view}
                 results={results}
+                ballots={ballots}
                 isCreator={isCreator}
                 voterName={voterName}
                 onChanged={load}
@@ -732,21 +747,23 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
           ballots can sensibly embargo. One setting decides, and it is the
           setting that says so on the tag beside the title.
 
-          Whether there is anything to draw is `show_voters` or being the
-          creator, who keeps the list either way because for them it is the
-          invite list they manage. Anyone else on a poll that hides its
-          respondents gets no card and no heading over it — the header's count
-          badge has said how many and the tag has said why nobody is named. */}
-      {!isOpen && (poll.show_voters || isCreator) && (
+          Whether there is anything to draw is whether this page holds a
+          roster, which is the same question said once: `poll_page` carries
+          one for the creator, who keeps the invite list either way because
+          for them it is the list they manage, and for anybody in a poll that
+          shows its respondents. Anyone else gets no card and no heading over
+          it — the header's count badge has said how many and the tag has said
+          why nobody is named. The condition used to be spelled out here as
+          well as in the database, and a card that drew itself on one reading
+          of it and was refused on the other would have been the bug. */}
+      {!isOpen && invitees && (
         <Stack gap={2}>
           <Title order={4}>Voters</Title>
           <Respondents
             pollId={poll.id}
             isCreator={isCreator}
-            showVoters={poll.show_voters}
             status={status}
-            initial={invitees}
-            liveTick={liveTick}
+            invitees={invitees}
             onChange={reloadAll}
           />
         </Stack>
@@ -758,7 +775,7 @@ export function PollDetail({ initial }: { initial: AccountRead | null }) {
           page included, and a second grid under it was a second answer to a
           question already answered. */}
       {!isOpen && status.results_available && poll.show_ballots && (
-        <Ballots source={{ kind: 'poll', pollId: poll.id }} />
+        <Ballots source={{ kind: 'poll', pollId: poll.id }} initial={ballots} />
       )}
 
       {/* The share link is inside Manage poll now; see the note there. */}

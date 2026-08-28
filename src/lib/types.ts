@@ -227,6 +227,17 @@ export interface AccountRead {
    */
   results: PollResults | null
   /**
+   * The published ballot sheet, on a poll whose results are out *and* which
+   * publishes them. Null on every other poll, and on the same terms as
+   * `results`: it is the read the card would have made, not a second way of
+   * learning that there is a sheet — `show_ballots` and `results_available`
+   * say that, and are what the card is rendered behind.
+   *
+   * It waits for the whole group, as the tally does, because the sheet is
+   * the tally in the form it can be recomputed from; see 0051.
+   */
+  ballots: BallotSheet | null
+  /**
    * The invite list, on an invite poll whose roster this reader draws: its
    * creator, who manages the list, or anybody in a poll that shows its
    * respondents. Null on an open poll, which has no list, and on an invite
@@ -253,6 +264,8 @@ export interface OpenRead {
    * nothing about who is reading it.
    */
   results: PollResults | null
+  /** The published ballot sheet, on the same terms; see `AccountRead`. */
+  ballots: BallotSheet | null
 }
 
 /**
