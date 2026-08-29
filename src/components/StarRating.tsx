@@ -7,30 +7,26 @@ const COUNT = 5
 /**
  * The 0–5 star control a voter scores an option with.
  *
- * This is deliberately not Mantine's `Rating`, which was what the ballot used
- * until it turned out to score the wrong option on a phone. Two things about
- * it are touch-only, so neither shows up in a desktop browser or its device
- * emulator, and both were live on the ballot at once:
+ * Deliberately not Mantine's `Rating`, which scored the wrong option on a
+ * phone. Two things about it are touch-only — invisible in a desktop browser
+ * or its device emulator — and both were live on the ballot at once:
  *
- * - It sets the score from `touchstart`, reading the score off the finger's x
- *   coordinate against the row's bounding box. A finger that lands on a star
- *   row only to *scroll* the page therefore scores that option on the way
- *   past — so scrolling down to option 2 could silently rewrite option 1, and
- *   with the ballot's re-tap-to-clear on top, landing on the star that was
- *   already picked wiped that option's score outright.
- * - The tap is then applied a second time by the click the browser
- *   synthesises after it. Mantine suppresses that click with a
- *   `preventDefault` in `touchend`, which browsers honour unevenly; where it
- *   does not hold, the second pass runs into re-tap-to-clear and takes the
- *   score straight back to 0 — the same tap both setting and clearing it.
+ * - It sets the score from `touchstart`, off the finger's x coordinate against
+ *   the row's bounding box, so a finger landing on a star row only to *scroll*
+ *   scored that option on the way past. With re-tap-to-clear on top, landing
+ *   on the star already picked wiped the score outright.
+ * - The tap is then applied again by the click the browser synthesises after
+ *   it. Mantine suppresses that with a `preventDefault` in `touchend`, which
+ *   browsers honour unevenly; where it does not hold, the second pass runs
+ *   into re-tap-to-clear and takes the score back to 0.
  *
- * So: one event path, `click`, which is the one path every browser agrees
- * on, and no coordinate arithmetic — a star is a button and says which score
- * it is. Scrolling with a finger on the stars scrolls, and nothing else.
+ * So: one event path, `click`, which every browser agrees on, and no
+ * coordinate arithmetic — a star is a button and says which score it is.
+ * Scrolling with a finger on the stars scrolls, and nothing else.
  *
- * 0 is a real score here rather than the absence of one, and the only way to
- * reach it is to press the star that is already picked, which is why that
- * gesture returns the option to 0. The ballot says so above the options.
+ * 0 is a real score rather than the absence of one, and the only way to reach
+ * it is to press the star already picked. The ballot says so above the
+ * options.
  *
  * The group is a radio group to a screen reader: one tab stop, arrow keys to
  * move between the scores, Left from one star clearing back to 0.

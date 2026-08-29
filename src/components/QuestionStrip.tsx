@@ -8,8 +8,8 @@ import { badgeColor } from '../lib/badgeColors'
  *
  * A multi-question poll is several polls under the hood, each with its own
  * ballot, its own tally and its own address. This is the only thing on screen
- * that says so is not the case: it names the poll's questions in order, marks
- * the one being read, and puts the next and previous within one tap. Without
+ * that holds them together as one poll: it names the questions in order,
+ * marks the one being read, and puts the next and previous within one tap. Without
  * it a voter who answered question 1 would be looking at a finished poll with
  * nowhere to go.
  *
@@ -26,37 +26,23 @@ import { badgeColor } from '../lib/badgeColors'
  * ballots.
  *
  * **Marks are shown only where they are honest, and the two ways in are honest
- * about different things.** On an invite poll the server knows which questions
- * this account has answered and finished adding to, and says so: `poll_group`
- * returns a flag per question for each, because an invite ballot and an invite
- * confirmation both carry the voter's account and nothing has to be linked to
- * find them. On an open poll it does not and must not — a share-link ballot is
- * identified by a key minted per question so that one browser's ballots cannot
- * be joined, its confirmations the same, and `open_poll_group` returns no such
- * flag on purpose.
- *
- * That is a rule about *the server*, not about the reader, and it was read as
- * both: `answered` arrived undefined on every open poll, so no question was
- * ever marked on the public route and none was marked on the creator's own
- * page either, since an open poll's ballots carry no account for `poll_group`
- * to match. The tick a voter was owed was withheld from the one party
- * entitled to it. `open_poll_group`'s own comment says as much — the browser
- * already knows which questions it has answered, and is the one place
- * entitled to — so the flag comes from `lib/questionMarks.ts` there, out
- * of this browser's own storage, and reaches the server no more than the
- * remembered voter name does.
+ * about different things.** On an invite poll the server knows what this
+ * account has answered and finished adding to, and `poll_group` says so.
+ * On an open poll it does not and must not — a share-link ballot is identified
+ * by a key minted per question so one browser's ballots cannot be joined, and
+ * `open_poll_group` returns no such flag on purpose. That is a rule about *the
+ * server*, not about the reader: the browser already knows which questions it
+ * has answered and is the one place entitled to, so there the flag comes out
+ * of `lib/questionMarks.ts` and reaches the server no more than the remembered
+ * voter name does.
  *
  * This component asks for none of that. It takes a boolean per question and
- * colours a badge with it; where the boolean came from is the page's
- * business, and the two pages answer it the way each honestly can.
+ * colours a badge with it; where the boolean came from is the page's business.
  *
  * **And no boolean at all means no mark**, which is the third honest answer
- * and the one a finished poll gives. A poll that has stopped taking votes has
- * nothing to be done about a question the reader skipped, so *done* and
- * *outstanding* are a distinction about a ballot nobody can still cast — and
- * *outstanding* in particular is a nudge towards something the poll will no
- * longer accept. The strip then says only which question is open and where
- * the others are, in one neutral colour.
+ * and the one a finished poll gives: *done* and *outstanding* would be a
+ * distinction about a ballot nobody can still cast, and *outstanding* in
+ * particular a nudge towards something the poll will no longer accept.
  */
 export function QuestionStrip({
   questions,

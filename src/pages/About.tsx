@@ -21,6 +21,7 @@ import {
   SignInIcon,
   StarIcon,
 } from '@phosphor-icons/react'
+import { useAuth } from '../lib/auth'
 import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 
 /**
@@ -387,6 +388,12 @@ const PROPERTIES: Entry[] = [
  * arithmetic is the shape it is, and it takes about fifteen seconds.
  */
 function Samples() {
+  // The third card is the only part of this page that depends on who is
+  // reading it. A signed-in account was still being told to sign in, on a
+  // button that took them to the poll list they already have — the one card
+  // on the page whose copy was wrong for half its readers.
+  const { session } = useAuth()
+
   return (
     <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
       <Sample
@@ -408,12 +415,16 @@ function Samples() {
         action="Example result"
       />
       <Sample
-        to="/"
+        to={session ? '/polls/new' : '/'}
         icon={<SignInIcon size={22} aria-hidden />}
         gradient="create"
         title="Try it yourself"
-        body="Sign in to try making and sending your own polls."
-        action="Sign in"
+        body={
+          session
+            ? 'Make a poll of your own and send it to your friends.'
+            : 'Sign in to try making and sending your own polls.'
+        }
+        action={session ? 'New poll' : 'Sign in'}
       />
     </SimpleGrid>
   )

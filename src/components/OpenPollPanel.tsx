@@ -1,14 +1,14 @@
-import { useState, type ReactNode } from 'react'
+import { Suspense, useState, type ReactNode } from 'react'
 import { Button, Card, Group, Stack, Text } from '@mantine/core'
 import { openPollRpc } from '../lib/samplePoll'
 import { voterKeyFor } from '../lib/voterKey'
 import type { VoterName } from '../lib/voterName'
-import { Ballots } from './Ballots'
 import { BallotCard, type BallotScore } from './BallotCard'
 import { CollectOptions, Confirmations } from './CollectOptions'
+import { Ballots, Results } from './deferred'
 import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
-import { Results } from './Results'
+import { BallotsSkeleton, ResultsSkeleton } from './Skeletons'
 import { VoterNameField } from './VoterNameField'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
@@ -156,21 +156,15 @@ export function OpenPollPanel({
   }
 
   // Who has voted, on a poll that names them. Only the names: how many is in
-  // the header badge above, once, on every screen the poll appears on.
+  // the header badge, once, on every screen the poll appears on.
   //
-  // One condition and no second one. It used to be held back until you had
+  // One condition and no second one. It was once held back until you had
   // voted, because watching a roster fill up is a live feed of the arrival
-  // order — names attached to the moment each one arrived, which is what the
-  // published ballots work to keep off the record by ordering themselves on a
-  // hash instead of on time. That bought a narrower version of a leak it could
-  // not close (a voter still sees everyone who arrives after them) at the
-  // price of one card behaving three ways, and of the same card in the
-  // collecting stage above answering a question about options that no rule
-  // about ballots can sensibly embargo. A poll that says it shows who has
-  // responded shows it, to everyone in it, whichever stage it is at.
-  //
-  // A poll that hides respondents renders nothing here at all: it has no
-  // names to show, and the header has already said how many and why.
+  // order — but that bought a narrower version of a leak it could not close (a
+  // voter still sees everyone arriving after them) at the price of one card
+  // behaving three ways. A poll that says it shows who has responded shows it,
+  // to everyone in it, whichever stage it is at; one that hides them renders
+  // nothing here, and the header has already said how many and why.
   const participation = view.voters ? (
     <NameRoster title="Voters" names={view.voters} empty="Nobody has voted yet." />
   ) : null
@@ -184,11 +178,17 @@ export function OpenPollPanel({
             must not take the way out of the question with it. The invite
             reading places it the same way, for the same reason. */}
         {questionStrip}
-        <Results source={{ kind: 'open', pollId }} initial={results} />
+        <Suspense fallback={<ResultsSkeleton options={view.options.length || undefined} />}>
+          <Results source={{ kind: 'open', pollId }} initial={results} />
+        </Suspense>
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}
-        {view.poll.show_ballots && <Ballots source={{ kind: 'open', pollId }} initial={ballots} />}
+        {view.poll.show_ballots && (
+          <Suspense fallback={<BallotsSkeleton rows={view.voted_count || undefined} />}>
+            <Ballots source={{ kind: 'open', pollId }} initial={ballots} />
+          </Suspense>
+        )}
       </Stack>
     )
   }

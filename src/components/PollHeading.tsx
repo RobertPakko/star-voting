@@ -68,26 +68,19 @@ export function PollHeading({
 }) {
   return (
     <Stack gap="xs">
-      {/* The title and the badge share one row, sixty/forty, and neither is
-          allowed to take the other's half.
+      {/* The title and the badge share one row, sixty/forty, and neither may
+          take the other's half. Both earlier attempts came apart on a phone:
+          left free to give, the title wrapped a character at a time down the
+          side of a badge holding 220px of a 330px card; pinned so the badge
+          could not shrink, the row wrapped and the badge dropped onto a line
+          of its own.
 
-          Both earlier attempts came apart on a phone. Left free to give, the
-          title took min-content and wrapped one or two characters at a time
-          down the side of a badge holding 220px of a 330px card; pinned so
-          the badge could not shrink, the row had to wrap and the badge
-          dropped onto a line of its own, which is a lot of vertical space for
-          a word or two and reads as a second thing rather than as part of the
-          heading.
-
-          So the split is stated instead of negotiated. The title's *basis* is
+          So the split is stated rather than negotiated. The title's *basis* is
           60% and the badge's ceiling is 40%, and the slack goes to whoever
-          needs it: the badge takes only as much as its text — *In progress*
-          asks for a fifth of the row, not two fifths — and the title grows
-          into everything left over, so sixty is a floor rather than a
-          serving. Past the ceiling it is the title that gives, wrapping
-          inside its own share, because a wrapped title is still readable and
-          an elected option ellipsised to two letters is not an answer at
-          all. */}
+          needs it — the badge takes only as much as its text, so sixty is a
+          floor rather than a serving. Past the ceiling the title gives, because
+          a wrapped title is still readable and an elected option ellipsised to
+          two letters is not an answer at all. */}
       <Stack gap={2}>
         <Group align="flex-start" gap="sm" wrap="nowrap">
           {/* `minWidth: 0` is what lets a flex item shrink below its longest

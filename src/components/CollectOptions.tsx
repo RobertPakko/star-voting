@@ -55,17 +55,15 @@ export interface Confirmation {
   confirmed: boolean
   /**
    * Whether this press could be the press that opens the poll — a poll with a
-   * participant list, still waiting on somebody. It is the one thing about the
-   * button that is not obvious from the button, and somebody deciding whether
-   * to press it should know it before they do.
+   * participant list, still waiting on somebody. The one thing about the
+   * button that is not obvious from the button.
    *
-   * **How many have confirmed is deliberately not here.** That is the count
-   * badge's job, in the poll's header, on every screen the poll appears on. It
-   * is false once everybody has confirmed, which is a poll that stayed put for
-   * a reason this card cannot name — a question of the group nobody has
-   * finished, or a list still short of two options — so it says the creator
-   * ends the stage rather than promising an opening that has already not
-   * happened.
+   * **How many have confirmed is deliberately not here**; that is the count
+   * badge's job. It is false once everybody has confirmed, which is a poll
+   * that stayed put for a reason this card cannot name — a question of the
+   * group nobody has finished, or a list still short of two options — so it
+   * says the creator ends the stage rather than promising an opening that has
+   * already not happened.
    */
   opensWhenEveryoneHas?: boolean
 }
@@ -76,37 +74,29 @@ export interface Confirmation {
  * thing being filled in, and what happens next beside the button that ends
  * your part in it.
  *
- * That is the whole of why this looks the way it does. Collecting options is
- * the ballot's stage, at the same address, in the same place on the page, and
- * a reader who has done one should recognise the other — so the two cards are
- * built the same way round rather than each in whatever order it grew in.
+ * Collecting options is the ballot's stage, at the same address and in the
+ * same place on the page, so the two cards are built the same way round rather
+ * than each in whatever order it grew in.
  *
- * It stands in for the ballot on two occasions, and they are not the same
- * occasion:
+ * It stands in for the ballot on two occasions, and they are not the same:
  *
  *  - a poll **still collecting** its options, which has no ballot yet.
  *    Everyone in the poll sees this list and this box, the creator included,
- *    who suggests through the same RPC as everybody else rather than a path
- *    of their own. That is the same shape as the creator voting in their own
- *    open poll through the anon RPC: one code path, one set of rules, and no
- *    way for the creator's list to be built under rules nobody else's is.
+ *    who suggests through the same RPC as everybody else — one code path, and
+ *    no way for the creator's list to be built under rules nobody else's is.
  *  - a poll whose creator is **correcting** a list that is already a ballot,
- *    which only they see, and only while nobody has voted. That path is
- *    `source.kind === 'creator'`; see `OptionsSource` above. It confirms
- *    nothing and carries its own way out, as `footer`.
+ *    which only they see and only while nobody has voted. That path is
+ *    `source.kind === 'creator'`. It confirms nothing and carries its own way
+ *    out, as `footer`.
  *
- * Suggestions carry no name. Who suggested what would be a third disclosure
- * question on top of "who responded" and "how they voted", and the poll's
- * tags answer neither of those about the option list. The name field at the
- * top is the confirmation's, on the one poll that has no account to read one
- * from — the same field, in the same place, that the same poll's ballot asks
- * for.
+ * Suggestions carry no name: who suggested what would be a third disclosure
+ * question on top of "who responded" and "how they voted", and the poll's tags
+ * answer neither about the option list. The name field at the top is the
+ * *confirmation's*, on the one poll with no account to read one from.
  *
- * Pruning the list is creator-only either way, and sits here beside the list
- * it acts on, the same place the invite controls sit inside `Respondents`.
- * Opening the poll does not: it is what the creator does to the *poll*, so it
- * is in `CreatorControls` with the rest of the lifecycle, and this component
- * has nothing to say about when the stage ends.
+ * Pruning is creator-only and sits beside the list it acts on. Opening the
+ * poll does not: that is what the creator does to the *poll*, so it lives in
+ * `CreatorControls` with the rest of the lifecycle.
  */
 export function CollectOptions({
   source,
@@ -334,13 +324,10 @@ function OptionList({
 }) {
   const [name, setName] = useState('')
   // Always on screen here, unlike the create form, where a `+` opens one per
-  // row. That form shows a dozen option rows at once and a description field
-  // under every one of them would bury the list; this box is one option at a
-  // time, so the field costs two rows of a card that has nothing else in it —
-  // and the alternative was a `+` that had to be found and pressed before the
-  // most useful thing a suggestion can carry could be typed. So there is
-  // nothing to open, and no state for whether it is open: the string is the
-  // whole of it, and empty means no description, the same as it always did.
+  // row: that form shows a dozen option rows at once and a field under each
+  // would bury the list, while this box is one option at a time. So there is
+  // nothing to open and no state for whether it is open — the string is the
+  // whole of it, and empty means no description.
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   // What is wrong with the suggestion being typed, against the field it is
@@ -399,7 +386,11 @@ function OptionList({
     }
 
     setBusy(true)
-    const body = { p_name: trimmed, p_description: trimmedDescription || null }
+    // Omitted rather than sent as null when there is nothing to say: the
+    // argument defaults to NULL in the database, so the two reach
+    // `insert_option` identically, and leaving it out is the shape the
+    // generated `Args` describes.
+    const body = { p_name: trimmed, p_description: trimmedDescription || undefined }
     const { error: rpcError } =
       source.kind === 'poll'
         ? await supabase.rpc('suggest_option', { p_poll_id: source.pollId, ...body })

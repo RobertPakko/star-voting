@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Center, Loader, Text } from '@mantine/core'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './lib/auth'
@@ -9,12 +9,32 @@ import { rememberDestination, takeDestination } from './lib/shareLink'
 import { SignIn } from './pages/SignIn'
 import { Layout } from './components/Layout'
 import { PollList } from './pages/PollList'
-import { CreatePoll } from './pages/CreatePoll'
 import { PollDetail } from './pages/PollDetail'
 import { PublicPoll } from './pages/PublicPoll'
-import { About } from './pages/About'
-import { PollPageSkeleton } from './components/Skeletons'
+import { AboutSkeleton, FormSkeleton, PollPageSkeleton } from './components/Skeletons'
 import type { PollRead } from './lib/types'
+
+/**
+ * The two routes nobody is on when the app first paints, fetched when they
+ * are asked for rather than with everything else.
+ *
+ * The split is drawn where the reader's own path is: a voter opening a share
+ * link needs a ballot, and used to download the create form's tab strip, tag
+ * input and segmented controls, and the whole of the About page, before they
+ * could score anything. Neither is reachable from a poll page, so neither can
+ * be needed in the same breath as one.
+ *
+ * The poll pages themselves are not split, and deliberately: they *are* the
+ * first paint for the reader this app is least able to ask anything of.
+ * `samplePollData` is split too, by an `import()` in lib/samplePoll.ts, for
+ * the same reason one step further out.
+ *
+ * Each waits behind the shape of the page it is fetching, like every other
+ * wait in the app — see Skeletons.tsx. A spinner here would be the one place
+ * in the app that has a spinner and a known shape at the same time.
+ */
+const CreatePoll = lazy(() => import('./pages/CreatePoll').then((m) => ({ default: m.CreatePoll })))
+const About = lazy(() => import('./pages/About').then((m) => ({ default: m.About })))
 
 function App() {
   const { session, loading } = useAuth()
@@ -50,12 +70,26 @@ function App() {
             point of its link being its id: `PollPage` decides which of the
             two readings of it to render, rather than the URL deciding. */}
         <Route path="polls/:pollId" element={<PollPage />} />
-        <Route path="about" element={<About />} />
+        <Route
+          path="about"
+          element={
+            <Suspense fallback={<AboutSkeleton />}>
+              <About />
+            </Suspense>
+          }
+        />
 
         {session && (
           <>
             <Route index element={<PollList />} />
-            <Route path="polls/new" element={<CreatePoll />} />
+            <Route
+              path="polls/new"
+              element={
+                <Suspense fallback={<FormSkeleton />}>
+                  <CreatePoll />
+                </Suspense>
+              }
+            />
           </>
         )}
       </Route>
@@ -70,53 +104,33 @@ function App() {
 /**
  * A poll, as whoever is looking at it can see it.
  *
- * One address serves both readings, because a poll has one address: a signed
- * -in participant gets `PollDetail`, which reads the poll as an account and
- * carries the creator's controls, and everybody else gets `PublicPoll`, which
- * reads it through the anon RPCs and can therefore only ever show an open
- * one. There used to be a route each -- `#/polls/:id` for the first and
- * `#/p/:token` for the second -- and the split was the whole of what made an
- * open poll's creator unable to hand out the address in front of them.
+ * One address serves both readings, because a poll has one address: a
+ * signed-in participant gets `PollDetail`, which reads the poll as an account
+ * and carries the creator's controls, and everybody else gets `PublicPoll`,
+ * which reads it through the anon RPCs and can therefore only ever show an
+ * open one.
  *
  * **The read that decides is the read that draws the page.** `poll_page`
- * answers both at once -- which reading this reader is entitled to, and the
- * whole of it -- so the route no longer has to find out by trying. See
- * lib/pollPage.ts and 0048_one_read_opens_a_poll.sql.
+ * answers both at once — which reading this reader is entitled to, and the
+ * whole of it — so the route never finds out by trying. It used to, and the
+ * trying was not free: a signed-in stranger holding an open poll's link paid
+ * four queries answered with nothing, a discarded render, and then the public
+ * reading starting from the beginning. See lib/pollPage.ts.
  *
- * It used to find out by trying, and the trying was not free. Every address
- * went to `PollDetail` first, on the reasoning that it read the `polls` row
- * as its first act anyway and row-level security answers exactly the question
- * being asked. That is true, and it is a good deal for the creator opening
- * their own poll. It is a bad one for a signed-in stranger holding an open
- * poll's link: four queries answered with nothing, a discarded render, and
- * then the public reading starting again from the beginning. Three round
- * trips to open a poll that was public the whole time. Asking one question
- * that has a real answer costs the creator nothing and costs the stranger two
- * of those trips.
+ * **The answer does not change who can see what.** `poll_page` calls the same
+ * functions this page used to call one at a time, and an invite poll somebody
+ * is not in comes back tagged exactly as a poll that does not exist — so the
+ * read cannot be used to find out which polls are real.
  *
- * **What the answer does not change is who can see what.** `poll_page` calls
- * the same functions this page used to call one at a time, so every rule
- * about who may read a poll is where it always was; it grants nothing that
- * asking them separately would not have. And an invite poll somebody is not
- * in comes back tagged exactly as a poll that does not exist, so the read
- * cannot be used to find out which polls are real.
+ * **A crossing is not an arrival.** Every question answers with its whole
+ * group, so the read that opened one already describes its siblings: walking
+ * between them re-decides nothing and keeps the same page mounted, which is
+ * what stops the heading and the strip blinking on the way.
  *
- * **A crossing is not an arrival.** Every question of a multi-question poll
- * answers with the whole group, so the read that opened one question already
- * describes its siblings: walking between them re-decides nothing and keeps
- * the same page mounted, which is what stops the heading and the strip
- * blinking on the way. Only an address this read does not cover is an arrival
- * somewhere new, and only that waits.
- *
- * **The About page's sample poll is the one address that skips all of this.**
- * Its ids are words rather than uuids and it is answered out of a file in the
- * browser, so there is no row for the account reading to find and no sign-in
- * that could produce one: `PollDetail` asked the `polls` table about
- * `sample-host` and got back Postgres complaining that it is not a uuid,
- * which is what a signed-in reader saw where the sample should have been.
- * Under the two routes this replaced the question never came up, because
- * `#/p/:token` went to the public reading and nowhere else. See
- * `isSampleId` in lib/samplePoll.ts.
+ * **The About page's sample skips all of this.** Its ids are words rather than
+ * uuids and it is answered out of a file, so there is no row for the account
+ * reading to find — `PollDetail` asking the `polls` table about `sample-host`
+ * got back Postgres complaining that it is not a uuid. See `isSampleId`.
  */
 function PollPage() {
   const { session } = useAuth()
@@ -200,17 +214,9 @@ function PollPage() {
   }, [arrive])
 
   // The route holds the subscription, and the poll's first read happens on
-  // subscribing — the rule every other page in the app follows, which this one
-  // could not while the read that chose the page was made before the page
-  // existed to subscribe. The topic is `poll:<id>` and the id is in the URL,
-  // exactly as the poll list's topic is its reader's id, so there is nothing
-  // left to read the poll to find out.
-  //
-  // What that buys is one request to open a poll instead of two. The page used
-  // to be read here and then, a moment later, read again by the page it chose
-  // the instant its own subscription went live — not waste, but the price of
-  // the window between the two, in which a vote could land unheard. Subscribing
-  // first closes the window rather than paying for it.
+  // subscribing — the rule every other page follows. The topic is `poll:<id>`
+  // and the id is in the URL, so there is nothing left to read the poll to
+  // find out, and opening a poll costs one request instead of two.
   //
   // The sample watches nothing: it is answered out of a file in this browser,
   // so there is no topic and `PublicPoll` reads it for itself.

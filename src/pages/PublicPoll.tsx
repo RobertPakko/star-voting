@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Divider, Stack, Text, Title } from '@mantine/core'
 import { isSampleId, openPollRpc } from '../lib/samplePoll'
 import { readPollPage } from '../lib/pollPage'
+import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
 import {
   answeredQuestions,
@@ -220,16 +221,22 @@ export function PublicPoll({
       p_poll_id: pollId,
       p_voter_key: voterKeyFor(pollId),
     })
-    if (rpcError) {
-      // A later read keeps the poll already on screen; turning a page
-      // somebody has been voting on into "poll not found" because one request
-      // lost a race with a flaky connection would be a lie about their link.
+    // A read that failed and a read that came back the wrong shape are the
+    // same event here, and get the same handling: a later read keeps the poll
+    // already on screen, because turning a page somebody has been voting on
+    // into "poll not found" over one lost request would be a lie about their
+    // link. Only a first read says anything.
+    const { value, error: shape } = rpcError
+      ? { value: null, error: rpcError.message }
+      : parseAnswer(openPollViewSchema, 'open_poll_view', data)
+
+    if (!value) {
       if (loadedFor.current !== pollId) {
-        setFailed({ pollId, message: rpcError.message })
+        setFailed({ pollId, message: shape ?? 'Poll not found.' })
       }
       return false
     }
-    finish(pollId, data as OpenPollView)
+    finish(pollId, value)
     return true
   }, [pollId, finish])
 
@@ -262,12 +269,10 @@ export function PublicPoll({
   const shell = view ?? sibling
   const error = failed && failed.pollId === pollId ? failed.message : null
 
-  // The poll's other questions arrive with the poll itself, in the read that
-  // opened it: `poll_page` answers the same list for every question in the
-  // group, so crossing between them asks the server for nothing at all. That
-  // is what keeps the strip on screen while it happens — it used to be a
-  // second request behind this page, which could not even be sent until the
-  // first came back and said the poll had a group.
+  // The poll's other questions arrive with the poll itself: `poll_page`
+  // answers the same list for every question in the group, so crossing between
+  // them asks the server for nothing and the strip stays on screen while it
+  // happens.
   const known = questions.some((question) => question.id === pollId)
 
   const sample = !!pollId && isSampleId(pollId)
@@ -335,15 +340,9 @@ export function PublicPoll({
   }))
   // How many questions the poll asks, for the count badge: a poll of several
   // has no turnout, only turnouts, so the badge says how much there is to
-  // answer instead. See turnoutLabel.
-  //
-  // There is no "not known yet" to draw around any more. The group used to
-  // arrive in a read behind this page, so a poll that had one drew a turnout
-  // and rewrote itself into *5 questions* a moment later unless the badge was
-  // held back — the same flicker the winner badge below still waits to avoid.
-  // Now the strip arrives with the poll, so `known` is true wherever there is
-  // a poll on screen to put a badge on, and a poll with no group asks one
-  // question.
+  // answer instead. See turnoutLabel. The strip arrives with the poll, so
+  // `known` is true wherever there is a poll on screen to put a badge on, and
+  // a poll with no group asks one question.
   const questionCount = !shell.poll.group_id ? 1 : known ? questions.length : 1
   const onwards = nextUnansweredKey(strip, pollId)
   // The way on, taken rather than offered, at both stages: whoever has just
@@ -384,18 +383,14 @@ export function PublicPoll({
           for the reason PollHeading exists: one poll should not be two
           different-looking things depending on how you reached it.
 
-          One of its four parts is left out here, and knowingly: who created
-          the poll. Every email address this app shows anywhere is shown to
-          somebody already in the poll it belongs to, and a share link has no
-          such boundary — it reaches whoever it was forwarded to.
+          One of its four parts is knowingly left out: who created the poll.
+          Every email address this app shows is shown to somebody already in
+          the poll it belongs to, and a share link has no such boundary.
 
-          Someone arriving from a shared link has no other context at all, so
-          the terms of the poll are stated in full, not just the one that
-          changes what happens to their ballot. The count included, and before
-          this reader has voted: what a poll keeps from its voters is how it
-          is *going*, the standings, which stay sealed until the results
-          unlock, and how many have answered is not that. It names nobody, it
-          says nothing about any ballot, and the roster below still waits. */}
+          The terms are stated in full, the count included, and before this
+          reader has voted: what a poll keeps from its voters is how it is
+          *going* — the standings, sealed until the results unlock — and how
+          many have answered is not that. It names nobody. */}
       <PollHeading
         title={shell.poll.title}
         description={shell.poll.description}
@@ -403,19 +398,15 @@ export function PublicPoll({
         mode={shell.poll.mode}
         showVoters={shell.poll.show_voters}
         showBallots={shell.poll.show_ballots}
-        turnout={
-          questionCount === 0
-            ? undefined
-            : {
-                soliciting: shell.soliciting,
-                mode: shell.poll.mode,
-                votedCount: shell.voted_count,
-                invitedCount: 0,
-                confirmedCount: shell.confirmed_count,
-                optionCount: shell.options.length,
-                questionCount,
-              }
-        }
+        turnout={{
+          soliciting: shell.soliciting,
+          mode: shell.poll.mode,
+          votedCount: shell.voted_count,
+          invitedCount: 0,
+          confirmedCount: shell.confirmed_count,
+          optionCount: shell.options.length,
+          questionCount,
+        }}
         state={{
           soliciting: shell.soliciting,
           resultsAvailable: shell.results_available,

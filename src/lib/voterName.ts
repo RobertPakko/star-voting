@@ -3,28 +3,22 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 /**
  * The name this browser last voted under, offered back on the next ballot.
  *
- * A poll that asks several questions is several polls under the hood, and an
- * open poll's ballots are identified by a `voter_key` that is deliberately
- * minted per question so that one browser's ballots cannot be joined to each
- * other; see `voterKey.ts` for what that scoping is worth. Nothing on the
- * server therefore knows that the person answering question 2 is the one who
- * answered question 1, and nothing on the server should.
+ * An open poll's ballots are identified by a `voter_key` minted per question
+ * precisely so one browser's ballots cannot be joined to each other, so
+ * nothing on the server knows that the person answering question 2 answered
+ * question 1 — and nothing on the server should. The continuity lives here
+ * instead, in the one place entitled to it. Nothing new is sent anywhere: the
+ * name still reaches the server only when a ballot is submitted, and only for
+ * the question it was submitted to.
  *
- * So the continuity lives here instead, in the one place entitled to it: the
- * voter's own browser. Typing your name once and having it offered back is a
- * convenience the browser can provide alone, and providing it this way sends
- * nothing new anywhere — the name still reaches the server only when a ballot
- * is submitted, and only for the question it was submitted to.
+ * **Stored per browser, not per poll.** A name is not a per-poll secret; it is
+ * what this person is called. Somebody answering under a pseudonym overwrites
+ * it by typing a different one.
  *
- * **Stored per browser, not per poll.** A name is not a per-poll secret; it
- * is what this person is called, and it is the same on the next poll as on
- * this one. Somebody who answers under a pseudonym can overwrite it by
- * typing a different one, which is the same gesture as changing it.
- *
- * It is only ever a suggestion. Every ballot's name field starts filled in
- * and stays editable, and a poll that hides its respondents shows no field at
- * all — `open_poll_submit` discards the name on such a poll whatever the
- * client sends, so a remembered name cannot leak onto an anonymous ballot.
+ * It is only ever a suggestion — every field starts filled in and stays
+ * editable — and a poll that hides its respondents shows no field at all:
+ * `open_poll_submit` discards the name on such a poll whatever the client
+ * sends, so a remembered name cannot leak onto an anonymous ballot.
  */
 
 const STORAGE_KEY = 'star-voting:voter-name'
@@ -56,25 +50,14 @@ export function rememberVoterName(name: string): void {
  * typed into it.
  *
  * A share link carries no account, so a poll that shows who has responded has
- * to ask — on the ballot, and on the card the option list is confirmed from,
- * which is the same field in the same place at two stages of the same poll.
- * It was written out twice, once in each card, down to the comment explaining
- * `enterKeyHint`; `VoterNameField` is that field, once, and this is what it
- * draws from.
+ * to ask — on the ballot, and on the card the option list is confirmed from.
+ * `VoterNameField` is that field, once; this is what it draws from.
  *
- * **The state lives above the card, in the page.** A name is not a fact about
- * a question — it is what this person is called, the same on question 5 as on
- * question 1, which is the whole reason the storage above carries it from one
- * question to the next. Held inside the card it also *ended* with the card:
- * crossing between two questions unmounts that card, so a name typed but not
- * yet sent was thrown away by the crossing, and the box itself blinked out
- * with everything else while the next question was read. Held in the page,
- * which stays mounted across a crossing, it is one field that goes on
- * standing there — the stand-in a crossing puts up draws this same node, so
- * nothing about it moves.
- *
- * The page therefore holds it with `useVoterName` and hands the result to
- * whichever card is up.
+ * **The state lives above the card, in the page**, because crossing between
+ * two questions unmounts the card: held in there, a name typed but not yet
+ * sent went with the crossing and the box blinked out with it. The page stays
+ * mounted, and the stand-in a crossing puts up draws this same node, so
+ * nothing about the field moves.
  */
 export type VoterName = {
   /** What is in the box, and what the field draws. */

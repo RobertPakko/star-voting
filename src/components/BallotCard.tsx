@@ -13,25 +13,20 @@ export type BallotScore = { candidate_id: string; score: number }
  * The ballot itself: a score per option, and the button that sends them.
  *
  * There are two ballots in the app and there is one of this. An invite poll's
- * goes to `submit_ballot` as the account that is signed in; an open poll's
- * goes to `open_poll_submit` as `anon`, carrying a voter key and, the first
- * time, a name. Those are genuinely two paths — different grants, different
- * guards, different things to get wrong — and they stay two functions, the
- * way `submit_ballot` and `open_poll_submit` are two functions over one
- * `replace_scores()`. What was never two things is the ballot on screen: the
- * same shuffled rows, the same stars, the same "you can change your vote"
- * beside the same pair of buttons. Held as copies, they drifted in exactly
- * the places nobody looks — a `<br/>` here and not there — and any change to
- * scoring had to be made twice or be made on one kind of poll only.
+ * scores go to `submit_ballot` as the signed-in account; an open poll's go to
+ * `open_poll_submit` as `anon`, carrying a voter key and, the first time, a
+ * name. Those are genuinely two paths — different grants, different guards —
+ * and they stay two functions. What was never two things is the ballot on
+ * screen, and held as copies the two drifted in exactly the places nobody
+ * looks.
  *
  * So the caller says what its ballot is *for*: which options, what it says
- * about the results, and where to send the scores. Everything a voter
- * touches is here.
+ * about the results, and where to send the scores. Everything a voter touches
+ * is here.
  *
- * The same form fills in a ballot and changes one, on both kinds of poll,
- * which is why `initial` is the only thing that tells them apart. A ballot
- * you are changing that looked or behaved unlike the ballot you cast would be
- * two things to learn rather than one.
+ * The same form fills in a ballot and changes one, which is why `initial` is
+ * the only thing telling them apart: a ballot you are changing that looked or
+ * behaved unlike the one you cast would be two things to learn.
  */
 export function BallotCard({
   options,

@@ -1,39 +1,25 @@
 /**
- * Where a voter goes once they have answered the question in front of them.
+ * Where a voter goes once they have answered the question in front of them:
+ * the next question they still owe, not simply the next one along.
  *
- * A poll of several questions moves the voter on by itself — see the pages
- * that call this — and the question it moves them to is the next one they
- * still owe, not simply the next one along. The two are the same thing for
- * anybody working a poll front to back, which is nearly everybody; they come
+ * The two are the same thing for anybody working front to back. They come
  * apart for the voter who jumped into the middle from the question strip, and
- * for that voter "the next one" would be a question they have already
- * answered. Being carried to a ballot that is already cast is not progress,
- * it is a page saying *your vote is in* that nobody asked to see.
+ * for them "the next one" is a question already answered — a page saying
+ * *your vote is in* that nobody asked to see.
  *
- * **It rounds.** The search runs forward from the question just answered and
- * then wraps to the ones before it, so a voter who started at question 3 is
- * taken back to question 1 rather than left standing on the last question
- * with two unanswered ones behind them. Stopping at the end would be a dead
- * end: the card that used to offer the way on is gone, and what remains is
- * the strip, which says which questions are outstanding but does not act. If
- * a poll still has an unanswered question in it, there is somewhere to go.
+ * **It rounds.** The search runs forward and then wraps, so a voter who
+ * started at question 3 is taken back to question 1 rather than left on the
+ * last question with two unanswered ones behind them. **Nothing owed returns
+ * null**, and the page then stays put and re-reads itself into *your vote is
+ * in*, as a single-question poll always has.
  *
- * **Nothing is left when there is nothing owed.** Every other question
- * answered returns null, and the page then does what a single-question poll
- * has always done: stays where it is and re-reads itself into *your vote is
- * in*. The question just answered is excluded by key rather than by its flag,
- * because this is asked at the moment the ballot goes in and no read has yet
- * come back to say so.
- *
- * It takes the same list the strip is drawn from, deliberately: the voter is
- * only ever sent to a question the strip in front of them shows as
- * outstanding, and one list is what makes that true rather than a promise.
+ * It takes the same list the strip is drawn from, so the voter is only ever
+ * sent to a question the strip in front of them shows as outstanding.
  *
  * **"Answered" is whatever the poll's stage is asking for**, which is how this
  * serves the option-collecting stage without knowing there is one: while a
- * poll is still collecting, the list handed in is marked by whose lists this
- * reader has confirmed, so *Confirm options* carries them to the next list
- * they owe exactly as a first ballot carries them to the next question.
+ * poll is collecting, the list is marked by whose lists this reader has
+ * confirmed, so *Confirm options* carries them on exactly as a ballot does.
  */
 export function nextUnansweredKey(
   questions: { key: string; answered?: boolean }[],

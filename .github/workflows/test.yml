@@ -37,3 +37,32 @@ jobs:
       - name: Install the psql client
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
       - run: test/run.sh
+
+  # The other half of the app, which had nothing checking it until now: the
+  # tally job above covers Postgres, and a type error or a broken bundle used
+  # to surface as a failed *deploy* on main, after merge, rather than as a red
+  # check on the pull request that introduced it.
+  app:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # The version deploy.yml builds with; the two should not drift.
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # Runnable at last: oxfmt checks line endings, and until `.gitattributes`
+      # arrived a Windows checkout handed it CRLF and it failed on every file.
+      # See the line-endings note in AGENTS.md.
+      - run: npm run fmt:check
+      # `npm run build` is `tsc -b && vite build`, so this is the typecheck and
+      # the bundle in one step, and it fails on whichever comes first.
+      #
+      # No Supabase secrets, unlike deploy.yml. They are read through
+      # `import.meta.env` and only matter to a bundle somebody is going to run;
+      # what is being asked here is whether the app compiles, and a pull
+      # request from a fork could not see them anyway.
+      - run: npm run build

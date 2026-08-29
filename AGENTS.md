@@ -34,6 +34,17 @@ already written in — no semicolons, single quotes, a hundred columns — and
 skips Markdown, since this file and the README are wrapped by hand and the
 wrapping carries meaning.
 
+Everything here is stored and checked out with LF, which
+[`.gitattributes`](.gitattributes) states as `* text=auto eol=lf`. That line
+is not decoration: oxfmt writes LF and *checks* for it, so without it a
+Windows clone under the default `core.autocrlf=true` gets a CRLF working tree,
+`npm run fmt:check` fails on every source file, and `npm run fmt` rewrites all
+of them into a diff `git diff` then shows as empty. Nothing in the repository
+was ever wrong — the committed blobs have always been LF and CI never saw it —
+but it made the formatter unusable on Windows. With the attributes file in
+place `fmt:check` passes everywhere, which is why it is a step in the `app`
+job of [`test.yml`](.github/workflows/test.yml).
+
 **One poll, two pages, one set of components.** A poll is read as an account
 on `PollDetail` and through its link on `PublicPoll`, and an open poll is read
 both ways by its own creator — so nearly everything a poll says about itself
@@ -199,7 +210,7 @@ directly with `pg_net`:
   ready](#telling-people-the-results-are-ready).
 
 The senders themselves are in
-[`0043_the_emails_a_poll_sends.sql`](supabase/migrations/0043_the_emails_a_poll_sends.sql),
+`0043_the_emails_a_poll_sends.sql`,
 which is also where the letterhead they share is written down; the triggers
 that call them are in the squashed baseline under
 [`supabase/migrations/`](supabase/migrations). Who hears which of them, and
@@ -259,6 +270,13 @@ as one that changes a result.
 Migration files accumulate, and a long chain of them gets slow to run and hard
 to read. Occasionally collapse the whole history into a single baseline file:
 
+A squash also deletes the files it folded in, so **a migration named anywhere
+in this document below the baseline number is history rather than a path.**
+Those are written as plain names — `0043_the_emails_a_poll_sends.sql` — and
+never linked, because the link would 404 the moment the next squash ran. The
+reasoning they carried is in this file; the schema they built is in the
+baseline.
+
 ```bash
 scripts/squash.sh
 ```
@@ -310,6 +328,12 @@ databases. `PGHOST`, `PGUSER` and friends are honoured, and with none set it
 falls back to a local cluster. There is no test framework and nothing to `npm
 install`. CI runs the same script against a `postgres` service container
 ([`.github/workflows/test.yml`](.github/workflows/test.yml)).
+
+That workflow has a second job, `app`, over the half of the codebase the
+cases above cannot reach: `npm run lint`, `npm run fmt:check`, and then
+`npm run build`, which is `tsc -b && vite build` and so covers the typecheck
+and the bundle together. It takes no Supabase secrets — nothing is being run,
+only compiled, and a pull request from a fork could not see them anyway.
 
 Getting to a server is `test/build-db.sh`'s job, and it is the same job for
 `scripts/sample-poll.sh`, which arrives through the same file: start the local
@@ -414,24 +438,22 @@ the ones that ship.
 
 Poll pages hold a websocket and re-read themselves when the database says
 something moved, so votes appear without a reload.
-[`src/lib/useLiveStream.ts`](src/lib/useLiveStream.ts) is the listening half;
-`broadcast_poll_change()` and the triggers around it — in the squashed
-baseline, then widened by
-[`0035_broadcast_polls_to_watchers.sql`](supabase/migrations/0035_broadcast_polls_to_watchers.sql)
-— are the telling half. This needs Realtime enabled on the Supabase project and
-nothing else: broadcasting from the database writes to `realtime.messages`,
-which needs no publication changes and no table grants.
+[`src/lib/useLiveStream.ts`](src/lib/useLiveStream.ts) is the listening half and
+documents its own rules — when it reads, what it does with a hidden tab, why it
+never stops watching a page that is on screen. Those are not repeated here.
+`broadcast_poll_change()` and the triggers around it are the telling half, and
+they are what this section is about. Realtime has to be enabled on the Supabase
+project and nothing else: broadcasting from the database writes to
+`realtime.messages`, which needs no publication changes and no table grants.
 
 **A signal, not the data.** Every message is empty. It says a poll changed and
-refuses to say how; whoever hears it re-reads the poll through the same RPC
-they would have called anyway. That is the whole reason this can exist without
-unpicking the access rules. `anon` still has no read grant on any table, an
-open poll's voters still reach their poll only through the `open_poll_*`
-functions, and not one rule about who may see what had to be restated. The
-alternative — subscribing to row changes directly — would have meant opening
-those tables to `anon` and re-deriving every rule in this file as an RLS
-policy, which is a second copy of the access model to keep in step with the
-first.
+refuses to say how; whoever hears it re-reads through the same RPC they would
+have called anyway. That is the whole reason this can exist without unpicking
+the access rules — `anon` still has no read grant on any table, and not one
+rule about who may see what had to be restated. Subscribing to row changes
+directly would have meant opening those tables to `anon` and re-deriving every
+rule in this file as an RLS policy: a second copy of the access model to keep
+in step with the first.
 
 **The topics are public, and that is a decision rather than an oversight.** A
 listener needs no authorization because there is nothing to authorize: the
@@ -439,164 +461,85 @@ payload is `{}`, and the most anyone gains by guessing a topic is knowing that
 a poll whose id they already held changed at some moment. It is still the RPC,
 not the socket, that decides what comes back.
 
-There are two kinds of topic:
-
-- `poll:<id>`, for every page watching one poll, whichever side of it they are
-  on. There were three kinds and this was two of them: an open poll was
-  announced under its id *and* under its share token, because somebody
-  arriving on `/p/:token` did not learn the id until they had read the poll
-  once — and reading once before subscribing is what the second topic existed
-  to avoid. A poll's id is its link now, so a voter arrives holding the topic
-  and there is nothing left to bridge.
-- `user:<id>`, for one person's poll list: every change to every poll on it,
-  invites included.
+There are two: `poll:<id>`, for every page watching one poll, whichever side
+of it they are on; and `user:<id>`, for one person's poll list — every change
+to every poll on it, invites included.
 
 **The list watches its reader, not its rows, and that is what keeps it to one
-request.** It used to subscribe to one topic per poll on the page — a set it
-could not name until it had read the list. So it read to learn its polls,
-subscribed to them, and (because the first read happens on subscribe) read
-again: two requests to draw one list, and a third every time a page was
-turned. The circularity was never in the socket, it was in the topics.
-`user:<id>` is known from the session before anything is read, so the page
-subscribes on mount and reads once.
+request.** It used to subscribe to one topic per poll on the page: a set it
+could not name until it had read the list, so it read to learn its polls,
+subscribed, and read again on subscribing. Two requests to draw one list, and a
+third on every page turn. The circularity was never in the socket, it was in
+the topics. `user:<id>` is known from the session before anything is read.
 
 Widening that topic from "you were invited to something" to "something on your
-list moved" also fixed two things that were quietly wrong. A vote in the
+list moved" also fixed two things that were quietly wrong: a vote in the
 *second* question of a multi-question poll announced itself on that question's
-topic, and the list carries the *first* question's row, so the group's "everyone
-has answered" state moved with nobody listening. And turning a page cost a
-re-subscribe on top of the read, where it now costs only the read — which,
-since `0036`, is a read it genuinely needs.
+topic while the list carries the *first* question's row, so the group's
+"everyone has answered" state moved with nobody listening; and turning a page
+cost a re-subscribe on top of the read.
 
-**It does mean some reads are wasted, and that is the accepted trade.** The
-topic wakes you for any poll you can see, while the page in front of you holds
-ten — so a vote in a poll on page four re-reads page one to find it unchanged.
-The alternative is subscribing to the polls on screen, which is the scheme this
-replaced: it cannot name its topics until it has read, so it costs two requests
-to draw the list and a re-subscribe on every page turn. One stable topic and an
-occasional wasted read is the cheaper end of that trade, and each read is now a
-page rather than a whole history.
+**Some reads are wasted, and that is the accepted trade.** The topic wakes you
+for any poll you can see while the page in front of you holds ten, so a vote in
+a poll on page four re-reads page one to find it unchanged. The alternative is
+the scheme this replaced. Stated plainly: a poll with forty invitees writes
+forty-one rows to `realtime.messages` per change rather than one. The fan-out to
+*sockets* is unchanged — those forty were each already subscribed to the poll's
+own topic — so what the extra rows buy is one round trip per reader.
 
-The cost is worth stating plainly: a poll with forty invitees writes forty-one
-messages per change rather than one. The fan-out to *sockets* is unchanged —
-those forty were each already subscribed to the poll's own topic and each
-already woke up — so what those extra rows in `realtime.messages` buy is one
-round trip per reader, and the three fixes above.
+Four rules govern the telling half:
 
-Six rules keep it honest:
-
-- **The first read happens on subscribe, not on mount — on every page.** A
-  page that loaded itself and then subscribed would either read twice or leave
-  a gap between the two for a vote to slip through unseen. Waiting for the
-  subscription costs a handshake before anything appears and buys both problems
-  away. The poll page was the one page that could not follow this, because the
-  read that chose between `PollDetail` and `PublicPoll` had to happen before
-  either existed to subscribe: it read, rendered a page, and that page read
-  again the instant its own subscription went live — the second read being the
-  price of the window between the two. `PollPage` holds the subscription now
-  (the topic is `poll:<id>` and the id is in the URL, exactly as the list's
-  topic is its reader's id), so the route's own read *is* the read on
-  subscribing and the window is closed rather than paid for. See [One read
-  opens a poll](#one-read-opens-a-poll). It is
-  also what makes reconnecting self-healing: Realtime does not replay what it
-  sent while a socket was down, but rejoining a channel reports `SUBSCRIBED`
-  again, and every one of those is a fresh read. A laptop that slept through
-  four votes wakes up and asks. The one exception is the floor under that
-  rule: taken literally it makes the websocket load-bearing for the poll
-  appearing at all, so `FIRST_READ_MS` reads once anyway if subscribing has
-  not worked in a few seconds. A network that blocks websockets costs live
-  updates; it must not cost the poll.
 - **Deletes are announced as loudly as inserts.** `reset_poll` clears a poll's
   ballots and a creator correcting the option list takes rows back off. A page
-  told only about arrivals would sit there showing a tally that has just been
-  thrown away, which is a worse failure than being slow.
+  told only about arrivals would sit showing a tally that has just been thrown
+  away, which is worse than being slow.
 - **One statement, one message.** The triggers are statement-level, so a reset
-  clearing twenty ballots is one message rather than twenty, each of which
-  would otherwise land on everybody connected.
+  clearing twenty ballots is one message rather than twenty landing on
+  everybody connected.
 - **A poll on its way out says one thing, to the lists it was on.** Its rows
-  are silent — they cascade behind it, and `broadcast_poll_change` returns
-  early when the poll is already gone, which is what stops a delete
-  broadcasting once per option, invitee and ballot. Its own topic is silent
-  too: a page watching one poll answers a signal by re-reading it, and a
-  re-read of a poll that has gone is a read that *fails*, so the watcher would
-  retry five times and then tell its reader they were offline. What is left is
-  the announcement the poll itself owes, and it goes to `user:<id>` —
-  `broadcast_poll_gone`, on a **BEFORE** DELETE row trigger, because the
-  audience is `invited_voters` and those rows are deleted by the same
-  statement. Without it a homepage added polls by itself, on the invite, and
-  never removed them: a deleted poll sat on everyone else's list as a card
-  that opens onto *Poll not found*. The unit is the poll, as everywhere else
-  here, so deleting a five-question group is five messages — the Delete
-  button acts on the group, and that is five polls going. **The nightly
-  purge is still silent**: it can take hundreds of expired polls in one
-  statement, months after anybody looked at them, so `purge_old_polls` raises
-  `app.purging_polls` over its own transaction and the trigger stands down.
-- **A read that fails is tried again, a few times, and then admitted to.**
-  Polling used to cover this by accident — a dropped request was simply
-  followed by another one five seconds later. Nothing follows a failed read
-  now, and on the last vote of a poll there is no next signal to wait for, so
-  `useLiveStream` retries briefly and then says so rather than leaving a page
-  quietly wrong.
-- **A hidden tab holds no socket.** Nobody is reading a backgrounded poll and
-  twenty of them behind a closed lid should not each hold a connection open.
-  Coming back re-subscribes, which re-reads, so returning to a tab shows what
-  arrived while it was away rather than what was there when it left.
-- **Nothing stops watching while it is on screen.** A page used to drop its
-  subscription once its poll had settled — closed, or its results out — on the
-  reasoning that such a poll has taken its last vote. It has, but that is not
-  the same as nothing changing: its creator can reset it, which deletes every
-  ballot and puts the poll back to taking votes, and the reset broadcasts like
-  everything else (`ballots_broadcast_delete`, and `polls_broadcast_update` on
-  `closed_at`). The page that had stopped listening was the only one that
-  would not hear it, and it sat showing a tally of votes that no longer exist
-  — the window `Results` re-reads on every draw to narrow. So every page holds
-  its subscription for as long as it is on screen. That also deletes a rule
-  that had to be got exactly right: watching used to stop *per question*
-  rather than per page, because a question of a settled poll is still a
-  question nobody has read, and getting that wrong left a finished poll's
-  second question behind a skeleton until somebody reloaded. There is no
-  `enabled` on `useLiveStream` any more, and no liveness for a page to
-  compute.
-- **A vote *changed* says nothing at all.** The one deliberate silence here,
-  and the reasoning is in [Changing your vote until the results are
+  are silent — they cascade behind it, and `broadcast_poll_change` returns early
+  when the poll is already gone, which stops a delete broadcasting once per
+  option, invitee and ballot. Its own topic is silent too: a watcher answers a
+  signal by re-reading, and a re-read of a poll that has gone *fails*, so it
+  would retry five times and then tell its reader they were offline. What is
+  left is the announcement the poll owes its lists, and it goes to
+  `user:<id>` — `broadcast_poll_gone`, on a **BEFORE** DELETE row trigger,
+  because the audience is `invited_voters` and those rows go in the same
+  statement. Without it a deleted poll sat on everyone else's list as a card
+  that opens onto *Poll not found*. The unit is the poll, so deleting a
+  five-question group is five messages. **The nightly purge is still silent**:
+  it can take hundreds of expired polls in one statement, months after anybody
+  looked, so `purge_old_polls` raises `app.purging_polls` over its own
+  transaction and the trigger stands down.
+- **A vote *changed* says nothing at all.** The one deliberate silence, and the
+  reasoning is in [Changing your vote until the results are
   out](#changing-your-vote-until-the-results-are-out): nothing a watcher can
-  see before the results unlock is derived from a score, and past the unlock
-  no vote can change. A signal would wake everyone connected to re-read a poll
-  and hand each of them the answer they already had. There is no trigger on
-  `scores` and none on `UPDATE` of `ballots`.
+  see before the results unlock is derived from a score, and past the unlock no
+  vote can change. A signal would wake everyone connected to hand them the
+  answer they already had. There is no trigger on `scores` and none on `UPDATE`
+  of `ballots`.
 
-**There is still no live indicator, and there is now one notice.** A page that
-updates itself demonstrates that by updating itself; a dot claiming it does is
-one more thing to read and one more thing to keep true. A page that has
-*stopped* updating itself demonstrates nothing at all, and that is the one
-state a reader cannot work out by looking — so
-[`LiveConnectionNotice`](src/components/LiveConnectionNotice.tsx) says it, and
-says what to do about it. It matters because there is deliberately no polling
-fallback: a network that blocks websockets outright will serve every request
-this app makes and still leave a page that never changes. Refreshing is the
-fallback, so the notice asks for exactly that rather than inviting somebody to
-wait for a reconnection that is not coming. `useLiveStream` sits on the state
-for several seconds first, so a socket that drops and comes straight back
-never reaches the screen.
+**There is no live indicator, and there is one notice.** A page that updates
+itself demonstrates that by updating itself. A page that has *stopped* is the
+one state a reader cannot work out by looking, so
+[`LiveConnectionNotice`](src/components/LiveConnectionNotice.tsx) says it. There is
+deliberately no polling fallback — refreshing is the fallback, which is what
+the notice asks for.
 
-One request per page on a first read, and one per change after that — the poll
-list included, a finished poll included since [0050](#one-read-opens-a-poll)
-folded its tally and its roster into that read, and an in-progress one included
-since the route took over the subscription and stopped needing a second read to
-close the gap behind its first. Turning a page of it costs one more, for the page itself; what
-it no longer costs is a re-subscription, because the topic the list watches
-does not depend on which polls are on screen. The state badge costs nothing at
-all: the winner rides on the same read that draws the page it sits on. See
-[The winner is kept with the poll](#the-winner-is-kept-with-the-poll), which
-is also why it used to cost a second request and no longer does.
+One request per page on a first read, and one per change after that: the poll
+list included, and a finished poll included since
+[`poll_page`](#one-read-opens-a-poll) folded its tally and its roster into that
+read. The state badge costs nothing at all; see [The winner is kept with the
+poll](#the-winner-is-kept-with-the-poll).
 
 In `npm run dev` every one of those appears twice: React's `StrictMode` mounts
 each component, unmounts it and mounts it again, so every effect that fetches
 or subscribes runs twice. That is development-only and deliberate — it is what
-catches an effect whose cleanup does not work — and `npm run build` output does
-it once. Count requests against `npm run preview`, not `npm run dev`. Against a
-real Supabase project each request is also preceded by a CORS preflight
-`OPTIONS`, so the browser's network panel shows two entries per call.
+catches an effect whose cleanup does not work. Count requests against
+`npm run preview`. Against a real Supabase project each request is also
+preceded by a CORS preflight `OPTIONS`, so the network panel shows two entries
+per call.
+
 
 ## The winner is kept with the poll
 
@@ -623,21 +566,15 @@ existed and drew it as a settled green badge until it was reloaded. The
 answer's living in one place, owned by the thing it is about, is what closes
 that: a reset anywhere reaches everywhere on the next read.
 
-Nothing in the browser is held on to now. `Results`, `Ballots` and
-`FullRanking` each read on every draw. The tally is cheap enough now that the
-[full ranking](#results-and-the-full-ranking) was split out behind its button,
-and the ranking is the most expensive thing this app asks for and the one
-asked for least often — so the wait for it is once per opening rather than
-once per reader, which is the trade that split was made to allow.
+Nothing in the browser is held on to now: `Results`, `Ballots` and
+`FullRanking` each read on every draw.
 
-**Two columns, because there are three answers.** `winner_settled_at` says
-whether the poll has been asked at all; `winner_name` is the answer, and null
-is a real one — a genuine tie elects nobody, and so does a poll closed before
-anyone voted. A single nullable name could tell only two of the three apart,
-and the pair it would merge is exactly the pair that must not merge: *Tied* is
-a wrong answer where *Results ready* is only a missing one. The reads surface
-the pair as `winner_name` and `winner_settled`, and the browser reads an
-unsettled poll as `undefined` rather than null.
+**Two columns, because there are three answers** — settled with a name,
+settled with none, and not settled at all. Why that distinction matters and how
+the browser draws each is in `PollStatus` in [`src/lib/types.ts`](src/lib/types.ts)
+and `PollStateBadge` in [`src/components/PollTags.tsx`](src/components/PollTags.tsx).
+The pair is `winner_settled_at` and `winner_name`; null is a real answer, since
+a genuine tie elects nobody and so does a poll closed before anyone voted.
 
 **What settles it, and the one that could not be a trigger.** The events are
 the set `notify_results_ready` already reconciles the results-are-in email on,
@@ -682,233 +619,93 @@ answering. It can go once that window is well past.
 ## One read opens a poll
 
 A poll page used to be assembled from four requests and, on an open poll, a
-fifth behind them: `polls` and `candidates` read straight through row-level
-security, `poll_status` for the counts and the stage, `poll_group` for the
-question strip, and then `open_poll_view` — which could not be asked for until
-the first four came back, because nothing before them said the poll was open.
+fifth behind them — `open_poll_view` could not be asked for until the first four
+came back, because nothing before them said the poll was open. Worse was the
+reader nobody had designed for: somebody signed in, holding the link to an open
+poll that is not theirs. Every address went to the account reading first, so
+they spent a round trip on four queries that row-level security answered with
+nothing, got handed to the public reading, and started again. Three round trips
+and a discarded render to open a poll that was public all along.
 
-The first four run together and cost one round trip between them. The fifth
-cost a second one, paid by every reader of every open poll, for a fact the
-server knew before it answered the first request.
-
-Worse was the reader nobody had designed for: somebody signed in, holding the
-link to an open poll that is not theirs. Every address went to the account
-reading first, so they spent a round trip on four queries that row-level
-security answered with nothing, got handed to the public reading, and started
-again. Three round trips and a discarded render to open a poll that was public
-all along.
-
-`poll_page(p_poll_id, p_voter_key)` — [`0048`](supabase/migrations/0048_one_read_opens_a_poll.sql),
-wrapped by [`src/lib/pollPage.ts`](src/lib/pollPage.ts) — answers the question
-the route is actually asking, *what may this reader see here*, and returns the
-page with it.
-
-**It returns a tagged union, not a superset, and that is the whole design.**
-`open_poll_group` deliberately answers less than `poll_group`: no `voted`, no
-`confirmed`, because an open poll's ballots are identified by a `voter_key`
-minted per question precisely so one browser's cannot be joined to each other.
-A single flat shape with those fields left null would put that joining one
-careless `coalesce` away, and whoever wrote it would think they were filling in
-a gap. Under a tag they have to build a different branch, which is a decision
-somebody takes rather than a hole somebody fills.
-
-- `account` — the creator, or somebody on the invite list: the poll row, its
-  options, its status, and its group with every per-reader mark on it. On an
-  *open* poll it carries `view` as well, because the creator manages the poll
-  through the same panel everybody else votes in. Plus `results`, `ballots`
-  and `invitees` where the page draws them; see below.
-- `open` — an open poll to anyone else holding the link: the curated view and
-  the bare strip, and nothing that could say who has answered what. Plus
-  `results` and `ballots` on the same terms.
-- `unreadable` — no such poll, or an invite poll this reader is not in, and
-  which of the two it is is not disclosed.
+`poll_page(p_poll_id, p_voter_key)`, wrapped by
+[`src/lib/pollPage.ts`](src/lib/pollPage.ts), answers the question the route is
+actually asking — *what may this reader see here* — and returns the page with
+it. It is tagged `account` / `open` / `unreadable`; why a tagged union rather
+than one flat shape is in `PollRead` in [`src/lib/types.ts`](src/lib/types.ts),
+and how the route spends the answer is in `PollPage` in
+[`src/App.tsx`](src/App.tsx). What belongs here is why it is allowed to exist
+at all, and the one gate that had to be fixed before it could.
 
 **Nothing here is a new privilege.** Each branch returns what the caller could
 already have asked for one request at a time, from the functions that already
 decide it: `poll_status`, `poll_group`, `open_poll_view`, `open_poll_group`,
-`get_poll_results`, `open_poll_results`, `poll_ballots`, `open_poll_ballots`
-and `poll_invitees` are called rather than reimplemented, so there is one copy
-of every rule. The
-visibility test is `is_poll_creator` / `is_invited_to_poll` — the same two
-functions `polls_select` is written in terms of — rather than a third
-hand-written copy of `created_by = auth.uid() or exists (...)`, which is what
-`poll_status` and `poll_group` each carry.
+`get_poll_results`, `open_poll_results`, `poll_ballots`, `open_poll_ballots` and
+`poll_invitees` are called rather than reimplemented, so there is one copy of
+every rule. The visibility test is `is_poll_creator` / `is_invited_to_poll` — the
+same two functions `polls_select` is written in terms of — rather than a third
+hand-written copy of `created_by = auth.uid() or exists (...)`.
 
 **It does not replace them.** This is the *first* read. The live tick stays
 deliberately narrow — `poll_status` alone on an invite poll, plus
 `open_poll_view` on an open one — because a poll's title, its terms and the
-questions it asks are frozen at creation, and re-reading them on every signal
-would be a bigger waste than the round trip this saves.
+questions it asks are frozen at creation.
 
-**The route reads, subscribes, and the page it chooses draws what it read.**
-`PollPage` holds the poll's one subscription and makes this read on
-`SUBSCRIBED`, then hands the result down as `initial`; both pages apply it on
-mount rather than waiting to be asked, and neither subscribes to anything.
-Instead each hands its own reading of a signal *up* — `watch(onSignal)` — and
-the route calls that in place of its own read once there is a page to ask. So
-the first signal on an address is the read that opens the poll, and every one
-after it belongs to the page that read chose.
+**What the page draws rides along with it.** `results`, `ballots` and
+`invitees` travel on the read, gated on exactly the condition the cards are
+rendered behind, so a poll still taking votes pays nothing: STAR does not run.
+Null on any of them means "ask for yourself", not "there is none" —
+`results_available` is still the only thing that says whether a result exists.
+That is what keeps the cards right where no `poll_page` read is in hand: a poll
+that finishes while somebody is watching, a crossing between two questions, and
+the About page's sample.
 
-It went the other way round at first: the route read, rendered a page, and that
-page read again the instant its own subscription went live. Not waste — the
-second read closed the window between the route's snapshot and the
-subscription, in which a vote could land unheard — but it made opening an
-in-progress poll three requests where a finished one took one, and the finished
-one only took one because it had stopped watching altogether. Subscribing
-before reading closes the window instead of paying for it, and it is the rule
-every other page in the app already followed; the poll page could not, only
-because the read that decides which page this is had to happen before that page
-existed to subscribe. Owning the channel one level up is what removes that.
+**One gate over all three, and it was a real hole.** `poll_results_revealed` is
+group-wide on purpose — a poll of five questions that revealed question one's
+result while question three was still taking votes would let the early answers
+steer the late ones — but both ballot-sheet functions asked `poll_gate_open` of
+their own question and no other. So a finished question inside an unfinished
+poll handed out every ballot cast in it while `get_poll_results` on that same
+question refused, and a sheet of every ballot *is* that question's result in
+the form it can be recomputed from. The pages never asked, because both cards
+render behind `results_available` — but these are functions any participant may
+call. Both now refuse under `poll_results_revealed`: the same per-question
+condition they already applied, and-ed across the group, so it can only refuse
+where they used to answer, and on a poll of one question nothing moves. The
+wording stays each function's own; what is refused there is the sheet, not the
+tally.
 
-The cost is `FIRST_READ_MS`: on a network that blocks websockets outright,
-nothing ever reports `SUBSCRIBED` and the poll now waits for that floor before
-it appears. The poll list has always paid this; the poll page did not, and now
-does. A healthy socket subscribes in a fraction of it.
+**The cost is `FIRST_READ_MS`.** The route subscribes and reads on `SUBSCRIBED`,
+which is what closes the window between a snapshot and a live socket rather
+than paying a second read for it — but on a network that blocks websockets
+nothing ever reports `SUBSCRIBED`, so the poll waits for that floor before it
+appears. The poll list has always paid this; the poll page now does too.
 
-**And what the page then draws rides along with it** —
-[`0050`](supabase/migrations/0050_a_finished_poll_opens_in_one_read.sql). 0048
-answered what the *route* asks; a poll whose results are out draws two more
-cards, and each of them went and asked for itself the moment it mounted, which
-it could not do until `poll_page` came back. So opening a completed poll cost
-two round trips: `poll_page`, and then `get_poll_results`, `poll_invitees` and
-`poll_ballots` together, landing on skeletons the reader was already looking
-at.
-
-`results`, `ballots` and `invitees` close that, on the same terms as
-everything above:
-
-- **Only when the page will draw them.** The tally is gated on
-  `poll_results_revealed`, which is the same predicate the reads report as
-  `results_available` and the same one the cards are rendered behind — so what
-  the server carries and what the browser draws cannot come apart, and a poll
-  still taking votes pays nothing: STAR does not run. The roster is a
-  poll-and-reader question rather than a stage one, so its condition is the
-  client's exactly: an invite poll, read by its creator or showing its
-  respondents.
-- **Null means "ask for yourself", not "there is none".** `results_available`
-  is still the only thing that says whether a result exists, and is what the
-  pages branch on. These are a handoff of work already done, so
-  [`Results`](src/components/Results.tsx) and
-  [`Respondents`](src/components/Respondents.tsx) take theirs through a
-  consume-once ref and read for themselves when handed nothing — which is what
-  keeps them right where no `poll_page` read is in hand: a poll that finishes
-  while somebody is watching (the live tick carries neither), a crossing
-  between two questions, and the About page's sample. `PollDetail` drops both
-  on every narrow tick for the same reason: the tally belongs to the read that
-  fetched it, and a creator's reset takes the votes under it away.
-- **One gate over all three** —
-  [`0051`](supabase/migrations/0051_one_gate_over_the_results.sql). The sheet
-  could not travel until its gate agreed with the tally's, and the two did not
-  merely differ in wording. `poll_results_revealed` is group-wide on purpose —
-  a poll of five questions that revealed question one's result while question
-  three was still taking votes would let the early answers steer the late ones
-  — and both ballot functions asked `poll_gate_open` of their own question and
-  no other. So a finished question inside an unfinished poll handed out every
-  ballot cast in it while `get_poll_results` on that same question refused, and
-  a sheet of every ballot *is* that question's result in the form it can be
-  recomputed from. The pages never asked (both cards render behind
-  `results_available`), but these are functions any participant may call.
-  Both now refuse under `poll_results_revealed`: the same per-question
-  condition they already applied, and-ed across the group, so it can only
-  refuse where they used to answer, and on a poll of one question nothing
-  moves at all. The wording stays each function's own — one predicate is not
-  one sentence, and what is refused here is the sheet, not the tally.
-- **The roster went further than a handoff.** The other two are one read's
-  work handed to a card that can still do it itself. The roster is not: it is
-  the only one whose card had no other reason to fetch — it moves as people
-  answer, so it was re-read on a tick the page bumped purely to drive it, which
-  was the page's own request at the page's own moment with a second copy of the
-  poll's access rules behind it. `PollDetail` now holds the roster like the
-  poll and the status, `refresh` re-reads it in the same `Promise.all` as the
-  counts it sits under, and `Respondents` renders what it is given. The card
-  exists exactly when the page holds a roster, which is `poll_page`'s condition
-  and no longer a second reading of it in the browser; an invite added or
-  removed re-reads once rather than twice; and the shape that stood in for its
-  first read is gone. See [Waiting](#waiting).
-
-**A crossing is not an arrival.** Every question of a multi-question poll
-answers with the whole group, so the read that opened one question already
-describes its siblings. Walking between them re-decides nothing, keeps the same
-page mounted, and asks the server for nothing at all — which is what stops the
-heading and the strip blinking on the way through a poll.
-
-**The voter key is peeked at, never minted.** `poll_page` is the request that
-establishes whether an address even leads to an open poll, so `heldVoterKeyFor`
-reads the key without creating one; minting on the way in would leave a key in
-`localStorage` for every invite poll an account ever opened. A browser that has
-voted is already holding its key, and one that is not holding a key has not
-voted — the same answer either way. `voterKeyFor` still mints everywhere a
-ballot or a confirmation is actually being sent.
 
 ## Waiting
 
-A live page is the second read onwards; the first one has nothing to show at
-all, and every one of those used to be the same spinner in the middle of an
-empty column — the same mark whether what was coming was a poll list, a
-ballot or a tally, with the page landing all at once underneath it.
+A live page is the second read onwards; the first has nothing to show, and
+every one of those used to be the same spinner in an empty column — the same
+mark whether what was coming was a poll list, a ballot or a tally.
+`src/components/Skeletons.tsx` draws the shape of the page instead, and states
+the four rules that keep the shapes from becoming a lie. They are not repeated
+here. What belongs here is the two things those rules were learned from:
 
-`src/components/Skeletons.tsx` draws the shape of the page instead: the
-list's cards, the poll's tag row, the ballot's starred rows, the score round's
-bars, the form's sections. Three rules keep them from becoming a lie:
+**A condition in the source is not the same thing as a case that happens.**
+The runoff card is written behind `results.runoff && results.finalists.length
+=== 2` and cannot fail on a poll with a tally at all — every question is held
+to at least two options, so `star_round` always fills both finalist slots. It
+was left out of `ResultsSkeleton` for years on the strength of that condition,
+and the tally grew by a third every time the wait ended.
 
-- **A skeleton claims only what the page always has.** The list draws three
-  cards because the wait is over long before anyone counts them; it does not
-  draw a poll's description, which most polls do not have. A placeholder for
-  something that then fails to appear is a small lie the reader has to
-  un-learn. The one stand-in drawn *inside* a page that has already read the
-  poll guesses at nothing at all, because by then there is nothing to guess:
-  `QuestionSkeleton` is handed the strip and the name box themselves, as real
-  nodes, along with the answers to whether the question being opened asks for
-  a name, whether the poll it belongs to has finished, whether that question
-  is certain to have a tally, and how many options it holds. See [A poll can
-  ask more than one question](#a-poll-can-ask-more-than-one-question) for why
-  the first two are handed over rather than drawn — they belong to the poll
-  rather than to the question, so they never had anything to wait for — and
-  for how the page answers the last two about a question it has not read.
+**A shape that guesses at nothing should not exist.** `RosterSkeleton` was
+deleted rather than improved: once [`poll_page`](#one-read-opens-a-poll)
+carried the roster, `Respondents` stopped fetching its own copy and the wait
+it stood in for stopped existing. `ResultsSkeleton` and `BallotsSkeleton`
+survive the same test because both are still reachable holding nothing.
 
-  The other side of that rule is that a shape claims everything the page
-  *does* always have, and a condition in the source is not the same thing as a
-  case that happens. The runoff card is written behind
-  `results.runoff && results.finalists.length === 2` and cannot fail on a poll
-  with a tally at all: every question is held to at least two options, so
-  `star_round` always fills both finalist slots. It was left out of
-  `ResultsSkeleton` for years on the strength of that condition, and the tally
-  grew by a third every time the wait ended.
-- **A shape only exists for a wait that exists.** There was a second such
-  stand-in, `RosterSkeleton`, and following that reasoning to the end deleted
-  it: a card that guesses at nothing is a card whose content the page already
-  has. Once `poll_page` carried the roster
-  ([0050](#one-read-opens-a-poll)) it did, so `Respondents` stopped fetching
-  its own copy — the page holds the roster and re-reads it in the same batch
-  as the counts above it — and the wait the shape stood in for stopped
-  existing. `ResultsSkeleton` and `BallotsSkeleton` did not go the same way,
-  and the difference is the test: both are still reachable with nothing in
-  hand, because a poll that finishes while somebody is watching it gets its
-  tally on the live tick, which carries neither, and because a crossing
-  between two questions of an open poll re-reads through `open_poll_view`,
-  which carries neither either.
-- **They all live in that one file**, so a page and its stand-in get changed
-  together. The failure mode of skeletons is that they slowly stop resembling
-  anything.
-- **They are built out of the containers the page is built out of** — the same
-  `maw`, the same `gap`, the same cards in the same order — so the shapes stand
-  where the content lands and the swap is a fill rather than a jump. Anything
-  the pages share a component for is one shape in that file too: `PollHeading`
-  is drawn once there and used by the poll page and the list card, exactly as
-  the pages use one heading, and the ballot's stand-in is one card of starred
-  rows because `BallotCard` is one card. Three copies of a shape are three
-  things to keep in step, which is how the stand-ins drifted last time: the
-  ballot had long since become a single card and its skeleton was still drawing
-  the stack of little ones it replaced.
+The one wait that is still a spinner is the app's own boot, before the session
+is known — at that point there is no page to draw the shape of.
 
-They are `aria-hidden`, wrapped in a `role="status"` that says *Loading* once:
-the shapes are decoration, and what a non-visual reader needs is the word
-they are miming. What is handed to `QuestionSkeleton` is drawn outside that
-wrapper, because it is not decoration — a real link or a real input under
-`aria-hidden` would be one nothing could reach, announced to nobody and still
-in the tab order. The one wait that is still a spinner is the app's own boot,
-before the session is known — at that point there is no page to draw the
-shape of.
 
 ## Installing it to a home screen
 
@@ -1568,7 +1365,7 @@ Four things hold it together:
 
 **An option name may be 150 characters and its description 900**, and they
 were 100 and 500 until
-[`0037`](supabase/migrations/0037_longer_option_fields.sql). Both were chosen
+`0037`. Both were chosen
 when suggestions were the only way into `candidates`, and both turned out to
 be a size smaller than what people write: 100 was a *label's* length rather
 than an option's — real options carry a subtitle, an author, a year, a
@@ -2878,7 +2675,7 @@ the one stage where there is nothing to vote on. It also went to the creator,
 who wrote it. So a poll had four moments in it and wrote about one and a half
 of them, in a letter whose subject line — *You're invited to vote* — is how
 bulk mail opens, which is how Gmail read it.
-[`0043_the_emails_a_poll_sends.sql`](supabase/migrations/0043_the_emails_a_poll_sends.sql)
+`0043_the_emails_a_poll_sends.sql`
 is the four letters and the two rules that decide them.
 
 - **The invitation says which stage the poll is at**, because that is what
@@ -2898,7 +2695,7 @@ is the four letters and the two rules that decide them.
   invitee confirmed, and finishing because the last invitee voted — are news
   to everybody in the poll *except that invitee*, who has just watched the
   thing the letter describes. Both were sent to them until
-  [`0049_nobody_is_told_what_they_just_did.sql`](supabase/migrations/0049_nobody_is_told_what_they_just_did.sql),
+  `0049_nobody_is_told_what_they_just_did.sql`,
   which is where the rule stopped being about the creator.
 
 - **The rule is one function, and the caller supplies the answer.**
@@ -2948,7 +2745,7 @@ is the four letters and the two rules that decide them.
   Resend: it reads the key from Vault, builds the link, and returns quietly
   where there is no mailer. Four copies of a table layout would have been
   four places for a padding value to drift. The button went the same way in
-  [`0044_one_button.sql`](supabase/migrations/0044_one_button.sql): it had
+  `0044_one_button.sql`: it had
   been named after each letter — *Add options*, *Cast your ballot*, *See the
   results* — which read as four different doors onto the one page all four
   open, so it says **Open poll** in every email and the letter's subject is

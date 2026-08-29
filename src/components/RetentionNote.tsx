@@ -9,31 +9,23 @@ const DAY_MS = 24 * 60 * 60 * 1000
  * When this poll will be deleted, for the person who can do something about
  * it.
  *
- * Polls are removed six months after they are created (see
- * `0025_poll_retention.sql`), and the one thing that makes an automatic
- * deletion fair is that it was never a surprise: the date is on the poll
- * from the day it exists, on the same page as the result it is going to take
- * with it. It never moves, so this line says the same thing on the last day
- * as it did on the first.
+ * Polls are removed six months after creation, and what makes an automatic
+ * deletion fair is that it was never a surprise: the date is on the poll from
+ * the day it exists, on the same page as the result it will take with it. It
+ * never moves, so this line says the same thing on the last day as the first.
  *
- * **Only the creator is told.** It used to be shown to everyone the poll
- * admits, on the grounds that an invitee's ballot goes on the same day — but
- * a retention date is a thing to *act* on, and the only act there is belongs
- * to the creator: duplicate the poll, which nobody else has a button for. For
- * a respondent it is a deadline about somebody else's poll with nothing on
- * the other end of it, on a page they came to in order to vote or to read a
- * result. The policy itself is still public, on the
- * [About](../pages/About.tsx) page, which is where somebody who wants the
- * rule rather than this poll's date will look.
+ * **Only the creator is told.** A retention date is a thing to *act* on, and
+ * the only act there is belongs to the creator — duplicate the poll, which
+ * nobody else has a button for. For a respondent it is a deadline about
+ * somebody else's poll with nothing on the other end of it. The policy itself
+ * is public, on the About page.
  *
- * It is a quiet line for almost all of a poll's life, nobody needs warning
- * in March about September, and becomes a warning in the last month, when
- * there is still time to do something about it — which is also when it names
- * Duplicate.
+ * A quiet line for almost all of a poll's life, and a warning in the last
+ * month, when there is still time to do something about it.
  *
  * `expiresAt` is missing against a database whose `poll_status` predates the
- * column, and then this renders nothing at all. A retention date is only
- * worth showing when it is the real one.
+ * column, and then this renders nothing: a retention date is only worth
+ * showing when it is the real one.
  */
 export function RetentionNote({ expiresAt }: { expiresAt?: string | null }) {
   if (!expiresAt) return null

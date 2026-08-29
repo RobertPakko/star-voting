@@ -1,39 +1,30 @@
 /**
  * What this browser has done with a poll's questions, kept in this browser.
  *
- * Two marks, and they are the same mark one stage apart: the question strip's
- * tick on a question already answered, and — while the poll is still
- * collecting its options — on a question this reader has finished adding to.
+ * Two marks, one stage apart: the question strip's tick on a question already
+ * answered, and — while the poll is still collecting its options — on a
+ * question this reader has finished adding to.
  *
- * On an invite poll the server fills both in. `poll_group` returns a `voted`
- * flag and a `confirmed` flag per question, because both carry the reader's
- * account and nothing has to be linked to find them. **On an open poll nothing
- * can.** A share-link ballot, and a share-link confirmation with it, is
- * identified by a `voter_key` minted per question precisely so that one
- * browser's marks cannot be joined to each other, and `open_poll_group` will
- * not undo that to fill in a tick — its own comment says the browser already
- * knows, and is the one place entitled to. This is that place.
+ * On an invite poll the server fills both in; `poll_group` returns a flag
+ * each, because both carry the reader's account. **On an open poll nothing
+ * can.** A share-link ballot, and its confirmation with it, is identified by a
+ * `voter_key` minted per question precisely so one browser's marks cannot be
+ * joined, and `open_poll_group` will not undo that to fill in a tick. The
+ * browser already knows, and is the one place entitled to. This is that place.
  *
- * So it is the same shape as `voterName`: continuity a voter actually
- * notices, carried by the only party who legitimately holds both halves,
- * and never sent anywhere. Nothing here reaches the server, and nothing here
- * is trusted for anything — being wrong colours a badge and cannot let
- * anybody vote twice, see a sealed result or reach a poll they don't hold a
- * link to. The server decides all three, on every call, from the key it is
- * shown.
+ * Nothing here reaches the server, and nothing here is trusted: being wrong
+ * colours a badge and cannot let anybody vote twice, see a sealed result or
+ * reach a poll they do not hold a link to. The server decides all three, on
+ * every call, from the key it is shown.
  *
- * **A question is recorded by its poll id**, which is the only name it has:
- * the public page and the creator's own page reach the same question at the
- * same address, so a question answered on either is marked on both. This used
- * to take two entries per ballot -- the share token the public route knew a
- * question by, and the poll id the creator's page knew it by -- and it does
- * not any more, for the same reason the two pages are now one address.
+ * **A question is recorded by its poll id**, which is the only name it has —
+ * the public page and the creator's page reach the same question at the same
+ * address, so a question answered on either is marked on both.
  *
- * Both are kept honest rather than only appended to: a creator who clears a
- * poll's votes leaves this browser holding a ballot that no longer exists, and
- * a confirmation can be taken back, so a read that comes back "not voted" or
- * "not confirmed" erases the record instead of letting a stale tick outlive
- * what it was about.
+ * **Both are kept honest rather than only appended to**: a creator who clears
+ * a poll's votes leaves this browser holding a ballot that no longer exists,
+ * and a confirmation can be taken back, so a read that comes back "no" erases
+ * the record instead of letting a stale tick outlive what it stood for.
  *
  * **The two are stored apart, because they are true at different times.** A
  * poll still collecting takes no ballots and a poll taking ballots collects
@@ -45,13 +36,10 @@ const ANSWERED_KEY = 'star-voting:answered'
 const CONFIRMED_KEY = 'star-voting:confirmed-options'
 
 /**
- * How many questions are remembered per mark, oldest dropped first.
- *
- * Polls are deleted six months after they are created, so an entry is dead
- * long before this cap is reached by anybody voting at a human rate; the cap
- * is only here so that a browser that never clears its storage cannot grow
- * this without limit. Losing the oldest entry costs one badge on a poll from
- * last year.
+ * How many questions are remembered per mark, oldest dropped first. Polls are
+ * deleted six months after creation, so an entry is dead long before anybody
+ * voting at a human rate reaches this; the cap is only so a browser that never
+ * clears its storage cannot grow it without limit.
  */
 const REMEMBERED_MAX = 100
 
@@ -64,7 +52,7 @@ function stored(key: string): string[] {
     return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : []
   } catch {
     // Private browsing, storage disabled, or something else's key. No ticks,
-    // which is exactly what this browser showed before it remembered any.
+    // which is what this browser showed before it remembered any.
     return []
   }
 }
@@ -73,23 +61,18 @@ function persist(key: string, ids: string[]) {
   try {
     localStorage.setItem(key, JSON.stringify(ids.slice(-REMEMBERED_MAX)))
   } catch {
-    // Nothing to do; the strip simply goes back to marking nothing.
+    // Nothing to do; the strip goes back to marking nothing.
   }
 }
 
 /**
  * One mark's worth of storage. Written once and used twice rather than copied,
- * so the two marks cannot drift into behaving differently — which, for two
- * ticks drawn by the same strip in the same colour, would read as a bug in the
- * strip rather than as two stores disagreeing.
+ * so the two cannot drift into behaving differently — which, for two ticks
+ * drawn by the same strip in the same colour, would read as a bug in the strip.
  */
 function mark(key: string) {
   return {
-    /**
-     * Every question this browser has recorded under this mark. Read fresh
-     * rather than cached: the pages ask once per poll read, and a cache would
-     * be one more thing to keep in step with what it is about.
-     */
+    /** Every question recorded under this mark. Read fresh: the pages ask once per poll read. */
     all: (): ReadonlySet<string> => new Set(stored(key)),
     /** Record it. */
     remember: (pollId: string) => {

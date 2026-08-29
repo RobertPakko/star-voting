@@ -1,0 +1,9 @@
+# Everything here is stored and checked out with LF.
+#
+# The committed blobs already were LF; what this fixes is the working tree.
+# oxfmt writes LF and checks for it, and a Windows clone under the default
+# core.autocrlf=true gets CRLF on disk -- so `npm run fmt:check` failed on
+# every source file there while passing in CI, and `npm run fmt` rewrote all
+# of them into a diff git then showed as empty. See "Line endings" in
+# AGENTS.md.
+* text=auto eol=lf

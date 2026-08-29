@@ -11,7 +11,7 @@ import { qrCodeFor, qrFileName, qrPath, qrPngDataUrl } from '../lib/qr'
  * pasting a link, and a code big enough to scan is far too big to sit in the
  * manage block unasked.
  */
-export function ShareQr({ url, title }: { url: string; title: string; isOpen: boolean }) {
+export function ShareQr({ url, title }: { url: string; title: string }) {
   const [opened, modal] = useDisclosure(false)
 
   // Encoding is cheap but not free, and the modal re-renders on every

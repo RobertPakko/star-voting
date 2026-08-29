@@ -22,6 +22,7 @@ import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { DescriptionField } from '../components/DescriptionField'
+import { groupQuestionsSchema, parseAnswer } from '../lib/rpcSchemas'
 import { FormSkeleton } from '../components/Skeletons'
 import styles from './CreatePoll.module.css'
 import {
@@ -33,7 +34,7 @@ import {
   TITLE_MAX,
   tooLong,
 } from '../lib/limits'
-import type { GroupQuestion, Invitee, Poll, PollMode, PollOption } from '../lib/types'
+import type { Invitee, Poll, PollMode, PollOption } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -410,7 +411,11 @@ export function CreatePoll() {
       // uses, and every question's options in one query rather than one each.
       const { data: groupData } = await supabase.rpc('poll_group', { p_poll_id: sourceId })
       if (cancelled) return
-      const group = (groupData as GroupQuestion[]) ?? []
+      // A group that does not parse is a poll with no group as far as this
+      // form is concerned: the duplicate then carries the one question it was
+      // opened from, which is the same thing every single-question duplicate
+      // does, rather than a half-copied set of questions.
+      const group = parseAnswer(groupQuestionsSchema, 'poll_group', groupData ?? []).value ?? []
 
       if (group.length > 1) {
         const ids = group.map((q) => q.id)
@@ -501,16 +506,17 @@ export function CreatePoll() {
   }
 
   function removeQuestion(index: number) {
-    setQuestions((prev) => {
-      const left = prev.filter((_, i) => i !== index)
-      // Removing the question on screen leaves the strip pointing at nothing,
-      // so it moves to the one before it — the neighbour the reader was last
-      // looking at — or to the first if this was the first.
-      if (prev[index]?.key === openKey) {
-        setOpenKey(left[Math.max(0, index - 1)]?.key ?? null)
-      }
-      return left
-    })
+    const left = questions.filter((_, i) => i !== index)
+    // Removing the question on screen leaves the strip pointing at nothing,
+    // so it moves to the one before it — the neighbour the reader was last
+    // looking at — or to the first if this was the first. Decided out here
+    // rather than inside the updater below: an updater is asked to be pure
+    // and is called twice under StrictMode, which is not where a second
+    // piece of state should be set from.
+    if (questions[index]?.key === openKey) {
+      setOpenKey(left[Math.max(0, index - 1)]?.key ?? null)
+    }
+    setQuestions(left)
   }
 
   /**
@@ -589,7 +595,12 @@ export function CreatePoll() {
     const { data, error: rpcError } = multiQuestion
       ? await supabase.rpc('create_poll_group', {
           p_title: title.trim(),
-          p_description: description.trim() || null,
+          // Sent even when empty, unlike the option descriptions below: this
+          // parameter has no DEFAULT in the database, so omitting it would
+          // leave PostgREST with no overload to call. '' and null reach the
+          // same place — both functions run it through
+          // `nullif(trim(coalesce(p_description, '')), '')`.
+          p_description: description.trim(),
           p_questions: cleaned,
           p_emails: isOpen ? [] : allEmails,
           p_mode: mode,
@@ -599,7 +610,12 @@ export function CreatePoll() {
         })
       : await supabase.rpc('create_poll', {
           p_title: title.trim(),
-          p_description: description.trim() || null,
+          // Sent even when empty, unlike the option descriptions below: this
+          // parameter has no DEFAULT in the database, so omitting it would
+          // leave PostgREST with no overload to call. '' and null reach the
+          // same place — both functions run it through
+          // `nullif(trim(coalesce(p_description, '')), '')`.
+          p_description: description.trim(),
           p_options: cleaned[0].options.map((o) => o.name),
           p_emails: isOpen ? [] : allEmails,
           p_mode: mode,
@@ -607,10 +623,15 @@ export function CreatePoll() {
           p_show_ballots: showBallots,
           p_solicit_options: solicitOptions,
           // Most polls describe nothing, and send nothing rather than a row of
-          // nulls the database would only throw away again.
+          // blanks the database would only throw away again. Where they are
+          // sent, an option with no description travels as '' rather than
+          // null: `insert_poll_row` runs the whole column through
+          // `nullif(trim(coalesce(…, '')), '')`, so the two arrive as the same
+          // absent description, and a `text[]` cannot say "nullable elements"
+          // to the generated types.
           p_option_descriptions: cleaned[0].options.some((o) => o.description)
-            ? cleaned[0].options.map((o) => o.description)
-            : null,
+            ? cleaned[0].options.map((o) => o.description ?? '')
+            : undefined,
         })
     setSubmitting(false)
 
@@ -641,7 +662,7 @@ export function CreatePoll() {
             button that removes the question, and see where it went. */}
         {multiQuestion && (
           <TextInput
-            label={`Title`}
+            label="Title"
             placeholder="What is this question asking?"
             value={question.title}
             onChange={(e) => updateQuestionTitle(questionIndex, e.currentTarget.value)}

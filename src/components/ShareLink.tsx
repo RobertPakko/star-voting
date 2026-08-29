@@ -9,22 +9,17 @@ import { ShareQr } from './ShareQr'
  * sharply, so the caption spells it out rather than leaving the creator to
  * assume.
  *
- * **The label and the caption span the whole row, above all three controls
- * rather than above the box alone.** They were the `TextInput`'s own label
- * once, which put them inside a field sharing a no-wrap row with two
- * buttons: the caption is a full sentence and the field is the part that
- * gives, so on a narrow screen it was squeezed into a column a few words
- * wide and the sentence unspooled down it. Nothing about the caption was
- * ever only about the box, either — *Anyone with this link can vote without
- * signing in* is as true of the link the Copy button lifts and of the one
- * the QR code carries, and all three are one control for handing the poll
- * out. So the wrapper holds the row, the label still names the box for a
- * screen reader through `htmlFor`, and the sentence gets the full width it
- * is written for.
+ * **The label and the caption span the whole row**, above all three controls
+ * rather than above the box alone. As the `TextInput`'s own label they sat
+ * inside a field sharing a no-wrap row with two buttons, and on a narrow
+ * screen the sentence unspooled down a column a few words wide. Nothing about
+ * the caption was only about the box either: *Anyone with this link can vote
+ * without signing in* is as true of what Copy lifts and what the QR code
+ * carries. So the wrapper holds the row, `htmlFor` still names the box for a
+ * screen reader, and the sentence gets its full width.
  *
- * Renders bare, with no card of its own: it sits inside the creator's manage
- * block and inside the open-poll thank-you card, both of which already have
- * a surface.
+ * Renders bare, with no card of its own: it sits inside surfaces that already
+ * have one.
  */
 export function ShareLink({ poll }: { poll: Pick<Poll, 'id' | 'title' | 'mode' | 'closed_at'> }) {
   const url = shareLinkFor(poll)
@@ -66,7 +61,7 @@ export function ShareLink({ poll }: { poll: Pick<Poll, 'id' | 'title' | 'mode' |
             </Button>
           )}
         </CopyButton>
-        <ShareQr url={url} title={poll.title} isOpen={isOpen} />
+        <ShareQr url={url} title={poll.title} />
       </Group>
     </Input.Wrapper>
   )

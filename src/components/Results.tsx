@@ -14,8 +14,10 @@ import { InfoIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
+import { parseAnswer, pollResultsSchema } from '../lib/rpcSchemas'
 import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
+import { NameList } from './NameList'
 import { OptionDescription } from './OptionDescription'
 import { ResultsSkeleton } from './Skeletons'
 import { voters } from '../lib/plural'
@@ -86,8 +88,10 @@ export function Results({
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
-      if (rpcError) setError(rpcError.message)
-      else setResults(data as PollResults)
+      if (rpcError) return setError(rpcError.message)
+      const { value, error: shape } = parseAnswer(pollResultsSchema, 'the tally', data)
+      if (value) setResults(value)
+      else setError(shape)
     })
 
     return () => {
@@ -159,13 +163,7 @@ export function Results({
             <Card withBorder key={i} p="sm">
               <Stack gap="xs">
                 <Text size="sm">
-                  {tb.tied.map((t, index) => (
-                    <span key={t.id}>
-                      {index > 0 && ' and '}
-                      <strong>{t.name}</strong>
-                    </span>
-                  ))}{' '}
-                  tied at {tb.tied_at} pts for{' '}
+                  <NameList names={tb.tied} /> tied at {tb.tied_at} pts for{' '}
                   {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}.
                 </Text>
                 {tb.steps.map((step, j) => (
@@ -341,12 +339,7 @@ function renderAdvancedNames(
   return (
     <>
       {prefix}
-      {advanced.map((a, index) => (
-        <span key={a.id}>
-          {index > 0 && ', '}
-          <strong>{a.name}</strong>
-        </span>
-      ))}
+      <NameList names={advanced} />
       {suffix}
     </>
   )

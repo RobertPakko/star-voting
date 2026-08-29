@@ -32,6 +32,12 @@ export interface AuthContextValue {
    * `onAuthStateChange` listener.
    */
   verifySignInCode: (email: string, code: string) => Promise<void>
+  /**
+   * Ends the session on this device. Nothing is returned and nothing throws:
+   * a sign-out that fails at the server has still cleared the local session,
+   * which is the whole of what the person pressing it asked for.
+   */
+  signOut: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined)

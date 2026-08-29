@@ -32,7 +32,7 @@ export function ThemeToggle() {
   return (
     <Menu width={150} position="bottom-end" shadow="md">
       <Menu.Target>
-        <ActionIcon variant="subtle" color="gray" size="lg" aria-label="Color theme">
+        <ActionIcon variant="outline" color="gray" size="lg" aria-label="Color theme">
           {computed === 'dark' ? (
             <MoonIcon size={18} aria-hidden />
           ) : (

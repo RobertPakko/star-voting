@@ -149,26 +149,24 @@ export interface PollStatus {
    */
   confirmed_count?: number
   /**
-   * The option this question elected, and whether the database has worked
-   * that out at all.
+   * The option this question elected, and whether the database has worked it
+   * out at all.
    *
    * Two fields rather than one because there are three answers and the badge
-   * draws a different thing for each: a name, *Tied* for a poll that elected
+   * draws a different thing for each: a name, *Tie* for a poll that elected
    * nobody, and *Results ready* for one whose answer this page has not been
-   * told. A single nullable name could only tell two of them apart, and the
-   * pair it would merge is exactly the pair that must not merge — *Tied* is a
-   * wrong answer where *Results ready* is only a missing one.
+   * told. A single nullable name would merge exactly the pair that must not
+   * merge — *Tie* is a wrong answer where *Results ready* is a missing one.
    *
    * So: `winner_settled` false means not worked out; true with a null
-   * `winner_name` means worked out and nobody won. Both undefined against a
-   * database that predates the columns, which reads as the third case and is
-   * the same reason `expires_at` is optional.
+   * `winner_name` means worked out and nobody won; both undefined against a
+   * database that predates the columns, for the reason `expires_at` is
+   * optional.
    *
-   * The database settles this once, when the poll crosses into having a
-   * result, and clears it when a reset takes that result away — so it arrives
-   * with the read that draws the page rather than in a request behind it, and
-   * a poll reset on another device cannot leave a name here that its votes no
-   * longer support. See 0047_the_winner_is_kept_with_the_poll.sql.
+   * The database settles it once, when the poll crosses into having a result,
+   * and clears it when a reset takes that result away — so it arrives with the
+   * read that draws the page, and a poll reset on another device cannot leave
+   * a name here its votes no longer support.
    */
   winner_name?: string | null
   winner_settled?: boolean
@@ -178,25 +176,20 @@ export interface PollStatus {
  * Everything the first paint of a poll page needs, and which reading of the
  * poll the reader turned out to be entitled to.
  *
- * One request answers both, which is the point: the address `#/polls/<id>` is
- * the same for every poll and every reader of it, so the route cannot know
- * which page to draw until something has looked the poll up. It used to find
- * out by trying — offering every address to the account reading and falling
- * back when row-level security returned nothing — which charged a signed-in
- * stranger holding an open poll's link a whole round trip and a discarded
- * render to learn a fact the server had before it answered.
+ * One request answers both, which is the point: `#/polls/<id>` is the same
+ * address for every poll and every reader, so the route cannot know which page
+ * to draw until something has looked the poll up.
  *
  * **The tag is the design, not a convenience.** `open` carries strictly less
- * than `account` does, and deliberately: an open poll's ballots are
- * identified by a voter_key minted per question so that one browser's cannot
- * be joined to each other, so no per-question `voted` or `confirmed` mark can
- * honestly appear on it — see `open_poll_group`, which says so at length. A
- * single flat shape with those fields left null would put the joining one
- * absent-minded `coalesce` away. Under a tag, restoring them means writing a
- * different branch, which is a decision somebody takes rather than a hole
- * somebody fills.
+ * than `account` does, deliberately: an open poll's ballots are identified by
+ * a voter_key minted per question so one browser's cannot be joined, so no
+ * per-question `voted` or `confirmed` mark can honestly appear on it. A single
+ * flat shape with those fields left null would put the joining one
+ * absent-minded `coalesce` away; under a tag, restoring them means writing a
+ * different branch — a decision somebody takes rather than a hole somebody
+ * fills.
  *
- * See `poll_page` in 0048_one_read_opens_a_poll.sql, and `readPollPage`.
+ * See `poll_page` in the migrations, and `readPollPage`.
  */
 export type PollRead = AccountRead | OpenRead | UnreadableRead
 
@@ -215,38 +208,30 @@ export interface AccountRead {
    */
   view: OpenPollView | null
   /**
-   * The tally, on a poll whose results are out. Null on every other poll —
-   * and null is *not* how a page learns there is no result: `status
-   * .results_available` says that, and is what decides whether the card is
-   * drawn at all. This is one read's worth of work handed over so the card
-   * does not have to make it, and a card handed nothing reads for itself.
+   * The tally, on a poll whose results are out.
    *
-   * Which is what keeps it working where no `poll_page` read is in hand: the
-   * live tick is deliberately narrow and carries no tally, so a poll that
-   * finishes while somebody is watching gets one the ordinary way.
+   * Null is *not* how a page learns there is no result — `status
+   * .results_available` says that, and is what the card is rendered behind.
+   * This is one read's worth of work handed over, and a card handed nothing
+   * reads for itself. Which is what keeps it working where no `poll_page` read
+   * is in hand: the live tick is deliberately narrow and carries no tally.
    */
   results: PollResults | null
   /**
    * The published ballot sheet, on a poll whose results are out *and* which
-   * publishes them. Null on every other poll, and on the same terms as
-   * `results`: it is the read the card would have made, not a second way of
-   * learning that there is a sheet — `show_ballots` and `results_available`
-   * say that, and are what the card is rendered behind.
-   *
-   * It waits for the whole group, as the tally does, because the sheet is
-   * the tally in the form it can be recomputed from; see 0051.
+   * publishes them. Same terms as `results`. It waits for the whole group, as
+   * the tally does, because the sheet is the tally in the form it can be
+   * recomputed from.
    */
   ballots: BallotSheet | null
   /**
    * The invite list, on an invite poll whose roster this reader draws: its
-   * creator, who manages the list, or anybody in a poll that shows its
-   * respondents. Null on an open poll, which has no list, and on an invite
-   * poll that hides its roster from the reader asking — who renders no card,
-   * so there is nothing to carry.
+   * creator, or anybody in a poll that shows its respondents. Null on an open
+   * poll and on one that hides its roster from the reader asking, who renders
+   * no card.
    *
-   * What each row may say is `poll_invitees`' business, unchanged: a poll
-   * that hides respondents nulls the per-person columns for everybody, its
-   * creator included.
+   * What each row may say is `poll_invitees`' business: a poll that hides
+   * respondents nulls the per-person columns for everybody, creator included.
    */
   invitees: Invitee[] | null
 }

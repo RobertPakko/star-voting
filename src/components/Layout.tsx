@@ -1,5 +1,5 @@
 import { Anchor, AppShell, Button, Group, Text, Title } from '@mantine/core'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { InstallButton } from './InstallButton'
 import { ThemeToggle } from './ThemeToggle'
@@ -21,9 +21,20 @@ import { ThemeToggle } from './ThemeToggle'
  * and its absence is the plainest way to say you have arrived.
  */
 export function Layout() {
-  const { session } = useAuth()
+  const { session, signOut } = useAuth()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const onAbout = pathname === '/about'
+
+  // Off the poll and back to the front door, rather than left standing where
+  // the session used to admit them. A page that was rendering the account
+  // reading of a poll holds that read until something asks again, and nothing
+  // does: the route re-reads on a live signal, not on the session changing.
+  // Leaving the address is what makes signing out look like signing out.
+  async function handleSignOut() {
+    await signOut()
+    navigate('/', { replace: true })
+  }
 
   return (
     <AppShell header={{ height: 60 }} padding="md">
@@ -66,10 +77,19 @@ export function Layout() {
             )}
             <InstallButton />
             <ThemeToggle />
-            {/* Signed out this is an offer rather than a gate; voting on an
-                open poll needs no account; but it has to be visible to be
-                taken, so it gets the same slot the sign-out button holds. */}
-            {!session && (
+            {/* One slot, two states. Signed out this is an offer rather than a
+                gate — voting on an open poll needs no account — but it has to
+                be visible to be taken. Signed in it is the way back off a
+                shared device, which is the case this app actually has: a link
+                pasted into a family thread is opened on somebody else's phone,
+                and without this the first account to sign in there owns the
+                app for good. Subtle rather than outlined, because leaving is
+                not what anybody came to do. */}
+            {session ? (
+              <Button variant="outline" color="gray" size="sm" onClick={handleSignOut}>
+                Sign out
+              </Button>
+            ) : (
               <Button component={Link} to="/" variant="outline" size="sm">
                 Sign in
               </Button>

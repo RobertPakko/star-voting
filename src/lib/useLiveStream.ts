@@ -25,17 +25,14 @@ const GRACE_MS = 8000
  * How long to wait before asking again after a read that failed, and how many
  * times to bother.
  *
- * Polling used to cover this by accident: a read that lost a race with a
- * flaky connection was simply followed by another one five seconds later, and
- * nobody had to think about it. Nothing follows a failed read now — the next
- * one comes when somebody votes, and on the last vote of a poll that is
- * never. Without this, one dropped request at the wrong moment leaves a page
- * showing a ballot for a poll that has already closed.
+ * Nothing follows a failed read on its own — the next one comes when somebody
+ * votes, and on the last vote of a poll that is never — so without this, one
+ * dropped request leaves a page showing a ballot for a poll that has closed.
  *
  * A read failing while the socket is up is the unusual case, because the
  * common kinds of trouble take the socket with them and reconnecting already
- * re-reads. So this is short and gives up quickly: past that, the honest
- * thing is to stop guessing and tell the reader.
+ * re-reads. So this is short and gives up quickly: past that, the honest thing
+ * is to stop guessing and tell the reader.
  */
 const RETRY_MS = 5000
 const RETRY_LIMIT = 5
@@ -43,18 +40,14 @@ const RETRY_LIMIT = 5
 /**
  * How long a page waits for a subscription before reading anyway.
  *
- * The first read happens on subscribing, which is what keeps it to one read
- * instead of two. Taken literally that makes the websocket load-bearing for
- * the page existing at all: on a network that blocks websockets outright —
- * the corporate proxy, the hotel captive portal — nothing would ever
- * subscribe, so nothing would ever read, and the poll would sit behind its
- * loading skeleton for good. Losing live updates on such a network is a
- * decision this app has made; losing the poll is not.
+ * On a network that blocks websockets outright — the corporate proxy, the
+ * hotel captive portal — nothing would ever subscribe, so nothing would ever
+ * read, and the poll would sit behind its skeleton for good. Losing live
+ * updates there is a decision this app has made; losing the poll is not.
  *
- * So this is the one read that does not wait to be invited, and it happens
- * once per page rather than on a repeat: it is a floor under the page, not a
- * timer creeping back in. A healthy socket subscribes in a fraction of this
- * and cancels it on the way past.
+ * Once per page rather than on a repeat: a floor under the page, not a timer
+ * creeping back in. A healthy socket subscribes in a fraction of this and
+ * cancels it on the way past.
  */
 const FIRST_READ_MS = 5000
 
@@ -75,45 +68,31 @@ export type LiveStatus = 'connecting' | 'live' | 'offline'
  * squashed baseline and `0035_broadcast_polls_to_watchers.sql`.
  *
  * **The message is a knock on the door, not the news.** Every broadcast is
- * empty. It says a poll changed, and this hook answers by calling the same
- * RPC the page would have called anyway — so the database functions remain
- * the only way anything is read, and every rule about who may see what stays
- * where it already was. That is what lets an open poll's voters, who have no
- * read grant on any table, be told about a vote at all: they are told
- * nothing, and then they ask.
+ * empty. It says a poll changed, and this hook answers by calling the same RPC
+ * the page would have called anyway — so the database functions remain the
+ * only way anything is read, and every rule about who may see what stays where
+ * it was. That is what lets an open poll's voters, who have no read grant on
+ * any table, be told about a vote at all: they are told nothing, then they ask.
  *
  * **The first read happens on subscribe, not on mount.** A page that loaded
- * itself and then subscribed would either read twice or leave a gap between
- * the two where a vote could slip through unseen. Waiting for the
- * subscription costs a handshake before anything appears and buys both
- * problems away. It is also what makes a reconnect self-healing: Realtime
- * does not replay what it sent while a socket was down, but rejoining a
- * channel reports `SUBSCRIBED` again, and every one of those is a fresh read.
- * A laptop that slept through four votes wakes up and asks.
+ * itself and then subscribed would either read twice or leave a gap where a
+ * vote could slip through unseen. It also makes a reconnect self-healing:
+ * Realtime does not replay what it sent while a socket was down, but rejoining
+ * reports `SUBSCRIBED` again, and every one of those is a fresh read.
  *
- * **Except that a page never waits on the socket forever.** Read literally,
- * the rule above makes the websocket load-bearing for the poll appearing at
- * all, and a network that blocks websockets would leave a permanent loading
- * skeleton. `FIRST_READ_MS` is the floor under that: one read, once, if
- * subscribing has not worked by then. Live updates are what such a network
- * costs; the poll is not.
+ * **Except that a page never waits on the socket forever.** Taken literally
+ * that rule makes the websocket load-bearing for the poll appearing at all.
+ * `FIRST_READ_MS` is the floor: one read, once, if subscribing has not worked
+ * by then. Live updates are what such a network costs; the poll is not.
  *
- * **Nothing stops watching while it is on screen.** A page used to drop its
- * subscription once its poll had settled — closed, or its results out — on
- * the reasoning that nothing about such a poll changes again. It does: its
- * creator can reset it, which deletes every ballot and puts the poll back to
- * taking votes, and the reset broadcasts like everything else. A page that
- * had stopped listening was the only one that would not hear it, and would
- * sit showing a tally of votes that no longer exist. So every page holds its
- * subscription for as long as it is on screen, and that is also what makes
- * "one topic, one read on subscribing" one rule rather than one rule with a
- * settled-poll exception hanging off it.
+ * **Nothing stops watching while it is on screen**, a settled poll included.
+ * Its creator can reset it, which deletes every ballot and broadcasts like
+ * everything else, and a page that had stopped listening would sit showing a
+ * tally of votes that no longer exist.
  *
- * **A hidden tab holds no socket.** Nobody is reading a backgrounded poll,
- * and twenty of them behind a closed lid should not each hold a connection
- * open. Coming back re-subscribes, which re-reads — so returning to a tab
- * shows what arrived while it was away, rather than what was there when it
- * left.
+ * **A hidden tab holds no socket.** Nobody is reading a backgrounded poll, and
+ * twenty behind a closed lid should not each hold a connection open. Coming
+ * back re-subscribes, which re-reads.
  *
  * Returns what to tell the reader; see `LiveConnectionNotice`.
  */
@@ -285,14 +264,11 @@ export function useLiveStream(
             // round trip, where a suppressed one is a page left showing votes
             // that have since been overtaken.
             //
-            // That is affordable because every page subscribes to exactly one
-            // topic. A caller passing several would get one read per channel
-            // -- and worse, any that landed while the first was still in
-            // flight would each queue a trailing read behind it, because
-            // `missed` cannot tell a genuine signal from a wave of channels
-            // arriving. The poll list used to do exactly that and cost three
-            // reads to draw itself once; the fix was to give it a topic it
-            // could name before its first read, not to second-guess this.
+            // Affordable because every page subscribes to exactly one topic. A
+            // caller passing several would get one read per channel, and any
+            // landing while the first was in flight would each queue a trailing
+            // read behind it — `missed` cannot tell a genuine signal from a
+            // wave of channels arriving.
             soon()
           } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
             subscribed = false
@@ -350,17 +326,7 @@ export function useLiveStream(
   return status
 }
 
-/**
- * The topic a poll is announced on.
- *
- * One topic, for every page that watches the poll. There were two until a
- * poll's id became its link: the same poll was announced under its id and
- * again under its share token, because somebody arriving on `/p/:token` did
- * not learn the id until they had read the poll once — and reading it once
- * before subscribing is exactly what the second topic existed to avoid. A
- * voter now arrives holding the id, so there is nothing left to bridge and
- * `broadcast_poll_change` sends one message where it sent two.
- */
+/** The topic a poll is announced on: one, for every page that watches it. */
 export function pollTopic(pollId: string): string {
   return `poll:${pollId}`
 }

@@ -68,8 +68,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error
   }
 
+  async function signOut() {
+    // Local scope, and errors swallowed. Both are about the same thing: the
+    // person pressing this wants the session off *this* device, and a request
+    // to revoke it server-side that fails -- an expired token, no network --
+    // must not leave them signed in because of it. The client clears its own
+    // storage either way, and the listener above turns that into a signed-out
+    // app.
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+  }
+
   return (
-    <AuthContext.Provider value={{ session, loading, signInWithEmail, verifySignInCode }}>
+    <AuthContext.Provider value={{ session, loading, signInWithEmail, verifySignInCode, signOut }}>
       {children}
     </AuthContext.Provider>
   )

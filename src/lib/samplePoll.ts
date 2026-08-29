@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { Database } from './database.types'
 import type {
   BallotSheet,
   OpenGroupQuestion,
@@ -18,24 +19,20 @@ import type {
  *
  * **Why a recording rather than rows in the real database.** A sample poll
  * living in Supabase would be deleted by the nightly retention purge six
- * months after it was created, and until then anyone holding the link could
- * vote in it -- so the tie-break the About page promises to demonstrate would
- * drift away from the ballots that produce it. Neither is true of a file.
+ * months after creation, and until then anyone holding the link could vote in
+ * it — so the tie-break the About page promises to demonstrate would drift
+ * away from the ballots that produce it. Neither is true of a file.
  *
- * **What is not faked.** Every payload here came out of `star_round()`,
+ * **What is not faked.** Every payload came out of `star_round()`,
  * `poll_ranking()` and `ballot_sheet()`. Nothing in the browser recomputes a
- * tally, so the sample cannot show a STAR result this app would not produce;
- * change the ballots in `scripts/sample-poll.sql` and rerun the script and the
- * page follows.
+ * tally, so the sample cannot show a STAR result this app would not produce.
  *
- * The pages themselves know none of this. `PublicPoll` renders a sample id
- * exactly as it renders a real one, because every open-poll read goes
- * through `openPollRpc` below and it is the only thing that decides what
- * answers it. The one place outside this file that has to know a sample id
- * when it sees one is `PollPage` in App.tsx, which routes it to `PublicPoll`
- * rather than offering it to the account reading first: there is no `polls`
- * row for that read to find, and asking for one got the reader a uuid
- * syntax error instead of the sample.
+ * The pages know none of this: `PublicPoll` renders a sample id exactly as it
+ * renders a real one, because every open-poll read goes through `openPollRpc`
+ * below. The one place outside this file that has to recognise a sample id is
+ * `PollPage`, which routes it to `PublicPoll` rather than offering it to the
+ * account reading — there is no `polls` row to find, and asking for one got
+ * the reader a uuid syntax error instead of the sample.
  */
 
 /** The three questions of one copy of the sample, keyed by poll id. */
@@ -57,14 +54,12 @@ export const SAMPLE_RESULT_ID = 'sample-result-host'
 /**
  * A real poll id is a v4 UUID, so nothing the database can mint begins with
  * this and no poll can be shadowed by the sample. It is also why the sample's
- * ids are words: a poll's id is its link now, and the sample's links are meant
- * to be read in the address bar and pasted into a talk.
+ * ids are words: a poll's id is its link, and the sample's links are meant to
+ * be read in the address bar and pasted into a talk.
  *
- * They are ids the `polls` table would refuse -- it would not merely fail to
- * find them, it errors on the cast -- so this has to be asked before anything
- * puts one in front of the database. Two places do: `openPollRpc` below, for
- * every open-poll call, and `PollPage` in App.tsx, for which of the two
- * readings of a poll address to render at all.
+ * The `polls` table would not merely fail to find these — it errors on the
+ * cast — so this has to be asked before anything puts one in front of the
+ * database. Two places do: `openPollRpc` below, and `PollPage` in App.tsx.
  */
 export function isSampleId(pollId: string): boolean {
   return pollId.startsWith('sample-')
@@ -88,6 +83,19 @@ interface OpenPollArgs {
 }
 
 /**
+ * Every function an open poll's link may reach, named rather than taken as a
+ * bare string: the generated `Database` type knows the whole catalogue, and a
+ * typo here would otherwise be a runtime "function does not exist" that only
+ * the reader who hit it ever sees.
+ *
+ * `poll_page` is on the list because the read that *opens* a poll goes through
+ * here too, so the sample can answer it — see lib/pollPage.ts.
+ */
+type OpenPollFn =
+  | Extract<keyof Database['public']['Functions'], `open_poll_${string}`>
+  | 'poll_page'
+
+/**
  * Every read and write an open poll makes under its id, sent to the server
  * or, for the sample, answered here.
  *
@@ -95,12 +103,12 @@ interface OpenPollArgs {
  * forty-odd kilobytes of recorded JSON, and the overwhelming majority of
  * readers never open the sample at all.
  */
-export function openPollRpc(fn: string, args: OpenPollArgs): PromiseLike<RpcAnswer> {
+export function openPollRpc(fn: OpenPollFn, args: OpenPollArgs): PromiseLike<RpcAnswer> {
   if (!isSampleId(args.p_poll_id)) return supabase.rpc(fn, args)
   return import('./samplePollData').then(({ SAMPLE_PAYLOADS }) => answer(SAMPLE_PAYLOADS, fn, args))
 }
 
-function answer(payloads: SamplePayloads, fn: string, args: OpenPollArgs): RpcAnswer {
+function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): RpcAnswer {
   const question = payloads[args.p_poll_id]
 
   // The same message a mistyped link gets from the server, because a

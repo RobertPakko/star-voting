@@ -39,21 +39,15 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * poll's view is handed to `OpenPollPanel`: the page owns the poll, and this
  * renders it. `poll_page` brings the roster on the read that opens the page
  * and the live tick brings it again in the same batch as the counts above it,
- * so who has answered and how many have is one read and cannot disagree on
- * screen. This card used to fetch its own copy on a tick the page bumped for
- * it, which was the same request at the same moment with a second copy of the
- * poll's rules — and a first read that had to be waited for, under a heading
- * the page had already drawn, which is the stand-in that no longer exists.
+ * so who has answered and how many have is one read and cannot disagree.
  *
- * Whether the roster is readable is therefore not asked here either. `poll_page`
- * carries one exactly when there is a card to draw — an invite poll, read by
- * its creator or showing its respondents — so the page renders this only when
- * it holds one, and a reader with no roster gets no card rather than a request
- * expected to fail.
+ * Whether the roster is readable is therefore not asked here either.
+ * `poll_page` carries one exactly when there is a card to draw, so the page
+ * renders this only when it holds one and a reader with no roster gets no card
+ * rather than a request expected to fail.
  *
- * The add/remove controls are creator-only and unchanged in behaviour: they
- * write, and then ask the page to re-read, which is what brings the list back
- * changed.
+ * The add/remove controls are creator-only: they write, then ask the page to
+ * re-read, which is what brings the list back changed.
  */
 export function Respondents({
   pollId,
@@ -145,9 +139,15 @@ export function Respondents({
   // off whichever column is being drawn: a poll that hides its respondents
   // nulls both, and a database that predates has_confirmed sends it undefined,
   // which is the same "nothing to show" and gets the same line underneath.
-  const showsStatus = invitees.some((i) =>
-    collecting ? (i.has_confirmed ?? null) !== null : i.has_voted !== null,
-  )
+  //
+  // `some` over an empty roster is false, which is not the same fact at all:
+  // a poll whose creator has removed every invitee was explaining that it
+  // hides who responded, under a card with nobody in it, whatever its
+  // respondents setting actually said. Nobody to report on is nothing to
+  // explain.
+  const showsStatus =
+    invitees.length === 0 ||
+    invitees.some((i) => (collecting ? (i.has_confirmed ?? null) !== null : i.has_voted !== null))
 
   return (
     <Card withBorder>
@@ -191,7 +191,7 @@ export function Respondents({
 
         {!showsStatus && (
           <Text size="xs" c="dimmed">
-            This poll hides who has responded, so you cannot can see which of these people have{' '}
+            This poll hides who has responded, so you cannot see which of these people have{' '}
             {collecting ? 'confirmed the options' : 'voted'}.
           </Text>
         )}

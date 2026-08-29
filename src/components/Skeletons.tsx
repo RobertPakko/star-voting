@@ -1,16 +1,35 @@
 import { Fragment, type ReactNode } from 'react'
-import { Box, Card, Divider, Group, Skeleton, Stack, VisuallyHidden } from '@mantine/core'
+import {
+  Box,
+  Card,
+  Divider,
+  Group,
+  SimpleGrid,
+  Skeleton,
+  Stack,
+  VisuallyHidden,
+} from '@mantine/core'
 
 /**
  * The shapes each page draws while it is waiting for its first read.
  *
- * Three rules keep them honest:
+ * Four rules keep them honest:
  *
  *  - **A skeleton claims only what the page always has.** The poll list draws
  *    three cards because the wait is over long before anyone counts them; it
  *    does not draw a description, which most polls do not have. A placeholder
  *    for something that then fails to appear is a small lie the reader has to
- *    un-learn.
+ *    un-learn. The other side of it is that a shape claims everything the page
+ *    *does* always have — and a condition in the source is not the same thing
+ *    as a case that happens; see AGENTS.md for the runoff card, which was left
+ *    out for years on the strength of one.
+ *  - **A shape only exists for a wait that exists.** A card that guesses at
+ *    nothing is a card whose content the page already has, and once
+ *    `poll_page` carried the roster that was true of `RosterSkeleton`, which
+ *    is why there is no longer one. The test is whether the card is still
+ *    reachable holding nothing: `ResultsSkeleton` and `BallotsSkeleton` are,
+ *    because the live tick carries no tally and a crossing between two
+ *    questions of an open poll re-reads through `open_poll_view`.
  *  - **They are one component per page, next to nothing else.** Every skeleton
  *    in the app is in this file, so a page and its stand-in are changed
  *    together rather than drifting apart; the failure mode of skeletons is
@@ -251,20 +270,12 @@ export function PollPageSkeleton({ rows = 5 }: { rows?: number }) {
  * whole poll away and back.
  *
  * **The two things inside the card that are not the question's are handed in
- * and drawn for real**, in the places the ballot draws them: the strip of
- * questions, and the name box on an open poll that shows its respondents.
- * Both belong to the poll's half of the page like the heading above does —
- * the same questions in the same order, the same name this browser is
- * answering under — and only happen to live inside the card a crossing
- * replaces. Stood in for, the strip greyed out and came back at the exact
- * moment a reader was using it to navigate, which is the thing this whole
- * stand-in exists to prevent, and it put the way out of the question behind
- * the wait; the name box went further and took what had been typed into it
- * with it. Drawn for real, the strip's links stay live and the name stays
- * typed, and nothing about either moves across a crossing: the badge marking
- * which question is open has already moved, because the address has, and the
- * tags take whatever colour the read gives them when it lands, which is a
- * tick appearing rather than a row of shapes filling in.
+ * and drawn for real**: the strip of questions, and the name box on an open
+ * poll that shows its respondents. Both belong to the poll's half of the page
+ * like the heading does, and only happen to live inside the card a crossing
+ * replaces. Stood in for, the strip greyed out at the exact moment a reader
+ * was using it to navigate — putting the way out of the question behind the
+ * wait — and the name box took what had been typed into it with it.
  *
  * They therefore sit outside the `Loading` wrapper, which hides what it holds
  * from screen readers. A real link or a real input in there would be one
@@ -297,26 +308,21 @@ export function QuestionSkeleton({
   finished?: boolean
   /**
    * Whether the question being opened is certain to have a tally under the
-   * strip rather than the notice a question nobody answered puts up — which
-   * decides how much of the block below is claimed, and is the one thing
-   * about the question being opened that this can be told rather than shown.
+   * strip rather than the notice a question nobody answered puts up, which
+   * decides how much of the block below is claimed.
    *
    * The fact behind it is `results_available && !is_closed`, read off the
-   * question being *left*, and it carries because of how a question stops
-   * taking votes. `poll_gate_open` opens on one of two things: the poll was
-   * closed, or every invitee has answered that question. Results need every
-   * question in the group gated open, and closing is one act over all of them
-   * — `close_poll` writes one timestamp — so a poll whose results are out
-   * with no `closed_at` is one where every question was answered by everyone
-   * invited. Every question in it therefore has ballots, including the one
-   * being opened, and a tally is what is coming.
+   * question being *left*. It carries because results need every question in
+   * the group gated open, and `poll_gate_open` opens on one of two things: the
+   * poll was closed, or every invitee answered that question. Closing is one
+   * act over the whole group, so results out with no `closed_at` means every
+   * question was answered by everyone invited — including the one being
+   * opened, which therefore has a tally coming.
    *
-   * A poll that was closed early is the case this is false for, and it is
-   * false honestly: closing settles the group at whatever it had, so a
-   * question nobody got to has no tally and puts up the notice instead. An
-   * open poll is always in that case — its questions have no invite list to
-   * have finished, so `poll_gate_open` has nothing but `closed_at` to go on —
-   * which is why the share-link reading keeps the one card it always drew.
+   * A poll closed early is the case this is false for, and false honestly:
+   * closing settles the group at whatever it had. An open poll is always in
+   * that case, its questions having no invite list to have finished, which is
+   * why the share-link reading keeps the one card it always drew.
    */
   tallied?: boolean
   /** The name box, on the polls that ask for one; see VoterNameField. */
@@ -325,18 +331,11 @@ export function QuestionSkeleton({
   strip?: ReactNode
 }) {
   // Under the strip, as much of the ending as is known to be coming. Where a
-  // tally is certain that is the whole of it, the same three cards `Results`
-  // will put up a beat later and then fill — the block under the strip used
-  // to be one card and then four, which is the jump these shapes exist to
-  // prevent, and it was the commonest crossing of the lot that took it: a
-  // poll everybody answered, read back question by question.
-  //
-  // Where it is not, this is still the one card both endings share, and the
-  // score round arrives under it. `Results` puts up `ResultsSkeleton` the
-  // moment it lands, whose first shape is this one, so the wait continues
-  // rather than starting over.
-  //
-  // A finished question asks for no name, which is why there is none here.
+  // tally is certain that is the whole of it — the same three cards `Results`
+  // puts up a beat later and then fills, rather than one card that becomes
+  // four. Where it is not, this is still the one card both endings share, and
+  // `ResultsSkeleton`'s first shape is this one, so the wait continues rather
+  // than starting over. A finished question asks for no name.
   if (finished) {
     return (
       <>
@@ -491,6 +490,57 @@ function FieldShape({ label, children }: { label: number; children: ReactNode })
  * warning, and the shape a duplicate will take is not known until the poll it
  * is copied from lands.
  */
+/**
+ * The About page, which is fetched rather than bundled — see the `lazy` calls
+ * in App.tsx — so it has a wait of its own now.
+ *
+ * The heading, the paragraph under it, the row of three sample cards and the
+ * tab strip: everything above the fold and everything that is there whichever
+ * tab opens. Nothing of the panel below the strip, because which panel that
+ * is depends on the tab and all three are different lengths.
+ */
+export function AboutSkeleton() {
+  return (
+    <Loading>
+      <Stack maw={720} mx="auto" gap="md">
+        <Skeleton height={bar.title} width={132} radius="sm" />
+
+        <Stack gap={6}>
+          {['100%', '100%', '72%'].map((w, i) => (
+            <Skeleton key={i} height={bar.name} width={w} radius="sm" />
+          ))}
+        </Stack>
+
+        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Card key={i} withBorder p="md">
+              <Stack gap="sm">
+                <Skeleton height={34} width={34} radius="md" />
+                <Skeleton height={bar.heading} width="70%" radius="sm" />
+                <Skeleton height={bar.line} width="90%" radius="sm" />
+                <Skeleton height={control} width={128} radius="md" />
+              </Stack>
+            </Card>
+          ))}
+        </SimpleGrid>
+
+        {/* `Tabs.List grow`: three tabs sharing the width, over the rule they
+            sit on. */}
+        <Stack gap={0}>
+          <Group gap={0} wrap="nowrap">
+            {Array.from({ length: 3 }, (_, i) => (
+              <Box key={i} style={{ flex: 1, padding: '10px 16px' }}>
+                <Skeleton height={bar.name} radius="sm" />
+              </Box>
+            ))}
+          </Group>
+          <Skeleton height={1} radius={0} />
+        </Stack>
+      </Stack>
+    </Loading>
+  )
+}
+
 export function FormSkeleton() {
   return (
     <Loading>

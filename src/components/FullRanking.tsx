@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
+import { NameList } from './NameList'
 import { RankingSkeleton } from './Skeletons'
 import { voters } from '../lib/plural'
 
@@ -25,22 +26,15 @@ export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
  *
  * **Fetched when the button is pressed, not with the tally that drew it.**
  * STAR names one winner in one round; ordering the rest takes a round per
- * place, each one re-reading every ballot, and it is far and away the most
- * expensive thing this app asks a database for -- a tally that took 48ms on
- * ten options and a hundred voters takes 8ms without it, and one that took
- * 527ms on fifty options takes 19ms. Almost nobody presses the button, so
- * almost nobody should pay for it. The cost of the split is that whoever does
- * press it waits, and pays for the head round twice: first place is part of
- * the ranking, so `poll_ranking` runs it again rather than being handed it.
- * See AGENTS.md, "Results and the full ranking", for the measurements.
+ * place, each re-reading every ballot, and it is far and away the most
+ * expensive thing this app asks a database for — a tally that took 48ms on ten
+ * options and a hundred voters takes 8ms without it, and one that took 527ms
+ * on fifty options takes 19ms. Almost nobody presses the button, so almost
+ * nobody should pay for it. See AGENTS.md, "Results and the full ranking".
  *
- * The answer is not held on to. It used to be, for the life of the tab, on
- * the grounds that a poll whose results are out has taken its last vote --
- * true, unless its creator resets it, which deletes every vote and is
- * announced to nobody. So the wait is once per opening rather than once per
- * reader. It is the most expensive thing this app asks for and the one
- * fetched least often, which is exactly the trade the split above was made
- * to allow.
+ * The answer is not held on to, because a creator can reset the poll — which
+ * deletes every vote and is announced to nobody. So the wait is once per
+ * opening rather than once per reader.
  */
 export function FullRanking({ source, results }: { source: RankingSource; results: PollResults }) {
   const [opened, modal] = useDisclosure(false)
@@ -125,20 +119,13 @@ function Places({ ranking, results }: { ranking: RankingEntry[]; results: PollRe
   return (
     <Stack gap="md">
       {ranking.map((entry) => (
-        <Place key={entry.place} entry={entry} results={results} nameById={nameById} />
+        <Place key={entry.place} entry={entry} nameById={nameById} />
       ))}
     </Stack>
   )
 }
 
-function Place({
-  entry,
-  nameById,
-}: {
-  entry: RankingEntry
-  results: PollResults
-  nameById: Map<string, string>
-}) {
+function Place({ entry, nameById }: { entry: RankingEntry; nameById: Map<string, string> }) {
   const total = entry.options[0].total_score
 
   return (
@@ -227,20 +214,8 @@ function tiebreakNote(tb: Tiebreak) {
 
   return (
     <>
-      {tb.tied.map((t, index) => (
-        <span key={t.id}>
-          {index > 0 && ' and '}
-          <strong>{t.name}</strong>
-        </span>
-      ))}{' '}
-      tied at {tb.tied_at} pts for the runoff;{' '}
-      {tb.advanced.map((a, index) => (
-        <span key={a.id}>
-          {index > 0 && ', '}
-          <strong>{a.name}</strong>
-        </span>
-      ))}{' '}
-      advanced on {rule}.
+      <NameList names={tb.tied} /> tied at {tb.tied_at} pts for the runoff;{' '}
+      <NameList names={tb.advanced} /> advanced on {rule}.
     </>
   )
 }

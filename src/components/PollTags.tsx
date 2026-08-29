@@ -7,38 +7,31 @@ import type { PollMode } from '../lib/types'
  * a poll: a row of badges saying what kind of poll it is, and one badge
  * beside the title saying where it has got to.
  *
- * The row is the same four badges everywhere, in the same order and the same
- * words: **invite only/open link**, then respondents shown/hidden, then
- * ballots published/private, then how many have answered. The three settings
- * are in the order they are chosen in `CreatePoll`, who can vote, then
- * whether their names are shown, then whether their ballots are, so the
- * form that sets a poll's terms and the row that reports them tell one story
- * in one order, and nobody has to re-sort the row to check what they picked.
- * The count comes last of the four because it is the only one that is not a
- * setting at all: it is the poll happening rather than the poll's terms.
+ * The row is the same four badges everywhere, in the same order: **invite
+ * only/open link**, respondents shown/hidden, ballots published/private, then
+ * how many have answered. The three settings run in the order `CreatePoll`
+ * asks them, so the form that sets a poll's terms and the row that reports
+ * them tell one story in one order. The count comes last because it is the
+ * only one that is not a setting: it is the poll happening rather than its
+ * terms.
  *
- * Always-present matters more than it sounds: when a tag only appeared for
- * one of its two states, its absence had to be read as the other state, and
- * "no tag" is not something anyone reads. Showing both states of all three
- * settings means the terms of a poll can be taken in at a glance and
- * compared between polls.
+ * **Both states of every setting are always shown.** A tag that appeared for
+ * only one of its states made its absence carry the other, and "no tag" is not
+ * something anyone reads.
  *
- * The wording is deliberately not symmetrical. Respondents are shown or
- * hidden, hiding them lists nobody at all, which is not the same as
- * listing them anonymously, while ballots are published or private. An
- * anonymous ballot is the two tags together: respondents hidden, ballots
- * published.
+ * The wording is deliberately not symmetrical: respondents are shown or
+ * *hidden* — hiding them lists nobody, which is not the same as listing them
+ * anonymously — while ballots are published or private. An anonymous ballot is
+ * the two together: respondents hidden, ballots published.
  *
- * These tags are also the only place a voter is told what happens to their
- * ballot, so every page carrying a ballot puts them above it. Changing any
- * of these strings means changing them here, which is the point of this file
- * existing.
+ * These tags are the only place a voter is told what happens to their ballot,
+ * so every page carrying a ballot puts them above it, and every one of these
+ * strings is decided here.
  *
- * **Where the poll has got to is not in this row.** It is a state rather
- * than a setting, it is the one thing on a card that moves on its own, and
- * it is the only part worth reading before deciding whether to open the
- * poll at all; so it sits beside the title as `PollStateBadge`, on its own,
- * where a row of settings cannot bury it.
+ * **Where the poll has got to is not in this row.** It is a state rather than
+ * a setting, the one thing on a card that moves on its own, and the only part
+ * worth reading before deciding whether to open the poll — so it sits beside
+ * the title as `PollStateBadge`, where a row of settings cannot bury it.
  */
 export function PollTags({
   mode,
@@ -86,34 +79,23 @@ export interface Turnout {
   votedCount: number
   invitedCount: number
   /**
-   * How many people have said they are done adding options. It is the count
-   * badge's whole content while the poll is collecting them, because it is
-   * the number that is moving at that stage — see turnoutLabel.
-   *
-   * Undefined against a database whose `poll_status` and `list_polls` predate
-   * the column, which is the only reason `optionCount` below is still here.
+   * How many people have said they are done adding options — the badge's whole
+   * content while the poll is collecting, because it is the number that is
+   * moving then. Undefined against a database whose `poll_status` and
+   * `list_polls` predate the column, which is the only reason `optionCount`
+   * below still exists.
    */
   confirmedCount?: number
-  /**
-   * How many options the poll holds. Read only as the fallback for the line
-   * above: it is what this badge counted while collecting before there was
-   * anything better to count, and it is what a browser running ahead of the
-   * migration still gets.
-   */
+  /** How many options the poll holds. Only the fallback for the line above. */
   optionCount: number
   /**
    * How many questions the poll asks. Above one it takes the badge over
-   * entirely; see turnoutLabel for why a multi-question poll has no turnout
-   * number to report.
+   * entirely; see turnoutLabel.
    *
    * Every screen that draws a poll passes it, so one poll wears one badge
-   * wherever it is read — the list it was opened from, its own page, and the
-   * public one. It used to come from the list alone, and a poll that said
-   * *5 questions* on the card said *2/7 votes* the moment it was opened,
-   * which is the drift `PollHeading` exists to prevent. A page that does not
-   * yet know the count leaves `turnout` off altogether rather than passing
-   * this undefined, since a turnout drawn now is a turnout rewritten in a
-   * moment.
+   * wherever it is read. A page that does not yet know leaves `turnout` off
+   * altogether rather than passing this undefined, since a turnout drawn now
+   * is a turnout rewritten in a moment.
    */
   questionCount?: number
 }
@@ -150,19 +132,16 @@ function turnoutLabel({
     return `${questionCount} questions`
   }
   if (soliciting) {
-    // Turnout is zero and stays zero until the list is settled, so this stage
-    // counts what is actually moving. That used to be the options coming in,
-    // and the options coming in are the wrong number: seven of them is seven
-    // people with an idea each or one person with seven, and neither is
-    // distinguishable from a poll nobody has opened. So it counts the people
-    // who have said they are done instead — the same shape as the turnout it
-    // gives way to, out of the same denominator, so a card carrying "2/5
-    // confirmed" today and "5/5 votes" next week is counting the same list of
-    // people both times.
+    // Turnout is zero until the list is settled, so this stage counts what is
+    // actually moving — and that is people, not options: seven options is
+    // seven people with an idea each or one person with seven, and neither is
+    // distinguishable from a poll nobody opened. Counting who is *done* has
+    // the same shape and denominator as the turnout it gives way to, so "2/5
+    // confirmed" today and "5/5 votes" next week count the same list of
+    // people.
     //
-    // The option count is the fallback and nothing else: a browser talking to
-    // a database that predates the confirmations reports what this badge
-    // always reported rather than a confident zero.
+    // The option count is the fallback and nothing else, for a browser talking
+    // to a database that predates the confirmations.
     if (confirmedCount === undefined) {
       return `${optionCount} ${optionCount === 1 ? 'option' : 'options'}`
     }
@@ -186,36 +165,27 @@ function turnoutLabel({
  *
  * The name is not prefixed with "Winner:". The badge is green, it sits where
  * every other poll's state sits, and the polls around it read *In progress*
- * and *Collecting options*; a label saying which question is being answered
- * is only worth its room when the answer alone would be ambiguous.
+ * and *Collecting options*.
  *
  * Three outcomes are told apart rather than collapsed, because a reader
- * scanning a list of finished polls needs *what happened*, and "ready to
- * look at" is not that:
+ * scanning a list of finished polls needs *what happened*, and "ready to look
+ * at" is not that:
  *
  *  - a name: the option STAR elected;
- *  - *Tied*: the election ran and settled nothing, which STAR
- *    can genuinely produce and the app reports rather than inventing a
- *    result. It carries the colour of a tie-break that decided nothing,
- *    which is the same claim one level up;
- *  - *Results ready*: the poll is finished and no single option is this
- *    badge's to name. That is a real state, not a fallback. A poll of several
- *    questions is the deliberate case — it has a winner per question, so the
- *    badge names none of them and the question the reader opens names its own,
- *    in the green banner over its tally — and `inGroup` is what says so. A
- *    browser talking to a database older than the columns that carry the
- *    winner, and a read that simply failed, arrive here too. It must never
- *    read as *Tied*, which would be a wrong answer rather than a missing one.
+ *  - *Tie*: the election ran and settled nothing, which STAR can genuinely
+ *    produce and the app reports rather than inventing a result. It carries
+ *    the colour of a tie-break that decided nothing;
+ *  - *Results ready*: finished, and no single option is this badge's to name.
+ *    A real state, not a fallback: a poll of several questions has a winner
+ *    per question, so the badge names none and the question the reader opens
+ *    names its own. A database older than the winner columns and a read that
+ *    failed arrive here too. It must never read as *Tie*, which would be a
+ *    wrong answer rather than a missing one.
  *
- * **Nothing here waits on anything.** The name used to arrive in a request
- * behind the page, so a finished poll drew *Results ready* for the hundred
- * milliseconds before its answer landed and then rewrote itself into the
- * winner's name — every load of every finished poll flickering through a
- * state that was true for nobody. That needed a third input, `awaitingWinner`,
- * and a badge that drew nothing while it was set. The winner now arrives on
- * the same read as `resultsAvailable` — `list_polls`, `poll_status` and
- * `open_poll_view` all carry it — so every state below is decided by the read
- * that drew the page and there is no in-flight case left to draw.
+ * **Nothing here waits on anything.** `list_polls`, `poll_status` and
+ * `open_poll_view` all carry the winner, so every state below is decided by
+ * the read that drew the page — no in-flight case, and no flicker through
+ * *Results ready* on the way to a name.
  */
 export function PollStateBadge({
   soliciting,
@@ -239,13 +209,10 @@ export function PollStateBadge({
    *
    * Decided here rather than by each caller passing `winner: undefined`,
    * because "a poll of several questions names none of them" is one rule and
-   * three screens draw this badge. It had been left to the callers, and the
-   * one that could not keep it was the poll list: a `Results` card files what
-   * it read under the question's own id, a group's list row *is* its first
-   * question, so opening that question and walking back to the list handed
-   * the group's card the name it had just been told to withhold. One poll
-   * read two ways said two different things, which is the whole thing this
-   * file exists to stop.
+   * three screens draw this badge. Left to the callers, the poll list could
+   * not keep it: a group's list row *is* its first question, so walking back
+   * from that question handed the group's card the name it had just been told
+   * to withhold.
    */
   inGroup?: boolean
 }) {
@@ -286,22 +253,15 @@ export function PollStateBadge({
         </Badge>
       )
     }
-    // The only badge here whose text belongs to the poll rather than to the
-    // app, and so the only one with a ceiling: an elected option can be a
-    // sentence, and past 40% of the heading's row the name ellipsises with
-    // the whole of it on the `title` attribute.
+    // The only badge whose text belongs to the poll rather than to the app,
+    // and so the only one with a ceiling: an elected option can be a sentence,
+    // and past 40% of the heading's row the name ellipsises with the whole of
+    // it on the `title` attribute. Every other badge is a fixed phrase the app
+    // wrote and knows the length of, and keeps its width instead.
     //
-    // Every other badge on this row is a fixed phrase of the app's own —
-    // *Collecting options* is the longest — and keeps its width instead.
-    // Capping those at the same share would ellipsise a label the app wrote
-    // and knows the length of, to make room for a title, on the one screen
-    // narrow enough for 40% to bite. So the share is the answer to "how much
-    // of the title may a poll's own text take", which is the only place the
-    // question is actually asked.
-    //
-    // 40% is a *max-width* against the row rather than a basis, which is what
-    // makes the badge exactly as wide as its name up to that point and the
-    // title's 60% a floor rather than a serving. See PollHeading.
+    // 40% is a *max-width* rather than a basis, which is what makes the badge
+    // exactly as wide as its name up to that point and the title's 60% a floor
+    // rather than a serving. See PollHeading.
     return (
       <Badge
         color={badgeColor.done}
