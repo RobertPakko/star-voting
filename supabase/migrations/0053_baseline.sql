@@ -690,6 +690,12 @@ begin
       raise exception 'Question % needs a title', i + 1;
     end if;
 
+    -- Bounded like the poll's own title, and named by number rather than
+    -- raised from insert_poll_row, because here there is a question to name.
+    if length(v_question_title) > 100 then
+      raise exception 'The title of question % is too long', i + 1;
+    end if;
+
     v_id := insert_poll_row(
       trim(p_title),
       nullif(trim(coalesce(p_description, '')), ''),
@@ -1044,6 +1050,16 @@ declare
   v_item jsonb;
   i int;
 begin
+  -- A title is a line at the top of a card, and a description is the
+  -- paragraph under it. Both callers have trimmed by the time they arrive.
+  if length(p_title) > 100 then
+    raise exception 'That title is too long';
+  end if;
+
+  if length(p_description) > 500 then
+    raise exception 'That description is too long';
+  end if;
+
   -- Drop blanks but keep the author's ordering, carrying each option's
   -- description along with it.
   select coalesce(jsonb_agg(
@@ -1093,7 +1109,7 @@ $$;
 ALTER FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer) IS 'One poll row with its options and its invitees, for the two functions that create polls. Internal: it checks the option list and nothing else, because its callers have checked the rest.';
+COMMENT ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer) IS 'One poll row with its options and its invitees, for the two functions that create polls. Internal: it checks the title, the description and the option list, because its callers have checked the rest.';
 
 
 
