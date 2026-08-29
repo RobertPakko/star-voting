@@ -23,7 +23,7 @@ export function InstallButton() {
   return (
     <Tooltip label="Install app" withArrow>
       <ActionIcon
-        variant="subtle"
+        variant="outline"
         color="gray"
         size="lg"
         aria-label="Install app"
