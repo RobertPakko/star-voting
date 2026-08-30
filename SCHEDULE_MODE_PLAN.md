@@ -11,7 +11,7 @@ A poll that finds a time instead of choosing an option, reusing the STAR
 machinery unchanged.
 
 A poll gains a type. `option` is everything the app does today. On a `time`
-poll the creator says how long the meeting is, which timezone the poll is
+poll the creator says how long the meeting is, what grandularity of selection to allow for (1 hour, 30 minutes, etc), which timezone the poll is
 held in, and what part of each day is in bounds; the app enumerates every
 window of that length as an **option**, and voters rate those options 0–5 by
 painting a calendar.
@@ -92,7 +92,8 @@ the creator's prose. Add:
 {
   "timezone": "-07:00",
   "window": { "start": "08:00", "end": "22:00" },
-  "slot_minutes": 180
+  "desired_slots": 3, // This example, a user wants to find 90 minutes of time
+  "grandularity": 30 // users can select 30 minutes at a time when voting
 }
 ```
 
@@ -111,7 +112,7 @@ Both columns need carrying through whichever of `poll_page`, `open_poll_view`,
 `poll_group`, `open_poll_group` and `list_polls` the front end reads them
 from, and through the zod schemas in `src/lib/rpcSchemas.ts`.
 
-### 2. The option cap becomes type-aware
+### 2. The option cap is increased
 
 Today the cap is 50, and it is enforced in two and a half places:
 
@@ -124,12 +125,7 @@ Today the cap is 50, and it is enforced in two and a half places:
   checks nothing. A sixty-option poll created up front would be accepted today
   purely because of that gap.
 
-Don't lean on the gap and don't raise the constant globally. `insert_option` is
-reachable by `anon` through `open_poll_suggest_option`, so a global raise
-widens the write surface on every open poll in the app. Make the cap a function
-of `polls.kind` — leave `option` polls at 50, give `time` polls a ceiling
-generous enough for a fortnight at half-hourly starts — and enforce it in
-`insert_poll_row` as well, which closes the existing hole in the same breath.
+The cap can be increased to 500 to accomodate this new type of poll.
 
 ### 3. A composite index on `scores`
 
@@ -168,17 +164,13 @@ plumbing.
 
 **Creation.** From `schedule` plus the creator's chosen days, enumerate every
 start time such that the whole window fits inside that day's in-bounds hours.
-Each start is one option. The option's `name` is its start date-time,
-formatted for a human to read in the poll's timezone — this string is what
-`winner_name` stores and what the results email says, so it needs to read as a
-time (`Tue 2 Sep, 2:00 PM`) rather than as a serial number. The duration is not
-in the label; it comes from the poll's title, description and `schedule`.
+Each start is one option. The duration is not
+in the label; it comes from the poll's metadata. Start times do not need to be human-readable, the client can format them into a readable human date if needed.
 
 Start times are naturally unique within a poll, which satisfies
 `insert_option`'s case-insensitive duplicate check for the paths that use it.
 
-**Voting.** The voter paints a rating per *hour* (or per `slot_minutes`
-granule). For each option, take the minimum rating across the granules its
+**Voting.** The voter paints a rating according to the grandularity defined (see the intervalMinutes prop on the Mantine schedule component) For each option, take the minimum rating across the granules its
 window covers. Untouched granules are 0, which is a real rating meaning
 unavailable, consistent with how `BallotCard` already sends
 `values[o.id] ?? 0`.
@@ -191,12 +183,7 @@ submit — "you haven't marked any 3-hour block, so every option will score 0".
 **Reading a ballot back.** `open_poll_revise` and `revise_ballot` return
 scores per option. To repaint the calendar, invert: a granule's rating is the
 maximum over the windows containing it, since a window's score was the minimum
-over its granules. This is lossy — the original painting cannot always be
-recovered exactly — so decide whether revision repaints from the derived
-values or keeps the raw painting in browser storage alongside the ballot. The
-derived repaint is simpler and probably good enough; the ballot is the thing of
-record either way.
-
+over its granules. This is lossy — but we are accepting this tradeoff.
 ## Front end
 
 **The calendar. `@mantine/schedule`, version 9.5.2.** Real and released, not
@@ -213,16 +200,7 @@ covers single taps, and each painted region is rendered as a background event
 `renderEventBody`. The rating itself — which of the six levels the drag
 applies — is the app's own control.
 
-Costs to know before committing:
-
-- It requires `@mantine/dates` and depends on `rrule`, and `@mantine/dates`
-  peers on `dayjs`. Three packages, two of them recurrence and date machinery a
-  rating grid never uses.
-- Peer dependencies pin `@mantine/core`, `@mantine/hooks` and `@mantine/dates`
-  to **exactly** 9.5.2. `package.json` currently has `^9.5.1`, which resolves,
-  but from here every `@mantine/schedule` bump drags the others with it.
-- The app installs to phones as a PWA. Measure the bundle delta before
-  building on it, not after.
+We are not concerned about the bundle size increasing due to adding the dependencies needed to support this.
 
 **The ballot.** A new component beside `BallotCard`, not a variant of it. It
 produces the same `BallotScore[]` and hands it to the same `onSubmit`, so both
@@ -246,10 +224,6 @@ tie-break copy still reads sensibly when the two finalists are neighbouring
 windows and the tie-break line says the tie was resolved at random — both will
 be common. Rewording that copy for `time` polls is cheap and worth doing.
 
-**Everything that assumed a short option list** needs a look at sixty-plus
-options, not a rewrite: `FullRanking`, the published ballot sheet under
-`show_ballots`, the option editor in `CreatorControls`, and the skeletons.
-
 ## Out of scope for the first pass
 
 **Option solicitation on `time` polls.** Turn it off in the UI and refuse the
@@ -259,18 +233,9 @@ It is wanted eventually and the mechanics are settled: extend
 `add_suggested_option` and `insert_option` so several options can be inserted
 atomically, since a voter "adding Thursday" adds a dozen options — one per
 window start — and a dozen separate calls can fail halfway or hit the cap
-mid-expansion, leaving a Thursday with morning windows and no afternoon.
+mid-expansion, leaving a Thursday with morning windows and no afternoon. It is deferred to make initial delivery of this feature easier.
 
-It is deferred because of a product risk rather than the mechanics. Solicitation
-is a two-phase flow: propose options, confirm, creator finalizes, then vote. On
-a time poll both phases are *the same gesture on the same calendar*. Phase one
-means "these times should be on the ballot" and phase two means "here is how
-much I like them", and there is every reason to expect people to paint their
-availability in phase one and be confused at being asked again. Ship without
-it, see whether anyone asks, and if they do, design it as an explicit "propose
-more days" step rather than reusing the suggestion box.
-
-**A calendar heat-map of results.** Decided against; the ranked list stands.
+**A calendar heat-map of results.** Decided against; we can just use the same results view as before for the most part (other than potentially needing to translate the options into human-readable dates)
 
 **Named timezones and DST-spanning polls.** Fixed offsets only.
 
@@ -312,6 +277,4 @@ read.
 2. The pure functions: enumerate options from a `schedule`, derive option
    scores from a painting, invert for repaint. No UI.
 3. The create form: type toggle and generation.
-4. The ballot: `@mantine/schedule` painter, bundle measured.
-5. Sweep the views that assumed a short list; reword the runoff and tie-break
-   copy for `time` polls.
+4. The ballot: `@mantine/schedule` painter.
