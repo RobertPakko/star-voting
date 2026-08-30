@@ -11,14 +11,18 @@
     "fmt:check": "oxfmt --check",
     "types": "supabase gen types typescript --linked --schema public > src/lib/database.types.ts",
     "preview": "vite preview",
-    "test": "bash test/run.sh"
+    "test": "bash test/run.sh",
+    "test:unit": "vitest run"
   },
   "dependencies": {
-    "@mantine/core": "^9.5.1",
-    "@mantine/hooks": "^9.5.1",
-    "@mantine/notifications": "^9.5.1",
+    "@mantine/core": "^9.5.2",
+    "@mantine/dates": "^9.5.2",
+    "@mantine/hooks": "^9.5.2",
+    "@mantine/notifications": "^9.5.2",
+    "@mantine/schedule": "^9.5.2",
     "@phosphor-icons/react": "^2.1.10",
     "@supabase/supabase-js": "^2.112.3",
+    "dayjs": "^1.11.23",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",
@@ -37,6 +41,7 @@
     "postcss-simple-vars": "^7.0.1",
     "supabase": "^2.114.0",
     "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "vitest": "^4.1.11"
   }
 }

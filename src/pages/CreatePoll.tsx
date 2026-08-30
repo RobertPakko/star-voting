@@ -22,6 +22,8 @@ import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { DescriptionField } from '../components/DescriptionField'
+import { ScheduleFields } from '../components/ScheduleFields'
+import { blankSchedule, enumerateWindows, windowsPerDay } from '../lib/schedule'
 import { groupQuestionsSchema, parseAnswer } from '../lib/rpcSchemas'
 import { FormSkeleton } from '../components/Skeletons'
 import styles from './CreatePoll.module.css'
@@ -34,7 +36,7 @@ import {
   TITLE_MAX,
   tooLong,
 } from '../lib/limits'
-import type { Invitee, Poll, PollMode, PollOption } from '../lib/types'
+import type { Invitee, Poll, PollKind, PollMode, PollOption, PollSchedule } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -141,6 +143,8 @@ interface FormErrors {
   emails?: string
   /** Wrong with the poll's list of questions, rather than with any one of them. */
   questions?: string
+  /** Wrong with a time poll's grid: no days on it, or too many windows on those days. */
+  schedule?: string
   /** Wrong with one question's title, by that question's index. */
   questionTitles: Record<number, string>
   /** Wrong with one question's option list, by that question's index. */
@@ -156,6 +160,7 @@ function hasErrors(errors: FormErrors): boolean {
     errors.description ||
     errors.emails ||
     errors.questions ||
+    errors.schedule ||
     Object.keys(errors.questionTitles).length ||
     Object.keys(errors.options).length ||
     Object.keys(errors.optionNames).length ||
@@ -193,6 +198,9 @@ function validate(form: {
   myEmail: string
   isOpen: boolean
   solicitOptions: boolean
+  kind: PollKind
+  schedule: PollSchedule
+  days: string[]
 }): FormErrors {
   const errors: FormErrors = noErrors()
 
@@ -216,7 +224,29 @@ function validate(form: {
     }
   }
 
-  form.questions.forEach((question, questionIndex) => {
+  // A time poll writes no option list, so none of the rules about one apply
+  // to it. What it has instead is a grid, and the one thing that can be wrong
+  // with a grid is the size of the ballot it generates.
+  if (form.kind === 'time') {
+    const total = windowsPerDay(form.schedule) * form.days.length
+    if (form.days.length === 0) {
+      errors.schedule = 'Pick at least one day people can meet on.'
+    } else if (total < 2) {
+      // The same floor every poll has, arrived at from the other direction:
+      // one window is not a choice, it is an announcement.
+      errors.schedule =
+        'That leaves one window to choose from. Widen the day, shorten the meeting, or add a day.'
+    } else if (total > MAX_OPTIONS) {
+      errors.schedule = `That is ${total} windows, and a ballot can hold ${MAX_OPTIONS}. Use longer blocks, fewer days, or a narrower part of the day.`
+    }
+  }
+
+  // Skipped wholesale on a time poll rather than filtered rule by rule: there
+  // are no option fields on screen to hang a message on, and the one question
+  // it asks is named by the poll's own title.
+  const questions = form.kind === 'time' ? [] : form.questions
+
+  questions.forEach((question, questionIndex) => {
     // Only read on a poll that asks more than one: a single question is
     // named by the poll's own title, and there is no field on screen here.
     if (form.multiQuestion) {
@@ -320,6 +350,15 @@ export function CreatePoll() {
   // one being removed.
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [mode, setMode] = useState<PollMode>('invite')
+  // What the poll is choosing between. Held beside the option list rather
+  // than replacing it, so switching back and forth does not throw away
+  // whatever was typed on the other side of the toggle.
+  const [kind, setKind] = useState<PollKind>('option')
+  const [schedule, setSchedule] = useState<PollSchedule>(blankSchedule)
+  // The days in bounds. Not part of the schedule, because they are exactly
+  // the days the generated options start on and the poll reads them back off
+  // those; see PollSchedule.
+  const [days, setDays] = useState<string[]>([])
   const [showVoters, setShowVoters] = useState(false)
   const [showBallots, setShowBallots] = useState(false)
   const [solicitOptions, setSolicitOptions] = useState(false)
@@ -346,6 +385,9 @@ export function CreatePoll() {
     myEmail,
     isOpen,
     solicitOptions,
+    kind,
+    schedule,
+    days,
   })
   // What the fields actually render. Held back until the first submit, then
   // live: fixing a field clears its message as it is fixed.
@@ -496,6 +538,34 @@ export function CreatePoll() {
     else setOpenKey(value)
   }
 
+  /**
+   * Switching between a poll about options and a poll about times.
+   *
+   * Two settings go off with it and stay off, because neither works on a
+   * calendar yet and both would be a promise the poll could not keep:
+   *
+   * - **Several questions.** One calendar per question is a form nobody has
+   *   drawn, and `create_poll_group` takes no kind at all -- every question it
+   *   makes is an ordinary one.
+   * - **Collecting options from voters.** A voter "adding Thursday" adds a
+   *   dozen options, one per window start, and the suggestion path inserts
+   *   them one at a time; a run that failed halfway would leave a Thursday
+   *   with morning windows and no afternoon. `create_poll` refuses the
+   *   combination too -- this is what stops it being offered.
+   *
+   * They are turned off rather than disabled in place: a switch that is on
+   * and has no effect is worse than one that has moved where the creator can
+   * see it move.
+   */
+  function switchKind(next: PollKind) {
+    setKind(next)
+    if (next === 'time') {
+      setMultiQuestion(false)
+      setSolicitOptions(false)
+      setQuestions((prev) => prev.slice(0, 1))
+    }
+  }
+
   function addQuestion() {
     const added = blankQuestion()
     setQuestions((prev) => [...prev, added])
@@ -574,6 +644,12 @@ export function CreatePoll() {
       return
     }
 
+    // A time poll's ballot is generated here, in the browser, and sent through
+    // the same create_poll as any other list of options. That is the whole
+    // trick: from this line on there is nothing about this poll the database
+    // handles differently, apart from two columns it stores and hands back.
+    const windows = kind === 'time' ? enumerateWindows(schedule, days) : []
+
     // Blank rows are dropped here and in the database alike, and the
     // descriptions travel with their option rather than beside it, so a
     // dropped row cannot slide every later description onto the wrong one.
@@ -616,12 +692,16 @@ export function CreatePoll() {
           // same place — both functions run it through
           // `nullif(trim(coalesce(p_description, '')), '')`.
           p_description: description.trim(),
-          p_options: cleaned[0].options.map((o) => o.name),
+          p_options: kind === 'time' ? windows : cleaned[0].options.map((o) => o.name),
           p_emails: isOpen ? [] : allEmails,
           p_mode: mode,
           p_show_voters: showVoters,
           p_show_ballots: showBallots,
           p_solicit_options: solicitOptions,
+          p_kind: kind,
+          // The database ties these two together: a schedule on an option
+          // poll is refused, and a time poll without one cannot be stored.
+          p_schedule: kind === 'time' ? schedule : undefined,
           // Most polls describe nothing, and send nothing rather than a row of
           // blanks the database would only throw away again. Where they are
           // sent, an option with no description travels as '' rather than
@@ -629,9 +709,10 @@ export function CreatePoll() {
           // `nullif(trim(coalesce(…, '')), '')`, so the two arrive as the same
           // absent description, and a `text[]` cannot say "nullable elements"
           // to the generated types.
-          p_option_descriptions: cleaned[0].options.some((o) => o.description)
-            ? cleaned[0].options.map((o) => o.description ?? '')
-            : undefined,
+          p_option_descriptions:
+            kind === 'option' && cleaned[0].options.some((o) => o.description)
+              ? cleaned[0].options.map((o) => o.description ?? '')
+              : undefined,
         })
     setSubmitting(false)
 
@@ -895,30 +976,67 @@ export function CreatePoll() {
               label="Publish ballots"
             />
 
-            <Switch
-              checked={solicitOptions}
-              onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
-              label="Solicit options from voters"
-            />
+            {/* Both of these are off and out of reach on a time poll, and the
+                reason is in switchKind. Hidden rather than disabled: a switch
+                a creator cannot move is a question they still have to answer,
+                and neither of them is a question a time poll asks. */}
+            {kind === 'option' && (
+              <>
+                <Switch
+                  checked={solicitOptions}
+                  onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
+                  label="Solicit options from voters"
+                />
 
-            <Switch
-              checked={multiQuestion}
-              onChange={(e) => toggleMultiQuestion(e.currentTarget.checked)}
-              label="Multiple questions"
-            />
+                <Switch
+                  checked={multiQuestion}
+                  onChange={(e) => toggleMultiQuestion(e.currentTarget.checked)}
+                  label="Multiple questions"
+                />
+              </>
+            )}
           </Stack>
         </Card>
       </Stack>
 
       <Stack gap={2}>
-        <Title order={4}>{solicitOptions ? 'Starting options' : 'Options'}</Title>
+        <Title order={4}>
+          {kind === 'time' ? 'Times' : solicitOptions ? 'Starting options' : 'Options'}
+        </Title>
         <Card withBorder p="sm">
+          {/* What this poll is choosing between, at the head of the section
+              whose whole shape it decides. It sits here rather than up in
+              Configuration because it is not a setting on a ballot -- it is
+              which ballot this is, and the fields below it are the answer. */}
+          <SegmentedControl
+            fullWidth
+            mb="sm"
+            value={kind}
+            onChange={(v) => switchKind(v as PollKind)}
+            data={[
+              { value: 'option', label: 'Choose an option' },
+              { value: 'time', label: 'Find a time' },
+            ]}
+          />
           {/* Last, because it is the only part of the form whose shape depends on
           the answers above it: a poll collecting its options can be created
           with none at all, and the rows here become a head start rather than
           the ballot. */}
           <Stack gap="sm">
-            {multiQuestion ? (
+            {kind === 'time' ? (
+              /* No option rows at all: the ballot is generated from these four
+                 answers and the days picked below them, which is the whole of
+                 what makes a time poll a poll about times. See
+                 enumerateWindows, and handleSubmit, where they become the
+                 ordinary p_options every other poll sends. */
+              <ScheduleFields
+                schedule={schedule}
+                days={days}
+                onScheduleChange={setSchedule}
+                onDaysChange={setDays}
+                error={shown.schedule}
+              />
+            ) : multiQuestion ? (
               /* One question at a time, behind a strip of tabs. Every question
              laid out at once was a form that grew with the poll: five
              questions of five options each is fifty fields in one scroll,

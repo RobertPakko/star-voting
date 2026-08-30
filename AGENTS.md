@@ -15,19 +15,21 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (BallotCard, VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ScheduleFields, ConfirmOptions, …)
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, a time poll's windows and how a painted calendar becomes scores (schedule.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 scripts/         squash.sh, which squashes the migrations and replays the above;
                  sample-poll.sh, which records the About page's sample poll
 test/            tally tests, run against a throwaway Postgres; build-db.sh, which builds one
+                 (the one piece of election logic that is not SQL is tested beside it, in src/lib/schedule.test.ts)
 ```
 
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
 `npm run lint` (oxlint), `npm run fmt` (oxfmt; `npm run fmt:check` reports
-without writing), `npm run preview`, `npm test` (see [Tests](#tests)).
+without writing), `npm run preview`, `npm test` and `npm run test:unit` (see
+[Tests](#tests)).
 
 The formatter is configured in `.oxfmtrc.json` to the style the code was
 already written in — no semicolons, single quotes, a hundred columns — and
@@ -330,10 +332,26 @@ install`. CI runs the same script against a `postgres` service container
 ([`.github/workflows/test.yml`](.github/workflows/test.yml)).
 
 That workflow has a second job, `app`, over the half of the codebase the
-cases above cannot reach: `npm run lint`, `npm run fmt:check`, and then
-`npm run build`, which is `tsc -b && vite build` and so covers the typecheck
-and the bundle together. It takes no Supabase secrets — nothing is being run,
-only compiled, and a pull request from a fork could not see them anyway.
+cases above cannot reach: `npm run lint`, `npm run fmt:check`, `npm run
+test:unit`, and then `npm run build`, which is `tsc -b && vite build` and so
+covers the typecheck and the bundle together. It takes no Supabase secrets —
+nothing is being run, only compiled, and a pull request from a fork could not
+see them anyway.
+
+```bash
+npm run test:unit     # vitest, over src/lib/schedule.ts and nothing else
+```
+
+**`test:unit` is deliberately one file wide.** It exists because [schedule
+mode](#a-poll-that-finds-a-time) put a piece of election logic in the browser
+for the first time: a time poll's options are enumerated by the creator's
+browser and its ballot is flattened from a painted calendar into a score per
+option before it is sent, so `src/lib/schedule.ts` can be wrong in exactly the
+way the tally can — plausibly, and with nothing downstream that would notice,
+because the database sees an ordinary poll either way. The SQL suite cannot
+reach it and there was no JS runner in the repo, so one was added for it. It is
+not a foothold for testing components: everything it covers is a pure function
+of its arguments.
 
 Getting to a server is `test/build-db.sh`'s job, and it is the same job for
 `scripts/sample-poll.sh`, which arrives through the same file: start the local
@@ -539,6 +557,229 @@ catches an effect whose cleanup does not work. Count requests against
 `npm run preview`. Against a real Supabase project each request is also
 preceded by a CORS preflight `OPTIONS`, so the network panel shows two entries
 per call.
+
+
+## A poll that finds a time
+
+A poll has a `kind`. `option` is everything above: a list somebody wrote,
+scored 0–5. `time` is a poll looking for a meeting slot — the creator says how
+long the meeting is, how finely people may answer, which offset the poll is
+held in and what part of each day is in bounds; every window of that length
+that fits becomes an **option**, and voters rate those options by painting a
+calendar.
+
+The trick is that the enumeration happens in the browser at creation, and the
+painting is translated back into a score per option before it is sent. The
+database stores a `time` poll exactly as it stores any other: rows in
+`candidates`, rows in `scores`, one ballot per voter. `poll_tally`,
+`star_round`, `settle_winner`, the RLS policies, the voter-key path, ballot
+revision and the live stream are all untouched, because none of them knows
+what an option means.
+
+The worked example: a three-hour meeting, Monday to Friday, 8am–10pm, hourly
+starts. Twelve window starts a day, five days, sixty options, each one a
+three-hour window. A voter who can do Tuesday afternoon and nothing else
+scores the Tuesday afternoon windows highly and everything else 0.
+
+### What is stored
+
+[`0055_schedule_polls.sql`](supabase/migrations/0055_schedule_polls.sql) adds
+two columns to `polls`, tied together by a check constraint the way
+`polls_question_ck` ties the question columns together — `schedule` is null if
+and only if `kind = 'option'`:
+
+```json
+{
+  "timezone": "-07:00",
+  "window": { "start": "08:00", "end": "22:00" },
+  "desired_slots": 3,
+  "granularity": 60
+}
+```
+
+Only what cannot be recovered from the options. **The in-bounds days are
+deliberately not stored**: they are exactly the set of dates the options start
+on, so the client derives them (`daysOf`) and the two can never disagree.
+`window` is stored even though it is nearly derivable, because the grid needs a
+vertical axis on days whose options are sparse. A meeting's length is not
+stored either — it is `desired_slots * granularity`.
+
+**A fixed UTC offset, never a named zone.** A named zone spanning a
+daylight-saving transition gives one day 23 or 25 hours and a 1am that happens
+twice or not at all, which makes the generated option names ambiguous in
+precisely the way declaring a timezone was meant to prevent. One poll, one
+offset; everybody sees the same grid whatever their own clock says, and
+`validate_schedule` refuses anything else. A distributed group pays a
+conversion tax, and that is the trade.
+
+**An option's name is its window start, in full ISO 8601:**
+`2026-09-01T14:00:00-07:00`. Unambiguous on its own, unique within the poll
+(which is what `insert_option`'s case-insensitive duplicate check needs), and
+sortable as plain text. It is formatted for reading wherever it is shown; see
+*Reading the results* below.
+
+### The derivation
+
+The one piece of real logic, and the only election logic in this app that does
+not live in Postgres. All of it is [`src/lib/schedule.ts`](src/lib/schedule.ts),
+pure and tested by `npm run test:unit`.
+
+**Creation.** From the schedule plus the creator's chosen days, enumerate every
+start such that the whole window fits inside that day's in-bounds hours — a
+fourteen-hour day offers a three-hour meeting twelve hourly starts, not
+fourteen. Each start is one option, sent through the ordinary `create_poll` as
+an ordinary `p_options`.
+
+**Voting.** The voter paints a rating per granule. **A window's rating is the
+minimum of its granules.** Not the mean: with a mean, a window containing an
+hour the voter flatly cannot attend still scores 3.3 and can win. With a
+minimum, any window touching a 0 is a 0, which is exactly "I can't be there".
+An untouched granule is 0, a real rating meaning unavailable — the same reading
+`BallotCard` already gives an unscored option.
+
+A consequence worth designing for: a voter whose longest free block is shorter
+than the window scores *every* option 0 and contributes nothing. That is
+correct, and it looks exactly like the app having eaten their vote, so the
+ballot says so before the vote goes in.
+
+**Reading a ballot back.** Invert: a granule's rating is the *maximum* over the
+windows containing it, since a window's score was the minimum over its
+granules. This is lossy and knowingly so — the shape of somebody's availability
+survives, the difference between "fine" and "ideal" within it does not — so
+re-saving an unedited ballot can lower a rating. That is the cost of storing
+windows rather than granules, which is what lets a time poll be an ordinary
+poll everywhere else.
+
+### The ballot
+
+[`TimeBallotCard`](src/components/TimeBallotCard.tsx), beside `BallotCard`
+rather than a variant of it: one is a list read top to bottom, the other a grid
+that is scanned. What they have in common is
+[`BallotFrame`](src/components/BallotFrame.tsx) — the card, the name box, the
+question strip, the error line, Cancel and Submit, and the sending itself. Both
+produce the same `BallotScore[]` for the same `onSubmit`, so both ballot paths,
+`submit_ballot` and `open_poll_submit`, work unchanged.
+
+The calendar is [`@mantine/schedule`](https://mantine.dev)'s `WeekView`, and it
+is worth being clear about what that is: an event calendar in the Google
+Calendar mould, whose primitive is an event with a start, an end and a colour.
+It is not an availability grid and has no notion of a rated cell. The
+adaptation is three props — `withDragSlotSelect` with `onSlotDragEnd` for the
+drag, `onTimeSlotClick` for a tap, and every painted region rendered back as a
+background event coloured by its rating. Which of the six ratings a drag
+applies is the app's own control, because a calendar has nowhere to put one.
+Days the poll is not asking about are disabled through `getTimeSlotProps`, and
+the view switcher and Today control are hidden: both are ways off the only
+screen that answers the question.
+
+`useBallotOrder` does not apply, and that is the one deliberate exception to
+the argument in [`ballotOrder.ts`](src/lib/ballotOrder.ts). It shuffles because
+position on a list is worth points; a calendar's order is chronological and
+load-bearing, and shuffling it would produce a week with Thursday in the
+middle.
+
+**It is loaded lazily**, through
+[`components/deferred.ts`](src/components/deferred.ts) alongside the results
+cards, and its stylesheet is imported inside it rather than in `main.tsx` so
+Vite splits the CSS with the chunk. `@mantine/schedule` and the `rrule` it
+carries are about 105 kB of JS and 79 kB of CSS — more than everything else on
+a ballot put together, and a poll that chooses an option fetches none of it.
+
+### Reading the results
+
+The results view is reused exactly as it stands. No calendar heat map: an
+option's name *is* its identity, the page already ranks options by score, and a
+ranked list of times is a legible answer. The only thing wrong with it on a
+time poll is that the names are ISO timestamps — so they are rewritten once, on
+the payload, by `relabelResults` / `relabelRanking` / `relabelSheet`, rather
+than threading a formatter down through the score rows, the tie-break prose,
+`NameList`, the head-to-head matchups, the full ranking and the published
+sheet. Every one of those still just renders `name`.
+
+### Ties, and the poll that elects nobody
+
+Adjacent windows overlap heavily, so their totals and their per-ballot vectors
+are nearly identical and the top two by score are usually neighbours. The
+runoff then compares Tuesday 2pm against Tuesday 3pm rather than against a
+genuinely different time. That much is accepted: if the two best windows are
+two shifted copies of the same slot, that slot is a good answer.
+
+Painting whole days — which the ballot actively encourages — goes one step
+further and gives contiguous windows *identical* score vectors from every
+ballot. In the score round that is fine: `star_round` falls through to
+`v_resolved := 'random'` and orders by candidate id, and among genuinely equal
+windows any pick is a good pick.
+
+**In the runoff it is not fine, and this is the sharp edge of the feature.**
+The runoff has no random fallback. Two finalists with identical vectors are
+level on preference, on points and on five-star votes alike, which is
+`resolved_by: 'unresolved'` — `winner_id` is null, `poll_winner_name` returns
+null, and the poll reports a tie and elects nobody. So a poll where everybody
+paints the same whole days, which is the most natural way to answer one, comes
+back with no answer. `test/sql/cases/32_a_calendar_of_windows_tallies.sql`
+asserts both halves of this: the heavy-but-decidable case settles a winner, and
+the identical case elects nobody.
+
+Giving the runoff a last resort — the same arbitrary-but-stable ordering by
+candidate id that the score round falls back on — would fix it, and would only
+ever fire where there is currently no winner at all. It is a change to the
+tally every poll goes through, so it is not in the migration that adds a poll
+kind.
+
+### The option ceiling, and what the tally costs
+
+The ceiling on options was 50 and is now 500, for every poll rather than only
+for the new kind. Fifty was a ceiling on how long a list a person will read to
+the end before scoring any of it, which is the right question to ask of a list
+and the wrong one to ask of a calendar. `MAX_OPTIONS` in
+[`limits.ts`](src/lib/limits.ts) and `insert_option` both say 500 — and
+`insert_poll_row` now says it too, which it never did: that path inserts into
+`candidates` directly and checked nothing, so a poll created over the cap up
+front was accepted while the same poll built one option at a time was refused.
+
+The plan this was built from called for a composite index on
+`scores (ballot_id, candidate_id)`, on the grounds that the tie-break block's
+correlated lookups had only `idx_scores_ballot_id` to go on. **That index
+already exists**: the `UNIQUE (ballot_id, candidate_id)` constraint on `scores`
+is backed by a btree on exactly those columns, and `EXPLAIN` shows the
+tie-break block using it. Adding another would have been a duplicate.
+
+What the worst case actually costs is the pair build, which is quadratic in the
+tied group and multiplied by the ballots. Measured on this schema with
+everything cached:
+
+| | |
+| --- | --- |
+| `poll_tally`, 60 options × 60 ballots, every window tied | ~2.4 s |
+| the same, with the ballots actually differing | ~0.65 s |
+| `poll_ranking`, 60 options, every window tied | ~6 s |
+
+The tally is the number that matters: `settle_winner` runs it inside the
+transaction of the deciding ballot, so the last voter to submit waits for it.
+It is acceptable and it is not comfortable. The fix, when it is wanted, is to
+stop asking `scores` the same question 212,400 times — pivot each ballot's
+scores over the tied group once and join, rather than reading them back a pair
+at a time.
+
+### Deliberately not built yet
+
+- **Collecting times from voters.** `solicit_options` is refused on a time poll
+  by `create_poll` and hidden in the form. A voter "adding Thursday" adds a
+  dozen options, one per window start, and `add_suggested_option` inserts one
+  at a time — a run that failed halfway would leave a Thursday with morning
+  windows and no afternoon. Turning it on means making that insertion atomic
+  first.
+- **Time polls in a multi-question group.** `create_poll_group` takes no kind,
+  so every question it makes is an ordinary one, and the form hides the
+  Multiple questions switch. One calendar per question is a form nobody has
+  drawn.
+- **A calendar heat map of the results.** Decided against; see above.
+- **Named timezones and DST-spanning polls.** Fixed offsets only.
+- **Cross-timezone rendering.** One poll, one grid, everyone sees the same one.
+- **Editing a time poll's options by hand.** `creator_add_option` refuses it
+  and the editor is not offered: the options are generated from the schedule,
+  and a typed-in name is one the calendar cannot draw and the minimum rule
+  cannot score.
 
 
 ## The winner is kept with the poll

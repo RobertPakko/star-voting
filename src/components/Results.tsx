@@ -15,7 +15,8 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
 import { parseAnswer, pollResultsSchema } from '../lib/rpcSchemas'
-import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
+import { relabelResults } from '../lib/schedule'
+import type { HeadToHeadStep, Matchup, PollResults, PollSchedule } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { NameList } from './NameList'
 import { OptionDescription } from './OptionDescription'
@@ -32,6 +33,7 @@ export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
 export function Results({
   source,
   initial = null,
+  schedule = null,
 }: {
   source: ResultsSource
   /**
@@ -47,6 +49,12 @@ export function Results({
    * before.
    */
   initial?: PollResults | null
+  /**
+   * The grid a time poll was voted on, which is all this card needs to read
+   * one: an option's name is its window start, and the schedule says how long
+   * a window lasts. Absent on every other poll.
+   */
+  schedule?: PollSchedule | null
 }) {
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
@@ -109,19 +117,23 @@ export function Results({
 
   if (!results) return <ResultsSkeleton />
 
-  const nameById = new Map(results.options.map((o) => [o.id, o.name]))
-  const maxScore = Math.max(1, ...results.options.map((o) => o.total_score))
+  // The one thing a time poll changes about this card. Everything below reads
+  // `name` and none of it knows or cares that the name it is reading was an
+  // ISO timestamp a line ago; see relabelResults.
+  const shown = schedule ? relabelResults(results, schedule) : results
+  const nameById = new Map(shown.options.map((o) => [o.id, o.name]))
+  const maxScore = Math.max(1, ...shown.options.map((o) => o.total_score))
 
   return (
     <Stack gap="md">
-      {results.winner_id && (
+      {shown.winner_id && (
         <Card withBorder bg="var(--mantine-color-green-light)">
           <Text fw={700} size="lg">
-            Winner: {nameById.get(results.winner_id)}
+            Winner: {nameById.get(shown.winner_id)}
           </Text>
         </Card>
       )}
-      {!results.winner_id && results.finalists.length === 2 && (
+      {!shown.winner_id && shown.finalists.length === 2 && (
         <Card withBorder bg="var(--mantine-color-orange-light)">
           <Text fw={700} size="lg">
             No winner
@@ -133,11 +145,11 @@ export function Results({
         <Title order={4}>Score round</Title>
         <Card withBorder p="sm">
           <Stack gap="xs">
-            {results.options.map((o) => (
+            {shown.options.map((o) => (
               <div key={o.id}>
                 <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
                   <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={results.finalists.includes(o.id) ? 700 : 400} truncate>
+                    <Text size="sm" fw={shown.finalists.includes(o.id) ? 700 : 400} truncate>
                       {o.name}
                     </Text>
                     {o.description && <OptionNote name={o.name} description={o.description} />}
@@ -148,7 +160,7 @@ export function Results({
                 </Group>
                 <Progress
                   value={(o.total_score / maxScore) * 100}
-                  color={results.finalists.includes(o.id) ? 'blue' : 'gray'}
+                  color={shown.finalists.includes(o.id) ? 'blue' : 'gray'}
                 />
               </div>
             ))}
@@ -156,10 +168,10 @@ export function Results({
         </Card>
       </Stack>
 
-      {results.tiebreaks.length > 0 && (
+      {shown.tiebreaks.length > 0 && (
         <Stack gap={2}>
-          <Title order={4}>Tie-break{results.tiebreaks.length > 1 ? 's' : ''}</Title>
-          {results.tiebreaks.map((tb, i) => (
+          <Title order={4}>Tie-break{shown.tiebreaks.length > 1 ? 's' : ''}</Title>
+          {shown.tiebreaks.map((tb, i) => (
             <Card withBorder key={i} p="sm">
               <Stack gap="xs">
                 <Text size="sm">
@@ -219,41 +231,41 @@ export function Results({
         </Stack>
       )}
 
-      {results.runoff && results.finalists.length === 2 && (
+      {shown.runoff && shown.finalists.length === 2 && (
         <Stack gap={2}>
           <Title order={4}>Automatic runoff round</Title>
           <Card withBorder p="sm">
             <Stack gap="xs">
               <Text size="sm">
-                <strong>{nameById.get(results.finalists[0])}</strong>:{' '}
-                {voters(results.runoff.prefers_a)} preferred
+                <strong>{nameById.get(shown.finalists[0])}</strong>:{' '}
+                {voters(shown.runoff.prefers_a)} preferred
               </Text>
               <Text size="sm">
-                <strong>{nameById.get(results.finalists[1])}</strong>:{' '}
-                {voters(results.runoff.prefers_b)} preferred
+                <strong>{nameById.get(shown.finalists[1])}</strong>:{' '}
+                {voters(shown.runoff.prefers_b)} preferred
               </Text>
               <Text size="sm" c="dimmed">
-                {voters(results.runoff.ties)} scored both finalists equally.
+                {voters(shown.runoff.ties)} scored both finalists equally.
               </Text>
-              {results.runoff.resolved_by === 'higher_score' && (
+              {shown.runoff.resolved_by === 'higher_score' && (
                 <Text size="sm">
-                  The runoff tied, so it went to {nameById.get(results.winner_id ?? '')} on the
-                  higher score-round total.
+                  The runoff tied, so it went to {nameById.get(shown.winner_id ?? '')} on the higher
+                  score-round total.
                 </Text>
               )}
-              {results.runoff.resolved_by === 'five_star_votes' && (
+              {shown.runoff.resolved_by === 'five_star_votes' && (
                 <>
                   <Text size="sm">
                     The runoff tied and both finalists have identical score totals, so it went to{' '}
-                    {nameById.get(results.winner_id ?? '')} on five-star votes.
+                    {nameById.get(shown.winner_id ?? '')} on five-star votes.
                   </Text>
                   <Text size="sm" c="dimmed">
-                    {nameById.get(results.finalists[0])}: {results.runoff.five_stars_a} ·{' '}
-                    {nameById.get(results.finalists[1])}: {results.runoff.five_stars_b}
+                    {nameById.get(shown.finalists[0])}: {shown.runoff.five_stars_a} ·{' '}
+                    {nameById.get(shown.finalists[1])}: {shown.runoff.five_stars_b}
                   </Text>
                 </>
               )}
-              {results.runoff.resolved_by === 'unresolved' && (
+              {shown.runoff.resolved_by === 'unresolved' && (
                 <Text size="sm" c="orange">
                   The runoff tied, both finalists have identical score totals, and both were given
                   five stars on the same number of ballots, so there is no winner.
@@ -264,7 +276,7 @@ export function Results({
         </Stack>
       )}
 
-      <FullRanking source={source} results={results} />
+      <FullRanking source={source} results={shown} schedule={schedule} />
     </Stack>
   )
 }

@@ -3,12 +3,13 @@ import { Button, Card, Group, Stack, Text } from '@mantine/core'
 import { openPollRpc } from '../lib/samplePoll'
 import { voterKeyFor } from '../lib/voterKey'
 import type { VoterName } from '../lib/voterName'
-import { BallotCard, type BallotScore } from './BallotCard'
+import { BallotCard } from './BallotCard'
+import type { BallotScore } from './BallotFrame'
 import { CollectOptions, Confirmations } from './CollectOptions'
-import { Ballots, Results } from './deferred'
+import { Ballots, Results, TimeBallotCard } from './deferred'
 import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
-import { BallotsSkeleton, ResultsSkeleton } from './Skeletons'
+import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton } from './Skeletons'
 import { VoterNameField } from './VoterNameField'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
@@ -179,14 +180,22 @@ export function OpenPollPanel({
             reading places it the same way, for the same reason. */}
         {questionStrip}
         <Suspense fallback={<ResultsSkeleton options={view.options.length || undefined} />}>
-          <Results source={{ kind: 'open', pollId }} initial={results} />
+          <Results
+            source={{ kind: 'open', pollId }}
+            initial={results}
+            schedule={view.poll.schedule}
+          />
         </Suspense>
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}
         {view.poll.show_ballots && (
           <Suspense fallback={<BallotsSkeleton rows={view.voted_count || undefined} />}>
-            <Ballots source={{ kind: 'open', pollId }} initial={ballots} />
+            <Ballots
+              source={{ kind: 'open', pollId }}
+              initial={ballots}
+              schedule={view.poll.schedule}
+            />
           </Suspense>
         )}
       </Stack>
@@ -215,6 +224,7 @@ export function OpenPollPanel({
       ) : (
         <OpenBallot
           pollId={pollId}
+          poll={view.poll}
           options={view.options}
           voterName={needsName ? voterName : undefined}
           isCreator={isCreator}
@@ -264,6 +274,7 @@ function Voted({
     return (
       <OpenBallot
         pollId={pollId}
+        poll={view.poll}
         options={view.options}
         initial={scores}
         isCreator={isCreator}
@@ -318,6 +329,7 @@ function Voted({
  */
 function OpenBallot({
   pollId,
+  poll,
   options,
   voterName,
   isCreator,
@@ -327,6 +339,8 @@ function OpenBallot({
   questionStrip,
 }: {
   pollId: string
+  /** Which ballot to put up, and the grid to draw it on if it is a calendar. */
+  poll: Pick<OpenPollView['poll'], 'kind' | 'schedule'>
   options: PollOption[]
   /** The name to vote under, on the polls that ask; absent on a revision. */
   voterName?: VoterName
@@ -378,6 +392,36 @@ function OpenBallot({
     // Remembered only once a ballot has actually gone in under it, so a name
     // typed into a form that was refused is not offered back on the next one.
     voterName?.remember()
+  }
+
+  // Two ballots, one submit path: whichever of them is on screen produces the
+  // same BallotScore[] and sends it through the same open_poll_submit. See
+  // BallotFrame, which is everything the two have in common.
+  if (poll.kind === 'time' && poll.schedule) {
+    return (
+      <Suspense
+        fallback={
+          <QuestionSkeleton
+            rows={3}
+            nameField={voterName && <VoterNameField name={voterName} />}
+            strip={questionStrip}
+          />
+        }
+      >
+        <TimeBallotCard
+          options={options}
+          schedule={poll.schedule}
+          initial={initial}
+          nameField={voterName && <VoterNameField name={voterName} />}
+          questionStrip={questionStrip}
+          note={<RevealNote reveal={{ kind: 'open', isCreator }} canRevise />}
+          beforeSubmit={checkName}
+          onSubmit={send}
+          onVoted={onVoted}
+          onCancel={onCancel}
+        />
+      </Suspense>
+    )
   }
 
   return (

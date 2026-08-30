@@ -3,7 +3,8 @@ import { Stack, Table, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { BallotsSkeleton } from './Skeletons'
-import type { BallotSheet } from '../lib/types'
+import { relabelSheet } from '../lib/schedule'
+import type { BallotSheet, PollSchedule } from '../lib/types'
 
 /**
  * Which ballot endpoint to read. Same split as ResultsSource, and for the
@@ -25,6 +26,7 @@ export type BallotsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
 export function Ballots({
   source,
   initial = null,
+  schedule = null,
 }: {
   source: BallotsSource
   /**
@@ -38,6 +40,11 @@ export function Ballots({
    * sample. It reads for itself, exactly as before.
    */
   initial?: BallotSheet | null
+  /**
+   * The grid a time poll was voted on. The columns of this sheet are its
+   * options, which on a time poll are ISO timestamps; see relabelSheet.
+   */
+  schedule?: PollSchedule | null
 }) {
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
@@ -90,24 +97,27 @@ export function Ballots({
 
   if (!sheet) return <BallotsSkeleton />
 
-  const named = sheet.voters_named
+  // The columns of a time poll's sheet are its windows, which are stored as
+  // ISO timestamps and read as headings; see relabelSheet.
+  const shown = schedule ? relabelSheet(sheet, schedule) : sheet
+  const named = shown.voters_named
   // Unscored options count as 0 everywhere else in the app; a ballot missing
   // a score would have to predate the "score every option" rule, but reading
   // it as 0 keeps the columns adding up to what the tally says.
   const scoreOn = (scores: Record<string, number>, optionId: string) => scores[optionId] ?? 0
-  const totals = sheet.options.map((o) =>
-    sheet.ballots.reduce((sum, b) => sum + scoreOn(b.scores, o.id), 0),
+  const totals = shown.options.map((o) =>
+    shown.ballots.reduce((sum, b) => sum + scoreOn(b.scores, o.id), 0),
   )
 
   return (
     <Stack gap={2}>
       <Title order={4}>Ballots</Title>
-      <Table.ScrollContainer minWidth={120 + sheet.options.length * 90}>
+      <Table.ScrollContainer minWidth={120 + shown.options.length * 90}>
         <Table striped withTableBorder withColumnBorders>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{named ? 'Voter' : 'Ballot'}</Table.Th>
-              {sheet.options.map((o) => (
+              {shown.options.map((o) => (
                 <Table.Th key={o.id} ta="right">
                   {o.name}
                 </Table.Th>
@@ -117,7 +127,7 @@ export function Ballots({
           <Table.Tbody>
             {/* Index as key: the list is static once fetched, and an
                   unnamed sheet has nothing else to key on by design. */}
-            {sheet.ballots.map((ballot, i) => (
+            {shown.ballots.map((ballot, i) => (
               <Table.Tr key={i}>
                 <Table.Td>
                   {named ? (
@@ -128,7 +138,7 @@ export function Ballots({
                     </Text>
                   )}
                 </Table.Td>
-                {sheet.options.map((o) => (
+                {shown.options.map((o) => (
                   <Table.Td key={o.id} ta="right">
                     {scoreOn(ballot.scores, o.id)}
                   </Table.Td>
@@ -140,7 +150,7 @@ export function Ballots({
             <Table.Tr>
               <Table.Th>Total</Table.Th>
               {totals.map((total, i) => (
-                <Table.Th key={sheet.options[i].id} ta="right">
+                <Table.Th key={shown.options[i].id} ta="right">
                   {total}
                 </Table.Th>
               ))}

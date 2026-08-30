@@ -6,6 +6,50 @@
  */
 export type PollMode = 'invite' | 'open'
 
+/**
+ * What a poll is choosing between. 'option' is an ordinary ballot -- a list
+ * somebody wrote, scored 0-5. 'time' is a poll looking for a meeting slot:
+ * its options are the start of every window that fits inside the hours its
+ * creator declared, and its ballot is a calendar.
+ *
+ * The distinction lives in the browser and nowhere else that matters. Every
+ * RPC below the two ballots -- the tally, the runoff, the winner, the row-level
+ * security -- sees a poll with options and a score per option, and neither
+ * knows nor needs to know what an option means.
+ */
+export type PollKind = 'option' | 'time'
+
+/**
+ * How a time poll's grid is laid out. Null on an ordinary poll; required on a
+ * time poll, and the database ties the two together.
+ *
+ * Only what cannot be recovered from the options is here. The days in bounds
+ * are deliberately absent -- they are exactly the days the options start on,
+ * so the client derives them (see `daysOf`) and the two can never disagree.
+ * The daily window is stored even though it is nearly derivable, because the
+ * grid needs a vertical axis on a day whose options are sparse.
+ */
+// A type alias rather than an interface, which matters here and nowhere else
+// in this file: an interface has no implicit index signature, so it cannot be
+// handed to a PostgREST `Json` parameter -- and this is the one shape in the
+// app that travels *into* the database as jsonb rather than only out of it.
+export type PollSchedule = {
+  /**
+   * A fixed UTC offset, `-07:00`, never a named zone. A named zone spanning a
+   * daylight-saving transition gives one day 23 or 25 hours and a 1am that
+   * happens twice or not at all, which makes an option's name ambiguous in
+   * precisely the way declaring a timezone was meant to prevent. One poll, one
+   * offset, everybody looking at the same grid.
+   */
+  timezone: string
+  /** The hours of each day in bounds, as `HH:MM`. `end` may be `24:00`. */
+  window: { start: string; end: string }
+  /** How many granules long the meeting is: 3 at a granularity of 30 is 90 minutes. */
+  desired_slots: number
+  /** Minutes per granule -- the resolution the ballot paints at, and the step between window starts. */
+  granularity: number
+}
+
 export interface Poll {
   id: string
   title: string
@@ -15,6 +59,15 @@ export interface Poll {
   created_at: string
   closed_at: string | null
   mode: PollMode
+  /**
+   * Whether this poll chooses an option or finds a time. Optional for the
+   * reason `PollStatus.expires_at` is: a browser running a bundle older than
+   * the migration that added it reads every poll as an ordinary one, which is
+   * what every browser did before time polls existed.
+   */
+  kind?: PollKind
+  /** The grid a time poll's ballot is drawn on; null on any other poll. */
+  schedule?: PollSchedule | null
   /** Participants can see who has responded. */
   show_voters: boolean
   /**
@@ -330,6 +383,13 @@ export interface OpenPollView {
     group_id?: string | null
     question_position?: number | null
     question_title?: string | null
+    /**
+     * What the ballot is, and the grid to draw it on. Optional for the same
+     * reason as the three above: a browser talking to a database that predates
+     * them reads the poll as an ordinary one.
+     */
+    kind?: PollKind
+    schedule?: PollSchedule | null
   }
   options: PollOption[]
   voted_count: number

@@ -4,7 +4,8 @@ import { useDisclosure } from '@mantine/hooks'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
-import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
+import { relabelRanking } from '../lib/schedule'
+import type { PollResults, PollSchedule, RankingEntry, Tiebreak } from '../lib/types'
 import { NameList } from './NameList'
 import { RankingSkeleton } from './Skeletons'
 import { voters } from '../lib/plural'
@@ -36,7 +37,17 @@ export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
  * deletes every vote and is announced to nobody. So the wait is once per
  * opening rather than once per reader.
  */
-export function FullRanking({ source, results }: { source: RankingSource; results: PollResults }) {
+export function FullRanking({
+  source,
+  results,
+  schedule = null,
+}: {
+  source: RankingSource
+  /** Already relabelled by Results on a time poll; see relabelResults. */
+  results: PollResults
+  /** The grid a time poll was voted on, for the places this fetches itself. */
+  schedule?: PollSchedule | null
+}) {
   const [opened, modal] = useDisclosure(false)
 
   // Flattened to primitives so the dependency list is complete without
@@ -106,7 +117,12 @@ export function FullRanking({ source, results }: { source: RankingSource; result
 
           {!error && !ranking && <RankingSkeleton places={results.options.length} />}
 
-          {ranking && <Places ranking={ranking} results={results} />}
+          {ranking && (
+            <Places
+              ranking={schedule ? relabelRanking(ranking, schedule) : ranking}
+              results={results}
+            />
+          )}
         </Stack>
       </Modal>
     </>

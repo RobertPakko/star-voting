@@ -15,7 +15,8 @@ import {
   rememberConfirmed,
 } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
-import { BallotCard, type BallotScore } from '../components/BallotCard'
+import { BallotCard } from '../components/BallotCard'
+import type { BallotScore } from '../components/BallotFrame'
 import { CollectOptions } from '../components/CollectOptions'
 import { CreatorControls } from '../components/CreatorControls'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
@@ -24,7 +25,7 @@ import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { RetentionNote } from '../components/RetentionNote'
-import { Ballots, Results } from '../components/deferred'
+import { Ballots, Results, TimeBallotCard } from '../components/deferred'
 import {
   BallotsSkeleton,
   PollPageSkeleton,
@@ -37,6 +38,7 @@ import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { readPollPage } from '../lib/pollPage'
 import { openPollViewSchema, parseAnswer, pollStatusSchema } from '../lib/rpcSchemas'
+import { winnerLabel } from '../lib/schedule'
 import type {
   AccountRead,
   BallotSheet,
@@ -387,6 +389,12 @@ export function PollDetail({
     !!poll &&
     !!status &&
     poll.created_by === session?.user.id &&
+    // A time poll's options are its windows, generated from its schedule.
+    // Typing one in among them would put a name on the ballot the calendar
+    // cannot draw and the minimum rule cannot score, so the editor is not
+    // offered -- and `creator_add_option` refuses it besides, which is what
+    // makes this a hidden control rather than a rule.
+    poll.kind !== 'time' &&
     !status.soliciting &&
     !status.is_closed &&
     status.voted_count === 0
@@ -603,7 +611,9 @@ export function PollDetail({
           // `undefined` where the answer has not been settled — a database
           // older than the columns included — since null here means a poll
           // that elected nobody.
-          winner: status.winner_settled ? (status.winner_name ?? null) : undefined,
+          winner: status.winner_settled
+            ? winnerLabel(status.winner_name ?? null, poll.schedule)
+            : undefined,
           // The badge belongs to the poll, and a poll of several questions has
           // an answer per question rather than one to put beside its title.
           // The question in front of the reader names its own, in the green
@@ -689,7 +699,11 @@ export function PollDetail({
             <>
               {questionStrip}
               <Suspense fallback={<ResultsSkeleton options={optionList.length || undefined} />}>
-                <Results source={{ kind: 'poll', pollId: poll.id }} initial={results} />
+                <Results
+                  source={{ kind: 'poll', pollId: poll.id }}
+                  initial={results}
+                  schedule={poll.schedule}
+                />
               </Suspense>
             </>
           ) : status.is_closed ? (
@@ -783,7 +797,11 @@ export function PollDetail({
           question already answered. */}
       {!isOpen && status.results_available && poll.show_ballots && (
         <Suspense fallback={<BallotsSkeleton rows={status.voted_count || undefined} />}>
-          <Ballots source={{ kind: 'poll', pollId: poll.id }} initial={ballots} />
+          <Ballots
+            source={{ kind: 'poll', pollId: poll.id }}
+            initial={ballots}
+            schedule={poll.schedule}
+          />
         </Suspense>
       )}
 
@@ -910,7 +928,8 @@ function VoteForm({
   onCancel,
   questionStrip,
 }: {
-  poll: Pick<Poll, 'id'>
+  /** Which ballot to put up, and the grid to draw it on if it is a calendar. */
+  poll: Pick<Poll, 'id' | 'kind' | 'schedule'>
   options: PollOption[]
   /** The scores already on this voter's ballot; absent when casting a new one. */
   initial?: Record<string, number>
@@ -929,6 +948,26 @@ function VoteForm({
       p_scores: scores,
     })
     if (error) throw new Error(error.message)
+  }
+
+  // Two ballots, one submit path: whichever of them is on screen produces the
+  // same BallotScore[] and sends it through the same submit_ballot. See
+  // BallotFrame, which is everything the two have in common.
+  if (poll.kind === 'time' && poll.schedule) {
+    return (
+      <Suspense fallback={<QuestionSkeleton rows={3} strip={questionStrip} />}>
+        <TimeBallotCard
+          options={options}
+          schedule={poll.schedule}
+          initial={initial}
+          questionStrip={questionStrip}
+          note={<RevealNote reveal={{ kind: 'invite' }} canRevise />}
+          onSubmit={send}
+          onVoted={onVoted}
+          onCancel={onCancel}
+        />
+      </Suspense>
+    )
   }
 
   return (

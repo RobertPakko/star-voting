@@ -8,6 +8,7 @@ import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
 import { PollListSkeleton } from '../components/Skeletons'
 import type { PollListItem } from '../lib/types'
+import { winnerLabel } from '../lib/schedule'
 
 /**
  * How many polls a page of the list holds.
@@ -205,7 +206,9 @@ export function PollList() {
                 // is that question's winner rather than the poll's. The badge
                 // withholds it on `inGroup`, in one place for all three
                 // screens, rather than leaving three callers to remember.
-                winner: poll.winner_settled ? (poll.winner_name ?? null) : undefined,
+                winner: poll.winner_settled
+                  ? winnerLabel(poll.winner_name ?? null, poll.schedule)
+                  : undefined,
                 inGroup: poll.question_count > 1,
               }}
             />

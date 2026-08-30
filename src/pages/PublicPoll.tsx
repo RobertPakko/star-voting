@@ -22,6 +22,7 @@ import { QuestionStrip } from '../components/QuestionStrip'
 import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
+import { winnerLabel } from '../lib/schedule'
 import type {
   BallotSheet,
   OpenGroupQuestion,
@@ -421,7 +422,9 @@ export function PublicPoll({
           // this page has none. That made the badge wait on that card and
           // exist only because it did. `open_poll_view` carries the answer
           // now, so it arrives with the page and needs no account to ask for.
-          winner: shell.winner_settled ? (shell.winner_name ?? null) : undefined,
+          winner: shell.winner_settled
+            ? winnerLabel(shell.winner_name ?? null, shell.poll.schedule)
+            : undefined,
           // Except on a poll of several questions, whose badge names none of
           // their winners. See PollStateBadge.
           inGroup: !!shell.poll.group_id,

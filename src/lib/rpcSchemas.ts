@@ -48,6 +48,21 @@ import type { BallotSheet, OpenPollView, PollRead, PollResults, PollStatus } fro
  */
 
 const pollMode = z.enum(['invite', 'open'])
+const pollKind = z.enum(['option', 'time'])
+
+/**
+ * The grid a time poll's ballot is drawn on. Checked rather than waved
+ * through, because it is the one payload the app does arithmetic with: the
+ * calendar enumerates cells from these four numbers and flattens a painting
+ * back through them, and a `granularity` that arrived as a string would make
+ * every window start `NaN` several screens away from here.
+ */
+const pollSchedule = z.object({
+  timezone: z.string(),
+  window: z.object({ start: z.string(), end: z.string() }),
+  desired_slots: z.number(),
+  granularity: z.number(),
+})
 
 const pollOption = z.object({
   id: z.string(),
@@ -73,6 +88,8 @@ const poll = z.object({
   group_id: z.string().nullable(),
   question_position: z.number().nullable(),
   question_title: z.string().nullable(),
+  kind: pollKind.optional(),
+  schedule: pollSchedule.nullable().optional(),
 })
 
 const groupQuestion = z.object({
@@ -128,6 +145,8 @@ export const openPollViewSchema = z.object({
     group_id: z.string().nullable().optional(),
     question_position: z.number().nullable().optional(),
     question_title: z.string().nullable().optional(),
+    kind: pollKind.optional(),
+    schedule: pollSchedule.nullable().optional(),
   }),
   options: z.array(pollOption),
   voted_count: z.number(),

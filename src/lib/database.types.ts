@@ -157,10 +157,12 @@ export type Database = {
           description: string | null
           group_id: string | null
           id: string
+          kind: string
           mode: string
           options_finalized_at: string | null
           question_position: number | null
           question_title: string | null
+          schedule: Json | null
           show_ballots: boolean
           show_voters: boolean
           solicit_options: boolean
@@ -176,10 +178,12 @@ export type Database = {
           description?: string | null
           group_id?: string | null
           id?: string
+          kind?: string
           mode?: string
           options_finalized_at?: string | null
           question_position?: number | null
           question_title?: string | null
+          schedule?: Json | null
           show_ballots?: boolean
           show_voters?: boolean
           solicit_options?: boolean
@@ -195,10 +199,12 @@ export type Database = {
           description?: string | null
           group_id?: string | null
           id?: string
+          kind?: string
           mode?: string
           options_finalized_at?: string | null
           question_position?: number | null
           question_title?: string | null
+          schedule?: Json | null
           show_ballots?: boolean
           show_voters?: boolean
           solicit_options?: boolean
@@ -309,10 +315,12 @@ export type Database = {
           description: string | null
           group_id: string | null
           id: string
+          kind: string
           mode: string
           options_finalized_at: string | null
           question_position: number | null
           question_title: string | null
+          schedule: Json | null
           show_ballots: boolean
           show_voters: boolean
           solicit_options: boolean
@@ -331,9 +339,11 @@ export type Database = {
         Args: {
           p_description: string
           p_emails: string[]
+          p_kind?: string
           p_mode?: string
           p_option_descriptions?: string[]
           p_options: string[]
+          p_schedule?: Json
           p_show_ballots?: boolean
           p_show_voters?: boolean
           p_solicit_options?: boolean
@@ -375,10 +385,12 @@ export type Database = {
           p_description: string
           p_emails: string[]
           p_group_id?: string
+          p_kind?: string
           p_mode: string
           p_options: Json
           p_question_position?: number
           p_question_title: string
+          p_schedule?: Json
           p_show_ballots: boolean
           p_show_voters: boolean
           p_solicit_options: boolean
@@ -402,6 +414,7 @@ export type Database = {
           invited_count: number
           is_closed: boolean
           is_complete: boolean
+          kind: string
           mode: string
           option_count: number
           options_finalized_at: string
@@ -409,6 +422,7 @@ export type Database = {
           question_position: number
           question_title: string
           results_available: boolean
+          schedule: Json
           show_ballots: boolean
           show_voters: boolean
           solicit_options: boolean
@@ -505,10 +519,12 @@ export type Database = {
           description: string | null
           group_id: string | null
           id: string
+          kind: string
           mode: string
           options_finalized_at: string | null
           question_position: number | null
           question_title: string | null
+          schedule: Json | null
           show_ballots: boolean
           show_voters: boolean
           solicit_options: boolean
@@ -635,6 +651,7 @@ export type Database = {
         Returns: undefined
       }
       unconfirm_options: { Args: { p_poll_id: string }; Returns: undefined }
+      validate_schedule: { Args: { p_schedule: Json }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

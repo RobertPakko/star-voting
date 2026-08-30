@@ -58,6 +58,9 @@ jobs:
       # arrived a Windows checkout handed it CRLF and it failed on every file.
       # See the line-endings note in AGENTS.md.
       - run: npm run fmt:check
+      # The one piece of election logic that lives in the browser rather than
+      # in Postgres: see the Tests section of AGENTS.md.
+      - run: npm run test:unit
       # `npm run build` is `tsc -b && vite build`, so this is the typecheck and
       # the bundle in one step, and it fails on whichever comes first.
       #

@@ -28,3 +28,21 @@ import { lazy } from 'react'
 export const Results = lazy(() => import('./Results').then((m) => ({ default: m.Results })))
 
 export const Ballots = lazy(() => import('./Ballots').then((m) => ({ default: m.Ballots })))
+
+/**
+ * And the calendar a time poll is voted on, for the same reason and a
+ * sharper one: it is the only part of this app with a real dependency behind
+ * it. `@mantine/schedule` and the `rrule` it carries are around 250 kB
+ * unminified, which is more than everything else on the ballot put together,
+ * and every poll that chooses an option would have paid for it on first paint
+ * to draw a list of stars.
+ *
+ * Declared here rather than at its two call sites for the reason above:
+ * `VoteForm` on the invite page and `OpenBallot` behind a share link both
+ * draw it, and two `lazy()` calls over one module would remount the ballot --
+ * with whatever was painted on it -- on any render that swapped which of them
+ * held it.
+ */
+export const TimeBallotCard = lazy(() =>
+  import('./TimeBallotCard').then((m) => ({ default: m.TimeBallotCard })),
+)
