@@ -11,6 +11,7 @@ import { Layout } from './components/Layout'
 import { PollList } from './pages/PollList'
 import { PollDetail } from './pages/PollDetail'
 import { PublicPoll } from './pages/PublicPoll'
+import { NotFound } from './pages/NotFound'
 import { AboutSkeleton, FormSkeleton, PollPageSkeleton } from './components/Skeletons'
 import type { PollRead } from './lib/types'
 
@@ -90,6 +91,12 @@ function App() {
                 </Suspense>
               }
             />
+            {/* Anything else, for a reader who has an account: a mistyped
+                address used to render the shell with an empty body. Signed
+                out this is unreachable, and deliberately -- the catch-all
+                below is the sign-in screen, which is where somebody with no
+                session and no valid address should land anyway. */}
+            <Route path="*" element={<NotFound />} />
           </>
         )}
       </Route>
