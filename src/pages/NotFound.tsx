@@ -22,7 +22,7 @@ export function NotFound() {
     <Stack maw={720} mx="auto" gap="md" align="center">
       <Title order={3}>Page not found</Title>
       <Text c="dimmed" ta="center">
-        This address may be mistyped, or the page may have moved.
+        This poll may have been deleted.
       </Text>
       <Button component={Link} to="/" variant="light">
         Back to your polls
