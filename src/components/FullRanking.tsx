@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
 import { relabelRanking } from '../lib/schedule'
-import type { PollResults, PollSchedule, RankingEntry, Tiebreak } from '../lib/types'
+import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
 import { NameList } from './NameList'
 import { RankingSkeleton } from './Skeletons'
 import { voters } from '../lib/plural'
@@ -40,13 +40,10 @@ export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
 export function FullRanking({
   source,
   results,
-  schedule = null,
 }: {
   source: RankingSource
   /** Already relabelled by Results on a time poll; see relabelResults. */
   results: PollResults
-  /** The grid a time poll was voted on, for the places this fetches itself. */
-  schedule?: PollSchedule | null
 }) {
   const [opened, modal] = useDisclosure(false)
 
@@ -117,12 +114,7 @@ export function FullRanking({
 
           {!error && !ranking && <RankingSkeleton places={results.options.length} />}
 
-          {ranking && (
-            <Places
-              ranking={schedule ? relabelRanking(ranking, schedule) : ranking}
-              results={results}
-            />
-          )}
+          {ranking && <Places ranking={relabelRanking(ranking)} results={results} />}
         </Stack>
       </Modal>
     </>

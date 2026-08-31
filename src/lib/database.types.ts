@@ -414,7 +414,6 @@ export type Database = {
           invited_count: number
           is_closed: boolean
           is_complete: boolean
-          kind: string
           mode: string
           option_count: number
           options_finalized_at: string
@@ -422,7 +421,6 @@ export type Database = {
           question_position: number
           question_title: string
           results_available: boolean
-          schedule: Json
           show_ballots: boolean
           show_voters: boolean
           solicit_options: boolean

@@ -9,6 +9,7 @@ import {
   saysNothing,
   scoresFromPainting,
   windowsPerDay,
+  winnerLabel,
 } from './schedule'
 import type { PollSchedule } from './types'
 
@@ -186,10 +187,22 @@ describe('reading a ballot back onto the calendar', () => {
 
 describe('what a window is called on screen', () => {
   test('reads as a time, in the poll offset and never the reader own', () => {
-    expect(formatWindow('2026-09-01T14:00:00-07:00', threeHours)).toBe('Tue 1 Sep, 2:00pm – 5:00pm')
-    expect(formatWindow('2026-09-05T09:30:00+01:00', ninetyMinutes)).toBe(
-      'Sat 5 Sep, 9:30am – 11:00am',
-    )
+    expect(formatWindow('2026-09-01T14:00:00-07:00')).toBe('Tue 1 Sep, 2:00pm')
+    // The same instant with a different offset on it is a different wall
+    // clock, and this reads the offset the poll declared rather than converting
+    // to the reader's -- which is the whole of one-timezone-per-poll.
+    expect(formatWindow('2026-09-05T09:30:00+01:00')).toBe('Sat 5 Sep, 9:30am')
+  })
+
+  test('and takes no schedule, which is what keeps it out of the database', () => {
+    // A name is enough. Nothing above this has to be told which kind of poll
+    // it is drawing, so list_polls, poll_status and the three cards that draw
+    // a winner all stayed as they were.
+    expect(winnerLabel('2026-09-01T14:00:00-07:00')).toBe('Tue 1 Sep, 2:00pm')
+    // null is "settled, and nobody won"; undefined is "not settled". Both are
+    // answers rather than names, so neither is formatted.
+    expect(winnerLabel(null)).toBeNull()
+    expect(winnerLabel(undefined)).toBeUndefined()
   })
 
   test('midnight at either end of the day', () => {
@@ -199,6 +212,12 @@ describe('what a window is called on screen', () => {
   })
 
   test('a name that is not a window is shown as it is, not as a crash', () => {
-    expect(formatWindow('Pizza', threeHours)).toBe('Pizza')
+    // Which is also what lets this be applied to every poll unconditionally:
+    // an ordinary poll's options are not ISO instants, so they pass through.
+    expect(formatWindow('Pizza')).toBe('Pizza')
+    expect(formatWindow('2026-09-01')).toBe('2026-09-01')
+    // No offset on it, so it is not a window start and not this app's to read.
+    expect(formatWindow('2026-09-01T14:00:00')).toBe('2026-09-01T14:00:00')
+    expect(winnerLabel('Pizza')).toBe('Pizza')
   })
 })

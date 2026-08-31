@@ -257,7 +257,20 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /**
- * An option's name, as a person reads it: `Tue 1 Sep, 2:00 – 5:00pm`.
+ * An option's name, as a person reads it: `Tue 1 Sep, 2:00pm`.
+ *
+ * **It decides from the name alone, and takes no schedule.** That is the whole
+ * point of it: formatting a time is presentation, and presentation is the
+ * browser's job. Nothing above has to be told which kind of poll it is reading
+ * or hand a schedule down to reach it -- which is what keeps `list_polls` and
+ * every card that draws a winner out of this feature entirely.
+ *
+ * What it recognises is the exact shape `enumerateWindows` produces: a full
+ * ISO 8601 instant with a numeric offset. Anything else is returned untouched,
+ * so an ordinary poll's options pass straight through. An option poll whose
+ * option is *literally* named `2026-09-01T14:00:00-07:00` would be reformatted
+ * too -- which is a poll nobody is going to write, and which would still be
+ * shown the same instant, more legibly.
  *
  * Formatted by hand rather than through `Intl.DateTimeFormat`, because every
  * formatter that takes a `Date` also takes the reader's own timezone with it,
@@ -269,8 +282,13 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * The weekday is worked out from the date arithmetically, in UTC, which is
  * safe for the same reason: the parts are treated as wall clock and never as
  * an instant.
+ *
+ * The window's *end* is deliberately not here. It would need the schedule
+ * back, and every window in a poll is the same length -- sixty rows each
+ * saying "– 5:00pm" three hours after their own start is noise, and the length
+ * is one fact about the poll rather than one fact per option.
  */
-export function formatWindow(name: string, schedule: PollSchedule): string {
+export function formatWindow(name: string): string {
   const parsed = parseWindowStart(name)
   // A name that is not a window is shown as it is. Better a stray label on a
   // results page than a crash on one.
@@ -278,10 +296,8 @@ export function formatWindow(name: string, schedule: PollSchedule): string {
 
   const [year, month, day] = parsed.day.split('-').map(Number)
   const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]
-  const from = toMinutes(parsed.timeOfDay)
-  const to = from + meetingMinutes(schedule)
 
-  return `${weekday} ${day} ${MONTHS[month - 1]}, ${clock(from)} – ${clock(to)}`
+  return `${weekday} ${day} ${MONTHS[month - 1]}, ${clock(toMinutes(parsed.timeOfDay))}`
 }
 
 /** The day part alone, for a column heading over a grid. */
@@ -320,8 +336,10 @@ export function clock(minutes: number): string {
  * column headings. Every one of those renders `name` and every one of them
  * stays untouched: what changes is what `name` says by the time it arrives.
  *
- * A poll that is not a time poll passes through unrelabelled, because there is
- * no schedule to hand these.
+ * None of these take a schedule, and none of their callers has to know which
+ * kind of poll they are drawing: `formatWindow` decides from the name alone,
+ * and an ordinary poll's options are not window starts, so they pass straight
+ * through. Applied unconditionally for that reason.
  */
 export function relabelResults<
   T extends {
@@ -334,8 +352,8 @@ export function relabelResults<
       })[]
     }[]
   },
->(results: T, schedule: PollSchedule): T {
-  const label = (name: string) => formatWindow(name, schedule)
+>(results: T): T {
+  const label = formatWindow
   return {
     ...results,
     options: results.options.map((option) => ({ ...option, name: label(option.name) })),
@@ -372,21 +390,15 @@ export function relabelRanking<
       })[]
     }[]
   },
->(ranking: T[], schedule: PollSchedule): T[] {
-  return ranking.map((place) => relabelResults(place, schedule))
+>(ranking: T[]): T[] {
+  return ranking.map(relabelResults)
 }
 
 /** And for the published sheet, whose columns are the options. */
-export function relabelSheet<T extends { options: { name: string }[] }>(
-  sheet: T,
-  schedule: PollSchedule,
-): T {
+export function relabelSheet<T extends { options: { name: string }[] }>(sheet: T): T {
   return {
     ...sheet,
-    options: sheet.options.map((option) => ({
-      ...option,
-      name: formatWindow(option.name, schedule),
-    })),
+    options: sheet.options.map((option) => ({ ...option, name: formatWindow(option.name) })),
   }
 }
 
@@ -398,11 +410,13 @@ export function relabelSheet<T extends { options: { name: string }[] }>(
  * timestamp. `undefined` means "not settled" and `null` means "settled, and
  * nobody won"; both pass through untouched, because both are answers rather
  * than names.
+ *
+ * The poll list is why this takes no schedule. That screen reads `list_polls`,
+ * which would have had to carry two more columns -- a hundred and thirty lines
+ * of function restated, since adding a column to a `RETURNS TABLE` is a new
+ * return type and cannot be a `CREATE OR REPLACE` -- for the sake of one
+ * label. `formatWindow` decides from the name.
  */
-export function winnerLabel(
-  name: string | null | undefined,
-  schedule: PollSchedule | null | undefined,
-): string | null | undefined {
-  if (!name || !schedule) return name
-  return formatWindow(name, schedule)
+export function winnerLabel(name: string | null | undefined): string | null | undefined {
+  return name ? formatWindow(name) : name
 }

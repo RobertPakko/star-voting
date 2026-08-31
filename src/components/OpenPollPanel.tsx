@@ -180,22 +180,14 @@ export function OpenPollPanel({
             reading places it the same way, for the same reason. */}
         {questionStrip}
         <Suspense fallback={<ResultsSkeleton options={view.options.length || undefined} />}>
-          <Results
-            source={{ kind: 'open', pollId }}
-            initial={results}
-            schedule={view.poll.schedule}
-          />
+          <Results source={{ kind: 'open', pollId }} initial={results} />
         </Suspense>
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}
         {view.poll.show_ballots && (
           <Suspense fallback={<BallotsSkeleton rows={view.voted_count || undefined} />}>
-            <Ballots
-              source={{ kind: 'open', pollId }}
-              initial={ballots}
-              schedule={view.poll.schedule}
-            />
+            <Ballots source={{ kind: 'open', pollId }} initial={ballots} />
           </Suspense>
         )}
       </Stack>

@@ -190,44 +190,11 @@ comment on function "public"."insert_option"("p_poll" "public"."polls", "p_name"
 -- 4. The index the tie-break block needs, which is already there
 -- ---------------------------------------------------------------------------
 
--- Nothing to add here, and it is worth writing down why rather than leaving
--- the next reader to rediscover it.
---
--- star_round's tie-break block fires whenever a tied group is larger than the
--- finalist slots left to fill, and on a time poll that is the common case
--- rather than the rare one: a voter painting whole days gives contiguous
--- windows *identical* score vectors, so they tie at every step. The block
--- builds every ordered pair in the tied group and cross-joins each against
--- every ballot with two correlated lookups into `scores`, keyed on
--- (ballot_id, candidate_id) -- so a composite index on those two columns
--- looked like the one performance change that mattered.
---
--- `scores` already has one. The UNIQUE (ballot_id, candidate_id) constraint
--- on that table is backed by a btree on exactly those columns in exactly that
--- order, and EXPLAIN confirms the tie-break block was using it all along:
--- both lookups come back as `Index Scan using
--- scores_ballot_id_candidate_id_key`, one row each. Adding
--- idx_scores_ballot_candidate would have been a duplicate index -- write cost
--- and disk for a plan that was already optimal.
---
--- What the worst case actually costs is the pair build itself, which is
--- quadratic in the tied group and multiplied by the ballots: sixty windows
--- all tied is 3,540 ordered pairs, and at sixty ballots that is 212,400
--- lateral iterations with two lookups each. Measured on this schema, on a
--- laptop-class server, with everything cached:
---
---   poll_tally, 60 options x 60 ballots, every window tied     ~2.4 s
---   the same, with the ballots actually differing              ~0.65 s
---   poll_ranking, 60 options, every window tied                ~6 s
---
--- The tally is the number that matters, because settle_winner runs it inside
--- the transaction of the deciding ballot -- the last voter to submit waits
--- for it. It is acceptable and it is not comfortable. The fix, when it is
--- wanted, is to stop asking `scores` the same question 212,400 times: pivot
--- each ballot's scores over the tied group once and join, rather than reading
--- them back a pair at a time. That is a change to the tally every poll goes
--- through, so it belongs in its own migration with the whole suite behind it,
--- not in the one that adds a poll kind.
+-- Nothing to add. `scores` already has a btree on (ballot_id, candidate_id) --
+-- the index behind its UNIQUE constraint -- and EXPLAIN shows star_round's
+-- tie-break block using it. See "A poll that finds a time" in AGENTS.md for
+-- what the worst case does cost, which is the pair build rather than the
+-- lookups, and for the measurements.
 
 
 -- ---------------------------------------------------------------------------
@@ -316,6 +283,21 @@ $$;
 
 alter function "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") owner to "postgres";
 
+-- Not decoration, and the reason it is spelled out on both of the functions
+-- this migration drops: Postgres grants EXECUTE to PUBLIC on a newly created
+-- function, and 0053 had revoked exactly that from both. A CREATE OR REPLACE
+-- keeps the old ACL and would not have needed this -- but neither of these
+-- could be replaced, because each gained defaulted parameters and would
+-- otherwise have stood beside its old self as an ambiguous overload. So they
+-- were dropped, and a dropped function takes its grants with it.
+--
+-- Without this line `anon` can reach `create_poll` through PostgREST. It is
+-- refused by the `auth.uid() is null` check on the first line of the body, so
+-- nothing is writable either way -- but "an internal function is not exposed"
+-- and "an internal function is exposed and says no" are not the same posture,
+-- and this app grants `anon` nothing but the `open_poll_*` functions.
+revoke all on function "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") from public;
+
 comment on function "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") is
   'One poll row with its options and its invitees, for the two functions that create polls. Internal: it checks the title, the description and the option list, because its callers have checked the rest.';
 
@@ -394,6 +376,11 @@ alter function "public"."create_poll"("p_title" "text", "p_description" "text", 
 
 comment on function "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") is
   'Creates one poll with its options and its invitees. A time poll carries a schedule and options its creator''s browser enumerated from it; the database stores it exactly as it stores any other poll.';
+
+-- Revoked from PUBLIC before it is granted to anybody, for the reason spelled
+-- out on insert_poll_row above. The order matters only for readability: this
+-- is the same pair of statements 0053 has for the old signature.
+revoke all on function "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") from public;
 
 grant all on function "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") to "authenticated";
 
@@ -597,155 +584,15 @@ end;
 $$;
 
 
--- The poll list draws a card per poll, and on a finished one that card
--- carries the winner's name -- which on a time poll is an ISO timestamp the
--- browser has to be told to format. `kind` is what tells it; `schedule` is
--- what lets it say how long the meeting is beside the time it starts.
+-- The poll list is deliberately not here. Its card draws a winner's name, and
+-- on a finished time poll that name is an ISO timestamp -- but formatting a
+-- timestamp is presentation, and `winnerLabel` in src/lib/schedule.ts does it
+-- from the name alone. Carrying `kind` and `schedule` through `list_polls` so
+-- the browser could be *told* what it can already see would have meant
+-- restating that function whole: adding a column to a `RETURNS TABLE` is a new
+-- return type, which `CREATE OR REPLACE` refuses, so it is a DROP, a hundred
+-- and thirty lines of unchanged body, and the grant again. For one label.
 --
--- Dropped and recreated rather than replaced: two more columns is a new
--- return type, and CREATE OR REPLACE cannot change one.
-drop function if exists "public"."list_polls"("p_limit" integer, "p_offset" integer);
-create or replace function "public"."list_polls"("p_limit" integer, "p_offset" integer) RETURNS TABLE("id" "uuid", "title" "text", "description" "text", "created_by" "uuid", "created_by_email" "text", "created_at" timestamp with time zone, "closed_at" timestamp with time zone, "mode" "text", "kind" "text", "schedule" "jsonb", "show_voters" boolean, "show_ballots" boolean, "solicit_options" boolean, "options_finalized_at" timestamp with time zone, "invited_count" integer, "voted_count" integer, "option_count" integer, "confirmed_count" integer, "is_complete" boolean, "voted" boolean, "is_closed" boolean, "results_available" boolean, "soliciting" boolean, "group_id" "uuid", "question_position" integer, "question_title" "text", "question_count" integer, "winner_name" "text", "winner_settled" boolean, "total_count" integer)
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-  -- Left as a SQL function rather than plpgsql, as it always was. In plpgsql
-  -- the names in RETURNS TABLE become variables that shadow same-named
-  -- columns -- `id`, `title`, `voted`, `winner_name` and `total_count` all
-  -- appear below -- and the failure is silent rather than an error. See the
-  -- note on poll_winners(), which is plpgsql and has to alias around exactly
-  -- that.
-  with args as (
-    -- Floored rather than trusted: a limit of zero or less would ask for an
-    -- empty page of a list that has rows in it, and a negative offset is a
-    -- syntax error rather than a page.
-    select
-      greatest(coalesce(p_limit, 1), 1) as lim,
-      greatest(coalesce(p_offset, 0), 0) as want
-  ), visible as (
-    -- The whole row alongside its columns, so the aggregates below can be
-    -- handed a poll rather than rebuilding one.
-    --
-    -- Written out here rather than behind a helper on purpose: a function
-    -- call in this predicate is opaque to the planner unless it happens to
-    -- inline, and the index 0036 added is only reachable while the
-    -- comparison is written where the planner can see it.
-    select p.*, p as poll_row
-    from polls p
-    where (p.group_id is null or p.question_position = 1)
-      and (
-        p.created_by = auth.uid()
-        or exists (
-          select 1 from invited_voters iv
-          where iv.poll_id = p.id and iv.email = lower(auth.jwt() ->> 'email')
-        )
-      )
-  ), counted as (
-    -- The one pass over everything the caller can see. It is the price of
-    -- reporting a total at all, and it is the cheap half: one predicate and
-    -- no subqueries, against that same index.
-    select count(*)::int as total from visible
-  ), bounds as (
-    -- Where the requested page actually starts. Asking past the end lands on
-    -- the last page there is rather than on nothing: a poll deleted from page
-    -- three leaves its reader on page three, or on the last page if that was
-    -- it. The browser clamps the page number it displays the same way, from
-    -- the same total, so the two cannot disagree about what is on screen.
-    select
-      c.total,
-      least(a.want, greatest(((c.total - 1) / a.lim) * a.lim, 0)) as page_start
-    from counted c, args a
-  ), page as (
-    -- The page is taken here, before a single aggregate has run.
-    --
-    -- `id` breaks ties on `created_at`, because offset paging is only correct
-    -- over a total order: two rows that compare equal may come back in either
-    -- order, and then a row can land on two pages or on none, silently. In
-    -- the app polls are made one at a time and their timestamps differ, so
-    -- this is insurance -- nothing *enforces* that they differ. In the test
-    -- suite it is load-bearing: a case is one transaction, so every poll a
-    -- case creates shares a created_at to the microsecond.
-    select v.*
-    from visible v
-    order by v.created_at desc, v.id desc
-    limit (select a.lim from args a)
-    offset (select b.page_start from bounds b)
-  ), tallied as (
-    select
-      v.id as poll_id,
-      -- Per question, and the question is the first one: the invite list is
-      -- the same on every question, and a turnout that differs between them
-      -- is not a number this list has room to reconcile. The card shows the
-      -- question count in its place on a grouped poll.
-      (select count(*)::int from invited_voters iv where iv.poll_id = v.id) as invited_count,
-      (select count(*)::int from ballots b where b.poll_id = v.id) as voted_count,
-      (select count(*)::int from candidates c where c.poll_id = v.id) as option_count,
-      -- The same, and per question for the same reason. It is what the count
-      -- badge reports while the poll is still collecting, in place of the
-      -- turnout that has not started moving yet.
-      poll_confirmed_count(v.id) as confirmed_count,
-      (select count(*)::int from poll_group_members(v.poll_row)) as question_count,
-      -- Asked of every question: a poll is answered when all of it is.
-      (select bool_and(
-                exists (select 1 from ballots b where b.poll_id = q.id and b.voter_id = auth.uid()))
-         from poll_group_members(v.poll_row) q) as voted,
-      (select bool_and(
-                (select count(*) from invited_voters iv where iv.poll_id = q.id) > 0
-                and (select count(*) from ballots b where b.poll_id = q.id)
-                    >= (select count(*) from invited_voters iv where iv.poll_id = q.id))
-         from poll_group_members(v.poll_row) q) as is_complete,
-      (select bool_and(q.closed_at is not null)
-         from poll_group_members(v.poll_row) q) as is_closed
-    from page v
-  )
-  select
-    v.id,
-    v.title,
-    v.description,
-    v.created_by,
-    v.created_by_email,
-    v.created_at,
-    v.closed_at,
-    v.mode,
-    -- What the ballot is, and the grid a time poll's ballot is drawn on.
-    -- The card needs the first to know that a winner's name is a timestamp
-    -- rather than a label, and the second to say how long the window it
-    -- names lasts.
-    v.kind,
-    v.schedule,
-    v.show_voters,
-    v.show_ballots,
-    v.solicit_options,
-    v.options_finalized_at,
-    t.invited_count,
-    t.voted_count,
-    t.option_count,
-    t.confirmed_count,
-    t.is_complete,
-    t.voted,
-    t.is_closed,
-    poll_results_revealed(v.poll_row),
-    v.solicit_options and v.options_finalized_at is null and v.closed_at is null,
-    v.group_id,
-    v.question_position,
-    v.question_title,
-    t.question_count,
-    -- A group's row here *is* its first question, so this is that question's
-    -- winner rather than the poll's -- a poll of several questions has one
-    -- answer each and none to put beside its title. The badge withholds it on
-    -- `question_count > 1` and always did; see PollStateBadge, which decides
-    -- that in one place rather than trusting three callers to remember.
-    v.winner_name,
-    v.winner_settled_at is not null,
-    (select c.total from counted c)
-  from page v
-  join tallied t on t.poll_id = v.id
-  order by v.created_at desc, v.id desc;
-$$;
-
-alter function "public"."list_polls"("p_limit" integer, "p_offset" integer) owner to "postgres";
-
-grant all on function "public"."list_polls"("p_limit" integer, "p_offset" integer) to "authenticated";
-
-comment on function "public"."list_polls"("p_limit" integer, "p_offset" integer) is
-  'One page of the caller''s poll list, newest first, with the total on every row. The page is taken before the per-poll aggregates run, so the work is proportional to the rows returned rather than to everything the caller can see. An offset past the end returns the last page there is.';
+-- `poll_status` is absent for the same reason, and so is anything else that
+-- carries `winner_name`. Only the two reads a *ballot* is drawn from need the
+-- schedule, because only they need the grid.

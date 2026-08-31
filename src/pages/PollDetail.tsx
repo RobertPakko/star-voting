@@ -611,9 +611,7 @@ export function PollDetail({
           // `undefined` where the answer has not been settled — a database
           // older than the columns included — since null here means a poll
           // that elected nobody.
-          winner: status.winner_settled
-            ? winnerLabel(status.winner_name ?? null, poll.schedule)
-            : undefined,
+          winner: status.winner_settled ? winnerLabel(status.winner_name ?? null) : undefined,
           // The badge belongs to the poll, and a poll of several questions has
           // an answer per question rather than one to put beside its title.
           // The question in front of the reader names its own, in the green
@@ -699,11 +697,7 @@ export function PollDetail({
             <>
               {questionStrip}
               <Suspense fallback={<ResultsSkeleton options={optionList.length || undefined} />}>
-                <Results
-                  source={{ kind: 'poll', pollId: poll.id }}
-                  initial={results}
-                  schedule={poll.schedule}
-                />
+                <Results source={{ kind: 'poll', pollId: poll.id }} initial={results} />
               </Suspense>
             </>
           ) : status.is_closed ? (
@@ -797,11 +791,7 @@ export function PollDetail({
           question already answered. */}
       {!isOpen && status.results_available && poll.show_ballots && (
         <Suspense fallback={<BallotsSkeleton rows={status.voted_count || undefined} />}>
-          <Ballots
-            source={{ kind: 'poll', pollId: poll.id }}
-            initial={ballots}
-            schedule={poll.schedule}
-          />
+          <Ballots source={{ kind: 'poll', pollId: poll.id }} initial={ballots} />
         </Suspense>
       )}
 

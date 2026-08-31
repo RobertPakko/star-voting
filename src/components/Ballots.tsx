@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { BallotsSkeleton } from './Skeletons'
 import { relabelSheet } from '../lib/schedule'
-import type { BallotSheet, PollSchedule } from '../lib/types'
+import type { BallotSheet } from '../lib/types'
 
 /**
  * Which ballot endpoint to read. Same split as ResultsSource, and for the
@@ -26,7 +26,6 @@ export type BallotsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
 export function Ballots({
   source,
   initial = null,
-  schedule = null,
 }: {
   source: BallotsSource
   /**
@@ -40,11 +39,6 @@ export function Ballots({
    * sample. It reads for itself, exactly as before.
    */
   initial?: BallotSheet | null
-  /**
-   * The grid a time poll was voted on. The columns of this sheet are its
-   * options, which on a time poll are ISO timestamps; see relabelSheet.
-   */
-  schedule?: PollSchedule | null
 }) {
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
@@ -99,7 +93,7 @@ export function Ballots({
 
   // The columns of a time poll's sheet are its windows, which are stored as
   // ISO timestamps and read as headings; see relabelSheet.
-  const shown = schedule ? relabelSheet(sheet, schedule) : sheet
+  const shown = relabelSheet(sheet)
   const named = shown.voters_named
   // Unscored options count as 0 everywhere else in the app; a ballot missing
   // a score would have to predate the "score every option" rule, but reading

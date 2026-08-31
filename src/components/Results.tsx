@@ -16,7 +16,7 @@ import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
 import { parseAnswer, pollResultsSchema } from '../lib/rpcSchemas'
 import { relabelResults } from '../lib/schedule'
-import type { HeadToHeadStep, Matchup, PollResults, PollSchedule } from '../lib/types'
+import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { NameList } from './NameList'
 import { OptionDescription } from './OptionDescription'
@@ -33,7 +33,6 @@ export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
 export function Results({
   source,
   initial = null,
-  schedule = null,
 }: {
   source: ResultsSource
   /**
@@ -49,12 +48,6 @@ export function Results({
    * before.
    */
   initial?: PollResults | null
-  /**
-   * The grid a time poll was voted on, which is all this card needs to read
-   * one: an option's name is its window start, and the schedule says how long
-   * a window lasts. Absent on every other poll.
-   */
-  schedule?: PollSchedule | null
 }) {
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
@@ -117,10 +110,12 @@ export function Results({
 
   if (!results) return <ResultsSkeleton />
 
-  // The one thing a time poll changes about this card. Everything below reads
-  // `name` and none of it knows or cares that the name it is reading was an
-  // ISO timestamp a line ago; see relabelResults.
-  const shown = schedule ? relabelResults(results, schedule) : results
+  // The one thing a time poll changes about this card, and it is applied to
+  // every poll because it costs nothing to: an ordinary poll's options are not
+  // window starts, so they come back exactly as they went in. Everything below
+  // reads `name` and none of it knows or cares that the name it is reading was
+  // an ISO timestamp a line ago. See relabelResults.
+  const shown = relabelResults(results)
   const nameById = new Map(shown.options.map((o) => [o.id, o.name]))
   const maxScore = Math.max(1, ...shown.options.map((o) => o.total_score))
 
@@ -276,7 +271,7 @@ export function Results({
         </Stack>
       )}
 
-      <FullRanking source={source} results={shown} schedule={schedule} />
+      <FullRanking source={source} results={shown} />
     </Stack>
   )
 }

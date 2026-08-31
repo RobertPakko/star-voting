@@ -206,9 +206,7 @@ export function PollList() {
                 // is that question's winner rather than the poll's. The badge
                 // withholds it on `inGroup`, in one place for all three
                 // screens, rather than leaving three callers to remember.
-                winner: poll.winner_settled
-                  ? winnerLabel(poll.winner_name ?? null, poll.schedule)
-                  : undefined,
+                winner: poll.winner_settled ? winnerLabel(poll.winner_name ?? null) : undefined,
                 inGroup: poll.question_count > 1,
               }}
             />

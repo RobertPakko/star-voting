@@ -267,6 +267,69 @@ applies it to the live database, run `npm test` first — the suite builds a
 database from these files, so it catches a migration that does not apply as well
 as one that changes a result.
 
+### Trying one out, and taking it back
+
+Three ways, in the order to reach for them.
+
+**1. `npm test`, which is already the loop.** `test/build-db.sh` drops the
+throwaway database and builds it again from `supabase/migrations/` on every
+run, so editing a migration and re-running the suite *is* the reversible test:
+there is no state to undo. This is the answer nearly every time.
+
+**2. Postgres has transactional DDL.** Against a database you want to keep —
+a scratch copy of production, a Supabase branch — apply the migration inside a
+transaction and throw it away:
+
+```sql
+begin;
+\i supabase/migrations/0055_schedule_polls.sql
+-- create a poll, read it back, run the tally, prove whatever you came to prove
+rollback;
+```
+
+`ALTER TABLE`, `CREATE FUNCTION`, `DROP FUNCTION`, `CREATE INDEX` and `GRANT`
+are all transactional in Postgres, so the `rollback` leaves the schema
+byte-identical — function bodies, column list, constraints and ACLs alike.
+(`CREATE INDEX CONCURRENTLY` and `ALTER TYPE … ADD VALUE` are the exceptions;
+neither appears in these migrations.) Nothing in the repo is needed for this,
+and it is the right tool while the SQL is still moving.
+
+**3. A down file, for a migration already committed.** Once the integration
+has applied something to the live project, a transaction is no longer
+available and the only way back is a script that undoes it.
+[`supabase/rollback/`](supabase/rollback) holds those, one per migration that
+has one:
+
+```bash
+psql -d <database> -f supabase/rollback/0055_schedule_polls.down.sql
+```
+
+Deliberately **not** under `supabase/migrations/`, because everything in that
+directory is applied on merge and a down file landing there would undo the
+migration beside it. Each one drops what its migration added, then restores
+every function it replaced to the definition the baseline gives, verbatim —
+including the `REVOKE ALL … FROM PUBLIC` lines, without which a restored
+function is *more* open than the one it replaced. Check one by fingerprinting
+the schema before and after a round trip:
+
+```sql
+select md5(string_agg(x, '|' order by x)) from (
+  select p.proname || ':' || pg_get_functiondef(p.oid) || ':' || coalesce(p.proacl::text, '')
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public'
+  union all select 'col:' || table_name || '.' || column_name
+    from information_schema.columns where table_schema = 'public'
+  union all select 'con:' || conname from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace where n.nspname = 'public') s;
+```
+
+**A down file is not a promise that nothing is lost.** It restores the schema,
+not the data the schema was holding: `0055`'s takes `polls.kind` and
+`polls.schedule` with it, and every time poll's grid goes with them. The polls
+survive — their windows are ordinary rows in `candidates` and their ballots
+ordinary rows in `scores`, which is the whole design — and they still tally.
+Nobody can paint a calendar on them again.
+
 ### Squashing
 
 Migration files accumulate, and a long chain of them gets slow to run and hard
@@ -618,6 +681,17 @@ conversion tax, and that is the trade.
 sortable as plain text. It is formatted for reading wherever it is shown; see
 *Reading the results* below.
 
+**Only the two reads a ballot is drawn from carry the new columns**, because
+only they need the grid: `poll_page`'s account branch, which hands back the
+whole row anyway, and `open_poll_view`, which builds its poll object field by
+field and so had to be restated whole. `list_polls`, `poll_status` and
+everything else carrying a `winner_name` were left exactly as they were —
+formatting a timestamp is presentation, and `formatWindow` does it from the
+name alone. That is not a small saving: adding a column to `list_polls` means
+adding it to a `RETURNS TABLE`, which is a new return type, which
+`CREATE OR REPLACE` refuses — so it would be a `DROP`, a hundred and thirty
+lines of unchanged body restated, and the grant again, to relabel one badge.
+
 ### The derivation
 
 The one piece of real logic, and the only election logic in this app that does
@@ -696,6 +770,21 @@ than threading a formatter down through the score rows, the tie-break prose,
 `NameList`, the head-to-head matchups, the full ranking and the published
 sheet. Every one of those still just renders `name`.
 
+**None of them take a schedule, and no caller has to know which kind of poll it
+is drawing.** `formatWindow` recognises the exact shape `enumerateWindows`
+produces — a full ISO 8601 instant with a numeric offset — and returns anything
+else untouched, so the relabelling is applied to every poll unconditionally and
+an ordinary poll's options come back as they went in. The cost is that an
+option poll whose option is *literally* named `2026-09-01T14:00:00-07:00` gets
+reformatted; it is still the same instant, more legibly, and it is not a poll
+anybody is going to write.
+
+The window's **end** is deliberately not shown. It would need the schedule
+back, and every window in a poll is the same length — sixty rows each saying
+"– 5:00pm" three hours after their own start is noise. If the length is wanted
+on the results page it belongs once, in a line above the list, rather than once
+per option.
+
 ### Ties, and the poll that elects nobody
 
 Adjacent windows overlap heavily, so their totals and their per-ballot vectors
@@ -725,6 +814,25 @@ candidate id that the score round falls back on — would fix it, and would only
 ever fire where there is currently no winner at all. It is a change to the
 tally every poll goes through, so it is not in the migration that adds a poll
 kind.
+
+### Two functions had to be dropped, and took their grants with them
+
+`create_poll` and `insert_poll_row` each gained two defaulted parameters, and
+that cannot be a `CREATE OR REPLACE`: a different argument count is a different
+function, so the old one would have stood beside the new one as an overload
+that makes every existing call ambiguous. Both were dropped and recreated.
+
+**A dropped function takes its grants with it, and a newly created one is
+executable by `PUBLIC`.** 0053 revokes exactly that on both — every internal
+function in this schema has a `REVOKE ALL … FROM PUBLIC` beside it — so
+recreating them without re-revoking would have left `create_poll` reachable by
+`anon` through PostgREST. It is refused on the first line of its own body by
+the `auth.uid() is null` check, so nothing was writable either way; but "an
+internal function is not exposed" and "an internal function is exposed and says
+no" are not the same posture, and this app grants `anon` nothing outside the
+`open_poll_*` functions. `0055` re-revokes both, and
+`test/sql/cases/30_a_poll_that_finds_a_time.sql` asserts it, because a missing
+`REVOKE` is invisible in a schema and identical to never having needed one.
 
 ### The option ceiling, and what the tally costs
 

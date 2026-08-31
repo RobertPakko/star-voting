@@ -122,12 +122,17 @@ begin
   perform tests.assert_eq('and handed the same grid',
     v_view #> '{poll,schedule}', v_schedule);
 
-  -- The poll list card needs them too: a finished time poll's winner_name is
-  -- a timestamp, and a card that was not told so would print it raw.
-  perform tests.assert_eq('and so is the card on the poll list',
-    (select kind from list_polls(20, 0) where id = v_poll), 'time');
-  perform tests.assert_eq('with the grid, so the card can say how long the window is',
-    (select schedule from list_polls(20, 0) where id = v_poll), v_schedule);
+  -- And the poll list is deliberately not carrying them. Its card draws a
+  -- winner's name, which on a time poll is a timestamp -- and the browser
+  -- formats that from the name alone rather than being told what kind of poll
+  -- it is reading. Asserted, because "we chose not to" and "we forgot" look
+  -- identical in a schema.
+  perform tests.assert_eq('the poll list is not told which kind a poll is',
+    (select count(*)::int from information_schema.routines r
+       join lateral unnest(string_to_array(pg_get_function_result(
+              (quote_ident(r.routine_schema) || '.' || quote_ident(r.routine_name))::regproc), ','))
+            as col on true
+     where r.routine_name = 'list_polls' and col like '%kind%'), 0);
 
   -- ---- its options are its windows, and stay that way ---------------------
 
@@ -140,6 +145,30 @@ begin
   perform creator_add_option(v_plain, 'Curry');
   perform tests.assert_eq('while an ordinary poll takes one as it always did',
     (select count(*)::int from candidates where poll_id = v_plain), 3);
+
+  -- ---- and the grants survived being dropped and recreated ---------------
+
+  -- `create_poll` and `insert_poll_row` could not be replaced in place -- each
+  -- gained two defaulted parameters, and a CREATE OR REPLACE of the old
+  -- signature would have left both standing as an ambiguous overload -- so
+  -- both were dropped. A dropped function takes its grants with it, and a new
+  -- one is executable by PUBLIC until told otherwise: 0053 revokes exactly
+  -- that on both, and re-revoking it is easy to leave out and invisible when
+  -- you do. `anon` reaches PostgREST as a member of PUBLIC, and this app
+  -- grants it nothing outside the open_poll_* functions.
+  perform tests.assert_eq('creating a poll is not something anyone can do',
+    (select bool_or(a::text like '=%')
+       from pg_proc p, unnest(coalesce(p.proacl, acldefault('f', p.proowner))) a
+      where p.pronamespace = 'public'::regnamespace and p.proname = 'create_poll'),
+    false);
+  perform tests.assert_eq('and the row behind it is internal, as it always was',
+    (select bool_or(a::text like '=%')
+       from pg_proc p, unnest(coalesce(p.proacl, acldefault('f', p.proowner))) a
+      where p.pronamespace = 'public'::regnamespace and p.proname = 'insert_poll_row'),
+    false);
+  perform tests.assert_eq('while an account can still create one',
+    has_function_privilege('authenticated', 'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb)', 'execute'),
+    true);
 end $$;
 
 rollback;
