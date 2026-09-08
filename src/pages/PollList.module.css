@@ -1,0 +1,33 @@
+/* A poll on the list, which is a link the size of a card.
+ *
+ * Nothing about it said so. It carries no underline and no colour — a card of
+ * badges and a title, styled as the same heading the poll's own page uses —
+ * and the only thing that ever announced it was clickable was the cursor,
+ * which is not something a reader looks at to find out what a page offers.
+ *
+ * So it lifts by a pixel under the pointer and settles back under a press.
+ * A pixel is enough: the whole row moving is what reads as "this, all of it,
+ * is one thing to click", and the distance is beside the point.
+ *
+ * Behind `hover: hover` because a phone has no pointer to answer it, and a
+ * hover rule on a touch screen is a state that arrives on tap and then sticks
+ * to whatever was tapped last.
+ */
+@media (hover: hover) {
+  .card {
+    transition:
+      transform var(--motion-fast) var(--motion-ease),
+      box-shadow var(--motion-fast) var(--motion-ease);
+  }
+
+  .card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--mantine-shadow-sm);
+  }
+
+  /* Back down under the finger, so the press has somewhere to land. */
+  .card:active {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+}

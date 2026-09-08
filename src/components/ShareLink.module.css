@@ -1,0 +1,61 @@
+/* The Copy button, saying whether it worked.
+ *
+ * Copying is the one action in this app that produces no evidence of itself:
+ * the clipboard is somewhere else, nothing on the page changes, and the whole
+ * of the receipt is this button. It already turned green and changed its word,
+ * both between two frames, which is exactly as much of an event as a button
+ * that did nothing at all.
+ *
+ * So the tick arrives — the mark the reader is actually looking for — and the
+ * colour walks to green rather than cutting to it.
+ *
+ * **The width is fixed to the wider of the two states.** Copy is a
+ * no-wrap row with a text box flexing beside it, so a button that grows by a
+ * word and an icon shoves the link along under the reader's eye at the moment
+ * they are checking what they copied. Holding the box at the size it will
+ * need is what makes the tick free to appear.
+ */
+.copy {
+  min-width: 112px;
+  transition:
+    background-color var(--motion-base) var(--motion-ease),
+    color var(--motion-base) var(--motion-ease);
+}
+
+/* Overshooting on the way in, and only slightly: a tick that lands with a
+   little weight reads as a thing that happened, which is the entire message. */
+.tick {
+  display: flex;
+  animation: tick var(--motion-base) var(--motion-ease);
+}
+
+@keyframes tick {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  70% {
+    transform: scale(1.15);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The word under it, swapped rather than replaced. */
+.label {
+  animation: fade var(--motion-fast) var(--motion-ease);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

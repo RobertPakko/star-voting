@@ -25,6 +25,7 @@ import { DescriptionField } from '../components/DescriptionField'
 import { groupQuestionsSchema, parseAnswer } from '../lib/rpcSchemas'
 import { FormSkeleton } from '../components/Skeletons'
 import styles from './CreatePoll.module.css'
+import listRow from '../components/listRow.module.css'
 import {
   MAX_OPTIONS,
   MAX_QUESTIONS,
@@ -44,12 +45,29 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * in nearly every poll stays in.
  */
 interface OptionDraft {
+  /**
+   * Identity, for exactly the reason `QuestionDraft` has one. The rows were
+   * keyed by position, which React is happy with right up to the moment a row
+   * leaves: removing option 2 of four slides 3 and 4 up one, and every row
+   * below the gap is then a different option wearing the same key — which is
+   * fine for text in a box and not fine at all for a row that is supposed to
+   * be animating its way out. The messages under the fields stay keyed by
+   * position, and deliberately: they are about *option 3*, which is a place
+   * in a list rather than a thing.
+   *
+   * Never sent anywhere; the options travel to the database in order.
+   */
+  key: string
   name: string
   description: string | null
 }
 
+/** Only has to be unique within one open form, and never leaves it. */
+let optionSeq = 0
+
 function blankOption(): OptionDraft {
-  return { name: '', description: null }
+  optionSeq += 1
+  return { key: `option-${optionSeq}`, name: '', description: null }
 }
 
 /**
@@ -311,6 +329,13 @@ export function CreatePoll() {
   // QuestionDraft. The switch decides what is rendered and what is read, not
   // what is held.
   const [questions, setQuestions] = useState<QuestionDraft[]>([blankQuestion()])
+  // The row that has just been added, and the rows on their way out. One
+  // arriving at a time, since the cursor can only be in one of them; a set on
+  // the way out, because removing three rows in quick succession is a
+  // perfectly ordinary thing to do to a list and each of them has to be
+  // allowed to finish leaving.
+  const [arriving, setArriving] = useState<string | null>(null)
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set())
   const [multiQuestion, setMultiQuestion] = useState(false)
   // Which question's fields are on screen, by key rather than by position;
   // see QuestionDraft.key. Never trusted on its own: what is rendered is
@@ -398,7 +423,11 @@ export function CreatePoll() {
       // Descriptions come across with their options, so a duplicate of a poll
       // that explained its options does not quietly lose the explanations.
       const draftFrom = (rows: PollOption[]): OptionDraft[] => {
-        const drafted = rows.map((o) => ({ name: o.name, description: o.description }))
+        const drafted = rows.map((o) => ({
+          ...blankOption(),
+          name: o.name,
+          description: o.description,
+        }))
         // Keep the form's two-row minimum if the source somehow had fewer.
         return drafted.length >= 2
           ? drafted
@@ -474,11 +503,46 @@ export function CreatePoll() {
   }
 
   function addOption(question: number) {
-    patchOptions(question, (options) => [...options, blankOption()])
+    const added = blankOption()
+    patchOptions(question, (options) => [...options, added])
+    // Which row is new, for its way in and for the cursor. Both want the same
+    // answer and neither wants it for long; see `arriving` where it is drawn.
+    setArriving(added.key)
   }
 
-  function removeOption(question: number, index: number) {
-    patchOptions(question, (options) => options.filter((_, i) => i !== index))
+  /**
+   * Take a row out — which is two things, because the row has to still be
+   * there to be seen leaving.
+   *
+   * It is emptied now and dropped when its animation says so. Emptying is not
+   * cosmetic: for the fifth of a second between the press and the row
+   * actually going, a row that still held a name would still be an option
+   * this form would validate and, if the creator pressed Create inside that
+   * window, still be an option the poll was made with. A blank row is already
+   * nothing to every rule in this file — blank names are dropped before the
+   * poll is created, skipped by the duplicate check, and not counted towards
+   * the two a question needs — so emptying it takes it out of the form's
+   * reckoning at the moment the reader took it out of theirs, with no rule
+   * anywhere needing to hear about `leaving` at all.
+   *
+   * It keeps its place in the list until it goes, which is what keeps the
+   * messages under every row below it pointing at the right row.
+   */
+  function removeOption(question: number, key: string) {
+    setLeaving((prev) => new Set(prev).add(key))
+    patchOptions(question, (options) =>
+      options.map((o) => (o.key === key ? { ...o, name: '', description: null } : o)),
+    )
+  }
+
+  /** The row's animation is over, so now it can actually go. */
+  function dropOption(question: number, key: string) {
+    setLeaving((prev) => {
+      const rest = new Set(prev)
+      rest.delete(key)
+      return rest
+    })
+    patchOptions(question, (options) => options.filter((o) => o.key !== key))
   }
 
   function updateQuestionTitle(index: number, value: string) {
@@ -678,57 +742,75 @@ export function CreatePoll() {
         </Text>
 
         {question.options.map((option, index) => (
-          <Group key={index} gap="xs" align="flex-start" wrap="nowrap">
-            <Stack gap={4} style={{ flex: 1 }}>
-              <TextInput
-                value={option.name}
-                onChange={(e) =>
-                  updateOption(questionIndex, index, { name: e.currentTarget.value })
-                }
-                placeholder={`Option ${index + 1}`}
-                error={shown.optionNames[optionKey(questionIndex, index)]}
-              />
-              {option.description !== null && (
-                <DescriptionField
-                  value={option.description}
+          /* The row's own box, which is what opens and closes; see
+             listRow.module.css. The handler is hung only on a row that is
+             leaving, so the arrival's animation cannot be mistaken for the
+             departure's ending. */
+          <div
+            key={option.key}
+            className={`${listRow.row} ${option.key === arriving ? listRow.joining : ''} ${
+              leaving.has(option.key) ? listRow.leaving : ''
+            }`}
+            onAnimationEnd={
+              leaving.has(option.key) ? () => dropOption(questionIndex, option.key) : undefined
+            }
+          >
+            <Group className={listRow.content} gap="xs" align="flex-start" wrap="nowrap">
+              <Stack gap={4} style={{ flex: 1 }}>
+                <TextInput
+                  value={option.name}
                   onChange={(e) =>
-                    updateOption(questionIndex, index, { description: e.currentTarget.value })
+                    updateOption(questionIndex, index, { name: e.currentTarget.value })
                   }
-                  placeholder={`Option ${index + 1} description`}
-                  error={shown.optionDescriptions[optionKey(questionIndex, index)]}
-                  autoFocus
+                  placeholder={`Option ${index + 1}`}
+                  error={shown.optionNames[optionKey(questionIndex, index)]}
+                  /* The cursor follows the row that was just asked for. Adding
+                   an option and then having to reach for the box it made is
+                   the same press twice. */
+                  autoFocus={option.key === arriving}
                 />
-              )}
-            </Stack>
-            <Tooltip
-              label={option.description === null ? 'Add description' : 'Remove description'}
-              withArrow
-            >
+                {option.description !== null && (
+                  <DescriptionField
+                    value={option.description}
+                    onChange={(e) =>
+                      updateOption(questionIndex, index, { description: e.currentTarget.value })
+                    }
+                    placeholder={`Option ${index + 1} description`}
+                    error={shown.optionDescriptions[optionKey(questionIndex, index)]}
+                    autoFocus
+                  />
+                )}
+              </Stack>
+              <Tooltip
+                label={option.description === null ? 'Add description' : 'Remove description'}
+                withArrow
+              >
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  onClick={() => toggleDescription(questionIndex, index)}
+                  aria-label={
+                    option.description === null
+                      ? `Add a description to option ${index + 1}`
+                      : `Remove the description from option ${index + 1}`
+                  }
+                >
+                  {option.description === null ? '+' : '−'}
+                </ActionIcon>
+              </Tooltip>
               <ActionIcon
                 variant="subtle"
-                color="gray"
-                onClick={() => toggleDescription(questionIndex, index)}
-                aria-label={
-                  option.description === null
-                    ? `Add a description to option ${index + 1}`
-                    : `Remove the description from option ${index + 1}`
-                }
-              >
-                {option.description === null ? '+' : '−'}
-              </ActionIcon>
-            </Tooltip>
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={() => removeOption(questionIndex, index)}
-              /* Two rows is the floor for a poll that ships its options with
+                color="red"
+                onClick={() => removeOption(questionIndex, option.key)}
+                /* Two rows is the floor for a poll that ships its options with
              it, and no floor at all for one that collects them. */
-              disabled={!solicitOptions && question.options.length <= 2}
-              aria-label="Remove option"
-            >
-              &times;
-            </ActionIcon>
-          </Group>
+                disabled={!solicitOptions && question.options.length <= 2}
+                aria-label="Remove option"
+              >
+                &times;
+              </ActionIcon>
+            </Group>
+          </div>
         ))}
 
         {/* Removing the question sits opposite adding an option, at the end

@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActionIcon,
@@ -20,6 +20,7 @@ import type { VoterName } from '../lib/voterName'
 import { DescriptionField } from './DescriptionField'
 import { NameRoster } from './NameRoster'
 import { OptionDescription } from './OptionDescription'
+import listRow from './listRow.module.css'
 import { OpeningNote } from './PollNotices'
 import { VoterNameField } from './VoterNameField'
 import type { PollOption } from '../lib/types'
@@ -336,6 +337,10 @@ function OptionList({
   const [nameError, setNameError] = useState<string | null>(null)
   const [descriptionError, setDescriptionError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The row a delete is in flight for, closing while it waits; see
+  // `removeOption`.
+  const [removing, setRemoving] = useState<string | null>(null)
+  const arriving = useArrivals(options)
 
   const full = options.length >= MAX_OPTIONS
   // A list that is already a ballot cannot be pruned below what an election
@@ -417,10 +422,20 @@ function OptionList({
 
     setError(null)
     setBusy(true)
+    // Closed while the request is in the air rather than after it lands. The
+    // row is the database's rather than this component's, so it does not
+    // disappear until a re-read says it has — which is a round trip away, and
+    // a list that sits perfectly still for a third of a second after a press
+    // is a list that looks like it missed the press. Nothing is claimed by
+    // this that is not about to be true: the row is gone from the poll before
+    // it is gone from the screen, not after.
+    setRemoving(option.id)
     const { error: deleteError } = await supabase.from('candidates').delete().eq('id', option.id)
     setBusy(false)
 
     if (deleteError) {
+      // It is still there after all, so it comes back.
+      setRemoving(null)
       setError(deleteError.message)
       return
     }
@@ -435,34 +450,45 @@ function OptionList({
         </Text>
       ) : (
         options.map((option) => (
-          <Fragment key={option.id}>
-            <Group justify="space-between" wrap="nowrap" gap="sm">
-              <div style={{ minWidth: 0 }}>
-                <Text fw={500}>{option.name}</Text>
-                {option.description && <OptionDescription description={option.description} />}
-              </div>
-              {isCreator && (
-                <Tooltip label="A poll needs at least two options" disabled={!atFloor} withArrow>
-                  {/* The span is what a tooltip on a disabled button needs:
+          /* The row's own box, which is what opens and closes; see
+             listRow.module.css. Two things travel in it — the option and the
+             rule under it — so the box has to space them itself, having taken
+             them out of the `Stack` that was doing it. */
+          <div
+            key={option.id}
+            className={`${listRow.row} ${arriving.has(option.id) ? listRow.joining : ''} ${
+              removing === option.id ? listRow.leaving : ''
+            }`}
+          >
+            <div className={`${listRow.content} ${listRow.stacked}`}>
+              <Group justify="space-between" wrap="nowrap" gap="sm">
+                <div style={{ minWidth: 0 }}>
+                  <Text fw={500}>{option.name}</Text>
+                  {option.description && <OptionDescription description={option.description} />}
+                </div>
+                {isCreator && (
+                  <Tooltip label="A poll needs at least two options" disabled={!atFloor} withArrow>
+                    {/* The span is what a tooltip on a disabled button needs:
                       a disabled control fires no pointer events of its
                       own, so the reason it is disabled would never be
                       readable without something around it that does. */}
-                  <span>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      disabled={atFloor}
-                      aria-label={`Remove ${option.name}`}
-                      onClick={() => removeOption(option)}
-                    >
-                      &times;
-                    </ActionIcon>
-                  </span>
-                </Tooltip>
-              )}
-            </Group>
-            <Divider />
-          </Fragment>
+                    <span>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        disabled={atFloor}
+                        aria-label={`Remove ${option.name}`}
+                        onClick={() => removeOption(option)}
+                      >
+                        &times;
+                      </ActionIcon>
+                    </span>
+                  </Tooltip>
+                )}
+              </Group>
+              <Divider />
+            </div>
+          </div>
         ))
       )}
 
@@ -541,4 +567,42 @@ export function Confirmations({ names }: { names: string[] }) {
       empty="Nobody has confirmed the options yet."
     />
   )
+}
+
+/**
+ * Which options were not in the list a moment ago.
+ *
+ * This list belongs to the poll rather than to whoever is looking at it: a
+ * suggestion typed on somebody else's phone arrives here on the live tick,
+ * with nothing to say it just did. Marking what is new is how a list that
+ * grew under the reader says so, and it is the same mark whether the reader
+ * added the row themselves or watched it turn up.
+ *
+ * **Nothing is new on the first read.** A card opening with six options has
+ * not just been given six options, and animating them in one by one would
+ * make the arrival of the card look like the arrival of its contents. So the
+ * first list is taken as the starting position and only what follows counts.
+ *
+ * Answered a render late, because it is answered from an effect: the row is
+ * drawn plain and the mark lands on the frame after, which is what makes the
+ * animation run at all — a class an element is born with has nothing to
+ * animate from.
+ */
+function useArrivals(options: PollOption[]): ReadonlySet<string> {
+  const [arriving, setArriving] = useState<ReadonlySet<string>>(new Set())
+  // Null until the first list has been seen, which is what tells "nothing has
+  // arrived yet" apart from "the list is empty".
+  const seen = useRef<Set<string> | null>(null)
+
+  useEffect(() => {
+    const ids = options.map((option) => option.id)
+    const before = seen.current
+    seen.current = new Set(ids)
+    if (!before) return
+
+    const added = ids.filter((id) => !before.has(id))
+    if (added.length) setArriving(new Set(added))
+  }, [options])
+
+  return arriving
 }

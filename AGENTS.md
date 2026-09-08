@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotCard, VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, which way a reader is walking through a poll's questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -705,6 +705,66 @@ survive the same test because both are still reachable holding nothing.
 
 The one wait that is still a spinner is the app's own boot, before the session
 is known — at that point there is no page to draw the shape of.
+
+
+## Motion
+
+Nothing in the app moved at all until it was given a scale to move on. The
+rule that decides what gets to: **an animation has to answer a question the
+reader would otherwise have to work out.** A star draining back to zero says a
+score was cleared rather than a tap missed; a bar growing to its length makes
+the comparison the page exists for happen on screen; a card sliding in from the
+right says which way through a poll somebody just walked. Anything that would
+only be pleasant is not in.
+
+The scale is three durations and one curve, declared on `:root` in
+`src/index.css`: `--motion-fast` (120ms) for feedback on a press,
+`--motion-base` (200ms) for something arriving or leaving, `--motion-slow`
+(500ms) for the results bars, which are the one thing meant to be watched
+rather than merely not-jarring. Durations are picked from those and never
+written by hand, so a dozen small animations read as one app rather than as a
+dozen opinions. The single exception is `main.tsx`, where Mantine's transition
+durations reach it as numbers rather than as CSS, and which says so.
+
+A reader who has asked their system for less motion gets none of it, said in
+three places because there are three kinds of motion to say it about: one rule
+over the whole stylesheet in `index.css`, `respectReducedMotion` in the theme
+for Mantine's own components, and `useReducedMotion` in `PollList` for the one
+smooth scroll that is asked for from JavaScript and therefore out of CSS's
+reach.
+
+`src/components/Reveal.tsx` is the entrance everything arrives by — a skeleton
+filling in, a page opening, a question giving way to the next, a winner
+appearing — for the reason `BallotCard` is one component: four copies of a fade
+drift, and motion drifts faster than wording because nobody can diff it.
+
+Three things this cost more than one attempt to get right:
+
+**A transition takes its delay from the state the element is arriving at, so
+that is where the delay has to live.** The stars fill left to right and drain
+right to left, and the first version of that announced the direction on the
+group and let one rule count forwards and another backwards. It measured
+correctly and drew wrong: telling every star its new delay in the same frame as
+the colour that delay is meant to hold back is not something a browser reliably
+honours, and Chrome took the new delay for some stars and the old one for
+others — the drain came out scattered rather than swept. The fix is to hang the
+forward delay on `.star[data-filled]` and the backward one on `.star`, so each
+star staggers itself off its own destination and nothing has to know which way
+the score moved. See `StarRating.module.css`.
+
+**A transition needs the browser to have *painted* the value it starts from.**
+The results bars are rendered at nothing and then at their real lengths, and
+one `requestAnimationFrame` between the two was not enough: React's effect runs
+after the commit but the frame may not have been drawn, so both widths landed
+in one paint and the browser drew the bars full length and transitioned
+nothing. Two frames is what makes the empty bar real. See `Results.tsx`.
+
+**A page's entrance is keyed by which page it is, not by the address.** Every
+question of a poll has an address of its own, and [the poll pages go to real
+trouble](#a-poll-can-ask-more-than-one-question) to keep a crossing between two
+of them mounted so the heading and the strip do not blink. Keying the route's
+fade on `pathname` would have thrown all of that away and re-mounted the poll
+on every step through it, which is why `Layout` keys on `pageKey()` instead.
 
 
 ## Installing it to a home screen

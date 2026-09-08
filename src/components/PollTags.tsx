@@ -1,6 +1,8 @@
+import { useEffect, useRef, useState } from 'react'
 import { Badge, Group } from '@mantine/core'
 import { badgeColor, countBadge } from '../lib/badgeColors'
 import type { PollMode } from '../lib/types'
+import classes from './PollTags.module.css'
 
 /**
  * A poll's high-level details, in the same shape on every screen that shows
@@ -50,6 +52,11 @@ export function PollTags({
    */
   turnout?: Turnout
 }) {
+  // The badge's own words, worked out before the badge so that whether they
+  // have changed is a question that can be asked at all.
+  const label = turnout ? turnoutLabel(turnout) : null
+  const changes = useChangeCount(label)
+
   return (
     <Group gap="xs">
       <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
@@ -67,9 +74,50 @@ export function PollTags({
       >
         {showBallots ? 'Ballots published' : 'Ballots private'}
       </Badge>
-      {turnout && <Badge {...countBadge}>{turnoutLabel(turnout)}</Badge>}
+      {turnout && (
+        <Badge
+          {...countBadge}
+          /* Re-mounted on every change, which is what makes the highlight
+             play every time rather than only the first: a CSS animation
+             already running does not restart because the class it came from
+             is still there. Nothing is lost by the remount — a badge holds no
+             state and takes no focus. */
+          key={changes}
+          className={changes > 0 ? classes.bumped : undefined}
+        >
+          {label}
+        </Badge>
+      )}
     </Group>
   )
+}
+
+/**
+ * How many times a value has changed since this was first rendered — which is
+ * a different question from what it is now, and the one a highlight has to
+ * answer.
+ *
+ * Starts at 0 and stays there for the first value, however that value got
+ * here: the count a page opens holding is not news, and a badge that flashed
+ * on arrival would be announcing that the page had loaded.
+ *
+ * It counts every change, including the reader's own vote going in. That is
+ * deliberate — a ballot lands, the page re-reads, and the badge is where the
+ * poll admits it — and it costs nothing on the one screen where the reader
+ * already knows, because the notification saying so is on screen at the same
+ * moment saying the same thing.
+ */
+function useChangeCount(value: string | null): number {
+  const [changes, setChanges] = useState(0)
+  const previous = useRef(value)
+
+  useEffect(() => {
+    if (previous.current === value) return
+    previous.current = value
+    setChanges((n) => n + 1)
+  }, [value])
+
+  return changes
 }
 
 /** What the count badge counts, which is not the same at every stage. */

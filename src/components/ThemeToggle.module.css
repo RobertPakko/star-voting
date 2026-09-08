@@ -1,0 +1,24 @@
+/* The sun and the moon trading places.
+ *
+ * The two icons mean the opposite of each other, and swapping them between
+ * two frames makes the header look like it was always that way rather than
+ * like it just changed — which matters here more than it looks, because the
+ * icon is the only confirmation the menu gives that a choice landed. Turning
+ * in is what makes the swap a swap.
+ */
+.icon {
+  display: flex;
+  animation: swap var(--motion-base) var(--motion-ease);
+}
+
+@keyframes swap {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.5);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

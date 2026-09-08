@@ -2,6 +2,7 @@ import { Anchor, AppShell, Button, Group, Text, Title } from '@mantine/core'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { InstallButton } from './InstallButton'
+import { Reveal } from './Reveal'
 import { ThemeToggle } from './ThemeToggle'
 
 /**
@@ -98,8 +99,30 @@ export function Layout() {
         </Group>
       </AppShell.Header>
       <AppShell.Main>
-        <Outlet />
+        {/* Each page fades in as it opens. Keyed by which page it is rather
+            than by the address, which is the whole of the care needed here:
+            walking between the questions of a poll changes the address
+            without changing the page, and the app goes to real trouble to
+            keep that crossing mounted so the heading and the strip do not
+            blink — see PollPage. A key off `pathname` would have thrown that
+            away and re-mounted the poll on every step through it. */}
+        <Reveal key={pageKey(pathname)}>
+          <Outlet />
+        </Reveal>
       </AppShell.Main>
     </AppShell>
   )
+}
+
+/**
+ * Which page an address is, as opposed to which poll.
+ *
+ * Every poll is one page — the address carries the poll's id because a poll's
+ * link is its id, and each of a poll's questions has an address of its own —
+ * so all of them answer to one key and moving between them opens nothing.
+ * `/polls/new` is the create form and genuinely another page, which is why it
+ * is named rather than swept in with the rest.
+ */
+function pageKey(pathname: string): string {
+  return pathname.startsWith('/polls/') && pathname !== '/polls/new' ? '/polls/:pollId' : pathname
 }

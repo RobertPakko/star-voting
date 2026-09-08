@@ -20,14 +20,74 @@
      over the star on Android while the finger is down. */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  /* The fill, which is the one animation on this control that is not
+     decoration. See the note on the stagger below.
+
+     This is the *emptying* delay, because this is the rule a star that is
+     losing its fill lands on. Counted backwards through the group. */
+  transition: color var(--motion-fast) var(--motion-ease);
+  transition-delay: calc((var(--stars) - 1 - var(--star)) * 30ms);
 
   @mixin dark {
     color: var(--mantine-color-dark-3);
   }
 }
 
+/* **The stagger runs the way the score moved**, and each star works that out
+ * from nothing but its own destination.
+ *
+ * Scoring an option fills left to right, which is the direction the stars are
+ * read in and the direction a score grows. Clearing one drains right to left,
+ * back towards the empty end.
+ *
+ * That second one is the reason any of this exists. 0 is a real score here and
+ * pressing the star already picked is the only way to reach it — a gesture the
+ * ballot has to explain in words above the options, because nothing about the
+ * control suggests it. Cleared instantly, it was indistinguishable from a tap
+ * that missed: five stars are lit, and then they are not. Draining them in the
+ * order a finger would rub them out makes it read as something the reader did,
+ * which is the whole of what was missing.
+ *
+ * **Which is why the two delays live on the two states rather than on a
+ * direction the group announces.** A transition takes its timing from the
+ * style the element is arriving *at*: a star gaining its fill is arriving at
+ * the rule below and counts forwards, a star losing it is arriving at `.star`
+ * above and counts backwards. Handing the whole group a direction instead
+ * looked equivalent and was not — it moves every star's delay in the same
+ * frame as the colour it is meant to be delaying, and a delay that changes as
+ * the transition begins is not reliably the delay the transition gets. Chrome
+ * took the new one for some stars and the old one for others, and the drain
+ * came out scattered.
+ *
+ * `--stars` is the group's length, handed down from the one place that knows
+ * it, so the count is not written twice. */
 .star[data-filled] {
   color: var(--mantine-color-yellow-filled);
+  /* The filling delay, counted forwards. */
+  transition-delay: calc(var(--star) * 30ms);
+}
+
+/* The press itself, on the star that took it — including the press that
+   clears the score, which is the one press that leaves the star it landed on
+   dimmer than it found it and would otherwise show nothing at all. Immediate
+   rather than staggered: this is a receipt for a tap, and a receipt that
+   waits its turn is not one. */
+.star[data-pressed] svg {
+  animation: press var(--motion-fast) var(--motion-ease);
+}
+
+@keyframes press {
+  from {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.22);
+  }
+
+  to {
+    transform: scale(1);
+  }
 }
 
 .star:focus-visible {

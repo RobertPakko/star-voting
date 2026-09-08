@@ -15,6 +15,7 @@ import {
   rememberConfirmed,
 } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
+import { useCrossingDirection } from '../lib/crossing'
 import { BallotCard, type BallotScore } from '../components/BallotCard'
 import { CollectOptions } from '../components/CollectOptions'
 import { CreatorControls } from '../components/CreatorControls'
@@ -23,6 +24,7 @@ import { OpenPollPanel } from '../components/OpenPollPanel'
 import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
+import { Reveal } from '../components/Reveal'
 import { RetentionNote } from '../components/RetentionNote'
 import { Ballots, Results } from '../components/deferred'
 import {
@@ -405,6 +407,15 @@ export function PollDetail({
     if (!hasVoted) setRevising(null)
   }, [hasVoted])
 
+  // Which way the reader is walking through the poll, for the card below to
+  // come in from. Asked here because it is a hook and every way out of this
+  // page is below it; until there is a crossing to describe it answers
+  // 'below', which is what all of those want anyway.
+  const crossing = useCrossingDirection(
+    pollId ?? '',
+    questions.map((question) => question.id),
+  )
+
   // The shape of the page that is coming: a title, the poll's terms, and
   // the cards of a ballot. See the note in Skeletons.tsx.
   if (loading) return <PollPageSkeleton />
@@ -618,138 +629,140 @@ export function PollDetail({
           same whichever question is open, so it stays on screen rather than
           blinking away and back at the moment the strip is being used to
           navigate. */}
-      {showing ? (
-        <>
-          {/* The creator's correction to an option list that is already a ballot,
+      <Reveal key={pollId} from={crossing}>
+        {showing ? (
+          <Reveal>
+            {/* The creator's correction to an option list that is already a ballot,
           in place of that ballot while it is open. It replaces the ballot
           rather than sitting beside it because they are two readings of one
           list, and a poll with no votes in it has no ballot anybody is
           part-way through. See 0028_creator_edits_options.sql for when this
           is allowed at all. */}
-          {editingOptions && editable ? (
-            <CollectOptions
-              source={{ kind: 'creator', pollId: poll.id }}
-              options={optionList}
-              isCreator
-              questionStrip={questionStrip}
-              footer={
-                <Group justify="space-between" wrap="wrap" gap="sm">
-                  <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
-                    Nobody has voted yet, so options can still be updated.
-                  </Text>
-                  <Button variant="light" onClick={() => setEditingOptions(false)}>
-                    Done
-                  </Button>
-                </Group>
-              }
-              onChanged={reloadAll}
-            />
-          ) : /* Open polls are voted through the same anon RPCs the public route
+            {editingOptions && editable ? (
+              <CollectOptions
+                source={{ kind: 'creator', pollId: poll.id }}
+                options={optionList}
+                isCreator
+                questionStrip={questionStrip}
+                footer={
+                  <Group justify="space-between" wrap="wrap" gap="sm">
+                    <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
+                      Nobody has voted yet, so options can still be updated.
+                    </Text>
+                    <Button variant="light" onClick={() => setEditingOptions(false)}>
+                      Done
+                    </Button>
+                  </Group>
+                }
+                onChanged={reloadAll}
+              />
+            ) : /* Open polls are voted through the same anon RPCs the public route
              uses, so the creator votes in their own poll exactly as everyone
              else does; one code path, one set of rules. */
-          isOpen ? (
-            view && (
-              // Keyed so a close or a reset remounts it; see where refreshKey
-              // is declared. A live refresh only replaces the view prop, which
-              // leaves a half-filled ballot inside the panel alone.
-              <OpenPollPanel
-                key={refreshKey}
-                pollId={poll.id}
-                view={view}
-                results={results}
-                ballots={ballots}
-                isCreator={isCreator}
-                voterName={voterName}
-                onChanged={load}
-                onFirstVote={advance}
-                onFirstConfirm={advance}
-                questionStrip={questionStrip}
-              />
-            )
-          ) : status.soliciting ? (
-            /* No ballot yet: the poll is a list everyone in it can add to, and
+            isOpen ? (
+              view && (
+                // Keyed so a close or a reset remounts it; see where refreshKey
+                // is declared. A live refresh only replaces the view prop, which
+                // leaves a half-filled ballot inside the panel alone.
+                <OpenPollPanel
+                  key={refreshKey}
+                  pollId={poll.id}
+                  view={view}
+                  results={results}
+                  ballots={ballots}
+                  isCreator={isCreator}
+                  voterName={voterName}
+                  onChanged={load}
+                  onFirstVote={advance}
+                  onFirstConfirm={advance}
+                  questionStrip={questionStrip}
+                />
+              )
+            ) : status.soliciting ? (
+              /* No ballot yet: the poll is a list everyone in it can add to, and
            the creator decides when it becomes a ballot. */
-            <CollectOptions
-              source={{ kind: 'poll', pollId: poll.id }}
-              options={options}
-              isCreator={isCreator}
-              questionStrip={questionStrip}
-              confirm={confirmation}
-              onChanged={reloadAll}
-              onConfirmed={advance}
-            />
-          ) : status.results_available ? (
-            /* The strip sits above the tally rather than inside it, which is
+              <CollectOptions
+                source={{ kind: 'poll', pollId: poll.id }}
+                options={options}
+                isCreator={isCreator}
+                questionStrip={questionStrip}
+                confirm={confirmation}
+                onChanged={reloadAll}
+                onConfirmed={advance}
+              />
+            ) : status.results_available ? (
+              /* The strip sits above the tally rather than inside it, which is
                the one place in this page it is not inside a card — because
                here there is no one card for it to be inside, and because a
                tally still loading, or a read of it that failed, must not take
                the way out of the question with it. Everything else about it
                is unchanged: the same list, in the same order, marking the
                same questions. */
-            <>
-              {questionStrip}
-              <Suspense fallback={<ResultsSkeleton options={optionList.length || undefined} />}>
-                <Results source={{ kind: 'poll', pollId: poll.id }} initial={results} />
-              </Suspense>
-            </>
-          ) : status.is_closed ? (
-            <>
-              {questionStrip}
-              <NoResultsNotice inGroup={!!poll.group_id} />
-            </>
-          ) : status.voted ? (
-            /* You have voted and the results are still sealed, which is exactly
+              <>
+                {questionStrip}
+                <Suspense fallback={<ResultsSkeleton options={optionList.length || undefined} />}>
+                  <Results source={{ kind: 'poll', pollId: poll.id }} initial={results} />
+                </Suspense>
+              </>
+            ) : status.is_closed ? (
+              <>
+                {questionStrip}
+                <NoResultsNotice inGroup={!!poll.group_id} />
+              </>
+            ) : status.voted ? (
+              /* You have voted and the results are still sealed, which is exactly
            the window a vote can be changed in — this branch is only reached
            when results_available and is_closed are both false, so the gate
            the database applies is the gate that decides what renders here.
            A ballot arriving from someone else while this is open takes the
            window away by moving the page on to the results, and the form
            goes with it. */
-            revising ? (
-              <VoteForm
-                poll={poll}
-                options={options}
-                initial={revising}
-                onVoted={() => {
-                  setRevising(null)
-                  load()
-                }}
-                onCancel={() => setRevising(null)}
-                questionStrip={questionStrip}
-              />
+              revising ? (
+                <VoteForm
+                  poll={poll}
+                  options={options}
+                  initial={revising}
+                  onVoted={() => {
+                    setRevising(null)
+                    load()
+                  }}
+                  onCancel={() => setRevising(null)}
+                  questionStrip={questionStrip}
+                />
+              ) : (
+                <Waiting
+                  status={status}
+                  pollId={poll.id}
+                  onRevise={setRevising}
+                  questionStrip={questionStrip}
+                />
+              )
             ) : (
-              <Waiting
-                status={status}
-                pollId={poll.id}
-                onRevise={setRevising}
-                questionStrip={questionStrip}
-              />
-            )
-          ) : (
-            /* Keyed like the open-poll panel, and for the same reason: a
+              /* Keyed like the open-poll panel, and for the same reason: a
            correction to the option list invalidates a half-filled ballot,
            and remounting is what discards it. */
-            <VoteForm
-              key={refreshKey}
-              poll={poll}
-              options={options}
-              onVoted={advance ?? load}
-              questionStrip={questionStrip}
-            />
-          )}
-        </>
-      ) : (
-        // The strip and the name box go in for real rather than as two more
-        // shapes: both are the poll's, like the heading above, and only
-        // happen to live inside the card being replaced. See QuestionSkeleton.
-        <QuestionSkeleton
-          finished={finished}
-          tallied={tallied}
-          rows={opening?.option_count}
-          nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
-          strip={questionStrip}
-        />
-      )}
+              <VoteForm
+                key={refreshKey}
+                poll={poll}
+                options={options}
+                onVoted={advance ?? load}
+                questionStrip={questionStrip}
+              />
+            )}
+          </Reveal>
+        ) : (
+          // The strip and the name box go in for real rather than as two more
+          // shapes: both are the poll's, like the heading above, and only
+          // happen to live inside the card being replaced. See QuestionSkeleton.
+          <QuestionSkeleton
+            finished={finished}
+            tallied={tallied}
+            rows={opening?.option_count}
+            nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
+            strip={questionStrip}
+          />
+        )}
+      </Reveal>
 
       {/* Everyone in the poll, for as long as the poll shows them. One setting
           decides, and it is the setting that says so on the tag beside the

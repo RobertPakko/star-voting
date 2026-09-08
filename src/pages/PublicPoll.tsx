@@ -14,11 +14,13 @@ import {
   rememberConfirmed,
 } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
+import { useCrossingDirection } from '../lib/crossing'
 import type { LiveStatus } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
+import { Reveal } from '../components/Reveal'
 import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
@@ -276,6 +278,14 @@ export function PublicPoll({
   const known = questions.some((question) => question.id === pollId)
 
   const sample = !!pollId && isSampleId(pollId)
+  // Which way the reader is walking through the poll, for the card below to
+  // come in from. Asked up here because it is a hook and the page has several
+  // ways out below this line; it answers 'below' until there is a crossing to
+  // describe, which covers every one of them.
+  const crossing = useCrossingDirection(
+    pollId ?? '',
+    questions.map((question) => question.id),
+  )
 
   // Handed up to the route, which owns the subscription. Registered for as
   // long as this page is on screen, a settled poll included: an open poll
@@ -432,49 +442,51 @@ export function PublicPoll({
           the poll, so it is the only part that waits: a crossing keeps the
           heading and the strip and fills this in, instead of blinking the
           whole poll away and back at the moment the strip is being used. */}
-      {view ? (
-        <>
-          {/* A first ballot opens the question this voter still owes, in
-              place of the card that used to sit at the foot of this page
-              offering to. A voter working through a poll of five wants the
-              next one, every time; asking five times whether they would like
-              what they came for is four presses and a scroll each, and the
-              one press that answered it was never a decision. Which question
-              that is comes from lib/nextQuestion.ts, including what happens
-              when the answer is none. Changing a vote does not advance — that
-              is a deliberate trip back to a question already behind them, and
-              carrying them forward again would undo it. */}
-          <OpenPollPanel
-            pollId={pollId}
-            view={view}
-            results={results}
-            ballots={ballots}
-            onChanged={load}
-            onFirstVote={advance}
-            onFirstConfirm={advance}
-            voterName={voterName}
-            questionStrip={questionStrip}
+      <Reveal key={pollId} from={crossing}>
+        {view ? (
+          <Reveal>
+            {/* A first ballot opens the question this voter still owes, in
+                place of the card that used to sit at the foot of this page
+                offering to. A voter working through a poll of five wants the
+                next one, every time; asking five times whether they would
+                like what they came for is four presses and a scroll each, and
+                the one press that answered it was never a decision. Which
+                question that is comes from lib/nextQuestion.ts, including
+                what happens when the answer is none. Changing a vote does not
+                advance — that is a deliberate trip back to a question already
+                behind them, and carrying them forward again would undo it. */}
+            <OpenPollPanel
+              pollId={pollId}
+              view={view}
+              results={results}
+              ballots={ballots}
+              onChanged={load}
+              onFirstVote={advance}
+              onFirstConfirm={advance}
+              voterName={voterName}
+              questionStrip={questionStrip}
+            />
+          </Reveal>
+        ) : (
+          // The strip and the name box go in for real rather than as two more
+          // shapes: both are the poll's, like the heading above, and only
+          // happen to live inside the card being replaced. See QuestionSkeleton.
+          //
+          // No `tallied` and no row count, unlike the account reading, and
+          // neither is an omission. An open question has no invite list to have
+          // finished, so `poll_gate_open` has nothing but `closed_at` to go on
+          // and a finished one here was always closed — which settles the group
+          // at whatever it had, so a question nobody answered is a real ending
+          // and the one card both endings share is all this can claim. And the
+          // strip a share link is given carries no option count: see
+          // `open_poll_group` for what that list deliberately leaves out.
+          <QuestionSkeleton
+            finished={finished}
+            nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
+            strip={questionStrip}
           />
-        </>
-      ) : (
-        // The strip and the name box go in for real rather than as two more
-        // shapes: both are the poll's, like the heading above, and only
-        // happen to live inside the card being replaced. See QuestionSkeleton.
-        //
-        // No `tallied` and no row count, unlike the account reading, and
-        // neither is an omission. An open question has no invite list to have
-        // finished, so `poll_gate_open` has nothing but `closed_at` to go on
-        // and a finished one here was always closed — which settles the group
-        // at whatever it had, so a question nobody answered is a real ending
-        // and the one card both endings share is all this can claim. And the
-        // strip a share link is given carries no option count: see
-        // `open_poll_group` for what that list deliberately leaves out.
-        <QuestionSkeleton
-          finished={finished}
-          nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
-          strip={questionStrip}
-        />
-      )}
+        )}
+      </Reveal>
     </Stack>
   )
 }
