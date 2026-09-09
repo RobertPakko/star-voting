@@ -759,6 +759,23 @@ Vite splits the CSS with the chunk. `@mantine/schedule` and the `rrule` it
 carries are about 105 kB of JS and 79 kB of CSS — more than everything else on
 a ballot put together, and a poll that chooses an option fetches none of it.
 
+Which is also why it is **the one ballot with an entrance of its own** (see
+[Motion](#motion)). Every other ballot is in the main bundle and mounts with
+the page, and the page already fades in as a whole — `Layout` wraps the route
+in a `Reveal` — so a second fade there would run over the first. The calendar
+lands after that fade is over, and without one it would be the only thing in
+the app that snaps in. `BallotFrame` takes an `arriving` flag for it, and no
+other caller sets it.
+
+**It wraps the body, not the card**, and that is the whole of the care needed.
+`QuestionSkeleton` stands in for a ballot being fetched by rendering a real
+card holding the *real* name box and the *real* question strip over a
+placeholder body — precisely so neither of them blinks during the wait. Fading
+the card would play a full entrance over two things that had not changed a
+pixel, which is the mistake [Motion](#motion) records against the question
+strip on a crossing between questions. Only the body was ever a placeholder, so
+only the body arrives.
+
 ### Reading the results
 
 The results view is reused exactly as it stands. No calendar heat map: an

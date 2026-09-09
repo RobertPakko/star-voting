@@ -216,6 +216,10 @@ export function TimeBallotCard({
       onSubmit={onSubmit}
       onVoted={onVoted}
       onCancel={onCancel}
+      // Fetched when it is drawn rather than bundled with the ballot, so it
+      // arrives after the page's own entrance has finished and has to make one
+      // of its own; see BallotFrame's `arriving`.
+      arriving
     >
       <Stack gap="xs">
         <Text size="sm">
