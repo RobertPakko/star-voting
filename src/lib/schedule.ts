@@ -1,4 +1,4 @@
-import type { PollSchedule } from './types'
+import type { DailyWindow, PollSchedule } from './types'
 
 /**
  * The one piece of real logic a time poll has: turning a schedule into
@@ -12,13 +12,20 @@ import type { PollSchedule } from './types'
  * when the poll is made, and the voter's browser flattens a painting into a
  * score per window before it is sent.
  *
- * So this file is where the feature can actually be wrong, and everything in
- * it is a pure function of its arguments for that reason. No `Date`, no
- * `Intl`, no reading of the clock: a poll is held in one fixed UTC offset that
- * its creator declared, and every calculation below is wall-clock arithmetic
- * in that offset. A voter in Berlin and a voter in Denver are shown the same
- * grid with the same labels, which is the whole of what "one timezone per
- * poll" buys and the reason none of this needs a timezone library.
+ * So this file is where the feature can actually be wrong, and every function
+ * that touches a window, a granule or a score is a pure function of its
+ * arguments for that reason. No `Date`, no `Intl`, no reading of the clock: a
+ * poll is held in one fixed UTC offset that its creator declared, and every
+ * calculation of that kind is wall-clock arithmetic in that offset. A voter in
+ * Berlin and a voter in Denver are shown the same grid with the same labels,
+ * which is the whole of what "one timezone per poll" buys and the reason none
+ * of this needs a timezone library.
+ *
+ * The exceptions are gathered under *Offsets, and the four functions that are
+ * allowed to read a clock*, well below everything the ballot is built from.
+ * They turn a place into the offset a poll is then held at, and an offset into
+ * a sentence for the person reading it; none of their answers is ever an
+ * argument to anything above them.
  *
  * Two string shapes carry everything:
  *
@@ -64,6 +71,20 @@ export function toTimeOfDay(minutes: number): string {
 }
 
 /**
+ * The hours one day is asking about.
+ *
+ * `window` is both the default and the axis -- see PollSchedule -- so a day
+ * nobody said anything special about gets the poll's own hours, and a day that
+ * was singled out gets its own. Every question below that involves a day at
+ * all goes through here rather than reading `schedule.window`, which is what
+ * makes "Friday evenings, Saturday from nine" one rule rather than a special
+ * case threaded through six functions.
+ */
+export function windowOn(schedule: PollSchedule, day: ScheduleDay): DailyWindow {
+  return schedule.day_windows?.[day] ?? schedule.window
+}
+
+/**
  * Every window the creator is offering, in order: one option per start time.
  *
  * A window is offered when the whole of it fits inside that day's in-bounds
@@ -72,16 +93,22 @@ export function toTimeOfDay(minutes: number): string {
  * day. Starts step by the granularity, which is also the resolution the ballot
  * paints at, so every window begins on a line the voter can see.
  *
+ * **Each day is measured against its own hours.** A Friday that runs 6pm-10pm
+ * and a Saturday that runs 9am-10pm are two different counts from one
+ * schedule, and a day too short to hold the meeting contributes nothing rather
+ * than contributing something that does not fit.
+ *
  * Chronological, which is both what a reader expects and what `sort_order`
  * ends up holding, since `create_poll` keeps the order it is given.
  */
 export function enumerateWindows(schedule: PollSchedule, days: ScheduleDay[]): WindowStart[] {
-  const first = toMinutes(schedule.window.start)
-  const last = toMinutes(schedule.window.end)
   const length = meetingMinutes(schedule)
   const starts: WindowStart[] = []
 
   for (const day of [...days].sort()) {
+    const hours = windowOn(schedule, day)
+    const first = toMinutes(hours.start)
+    const last = toMinutes(hours.end)
     for (let at = first; at + length <= last; at += schedule.granularity) {
       starts.push(`${day}T${toTimeOfDay(at)}:00${schedule.timezone}`)
     }
@@ -90,15 +117,95 @@ export function enumerateWindows(schedule: PollSchedule, days: ScheduleDay[]): W
 }
 
 /**
- * How many options a schedule would produce over some number of days, without
- * building them. The create form asks so it can say "that is 780 windows, and
- * a poll can hold 500" before anybody presses the button.
+ * How many options one day would produce, without building them.
+ *
+ * Per day rather than per poll now that two days need not be the same length:
+ * the create form adds these up to say "that is 780 windows, and a poll can
+ * hold 500" before anybody presses the button, and reads them one at a time to
+ * say which day is the one too short to hold the meeting.
  */
-export function windowsPerDay(schedule: PollSchedule): number {
-  const span = toMinutes(schedule.window.end) - toMinutes(schedule.window.start)
+export function windowsOn(schedule: PollSchedule, day: ScheduleDay): number {
+  const hours = windowOn(schedule, day)
+  const span = toMinutes(hours.end) - toMinutes(hours.start)
   const length = meetingMinutes(schedule)
   if (span < length) return 0
   return Math.floor((span - length) / schedule.granularity) + 1
+}
+
+/** The size of the whole ballot: every day's windows, added up. */
+export function countWindows(schedule: PollSchedule, days: ScheduleDay[]): number {
+  return days.reduce((total, day) => total + windowsOn(schedule, day), 0)
+}
+
+/**
+ * The hours the grid has to be tall enough to draw: the union of every day's.
+ *
+ * This is what `window` is set to when a poll is created, and it is why
+ * `window` is stored at all. A poll whose Friday starts at 6pm and whose
+ * Saturday starts at 9am is drawn on one axis running 9am to 10pm, with
+ * Friday morning greyed out -- rather than on two grids, or on one that clips
+ * whichever day it was not built for.
+ *
+ * With no days at all there is nothing to take a union of, so the poll's own
+ * hours stand. The create form is in that state until somebody picks a date.
+ */
+export function spanOf(schedule: PollSchedule, days: ScheduleDay[]): DailyWindow {
+  let first: number | null = null
+  let last: number | null = null
+
+  for (const day of days) {
+    const hours = windowOn(schedule, day)
+    const from = toMinutes(hours.start)
+    const to = toMinutes(hours.end)
+    if (first === null || from < first) first = from
+    if (last === null || to > last) last = to
+  }
+
+  if (first === null || last === null) return schedule.window
+  return { start: toTimeOfDay(first), end: toTimeOfDay(last) }
+}
+
+/**
+ * Every cell of the grid a voter may paint on one day, in order.
+ *
+ * A cell counts as in bounds when the whole of it is: a day ending at 10pm
+ * with half-hour granules ends on the 9:30 cell, and the 10:00 cell belongs to
+ * a day that is over. What the ballot uses this for is two things -- greying
+ * out what cannot be painted, and filling a whole day in one gesture.
+ */
+export function granulesInBounds(schedule: PollSchedule, day: ScheduleDay): GranuleKey[] {
+  const hours = windowOn(schedule, day)
+  const last = toMinutes(hours.end)
+  const keys: GranuleKey[] = []
+  for (
+    let at = toMinutes(hours.start);
+    at + schedule.granularity <= last;
+    at += schedule.granularity
+  ) {
+    keys.push(`${day} ${toTimeOfDay(at)}`)
+  }
+  return keys
+}
+
+/**
+ * Whether one cell of the grid is a cell this poll is asking about.
+ *
+ * Two ways to fail, and the ballot draws them the same way because they mean
+ * the same thing: the day is not one of the poll's days at all, or the day is
+ * but the hour is outside that day's own hours. Painting outside either would
+ * be ignored by `scoresFromPainting` -- no window covers it -- so it is
+ * refused at the gesture rather than swallowed after it.
+ */
+export function paintable(
+  schedule: PollSchedule,
+  inBounds: ReadonlySet<ScheduleDay>,
+  day: ScheduleDay,
+  timeOfDay: string,
+): boolean {
+  if (!inBounds.has(day)) return false
+  const hours = windowOn(schedule, day)
+  const at = toMinutes(timeOfDay)
+  return at >= toMinutes(hours.start) && at + schedule.granularity <= toMinutes(hours.end)
 }
 
 /**
@@ -227,8 +334,41 @@ export function saysNothing(scores: Record<WindowStart, number>): boolean {
   return Object.values(scores).every((score) => score === 0)
 }
 
+// ---------------------------------------------------------------------------
+// Offsets, and the only functions here allowed to read a clock
+// ---------------------------------------------------------------------------
+
 /**
- * The offset this browser is in right now, as the default.
+ * Everything above this line is wall-clock arithmetic in the poll's own offset
+ * and touches nothing outside its arguments. Below it sit the offset
+ * functions, and four of them -- `browserOffset`, `zoneOffsetOn`,
+ * `zoneShiftsWithin`, `viewerZone` -- read `Date` and `Intl`: the reader's own
+ * clock and the world's zone database. They are gathered here rather than
+ * scattered so that the exception is one place rather than four.
+ *
+ * **None of their answers reaches a window start, a granule key or a score.**
+ * Two run once, in the create form, to turn "Denver" into the fixed offset the
+ * poll is then held at for good; one warns that a poll straddles a clock
+ * change; one names the zone the reader is sitting in so they can be told how
+ * far from the grid they are. That is the whole list, and it is the line that
+ * keeps a voter's zone out of a grid built to exclude it.
+ */
+
+/** Minutes as an offset: 870 to `+14:30`, -420 to `-07:00`. */
+function toOffset(minutes: number): string {
+  return `${minutes < 0 ? '-' : '+'}${toTimeOfDay(Math.abs(minutes))}`
+}
+
+/** An offset back to minutes: `-07:00` to -420. Null if it is not one. */
+export function offsetMinutes(offset: string): number | null {
+  const match = /^([+-])(\d{2}):(\d{2})$/.exec(offset)
+  if (!match) return null
+  const size = Number(match[2]) * 60 + Number(match[3])
+  return match[1] === '-' ? -size : size
+}
+
+/**
+ * The offset this browser is in right now, as a last-resort default.
  *
  * `getTimezoneOffset` is minutes *behind* UTC, so its sign is the opposite of
  * every other offset in the world; the negation is the whole reason this is a
@@ -240,7 +380,144 @@ export function browserOffset(): string {
   const behind = new Date().getTimezoneOffset()
   const minutes = Math.round(-behind / 15) * 15
   const clamped = Math.max(-12 * 60, Math.min(14 * 60, minutes))
-  return `${clamped < 0 ? '-' : '+'}${toTimeOfDay(Math.abs(clamped))}`
+  return toOffset(clamped)
+}
+
+/**
+ * What a named zone's offset actually is on one particular day: `-06:00` for
+ * `America/Denver` in July, `-07:00` for the same place in December.
+ *
+ * **This is how a place becomes an offset, and it is the only place the two
+ * meet.** A poll is held at a fixed offset -- see PollSchedule.timezone, and
+ * the reasons are not cosmetic -- but almost nobody knows theirs, and the ones
+ * who think they do are often quoting the half of the year they are not in.
+ * So the create form asks for a place and asks this what that place's clock
+ * says on the poll's own dates, and stores the answer. From that moment the
+ * zone is gone and the number is the poll.
+ *
+ * Asked about a date rather than about now, which is the point: a poll held in
+ * March about a meeting in July has to be built on July's offset, and a
+ * browser reading its own clock in March would be an hour out for the whole
+ * ballot.
+ *
+ * Null when the runtime does not know the zone. Every browser this app
+ * supports does, and a caller that has an offset already never asks.
+ */
+export function zoneOffsetOn(timeZone: string, day: ScheduleDay): string | null {
+  const noon = Date.parse(`${day}T12:00:00Z`)
+  if (Number.isNaN(noon)) return null
+
+  // Twice, and the second pass is the point. What is wanted is the offset in
+  // force at *local* noon on that date; what the first pass measures is the
+  // offset at noon UTC, which in Auckland is one in the morning the following
+  // day. Shifting the instant by the first answer lands on local noon, and
+  // asking again there settles it -- clocks change in the small hours, so noon
+  // is never the ambiguous side of a transition. One correction is enough
+  // because no zone is more than a day from UTC.
+  const guess = offsetAt(timeZone, noon)
+  if (guess === null) return null
+  const minutes = offsetMinutes(guess)
+  if (minutes === null) return guess
+  return offsetAt(timeZone, noon - minutes * 60_000) ?? guess
+}
+
+/** The offset a zone is on at one instant, as `-06:00`. */
+function offsetAt(timeZone: string, instant: number): string | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      timeZoneName: 'longOffset',
+    }).formatToParts(new Date(instant))
+    const name = parts.find((part) => part.type === 'timeZoneName')?.value ?? ''
+    // `GMT-06:00`, and plain `GMT` at exactly zero on the runtimes that spell
+    // it that way -- which the pattern below would otherwise miss.
+    if (name === 'GMT') return '+00:00'
+    const match = /GMT([+-]\d{2}:\d{2})$/.exec(name)
+    return match ? match[1] : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The days in a poll on which a named zone's clocks are not what they are on
+ * the first day of it -- the poll that spans a daylight-saving change.
+ *
+ * A poll is one offset throughout, so this cannot be fixed; it can only be
+ * said. A creator picking "London" for a meeting the week the clocks go back
+ * is told that half their grid will read an hour off the wall, and can move
+ * the poll or accept it. Empty is the ordinary answer and the quiet one.
+ */
+export function zoneShiftsWithin(timeZone: string, days: ScheduleDay[]): ScheduleDay[] {
+  const sorted = [...days].sort()
+  if (sorted.length === 0) return []
+  const held = zoneOffsetOn(timeZone, sorted[0])
+  if (held === null) return []
+  return sorted.filter((day) => zoneOffsetOn(timeZone, day) !== held)
+}
+
+/**
+ * An offset as a sentence, for whoever is looking at the grid: `Mountain Time
+ * (Denver) -- UTC-06:00`, or just `UTC-06:00` on a poll whose creator picked a
+ * bare offset.
+ *
+ * The offset is always in it. A label is what the creator meant and the offset
+ * is what the poll *is*, and a reader who is shown only the first has been
+ * handed the ambiguity that storing an offset was meant to remove.
+ */
+export function describeOffset(schedule: PollSchedule): string {
+  const offset = `UTC${schedule.timezone}`
+  const label = schedule.timezone_label?.trim()
+  return label ? `${label} — ${offset}` : offset
+}
+
+/**
+ * How far the poll's offset is from the clock on the wall behind whoever is
+ * reading -- `3 hours behind you`, `half an hour ahead of you`, or nothing at
+ * all when the two agree.
+ *
+ * The one genuinely useful thing a voter's own zone can be used for on this
+ * screen, and the reason it is safe: it is a sentence *about* the difference
+ * rather than a conversion of the grid. Nothing on the calendar moves. A voter
+ * in Berlin still paints the same cells with the same labels as a voter in
+ * Denver -- they are just told, in words, that 2pm on it is 10pm to them.
+ *
+ * Null when the browser is in the poll's own offset today, which is the
+ * common case and wants no sentence at all. Also null when the browser is in
+ * a zone that changes between now and the poll, in which case the honest
+ * answer would need a date this function has not been given -- and a slightly
+ * stale hint is worse than no hint, so it says nothing.
+ */
+export function offsetFromViewer(schedule: PollSchedule, on?: ScheduleDay): string | null {
+  const poll = offsetMinutes(schedule.timezone)
+  if (poll === null) return null
+
+  // The reader's own zone on the poll's first day where one was given, so a
+  // hint about a July meeting is not computed from a January clock.
+  const here = on
+    ? offsetMinutes(zoneOffsetOn(viewerZone(), on) ?? '')
+    : -new Date().getTimezoneOffset()
+  if (here === null) return null
+
+  const gap = poll - here
+  if (gap === 0) return null
+
+  const size = Math.abs(gap)
+  const hours = Math.floor(size / 60)
+  const minutes = size % 60
+  const parts: string[] = []
+  if (hours > 0) parts.push(hours === 1 ? '1 hour' : `${hours} hours`)
+  if (minutes > 0) parts.push(`${minutes} minutes`)
+  return `${parts.join(' ')} ${gap > 0 ? 'ahead of' : 'behind'} your clock`
+}
+
+/** The zone this browser believes it is in, or `UTC` if it will not say. */
+export function viewerZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
 }
 
 /** The schedule a new time poll starts with: a working day, in this browser's offset. */

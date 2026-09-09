@@ -23,7 +23,15 @@ import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { DescriptionField } from '../components/DescriptionField'
 import { ScheduleFields } from '../components/ScheduleFields'
-import { blankSchedule, enumerateWindows, windowsPerDay } from '../lib/schedule'
+import {
+  blankSchedule,
+  countWindows,
+  enumerateWindows,
+  formatDay,
+  spanOf,
+  windowsOn,
+} from '../lib/schedule'
+import { resolveZone, zoneForViewer } from '../lib/timezones'
 import { groupQuestionsSchema, parseAnswer } from '../lib/rpcSchemas'
 import { FormSkeleton } from '../components/Skeletons'
 import styles from './CreatePoll.module.css'
@@ -174,6 +182,64 @@ function noErrors(): FormErrors {
 }
 
 /**
+ * Today, in this browser's own zone, as the day a place is resolved against
+ * before the poll has any days of its own.
+ *
+ * Local rather than UTC on purpose: it is standing in for "the poll's first
+ * day", which is a wall-clock date the creator picked out of a calendar, and
+ * `toISOString` would hand back yesterday's for anybody east of Greenwich in
+ * the evening.
+ */
+function todayInBrowser(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * The schedule as it is stored, from the schedule as it was drafted.
+ *
+ * Three tidies, all of them of states the form reaches by ordinary editing:
+ *
+ * - **`window` becomes the union of the days actually asked about.** It is the
+ *   grid's vertical axis (see PollSchedule), and a draft that was widened and
+ *   then narrowed again would otherwise leave a ballot with empty rows at the
+ *   top of every day.
+ * - **Per-day hours for days that are no longer in the poll are dropped.** The
+ *   fields prune as they go, but a creator who sets per-day hours, turns the
+ *   switch off, and unpicks a day leaves an entry behind -- an answer to a
+ *   question the poll does not ask.
+ * - **An empty map becomes no map.** `{}` and absent mean the same thing to
+ *   `windowOn`, and one of them is the shape every poll made before per-day
+ *   hours existed already has.
+ */
+function settle(schedule: PollSchedule, days: string[]): PollSchedule {
+  const asked = new Set(days)
+  const kept = Object.entries(schedule.day_windows ?? {}).filter(([day]) => asked.has(day))
+
+  return {
+    ...schedule,
+    window: spanOf(schedule, days),
+    day_windows: kept.length > 0 ? Object.fromEntries(kept) : null,
+  }
+}
+
+/**
+ * A handful of days in a sentence: `Sat 5 Sep`, `Fri 4 Sep and Sat 5 Sep`,
+ * `Fri 4 Sep, Sat 5 Sep and 3 others`.
+ *
+ * Cut off at three because the message this appears in is asking the creator
+ * to go and fix each one, and a list long enough to need scrolling is a list
+ * that has stopped being a list of things to fix.
+ */
+function listDays(days: string[]): string {
+  const named = days.slice(0, 3).map(formatDay)
+  const rest = days.length - named.length
+  if (rest > 0) return `${named.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'}`
+  if (named.length === 1) return named[0]
+  return `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`
+}
+
+/**
  * The whole form's rules, in one pass over what has been typed.
  *
  * Computed on every render and shown only once the form has been submitted
@@ -225,12 +291,23 @@ function validate(form: {
   }
 
   // A time poll writes no option list, so none of the rules about one apply
-  // to it. What it has instead is a grid, and the one thing that can be wrong
-  // with a grid is the size of the ballot it generates.
+  // to it. What it has instead is a grid, and what can be wrong with a grid is
+  // the size of the ballot it generates -- or, now that two days need not be
+  // the same length, one day of it holding nothing at all.
   if (form.kind === 'time') {
-    const total = windowsPerDay(form.schedule) * form.days.length
-    if (form.days.length === 0) {
+    const days = [...form.days].sort()
+    const total = countWindows(form.schedule, days)
+    // Named rather than counted, because "3 of your days are too short" is a
+    // sentence the creator cannot act on without going and finding which.
+    const tooShort = days.filter((day) => windowsOn(form.schedule, day) === 0)
+
+    if (days.length === 0) {
       errors.schedule = 'Pick at least one day people can meet on.'
+    } else if (tooShort.length > 0) {
+      // A day whose hours cannot hold the meeting is silently absent from the
+      // ballot -- `enumerateWindows` offers it nothing -- which looks exactly
+      // like the form having dropped it. Refused here instead, by name.
+      errors.schedule = `${listDays(tooShort)} ${tooShort.length === 1 ? 'is' : 'are'} too short for a meeting this long. Give ${tooShort.length === 1 ? 'it' : 'them'} more hours, shorten the meeting, or take ${tooShort.length === 1 ? 'that day' : 'those days'} off.`
     } else if (total < 2) {
       // The same floor every poll has, arrived at from the other direction:
       // one window is not a choice, it is an announcement.
@@ -359,6 +436,10 @@ export function CreatePoll() {
   // the days the generated options start on and the poll reads them back off
   // those; see PollSchedule.
   const [days, setDays] = useState<string[]>([])
+  // Which place the creator picked, which is the question; `schedule.timezone`
+  // is the answer, and the two are re-derived together by `pickZone` below.
+  // Opens on wherever this browser thinks it is, which is a guess they can see.
+  const [zone, setZone] = useState<string>(zoneForViewer)
   const [showVoters, setShowVoters] = useState(false)
   const [showBallots, setShowBallots] = useState(false)
   const [solicitOptions, setSolicitOptions] = useState(false)
@@ -566,6 +647,34 @@ export function CreatePoll() {
     }
   }
 
+  /**
+   * A place, resolved into the fixed offset the poll is actually held at.
+   *
+   * Two things can move it and both come through here: picking a different
+   * place, and moving the poll's first day. The second is the one that is easy
+   * to forget and expensive to get wrong -- somebody in Denver picking
+   * "Denver" in March for a meeting in July is on `-07:00` today and `-06:00`
+   * then, and a poll built on today's answer is an hour out on every option
+   * it offers.
+   *
+   * Done in the setters rather than in an effect watching the two, because an
+   * effect that writes to the state it watches is a loop waiting for a
+   * dependency to be listed slightly wrong -- and there are exactly two places
+   * the inputs change.
+   */
+  function pickZone(next: string, over: string[]) {
+    setZone(next)
+    const on = [...over].sort()[0] ?? todayInBrowser()
+    setSchedule((prev) => ({ ...prev, ...resolveZone(next, on) }))
+  }
+
+  /** Days, with the offset re-resolved against whichever is now the first. */
+  function pickDays(next: string[]) {
+    setDays(next)
+    const on = [...next].sort()[0]
+    if (on) setSchedule((prev) => ({ ...prev, ...resolveZone(zone, on) }))
+  }
+
   function addQuestion() {
     const added = blankQuestion()
     setQuestions((prev) => [...prev, added])
@@ -648,7 +757,16 @@ export function CreatePoll() {
     // the same create_poll as any other list of options. That is the whole
     // trick: from this line on there is nothing about this poll the database
     // handles differently, apart from two columns it stores and hands back.
-    const windows = kind === 'time' ? enumerateWindows(schedule, days) : []
+    //
+    // The schedule is tidied on the way out rather than kept tidy on the way
+    // in, because what the form holds is a draft and what is stored is a
+    // record: `window` becomes exactly the union of the days the poll ended up
+    // asking about, per-day hours for days that were picked and then unpicked
+    // are dropped, and an empty map becomes no map at all. All three are
+    // states the form can reach by ordinary editing, and none of them is a
+    // state worth storing.
+    const grid = kind === 'time' ? settle(schedule, days) : schedule
+    const windows = kind === 'time' ? enumerateWindows(grid, days) : []
 
     // Blank rows are dropped here and in the database alike, and the
     // descriptions travel with their option rather than beside it, so a
@@ -701,7 +819,7 @@ export function CreatePoll() {
           p_kind: kind,
           // The database ties these two together: a schedule on an option
           // poll is refused, and a time poll without one cannot be stored.
-          p_schedule: kind === 'time' ? schedule : undefined,
+          p_schedule: kind === 'time' ? grid : undefined,
           // Most polls describe nothing, and send nothing rather than a row of
           // blanks the database would only throw away again. Where they are
           // sent, an option with no description travels as '' rather than
@@ -1032,8 +1150,10 @@ export function CreatePoll() {
               <ScheduleFields
                 schedule={schedule}
                 days={days}
+                zone={zone}
                 onScheduleChange={setSchedule}
-                onDaysChange={setDays}
+                onDaysChange={pickDays}
+                onZoneChange={(next) => pickZone(next, days)}
                 error={shown.schedule}
               />
             ) : multiQuestion ? (

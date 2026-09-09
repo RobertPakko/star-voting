@@ -15,6 +15,7 @@ declare
   v_poll uuid;
   v_open uuid;
   v_plain uuid;
+  v_rich uuid;
   v_page jsonb;
   v_view jsonb;
   v_schedule jsonb := '{"timezone":"-07:00","window":{"start":"08:00","end":"22:00"},"desired_slots":3,"granularity":60}'::jsonb;
@@ -69,6 +70,60 @@ begin
            jsonb_set(v_schedule, '{granularity}', '25')::text),
     'divides an hour evenly');
 
+  -- ---- and a day that asks for hours of its own -------------------------
+
+  -- The daily window used to be one pair of times for the whole poll. A group
+  -- with a free Friday evening and a free Saturday morning was being asked to
+  -- answer as if both days ran nine to ten, so a day may now name its own
+  -- hours -- and `window` becomes the union of them all, which is the vertical
+  -- axis the ballot's grid is drawn on. See 0056.
+
+  perform tests.assert_raises('day_windows are keyed by date',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
+           jsonb_set(v_schedule, '{day_windows}', '{"Friday": {"start": "18:00", "end": "22:00"}}')::text),
+    'keyed by date');
+
+  -- Shaped like a date and not one, which the pattern alone cannot tell.
+  perform tests.assert_raises('and by a date that exists',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
+           jsonb_set(v_schedule, '{day_windows}', '{"2026-02-31": {"start": "18:00", "end": "22:00"}}')::text),
+    'is not a date');
+
+  perform tests.assert_raises('a day''s hours end after they start',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
+           jsonb_set(v_schedule, '{day_windows}', '{"2026-09-01": {"start": "20:00", "end": "18:00"}}')::text),
+    'end after they start');
+
+  -- The rule that is load-bearing rather than fussy: `window` is the grid the
+  -- ballot is drawn on, so a day reaching past it is a day whose windows have
+  -- no rows to be drawn in -- the voter would be offered options they cannot
+  -- mark and would score every one of them 0.
+  perform tests.assert_raises('a day cannot reach outside the grid it is drawn on',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
+           jsonb_set(v_schedule, '{day_windows}', '{"2026-09-01": {"start": "06:00", "end": "22:00"}}')::text),
+    'inside the poll''s own');
+
+  -- ---- the name a creator gave the offset --------------------------------
+
+  -- Presentation, and nothing computes with it: a poll is still held at a
+  -- fixed offset, and this is what the browser calls that offset so a voter is
+  -- shown "Mountain Time (Denver) — UTC-07:00" rather than four digits.
+  perform tests.assert_raises('a timezone name is a name',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
+           jsonb_set(v_schedule, '{timezone_label}', '7')::text),
+    'name for the offset');
+
+  perform tests.assert_raises('and a short one',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
+           jsonb_set(v_schedule, '{timezone_label}', to_jsonb(repeat('x', 81)))::text),
+    'too long');
+
   -- A voter "adding Thursday" adds a dozen options, one per window start, and
   -- the suggestion path inserts them one at a time -- so a run that failed
   -- halfway would leave a Thursday with morning windows and no afternoon.
@@ -94,6 +149,30 @@ begin
     (select schedule from polls where id = v_poll), v_schedule);
   perform tests.assert_eq('and its windows as ordinary options',
     (select count(*)::int from candidates where poll_id = v_poll), 3);
+
+  -- A poll carrying both of the new keys is stored with both, byte for byte:
+  -- the browser draws the grid from this jsonb and nothing here rewrites it.
+  v_rich := create_poll('Weekend', null,
+    array['2026-09-04T18:00:00-07:00', '2026-09-05T09:00:00-07:00'],
+    array['voter1@example.com'], 'invite', true, false, null, false, 'time',
+    '{"timezone":"-07:00","timezone_label":"Mountain Time (Denver)",'
+    '"window":{"start":"09:00","end":"22:00"},'
+    '"day_windows":{"2026-09-04":{"start":"18:00","end":"22:00"},'
+                   '"2026-09-05":{"start":"09:00","end":"22:00"}},'
+    '"desired_slots":2,"granularity":60}'::jsonb);
+
+  perform tests.assert_eq('a Friday evening and a Saturday morning are stored as asked',
+    (select schedule #> '{day_windows,2026-09-04}' from polls where id = v_rich),
+    '{"start": "18:00", "end": "22:00"}'::jsonb);
+  perform tests.assert_eq('and the name the creator put on the offset travels with it',
+    (select schedule ->> 'timezone_label' from polls where id = v_rich),
+    'Mountain Time (Denver)');
+
+  -- A day exactly filling the grid is the boundary the containment rule sits
+  -- on, and boundaries are where an off-by-one lives.
+  perform tests.assert_eq('a day may fill the whole grid',
+    (select (schedule #>> '{day_windows,2026-09-05,start}') from polls where id = v_rich),
+    '09:00');
 
   -- An ordinary poll is unchanged, and says so rather than being assumed to
   -- be: `kind` has a default, and a default nobody asserts is a default that

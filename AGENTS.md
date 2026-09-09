@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ScheduleFields, ConfirmOptions, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, a time poll's windows and how a painted calendar becomes scores (schedule.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, a time poll's windows and how a painted calendar becomes scores (schedule.ts), the places a poll can be held in (timezones.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -626,8 +626,8 @@ per call.
 
 A poll has a `kind`. `option` is everything above: a list somebody wrote,
 scored 0–5. `time` is a poll looking for a meeting slot — the creator says how
-long the meeting is, how finely people may answer, which offset the poll is
-held in and what part of each day is in bounds; every window of that length
+long the meeting is, how finely people may answer, where in the world the poll
+is held and what part of each day is in bounds; every window of that length
 that fits becomes an **option**, and voters rate those options by painting a
 calendar.
 
@@ -649,12 +649,16 @@ scores the Tuesday afternoon windows highly and everything else 0.
 [`0055_schedule_polls.sql`](supabase/migrations/0055_schedule_polls.sql) adds
 two columns to `polls`, tied together by a check constraint the way
 `polls_question_ck` ties the question columns together — `schedule` is null if
-and only if `kind = 'option'`:
+and only if `kind = 'option'`.
+[`0056_schedule_day_windows.sql`](supabase/migrations/0056_schedule_day_windows.sql)
+adds two optional keys inside it and no column at all:
 
 ```json
 {
-  "timezone": "-07:00",
-  "window": { "start": "08:00", "end": "22:00" },
+  "timezone": "-06:00",
+  "timezone_label": "Mountain Time (Denver)",
+  "window": { "start": "09:00", "end": "22:00" },
+  "day_windows": { "2026-09-04": { "start": "18:00", "end": "22:00" } },
   "desired_slots": 3,
   "granularity": 60
 }
@@ -667,6 +671,32 @@ on, so the client derives them (`daysOf`) and the two can never disagree.
 vertical axis on days whose options are sparse. A meeting's length is not
 stored either — it is `desired_slots * granularity`.
 
+**`window` is two things at once, and the second is what makes the first
+honest.** It is the hours of any day that `day_windows` does not name, and it
+is the union of every day's hours — which is the vertical axis the ballot's
+grid is drawn on. `CreatePoll` sets it to that union on the way out (`settle`,
+built on `spanOf`), and `validate_schedule` refuses a day reaching outside it,
+because such a day would have windows the grid has no rows to draw: the voter
+would be offered options they cannot mark and would score every one of them 0.
+
+**Friday evening and Saturday morning are different questions**, which is what
+`day_windows` is for. One pair of times for the whole poll asked a group whose
+Friday is free from six and whose Saturday is free from nine to answer as if
+both ran the same hours; now a day may name its own, and `enumerateWindows`
+measures each day against them. A day too short to hold the meeting contributes
+no windows at all — the create form refuses that by name rather than letting
+the day vanish from the ballot, since a silently absent day looks exactly like
+the form having dropped it.
+
+The dates in `day_windows` are the one thing in a schedule that names a day,
+which looks like a contradiction of the rule above. It is not, and nothing
+enforces agreement between the two: `daysOf` is still the only answer to
+*which* days a poll asks about, and an entry for a day the poll does not ask
+about is ignored rather than obeyed. What an entry says is what the hours are
+on a day that is already in bounds — which the options can only nearly answer,
+since the last start on a day falls a granule or two short of that day's end
+and the grid has to grey out the difference rather than guess it.
+
 **A fixed UTC offset, never a named zone.** A named zone spanning a
 daylight-saving transition gives one day 23 or 25 hours and a 1am that happens
 twice or not at all, which makes the generated option names ambiguous in
@@ -674,6 +704,33 @@ precisely the way declaring a timezone was meant to prevent. One poll, one
 offset; everybody sees the same grid whatever their own clock says, and
 `validate_schedule` refuses anything else. A distributed group pays a
 conversion tax, and that is the trade.
+
+**But nobody is asked for one.** The form asks for a *place* — a list of about
+sixty in [`timezones.ts`](src/lib/timezones.ts), one per offset-and-rule
+combination somebody plausibly organises a meeting from, named after its
+biggest city — and `zoneOffsetOn` asks the browser's own zone database what
+that place's clock reads **on the poll's first day**. The answer is stored, the
+zone is discarded, and the poll is the fixed-offset poll it always was.
+
+That date is the part worth being careful about, and the reason the zone is
+re-resolved whenever the first day moves (`pickZone` / `pickDays` in
+`CreatePoll`): somebody in Denver picking "Denver" in March for a meeting in
+July is on `-07:00` today and `-06:00` then, and a poll built on today's answer
+is an hour out on every option it offers. The old behaviour — read
+`getTimezoneOffset()` and store it — got exactly that wrong for half the year.
+
+`timezone_label` keeps the name the creator picked, so the ballot can say
+"Mountain Time (Denver) — UTC-06:00" instead of four digits. **It is
+presentation and nothing computes with it**, it is always written beside the
+offset and never instead of it, and it is checked only for type and length —
+there is no correct value to compare it against without shipping a zone
+database into Postgres to disagree with the browser's. A poll whose creator
+picked a bare offset from the bottom of the list has none, and so does every
+poll made before 0056.
+
+A poll that runs across a clock change in the zone it was built from cannot be
+fixed — one poll, one offset — so it is said: `zoneShiftsWithin` names the days
+that moved, and the create form puts a notice under the picker.
 
 **An option's name is its window start, in full ISO 8601:**
 `2026-09-01T14:00:00-07:00`. Unambiguous on its own, unique within the poll
@@ -699,10 +756,14 @@ not live in Postgres. All of it is [`src/lib/schedule.ts`](src/lib/schedule.ts),
 pure and tested by `npm run test:unit`.
 
 **Creation.** From the schedule plus the creator's chosen days, enumerate every
-start such that the whole window fits inside that day's in-bounds hours — a
-fourteen-hour day offers a three-hour meeting twelve hourly starts, not
-fourteen. Each start is one option, sent through the ordinary `create_poll` as
-an ordinary `p_options`.
+start such that the whole window fits inside **that day's own** in-bounds hours
+— a fourteen-hour day offers a three-hour meeting twelve hourly starts, not
+fourteen, and a four-hour Friday evening offers it none at all. Which hours a
+day has is `windowOn`, and every function below that involves a day at all goes
+through it rather than reading `schedule.window`: that is what makes per-day
+hours one rule rather than a special case threaded through six places. Each
+start is one option, sent through the ordinary `create_poll` as an ordinary
+`p_options`.
 
 **Voting.** The voter paints a rating per granule. **A window's rating is the
 minimum of its granules.** Not the mean: with a mean, a window containing an
@@ -734,17 +795,60 @@ question strip, the error line, Cancel and Submit, and the sending itself. Both
 produce the same `BallotScore[]` for the same `onSubmit`, so both ballot paths,
 `submit_ballot` and `open_poll_submit`, work unchanged.
 
-The calendar is [`@mantine/schedule`](https://mantine.dev)'s `WeekView`, and it
-is worth being clear about what that is: an event calendar in the Google
-Calendar mould, whose primitive is an event with a start, an end and a colour.
-It is not an availability grid and has no notion of a rated cell. The
-adaptation is three props — `withDragSlotSelect` with `onSlotDragEnd` for the
-drag, `onTimeSlotClick` for a tap, and every painted region rendered back as a
-background event coloured by its rating. Which of the six ratings a drag
-applies is the app's own control, because a calendar has nowhere to put one.
-Days the poll is not asking about are disabled through `getTimeSlotProps`, and
-the view switcher and Today control are hidden: both are ways off the only
-screen that answers the question.
+The calendar is [`@mantine/schedule`](https://mantine.dev), and it is worth
+being clear about what that is: an event calendar in the Google Calendar mould,
+whose primitive is an event with a start, an end and a colour. It is not an
+availability grid and has no notion of a rated cell. The adaptation is a
+handful of props, and each one is a gesture:
+
+- `withDragSlotSelect` with `onSlotDragEnd` gives the drag, and
+  `onTimeSlotClick` covers a single tap — a plain click is *not* a drag of
+  length zero to that hook (`use-slot-drag-select` refuses one where the start
+  and end index agree), which is why both are wired.
+- Every painted region is rendered back as a **background** event coloured by
+  its rating. Which of the six ratings a gesture applies is the app's own
+  control, because a calendar has nowhere to put one.
+- A cell the poll is not asking about is disabled through `getTimeSlotProps`,
+  now asked cell by cell rather than day by day: a Friday that only starts at
+  six is in bounds for part of itself, and a drag down it from nine marks the
+  evening and leaves the morning alone rather than being refused whole.
+- The **Today control is hidden**, because "today" is a week the poll is
+  probably not asking about. What replaces it is a link that appears only when
+  the calendar has been navigated off the poll's dates entirely, which a month
+  of arrows makes easy.
+
+**Three views, and a switcher that is the library's own.** `viewSelectProps`
+narrows it to day, week and month; `onViewChange` is held in this component, so
+`DayView`, `WeekView` and `MonthView` are rendered directly rather than through
+the `Schedule` wrapper — that wrapper hands every view the same prop bag, and
+the props one view does not declare (`onDayClick`, `view`) end up on a `div`,
+which React warns about on every render. Clicking a day heading in the week
+view means what it means in every other calendar: show me that day on its own.
+
+**Filling a day in one gesture**, which is what the week grid's day heading
+*looks* like it should do and now cannot, since it means the above:
+
+- The **all-day strip is relabelled "Whole day"** (`labels={{ allDay: … }}`)
+  and its click fills or clears that day's hours. It is the only per-day
+  control a week grid has that does not already mean something else, and it is
+  directly under the heading.
+- It **toggles**: a day that is already exactly what the brush would make it is
+  a day the click is taking back. The `Can't` brush never toggles — clearing a
+  cleared day would fill it.
+- In the **month view**, which has no time grid at all, a day *is* the unit:
+  `onDayClick` fills one and a drag across several fills those.
+
+**One event shape serves all three views.** Besides the painted runs, each
+in-bounds day gets an all-day event summarising it — `Whole day`, `6–10pm`,
+`4h in 2 blocks`, or `Tap to fill` when nothing is marked. An event running
+from midnight to a second before the next is what `isAllDayEvent` recognises,
+so the two time grids put it in the strip above the hours, exactly over the
+control that fills the day, and the month grid draws it across the day's cell —
+where it is the only thing there is to see, since a month has no rows to paint
+an hour onto. Its text colour is chosen here (`inkFor`) rather than left to the
+calendar: Mantine's variant resolver hands a background event a text colour
+equal to its background at these shades, which is dark blue on dark blue. The
+runs carry no text, so it never showed until the day lines did.
 
 `useBallotOrder` does not apply, and that is the one deliberate exception to
 the argument in [`ballotOrder.ts`](src/lib/ballotOrder.ts). It shuffles because
@@ -756,8 +860,10 @@ middle.
 [`components/deferred.ts`](src/components/deferred.ts) alongside the results
 cards, and its stylesheet is imported inside it rather than in `main.tsx` so
 Vite splits the CSS with the chunk. `@mantine/schedule` and the `rrule` it
-carries are about 105 kB of JS and 79 kB of CSS — more than everything else on
-a ballot put together, and a poll that chooses an option fetches none of it.
+carries are about 139 kB of JS and 79 kB of CSS built — more than everything
+else on a ballot put together, and a poll that chooses an option fetches none
+of it. It grew by a third when the day and month views were added, which is the
+price of the view switcher and is paid only by the ballot that has one.
 
 ### Reading the results
 
@@ -882,12 +988,26 @@ at a time.
   Multiple questions switch. One calendar per question is a form nobody has
   drawn.
 - **A calendar heat map of the results.** Decided against; see above.
-- **Named timezones and DST-spanning polls.** Fixed offsets only.
+- **Named timezones stored as such, and DST-spanning polls.** Still fixed
+  offsets only: what 0056 added is a *place* picker in front of the offset and
+  a caption behind it, not a poll that changes offset partway through. A poll
+  running across a clock change is warned about and then held at one offset for
+  its whole length, so its later days read an hour off the wall in the zone
+  they were built from.
 - **Cross-timezone rendering.** One poll, one grid, everyone sees the same one.
+  The reader's own zone buys them one sentence — `offsetFromViewer`, "6 hours
+  behind your clock" — and moves nothing on the calendar.
 - **Editing a time poll's options by hand.** `creator_add_option` refuses it
   and the editor is not offered: the options are generated from the schedule,
   and a typed-in name is one the calendar cannot draw and the minimum rule
   cannot score.
+- **Duplicating a time poll as one.** `CreatePoll`'s prefill copies the title,
+  the settings and the option list, and knows nothing about `kind` or
+  `schedule` — so "Duplicate" on a time poll produces an *option* poll whose
+  options are ISO timestamps. It has been that way since 0055 and 0056 did not
+  change it. Fixing it means carrying `kind`, `schedule` and `daysOf(options)`
+  through the prefill, and deciding what a duplicate of a poll about last month
+  should have in its day picker.
 
 
 ## The winner is kept with the poll

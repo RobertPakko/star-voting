@@ -1,15 +1,24 @@
 import { describe, expect, test } from 'vitest'
 import {
   clock,
+  countWindows,
   daysOf,
+  describeOffset,
   enumerateWindows,
   formatWindow,
+  granulesInBounds,
   granulesOf,
+  offsetMinutes,
+  paintable,
   paintingFromScores,
   saysNothing,
   scoresFromPainting,
-  windowsPerDay,
+  spanOf,
+  windowOn,
+  windowsOn,
   winnerLabel,
+  zoneOffsetOn,
+  zoneShiftsWithin,
 } from './schedule'
 import type { PollSchedule } from './types'
 
@@ -54,10 +63,11 @@ describe('enumerating the windows', () => {
   })
 
   test('counts the same windows without building them', () => {
-    expect(windowsPerDay(threeHours)).toBe(12)
-    expect(windowsPerDay(ninetyMinutes)).toBe(4)
+    expect(windowsOn(threeHours, '2026-09-01')).toBe(12)
+    expect(windowsOn(ninetyMinutes, '2026-09-01')).toBe(4)
     // A meeting longer than the day is offered nowhere, rather than once.
-    expect(windowsPerDay({ ...threeHours, desired_slots: 15 })).toBe(0)
+    expect(windowsOn({ ...threeHours, desired_slots: 15 }, '2026-09-01')).toBe(0)
+    expect(countWindows(threeHours, ['2026-09-01', '2026-09-02'])).toBe(24)
   })
 
   test('steps by the granularity, not by the hour', () => {
@@ -219,5 +229,159 @@ describe('what a window is called on screen', () => {
     // No offset on it, so it is not a window start and not this app's to read.
     expect(formatWindow('2026-09-01T14:00:00')).toBe('2026-09-01T14:00:00')
     expect(winnerLabel('Pizza')).toBe('Pizza')
+  })
+})
+
+describe('a day with hours of its own', () => {
+  /**
+   * The case the whole feature is for: a two-hour thing over a weekend, where
+   * Friday is only free in the evening and Saturday is free from breakfast.
+   *
+   * `window` is the union of the two, because it is the axis the ballot's grid
+   * is drawn on; the per-day entries are what each day actually asks.
+   */
+  const weekend: PollSchedule = {
+    timezone: '-07:00',
+    window: { start: '09:00', end: '22:00' },
+    day_windows: {
+      '2026-09-04': { start: '18:00', end: '22:00' },
+      '2026-09-05': { start: '09:00', end: '22:00' },
+    },
+    desired_slots: 2,
+    granularity: 60,
+  }
+  const days = ['2026-09-04', '2026-09-05']
+
+  test('each day is enumerated against its own hours', () => {
+    const starts = enumerateWindows(weekend, days)
+    const friday = starts.filter((s) => s.startsWith('2026-09-04'))
+    const saturday = starts.filter((s) => s.startsWith('2026-09-05'))
+
+    // Four hours of Friday evening, two-hour meeting, hourly starts: 6, 7, 8.
+    expect(friday.map((s) => s.slice(11, 16))).toEqual(['18:00', '19:00', '20:00'])
+    // Thirteen hours of Saturday: 9am through 8pm.
+    expect(saturday).toHaveLength(12)
+    expect(saturday[0].slice(11, 16)).toBe('09:00')
+    expect(saturday[11].slice(11, 16)).toBe('20:00')
+    // Still one sorted list, which is what `sort_order` ends up holding.
+    expect([...starts].sort()).toEqual(starts)
+  })
+
+  test('and counted against them, one day at a time and altogether', () => {
+    expect(windowsOn(weekend, '2026-09-04')).toBe(3)
+    expect(windowsOn(weekend, '2026-09-05')).toBe(12)
+    expect(countWindows(weekend, days)).toBe(15)
+  })
+
+  test('a day nobody singled out gets the poll own hours', () => {
+    // Sunday has no entry, so it is the poll's window: 9am to 10pm.
+    expect(windowOn(weekend, '2026-09-06')).toEqual({ start: '09:00', end: '22:00' })
+    expect(windowsOn(weekend, '2026-09-06')).toBe(12)
+  })
+
+  test('the axis is the union, which is what the grid has to be tall enough for', () => {
+    expect(spanOf(weekend, days)).toEqual({ start: '09:00', end: '22:00' })
+    // Friday alone is four hours of grid, not thirteen.
+    expect(spanOf(weekend, ['2026-09-04'])).toEqual({ start: '18:00', end: '22:00' })
+    // Nothing to take a union of leaves the poll's own hours standing.
+    expect(spanOf(weekend, [])).toEqual(weekend.window)
+  })
+
+  test('what a voter may paint, cell by cell', () => {
+    const inBounds = new Set(days)
+    // Friday morning is on the grid -- Saturday needs those rows -- and is not
+    // paintable, which is the whole reason the two are different questions.
+    expect(paintable(weekend, inBounds, '2026-09-04', '10:00')).toBe(false)
+    expect(paintable(weekend, inBounds, '2026-09-04', '18:00')).toBe(true)
+    expect(paintable(weekend, inBounds, '2026-09-05', '10:00')).toBe(true)
+    // The last cell of a day ends when the day does, and the one after it
+    // belongs to a day that is over.
+    expect(paintable(weekend, inBounds, '2026-09-04', '21:00')).toBe(true)
+    expect(paintable(weekend, inBounds, '2026-09-04', '22:00')).toBe(false)
+    // A day the poll never asked about is not paintable at any hour.
+    expect(paintable(weekend, inBounds, '2026-09-06', '10:00')).toBe(false)
+  })
+
+  test('filling a whole day fills that day and no more', () => {
+    expect(granulesInBounds(weekend, '2026-09-04')).toEqual([
+      '2026-09-04 18:00',
+      '2026-09-04 19:00',
+      '2026-09-04 20:00',
+      '2026-09-04 21:00',
+    ])
+    expect(granulesInBounds(weekend, '2026-09-05')).toHaveLength(13)
+  })
+
+  test('painting a whole day scores every window on it and nothing else', () => {
+    // What the "Whole day" control does, put through the derivation: every
+    // window on Friday takes the brush, and Saturday is untouched.
+    const starts = enumerateWindows(weekend, days)
+    const painting: Record<string, number> = {}
+    for (const key of granulesInBounds(weekend, '2026-09-04')) painting[key] = 4
+
+    const scores = scoresFromPainting(starts, painting, weekend)
+    expect(scores['2026-09-04T18:00:00-07:00']).toBe(4)
+    expect(scores['2026-09-04T20:00:00-07:00']).toBe(4)
+    expect(scores['2026-09-05T09:00:00-07:00']).toBe(0)
+    // And it survives being read back, because a flat painting is the one
+    // shape the minimum rule loses nothing from.
+    expect(paintingFromScores(starts, scores, weekend)).toEqual(painting)
+  })
+
+  test('a poll with no per-day hours is exactly the poll it was', () => {
+    // The shape every poll made before this existed still has, and the shape
+    // most polls will keep having.
+    expect(windowOn(threeHours, '2026-09-01')).toEqual(threeHours.window)
+    expect(enumerateWindows(threeHours, ['2026-09-01'])).toHaveLength(12)
+    expect(spanOf(threeHours, ['2026-09-01', '2026-09-02'])).toEqual(threeHours.window)
+  })
+})
+
+describe('a place, resolved into the offset a poll is held at', () => {
+  test('reads an offset back as minutes, and refuses anything else', () => {
+    expect(offsetMinutes('-07:00')).toBe(-420)
+    expect(offsetMinutes('+05:45')).toBe(345)
+    expect(offsetMinutes('+00:00')).toBe(0)
+    expect(offsetMinutes('America/Denver')).toBeNull()
+    expect(offsetMinutes('')).toBeNull()
+  })
+
+  test('the same place is two different offsets in two different months', () => {
+    // Which is the whole reason the form asks for a place and resolves it on
+    // the poll's own dates: a July meeting arranged in January is an hour out
+    // if the January answer is the one that gets stored.
+    expect(zoneOffsetOn('America/Denver', '2026-07-04')).toBe('-06:00')
+    expect(zoneOffsetOn('America/Denver', '2026-01-04')).toBe('-07:00')
+    expect(zoneOffsetOn('Europe/London', '2026-07-04')).toBe('+01:00')
+    expect(zoneOffsetOn('Europe/London', '2026-01-04')).toBe('+00:00')
+  })
+
+  test('including the offsets that are not a whole number of hours', () => {
+    expect(zoneOffsetOn('Asia/Kolkata', '2026-07-04')).toBe('+05:30')
+    expect(zoneOffsetOn('Asia/Kathmandu', '2026-07-04')).toBe('+05:45')
+    // A long way from UTC, where noon UTC is the following day locally --
+    // which is what the second pass in `zoneOffsetOn` is for.
+    expect(zoneOffsetOn('Pacific/Auckland', '2026-01-15')).toBe('+13:00')
+    expect(zoneOffsetOn('Pacific/Auckland', '2026-07-15')).toBe('+12:00')
+  })
+
+  test('a zone nobody has heard of is null rather than a throw', () => {
+    expect(zoneOffsetOn('Middle/Earth', '2026-07-04')).toBeNull()
+  })
+
+  test('a poll that runs across a clock change says which days moved', () => {
+    // The last Sunday in October, when the UK goes back to +00:00.
+    const across = ['2026-10-23', '2026-10-24', '2026-10-26', '2026-10-27']
+    expect(zoneShiftsWithin('Europe/London', across)).toEqual(['2026-10-26', '2026-10-27'])
+    // And the ordinary answer, which is silence.
+    expect(zoneShiftsWithin('Europe/London', ['2026-07-01', '2026-07-08'])).toEqual([])
+    expect(zoneShiftsWithin('Europe/London', [])).toEqual([])
+  })
+
+  test('a reader is told the zone and the offset, never the zone alone', () => {
+    const labelled: PollSchedule = { ...threeHours, timezone_label: 'Mountain Time (Denver)' }
+    expect(describeOffset(labelled)).toBe('Mountain Time (Denver) — UTC-07:00')
+    // A poll whose creator picked a bare offset has nothing to add to it.
+    expect(describeOffset(threeHours)).toBe('UTC-07:00')
   })
 })
