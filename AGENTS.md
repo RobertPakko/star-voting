@@ -713,9 +713,8 @@ Nothing in the app moved at all until it was given a scale to move on. The
 rule that decides what gets to: **an animation has to answer a question the
 reader would otherwise have to work out.** A star draining back to zero says a
 score was cleared rather than a tap missed; a bar growing to its length makes
-the comparison the page exists for happen on screen; a card sliding in from the
-right says which way through a poll somebody just walked. Anything that would
-only be pleasant is not in.
+the comparison the page exists for happen on screen; a page fading in says the
+last one has been left. Anything that would only be pleasant is not in.
 
 The scale is three durations and one curve, declared on `:root` in
 `src/index.css`: `--motion-fast` (120ms) for feedback on a press,
@@ -734,11 +733,11 @@ smooth scroll that is asked for from JavaScript and therefore out of CSS's
 reach.
 
 `src/components/Reveal.tsx` is the entrance everything arrives by — a skeleton
-filling in, a page opening, a question giving way to the next, a winner
-appearing — for the reason `BallotCard` is one component: four copies of a fade
-drift, and motion drifts faster than wording because nobody can diff it.
+filling in, a page opening, a winner appearing — for the reason `BallotCard` is
+one component: three copies of a fade drift, and motion drifts faster than
+wording because nobody can diff it.
 
-Four things this cost more than one attempt to get right:
+Six things this cost more than one attempt to get right:
 
 **A control must never make the reader wait to see the thing they just did.**
 The stars were swept in both directions at first, the fill running left to
@@ -767,9 +766,21 @@ which way the score moved. See `StarRating.module.css`.
 `Stack` stops being spaced by that stack.** `Reveal` is a `div`, and where the
 thing it wraps was several elements a fragment had flattened into a stack, they
 came out of it: the rule under the question strip on a poll showing its results
-went from sitting in its own air to pressed against the card below. Wrapping
-one element is always safe — the box stands where the element stood — and
-wrapping several means handing `Reveal` the gap of the stack it is standing in.
+went from sitting in its own air to pressed against the card below. Wrap one
+element, never several — the box then stands exactly where the element stood.
+
+**Mounting again is not the same as being different, and only the second one
+earns an entrance.** Walking between the questions of a poll re-mounts the card
+under the question strip, and [the strip is inside that
+card](#a-poll-can-ask-more-than-one-question) — so an entrance on that card
+played in full over a strip that had not changed a pixel, and the navigation
+appeared to reload itself every time it was used. The strip belongs to the poll
+rather than to the question, exactly as the heading above it does, and this
+page keeps both still across a crossing on purpose; an animation does not get
+an exemption from that because React happened to rebuild the DOM underneath it.
+So a crossing animates nothing of its own. What actually changed announces
+itself where it lives: the tally through `Results`, the published sheet through
+`Ballots`.
 
 **A transition needs the browser to have *painted* the value it starts from.**
 The results bars are rendered at nothing and then at their real lengths, and
