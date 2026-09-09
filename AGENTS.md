@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotCard, VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, ConfirmOptions, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, which way a reader is walking through a poll's questions, the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -705,6 +705,96 @@ survive the same test because both are still reachable holding nothing.
 
 The one wait that is still a spinner is the app's own boot, before the session
 is known — at that point there is no page to draw the shape of.
+
+
+## Motion
+
+Nothing in the app moved at all until it was given a scale to move on. The
+rule that decides what gets to: **an animation has to answer a question the
+reader would otherwise have to work out.** A star draining back to zero says a
+score was cleared rather than a tap missed; a bar growing to its length makes
+the comparison the page exists for happen on screen; a page fading in says the
+last one has been left. Anything that would only be pleasant is not in.
+
+The scale is three durations and one curve, declared on `:root` in
+`src/index.css`: `--motion-fast` (120ms) for feedback on a press,
+`--motion-base` (200ms) for something arriving or leaving, `--motion-slow`
+(500ms) for the results bars, which are the one thing meant to be watched
+rather than merely not-jarring. Durations are picked from those and never
+written by hand, so a dozen small animations read as one app rather than as a
+dozen opinions. The single exception is `main.tsx`, where Mantine's transition
+durations reach it as numbers rather than as CSS, and which says so.
+
+A reader who has asked their system for less motion gets none of it, said in
+three places because there are three kinds of motion to say it about: one rule
+over the whole stylesheet in `index.css`, `respectReducedMotion` in the theme
+for Mantine's own components, and `useReducedMotion` in `PollList` for the one
+smooth scroll that is asked for from JavaScript and therefore out of CSS's
+reach.
+
+`src/components/Reveal.tsx` is the entrance everything arrives by — a skeleton
+filling in, a page opening, a winner appearing — for the reason `BallotCard` is
+one component: three copies of a fade drift, and motion drifts faster than
+wording because nobody can diff it.
+
+Six things this cost more than one attempt to get right:
+
+**A control must never make the reader wait to see the thing they just did.**
+The stars were swept in both directions at first, the fill running left to
+right the way they are read. It measured beautifully and felt broken: the star
+at the end of a left-to-right sweep is the star the finger is on, so pressing
+the fourth star lit the three to its left first and began changing the one
+actually under the finger 90ms later. Filling is immediate now and only
+emptying is swept — emptying is the direction that needed the help, since
+pressing the star already picked is how a score goes back to 0 and doing it
+between two frames was indistinguishable from a tap that missed. The wipe runs
+left to right for the same reason it exists: the first star is filled whenever
+there is anything to clear, so starting there means the control answers on the
+frame of the press whatever score was being cleared.
+
+**A transition takes its delay from the state the element is arriving at, so
+that is where the delay has to live.** The first version of the sweep announced
+a direction on the group and let one rule count forwards and another backwards.
+Telling every star its new delay in the same frame as the colour that delay is
+meant to hold back is not something a browser reliably honours: Chrome took the
+new delay for some stars and the old one for others, and the sweep came out
+scattered. The delays hang off `.star` and `.star[data-filled]` instead, so
+each star takes its timing from its own destination and nothing has to know
+which way the score moved. See `StarRating.module.css`.
+
+**Wrapping content in an entrance puts a box around it, and a box inside a
+`Stack` stops being spaced by that stack.** `Reveal` is a `div`, and where the
+thing it wraps was several elements a fragment had flattened into a stack, they
+came out of it: the rule under the question strip on a poll showing its results
+went from sitting in its own air to pressed against the card below. Wrap one
+element, never several — the box then stands exactly where the element stood.
+
+**Mounting again is not the same as being different, and only the second one
+earns an entrance.** Walking between the questions of a poll re-mounts the card
+under the question strip, and [the strip is inside that
+card](#a-poll-can-ask-more-than-one-question) — so an entrance on that card
+played in full over a strip that had not changed a pixel, and the navigation
+appeared to reload itself every time it was used. The strip belongs to the poll
+rather than to the question, exactly as the heading above it does, and this
+page keeps both still across a crossing on purpose; an animation does not get
+an exemption from that because React happened to rebuild the DOM underneath it.
+So a crossing animates nothing of its own. What actually changed announces
+itself where it lives: the tally through `Results`, the published sheet through
+`Ballots`.
+
+**A transition needs the browser to have *painted* the value it starts from.**
+The results bars are rendered at nothing and then at their real lengths, and
+one `requestAnimationFrame` between the two was not enough: React's effect runs
+after the commit but the frame may not have been drawn, so both widths landed
+in one paint and the browser drew the bars full length and transitioned
+nothing. Two frames is what makes the empty bar real. See `Results.tsx`.
+
+**A page's entrance is keyed by which page it is, not by the address.** Every
+question of a poll has an address of its own, and [the poll pages go to real
+trouble](#a-poll-can-ask-more-than-one-question) to keep a crossing between two
+of them mounted so the heading and the strip do not blink. Keying the route's
+fade on `pathname` would have thrown all of that away and re-mounted the poll
+on every step through it, which is why `Layout` keys on `pageKey()` instead.
 
 
 ## Installing it to a home screen

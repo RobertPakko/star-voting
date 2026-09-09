@@ -1,8 +1,10 @@
 import { useId } from 'react'
 import { Button, CopyButton, Group, Input } from '@mantine/core'
+import { CheckIcon } from '@phosphor-icons/react'
 import type { Poll } from '../lib/types'
 import { shareLinkFor } from '../lib/shareLink'
 import { ShareQr } from './ShareQr'
+import classes from './ShareLink.module.css'
 
 /**
  * The link to hand around. Both modes get one; what the link grants differs
@@ -56,8 +58,24 @@ export function ShareLink({ poll }: { poll: Pick<Poll, 'id' | 'title' | 'mode' |
         />
         <CopyButton value={url}>
           {({ copied, copy }) => (
-            <Button variant="light" color={copied ? 'green' : undefined} onClick={copy}>
-              {copied ? 'Copied' : 'Copy'}
+            <Button
+              variant="light"
+              color={copied ? 'green' : undefined}
+              onClick={copy}
+              className={classes.copy}
+              leftSection={
+                copied ? (
+                  <span className={classes.tick}>
+                    <CheckIcon size={16} weight="bold" aria-hidden />
+                  </span>
+                ) : undefined
+              }
+            >
+              {/* Keyed on the word, so each one is drawn rather than the
+                  letters being rewritten in place. */}
+              <span key={copied ? 'copied' : 'copy'} className={classes.label}>
+                {copied ? 'Copied' : 'Copy'}
+              </span>
             </Button>
           )}
         </CopyButton>

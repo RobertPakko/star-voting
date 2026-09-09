@@ -1,0 +1,50 @@
+/* The count badge, just after the number in it changed.
+ *
+ * This is the only thing on any of these pages that moves without the reader
+ * having touched anything: a vote lands somewhere else, the socket says so,
+ * and the badge quietly reads one higher than it did. `LiveConnectionNotice`
+ * explains why there is no live indicator anywhere in the app — a page that
+ * updates itself demonstrates that by updating itself — and this is the half
+ * of that sentence the app was not keeping: a number that changes between two
+ * frames, in a row of five badges that did not, demonstrates nothing to
+ * anybody who was not staring at it.
+ *
+ * So the change is given about a second of being visible. Neutral, and
+ * deliberately: `countBadge` has no hue because a count makes no claim a hue
+ * could carry (see badgeColors.ts), and a badge that went green on its way up
+ * would be inventing one for as long as it took to fade. The background lifts
+ * to the app's own neutral raised surface and settles back.
+ *
+ * The pulse is at the front, where the change is, and much shorter than the
+ * fade: the eye is caught by the movement and then given a calm second to
+ * find out what moved.
+ */
+.bumped {
+  animation:
+    bump 1s var(--motion-ease),
+    pulse var(--motion-base) var(--motion-ease);
+}
+
+@keyframes bump {
+  from {
+    background-color: var(--mantine-color-default-hover);
+  }
+
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes pulse {
+  from {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.09);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
