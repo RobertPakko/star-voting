@@ -6,6 +6,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core'
 import { MoonIcon, SunIcon } from '@phosphor-icons/react'
+import classes from './ThemeToggle.module.css'
 
 const OPTIONS = [
   ['light', 'Light'],
@@ -33,11 +34,15 @@ export function ThemeToggle() {
     <Menu width={150} position="bottom-end" shadow="md">
       <Menu.Target>
         <ActionIcon variant="outline" color="gray" size="lg" aria-label="Color theme">
-          {computed === 'dark' ? (
-            <MoonIcon size={18} aria-hidden />
-          ) : (
-            <SunIcon size={18} aria-hidden />
-          )}
+          {/* Keyed on the scheme, so the icon coming in is a new element and
+              plays its way in; see ThemeToggle.module.css. */}
+          <span key={computed} className={classes.icon}>
+            {computed === 'dark' ? (
+              <MoonIcon size={18} aria-hidden />
+            ) : (
+              <SunIcon size={18} aria-hidden />
+            )}
+          </span>
         </ActionIcon>
       </Menu.Target>
       <Menu.Dropdown>

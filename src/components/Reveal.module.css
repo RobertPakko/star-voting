@@ -1,0 +1,30 @@
+/* The entrance every part of the app arrives by. See Reveal.tsx.
+ *
+ * `animation` rather than `transition`, because these run on mount and there
+ * is no previous value to transition from. The element is laid out where it
+ * always was and only its paint moves, so nothing below it shifts while it
+ * arrives.
+ *
+ * The rise is small on purpose: this is meant to be noticed as the page
+ * settling rather than as an effect, and the distance is what separates the
+ * two.
+ *
+ * `backface-visibility` keeps the transformed text off a half-pixel in
+ * WebKit, where a translated layer is composited and then snapped back.
+ */
+.reveal {
+  animation: reveal var(--motion-base) var(--motion-ease) both;
+  backface-visibility: hidden;
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,0 +1,81 @@
+/* A row joining or leaving a list of options, in the two places the app keeps
+ * one: the create form, where the list is a draft nobody else can see, and
+ * `CollectOptions`, where it is a list several people are adding to at once.
+ *
+ * One stylesheet for both, imported by each, for the reason `BallotCard` is
+ * one component: the two lists are the same list at different stages, and a
+ * row that arrived one way in the form and another way on the poll would be
+ * two things to learn about one idea.
+ *
+ * **The problem is the rows that did not move.** Adding an option pushes
+ * everything below it down by exactly the height of a row, between two
+ * frames, and removing one pulls everything up the same way — so the thing
+ * the reader is looking at is somewhere else by the time they look back, and
+ * nothing said which row was the one that changed. The row that arrives is
+ * not really what needs animating; the gap opening for it is.
+ *
+ * So a row is a one-cell grid that grows from no height to its own. The
+ * `0fr`/`1fr` pair is what makes that possible without anybody measuring
+ * anything: the row has no fixed height to animate between, and asking for
+ * one would mean reading it off the DOM and rewriting it whenever a
+ * description was opened underneath. A browser too old to interpolate
+ * `grid-template-rows` snaps the height and fades the row, which is what the
+ * app did everywhere until now.
+ */
+.row {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+/* The grid's single cell. It has to clip, or the row's contents keep their
+   full height while the track around them collapses and the list ends up
+   overlapping itself. `min-height: 0` is the other half of that: a grid item
+   will not shrink below its content without it. */
+.content {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* For a row that is more than one thing — `CollectOptions` puts a divider
+   under each option — since wrapping them together takes them out of the
+   `Stack` that was spacing them. Matched to that `Stack`'s own `sm`. */
+.stacked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+}
+
+.joining {
+  animation: join var(--motion-base) var(--motion-ease);
+}
+
+/* `forwards`, because a row on its way out is waiting for something —
+   a round trip to the database, or the state update that finally drops it —
+   and must not spring back to full height in the meantime. */
+.leaving {
+  animation: leave var(--motion-base) var(--motion-ease) forwards;
+}
+
+@keyframes join {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
+@keyframes leave {
+  from {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
