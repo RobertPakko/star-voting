@@ -240,7 +240,7 @@ export function CreatorControls({
         <Modal
           opened={frozenOpened}
           onClose={frozenModal.close}
-          title="Cannot edit options"
+          title={<Text fw={600}>Cannot edit options</Text>}
           centered
         >
           <Stack gap="md">
@@ -272,7 +272,7 @@ export function CreatorControls({
         <Modal
           opened={openOpened}
           onClose={openModal.close}
-          title="Open this poll for voting?"
+          title={<Text fw={600}>Open this poll for voting?</Text>}
           centered
         >
           <Stack gap="md">
@@ -296,7 +296,7 @@ export function CreatorControls({
           </Stack>
         </Modal>
 
-        <Modal opened={closeOpened} onClose={closeModal.close} title="Close poll?" centered>
+        <Modal opened={closeOpened} onClose={closeModal.close} title={<Text fw={600}>Close poll?</Text>} centered>
           <Stack gap="md">
             <Text size="sm">
               The poll will be closed and results will be revealed using the {status.voted_count}{' '}
@@ -316,7 +316,7 @@ export function CreatorControls({
           </Stack>
         </Modal>
 
-        <Modal opened={resetOpened} onClose={resetModal.close} title="Reset poll?" centered>
+        <Modal opened={resetOpened} onClose={resetModal.close} title={<Text fw={600}>Reset poll?</Text>} centered>
           <Stack gap="md">
             <Text size="sm">
               {status.voted_count === 0
@@ -340,7 +340,7 @@ export function CreatorControls({
           </Stack>
         </Modal>
 
-        <Modal opened={deleteOpened} onClose={deleteModal.close} title="Delete this poll?" centered>
+        <Modal opened={deleteOpened} onClose={deleteModal.close} title={<Text fw={600}>Delete this poll?</Text>} centered>
           <Stack gap="md">
             <Text size="sm">
               {poll.group_id ? 'Every question in this poll' : 'The poll'}, its options, and every
