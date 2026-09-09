@@ -51,8 +51,8 @@ export function StarRating({
 }) {
   const stars = useRef<(HTMLButtonElement | null)[]>([])
   // The star that took the press, until its animation is done with it. Which
-  // way the score moved is not held anywhere: each star staggers itself off
-  // the state it is arriving at, which is the only version of this that a
+  // way the score moved is not held anywhere: each star takes its own timing
+  // from the state it is arriving at, which is the only version of this that a
   // browser gets right. See StarRating.module.css.
   const [pressed, setPressed] = useState<number | null>(null)
 
@@ -100,8 +100,6 @@ export function StarRating({
       className={classes.group}
       role="radiogroup"
       aria-label={label}
-      // The group's length, for the stagger that counts backwards through it.
-      style={{ '--stars': COUNT } as React.CSSProperties}
       onPointerDown={onPointerDown}
     >
       {Array.from({ length: COUNT }, (_, index) => {

@@ -738,19 +738,38 @@ filling in, a page opening, a question giving way to the next, a winner
 appearing — for the reason `BallotCard` is one component: four copies of a fade
 drift, and motion drifts faster than wording because nobody can diff it.
 
-Three things this cost more than one attempt to get right:
+Four things this cost more than one attempt to get right:
+
+**A control must never make the reader wait to see the thing they just did.**
+The stars were swept in both directions at first, the fill running left to
+right the way they are read. It measured beautifully and felt broken: the star
+at the end of a left-to-right sweep is the star the finger is on, so pressing
+the fourth star lit the three to its left first and began changing the one
+actually under the finger 90ms later. Filling is immediate now and only
+emptying is swept — emptying is the direction that needed the help, since
+pressing the star already picked is how a score goes back to 0 and doing it
+between two frames was indistinguishable from a tap that missed. The wipe runs
+left to right for the same reason it exists: the first star is filled whenever
+there is anything to clear, so starting there means the control answers on the
+frame of the press whatever score was being cleared.
 
 **A transition takes its delay from the state the element is arriving at, so
-that is where the delay has to live.** The stars fill left to right and drain
-right to left, and the first version of that announced the direction on the
-group and let one rule count forwards and another backwards. It measured
-correctly and drew wrong: telling every star its new delay in the same frame as
-the colour that delay is meant to hold back is not something a browser reliably
-honours, and Chrome took the new delay for some stars and the old one for
-others — the drain came out scattered rather than swept. The fix is to hang the
-forward delay on `.star[data-filled]` and the backward one on `.star`, so each
-star staggers itself off its own destination and nothing has to know which way
-the score moved. See `StarRating.module.css`.
+that is where the delay has to live.** The first version of the sweep announced
+a direction on the group and let one rule count forwards and another backwards.
+Telling every star its new delay in the same frame as the colour that delay is
+meant to hold back is not something a browser reliably honours: Chrome took the
+new delay for some stars and the old one for others, and the sweep came out
+scattered. The delays hang off `.star` and `.star[data-filled]` instead, so
+each star takes its timing from its own destination and nothing has to know
+which way the score moved. See `StarRating.module.css`.
+
+**Wrapping content in an entrance puts a box around it, and a box inside a
+`Stack` stops being spaced by that stack.** `Reveal` is a `div`, and where the
+thing it wraps was several elements a fragment had flattened into a stack, they
+came out of it: the rule under the question strip on a poll showing its results
+went from sitting in its own air to pressed against the card below. Wrapping
+one element is always safe — the box stands where the element stood — and
+wrapping several means handing `Reveal` the gap of the stack it is standing in.
 
 **A transition needs the browser to have *painted* the value it starts from.**
 The results bars are rendered at nothing and then at their real lengths, and
