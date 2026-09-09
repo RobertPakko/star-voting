@@ -631,7 +631,10 @@ export function PollDetail({
           navigate. */}
       <Reveal key={pollId} from={crossing}>
         {showing ? (
-          <Reveal>
+          // Carrying the page's own gap, because several of the branches below
+          // are more than one element and were being spaced by the `Stack`
+          // this now sits inside rather than beside; see Reveal.
+          <Reveal gap="md">
             {/* The creator's correction to an option list that is already a ballot,
           in place of that ballot while it is open. It replaces the ballot
           rather than sitting beside it because they are two readings of one

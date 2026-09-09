@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Stack, type MantineSpacing } from '@mantine/core'
 import classes from './Reveal.module.css'
 
 /** Which way the content comes in from. */
@@ -34,16 +35,38 @@ export type RevealFrom = 'below' | 'left' | 'right'
  * Everything else fades and rises a little, which says "this is new" without
  * pretending to say where it came from.
  *
+ * **`gap` is not decoration and leaving it off is a real mistake.** This puts
+ * a box around content that did not have one, and where that content was
+ * several things inside a `Stack`, the box takes them out of it: they were
+ * being spaced by the stack and now they are being spaced by nothing. It cost
+ * the rule under the question strip on a poll showing its results, which went
+ * from sitting in its own air to being pressed against the card below it. So
+ * when what is being wrapped is more than one element in a `Stack`, hand this
+ * that stack's own gap and it lays them out the same way. One element needs
+ * nothing: the box stands where the element stood and is spaced like it.
+ *
  * A reader who has asked for less motion gets none of this; the rule is in
  * index.css, over the whole app rather than repeated here.
  */
 export function Reveal({
   children,
   from = 'below',
+  gap,
 }: {
   children: ReactNode
   /** @default 'below' */
   from?: RevealFrom
+  /** The gap of the `Stack` this is standing in; see above. */
+  gap?: MantineSpacing
 }) {
-  return <div className={`${classes.reveal} ${classes[from]}`}>{children}</div>
+  const className = `${classes.reveal} ${classes[from]}`
+
+  if (gap !== undefined) {
+    return (
+      <Stack className={className} gap={gap}>
+        {children}
+      </Stack>
+    )
+  }
+  return <div className={className}>{children}</div>
 }
