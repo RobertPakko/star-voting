@@ -402,19 +402,33 @@ nothing is being run, only compiled, and a pull request from a fork could not
 see them anyway.
 
 ```bash
-npm run test:unit     # vitest, over src/lib/schedule.ts and nothing else
+npm run test:unit     # vitest, over two files and nothing else
 ```
 
-**`test:unit` is deliberately one file wide.** It exists because [schedule
+**`test:unit` is deliberately narrow.** It exists because [schedule
 mode](#a-poll-that-finds-a-time) put a piece of election logic in the browser
 for the first time: a time poll's options are enumerated by the creator's
 browser and its ballot is flattened from a painted calendar into a score per
 option before it is sent, so `src/lib/schedule.ts` can be wrong in exactly the
 way the tally can — plausibly, and with nothing downstream that would notice,
 because the database sees an ordinary poll either way. The SQL suite cannot
-reach it and there was no JS runner in the repo, so one was added for it. It is
-not a foothold for testing components: everything it covers is a pure function
-of its arguments.
+reach it and there was no JS runner in the repo, so one was added for it.
+
+It covers two things, and both are things neither other check can see:
+
+- `schedule.test.ts`, the derivation above — pure functions of their
+  arguments, and not a foothold for testing components.
+- `limits.test.ts`, which reads `supabase/migrations/` and asserts that every
+  number in [`limits.ts`](src/lib/limits.ts) is the number the database
+  actually enforces. That file has always said *change a number here and change
+  it there in the same breath*, and nothing enforced it: when `0055` raised the
+  option ceiling to 500, `MAX_OPTIONS` stayed at 50 for three commits and the
+  create form refused a 210-window calendar the database would have taken. The
+  type checker cannot see SQL and the SQL suite cannot see TypeScript, so this
+  is the only place the two can be compared. It reads the *last* definition of
+  each function across the migrations in order, which is what a database built
+  from them runs, and it goes through `import.meta.glob` rather than `node:fs`
+  so that a test under `src/` is still held to the browser's typing.
 
 Getting to a server is `test/build-db.sh`'s job, and it is the same job for
 `scripts/sample-poll.sh`, which arrives through the same file: start the local

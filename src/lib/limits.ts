@@ -34,11 +34,22 @@ export const OPTION_NAME_MAX = 150
  */
 export const OPTION_DESCRIPTION_MAX = 900
 /**
- * Matches `insert_option`. A ballot is a list somebody has to read to the end
- * before scoring any of it, and one nobody reads to the end is not one
- * anybody can score honestly.
+ * Matches `insert_option` and `insert_poll_row`. Raised from 50 by
+ * `0055_schedule_polls.sql`, and the reason it moved is a change of question.
+ *
+ * 50 was a ceiling on how long a list a person will read to the end before
+ * scoring any of it, which is the right question to ask of a list of options
+ * and the wrong one to ask of a calendar: a working week of half-hour starts
+ * is over a hundred windows, and nobody reads a grid, they scan it. What 500
+ * is a ceiling on instead is what the tally can be asked to do while a voter
+ * waits for it -- see "A poll that finds a time" in AGENTS.md for what that
+ * actually costs.
+ *
+ * Applied to every poll rather than only to the new kind, because one number
+ * is one thing to keep in step, and a ballot long enough to be a problem was
+ * never going to be stopped at the fiftieth option anyway.
  */
-export const MAX_OPTIONS = 50
+export const MAX_OPTIONS = 500
 
 /** A name beside a tick on an open poll's roster, not a field to write in. */
 export const VOTER_NAME_MAX = 60
