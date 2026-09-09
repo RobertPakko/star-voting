@@ -98,7 +98,13 @@ export function FullRanking({
         }
       />
 
-      <Modal opened={opened} onClose={modal.close} title="Full ranking" size="lg" centered>
+      <Modal
+        opened={opened}
+        onClose={modal.close}
+        size="lg"
+        centered
+        title={<Text fw={600}>Full ranking</Text>}
+      >
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             STAR names one winner. To order the rest, the method runs again on the options left

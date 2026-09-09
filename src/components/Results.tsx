@@ -20,8 +20,10 @@ import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { NameList } from './NameList'
 import { OptionDescription } from './OptionDescription'
+import { Reveal } from './Reveal'
 import { ResultsSkeleton } from './Skeletons'
 import { voters } from '../lib/plural'
+import classes from './Results.module.css'
 
 /**
  * Which tally endpoint to read. Both return the same shape; the split is
@@ -72,6 +74,33 @@ export function Results({
   // deliberately — a reset takes a poll's votes away and tells nobody — and a
   // re-read must never come back with the answer from before it.
   const handoff = useRef(initial)
+  // Whether the bars have been let go. They are drawn at nothing for one
+  // frame and then at their real lengths, which is what there is to animate:
+  // a bar rendered at its length has never been any other length and has
+  // nothing to travel from. Once true it stays true — a live tick that brings
+  // a new tally moves the bars from where they were, and re-running the whole
+  // reveal on every vote would be the page shouting at the reader.
+  const [grown, setGrown] = useState(false)
+
+  useEffect(() => {
+    if (!results) return
+    // Two frames, and both of them are load-bearing. A transition needs the
+    // browser to have *painted* the width it is travelling from, and an
+    // effect does not guarantee that has happened: React runs this after the
+    // commit but the frame may not have been drawn yet, so flipping the width
+    // one frame later can still land in the same paint as the zero — which
+    // the browser resolves by drawing the bars full length and transitioning
+    // nothing. Waiting for the frame after the first is what makes the empty
+    // bar real.
+    let second = 0
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setGrown(true))
+    })
+    return () => {
+      cancelAnimationFrame(first)
+      cancelAnimationFrame(second)
+    }
+  }, [results])
 
   useEffect(() => {
     const given = handoff.current
@@ -119,160 +148,182 @@ export function Results({
   const nameById = new Map(shown.options.map((o) => [o.id, o.name]))
   const maxScore = Math.max(1, ...shown.options.map((o) => o.total_score))
 
+  // Wrapped so the tally fades in over the shape that was standing in for it,
+  // rather than replacing it between two frames. The winner card below has an
+  // entrance of its own as well, and needs one: a poll watched as it finishes
+  // grows a winner without this ever remounting.
   return (
-    <Stack gap="md">
-      {shown.winner_id && (
-        <Card withBorder bg="var(--mantine-color-green-light)">
-          <Text fw={700} size="lg">
-            Winner: {nameById.get(shown.winner_id)}
-          </Text>
-        </Card>
-      )}
-      {!shown.winner_id && shown.finalists.length === 2 && (
-        <Card withBorder bg="var(--mantine-color-orange-light)">
-          <Text fw={700} size="lg">
-            No winner
-          </Text>
-        </Card>
-      )}
-
-      <Stack gap={2}>
-        <Title order={4}>Score round</Title>
-        <Card withBorder p="sm">
-          <Stack gap="xs">
-            {shown.options.map((o) => (
-              <div key={o.id}>
-                <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
-                  <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={shown.finalists.includes(o.id) ? 700 : 400} truncate>
-                      {o.name}
-                    </Text>
-                    {o.description && <OptionNote name={o.name} description={o.description} />}
-                  </Group>
-                  <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                    {o.total_score} pts (avg {o.average_score})
-                  </Text>
-                </Group>
-                <Progress
-                  value={(o.total_score / maxScore) * 100}
-                  color={shown.finalists.includes(o.id) ? 'blue' : 'gray'}
-                />
-              </div>
-            ))}
-          </Stack>
-        </Card>
-      </Stack>
-
-      {shown.tiebreaks.length > 0 && (
-        <Stack gap={2}>
-          <Title order={4}>Tie-break{shown.tiebreaks.length > 1 ? 's' : ''}</Title>
-          {shown.tiebreaks.map((tb, i) => (
-            <Card withBorder key={i} p="sm">
-              <Stack gap="xs">
-                <Text size="sm">
-                  <NameList names={tb.tied} /> tied at {tb.tied_at} pts for{' '}
-                  {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}.
-                </Text>
-                {tb.steps.map((step, j) => (
-                  <Stack key={step.rule} gap={2}>
-                    <Group gap="xs">
-                      <Text size="sm" fw={600}>
-                        {j + 1}.{' '}
-                        {step.rule === 'head_to_head'
-                          ? 'Head-to-head preference'
-                          : 'Five-star votes'}
-                      </Text>
-                      <Badge
-                        size="xs"
-                        variant="light"
-                        color={step.decisive ? badgeColor.done : badgeColor.unsettled}
-                      >
-                        {step.decisive ? 'Decisive' : 'Still tied'}
-                      </Badge>
-                    </Group>
-                    {step.rule === 'head_to_head' ? (
-                      <HeadToHead step={step} />
-                    ) : (
-                      step.results.map((r) => (
-                        <Text key={r.id} size="sm" c="dimmed" pl="md">
-                          <strong>{r.name}</strong>: {r.value}{' '}
-                          {r.value === 1 ? 'five-star vote' : 'five-star votes'}
-                        </Text>
-                      ))
-                    )}
-                  </Stack>
-                ))}
-
-                <Text size="sm" c={tb.resolved_by === 'random' ? 'orange' : undefined}>
-                  {tb.resolved_by === 'random'
-                    ? renderAdvancedNames(
-                        tb.advanced,
-                        'Still tied after every rule; ',
-                        ' advanced by random selection.',
-                      )
-                    : renderAdvancedNames(
-                        tb.advanced,
-                        '',
-                        ` advanced on ${
-                          tb.resolved_by === 'head_to_head'
-                            ? 'head-to-head preference'
-                            : 'five-star votes'
-                        }.`,
-                      )}
-                </Text>
-              </Stack>
+    <Reveal>
+      <Stack gap="md">
+        {/* The one card on the page worth arriving rather than appearing. It is
+          the answer the whole poll was run to get, and it is also the only
+          thing here that was not on screen a moment ago — everything below it
+          is a working, and a working does not need announcing. Deliberately
+          the same small rise as everything else in the app: this is the end of
+          a decision about where to eat, and it should look pleased rather
+          than triumphant. The card that says there is no winner gets the same
+          entrance, being the same news. */}
+        {shown.winner_id && (
+          <Reveal>
+            <Card withBorder bg="var(--mantine-color-green-light)">
+              <Text fw={700} size="lg">
+                Winner: {nameById.get(shown.winner_id)}
+              </Text>
             </Card>
-          ))}
-        </Stack>
-      )}
+          </Reveal>
+        )}
+        {!shown.winner_id && shown.finalists.length === 2 && (
+          <Reveal>
+            <Card withBorder bg="var(--mantine-color-orange-light)">
+              <Text fw={700} size="lg">
+                No winner
+              </Text>
+            </Card>
+          </Reveal>
+        )}
 
-      {shown.runoff && shown.finalists.length === 2 && (
         <Stack gap={2}>
-          <Title order={4}>Automatic runoff round</Title>
+          <Title order={4}>Score round</Title>
           <Card withBorder p="sm">
             <Stack gap="xs">
-              <Text size="sm">
-                <strong>{nameById.get(shown.finalists[0])}</strong>:{' '}
-                {voters(shown.runoff.prefers_a)} preferred
-              </Text>
-              <Text size="sm">
-                <strong>{nameById.get(shown.finalists[1])}</strong>:{' '}
-                {voters(shown.runoff.prefers_b)} preferred
-              </Text>
-              <Text size="sm" c="dimmed">
-                {voters(shown.runoff.ties)} scored both finalists equally.
-              </Text>
-              {shown.runoff.resolved_by === 'higher_score' && (
-                <Text size="sm">
-                  The runoff tied, so it went to {nameById.get(shown.winner_id ?? '')} on the higher
-                  score-round total.
-                </Text>
-              )}
-              {shown.runoff.resolved_by === 'five_star_votes' && (
-                <>
-                  <Text size="sm">
-                    The runoff tied and both finalists have identical score totals, so it went to{' '}
-                    {nameById.get(shown.winner_id ?? '')} on five-star votes.
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    {nameById.get(shown.finalists[0])}: {shown.runoff.five_stars_a} ·{' '}
-                    {nameById.get(shown.finalists[1])}: {shown.runoff.five_stars_b}
-                  </Text>
-                </>
-              )}
-              {shown.runoff.resolved_by === 'unresolved' && (
-                <Text size="sm" c="orange">
-                  The runoff tied, both finalists have identical score totals, and both were given
-                  five stars on the same number of ballots, so there is no winner.
-                </Text>
-              )}
+              {shown.options.map((o, index) => (
+                <div key={o.id}>
+                  <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
+                    <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+                      <Text size="sm" fw={shown.finalists.includes(o.id) ? 700 : 400} truncate>
+                        {o.name}
+                      </Text>
+                      {o.description && <OptionNote name={o.name} description={o.description} />}
+                    </Group>
+                    <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                      {o.total_score} pts (avg {o.average_score})
+                    </Text>
+                  </Group>
+                  <Progress
+                    value={grown ? (o.total_score / maxScore) * 100 : 0}
+                    color={shown.finalists.includes(o.id) ? 'blue' : 'gray'}
+                    classNames={{ root: classes.bar, section: classes.section }}
+                    // Its place in the tally, which is what the bars are
+                    // staggered along; see Results.module.css.
+                    style={{ '--row': index } as React.CSSProperties}
+                  />
+                </div>
+              ))}
             </Stack>
           </Card>
         </Stack>
-      )}
 
-      <FullRanking source={source} results={shown} />
-    </Stack>
+        {shown.tiebreaks.length > 0 && (
+          <Stack gap={2}>
+            <Title order={4}>Tie-break{shown.tiebreaks.length > 1 ? 's' : ''}</Title>
+            {shown.tiebreaks.map((tb, i) => (
+              <Card withBorder key={i} p="sm">
+                <Stack gap="xs">
+                  <Text size="sm">
+                    <NameList names={tb.tied} /> tied at {tb.tied_at} pts for{' '}
+                    {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}.
+                  </Text>
+                  {tb.steps.map((step, j) => (
+                    <Stack key={step.rule} gap={2}>
+                      <Group gap="xs">
+                        <Text size="sm" fw={600}>
+                          {j + 1}.{' '}
+                          {step.rule === 'head_to_head'
+                            ? 'Head-to-head preference'
+                            : 'Five-star votes'}
+                        </Text>
+                        <Badge
+                          size="xs"
+                          variant="light"
+                          color={step.decisive ? badgeColor.done : badgeColor.unsettled}
+                        >
+                          {step.decisive ? 'Decisive' : 'Still tied'}
+                        </Badge>
+                      </Group>
+                      {step.rule === 'head_to_head' ? (
+                        <HeadToHead step={step} />
+                      ) : (
+                        step.results.map((r) => (
+                          <Text key={r.id} size="sm" c="dimmed" pl="md">
+                            <strong>{r.name}</strong>: {r.value}{' '}
+                            {r.value === 1 ? 'five-star vote' : 'five-star votes'}
+                          </Text>
+                        ))
+                      )}
+                    </Stack>
+                  ))}
+
+                  <Text size="sm" c={tb.resolved_by === 'random' ? 'orange' : undefined}>
+                    {tb.resolved_by === 'random'
+                      ? renderAdvancedNames(
+                          tb.advanced,
+                          'Still tied after every rule; ',
+                          ' advanced by random selection.',
+                        )
+                      : renderAdvancedNames(
+                          tb.advanced,
+                          '',
+                          ` advanced on ${
+                            tb.resolved_by === 'head_to_head'
+                              ? 'head-to-head preference'
+                              : 'five-star votes'
+                          }.`,
+                        )}
+                  </Text>
+                </Stack>
+              </Card>
+            ))}
+          </Stack>
+        )}
+
+        {shown.runoff && shown.finalists.length === 2 && (
+          <Stack gap={2}>
+            <Title order={4}>Automatic runoff round</Title>
+            <Card withBorder p="sm">
+              <Stack gap="xs">
+                <Text size="sm">
+                  <strong>{nameById.get(shown.finalists[0])}</strong>:{' '}
+                  {voters(shown.runoff.prefers_a)} preferred
+                </Text>
+                <Text size="sm">
+                  <strong>{nameById.get(shown.finalists[1])}</strong>:{' '}
+                  {voters(shown.runoff.prefers_b)} preferred
+                </Text>
+                <Text size="sm" c="dimmed">
+                  {voters(shown.runoff.ties)} scored both finalists equally.
+                </Text>
+                {shown.runoff.resolved_by === 'higher_score' && (
+                  <Text size="sm">
+                    The runoff tied, so it went to {nameById.get(shown.winner_id ?? '')} on the
+                    higher score-round total.
+                  </Text>
+                )}
+                {shown.runoff.resolved_by === 'five_star_votes' && (
+                  <>
+                    <Text size="sm">
+                      The runoff tied and both finalists have identical score totals, so it went to{' '}
+                      {nameById.get(shown.winner_id ?? '')} on five-star votes.
+                    </Text>
+                    <Text size="sm" c="dimmed">
+                      {nameById.get(shown.finalists[0])}: {shown.runoff.five_stars_a} ·{' '}
+                      {nameById.get(shown.finalists[1])}: {shown.runoff.five_stars_b}
+                    </Text>
+                  </>
+                )}
+                {shown.runoff.resolved_by === 'unresolved' && (
+                  <Text size="sm" c="orange">
+                    The runoff tied, both finalists have identical score totals, and both were given
+                    five stars on the same number of ballots, so there is no winner.
+                  </Text>
+                )}
+              </Stack>
+            </Card>
+          </Stack>
+        )}
+
+        <FullRanking source={source} results={shown} />
+      </Stack>
+    </Reveal>
   )
 }
 

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { StarIcon } from '@phosphor-icons/react'
 import classes from './StarRating.module.css'
 
@@ -30,6 +30,11 @@ const COUNT = 5
  *
  * The group is a radio group to a screen reader: one tab stop, arrow keys to
  * move between the scores, Left from one star clearing back to 0.
+ *
+ * Every change to the score, from a tap or from the keyboard, goes through
+ * `apply`, which is also the only thing that knows which way the score just
+ * moved and which star was pressed to move it. Both are for the animation and
+ * neither leaves this file; see StarRating.module.css for what they draw.
  */
 export function StarRating({
   value,
@@ -45,9 +50,29 @@ export function StarRating({
   onPointerDown?: React.PointerEventHandler<HTMLDivElement>
 }) {
   const stars = useRef<(HTMLButtonElement | null)[]>([])
+  // The star that took the press, until its animation is done with it. Which
+  // way the score moved is not held anywhere: each star takes its own timing
+  // from the state it is arriving at, which is the only version of this that a
+  // browser gets right. See StarRating.module.css.
+  const [pressed, setPressed] = useState<number | null>(null)
+
+  /**
+   * The one way the score changes, whichever control changed it.
+   *
+   * `pressed` is the star the reader actually acted on rather than the score
+   * they landed on, and the two come apart on exactly the press this control
+   * is worst at showing: pressing the third star when it is already picked
+   * scores 0, and the star to answer for that is the third.
+   */
+  function apply(next: number, star: number) {
+    setPressed(star)
+    onChange(next)
+  }
 
   function move(to: number) {
-    onChange(to)
+    // The star that keeps the focus is the one that took the press; 0 has no
+    // star of its own and the first one stands in, exactly as below.
+    apply(to, Math.max(to, 1))
     // Focus follows the score, so the next arrow press continues from it
     // rather than from where the finger or the tab stop left off. 0 has no
     // star of its own; the first one keeps the focus.
@@ -94,8 +119,14 @@ export function StarRating({
             tabIndex={star === Math.max(value, 1) ? 0 : -1}
             className={classes.star}
             data-filled={star <= value || undefined}
-            onClick={() => onChange(star === value ? 0 : star)}
+            data-pressed={pressed === star || undefined}
+            style={{ '--star': index } as React.CSSProperties}
+            onClick={() => apply(star === value ? 0 : star, star)}
             onKeyDown={(event) => handleKeyDown(event, star)}
+            // Handing the star back once it has finished is what lets the
+            // next press on the same star play at all: the attribute has to
+            // leave before it can arrive again.
+            onAnimationEnd={() => setPressed(null)}
           >
             <StarIcon size={20} weight="fill" aria-hidden />
           </button>

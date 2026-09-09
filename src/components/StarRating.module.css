@@ -20,14 +20,81 @@
      over the star on Android while the finger is down. */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  transition: color var(--motion-fast) var(--motion-ease);
+  /* The *emptying* delay, because this is the rule a star that is losing its
+     fill lands on; see the note below for why only one of the two directions
+     is staggered at all. */
+  transition-delay: calc(var(--star) * 30ms);
 
   @mixin dark {
     color: var(--mantine-color-dark-3);
   }
 }
 
+/* **Filling is immediate and only emptying is swept**, which is not a
+ * symmetry anybody would design on purpose and is the right way round for
+ * exactly one reason: **a control must never make the reader wait to see the
+ * thing they just did.**
+ *
+ * Both directions were swept at first, the fill running left to right the way
+ * the stars are read. It measured beautifully and felt broken, because the
+ * star at the end of a left-to-right sweep is the star the finger is on: press
+ * the fourth star and the three to its left light first, and the one actually
+ * under the finger begins to change 90ms later and finishes 210ms after the
+ * press. That is a control lagging its input, and no amount of sweep is worth
+ * it. Filling needs no help anyway — five stars lighting up is not a change
+ * anybody misses.
+ *
+ * Emptying is the one that did need help. 0 is a real score here and pressing
+ * the star already picked is the only way to reach it — a gesture the ballot
+ * has to explain in words above the options, because nothing about the control
+ * suggests it. Cleared between two frames it was indistinguishable from a tap
+ * that missed: five stars are lit, and then they are not. Wiped out one after
+ * another it reads as something the reader did, which is the whole of what was
+ * missing.
+ *
+ * It sweeps left to right, away from the empty end rather than back towards
+ * it, and that is the same rule about waiting: the first star is filled
+ * whenever there is anything to clear, so starting there means the control
+ * always begins answering on the frame of the press, whether the score being
+ * cleared was five or one.
+ *
+ * **The two delays live on the two states, rather than on a direction the
+ * group announces.** A transition takes its timing from the style the element
+ * is arriving *at*: a star gaining its fill arrives at the rule below, a star
+ * losing it arrives at `.star` above. Handing the whole group a direction
+ * instead looked equivalent and was not — it moves every star's delay in the
+ * same frame as the colour that delay is meant to hold back, and a delay that
+ * changes as its transition begins is not reliably the delay the transition
+ * gets. Chrome took the new one for some stars and the old one for others, and
+ * the sweep came out scattered. */
 .star[data-filled] {
   color: var(--mantine-color-yellow-filled);
+  /* The filling delay: none, and see above before adding one. */
+  transition-delay: 0ms;
+}
+
+/* The press itself, on the star that took it — including the press that
+   clears the score, which is the one press that leaves the star it landed on
+   dimmer than it found it and would otherwise show nothing at all. It is also
+   what answers a clear on the frame it happens, since the star being pressed
+   is the last one the wipe above reaches. */
+.star[data-pressed] svg {
+  animation: press var(--motion-fast) var(--motion-ease);
+}
+
+@keyframes press {
+  from {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.22);
+  }
+
+  to {
+    transform: scale(1);
+  }
 }
 
 .star:focus-visible {

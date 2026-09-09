@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Stack, Table, Text, Title } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { Reveal } from './Reveal'
 import { BallotsSkeleton } from './Skeletons'
 import { relabelSheet } from '../lib/schedule'
 import type { BallotSheet } from '../lib/types'
@@ -92,7 +93,9 @@ export function Ballots({
   if (!sheet) return <BallotsSkeleton />
 
   // The columns of a time poll's sheet are its windows, which are stored as
-  // ISO timestamps and read as headings; see relabelSheet.
+  // ISO timestamps and read as headings; see relabelSheet. Applied to every
+  // poll, because an ordinary poll's options are not window starts and come
+  // back exactly as they went in.
   const shown = relabelSheet(sheet)
   const named = shown.voters_named
   // Unscored options count as 0 everywhere else in the app; a ballot missing
@@ -103,55 +106,58 @@ export function Ballots({
     shown.ballots.reduce((sum, b) => sum + scoreOn(b.scores, o.id), 0),
   )
 
+  // Faded in over the shape that was standing in for it; see Reveal.
   return (
-    <Stack gap={2}>
-      <Title order={4}>Ballots</Title>
-      <Table.ScrollContainer minWidth={120 + shown.options.length * 90}>
-        <Table striped withTableBorder withColumnBorders>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{named ? 'Voter' : 'Ballot'}</Table.Th>
-              {shown.options.map((o) => (
-                <Table.Th key={o.id} ta="right">
-                  {o.name}
-                </Table.Th>
-              ))}
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {/* Index as key: the list is static once fetched, and an
-                  unnamed sheet has nothing else to key on by design. */}
-            {shown.ballots.map((ballot, i) => (
-              <Table.Tr key={i}>
-                <Table.Td>
-                  {named ? (
-                    ballot.voter
-                  ) : (
-                    <Text size="sm" c="dimmed">
-                      #{i + 1}
-                    </Text>
-                  )}
-                </Table.Td>
+    <Reveal>
+      <Stack gap={2}>
+        <Title order={4}>Ballots</Title>
+        <Table.ScrollContainer minWidth={120 + shown.options.length * 90}>
+          <Table striped withTableBorder withColumnBorders>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{named ? 'Voter' : 'Ballot'}</Table.Th>
                 {shown.options.map((o) => (
-                  <Table.Td key={o.id} ta="right">
-                    {scoreOn(ballot.scores, o.id)}
-                  </Table.Td>
+                  <Table.Th key={o.id} ta="right">
+                    {o.name}
+                  </Table.Th>
                 ))}
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-          <Table.Tfoot>
-            <Table.Tr>
-              <Table.Th>Total</Table.Th>
-              {totals.map((total, i) => (
-                <Table.Th key={shown.options[i].id} ta="right">
-                  {total}
-                </Table.Th>
+            </Table.Thead>
+            <Table.Tbody>
+              {/* Index as key: the list is static once fetched, and an
+                  unnamed sheet has nothing else to key on by design. */}
+              {shown.ballots.map((ballot, i) => (
+                <Table.Tr key={i}>
+                  <Table.Td>
+                    {named ? (
+                      ballot.voter
+                    ) : (
+                      <Text size="sm" c="dimmed">
+                        #{i + 1}
+                      </Text>
+                    )}
+                  </Table.Td>
+                  {shown.options.map((o) => (
+                    <Table.Td key={o.id} ta="right">
+                      {scoreOn(ballot.scores, o.id)}
+                    </Table.Td>
+                  ))}
+                </Table.Tr>
               ))}
-            </Table.Tr>
-          </Table.Tfoot>
-        </Table>
-      </Table.ScrollContainer>
-    </Stack>
+            </Table.Tbody>
+            <Table.Tfoot>
+              <Table.Tr>
+                <Table.Th>Total</Table.Th>
+                {totals.map((total, i) => (
+                  <Table.Th key={shown.options[i].id} ta="right">
+                    {total}
+                  </Table.Th>
+                ))}
+              </Table.Tr>
+            </Table.Tfoot>
+          </Table>
+        </Table.ScrollContainer>
+      </Stack>
+    </Reveal>
   )
 }

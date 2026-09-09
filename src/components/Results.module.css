@@ -1,0 +1,22 @@
+/* The score-round bars, on their way to the lengths they are reporting.
+ *
+ * This is the one place in the app that gets `--motion-slow`, and the one
+ * animation here that is meant to be watched rather than merely not-jarring.
+ * The bars are the whole point of the page: a reader arrives to compare
+ * lengths, and a set of bars that is simply *already* there has to be read
+ * one at a time to be compared at all. Drawn growing, the comparison is the
+ * thing that happens on screen — the order they settle in is the ranking.
+ *
+ * The stagger is what makes it a reading rather than a flourish: the rows go
+ * in the order the tally lists them, which is the order they placed in, so
+ * the winner's bar is the first to move.
+ *
+ * The transition is declared here in full rather than left to Mantine's
+ * `transitionDuration` prop, so the duration comes from the app's scale
+ * instead of a number written into the JSX; the doubled class is what makes
+ * it certainly beat Mantine's own rule for the same property.
+ */
+.bar .section {
+  transition: width var(--motion-slow) var(--motion-ease);
+  transition-delay: calc(var(--row) * 40ms);
+}

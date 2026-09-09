@@ -20,6 +20,7 @@ import {
   zoneOffsetOn,
   zoneShiftsWithin,
 } from './schedule'
+import { MAX_OPTIONS } from './limits'
 import type { PollSchedule } from './types'
 
 /**
@@ -94,6 +95,28 @@ describe('enumerating the windows', () => {
       '2026-09-01 22:00',
       '2026-09-01 23:00',
     ])
+  })
+
+  test('a fortnight of half-hour starts fits under the cap', () => {
+    // The shape that found the bug this test exists for: an 11-hour day, a
+    // one-hour meeting, half-hour steps, ten days -- 210 windows. The database
+    // has taken 500 since 0055; `MAX_OPTIONS` said 50 for a while longer, so
+    // the form refused a calendar the server would have stored. See
+    // limits.test.ts, which is what stops the two drifting again.
+    const fortnight: PollSchedule = {
+      timezone: '-07:00',
+      window: { start: '08:00', end: '19:00' },
+      desired_slots: 2,
+      granularity: 30,
+    }
+    expect(windowsOn(fortnight, '2026-09-01')).toBe(21)
+    const days = Array.from({ length: 10 }, (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`)
+    const starts = enumerateWindows(fortnight, days)
+    expect(starts).toHaveLength(210)
+    // Which is what the create form adds up before it lets the poll be made,
+    // one day at a time now that two days need not be the same length.
+    expect(countWindows(fortnight, days)).toBe(210)
+    expect(starts.length).toBeLessThanOrEqual(MAX_OPTIONS)
   })
 
   test('the days a poll asks about are the days its options start on', () => {

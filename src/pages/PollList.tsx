@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card, Group, Pagination, Stack, Text, Title } from '@mantine/core'
+import { useReducedMotion } from '@mantine/hooks'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
+import { Reveal } from '../components/Reveal'
 import { PollListSkeleton } from '../components/Skeletons'
 import type { PollListItem } from '../lib/types'
 import { winnerLabel } from '../lib/schedule'
+import classes from './PollList.module.css'
 
 /**
  * How many polls a page of the list holds.
@@ -25,6 +28,9 @@ const PAGE_SIZE = 10
 
 export function PollList() {
   const { session } = useAuth()
+  // Asked here rather than in CSS because the scroll below is asked for from
+  // JavaScript, which the global rule in index.css cannot reach.
+  const reducedMotion = useReducedMotion()
   const [polls, setPolls] = useState<PollListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
@@ -148,87 +154,92 @@ export function PollList() {
 
   if (!polls) return <PollListSkeleton />
 
+  // Faded in over the shape that was standing in for it, rather than swapped
+  // for it between two frames; see Reveal.
   return (
-    <Stack maw={720} mx="auto" gap="md">
-      <LiveConnectionNotice status={liveStatus} />
+    <Reveal>
+      <Stack maw={720} mx="auto" gap="md">
+        <LiveConnectionNotice status={liveStatus} />
 
-      <Group justify="space-between">
-        <Title order={2}>Your polls</Title>
-        <Button component={Link} to="/polls/new">
-          New poll
-        </Button>
-      </Group>
+        <Group justify="space-between">
+          <Title order={2}>Your polls</Title>
+          <Button component={Link} to="/polls/new">
+            New poll
+          </Button>
+        </Group>
 
-      {polls.length === 0 && (
-        <Text c="dimmed" size="sm">
-          No polls yet. Create one, or wait for an invite.
-        </Text>
-      )}
+        {polls.length === 0 && (
+          <Text c="dimmed" size="sm">
+            No polls yet. Create one, or wait for an invite.
+          </Text>
+        )}
 
-      <Stack gap="md">
-        {shown.map((poll) => (
-          <Card
-            key={poll.id}
-            withBorder
-            component={Link}
-            to={`/polls/${poll.id}`}
-            style={{ textDecoration: 'none' }}
-          >
-            {/* The same heading the poll's own page carries, at card size;
+        <Stack gap="md">
+          {shown.map((poll) => (
+            <Card
+              key={poll.id}
+              withBorder
+              component={Link}
+              to={`/polls/${poll.id}`}
+              className={classes.card}
+              style={{ textDecoration: 'none' }}
+            >
+              {/* The same heading the poll's own page carries, at card size;
                 see PollHeading. */}
-            <PollHeading
-              compact
-              title={poll.title}
-              description={poll.description}
-              createdBy={poll.created_by === session?.user.id ? 'you' : poll.created_by_email}
-              mode={poll.mode}
-              showVoters={poll.show_voters}
-              showBallots={poll.show_ballots}
-              turnout={{
-                soliciting: poll.soliciting,
-                mode: poll.mode,
-                votedCount: poll.voted_count,
-                invitedCount: poll.invited_count,
-                confirmedCount: poll.confirmed_count,
-                optionCount: poll.option_count,
-                questionCount: poll.question_count,
-              }}
-              state={{
-                soliciting: poll.soliciting,
-                resultsAvailable: poll.results_available,
-                closed: poll.is_closed,
-                // `undefined` rather than null where the database has not
-                // settled an answer — including a database old enough not to
-                // carry the columns at all — because null is a real answer
-                // here and means a poll that elected nobody.
-                //
-                // A group's row on this list *is* its first question, so this
-                // is that question's winner rather than the poll's. The badge
-                // withholds it on `inGroup`, in one place for all three
-                // screens, rather than leaving three callers to remember.
-                winner: poll.winner_settled ? winnerLabel(poll.winner_name ?? null) : undefined,
-                inGroup: poll.question_count > 1,
+              <PollHeading
+                compact
+                title={poll.title}
+                description={poll.description}
+                createdBy={poll.created_by === session?.user.id ? 'you' : poll.created_by_email}
+                mode={poll.mode}
+                showVoters={poll.show_voters}
+                showBallots={poll.show_ballots}
+                turnout={{
+                  soliciting: poll.soliciting,
+                  mode: poll.mode,
+                  votedCount: poll.voted_count,
+                  invitedCount: poll.invited_count,
+                  confirmedCount: poll.confirmed_count,
+                  optionCount: poll.option_count,
+                  questionCount: poll.question_count,
+                }}
+                state={{
+                  soliciting: poll.soliciting,
+                  resultsAvailable: poll.results_available,
+                  closed: poll.is_closed,
+                  // `undefined` rather than null where the database has not
+                  // settled an answer — including a database old enough not to
+                  // carry the columns at all — because null is a real answer
+                  // here and means a poll that elected nobody.
+                  //
+                  // A group's row on this list *is* its first question, so this
+                  // is that question's winner rather than the poll's. The badge
+                  // withholds it on `inGroup`, in one place for all three
+                  // screens, rather than leaving three callers to remember.
+                  winner: poll.winner_settled ? winnerLabel(poll.winner_name ?? null) : undefined,
+                  inGroup: poll.question_count > 1,
+                }}
+              />
+            </Card>
+          ))}
+        </Stack>
+
+        {/* Only once there is a second page to go to. */}
+        {pageCount > 1 && (
+          <Group justify="center">
+            <Pagination
+              total={pageCount}
+              value={current}
+              onChange={(next) => {
+                setPage(next)
+                // The list is taller than a phone; landing halfway down the
+                // new page reads as nothing having happened.
+                window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
               }}
             />
-          </Card>
-        ))}
+          </Group>
+        )}
       </Stack>
-
-      {/* Only once there is a second page to go to. */}
-      {pageCount > 1 && (
-        <Group justify="center">
-          <Pagination
-            total={pageCount}
-            value={current}
-            onChange={(next) => {
-              setPage(next)
-              // The list is taller than a phone; landing halfway down the
-              // new page reads as nothing having happened.
-              window.scrollTo({ top: 0, behavior: 'smooth' })
-            }}
-          />
-        </Group>
-      )}
-    </Stack>
+    </Reveal>
   )
 }

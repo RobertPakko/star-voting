@@ -7,3 +7,55 @@ body,
 body {
   margin: 0;
 }
+
+/* The app's motion, in the three lengths it comes in.
+ *
+ * Nothing in the app animated at all until these existed, and the risk in
+ * adding a dozen small animations at once is that each one gets its own
+ * opinion about how long it should take — which reads as a dozen unrelated
+ * effects rather than as one app. So durations are picked from here and never
+ * written by hand, and the scale is deliberately short: three values, named
+ * for what they are for rather than for how long they are.
+ *
+ * `--motion-ease` is the same curve throughout: quick to leave, gentle to
+ * arrive, which is what makes a thing look like it settled rather than
+ * stopped.
+ */
+:root {
+  /* Feedback on something the reader just did: a star taking a press, an
+     icon swapping, a button admitting it was clicked. Below about 100ms a
+     change reads as instant, which is the thing we are trying not to be. */
+  --motion-fast: 120ms;
+  /* Something arriving or leaving: a card, a row of a list, a page. */
+  --motion-base: 200ms;
+  /* Data resolving into a shape worth reading, which is only the results
+     bars. Long enough to be watched on purpose; see Results.module.css. */
+  --motion-slow: 500ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+/* A reader who has asked their system for less motion gets none of it.
+ *
+ * Written once, here, over everything — rather than as a media query inside
+ * each stylesheet that animates — because the failure mode of the per-file
+ * version is the file somebody adds next. Durations are collapsed rather than
+ * the animations removed, so anything that ends in its own `animationend`
+ * still ends.
+ *
+ * Mantine's own components are handled separately by `respectReducedMotion`
+ * in the theme; see main.tsx. Smooth scrolling asked for from JavaScript is
+ * not reachable from CSS at all, so the one place that asks for it reads the
+ * preference itself; see PollList.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
