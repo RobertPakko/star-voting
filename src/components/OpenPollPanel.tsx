@@ -124,6 +124,9 @@ export function OpenPollPanel({
         <CollectOptions
           source={{ kind: 'open', pollId }}
           options={view.options}
+          // A time poll collects windows rather than typed names, so the list
+          // is a calendar; see CollectOptions.
+          schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
           isCreator={isCreator}
           voterName={needsName ? voterName : undefined}
           questionStrip={questionStrip}

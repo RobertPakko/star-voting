@@ -54,8 +54,14 @@ create table if not exists sample.link (
 --
 -- Three questions, each one harder to settle than the last:
 --
---   host    a plain election. The score leader wins the runoff too, and there
---           is nothing to explain beyond the two rounds themselves.
+--   when    a plain election, and a calendar. The score leader wins the runoff
+--           too, so there is nothing to explain beyond the two rounds -- which
+--           is what makes it the right question to show a `time` poll on: a
+--           reader here is learning what the ballot is, not what a tie-break
+--           is. Its five options are the five two-hour windows that fit inside
+--           a Friday evening, and the nine ballots are what nine painted
+--           calendars flatten to -- see `scoresFromPainting`, which scores a
+--           window by its worst half hour rather than by its average.
 --   dinner  the runoff overturns the score round. Taco bar leads on points
 --           because the four voters who want it want it badly; pizza wins
 --           because five of the nine prefer it, which is the whole reason
@@ -63,31 +69,39 @@ create table if not exists sample.link (
 --   movie   a three-way tie for the second finalist slot, settled head to
 --           head, with one of the three pairs itself tied.
 --
--- The nine voters are the same nine in every question, and three of them are
--- the hosts on offer in the first one.
+-- The nine voters are the same nine in every question.
 create or replace function sample.poll() returns jsonb language sql immutable as $$
 select $json${
   "title": "Movie night",
   "voters": ["Ana", "Ben", "Chloe", "Diego", "Erin", "Farid", "Gina", "Hugo", "Iris"],
   "questions": [
     {
-      "slug": "host",
-      "title": "Who's hosting?",
+      "slug": "when",
+      "title": "When are we meeting?",
+      "kind": "time",
+      "schedule": {
+        "timezone": "-07:00",
+        "window": { "start": "18:00", "end": "22:00" },
+        "desired_slots": 4,
+        "granularity": 30
+      },
       "options": [
-        { "name": "Ana's place" },
-        { "name": "Ben's loft" },
-        { "name": "Chloe's basement" }
+        { "name": "2026-02-20T18:00:00-07:00" },
+        { "name": "2026-02-20T18:30:00-07:00" },
+        { "name": "2026-02-20T19:00:00-07:00" },
+        { "name": "2026-02-20T19:30:00-07:00" },
+        { "name": "2026-02-20T20:00:00-07:00" }
       ],
       "ballots": [
-        [5, 2, 3],
-        [2, 5, 3],
-        [2, 1, 5],
-        [3, 2, 5],
-        [4, 1, 4],
-        [2, 3, 5],
-        [3, 2, 4],
-        [4, 0, 5],
-        [1, 2, 4]
+        [5, 5, 5, 4, 4],
+        [0, 0, 5, 5, 5],
+        [4, 4, 0, 0, 0],
+        [3, 3, 4, 5, 5],
+        [0, 4, 5, 5, 0],
+        [5, 3, 0, 0, 0],
+        [2, 2, 3, 2, 2],
+        [1, 1, 5, 5, 5],
+        [5, 5, 5, 3, 3]
       ]
     },
     {
@@ -172,7 +186,14 @@ begin
   v_first := create_poll_group(
     v_poll ->> 'title',
     p_description,
-    (select jsonb_agg(jsonb_build_object('title', x ->> 'title', 'options', x -> 'options')
+    -- `kind` and `schedule` ride with each question, which is what lets one of
+    -- them be a calendar; see 0056_schedule_options.sql. A question that is not
+    -- one sends neither, and create_poll_group defaults it to an ordinary poll
+    -- exactly as it always did.
+    (select jsonb_agg(
+              jsonb_build_object('title', x ->> 'title', 'options', x -> 'options')
+              || jsonb_strip_nulls(
+                   jsonb_build_object('kind', x -> 'kind', 'schedule', x -> 'schedule'))
             order by ord)
      from jsonb_array_elements(v_poll -> 'questions') with ordinality as t(x, ord)),
     null,

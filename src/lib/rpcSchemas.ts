@@ -50,7 +50,7 @@ import type { BallotSheet, OpenPollView, PollRead, PollResults, PollStatus } fro
 const pollMode = z.enum(['invite', 'open'])
 const pollKind = z.enum(['option', 'time'])
 
-/** The hours of one day, or of every day that has none of its own. */
+/** The vertical axis of a grid: the earliest and latest a day may run. */
 const dailyWindow = z.object({ start: z.string(), end: z.string() })
 
 /**
@@ -62,17 +62,7 @@ const dailyWindow = z.object({ start: z.string(), end: z.string() })
  */
 export const pollScheduleSchema = z.object({
   timezone: z.string(),
-  // Presentation only, and optional for two reasons at once: a creator may
-  // have picked a bare offset, and a poll made before labels existed has none.
-  // Nothing arithmetic reads it, so a missing one costs a sentence and not a
-  // grid.
-  timezone_label: z.string().nullable().optional(),
   window: dailyWindow,
-  // Loose on the key, because a key that is not a date names a day the poll
-  // does not ask about, and `windowOn` looks days up rather than iterating --
-  // so it is never reached. The value is the part worth checking, for the
-  // reason above: it is arithmetic.
-  day_windows: z.record(z.string(), dailyWindow).nullable().optional(),
   desired_slots: z.number(),
   granularity: z.number(),
 })

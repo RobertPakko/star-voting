@@ -1,59 +1,70 @@
-import { useMemo } from 'react'
-import { ActionIcon, Alert, Group, Select, Stack, Switch, Text, Tooltip } from '@mantine/core'
+import { useMemo, useState } from 'react'
+import { Alert, Group, SegmentedControl, Select, Stack, Text } from '@mantine/core'
 import { DatePicker } from '@mantine/dates'
-// With the day picker, in the create form's own chunk; see TimeBallotCard.
+// With the day picker, in the create form's own chunk; see PaintCalendar.
 import '@mantine/dates/styles.css'
-import { XIcon } from '@phosphor-icons/react'
+import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
+import { PaintCalendar } from './PaintCalendar'
 import {
-  clock,
   countWindows,
+  DAY_MINUTES,
+  describeLength,
   describeOffset,
   formatDay,
-  spanOf,
+  granularityFor,
+  granuleKey,
+  isDaily,
+  MEETING_LENGTHS,
+  meetingMinutes,
+  paintingRuns,
+  runBounds,
   toMinutes,
   toTimeOfDay,
-  windowOn,
-  windowsOn,
+  type Bounds,
+  type GranuleKey,
+  type ScheduleDay,
 } from '../lib/schedule'
 import { offsetChoices, offsetDrift } from '../lib/timezones'
 import type { DailyWindow, PollSchedule } from '../lib/types'
 
 /**
- * What a creator says instead of writing a list of options: when the meeting
- * could be, how long it is, and at what resolution people may answer.
+ * What a creator says instead of writing a list of options: how long the
+ * meeting is, which days it could be on, and -- by painting them -- which
+ * hours of those days are in bounds.
  *
- * A handful of answers and a calendar, and between them they generate the
- * whole ballot -- see `enumerateWindows`. Nothing here is stored as typed: the
- * days become options and are read back off them, and the rest becomes the
- * poll's `schedule` column.
+ * **The creator paints the same calendar the voter does**, which is the whole
+ * shape of this form. It used to ask for one pair of times for the poll and
+ * then, behind a switch, a row of two dropdowns per day: fourteen rows of
+ * `Fri 4 Sep [18:00] to [22:00]` to say something a fortnight of drags says
+ * faster and more exactly. Anything a row of dropdowns could express, a
+ * painting can; a painting can also express a Wednesday free from nine to
+ * eleven and again after three, which the rows could not.
  *
- * **The days come before the hours**, which is the one thing about the order
- * worth explaining. It was the other way round when every day had the same
- * hours, because then the hours were a fact about the poll and the days were a
- * list. Now the hours can be a fact about each day, so there has to be a list
- * of days to hang them on before the question can be asked at all -- and the
- * offset comes last of the three because what each one is *called* is worked
- * out on the first of those days (see `offsetName`), so it is the only answer
- * whose list is not final until the ones above it are.
+ * **What is painted is the poll.** The cells become windows (`enumerateWindows`)
+ * and the windows become the options, and nothing about which days or hours
+ * are in bounds is stored beside them -- the ballot reads them back off the
+ * option list with `boundsOf`. So there is no second copy of the answer to
+ * disagree with the first.
  *
- * Within the first group, granularity comes before length because it is the
- * unit length is expressed in, and offering "90 minutes" beside a half-hour
- * grid that cannot express it is how you get a combination the enumeration has
- * to refuse after the fact.
+ * **The two time selects stay, as the default a whole day is filled with.**
+ * Nobody wants to drag out 09:00 to 17:00 on each of ten days, and "the
+ * working day, except Friday which is only the afternoon" is the common
+ * answer. So clicking a day's heading lays down these hours, and the drag is
+ * there for the days that differ. They are not stored and they are not the
+ * poll: what is painted is.
+ *
+ * **Granularity is not asked about**, which it used to be. It is a
+ * consequence of how long the meeting is -- half an hour under a day, a whole
+ * day at or above one; see `granularityFor` -- and the one thing a creator
+ * could do with the question was pick a combination the enumeration then had
+ * to refuse.
  */
 
-/** The resolutions a calendar can be painted at; see `validate_schedule`. */
-const GRANULARITIES = [
-  { value: '15', label: '15 minutes' },
-  { value: '30', label: 'half an hour' },
-  { value: '60', label: 'an hour' },
-]
-
-/** Times of day for the two ends of a daily window, at half-hour steps. */
+/** Times of day for the two ends of the default window, at half-hour steps. */
 function timesOfDay(from: number, to: number): { value: string; label: string }[] {
   const all: { value: string; label: string }[] = []
   for (let minutes = from; minutes <= to; minutes += 30) {
-    all.push({ value: toTimeOfDay(minutes), label: clock(minutes) })
+    all.push({ value: toTimeOfDay(minutes), label: toTimeOfDay(minutes) })
   }
   return all
 }
@@ -62,42 +73,21 @@ const STARTS = timesOfDay(0, 23 * 60 + 30)
 // Offered from half an hour after midnight so the list can never contain a
 // time at or before the earliest start; 24:00 is midnight at the end of the
 // day, which '00:00' would read as the start of it.
-const ENDS = [...timesOfDay(30, 23 * 60 + 30), { value: '24:00', label: 'midnight' }]
+const ENDS = [...timesOfDay(30, 23 * 60 + 30), { value: '24:00', label: '24:00' }]
 
-/**
- * How long a meeting may be, in whole granules, as far as the longest day in
- * the poll can hold.
- *
- * The *longest*, now that days can differ. Bounding it by the shortest would
- * refuse a perfectly good poll -- a three-hour Saturday meeting with a Friday
- * evening thrown in for the people who can only do Fridays -- and bounding it
- * by the union would offer a length no single day could hold. A day too short
- * for the meeting simply offers no windows, which the summary line says out
- * loud rather than leaving to be discovered on the ballot.
- */
-function lengths(schedule: PollSchedule, days: string[]): { value: string; label: string }[] {
-  const spans = days.map((day) => {
-    const hours = windowOn(schedule, day)
-    return toMinutes(hours.end) - toMinutes(hours.start)
-  })
-  const widest = spans.length
-    ? Math.max(...spans)
-    : toMinutes(schedule.window.end) - toMinutes(schedule.window.start)
+const LENGTHS = MEETING_LENGTHS.map((minutes) => ({
+  value: String(minutes),
+  label: describeLength(minutes),
+}))
 
-  const most = Math.max(1, Math.floor(widest / schedule.granularity))
-  const all: { value: string; label: string }[] = []
-  for (let slots = 1; slots <= most; slots++) {
-    all.push({ value: String(slots), label: describeLength(slots * schedule.granularity) })
-  }
-  return all
-}
+/** The whole of a day, which is what the create form's grid is drawn between. */
+const WHOLE_DAY: DailyWindow = { start: '00:00', end: '24:00' }
 
-function describeLength(minutes: number): string {
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  if (hours === 0) return `${rest} minutes`
-  const hourPart = hours === 1 ? '1 hour' : `${hours} hours`
-  return rest === 0 ? hourPart : `${hourPart} ${rest} minutes`
+/** The marked set as a painting, which is the shape `PaintCalendar` speaks. */
+function paintingOf(marked: Bounds): Record<GranuleKey, number> {
+  const painting: Record<GranuleKey, number> = {}
+  for (const key of marked) painting[key] = 1
+  return painting
 }
 
 /**
@@ -108,32 +98,73 @@ function inOrder(days: string[]): string[] {
   return [...days].sort()
 }
 
+/**
+ * Every cell of a day the creator may paint: the whole of it.
+ *
+ * Wider than what a day-fill lays down on purpose -- the two selects are a
+ * default and the drag is the exception to it, so an evening outside them has
+ * to be reachable. A poll answered in whole days has one cell per day, which
+ * is the day itself.
+ */
+function cellsOnDay(day: ScheduleDay, granularity: number): GranuleKey[] {
+  const keys: GranuleKey[] = []
+  for (let at = 0; at + granularity <= DAY_MINUTES; at += granularity)
+    keys.push(granuleKey(day, at))
+  return keys
+}
+
+/** And the cells one pair of times covers, which is what a day-fill writes. */
+function cellsInHours(day: ScheduleDay, hours: DailyWindow, granularity: number): GranuleKey[] {
+  if (granularity >= DAY_MINUTES) return [granuleKey(day, 0)]
+  const last = toMinutes(hours.end)
+  const keys: GranuleKey[] = []
+  for (let at = toMinutes(hours.start); at + granularity <= last; at += granularity) {
+    keys.push(granuleKey(day, at))
+  }
+  return keys
+}
+
 export function ScheduleFields({
   schedule,
   days,
+  hours,
+  marked,
   onScheduleChange,
   onDaysChange,
+  onHoursChange,
+  onMarkedChange,
   onOffsetChange,
   error,
 }: {
   schedule: PollSchedule
-  /** The days in bounds, as `YYYY-MM-DD`. Not part of the schedule: see PollSchedule. */
+  /** The days on the calendar, as `YYYY-MM-DD`. Not stored: see PollSchedule. */
   days: string[]
+  /** The hours a whole-day fill lays down. Not stored either. */
+  hours: DailyWindow
+  /** The cells painted in bounds, which become the options. */
+  marked: Bounds
   onScheduleChange: (schedule: PollSchedule) => void
-  onDaysChange: (days: string[]) => void
+  /**
+   * Days, with the painting that goes with them: a day added arrives already
+   * marked and a day removed takes its cells with it, so the two move
+   * together or the form has a moment where they disagree.
+   */
+  onDaysChange: (days: string[], marked: Set<GranuleKey>) => void
+  onHoursChange: (hours: DailyWindow) => void
+  onMarkedChange: (marked: Set<GranuleKey>) => void
   /**
    * Picking an offset, which the form handles rather than this component
-   * because the *name* stored beside it has to be worked out on the poll's
-   * first day -- see `CreatePoll`'s `pickOffset`. What is chosen here is the
-   * number; the caption follows from it.
+   * because a poll's dates decide which offset this browser is guessing on --
+   * see `CreatePoll`'s `pickOffset`.
    */
   onOffsetChange: (offset: string) => void
-  /** Wrong with the schedule as a whole -- no days, or too many windows. */
+  /** Wrong with the schedule as a whole -- nothing painted, or too many windows. */
   error?: string
 }) {
   const ordered = inOrder(days)
-  const perDay = Object.keys(schedule.day_windows ?? {}).length > 0
-  const total = countWindows(schedule, ordered)
+  const daily = isDaily(schedule)
+  const total = countWindows(schedule, marked)
+  const [brush, setBrush] = useState(1)
 
   // The two facts about the chosen days that the offset answers depend on, as
   // scalars: a memo keyed on an array rebuilds on every render, since the array
@@ -169,107 +200,134 @@ export function ScheduleFields({
     [schedule.timezone, everyDay],
   )
 
-  /**
-   * Changing the granularity re-expresses the meeting length in the new unit
-   * rather than keeping the number of granules, because the number of granules
-   * is not what the creator was looking at: they chose "an hour", and moving
-   * the grid from half-hours to quarter-hours must not quietly make it thirty
-   * minutes. Rounded up, so a 90-minute meeting on an hourly grid becomes two
-   * hours rather than one -- the direction that keeps the meeting long enough.
-   */
-  function setGranularity(granularity: number) {
-    const minutes = schedule.desired_slots * schedule.granularity
-    onScheduleChange({
-      ...schedule,
-      granularity,
-      desired_slots: Math.max(1, Math.ceil(minutes / granularity)),
-    })
-  }
+  /** Every cell the creator may paint: all of every day they picked. */
+  const paintable = useMemo(() => {
+    const cells = new Set<GranuleKey>()
+    for (const day of everyDay ? everyDay.split(',') : []) {
+      for (const key of cellsOnDay(day, schedule.granularity)) cells.add(key)
+    }
+    return cells
+  }, [everyDay, schedule.granularity])
 
   /**
-   * Write a set of per-day hours back, and re-derive the poll's own window
-   * from it.
+   * Changing how long the meeting is, which decides the resolution with it.
    *
-   * `window` is the union of every day's hours as well as the default for a
-   * day that has none -- see PollSchedule -- so it is never edited directly
-   * while the per-day rows are up: it is whatever those rows add up to. That
-   * is what keeps the ballot's vertical axis exactly as tall as the poll needs
-   * and no taller, and what makes turning the switch back off land on
-   * something sensible rather than on whatever the selects last held.
+   * When the resolution moves between half-hours and whole days the painting
+   * has to move with it, because a cell means something different on each side
+   * of that line. Going up to days, a day with anything marked on it becomes a
+   * day that is in; coming back down, a day that was in gets the default hours
+   * -- which is the same thing picking it in the calendar would have done, and
+   * the nearest thing to the answer they had.
    */
-  function setDayWindows(dayWindows: Record<string, DailyWindow>) {
-    const next = { ...schedule, day_windows: dayWindows }
-    onScheduleChange({ ...next, window: spanOf(next, Object.keys(dayWindows)) })
-  }
+  function setLength(minutes: number) {
+    const granularity = granularityFor(minutes)
+    const next = { ...schedule, granularity, desired_slots: minutes / granularity }
+    if (granularity === schedule.granularity) {
+      onScheduleChange(next)
+      return
+    }
 
-  /** Every chosen day gets a row, seeded from what it is already getting. */
-  function seed(forDays: string[]): Record<string, DailyWindow> {
-    const seeded: Record<string, DailyWindow> = {}
-    for (const day of inOrder(forDays)) seeded[day] = windowOn(schedule, day)
-    return seeded
+    const wasOn = new Set([...marked].map((key) => key.slice(0, 10)))
+    const moved = new Set<GranuleKey>()
+    for (const day of ordered) {
+      if (!wasOn.has(day)) continue
+      for (const key of cellsInHours(day, hours, granularity)) moved.add(key)
+    }
+    onScheduleChange(next)
+    onMarkedChange(moved)
   }
 
   /**
-   * Choosing days, with the per-day rows kept in step: a day added while they
-   * are up arrives with a row of its own, and a day removed takes its row with
-   * it. Anything else leaves an entry naming a day the poll is not asking
-   * about, which is a stored answer to a question nobody asked.
+   * Choosing days, with the painting kept in step: a day added arrives already
+   * marked with the default hours -- which is what somebody picking a day
+   * meant -- and a day removed takes its cells with it. Anything else leaves
+   * cells on a day nobody is asking about, which would quietly become options.
    */
   function setDays(next: string[]) {
-    onDaysChange(next)
-    if (perDay) setDayWindows(seed(next))
+    const asked = new Set(next)
+    const kept = new Set<GranuleKey>()
+    for (const key of marked) {
+      if (asked.has(key.slice(0, 10))) kept.add(key)
+    }
+    for (const day of next) {
+      if ([...marked].some((key) => key.startsWith(day))) continue
+      for (const key of cellsInHours(day, hours, schedule.granularity)) kept.add(key)
+    }
+    onDaysChange(next, kept)
   }
 
   /**
-   * On: every chosen day gets the hours it already had, so the switch changes
-   * nothing until something is edited -- it opens the rows rather than
-   * answering them.
+   * Moving the default hours, which re-fills the days that are still on the
+   * default and leaves the ones that are not.
    *
-   * Off: the rows go, and the poll keeps the union of what they held. Not the
-   * hours from before the switch was flipped: those are gone, and the union is
-   * the one window every day already fits inside.
+   * A day whose painting is exactly the old default is a day nobody has
+   * touched, and moving the default is how somebody says "the working day
+   * starts at eight" -- they should not then have to re-drag nine days. A day
+   * painted into something else is an answer, and answers are not moved.
    */
-  function setPerDay(on: boolean) {
-    if (on) setDayWindows(seed(ordered))
-    else onScheduleChange({ ...schedule, window: spanOf(schedule, ordered), day_windows: null })
+  function setHours(next: DailyWindow) {
+    const before = hours
+    const moved = new Set(marked)
+    for (const day of ordered) {
+      const was = cellsInHours(day, before, schedule.granularity)
+      const untouched =
+        was.length > 0 &&
+        was.every((key) => marked.has(key)) &&
+        [...marked].filter((key) => key.startsWith(day)).length === was.length
+      if (!untouched) continue
+      for (const key of was) moved.delete(key)
+      for (const key of cellsInHours(day, next, schedule.granularity)) moved.add(key)
+    }
+    onHoursChange(next)
+    onMarkedChange(moved)
   }
 
-  function setDayWindow(day: string, edit: Partial<DailyWindow>) {
-    const current = schedule.day_windows ?? {}
-    const hours = { ...windowOn(schedule, day), ...edit }
-    // Dragging a start past its own end is the one edit that can produce an
-    // impossible day, and the end is what moves: a creator moving the start is
-    // saying when the day begins, not asking for it to be refused.
-    if (toMinutes(hours.end) <= toMinutes(hours.start)) {
-      const after = ENDS.find((end) => end.value > hours.start)
-      if (!after) return
-      hours.end = after.value
+  function paint(keys: GranuleKey[], value: number) {
+    const next = new Set(marked)
+    for (const key of keys) {
+      if (value === 0) next.delete(key)
+      else next.add(key)
     }
-    setDayWindows({ ...current, [day]: hours })
+    onMarkedChange(next)
   }
+
+  /**
+   * The painting, drawn back. One colour: the question here has two answers
+   * rather than six, and a cell either is in bounds or is not.
+   */
+  function buildEvents(view: ScheduleViewLevel): ScheduleEventData[] {
+    const asPainting: Record<GranuleKey, number> = {}
+    for (const key of marked) asPainting[key] = 1
+    return paintingRuns(asPainting, schedule).map((run) => ({
+      id: `${run.day} ${run.from}`,
+      title:
+        view !== 'month'
+          ? ''
+          : daily
+            ? 'In bounds'
+            : `${toTimeOfDay(run.from)}–${toTimeOfDay(run.to)}`,
+      ...runBounds(run),
+      color: 'teal.6',
+      display: view === 'month' ? 'default' : 'background',
+    }))
+  }
+
+  const blank = ordered.filter(
+    (day) =>
+      countWindows(schedule, new Set([...marked].filter((key) => key.startsWith(day)))) === 0,
+  )
 
   return (
     <Stack gap="sm">
-      <Group grow align="flex-start" wrap="wrap">
-        <Select
-          label="Answer in blocks of"
-          description="How finely people can mark their time"
-          data={GRANULARITIES}
-          value={String(schedule.granularity)}
-          onChange={(v) => v && setGranularity(Number(v))}
-          allowDeselect={false}
-          comboboxProps={{ withinPortal: false }}
-        />
-        <Select
-          label="Meeting length"
-          description="Every option is a window this long"
-          data={lengths(schedule, ordered)}
-          value={String(schedule.desired_slots)}
-          onChange={(v) => v && onScheduleChange({ ...schedule, desired_slots: Number(v) })}
-          allowDeselect={false}
-          comboboxProps={{ withinPortal: false }}
-        />
-      </Group>
+      <Select
+        label="How long is it?"
+        description="Every option is a window this long"
+        data={LENGTHS}
+        value={String(meetingMinutes(schedule))}
+        onChange={(v) => v && setLength(Number(v))}
+        allowDeselect={false}
+        comboboxProps={{ withinPortal: false }}
+      />
 
       <Stack gap={4}>
         <Text size="sm" fw={500}>
@@ -281,108 +339,82 @@ export function ScheduleFields({
           onChange={setDays}
           size="sm"
           // The picker is the only field here whose width is not the form's,
-          // and centring it stops it sitting oddly against the selects above.
+          // and centring it stops it sitting oddly against the select above.
           mx="auto"
         />
       </Stack>
 
-      <Stack gap={6}>
-        <Group justify="space-between" align="center" wrap="nowrap">
-          <Text size="sm" fw={500}>
-            Hours to choose from
-          </Text>
-          <Switch
-            size="sm"
-            label="Set them per day"
-            checked={perDay}
-            onChange={(event) => setPerDay(event.currentTarget.checked)}
-            // With no days there is nothing to set hours on, and a switch that
-            // turns on and visibly does nothing is worse than one that says
-            // why it is waiting.
-            disabled={ordered.length === 0}
+      {/* Hidden on a poll answered in whole days, where there are no hours to
+          be earliest or latest: a day is either in or out. */}
+      {!daily && (
+        <Group grow align="flex-start" wrap="wrap">
+          <Select
+            label="Earliest start"
+            description="What clicking a whole day fills in"
+            data={STARTS}
+            value={hours.start}
+            onChange={(v) =>
+              v &&
+              setHours({
+                start: v,
+                end: ENDS.some((end) => end.value > v && end.value === hours.end)
+                  ? hours.end
+                  : (ENDS.find((end) => end.value > v)?.value ?? hours.end),
+              })
+            }
+            allowDeselect={false}
+            comboboxProps={{ withinPortal: false }}
+          />
+          <Select
+            label="Latest end"
+            description="Drag on the calendar for the days that differ"
+            data={ENDS.filter((end) => end.value > hours.start)}
+            value={hours.end}
+            onChange={(v) => v && setHours({ ...hours, end: v })}
+            allowDeselect={false}
+            comboboxProps={{ withinPortal: false }}
           />
         </Group>
+      )}
 
-        {perDay ? (
-          /* One row per day, in date order. A poll asking about a fortnight
-             gets fourteen rows, which is long -- and is exactly as long as the
-             answer the creator is giving. Nothing is collapsed behind a
-             summary, because the summary is the thing that would be wrong. */
-          <Stack gap={6}>
-            {ordered.map((day) => {
-              const hours = windowOn(schedule, day)
-              const windows = windowsOn(schedule, day)
-              return (
-                <Group key={day} gap="xs" wrap="nowrap" align="center">
-                  <Text
-                    size="sm"
-                    w={110}
-                    style={{ flexShrink: 0 }}
-                    c={windows ? undefined : 'dimmed'}
-                  >
-                    {formatDay(day)}
-                  </Text>
-                  <Select
-                    size="xs"
-                    aria-label={`Earliest start on ${formatDay(day)}`}
-                    data={STARTS}
-                    value={hours.start}
-                    onChange={(v) => v && setDayWindow(day, { start: v })}
-                    allowDeselect={false}
-                    comboboxProps={{ withinPortal: false }}
-                  />
-                  <Text size="xs" c="dimmed">
-                    to
-                  </Text>
-                  <Select
-                    size="xs"
-                    aria-label={`Latest end on ${formatDay(day)}`}
-                    data={ENDS.filter((end) => end.value > hours.start)}
-                    value={hours.end}
-                    onChange={(v) => v && setDayWindow(day, { end: v })}
-                    allowDeselect={false}
-                    comboboxProps={{ withinPortal: false }}
-                  />
-                  <Tooltip label="Take this day off the list" withArrow>
-                    <ActionIcon
-                      variant="subtle"
-                      color="gray"
-                      size="sm"
-                      aria-label={`Remove ${formatDay(day)}`}
-                      onClick={() => setDays(ordered.filter((other) => other !== day))}
-                    >
-                      <XIcon size={14} />
-                    </ActionIcon>
-                  </Tooltip>
-                </Group>
-              )
-            })}
-          </Stack>
-        ) : (
-          <Group grow align="flex-start" wrap="wrap">
-            <Select
-              label="Earliest start"
-              data={STARTS}
-              value={schedule.window.start}
-              onChange={(v) =>
-                v && onScheduleChange({ ...schedule, window: { ...schedule.window, start: v } })
-              }
-              allowDeselect={false}
-              comboboxProps={{ withinPortal: false }}
+      {ordered.length > 0 && (
+        <Stack gap={6}>
+          <Group gap="sm" wrap="wrap" align="center">
+            {/* Two values rather than the ballot's six: the question here is
+                whether the poll is asking about a time at all. The eraser is
+                what a drag needs and a day-click does not -- clicking a day
+                that is already exactly the default takes it back, which is the
+                same toggle the ballot's day-fill has. */}
+            <SegmentedControl
+              size="xs"
+              value={String(brush)}
+              onChange={(v) => setBrush(Number(v))}
+              data={[
+                { value: '1', label: 'Mark' },
+                { value: '0', label: 'Erase' },
+              ]}
             />
-            <Select
-              label="Latest end"
-              data={ENDS.filter((end) => end.value > schedule.window.start)}
-              value={schedule.window.end}
-              onChange={(v) =>
-                v && onScheduleChange({ ...schedule, window: { ...schedule.window, end: v } })
-              }
-              allowDeselect={false}
-              comboboxProps={{ withinPortal: false }}
-            />
+            <Text size="sm" c="dimmed">
+              {daily
+                ? 'Click a day to put it in or take it out, or drag across several.'
+                : 'Drag to mark the hours people can choose from; click a day’s heading to fill it with the hours above.'}
+            </Text>
           </Group>
-        )}
-      </Stack>
+          <PaintCalendar
+            schedule={schedule}
+            bounds={paintable}
+            axis={WHOLE_DAY}
+            painting={paintingOf(marked)}
+            brush={brush}
+            onPaint={paint}
+            buildEvents={buildEvents}
+            fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
+            // A whole day of half-hours is forty-eight rows, and at the
+            // ballot's row height that is a form nobody can see the bottom of.
+            slotHeight={daily ? undefined : 22}
+          />
+        </Stack>
+      )}
 
       {/* One list of offsets, in order, each captioned with what people on it
           call it. The offset is what is being chosen and what the poll is held
@@ -418,22 +450,38 @@ export function ScheduleFields({
 
       {/* What the answers above actually add up to. The creator is writing a
           ballot without seeing one, and this is the only place the size of it
-          is visible before the poll exists. */}
+          is visible before the poll exists. A day with nothing long enough on
+          it is named rather than left to vanish, since a silently absent day
+          looks exactly like the form having dropped it. */}
       <Text size="xs" c={error ? 'var(--mantine-color-error)' : 'dimmed'}>
         {error ??
           (ordered.length === 0
             ? 'Pick the days people can choose between.'
-            : `${total} ${total === 1 ? 'window' : 'windows'} to score across ${ordered.length} ${ordered.length === 1 ? 'day' : 'days'}.`)}
+            : `${total} ${total === 1 ? 'window' : 'windows'} to score across ${ordered.length} ${ordered.length === 1 ? 'day' : 'days'}.` +
+              (blank.length > 0
+                ? ` Nothing on ${listDays(blank)} is ${describeLength(meetingMinutes(schedule))} long.`
+                : ''))}
       </Text>
     </Stack>
   )
 }
 
 /**
+ * A handful of days in a sentence: `Sat 5 Sep`, `Fri 4 Sep and Sat 5 Sep`,
+ * `Fri 4 Sep, Sat 5 Sep and 3 others`.
+ */
+function listDays(days: string[]): string {
+  const named = days.slice(0, 3).map(formatDay)
+  const rest = days.length - named.length
+  if (rest > 0) return `${named.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'}`
+  if (named.length === 1) return named[0]
+  return `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`
+}
+
+/**
  * Today, as the date the offsets are captioned against before any day has been
- * picked. Only ever used to *label* the picker; what is stored beside the
- * offset is worked out by `CreatePoll` on the poll's own first day, and worked
- * out again whenever that day moves.
+ * picked. Only ever used to *label* the picker; what a poll is held at is the
+ * creator's own answer, and the guess behind it is `CreatePoll`'s.
  */
 function today(): string {
   const now = new Date()

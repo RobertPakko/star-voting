@@ -23,13 +23,13 @@ export type PollKind = 'option' | 'time'
  * How a time poll's grid is laid out. Null on an ordinary poll; required on a
  * time poll, and the database ties the two together.
  *
- * Only what cannot be recovered from the options is here. The days in bounds
- * are deliberately absent -- they are exactly the days the options start on,
- * so the client derives them (see `daysOf`) and the two can never disagree.
- * The daily window is stored even though it is nearly derivable, because the
- * grid needs a vertical axis on a day whose options are sparse -- and
- * `day_windows` is stored for the same reason, one day at a time, for a poll
- * whose Friday evening and Saturday morning are not the same question.
+ * Only what cannot be recovered from the options is here, and that is now
+ * three numbers and an offset. **Which days and which hours a poll is asking
+ * about are not stored at all**: the creator paints them, the painting becomes
+ * the option list, and `boundsOf` reads it back off that list -- so there is
+ * one answer to "when is this poll asking about" rather than two that can
+ * drift apart. `window` is the exception, and only because a grid cannot be
+ * drawn without a vertical axis to draw it on.
  */
 // A type alias rather than an interface, which matters here and nowhere else
 // in this file: an interface has no implicit index signature, so it cannot be
@@ -45,57 +45,28 @@ export type PollSchedule = {
    */
   timezone: string
   /**
-   * What the creator called that offset when they picked it: `Mountain Time
-   * (Denver)`. **Presentation, and nothing else depends on it.** The offset
-   * above is the whole of what the grid is built from, and this is stored so
-   * that a voter is told which zone the creator meant rather than being handed
-   * four digits and left to work it out -- which is a real cost of one poll,
-   * one offset, and the one part of it that was free to fix.
+   * The vertical axis the grid is drawn on, as `HH:MM`; `end` may be `24:00`.
    *
-   * Never the authority. It is written beside the offset everywhere it is
-   * shown, never instead of it, so a label that has drifted from the offset it
-   * was chosen for is a label the reader can see is wrong. Absent on a poll
-   * whose creator picked a bare offset, and on every poll made before this
-   * existed.
-   */
-  timezone_label?: string | null
-  /**
-   * The hours of a day in bounds, as `HH:MM`; `end` may be `24:00`.
-   *
-   * Two jobs, and they are the same value only because the second is defined
-   * to make it so: it is the vertical axis of the grid -- the union of every
-   * day's hours, which is why it is stored at all rather than derived from
-   * options that may be sparse -- and it is the hours of any day that
-   * `day_windows` does not name.
+   * The union of every day's hours -- the earliest cell any day is asking
+   * about and the latest -- so a poll whose Friday runs 18:00-22:00 and whose
+   * Saturday runs 09:00-22:00 is drawn on one axis with Friday morning greyed
+   * out, rather than on two grids or on one that clips whichever day it was
+   * not built for. `spanOf` computes it; nothing else decides what a day is
+   * asking about, which the cells already say.
    */
   window: { start: string; end: string }
-  /**
-   * The days whose hours are not the ones above, keyed by date: Friday
-   * evenings only, Saturday from nine.
-   *
-   * Absent, null or empty on a poll asking about the same hours every day,
-   * which is most of them and every poll made before this existed. An entry
-   * always sits inside `window` -- that is what keeps `window` the axis the
-   * whole grid is drawn on -- and `validate_schedule` refuses one that does
-   * not.
-   *
-   * This is the one thing in a schedule that names a date, which looks like a
-   * contradiction of the rule that the days in bounds are the days the options
-   * start on. It is not: `daysOf` is still the only answer to *which* days a
-   * poll asks about, and an entry here for a day the poll never asks about is
-   * ignored rather than obeyed. What this says is what the hours are on a day
-   * that is in bounds, which the options can only nearly answer -- the last
-   * start on a day is a granule or two short of that day's end, and the grid
-   * has to grey out the difference rather than guess it.
-   */
-  day_windows?: Record<string, { start: string; end: string }> | null
   /** How many granules long the meeting is: 3 at a granularity of 30 is 90 minutes. */
   desired_slots: number
-  /** Minutes per granule -- the resolution the ballot paints at, and the step between window starts. */
+  /**
+   * Minutes per granule -- the resolution the ballot paints at, and the step
+   * between window starts. Derived from the meeting's length rather than
+   * chosen; see `granularityFor`. 1440 is a whole day, which is what a meeting
+   * of a day or more is answered in.
+   */
   granularity: number
 }
 
-/** The hours of one day, or of every day that has no hours of its own. */
+/** The vertical axis of a grid: the earliest and latest a day may run. */
 export type DailyWindow = PollSchedule['window']
 
 export interface Poll {

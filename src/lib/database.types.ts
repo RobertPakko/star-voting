@@ -368,6 +368,10 @@ export type Database = {
         Args: { p_description?: string; p_name: string; p_poll_id: string }
         Returns: undefined
       }
+      creator_add_options: {
+        Args: { p_options: Json; p_poll_id: string }
+        Returns: number
+      }
       email_escape: { Args: { p_text: string }; Returns: string }
       finalize_options: { Args: { p_poll_id: string }; Returns: undefined }
       get_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
@@ -379,6 +383,13 @@ export type Database = {
           p_poll: Database['public']['Tables']['polls']['Row']
         }
         Returns: undefined
+      }
+      insert_options: {
+        Args: {
+          p_options: Json
+          p_poll: Database['public']['Tables']['polls']['Row']
+        }
+        Returns: number
       }
       insert_poll_row: {
         Args: {
@@ -470,6 +481,10 @@ export type Database = {
       open_poll_suggest_option: {
         Args: { p_description?: string; p_name: string; p_poll_id: string }
         Returns: undefined
+      }
+      open_poll_suggest_options: {
+        Args: { p_options: Json; p_poll_id: string }
+        Returns: number
       }
       open_poll_unconfirm_options: {
         Args: { p_poll_id: string; p_voter_key: string }
@@ -647,6 +662,10 @@ export type Database = {
       suggest_option: {
         Args: { p_description?: string; p_name: string; p_poll_id: string }
         Returns: undefined
+      }
+      suggest_options: {
+        Args: { p_options: Json; p_poll_id: string }
+        Returns: number
       }
       unconfirm_options: { Args: { p_poll_id: string }; Returns: undefined }
       validate_schedule: { Args: { p_schedule: Json }; Returns: undefined }

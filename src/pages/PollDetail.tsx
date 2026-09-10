@@ -389,12 +389,6 @@ export function PollDetail({
     !!poll &&
     !!status &&
     poll.created_by === session?.user.id &&
-    // A time poll's options are its windows, generated from its schedule.
-    // Typing one in among them would put a name on the ballot the calendar
-    // cannot draw and the minimum rule cannot score, so the editor is not
-    // offered -- and `creator_add_option` refuses it besides, which is what
-    // makes this a hidden control rather than a rule.
-    poll.kind !== 'time' &&
     !status.soliciting &&
     !status.is_closed &&
     status.voted_count === 0
@@ -638,6 +632,11 @@ export function PollDetail({
             <CollectOptions
               source={{ kind: 'creator', pollId: poll.id }}
               options={optionList}
+              // A time poll's options are its windows, so the correction is a
+              // painted calendar rather than a typed name -- which is also why
+              // `creator_add_options` allows a time poll where its singular
+              // sibling still refuses one. See CollectOptions.
+              schedule={poll.kind === 'time' ? poll.schedule : null}
               isCreator
               questionStrip={questionStrip}
               footer={
@@ -680,6 +679,7 @@ export function PollDetail({
             <CollectOptions
               source={{ kind: 'poll', pollId: poll.id }}
               options={options}
+              schedule={poll.kind === 'time' ? poll.schedule : null}
               isCreator={isCreator}
               questionStrip={questionStrip}
               confirm={confirmation}

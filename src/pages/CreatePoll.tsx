@@ -25,16 +25,20 @@ import { DescriptionField } from '../components/DescriptionField'
 import { ScheduleFields } from '../components/ScheduleFields'
 import {
   blankSchedule,
+  boundsOf,
   carryForward,
   countWindows,
   daysOf,
+  DEFAULT_HOURS,
+  describeLength,
   enumerateWindows,
-  formatDay,
+  meetingMinutes,
   spanOf,
-  windowsOn,
+  type Bounds,
+  type GranuleKey,
 } from '../lib/schedule'
-import { offsetName, viewerOffsetOn } from '../lib/timezones'
-import { groupQuestionsSchema, parseAnswer, pollScheduleSchema } from '../lib/rpcSchemas'
+import { viewerOffsetOn } from '../lib/timezones'
+import { pollScheduleSchema } from '../lib/rpcSchemas'
 import { FormSkeleton } from '../components/Skeletons'
 import styles from './CreatePoll.module.css'
 import listRow from '../components/listRow.module.css'
@@ -47,7 +51,15 @@ import {
   TITLE_MAX,
   tooLong,
 } from '../lib/limits'
-import type { Invitee, Poll, PollKind, PollMode, PollOption, PollSchedule } from '../lib/types'
+import type {
+  DailyWindow,
+  Invitee,
+  Poll,
+  PollKind,
+  PollMode,
+  PollOption,
+  PollSchedule,
+} from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -101,6 +113,38 @@ interface QuestionDraft {
   key: string
   title: string
   options: OptionDraft[]
+  /**
+   * What *this* question is choosing between, which used to be one answer for
+   * the whole poll. It is per question now because a group may ask "what are
+   * we watching?" and "when?", and `create_poll_group` reads a kind off each
+   * question — see 0056.
+   */
+  kind: PollKind
+  /**
+   * The four everything below is drafted from. All of them are held whether or
+   * not the question is a time poll, so switching a question back and forth
+   * does not throw away what was painted on the other side of the toggle —
+   * exactly as the option rows survive the same switch.
+   */
+  schedule: PollSchedule
+  /** The days on the calendar. Not stored; see PollSchedule. */
+  days: string[]
+  /** The hours a whole-day fill lays down. Not stored either. */
+  hours: DailyWindow
+  /** The cells painted in bounds, which become this question's options. */
+  marked: Set<GranuleKey>
+  /**
+   * Whether the offset on the schedule is an answer or a guess. Until the
+   * creator picks one it is wherever this browser is, and it follows the
+   * question's dates; see `pickDays`.
+   */
+  offsetPicked: boolean
+  /**
+   * How many weeks a duplicate's dates had to move to stop being in the past;
+   * 0 on every other question, and cleared the moment the creator picks a day
+   * of their own. See `carryForward`.
+   */
+  datesMoved: number
 }
 
 /** Only has to be unique within one open form, and never leaves it. */
@@ -119,7 +163,18 @@ const ADD_QUESTION = 'add-question'
 
 function blankQuestion(): QuestionDraft {
   questionSeq += 1
-  return { key: `question-${questionSeq}`, title: '', options: [blankOption(), blankOption()] }
+  return {
+    key: `question-${questionSeq}`,
+    title: '',
+    options: [blankOption(), blankOption()],
+    kind: 'option',
+    schedule: blankSchedule(),
+    days: [],
+    hours: { ...DEFAULT_HOURS },
+    marked: new Set(),
+    offsetPicked: false,
+    datesMoved: 0,
+  }
 }
 
 /**
@@ -144,7 +199,13 @@ function optionKey(question: number, option: number): string {
  * and are exactly the ones it needs in order to say where to go.
  */
 function questionHasError(errors: FormErrors, questionIndex: number): boolean {
-  if (errors.questionTitles[questionIndex] || errors.options[questionIndex]) return true
+  if (
+    errors.questionTitles[questionIndex] ||
+    errors.options[questionIndex] ||
+    errors.schedules[questionIndex]
+  ) {
+    return true
+  }
   // "1:" cannot match "10:0", since the character after the 1 is a 0 rather
   // than the colon.
   const prefix = `${questionIndex}:`
@@ -171,8 +232,8 @@ interface FormErrors {
   emails?: string
   /** Wrong with the poll's list of questions, rather than with any one of them. */
   questions?: string
-  /** Wrong with a time poll's grid: no days on it, or too many windows on those days. */
-  schedule?: string
+  /** Wrong with one question's grid, by that question's index: nothing painted, or too many windows. */
+  schedules: Record<number, string>
   /** Wrong with one question's title, by that question's index. */
   questionTitles: Record<number, string>
   /** Wrong with one question's option list, by that question's index. */
@@ -188,7 +249,7 @@ function hasErrors(errors: FormErrors): boolean {
     errors.description ||
     errors.emails ||
     errors.questions ||
-    errors.schedule ||
+    Object.keys(errors.schedules).length ||
     Object.keys(errors.questionTitles).length ||
     Object.keys(errors.options).length ||
     Object.keys(errors.optionNames).length ||
@@ -198,7 +259,7 @@ function hasErrors(errors: FormErrors): boolean {
 
 /** An empty set of messages: what the fields render before the first submit. */
 function noErrors(): FormErrors {
-  return { questionTitles: {}, options: {}, optionNames: {}, optionDescriptions: {} }
+  return { schedules: {}, questionTitles: {}, options: {}, optionNames: {}, optionDescriptions: {} }
 }
 
 /**
@@ -218,45 +279,19 @@ function todayInBrowser(): string {
 /**
  * The schedule as it is stored, from the schedule as it was drafted.
  *
- * Three tidies, all of them of states the form reaches by ordinary editing:
+ * One tidy, and it is the only thing about a day's shape that is stored at
+ * all: **`window` becomes the union of the cells actually painted**. It is the
+ * grid's vertical axis (see PollSchedule), and a draft that was painted late
+ * into an evening and then rubbed back out would otherwise leave a ballot with
+ * empty rows at the bottom of every day.
  *
- * - **`window` becomes the union of the days actually asked about.** It is the
- *   grid's vertical axis (see PollSchedule), and a draft that was widened and
- *   then narrowed again would otherwise leave a ballot with empty rows at the
- *   top of every day.
- * - **Per-day hours for days that are no longer in the poll are dropped.** The
- *   fields prune as they go, but a creator who sets per-day hours, turns the
- *   switch off, and unpicks a day leaves an entry behind -- an answer to a
- *   question the poll does not ask.
- * - **An empty map becomes no map.** `{}` and absent mean the same thing to
- *   `windowOn`, and one of them is the shape every poll made before per-day
- *   hours existed already has.
+ * Everything else a schedule used to carry about which days and hours are in
+ * bounds is gone, because the options say it: `boundsOf` reads the cells back
+ * off them. There is nothing here to prune, because there is nothing stored
+ * that could name a day the poll ended up not asking about.
  */
-function settle(schedule: PollSchedule, days: string[]): PollSchedule {
-  const asked = new Set(days)
-  const kept = Object.entries(schedule.day_windows ?? {}).filter(([day]) => asked.has(day))
-
-  return {
-    ...schedule,
-    window: spanOf(schedule, days),
-    day_windows: kept.length > 0 ? Object.fromEntries(kept) : null,
-  }
-}
-
-/**
- * A handful of days in a sentence: `Sat 5 Sep`, `Fri 4 Sep and Sat 5 Sep`,
- * `Fri 4 Sep, Sat 5 Sep and 3 others`.
- *
- * Cut off at three because the message this appears in is asking the creator
- * to go and fix each one, and a list long enough to need scrolling is a list
- * that has stopped being a list of things to fix.
- */
-function listDays(days: string[]): string {
-  const named = days.slice(0, 3).map(formatDay)
-  const rest = days.length - named.length
-  if (rest > 0) return `${named.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'}`
-  if (named.length === 1) return named[0]
-  return `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`
+function settle(schedule: PollSchedule, marked: Bounds): PollSchedule {
+  return { ...schedule, window: spanOf(marked, schedule) }
 }
 
 /**
@@ -284,9 +319,6 @@ function validate(form: {
   myEmail: string
   isOpen: boolean
   solicitOptions: boolean
-  kind: PollKind
-  schedule: PollSchedule
-  days: string[]
 }): FormErrors {
   const errors: FormErrors = noErrors()
 
@@ -310,40 +342,7 @@ function validate(form: {
     }
   }
 
-  // A time poll writes no option list, so none of the rules about one apply
-  // to it. What it has instead is a grid, and what can be wrong with a grid is
-  // the size of the ballot it generates -- or, now that two days need not be
-  // the same length, one day of it holding nothing at all.
-  if (form.kind === 'time') {
-    const days = [...form.days].sort()
-    const total = countWindows(form.schedule, days)
-    // Named rather than counted, because "3 of your days are too short" is a
-    // sentence the creator cannot act on without going and finding which.
-    const tooShort = days.filter((day) => windowsOn(form.schedule, day) === 0)
-
-    if (days.length === 0) {
-      errors.schedule = 'Pick at least one day people can meet on.'
-    } else if (tooShort.length > 0) {
-      // A day whose hours cannot hold the meeting is silently absent from the
-      // ballot -- `enumerateWindows` offers it nothing -- which looks exactly
-      // like the form having dropped it. Refused here instead, by name.
-      errors.schedule = `${listDays(tooShort)} ${tooShort.length === 1 ? 'is' : 'are'} too short for a meeting this long. Give ${tooShort.length === 1 ? 'it' : 'them'} more hours, shorten the meeting, or take ${tooShort.length === 1 ? 'that day' : 'those days'} off.`
-    } else if (total < 2) {
-      // The same floor every poll has, arrived at from the other direction:
-      // one window is not a choice, it is an announcement.
-      errors.schedule =
-        'That leaves one window to choose from. Widen the day, shorten the meeting, or add a day.'
-    } else if (total > MAX_OPTIONS) {
-      errors.schedule = `That is ${total} windows, and a ballot can hold ${MAX_OPTIONS}. Use longer blocks, fewer days, or a narrower part of the day.`
-    }
-  }
-
-  // Skipped wholesale on a time poll rather than filtered rule by rule: there
-  // are no option fields on screen to hang a message on, and the one question
-  // it asks is named by the poll's own title.
-  const questions = form.kind === 'time' ? [] : form.questions
-
-  questions.forEach((question, questionIndex) => {
+  form.questions.forEach((question, questionIndex) => {
     // Only read on a poll that asks more than one: a single question is
     // named by the poll's own title, and there is no field on screen here.
     if (form.multiQuestion) {
@@ -357,6 +356,43 @@ function validate(form: {
           TITLE_MAX,
         )
       }
+    }
+
+    // A time question writes no option list, so none of the rules about one
+    // apply to it. What it has instead is a painting, and what can be wrong
+    // with a painting is the size of the ballot it generates.
+    if (question.kind === 'time') {
+      const total = countWindows(question.schedule, question.marked)
+      const length = describeLength(meetingMinutes(question.schedule))
+
+      // A question collecting its times may be created with none at all, and
+      // usually is: the creator says how long the meeting is and where in the
+      // world it is, and the group says when. What they mark here is a head
+      // start, so an empty calendar is an answer rather than a gap.
+      if (form.solicitOptions && total === 0) {
+        if (question.days.length > 0) {
+          errors.schedules[questionIndex] =
+            `Nothing you have marked is ${length} long. Mark a longer stretch, shorten the meeting, or leave the calendar empty and let people add times themselves.`
+        }
+      } else if (question.days.length === 0) {
+        errors.schedules[questionIndex] = 'Pick the days people can meet on.'
+      } else if (total === 0) {
+        // Nothing painted is long enough, which is the state a creator reaches
+        // by asking for three hours on a two-hour evening -- and which would
+        // otherwise be a ballot with nothing on it.
+        errors.schedules[questionIndex] =
+          `Nothing you have marked is ${length} long, so there are no times to choose between. Mark a longer stretch, or shorten the meeting.`
+      } else if (total < 2 && !form.solicitOptions) {
+        // The same floor every poll has, arrived at from the other direction:
+        // one window is not a choice, it is an announcement. A question that
+        // collects its times may start with one, or with none.
+        errors.schedules[questionIndex] =
+          'That leaves one window to choose from. Mark more of the day, shorten the meeting, or add a day.'
+      } else if (total > MAX_OPTIONS) {
+        errors.schedules[questionIndex] =
+          `That is ${total} windows, and a ballot can hold ${MAX_OPTIONS}. Use a longer meeting, fewer days, or a narrower part of the day.`
+      }
+      return
     }
 
     // Compared lowercased: two options that differ only in case are one
@@ -454,15 +490,6 @@ export function CreatePoll() {
   // one being removed.
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [mode, setMode] = useState<PollMode>('invite')
-  // What the poll is choosing between. Held beside the option list rather
-  // than replacing it, so switching back and forth does not throw away
-  // whatever was typed on the other side of the toggle.
-  const [kind, setKind] = useState<PollKind>('option')
-  const [schedule, setSchedule] = useState<PollSchedule>(blankSchedule)
-  // The days in bounds. Not part of the schedule, because they are exactly
-  // the days the generated options start on and the poll reads them back off
-  // those; see PollSchedule.
-  const [days, setDays] = useState<string[]>([])
   const [showVoters, setShowVoters] = useState(false)
   const [showBallots, setShowBallots] = useState(false)
   const [solicitOptions, setSolicitOptions] = useState(false)
@@ -475,14 +502,6 @@ export function CreatePoll() {
   const [showErrors, setShowErrors] = useState(false)
   // Only ever true on a duplicate; a blank new poll renders immediately.
   const [prefilling, setPrefilling] = useState(Boolean(duplicateOf))
-  // How many weeks a duplicate's dates had to move to stop being in the past;
-  // 0 on every other poll, and cleared the moment the creator picks a day of
-  // their own. See `carryForward`, and the notice above the calendar fields.
-  const [datesMoved, setDatesMoved] = useState(0)
-  // Whether the offset on the schedule is an answer or a guess. Until the
-  // creator picks one it is wherever this browser is, and it follows the poll's
-  // dates; see `pickDays`.
-  const [offsetPicked, setOffsetPicked] = useState(false)
 
   const myEmail = session?.user.email?.toLowerCase() ?? ''
   const isOpen = mode === 'open'
@@ -497,9 +516,6 @@ export function CreatePoll() {
     myEmail,
     isOpen,
     solicitOptions,
-    kind,
-    schedule,
-    days,
   })
   // What the fields actually render. Held back until the first submit, then
   // live: fixing a field clears its message as it is fixed.
@@ -512,6 +528,17 @@ export function CreatePoll() {
   const openQuestion = questions.some((question) => question.key === openKey)
     ? openKey
     : (questions[0]?.key ?? null)
+
+  // What the last section of the form is called. A poll of several questions
+  // is a list of questions whatever each of them is asking for; a poll of one
+  // is named after the one thing it wants.
+  const sectionTitle = multiQuestion
+    ? 'Questions'
+    : questions[0]?.kind === 'time'
+      ? 'Times'
+      : solicitOptions
+        ? 'Starting options'
+        : 'Options'
 
   // Duplicating copies the source poll's settings into the form and stops
   // there; nothing is created until the user submits, so the copy can be
@@ -543,123 +570,116 @@ export function CreatePoll() {
 
       const { candidates, ...source } = pollRes.data as Poll & { candidates: PollOption[] }
 
-      // The grid, if this is a poll that finds a time. Checked rather than
-      // cast, unlike every other field on this row, for the reason
-      // `pollScheduleSchema` exists at all: it is the one payload the form
-      // does arithmetic with, and a `granularity` that arrived as a string
-      // would make every window start `NaN` several screens away from here. A
-      // schedule that will not parse is handled below rather than trusted.
-      const parsedGrid =
-        source.kind === 'time' ? pollScheduleSchema.safeParse(source.schedule) : null
-      const grid = parsedGrid?.success ? parsedGrid.data : null
-
       setTitle(source.title)
       setDescription(source.description ?? '')
       setMode(source.mode)
       setShowVoters(source.show_voters)
       setShowBallots(source.show_ballots)
-      // Off on a time poll, and `create_poll` refuses it there besides; see
-      // switchKind.
-      setSolicitOptions(grid ? false : source.solicit_options)
+      setSolicitOptions(source.solicit_options)
 
-      // Descriptions come across with their options, so a duplicate of a poll
-      // that explained its options does not quietly lose the explanations.
-      const draftFrom = (rows: PollOption[]): OptionDraft[] => {
+      /**
+       * One question of the copy, from the row it is being copied from.
+       *
+       * A time question copies as a time question. That took saying, because
+       * for two migrations it did not: the prefill copied the title, the
+       * settings and the option list and knew nothing about `kind`, so
+       * "Duplicate" on a time poll produced an *option* poll whose options
+       * were sixty ISO timestamps -- a real ballot, drawn as a list, that
+       * nobody could read and the calendar could not score.
+       *
+       * The schedule is the one field on that row this form checks rather
+       * than casts, for the reason `pollScheduleSchema` exists: it is the
+       * payload the form does arithmetic with, and a `granularity` that
+       * arrived as a string would make every window start `NaN` several
+       * screens away. One that will not parse leaves a time question with no
+       * grid and a line saying so, rather than the list-of-timestamps poll
+       * this is all here to prevent.
+       */
+      const draftFrom = (row: Poll, rows: PollOption[]): QuestionDraft => {
+        const blank = blankQuestion()
+        const parsed = row.kind === 'time' ? pollScheduleSchema.safeParse(row.schedule) : null
+        const grid = parsed?.success ? parsed.data : null
+
+        if (row.kind === 'time') {
+          if (!grid) {
+            // Still a time question, and still a copy worth making, but with
+            // no grid to put under it. Said plainly over calendar fields that
+            // are otherwise blank.
+            setError(
+              "That poll's calendar could not be read, so this copy has its title and settings but none of its times. Mark the days and hours below.",
+            )
+            return { ...blank, title: row.question_title ?? '', kind: 'time' }
+          }
+
+          // The painting comes off the options, exactly as the ballot reads it
+          // -- and then forward to the next dates that have not already gone,
+          // which is what makes a duplicate of last Friday's poll a poll about
+          // a Friday somebody can still attend. See `carryForward`.
+          const renewed = carryForward(
+            boundsOf(
+              rows.map((option) => option.name),
+              grid,
+            ),
+            todayInBrowser(),
+          )
+          return {
+            ...blank,
+            title: row.question_title ?? '',
+            kind: 'time',
+            // The offset copies straight across: it is what the poll was held
+            // at and a copy is held at the same one. `offsetPicked` with it,
+            // because an offset that came from the poll being copied is an
+            // answer rather than this browser's guess, and the dates that have
+            // just moved must not move it.
+            schedule: grid,
+            offsetPicked: true,
+            marked: renewed.bounds,
+            days: daysOf(renewed.bounds),
+            hours: grid.window,
+            datesMoved: renewed.weeks,
+          }
+        }
+
+        // Descriptions come across with their options, so a duplicate of a
+        // poll that explained its options does not quietly lose the
+        // explanations. The form's two-row minimum is kept if the source
+        // somehow had fewer.
         const drafted = rows.map((o) => ({
           ...blankOption(),
           name: o.name,
           description: o.description,
         }))
-        // Keep the form's two-row minimum if the source somehow had fewer.
-        return drafted.length >= 2
-          ? drafted
-          : [...drafted, blankOption(), blankOption()].slice(0, 2)
+        return {
+          ...blank,
+          title: row.question_title ?? '',
+          options:
+            drafted.length >= 2 ? drafted : [...drafted, blankOption(), blankOption()].slice(0, 2),
+        }
       }
 
-      if (grid) {
-        // A duplicate of a poll that finds a time is a poll that finds a time.
-        // Without this the copy came back as an *option* poll whose options
-        // were sixty ISO timestamps -- a real ballot, drawn as a list, that
-        // nobody could read and the calendar could not score.
-        setKind('time')
-        // Neither works on a calendar, and switchKind turns both off for the
-        // same reasons when the toggle is used by hand.
-        setMultiQuestion(false)
-        // Blank rather than the windows the source enumerated. They are not an
-        // option list anybody wrote, and leaving them in the draft would spill
-        // sixty timestamps into the form the moment somebody switched the copy
-        // back to a poll about options.
-        setQuestions([blankQuestion()])
+      if (source.group_id) {
+        // A duplicate of a poll that asks several questions is a poll that
+        // asks the same several, not whichever one the creator happened to
+        // press Duplicate on. One query for the lot of them: every question of
+        // a group carries the whole invite list, so the row-level security on
+        // `polls` lets anybody who can see one see its siblings.
+        const groupRes = await supabase
+          .from('polls')
+          .select('*, candidates(*)')
+          .eq('group_id', source.group_id)
+          .order('question_position')
+          .order('sort_order', { referencedTable: 'candidates' })
+        if (cancelled) return
 
-        // The days come off the options, exactly as the ballot reads them --
-        // and then forward to the next dates that have not already gone, which
-        // is what makes a duplicate of last Friday's poll a poll about a
-        // Friday somebody can still attend. See `carryForward`.
-        const asked = daysOf((candidates ?? []).map((option) => option.name))
-        const renewed = carryForward(grid, asked, todayInBrowser())
-        setDays(renewed.days)
-        setDatesMoved(renewed.weeks)
-
-        // The offset copies straight across -- it is what the poll was held at
-        // and there is nothing to resolve. Its caption does not: the copy's
-        // dates may have moved across a clock change, and `-07:00` is Pacific
-        // Time in July and Mountain Time in January, so the name is worked out
-        // again for the dates the copy actually asks about.
-        // The offset came from the poll being copied, so it is an answer
-        // rather than this browser's guess and the dates do not move it.
-        setOffsetPicked(true)
-        setSchedule({
-          ...renewed.schedule,
-          timezone_label: nameOffset(renewed.schedule.timezone, renewed.days),
-        })
-      } else {
-        if (source.kind === 'time') {
-          // A time poll whose schedule will not parse: still a time poll, and
-          // still a copy worth making, but with no grid to put under it. Said
-          // plainly over calendar fields that are otherwise blank, rather than
-          // quietly handed back as the list-of-timestamps poll the branch
-          // above exists to stop.
-          setKind('time')
-          setMultiQuestion(false)
-          setQuestions([blankQuestion()])
-          setError(
-            "That poll's calendar could not be read, so this copy has its title and settings but none of its times. Set the days and hours below.",
-          )
+        const rows = (groupRes.data as (Poll & { candidates: PollOption[] })[] | null) ?? []
+        if (rows.length > 1) {
+          setMultiQuestion(true)
+          setQuestions(rows.map((row) => draftFrom(row, row.candidates ?? [])))
         } else {
-          // A duplicate of a poll that asks several questions is a poll that
-          // asks the same several, not whichever one the creator happened to
-          // press Duplicate on. The group is read through the same RPC the
-          // poll page uses, and every question's options in one query rather
-          // than one each.
-          const { data: groupData } = await supabase.rpc('poll_group', { p_poll_id: sourceId })
-          if (cancelled) return
-          // A group that does not parse is a poll with no group as far as this
-          // form is concerned: the duplicate then carries the one question it
-          // was opened from, which is the same thing every single-question
-          // duplicate does, rather than a half-copied set of questions.
-          const group = parseAnswer(groupQuestionsSchema, 'poll_group', groupData ?? []).value ?? []
-
-          if (group.length > 1) {
-            const ids = group.map((q) => q.id)
-            const { data: allOptions } = await supabase
-              .from('candidates')
-              .select('*')
-              .in('poll_id', ids)
-              .order('sort_order')
-            if (cancelled) return
-            const rows = (allOptions as PollOption[]) ?? []
-            setMultiQuestion(true)
-            setQuestions(
-              group.map((question) => ({
-                ...blankQuestion(),
-                title: question.question_title,
-                options: draftFrom(rows.filter((o) => o.poll_id === question.id)),
-              })),
-            )
-          } else {
-            setQuestions([{ ...blankQuestion(), options: draftFrom(candidates ?? []) }])
-          }
+          setQuestions([draftFrom(source as Poll, candidates ?? [])])
         }
+      } else {
+        setQuestions([draftFrom(source as Poll, candidates ?? [])])
       }
 
       if (source.mode === 'invite') {
@@ -755,80 +775,71 @@ export function CreatePoll() {
     else setOpenKey(value)
   }
 
-  /**
-   * Switching between a poll about options and a poll about times.
-   *
-   * Two settings go off with it and stay off, because neither works on a
-   * calendar yet and both would be a promise the poll could not keep:
-   *
-   * - **Several questions.** One calendar per question is a form nobody has
-   *   drawn, and `create_poll_group` takes no kind at all -- every question it
-   *   makes is an ordinary one.
-   * - **Collecting options from voters.** A voter "adding Thursday" adds a
-   *   dozen options, one per window start, and the suggestion path inserts
-   *   them one at a time; a run that failed halfway would leave a Thursday
-   *   with morning windows and no afternoon. `create_poll` refuses the
-   *   combination too -- this is what stops it being offered.
-   *
-   * They are turned off rather than disabled in place: a switch that is on
-   * and has no effect is worse than one that has moved where the creator can
-   * see it move.
-   */
-  function switchKind(next: PollKind) {
-    setKind(next)
-    if (next === 'time') {
-      setMultiQuestion(false)
-      setSolicitOptions(false)
-      setQuestions((prev) => prev.slice(0, 1))
-    }
+  /** Edits one question in place, leaving the others alone. */
+  function patchQuestion(index: number, edit: Partial<QuestionDraft>) {
+    setQuestions((prev) => prev.map((q, i) => (i === index ? { ...q, ...edit } : q)))
   }
 
   /**
-   * An offset, with the name stored beside it worked out for the poll's own
-   * dates.
+   * Switching one question between choosing an option and finding a time.
    *
-   * The offset is what the creator picked and what the poll is held at; the
-   * name is a caption, and which caption is right depends on when the poll is
-   * -- `-07:00` is Pacific Time in July and Mountain Time in January. So it is
-   * derived rather than chosen, and derived again whenever either half of the
-   * question moves: `pickOffset` when the number changes, `pickDays` when the
-   * first day does.
+   * Nothing else moves with it any more, and that is the change 0056 bought:
+   * a group may hold a calendar among its questions, and a calendar may
+   * collect its times from voters. Both were turned off here, and the reasons
+   * were real -- `create_poll_group` took no kind, and the suggestion path
+   * inserted one option at a time, so a voter "adding Thursday" could leave a
+   * day with morning windows and no afternoon. Both are gone: the group reads
+   * a kind off each question, and `suggest_options` takes the whole painting
+   * in one statement.
    *
-   * Done in the setters rather than in an effect watching the two, because an
-   * effect that writes to the state it watches is a loop waiting for a
-   * dependency to be listed slightly wrong -- and there are exactly two places
-   * the inputs change.
+   * What the other side of the toggle held is kept rather than cleared, on
+   * both sides: the option rows survive a trip through the calendar, and a
+   * painting survives a trip through the option rows.
    */
-  function nameOffset(offset: string, over: string[]): PollSchedule['timezone_label'] {
-    return offsetName(offset, [...over].sort()[0] ?? todayInBrowser())
+  function switchKind(index: number, next: PollKind) {
+    patchQuestion(index, { kind: next })
   }
 
-  function pickOffset(next: string, over: string[]) {
-    setOffsetPicked(true)
-    setSchedule((prev) => ({ ...prev, timezone: next, timezone_label: nameOffset(next, over) }))
+  /**
+   * An offset the creator picked, which from then on is theirs.
+   *
+   * It is what the poll is held at and everything on the grid is worked out
+   * in it. Once it has been chosen by hand the dates no longer move it; see
+   * `pickDays`.
+   */
+  function pickOffset(index: number, next: string) {
+    patchQuestion(index, {
+      schedule: { ...questions[index].schedule, timezone: next },
+      offsetPicked: true,
+    })
   }
 
   /**
    * Days, with the offset caught up to them.
    *
-   * The caption always follows, for the reason above. **The offset itself
-   * follows only while it is still a guess** -- the form opens on whatever
-   * this browser is on today, and today is not when the meeting is: somebody
-   * in Denver arranging a July meeting in March is on `-07:00` as they type
-   * and `-06:00` when it happens, and a poll left on the opening guess would
-   * be an hour out on every option it offers. Once they have picked an offset
-   * it is theirs and the dates do not move it.
+   * **The offset follows only while it is still a guess** -- the form opens on
+   * whatever this browser is on today, and today is not when the meeting is:
+   * somebody in Denver arranging a July meeting in March is on `-07:00` as
+   * they type and `-06:00` when it happens, and a poll left on the opening
+   * guess would be an hour out on every option it offers. Once they have
+   * picked an offset it is theirs and the dates do not move it.
+   *
+   * Done in the setter rather than in an effect watching the two, because an
+   * effect that writes to the state it watches is a loop waiting for a
+   * dependency to be listed slightly wrong.
    */
-  function pickDays(next: string[]) {
-    setDays(next)
-    // The notice explains where the dates in the picker came from, so it goes
-    // as soon as they are the creator's own rather than the copy's.
-    setDatesMoved(0)
-
+  function pickDays(index: number, next: string[], marked: Set<GranuleKey>) {
+    const question = questions[index]
     const on = [...next].sort()[0]
-    setSchedule((prev) => {
-      const timezone = !offsetPicked && on ? viewerOffsetOn(on) : prev.timezone
-      return { ...prev, timezone, timezone_label: nameOffset(timezone, next) }
+    const timezone = !question.offsetPicked && on ? viewerOffsetOn(on) : question.schedule.timezone
+
+    patchQuestion(index, {
+      days: next,
+      marked,
+      schedule: { ...question.schedule, timezone },
+      // The notice explains where the dates in the picker came from, so it
+      // goes as soon as they are the creator's own rather than the copy's.
+      datesMoved: 0,
     })
   }
 
@@ -910,32 +921,46 @@ export function CreatePoll() {
       return
     }
 
-    // A time poll's ballot is generated here, in the browser, and sent through
-    // the same create_poll as any other list of options. That is the whole
-    // trick: from this line on there is nothing about this poll the database
-    // handles differently, apart from two columns it stores and hands back.
+    // A time question's ballot is generated here, in the browser, and sent
+    // through the same create_poll as any other list of options. That is the
+    // whole trick: from this line on there is nothing about this poll the
+    // database handles differently, apart from two columns it stores and
+    // hands back.
     //
     // The schedule is tidied on the way out rather than kept tidy on the way
     // in, because what the form holds is a draft and what is stored is a
-    // record: `window` becomes exactly the union of the days the poll ended up
-    // asking about, per-day hours for days that were picked and then unpicked
-    // are dropped, and an empty map becomes no map at all. All three are
-    // states the form can reach by ordinary editing, and none of them is a
-    // state worth storing.
-    const grid = kind === 'time' ? settle(schedule, days) : schedule
-    const windows = kind === 'time' ? enumerateWindows(grid, days) : []
-
+    // record: `window` becomes exactly the union of the cells the creator
+    // ended up leaving painted, which is the axis the ballot is drawn on.
+    //
     // Blank rows are dropped here and in the database alike, and the
     // descriptions travel with their option rather than beside it, so a
     // dropped row cannot slide every later description onto the wrong one.
-    const cleaned = questions.map((question) => ({
-      title: question.title.trim(),
-      options: question.options
-        .map((o) => ({ name: o.name.trim(), description: o.description?.trim() || null }))
-        .filter((o) => o.name),
-    }))
+    const cleaned = questions.map((question) => {
+      if (question.kind !== 'time') {
+        return {
+          title: question.title.trim(),
+          kind: 'option' as const,
+          schedule: null,
+          options: question.options
+            .map((o) => ({ name: o.name.trim(), description: o.description?.trim() || null }))
+            .filter((o) => o.name),
+        }
+      }
+      const grid = settle(question.schedule, question.marked)
+      return {
+        title: question.title.trim(),
+        kind: 'time' as const,
+        schedule: grid,
+        options: enumerateWindows(grid, question.marked).map((name) => ({
+          name,
+          description: null,
+        })),
+      }
+    })
+
     const typedEmails = emails.map((e) => e.trim().toLowerCase()).filter(Boolean)
     const allEmails = Array.from(new Set(includeSelf ? [...typedEmails, myEmail] : typedEmails))
+    const only = cleaned[0]
 
     setSubmitting(true)
     // One transaction either way: the poll, its questions, their options and
@@ -952,6 +977,10 @@ export function CreatePoll() {
           // same place — both functions run it through
           // `nullif(trim(coalesce(p_description, '')), '')`.
           p_description: description.trim(),
+          // Each question says which kind it is and carries its own grid; see
+          // 0056_schedule_options.sql. A question that is not a calendar sends
+          // `schedule: null`, which is what the check on that side refuses to
+          // see anything else in.
           p_questions: cleaned,
           p_emails: isOpen ? [] : allEmails,
           p_mode: mode,
@@ -961,22 +990,17 @@ export function CreatePoll() {
         })
       : await supabase.rpc('create_poll', {
           p_title: title.trim(),
-          // Sent even when empty, unlike the option descriptions below: this
-          // parameter has no DEFAULT in the database, so omitting it would
-          // leave PostgREST with no overload to call. '' and null reach the
-          // same place — both functions run it through
-          // `nullif(trim(coalesce(p_description, '')), '')`.
           p_description: description.trim(),
-          p_options: kind === 'time' ? windows : cleaned[0].options.map((o) => o.name),
+          p_options: only.options.map((o) => o.name),
           p_emails: isOpen ? [] : allEmails,
           p_mode: mode,
           p_show_voters: showVoters,
           p_show_ballots: showBallots,
           p_solicit_options: solicitOptions,
-          p_kind: kind,
+          p_kind: only.kind,
           // The database ties these two together: a schedule on an option
           // poll is refused, and a time poll without one cannot be stored.
-          p_schedule: kind === 'time' ? grid : undefined,
+          p_schedule: only.schedule ?? undefined,
           // Most polls describe nothing, and send nothing rather than a row of
           // blanks the database would only throw away again. Where they are
           // sent, an option with no description travels as '' rather than
@@ -984,10 +1008,9 @@ export function CreatePoll() {
           // `nullif(trim(coalesce(…, '')), '')`, so the two arrive as the same
           // absent description, and a `text[]` cannot say "nullable elements"
           // to the generated types.
-          p_option_descriptions:
-            kind === 'option' && cleaned[0].options.some((o) => o.description)
-              ? cleaned[0].options.map((o) => o.description ?? '')
-              : undefined,
+          p_option_descriptions: only.options.some((o) => o.description)
+            ? only.options.map((o) => o.description ?? '')
+            : undefined,
         })
     setSubmitting(false)
 
@@ -1027,83 +1050,149 @@ export function CreatePoll() {
           />
         )}
 
-        <Text size="xs" c="dimmed">
-          {solicitOptions
-            ? 'Voters will be able to add to this list later.'
-            : 'Use + to add a description to an option.'}
-        </Text>
+        {/* What this question is choosing between, at the head of the fields
+            whose whole shape it decides. It sits here rather than up in
+            Configuration because it is not a setting on a ballot -- it is
+            which ballot this question is, and the fields below it are the
+            answer. Per question since 0056, which is what lets a poll ask
+            "what are we watching?" and "when?" in one sitting. */}
+        <SegmentedControl
+          fullWidth
+          value={question.kind}
+          onChange={(v) => switchKind(questionIndex, v as PollKind)}
+          data={[
+            { value: 'option', label: 'Choose an option' },
+            { value: 'time', label: 'Find a time' },
+          ]}
+        />
 
-        {question.options.map((option, index) => (
-          /* The row's own box, which is what opens and closes; see
+        {question.kind === 'time' ? (
+          <>
+            {/* Dates that moved on their own are exactly the kind of thing a
+                creator notices two screens later, or never -- so a copy whose
+                dates had already gone says where the ones in the picker came
+                from. It goes as soon as they pick a day of their own; see
+                pickDays. */}
+            {question.datesMoved > 0 && (
+              <Alert color="blue" title="These dates have moved">
+                The poll you copied is in the past, so this one asks about the same days of the week{' '}
+                {question.datesMoved === 1 ? 'a week' : `${question.datesMoved} weeks`} later. Pick
+                different days below if that is not where you want it.
+              </Alert>
+            )}
+            {solicitOptions && (
+              <Text size="xs" c="dimmed">
+                Voters will be able to add times of their own later; what you mark here is the head
+                start.
+              </Text>
+            )}
+            {/* No option rows at all: the ballot is generated from these
+                answers and the calendar under them, which is the whole of what
+                makes a time question a question about times. See
+                enumerateWindows, and handleSubmit, where the windows become
+                the ordinary p_options every other poll sends. */}
+            <ScheduleFields
+              schedule={question.schedule}
+              days={question.days}
+              hours={question.hours}
+              marked={question.marked}
+              onScheduleChange={(next) => patchQuestion(questionIndex, { schedule: next })}
+              onDaysChange={(next, marked) => pickDays(questionIndex, next, marked)}
+              onHoursChange={(next) => patchQuestion(questionIndex, { hours: next })}
+              onMarkedChange={(next) => patchQuestion(questionIndex, { marked: next })}
+              onOffsetChange={(next) => pickOffset(questionIndex, next)}
+              error={shown.schedules[questionIndex]}
+            />
+          </>
+        ) : (
+          <>
+            <Text size="xs" c="dimmed">
+              {solicitOptions
+                ? 'Voters will be able to add to this list later.'
+                : 'Use + to add a description to an option.'}
+            </Text>
+
+            {question.options.map((option, index) => (
+              /* The row's own box, which is what opens and closes; see
              listRow.module.css. The handler is hung only on a row that is
              leaving, so the arrival's animation cannot be mistaken for the
              departure's ending. */
-          <div
-            key={option.key}
-            className={`${listRow.row} ${option.key === arriving ? listRow.joining : ''} ${
-              leaving.has(option.key) ? listRow.leaving : ''
-            }`}
-            onAnimationEnd={
-              leaving.has(option.key) ? () => dropOption(questionIndex, option.key) : undefined
-            }
-          >
-            <Group className={listRow.content} gap="xs" align="flex-start" wrap="nowrap">
-              <Stack gap={4} style={{ flex: 1 }}>
-                <TextInput
-                  value={option.name}
-                  onChange={(e) =>
-                    updateOption(questionIndex, index, { name: e.currentTarget.value })
-                  }
-                  placeholder={`Option ${index + 1}`}
-                  error={shown.optionNames[optionKey(questionIndex, index)]}
-                  /* The cursor follows the row that was just asked for. Adding
+              <div
+                key={option.key}
+                className={`${listRow.row} ${option.key === arriving ? listRow.joining : ''} ${
+                  leaving.has(option.key) ? listRow.leaving : ''
+                }`}
+                onAnimationEnd={
+                  leaving.has(option.key) ? () => dropOption(questionIndex, option.key) : undefined
+                }
+              >
+                <Group className={listRow.content} gap="xs" align="flex-start" wrap="nowrap">
+                  <Stack gap={4} style={{ flex: 1 }}>
+                    <TextInput
+                      value={option.name}
+                      onChange={(e) =>
+                        updateOption(questionIndex, index, { name: e.currentTarget.value })
+                      }
+                      placeholder={`Option ${index + 1}`}
+                      error={shown.optionNames[optionKey(questionIndex, index)]}
+                      /* The cursor follows the row that was just asked for. Adding
                    an option and then having to reach for the box it made is
                    the same press twice. */
-                  autoFocus={option.key === arriving}
-                />
-                {option.description !== null && (
-                  <DescriptionField
-                    value={option.description}
-                    onChange={(e) =>
-                      updateOption(questionIndex, index, { description: e.currentTarget.value })
-                    }
-                    placeholder={`Option ${index + 1} description`}
-                    error={shown.optionDescriptions[optionKey(questionIndex, index)]}
-                    autoFocus
-                  />
-                )}
-              </Stack>
-              <Tooltip
-                label={option.description === null ? 'Add description' : 'Remove description'}
-                withArrow
-              >
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  onClick={() => toggleDescription(questionIndex, index)}
-                  aria-label={
-                    option.description === null
-                      ? `Add a description to option ${index + 1}`
-                      : `Remove the description from option ${index + 1}`
-                  }
-                >
-                  {option.description === null ? '+' : '−'}
-                </ActionIcon>
-              </Tooltip>
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                onClick={() => removeOption(questionIndex, option.key)}
-                /* Two rows is the floor for a poll that ships its options with
+                      autoFocus={option.key === arriving}
+                    />
+                    {option.description !== null && (
+                      <DescriptionField
+                        value={option.description}
+                        onChange={(e) =>
+                          updateOption(questionIndex, index, { description: e.currentTarget.value })
+                        }
+                        placeholder={`Option ${index + 1} description`}
+                        error={shown.optionDescriptions[optionKey(questionIndex, index)]}
+                        autoFocus
+                      />
+                    )}
+                  </Stack>
+                  <Tooltip
+                    label={option.description === null ? 'Add description' : 'Remove description'}
+                    withArrow
+                  >
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      onClick={() => toggleDescription(questionIndex, index)}
+                      aria-label={
+                        option.description === null
+                          ? `Add a description to option ${index + 1}`
+                          : `Remove the description from option ${index + 1}`
+                      }
+                    >
+                      {option.description === null ? '+' : '−'}
+                    </ActionIcon>
+                  </Tooltip>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    onClick={() => removeOption(questionIndex, option.key)}
+                    /* Two rows is the floor for a poll that ships its options with
              it, and no floor at all for one that collects them. */
-                disabled={!solicitOptions && question.options.length <= 2}
-                aria-label="Remove option"
-              >
-                &times;
-              </ActionIcon>
-            </Group>
-          </div>
-        ))}
+                    disabled={!solicitOptions && question.options.length <= 2}
+                    aria-label="Remove option"
+                  >
+                    &times;
+                  </ActionIcon>
+                </Group>
+              </div>
+            ))}
+
+            {/* Wrong with the list rather than with a row in it, so it sits
+                under the list rather than under any one field. */}
+            {shown.options[questionIndex] && (
+              <Text c="var(--mantine-color-error)" size="sm">
+                {shown.options[questionIndex]}
+              </Text>
+            )}
+          </>
+        )}
 
         {/* Removing the question sits opposite adding an option, at the end
             of the question it acts on, and says in words what it removes.
@@ -1121,15 +1210,19 @@ export function CreatePoll() {
             the two share is not a row — it is that each is next to what it
             acts on. */}
         <Group gap="sm" align="center" justify="space-between">
-          <Button
-            variant="light"
-            size="xs"
-            onClick={() => addOption(questionIndex)}
-            w="fit-content"
-            disabled={question.options.length >= MAX_OPTIONS}
-          >
-            Add option
-          </Button>
+          {question.kind === 'time' ? (
+            <span />
+          ) : (
+            <Button
+              variant="light"
+              size="xs"
+              onClick={() => addOption(questionIndex)}
+              w="fit-content"
+              disabled={question.options.length >= MAX_OPTIONS}
+            >
+              Add option
+            </Button>
+          )}
           {multiQuestion && (
             <Button
               variant="light"
@@ -1151,14 +1244,6 @@ export function CreatePoll() {
             </Button>
           )}
         </Group>
-
-        {/* Wrong with the list rather than with a row in it, so it sits under
-            the list rather than under any one field. */}
-        {shown.options[questionIndex] && (
-          <Text c="var(--mantine-color-error)" size="sm">
-            {shown.options[questionIndex]}
-          </Text>
-        )}
       </Stack>
     )
   }
@@ -1269,82 +1354,35 @@ export function CreatePoll() {
               label="Publish ballots"
             />
 
-            {/* Both of these are off and out of reach on a time poll, and the
-                reason is in switchKind. Hidden rather than disabled: a switch
-                a creator cannot move is a question they still have to answer,
-                and neither of them is a question a time poll asks. */}
-            {kind === 'option' && (
-              <>
-                <Switch
-                  checked={solicitOptions}
-                  onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
-                  label="Solicit options from voters"
-                />
+            {/* Both of these used to be hidden on a time poll, because
+                neither worked on a calendar: `create_poll_group` took no kind,
+                and a voter "adding Thursday" adds a dozen options one request
+                at a time. 0056 settles both, so a poll may ask a calendar
+                among its questions and a calendar may collect its times. */}
+            <Switch
+              checked={solicitOptions}
+              onChange={(e) => setSolicitOptions(e.currentTarget.checked)}
+              label="Solicit options from voters"
+            />
 
-                <Switch
-                  checked={multiQuestion}
-                  onChange={(e) => toggleMultiQuestion(e.currentTarget.checked)}
-                  label="Multiple questions"
-                />
-              </>
-            )}
+            <Switch
+              checked={multiQuestion}
+              onChange={(e) => toggleMultiQuestion(e.currentTarget.checked)}
+              label="Multiple questions"
+            />
           </Stack>
         </Card>
       </Stack>
 
       <Stack gap={2}>
-        <Title order={4}>
-          {kind === 'time' ? 'Times' : solicitOptions ? 'Starting options' : 'Options'}
-        </Title>
+        <Title order={4}>{sectionTitle}</Title>
         <Card withBorder p="sm">
-          {/* What this poll is choosing between, at the head of the section
-              whose whole shape it decides. It sits here rather than up in
-              Configuration because it is not a setting on a ballot -- it is
-              which ballot this is, and the fields below it are the answer. */}
-          <SegmentedControl
-            fullWidth
-            mb="sm"
-            value={kind}
-            onChange={(v) => switchKind(v as PollKind)}
-            data={[
-              { value: 'option', label: 'Choose an option' },
-              { value: 'time', label: 'Find a time' },
-            ]}
-          />
           {/* Last, because it is the only part of the form whose shape depends on
           the answers above it: a poll collecting its options can be created
           with none at all, and the rows here become a head start rather than
           the ballot. */}
           <Stack gap="sm">
-            {kind === 'time' ? (
-              /* No option rows at all: the ballot is generated from these
-                 answers and the days picked below them, which is the whole of
-                 what makes a time poll a poll about times. See
-                 enumerateWindows, and handleSubmit, where they become the
-                 ordinary p_options every other poll sends. */
-              <Stack gap="sm">
-                {/* Dates that moved on their own are exactly the kind of thing
-                    a creator notices two screens later, or never -- so a copy
-                    whose dates had already gone says where the ones in the
-                    picker came from. It goes as soon as they pick a day of
-                    their own; see pickDays. */}
-                {datesMoved > 0 && (
-                  <Alert color="blue" title="These dates have moved">
-                    The poll you copied is in the past, so this one asks about the same days of the
-                    week {datesMoved === 1 ? 'a week' : `${datesMoved} weeks`} later. Pick different
-                    days below if that is not where you want it.
-                  </Alert>
-                )}
-                <ScheduleFields
-                  schedule={schedule}
-                  days={days}
-                  onScheduleChange={setSchedule}
-                  onDaysChange={pickDays}
-                  onOffsetChange={(next) => pickOffset(next, days)}
-                  error={shown.schedule}
-                />
-              </Stack>
-            ) : multiQuestion ? (
+            {multiQuestion ? (
               /* One question at a time, behind a strip of tabs. Every question
              laid out at once was a form that grew with the poll: five
              questions of five options each is fifty fields in one scroll,

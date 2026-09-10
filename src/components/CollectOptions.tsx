@@ -13,6 +13,7 @@ import {
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
+import { PaintTimes } from './PaintTimes'
 import { openPollRpc } from '../lib/samplePoll'
 import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
@@ -23,7 +24,7 @@ import { OptionDescription } from './OptionDescription'
 import listRow from './listRow.module.css'
 import { OpeningNote } from './PollNotices'
 import { VoterNameField } from './VoterNameField'
-import type { PollOption } from '../lib/types'
+import type { PollOption, PollSchedule } from '../lib/types'
 
 /**
  * Which endpoint an added option goes through.
@@ -40,6 +41,9 @@ import type { PollOption } from '../lib/types'
  * creator's correction is the one that cannot be confirmed, because a list
  * that is already a ballot has nobody left to be done adding to it.
  */
+/** Only has to be unique within one open card, and never leaves it. */
+let draftSeq = 0
+
 export type OptionsSource =
   | { kind: 'poll'; pollId: string }
   | { kind: 'open'; pollId: string }
@@ -102,6 +106,7 @@ export interface Confirmation {
 export function CollectOptions({
   source,
   options,
+  schedule,
   isCreator,
   voterName,
   questionStrip,
@@ -112,6 +117,16 @@ export function CollectOptions({
 }: {
   source: OptionsSource
   options: PollOption[]
+  /**
+   * The grid, on a poll that finds a time; null on every other poll.
+   *
+   * Its presence is what swaps the text box and the row-per-suggestion for a
+   * calendar: the list a time poll is collecting is a list of window starts,
+   * and nobody types one of those. Everything around it -- the name field, the
+   * question strip, the confirmation, the roster -- is the same card either
+   * way, because being done adding is the same act whichever the list is.
+   */
+  schedule?: PollSchedule | null
   isCreator: boolean
   /**
    * The name to confirm under, when the poll has to ask for one: an open poll
@@ -149,6 +164,9 @@ export function CollectOptions({
   // field: what is wrong with the name is marked on the box it was typed in,
   // by the field itself.
   const [error, setError] = useState<string | null>(null)
+  // Whether the list below holds something the poll does not yet; see the
+  // note beside the line that says so.
+  const [dirty, setDirty] = useState(false)
 
   // The name is what a confirmation is given under, so it is asked for only
   // where there is something to confirm: the creator correcting a ballot's
@@ -239,7 +257,35 @@ export function CollectOptions({
         {nameField}
         {questionStrip}
 
-        <OptionList source={source} options={options} isCreator={isCreator} onChanged={onChanged} />
+        {schedule ? (
+          <TimeList
+            source={source}
+            options={options}
+            schedule={schedule}
+            isCreator={isCreator}
+            onChanged={onChanged}
+            onDirtyChange={setDirty}
+          />
+        ) : (
+          <OptionList
+            source={source}
+            options={options}
+            isCreator={isCreator}
+            onChanged={onChanged}
+            onDirtyChange={setDirty}
+          />
+        )}
+
+        {/* Whichever list is on screen, its edits are drafted and applied in
+            one request -- so there is a moment where the card holds an answer
+            the poll does not, and the way out of the card sits a few lines
+            below. Said rather than guarded against: a Save button that is the
+            only way out is worse than one that is the obvious way out. */}
+        {dirty && (
+          <Text size="sm" c="orange">
+            You have changes that have not been saved yet.
+          </Text>
+        )}
 
         {error && (
           <Text c="red" size="sm">
@@ -317,12 +363,30 @@ function OptionList({
   options,
   isCreator,
   onChanged,
+  onDirtyChange,
 }: {
   source: OptionsSource
   options: PollOption[]
   isCreator: boolean
   onChanged: () => void
+  onDirtyChange: (dirty: boolean) => void
 }) {
+  /**
+   * Whether *Add* puts the option on the list or into a draft of one.
+   *
+   * The two suggestion paths add straight away, and should: the list belongs
+   * to the group, everybody watching sees a suggestion land as it lands, and
+   * that is half of what the collecting stage is for.
+   *
+   * The creator's correction is nobody else's business and is usually several
+   * options at once, so it drafts and saves in one request -- through
+   * `creator_add_options`, which is the same door a painted calendar comes in
+   * by. Four corrections used to be four round trips and four re-reads of the
+   * poll.
+   */
+  const drafting = source.kind === 'creator'
+
+  const [pending, setPending] = useState<{ key: string; name: string; description: string }[]>([])
   const [name, setName] = useState('')
   // Always on screen here, unlike the create form, where a `+` opens one per
   // row: that form shows a dozen option rows at once and a field under each
@@ -342,7 +406,7 @@ function OptionList({
   const [removing, setRemoving] = useState<string | null>(null)
   const arriving = useArrivals(options)
 
-  const full = options.length >= MAX_OPTIONS
+  const full = options.length + pending.length >= MAX_OPTIONS
   // A list that is already a ballot cannot be pruned below what an election
   // needs; a list still being collected can, because `finalize_options`
   // applies the floor when it becomes a ballot. The trigger enforces both,
@@ -374,8 +438,14 @@ function OptionList({
       return
     }
     // Case-insensitive, like the database: two options differing only in
-    // case are one option to everybody scoring the ballot.
-    if (options.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
+    // case are one option to everybody scoring the ballot. The draft is
+    // checked alongside the list, because a name waiting to be saved is one
+    // the save is about to refuse.
+    if (
+      [...options.map((o) => o.name), ...pending.map((o) => o.name)].some(
+        (existing) => existing.toLowerCase() === trimmed.toLowerCase(),
+      )
+    ) {
       setNameError(`“${trimmed}” is already on the list.`)
       return
     }
@@ -390,6 +460,18 @@ function OptionList({
       return
     }
 
+    if (drafting) {
+      draftSeq += 1
+      setPending((prev) => [
+        ...prev,
+        { key: `draft-${draftSeq}`, name: trimmed, description: trimmedDescription },
+      ])
+      setName('')
+      setDescription('')
+      onDirtyChange(true)
+      return
+    }
+
     setBusy(true)
     // Omitted rather than sent as null when there is nothing to say: the
     // argument defaults to NULL in the database, so the two reach
@@ -399,9 +481,7 @@ function OptionList({
     const { error: rpcError } =
       source.kind === 'poll'
         ? await supabase.rpc('suggest_option', { p_poll_id: source.pollId, ...body })
-        : source.kind === 'creator'
-          ? await supabase.rpc('creator_add_option', { p_poll_id: source.pollId, ...body })
-          : await supabase.rpc('open_poll_suggest_option', { p_poll_id: source.pollId, ...body })
+        : await supabase.rpc('open_poll_suggest_option', { p_poll_id: source.pollId, ...body })
     setBusy(false)
 
     if (rpcError) {
@@ -412,6 +492,38 @@ function OptionList({
     setDescription('')
     notifications.show({ message: `Added “${trimmed}”`, color: 'green' })
     onChanged()
+  }
+
+  /** The whole draft, in one request. */
+  async function saveDraft() {
+    if (busy || pending.length === 0) return
+    setError(null)
+    setBusy(true)
+    const { error: rpcError } = await supabase.rpc('creator_add_options', {
+      p_poll_id: source.pollId,
+      p_options: pending.map((o) => ({ name: o.name, description: o.description || null })),
+    })
+    setBusy(false)
+
+    if (rpcError) {
+      setError(rpcError.message)
+      return
+    }
+    notifications.show({
+      message: `Added ${pending.length} ${pending.length === 1 ? 'option' : 'options'}`,
+      color: 'green',
+    })
+    setPending([])
+    onDirtyChange(false)
+    onChanged()
+  }
+
+  function dropDraft(key: string) {
+    setPending((prev) => {
+      const left = prev.filter((o) => o.key !== key)
+      onDirtyChange(left.length > 0)
+      return left
+    })
   }
 
   // The creator prunes the list directly, the same way they manage the invite
@@ -492,6 +604,34 @@ function OptionList({
         ))
       )}
 
+      {/* The draft, under the list it is about to join. Marked rather than
+          slipped in among the saved rows: an option that is only in this
+          browser and an option the poll holds are two different things, and
+          the difference is exactly what the Save button is for. */}
+      {pending.map((option) => (
+        <div key={option.key} className={`${listRow.row} ${listRow.joining}`}>
+          <div className={`${listRow.content} ${listRow.stacked}`}>
+            <Group justify="space-between" wrap="nowrap" gap="sm">
+              <div style={{ minWidth: 0 }}>
+                <Text fw={500} c="dimmed">
+                  {option.name}
+                </Text>
+                {option.description && <OptionDescription description={option.description} />}
+              </div>
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                aria-label={`Discard ${option.name}`}
+                onClick={() => dropDraft(option.key)}
+              >
+                &times;
+              </ActionIcon>
+            </Group>
+            <Divider />
+          </div>
+        </div>
+      ))}
+
       <Group gap="xs" align="flex-start" wrap="nowrap">
         <Stack gap={4} style={{ flex: 1 }}>
           <TextInput
@@ -530,6 +670,21 @@ function OptionList({
         </Button>
       </Group>
 
+      {/* One request for the lot, which is the whole of the streamlining:
+          four corrections used to be four round trips and four re-reads of
+          the poll. */}
+      {pending.length > 0 && (
+        <Group justify="space-between" wrap="wrap" gap="sm">
+          <Text size="sm" c="dimmed">
+            {pending.length} {pending.length === 1 ? 'option is' : 'options are'} waiting to be
+            saved.
+          </Text>
+          <Button onClick={saveDraft} loading={busy}>
+            Save {pending.length === 1 ? 'option' : 'options'}
+          </Button>
+        </Group>
+      )}
+
       {full && (
         <Text size="xs" c="dimmed">
           A ballot may only have {MAX_OPTIONS} options.
@@ -543,6 +698,108 @@ function OptionList({
       )}
     </Stack>
   )
+}
+
+/**
+ * The same list, on a poll that finds a time: a calendar rather than a text
+ * box, and one request rather than one per window.
+ *
+ * Everything about *who may do what* is the same as the list above -- the
+ * three sources are the same three, and only the creator may take something
+ * off -- so what differs is the gesture and the endpoint it lands on. See
+ * `PaintTimes` for the gesture and 0056_schedule_options.sql for why the
+ * plural endpoint had to exist before a time poll could collect anything.
+ */
+function TimeList({
+  source,
+  options,
+  schedule,
+  isCreator,
+  onChanged,
+  onDirtyChange,
+}: {
+  source: OptionsSource
+  options: PollOption[]
+  schedule: PollSchedule
+  isCreator: boolean
+  onChanged: () => void
+  onDirtyChange: (dirty: boolean) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save(add: string[], removeIds: string[]) {
+    if (busy) return
+    setError(null)
+    setBusy(true)
+
+    // Removals first, so a save that swaps one window for another cannot trip
+    // over the 500-option ceiling on its way through the middle.
+    if (removeIds.length > 0) {
+      const { error: deleteError } = await supabase.from('candidates').delete().in('id', removeIds)
+      if (deleteError) {
+        setBusy(false)
+        setError(deleteError.message)
+        return
+      }
+    }
+
+    const { error: rpcError } = add.length === 0 ? { error: null } : await sendTimes(source, add)
+    setBusy(false)
+
+    if (rpcError) {
+      setError(rpcError.message)
+      return
+    }
+
+    notifications.show({
+      message:
+        add.length > 0
+          ? `Added ${add.length} ${add.length === 1 ? 'time' : 'times'}`
+          : `Removed ${removeIds.length} ${removeIds.length === 1 ? 'time' : 'times'}`,
+      color: 'green',
+    })
+    onDirtyChange(false)
+    onChanged()
+  }
+
+  return (
+    <Stack gap="sm">
+      <PaintTimes
+        schedule={schedule}
+        options={options}
+        // Taking somebody else's suggestion off the list is the creator's job
+        // everywhere else in this app, and is that here too.
+        canRemove={isCreator}
+        saving={busy}
+        onSave={save}
+        onDirtyChange={onDirtyChange}
+      />
+      {error && (
+        <Text c="red" size="sm">
+          {error}
+        </Text>
+      )}
+    </Stack>
+  )
+}
+
+/**
+ * A painting's worth of windows, through whichever of the three doors this
+ * reader came in by.
+ *
+ * One request whichever it is, which is the point: a gesture on that calendar
+ * is a handful of windows, and inserting them one at a time could leave a day
+ * with morning windows and no afternoon if the run stopped part-way.
+ */
+function sendTimes(source: OptionsSource, names: string[]) {
+  const body = { p_options: names.map((name) => ({ name })) }
+  if (source.kind === 'poll')
+    return supabase.rpc('suggest_options', { p_poll_id: source.pollId, ...body })
+  if (source.kind === 'creator') {
+    return supabase.rpc('creator_add_options', { p_poll_id: source.pollId, ...body })
+  }
+  return supabase.rpc('open_poll_suggest_options', { p_poll_id: source.pollId, ...body })
 }
 
 /**

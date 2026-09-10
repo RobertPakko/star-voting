@@ -1,7 +1,7 @@
 import type { DailyWindow, PollSchedule } from './types'
 
 /**
- * The one piece of real logic a time poll has: turning a schedule into
+ * The one piece of real logic a time poll has: turning a painted calendar into
  * options, turning a painted calendar into scores, and turning them back.
  *
  * A time poll is a poll whose options happen to be meeting times. The
@@ -36,9 +36,19 @@ import type { DailyWindow, PollSchedule } from './types'
  * - A **granule key** is one cell of the grid: `2026-09-01 14:00`. Wall clock
  *   in the poll's offset with no zone on it, which is the format
  *   `@mantine/schedule` hands back from its slot callbacks, minus the seconds.
+ *   Fixed width, so a set of them sorts chronologically as plain text too.
  *
  * The duration of a meeting is not stored and not in any name: it is
  * `desired_slots * granularity`, and every window is that long.
+ *
+ * **What a poll is asking about is a set of cells, and nothing else.** There
+ * is no list of days and no pair of times per day in the schedule -- the
+ * creator paints the calendar exactly as a voter does, and the painting
+ * becomes the option list. Reading it back is `boundsOf`: the cells covered by
+ * at least one window are exactly the cells a voter can usefully mark, so the
+ * options *are* the bounds and the two can never disagree. That is why the
+ * only thing `schedule` still says about the shape of a day is `window`, which
+ * is the vertical axis a grid is drawn on.
  */
 
 /** `2026-09-01T14:00:00-07:00` -- an option's name on a time poll. */
@@ -50,9 +60,49 @@ export type GranuleKey = string
 /** `2026-09-01` -- a day the poll is asking about. */
 export type ScheduleDay = string
 
+/**
+ * The cells a poll is asking about.
+ *
+ * On the create form it is what the creator has painted; on a ballot it is
+ * `boundsOf` the options. One type either way, because the two are the same
+ * question asked at two moments and every rule below reads them the same.
+ */
+export type Bounds = ReadonlySet<GranuleKey>
+
+/** Minutes in a day, which is also the coarsest granule there is. */
+export const DAY_MINUTES = 1440
+
 /** How long a meeting is, in minutes. Not stored: every window is this long. */
 export function meetingMinutes(schedule: PollSchedule): number {
   return schedule.desired_slots * schedule.granularity
+}
+
+/**
+ * Whether this poll's unit is a whole day rather than part of one.
+ *
+ * A meeting of a day or more is answered in days: there is no useful sense in
+ * which somebody is free from 09:00 on Tuesday to 09:00 on Thursday but not
+ * from 10:00 to 10:00, and asking for that resolution would multiply a
+ * three-day poll's options by forty-eight. So the granularity is derived from
+ * the length rather than chosen -- see `granularityFor` -- and everything that
+ * reads differently at day resolution asks here rather than comparing numbers.
+ */
+export function isDaily(schedule: PollSchedule): boolean {
+  return schedule.granularity >= DAY_MINUTES
+}
+
+/**
+ * The resolution a meeting of this length is answered at: half an hour below a
+ * day, a whole day at or above one.
+ *
+ * Derived rather than asked, which is the whole of the rule. Granularity was a
+ * question on the create form, and it is not a question anybody has an opinion
+ * about -- it is a consequence of how long the meeting is, and the one
+ * combination people chose by hand that mattered (a length the grid cannot
+ * express) was one the form then had to refuse.
+ */
+export function granularityFor(lengthMinutes: number): number {
+  return lengthMinutes < DAY_MINUTES ? 30 : DAY_MINUTES
 }
 
 /** `14:30` to 870. The one direction; `toTimeOfDay` is the other. */
@@ -62,107 +112,150 @@ export function toMinutes(timeOfDay: string): number {
 }
 
 /**
- * 870 to `14:30`. Never asked for more than 1440, because a window is
- * required to fit inside one day's in-bounds hours -- see `enumerateWindows`.
+ * 870 to `14:30`, and 1440 to `24:00` -- midnight at the end of a day, which
+ * is where a window running to the end of one finishes and which `00:00` would
+ * read as the start of it.
+ *
+ * This is both the wall clock the grid is keyed by and the clock a person
+ * reads, because those are now the same string: every time in this app is
+ * twenty-four hour time. The create form's two selectors used to say `2:00pm`
+ * while the calendar beside them said `14:00`, which is one poll described two
+ * ways on one screen.
  */
 export function toTimeOfDay(minutes: number): string {
   const hours = Math.floor(minutes / 60)
   return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 }
 
+/** One cell of the grid, from the two halves of it. */
+export function granuleKey(day: ScheduleDay, minutes: number): GranuleKey {
+  return `${day} ${toTimeOfDay(minutes)}`
+}
+
+/** And back again. */
+export function splitGranule(key: GranuleKey): { day: ScheduleDay; minutes: number } {
+  return { day: key.slice(0, 10), minutes: toMinutes(key.slice(11)) }
+}
+
 /**
- * The hours one day is asking about.
+ * The cell `by` minutes after this one, carrying into the next day.
  *
- * `window` is both the default and the axis -- see PollSchedule -- so a day
- * nobody said anything special about gets the poll's own hours, and a day that
- * was singled out gets its own. Every question below that involves a day at
- * all goes through here rather than reading `schedule.window`, which is what
- * makes "Friday evenings, Saturday from nine" one rule rather than a special
- * case threaded through six functions.
+ * The carry is what lets a window be longer than a day. At half-hour
+ * resolution it fires only on a poll whose bounds run to midnight and pick up
+ * again after it; at day resolution it fires on every step, because the step
+ * *is* a day.
  */
-export function windowOn(schedule: PollSchedule, day: ScheduleDay): DailyWindow {
-  return schedule.day_windows?.[day] ?? schedule.window
+export function stepGranule(key: GranuleKey, by: number): GranuleKey {
+  const { day, minutes } = splitGranule(key)
+  const total = minutes + by
+  const days = Math.floor(total / DAY_MINUTES)
+  return granuleKey(days === 0 ? day : addDays(day, days), total - days * DAY_MINUTES)
 }
 
 /**
  * Every window the creator is offering, in order: one option per start time.
  *
- * A window is offered when the whole of it fits inside that day's in-bounds
- * hours, so a fourteen-hour day of hourly starts offers a three-hour meeting
- * twelve slots and not fourteen -- the last two would run past the end of the
- * day. Starts step by the granularity, which is also the resolution the ballot
- * paints at, so every window begins on a line the voter can see.
+ * A window is offered when every cell it covers was painted, which is the
+ * whole rule and the reason there is nothing else to say about which times a
+ * poll asks about. A three-hour meeting on a day painted 09:00-12:00 offers
+ * exactly one start; painted 09:00-13:00 it offers three; painted 09:00-10:00
+ * it offers none, and that day quietly contributes nothing -- which the create
+ * form says out loud rather than leaving to be found on the ballot.
  *
- * **Each day is measured against its own hours.** A Friday that runs 6pm-10pm
- * and a Saturday that runs 9am-10pm are two different counts from one
- * schedule, and a day too short to hold the meeting contributes nothing rather
- * than contributing something that does not fit.
+ * It follows that a gap in the painting is a gap in the options. A creator who
+ * paints a morning and an afternoon and leaves lunch out is offering no window
+ * that spans lunch, which is what they said.
  *
  * Chronological, which is both what a reader expects and what `sort_order`
  * ends up holding, since `create_poll` keeps the order it is given.
  */
-export function enumerateWindows(schedule: PollSchedule, days: ScheduleDay[]): WindowStart[] {
-  const length = meetingMinutes(schedule)
+export function enumerateWindows(schedule: PollSchedule, bounds: Bounds): WindowStart[] {
   const starts: WindowStart[] = []
 
-  for (const day of [...days].sort()) {
-    const hours = windowOn(schedule, day)
-    const first = toMinutes(hours.start)
-    const last = toMinutes(hours.end)
-    for (let at = first; at + length <= last; at += schedule.granularity) {
-      starts.push(`${day}T${toTimeOfDay(at)}:00${schedule.timezone}`)
+  for (const key of [...bounds].sort()) {
+    let at = key
+    let whole = true
+    for (let slot = 1; slot < schedule.desired_slots; slot++) {
+      at = stepGranule(at, schedule.granularity)
+      if (!bounds.has(at)) {
+        whole = false
+        break
+      }
     }
+    if (!whole) continue
+
+    const { day, minutes } = splitGranule(key)
+    starts.push(`${day}T${toTimeOfDay(minutes)}:00${schedule.timezone}`)
   }
   return starts
 }
 
-/**
- * How many options one day would produce, without building them.
- *
- * Per day rather than per poll now that two days need not be the same length:
- * the create form adds these up to say "that is 780 windows, and a poll can
- * hold 500" before anybody presses the button, and reads them one at a time to
- * say which day is the one too short to hold the meeting.
- */
-export function windowsOn(schedule: PollSchedule, day: ScheduleDay): number {
-  const hours = windowOn(schedule, day)
-  const span = toMinutes(hours.end) - toMinutes(hours.start)
-  const length = meetingMinutes(schedule)
-  if (span < length) return 0
-  return Math.floor((span - length) / schedule.granularity) + 1
+/** The size of the ballot those bounds would produce, without building it. */
+export function countWindows(schedule: PollSchedule, bounds: Bounds): number {
+  return enumerateWindows(schedule, bounds).length
 }
 
-/** The size of the whole ballot: every day's windows, added up. */
-export function countWindows(schedule: PollSchedule, days: ScheduleDay[]): number {
-  return days.reduce((total, day) => total + windowsOn(schedule, day), 0)
+/**
+ * The cells a poll's options cover: the bounds, read back off the ballot.
+ *
+ * **This is why nothing about which days or hours are in bounds is stored.**
+ * A cell no window covers is a cell a voter could paint to no effect -- no
+ * option's score would move -- so the cells worth offering are exactly the
+ * cells the options cover, and those are recoverable from the option list
+ * alone. A poll cannot then be in a state where its stored bounds and its
+ * stored options disagree, because there is only one of them.
+ *
+ * The cost is that the last granule or two of a painted stretch drop out: a
+ * day painted 09:00-12:00 for a three-hour meeting is one window covering all
+ * six half-hours, but painted 09:00-12:30 the 12:00 cell is covered by the
+ * second window and painted 09:00-11:30 nothing is covered at all. Which is
+ * correct -- those are the cells that can change an answer.
+ */
+export function boundsOf(windowStarts: WindowStart[], schedule: PollSchedule): Set<GranuleKey> {
+  const cells = new Set<GranuleKey>()
+  for (const start of windowStarts) {
+    for (const key of granulesOf(start, schedule)) cells.add(key)
+  }
+  return cells
+}
+
+/** The days a poll is asking about: exactly the days its cells fall on. */
+export function daysOf(bounds: Bounds): ScheduleDay[] {
+  const days = new Set<ScheduleDay>()
+  for (const key of bounds) days.add(key.slice(0, 10))
+  return [...days].sort()
+}
+
+/** The cells in bounds on one day, in order. */
+export function boundsOnDay(bounds: Bounds, day: ScheduleDay): GranuleKey[] {
+  return [...bounds].filter((key) => key.startsWith(day)).sort()
 }
 
 /**
  * The hours the grid has to be tall enough to draw: the union of every day's.
  *
- * This is what `window` is set to when a poll is created, and it is why
- * `window` is stored at all. A poll whose Friday starts at 6pm and whose
- * Saturday starts at 9am is drawn on one axis running 9am to 10pm, with
- * Friday morning greyed out -- rather than on two grids, or on one that clips
- * whichever day it was not built for.
+ * This is what `window` is set to when a poll is created, and it is the one
+ * thing about the shape of a day that is stored -- because it is the only one
+ * a grid cannot be drawn without, and because a poll whose Friday starts at
+ * 18:00 and whose Saturday starts at 09:00 has to be drawn on one axis running
+ * 09:00 to 22:00 with Friday morning greyed out, rather than on two grids or
+ * on one that clips whichever day it was not built for.
  *
- * With no days at all there is nothing to take a union of, so the poll's own
- * hours stand. The create form is in that state until somebody picks a date.
+ * With nothing painted there is no union to take, so a whole day stands. The
+ * create form is in that state until somebody paints a cell.
  */
-export function spanOf(schedule: PollSchedule, days: ScheduleDay[]): DailyWindow {
+export function spanOf(bounds: Bounds, schedule: PollSchedule): DailyWindow {
   let first: number | null = null
   let last: number | null = null
 
-  for (const day of days) {
-    const hours = windowOn(schedule, day)
-    const from = toMinutes(hours.start)
-    const to = toMinutes(hours.end)
-    if (first === null || from < first) first = from
-    if (last === null || to > last) last = to
+  for (const key of bounds) {
+    const at = toMinutes(key.slice(11))
+    if (first === null || at < first) first = at
+    if (last === null || at + schedule.granularity > last) last = at + schedule.granularity
   }
 
-  if (first === null || last === null) return schedule.window
-  return { start: toTimeOfDay(first), end: toTimeOfDay(last) }
+  if (first === null || last === null) return { start: '00:00', end: '24:00' }
+  return { start: toTimeOfDay(first), end: toTimeOfDay(Math.min(last, DAY_MINUTES)) }
 }
 
 /**
@@ -192,17 +285,15 @@ function daysApart(from: ScheduleDay, to: ScheduleDay): number {
  * *duplicate* of a time poll asks about.
  *
  * Everything else in a schedule copies straight across -- how long the meeting
- * is, how finely it is answered, which hours of which days, where in the world
- * -- and the dates are the one part that cannot, because the whole reason to
- * duplicate a poll about last Friday is to ask about a Friday that is still
- * ahead. Copied verbatim they would be a form pre-filled with a fortnight
- * nobody can attend.
+ * is, at what resolution, where in the world -- and the painting is the one
+ * part that cannot, because the whole reason to duplicate a poll about last
+ * Friday is to ask about a Friday that is still ahead. Copied verbatim it
+ * would be a form pre-filled with a fortnight nobody can attend.
  *
  * **Whole weeks, so the weekdays hold.** That is the point of shifting rather
- * than clearing: `day_windows` says "Friday evenings, Saturday from nine", and
- * a Friday moved to a Wednesday is that answer given about the wrong day. The
- * entries move with the days they name -- and an entry for a day the poll does
- * not ask about is dropped rather than carried into a date nobody chose.
+ * than clearing: a painting that says "Friday evenings, Saturday from nine" is
+ * an answer about days of the week, and a Friday moved onto a Wednesday is
+ * that answer given about the wrong day.
  *
  * The smallest number of weeks that puts the first day on or after `today`, so
  * a poll whose dates are still ahead is not moved at all: duplicating a poll
@@ -215,68 +306,20 @@ function daysApart(from: ScheduleDay, to: ScheduleDay): number {
  * screens later, or never.
  */
 export function carryForward(
-  schedule: PollSchedule,
-  days: ScheduleDay[],
+  bounds: Bounds,
   today: ScheduleDay,
-): { days: ScheduleDay[]; schedule: PollSchedule; weeks: number } {
-  const asked = [...days].sort()
-  if (asked.length === 0 || asked[0] >= today) return { days: asked, schedule, weeks: 0 }
+): { bounds: Set<GranuleKey>; weeks: number } {
+  const days = daysOf(bounds)
+  if (days.length === 0 || days[0] >= today) return { bounds: new Set(bounds), weeks: 0 }
 
-  const weeks = Math.ceil(daysApart(asked[0], today) / 7)
+  const weeks = Math.ceil(daysApart(days[0], today) / 7)
   const shift = weeks * 7
-  const moved = asked.map((day) => addDays(day, shift))
-
-  if (!schedule.day_windows) return { days: moved, schedule, weeks }
-
-  const carried: Record<ScheduleDay, DailyWindow> = {}
-  for (const day of asked) {
-    const hours = schedule.day_windows[day]
-    if (hours) carried[addDays(day, shift)] = hours
+  const moved = new Set<GranuleKey>()
+  for (const key of bounds) {
+    const { day, minutes } = splitGranule(key)
+    moved.add(granuleKey(addDays(day, shift), minutes))
   }
-  return { days: moved, schedule: { ...schedule, day_windows: carried }, weeks }
-}
-
-/**
- * Every cell of the grid a voter may paint on one day, in order.
- *
- * A cell counts as in bounds when the whole of it is: a day ending at 10pm
- * with half-hour granules ends on the 9:30 cell, and the 10:00 cell belongs to
- * a day that is over. What the ballot uses this for is two things -- greying
- * out what cannot be painted, and filling a whole day in one gesture.
- */
-export function granulesInBounds(schedule: PollSchedule, day: ScheduleDay): GranuleKey[] {
-  const hours = windowOn(schedule, day)
-  const last = toMinutes(hours.end)
-  const keys: GranuleKey[] = []
-  for (
-    let at = toMinutes(hours.start);
-    at + schedule.granularity <= last;
-    at += schedule.granularity
-  ) {
-    keys.push(`${day} ${toTimeOfDay(at)}`)
-  }
-  return keys
-}
-
-/**
- * Whether one cell of the grid is a cell this poll is asking about.
- *
- * Two ways to fail, and the ballot draws them the same way because they mean
- * the same thing: the day is not one of the poll's days at all, or the day is
- * but the hour is outside that day's own hours. Painting outside either would
- * be ignored by `scoresFromPainting` -- no window covers it -- so it is
- * refused at the gesture rather than swallowed after it.
- */
-export function paintable(
-  schedule: PollSchedule,
-  inBounds: ReadonlySet<ScheduleDay>,
-  day: ScheduleDay,
-  timeOfDay: string,
-): boolean {
-  if (!inBounds.has(day)) return false
-  const hours = windowOn(schedule, day)
-  const at = toMinutes(timeOfDay)
-  return at >= toMinutes(hours.start) && at + schedule.granularity <= toMinutes(hours.end)
+  return { bounds: moved, weeks }
 }
 
 /**
@@ -295,31 +338,22 @@ export function parseWindowStart(
   return { day: match[1], timeOfDay: match[2], offset: match[3] }
 }
 
-/** The days a poll is asking about: exactly the days its options start on. */
-export function daysOf(windowStarts: WindowStart[]): ScheduleDay[] {
-  const days = new Set<ScheduleDay>()
-  for (const start of windowStarts) {
-    const parsed = parseWindowStart(start)
-    if (parsed) days.add(parsed.day)
-  }
-  return [...days].sort()
-}
-
 /**
  * The grid cells one window covers: `desired_slots` of them, starting at its
  * own start.
  *
- * A window never crosses midnight -- `enumerateWindows` only offers one that
- * fits inside a day -- so this is arithmetic on one date and needs no calendar.
+ * A window may run past midnight -- a three-day retreat is three cells on
+ * three dates, and at half-hour resolution a poll whose bounds run through
+ * midnight can offer one too -- so the walk is `stepGranule` rather than
+ * arithmetic on one date.
  */
 export function granulesOf(start: WindowStart, schedule: PollSchedule): GranuleKey[] {
   const parsed = parseWindowStart(start)
   if (!parsed) return []
 
-  const from = toMinutes(parsed.timeOfDay)
-  const keys: GranuleKey[] = []
-  for (let i = 0; i < schedule.desired_slots; i++) {
-    keys.push(`${parsed.day} ${toTimeOfDay(from + i * schedule.granularity)}`)
+  const keys: GranuleKey[] = [granuleKey(parsed.day, toMinutes(parsed.timeOfDay))]
+  for (let slot = 1; slot < schedule.desired_slots; slot++) {
+    keys.push(stepGranule(keys[slot - 1], schedule.granularity))
   }
   return keys
 }
@@ -405,6 +439,57 @@ export function saysNothing(scores: Record<WindowStart, number>): boolean {
   return Object.values(scores).every((score) => score === 0)
 }
 
+// ---------------------------------------------------------------------------
+// How long a meeting is, as a person says it
+// ---------------------------------------------------------------------------
+
+/**
+ * The lengths a meeting may be, in minutes: every half hour up to a day, then
+ * whole days.
+ *
+ * The step is the granularity the length implies -- see `granularityFor` --
+ * which is what keeps the two from ever disagreeing: there is no length in
+ * this list that its own granularity cannot express.
+ *
+ * A fortnight is the top, and arbitrarily so; the ballot for one is a month
+ * grid with fourteen days to click, and a poll looking for a longer block than
+ * that is asking a question about a calendar rather than about a meeting.
+ */
+export const MEETING_LENGTHS: number[] = [
+  ...Array.from({ length: 47 }, (_, i) => (i + 1) * 30),
+  ...Array.from({ length: 14 }, (_, i) => (i + 1) * DAY_MINUTES),
+]
+
+/**
+ * `30 minutes`, `1 hour`, `1.5 hours`, `3 days`.
+ *
+ * Decimal hours rather than "1 hour, 30 minutes", which is two units to read
+ * where one will do and which sorts badly against its neighbours in a list --
+ * `1 hour`, `1 hour, 30 minutes`, `2 hours` is three shapes for three
+ * consecutive rows. One trailing digit at most, because the shortest step is
+ * half an hour.
+ */
+export function describeLength(minutes: number): string {
+  if (minutes < 60) return `${minutes} minutes`
+  if (minutes < DAY_MINUTES) {
+    const hours = minutes / 60
+    return hours === 1 ? '1 hour' : `${trimmed(hours)} hours`
+  }
+  const days = minutes / DAY_MINUTES
+  return days === 1 ? '1 day' : `${trimmed(days)} days`
+}
+
+/** The same length in front of a noun: a `1.5-hour` block, a `3-day` block. */
+export function spanningLength(minutes: number): string {
+  if (minutes < 60) return `${minutes}-minute`
+  if (minutes < DAY_MINUTES) return `${trimmed(minutes / 60)}-hour`
+  return `${trimmed(minutes / DAY_MINUTES)}-day`
+}
+
+/** `2`, and `1.5` -- a number with no decimal point it does not need. */
+function trimmed(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
 // ---------------------------------------------------------------------------
 // Offsets, and the only functions here allowed to read a clock
 // ---------------------------------------------------------------------------
@@ -581,11 +666,29 @@ export function viewerZone(): string {
   }
 }
 
-/** The schedule a new time poll starts with: a working day, in this browser's offset. */
+/**
+ * The hours a new poll fills a day with, and the hours the create form's two
+ * selects open on. A working day, because most meetings are in one.
+ *
+ * Not stored and not part of a schedule: it is the default a whole-day fill
+ * lays down, and what a poll is asking about is what was painted. See
+ * `ScheduleFields`.
+ */
+export const DEFAULT_HOURS: DailyWindow = { start: '09:00', end: '17:00' }
+
+/**
+ * The schedule a new time poll starts with: an hour-long meeting, in this
+ * browser's offset.
+ *
+ * `window` is the grid's axis and is worked out from the painting on the way
+ * out (`spanOf`), so what it holds until then is only what an unpainted form
+ * would be drawn on -- which is nothing, since the calendar appears with the
+ * first day picked.
+ */
 export function blankSchedule(): PollSchedule {
   return {
     timezone: browserOffset(),
-    window: { start: '09:00', end: '17:00' },
+    window: { ...DEFAULT_HOURS },
     desired_slots: 2,
     granularity: 30,
   }
@@ -595,7 +698,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /**
- * An option's name, as a person reads it: `Tue 1 Sep, 2:00pm`.
+ * An option's name, as a person reads it: `Tue 1 Sep, 14:00`.
  *
  * **It decides from the name alone, and takes no schedule.** That is the whole
  * point of it: formatting a time is presentation, and presentation is the
@@ -610,12 +713,20 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * too -- which is a poll nobody is going to write, and which would still be
  * shown the same instant, more legibly.
  *
+ * **A window starting at midnight is shown as a day and no time**, which is
+ * the one concession to not having the schedule: a poll whose meeting is a day
+ * or longer is answered in whole days and every one of its options starts at
+ * 00:00, so `Mon 7 Sep, 00:00` would be sixty rows each carrying the same four
+ * useless digits. It costs a half-hour poll whose first window happens to
+ * start at midnight the word `00:00` -- still the right day, and a poll nobody
+ * has yet made.
+ *
  * Formatted by hand rather than through `Intl.DateTimeFormat`, because every
  * formatter that takes a `Date` also takes the reader's own timezone with it,
  * and a poll is held in one offset that everybody sees the same. Building a
  * `Date` here to format it would put the reader's zone back into a grid built
- * specifically to keep it out -- a 2pm Denver poll would read as 10pm to a
- * voter in Berlin on the results page while their ballot said 2pm.
+ * specifically to keep it out -- a 14:00 Denver poll would read as 22:00 to a
+ * voter in Berlin on the results page while their ballot said 14:00.
  *
  * The weekday is worked out from the date arithmetically, in UTC, which is
  * safe for the same reason: the parts are treated as wall clock and never as
@@ -623,7 +734,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  *
  * The window's *end* is deliberately not here. It would need the schedule
  * back, and every window in a poll is the same length -- sixty rows each
- * saying "– 5:00pm" three hours after their own start is noise, and the length
+ * saying "- 17:00" three hours after their own start is noise, and the length
  * is one fact about the poll rather than one fact per option.
  */
 export function formatWindow(name: string): string {
@@ -632,10 +743,8 @@ export function formatWindow(name: string): string {
   // results page than a crash on one.
   if (!parsed) return name
 
-  const [year, month, day] = parsed.day.split('-').map(Number)
-  const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]
-
-  return `${weekday} ${day} ${MONTHS[month - 1]}, ${clock(toMinutes(parsed.timeOfDay))}`
+  const at = toMinutes(parsed.timeOfDay)
+  return at === 0 ? formatDay(parsed.day) : `${formatDay(parsed.day)}, ${parsed.timeOfDay}`
 }
 
 /** The day part alone, for a column heading over a grid. */
@@ -644,17 +753,56 @@ export function formatDay(day: ScheduleDay): string {
   const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, dayOfMonth)).getUTCDay()]
   return `${weekday} ${dayOfMonth} ${MONTHS[month - 1]}`
 }
+/**
+ * The painting as one event per run of neighbouring cells sharing a value, for
+ * the two views that have hours in them.
+ *
+ * Merged rather than one event per cell, because a week of half-hours is three
+ * hundred cells and a run of them is one block to look at. A 0 draws nothing
+ * at all -- an unpainted cell already means the same thing, so a grey block
+ * over the whole calendar would be an answer nobody gave.
+ *
+ * `background` in the grids, where it is a wash behind the hours; the month
+ * view asks for `default`, which is the ordinary chip Mantine draws in a day
+ * cell, one per block. See `runsOf` for what a caller does with these.
+ */
+export function paintingRuns(
+  painting: Record<GranuleKey, number>,
+  schedule: PollSchedule,
+): { day: ScheduleDay; from: number; to: number; value: number }[] {
+  const cells = Object.entries(painting)
+    .filter(([, value]) => value > 0)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+
+  const runs: { day: ScheduleDay; from: number; to: number; value: number }[] = []
+  for (const [key, value] of cells) {
+    const day = key.slice(0, 10)
+    const from = toMinutes(key.slice(11))
+    const last = runs[runs.length - 1]
+    if (last && last.value === value && last.day === day && last.to === from) {
+      last.to = from + schedule.granularity
+      continue
+    }
+    runs.push({ day, from, to: from + schedule.granularity, value })
+  }
+  return runs
+}
 
 /**
- * Minutes since midnight as a twelve-hour clock: `9:30am`, `2:00pm`, `12:00am`.
- * 1440 is midnight at the end of the day, which is where a window running to
- * the end of a day that goes to `24:00` finishes.
+ * A run of cells, as the grid wants it: `YYYY-MM-DD HH:mm:ss` at both ends.
+ *
+ * A run reaching the end of its day ends a second before the next one starts,
+ * because `24:00:00` is not a time of day the library can parse -- which is
+ * also every run on a poll answered in whole days, where a cell *is* a day.
  */
-export function clock(minutes: number): string {
-  const hours24 = Math.floor(minutes / 60) % 24
-  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12
-  const suffix = hours24 < 12 ? 'am' : 'pm'
-  return `${hours12}:${String(minutes % 60).padStart(2, '0')}${suffix}`
+export function runBounds(run: { day: ScheduleDay; from: number; to: number }): {
+  start: string
+  end: string
+} {
+  return {
+    start: `${run.day} ${toTimeOfDay(run.from)}:00`,
+    end: run.to >= DAY_MINUTES ? `${run.day} 23:59:59` : `${run.day} ${toTimeOfDay(run.to)}:00`,
+  }
 }
 
 // ---------------------------------------------------------------------------
