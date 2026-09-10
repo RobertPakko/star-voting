@@ -309,6 +309,9 @@ export function ScheduleFields({
       ...runBounds(run),
       color: 'teal.6',
       display: view === 'month' ? 'default' : 'background',
+      // A month chip's label, in a colour the calendar would pick badly; see
+      // `eventBody` in PaintCalendar.
+      payload: { ink: 'var(--mantine-color-white)' },
     }))
   }
 

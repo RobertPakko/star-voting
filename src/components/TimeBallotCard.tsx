@@ -66,18 +66,25 @@ import type { PollOption, PollSchedule } from '../lib/types'
  * somebody who cannot tell the red end from the green one, and does not depend
  * on that for its first reading.
  *
- * There is no ink to choose any more, which the previous arrangement needed:
- * the day lines that carried text over a background event are gone, and a
- * month chip is an ordinary Mantine event that colours its own label.
+ * `ink` is chosen here rather than left to the calendar. A month chip takes
+ * its text colour from Mantine's variant resolver, and at the dark end of this
+ * ramp that comes back close enough to the background to be unreadable --
+ * `green.9` on `green.9`, which is a label everywhere except on screen. Picked
+ * against the six swatches rather than computed, because there are six of them
+ * and they do not change.
  */
 const RATINGS = [
-  { value: '0', label: "Can't", color: 'gray.5' },
-  { value: '1', label: '1', color: 'red.4' },
-  { value: '2', label: '2', color: 'orange.5' },
-  { value: '3', label: '3', color: 'yellow.5' },
-  { value: '4', label: '4', color: 'teal.6' },
-  { value: '5', label: '5', color: 'green.9' },
+  { value: '0', label: "Can't", color: 'gray.5', ink: 'black' },
+  { value: '1', label: '1', color: 'red.4', ink: 'black' },
+  { value: '2', label: '2', color: 'orange.5', ink: 'black' },
+  { value: '3', label: '3', color: 'yellow.5', ink: 'black' },
+  { value: '4', label: '4', color: 'teal.6', ink: 'white' },
+  { value: '5', label: '5', color: 'green.9', ink: 'white' },
 ]
+
+function inkFor(rating: number): string {
+  return `var(--mantine-color-${RATINGS[rating]?.ink ?? 'black'})`
+}
 
 function colorFor(rating: number): string {
   return RATINGS[rating]?.color ?? 'gray.5'
@@ -179,6 +186,7 @@ export function TimeBallotCard({
       ...runBounds(run),
       color: colorFor(run.value),
       display: view === 'month' ? 'default' : 'background',
+      payload: { ink: inkFor(run.value) },
     }))
   }
 

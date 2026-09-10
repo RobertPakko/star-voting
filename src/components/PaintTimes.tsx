@@ -174,6 +174,7 @@ export function PaintTimes({
       ...runBounds(run),
       color: COLORS[run.value],
       display: view === 'month' ? 'default' : 'background',
+      payload: { ink: INKS[run.value] },
     }))
   }
 
@@ -265,4 +266,11 @@ const LABELS: Record<number, string> = {
   [DROPPING]: 'Coming off',
   [OFFERED]: 'Offered',
   [ADDING]: 'Adding',
+}
+
+/** And what a month chip's label is written in over each of them. */
+const INKS: Record<number, string> = {
+  [DROPPING]: 'var(--mantine-color-black)',
+  [OFFERED]: 'var(--mantine-color-white)',
+  [ADDING]: 'var(--mantine-color-white)',
 }

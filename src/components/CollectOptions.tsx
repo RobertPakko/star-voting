@@ -387,6 +387,11 @@ function OptionList({
   const drafting = source.kind === 'creator'
 
   const [pending, setPending] = useState<{ key: string; name: string; description: string }[]>([])
+  // Rows on their way off the list, by id. Held rather than deleted for the
+  // reason the additions are held: one press of Save is one request, and a
+  // card where adding waits and removing does not is a card that has to be
+  // explained.
+  const [dropping, setDropping] = useState<ReadonlySet<string>>(new Set())
   const [name, setName] = useState('')
   // Always on screen here, unlike the create form, where a `+` opens one per
   // row: that form shows a dozen option rows at once and a field under each
@@ -406,13 +411,18 @@ function OptionList({
   const [removing, setRemoving] = useState<string | null>(null)
   const arriving = useArrivals(options)
 
-  const full = options.length + pending.length >= MAX_OPTIONS
+  const kept = options.length - dropping.size + pending.length
+  const full = kept >= MAX_OPTIONS
+  const dirty = pending.length > 0 || dropping.size > 0
   // A list that is already a ballot cannot be pruned below what an election
   // needs; a list still being collected can, because `finalize_options`
   // applies the floor when it becomes a ballot. The trigger enforces both,
   // and this only decides whether to offer the button. See
   // 0028_creator_edits_options.sql.
-  const atFloor = source.kind === 'creator' && options.length <= 2
+  // Counted against what Save would leave behind rather than against what is
+  // on the poll now, since three options with two of them struck through is a
+  // list already at the floor.
+  const atFloor = drafting && kept <= 2
 
   async function addOption() {
     if (busy) return
@@ -494,26 +504,45 @@ function OptionList({
     onChanged()
   }
 
-  /** The whole draft, in one request. */
+  /** The whole draft -- what is going and what is coming -- in one press. */
   async function saveDraft() {
-    if (busy || pending.length === 0) return
+    if (busy || !dirty) return
     setError(null)
     setBusy(true)
-    const { error: rpcError } = await supabase.rpc('creator_add_options', {
-      p_poll_id: source.pollId,
-      p_options: pending.map((o) => ({ name: o.name, description: o.description || null })),
-    })
+
+    // Removals first, so a save that swaps one option for another cannot trip
+    // over the 500-option ceiling on its way through the middle.
+    if (dropping.size > 0) {
+      const { error: deleteError } = await supabase
+        .from('candidates')
+        .delete()
+        .in('id', [...dropping])
+      if (deleteError) {
+        setBusy(false)
+        setError(deleteError.message)
+        return
+      }
+    }
+
+    const { error: rpcError } =
+      pending.length === 0
+        ? { error: null }
+        : await supabase.rpc('creator_add_options', {
+            p_poll_id: source.pollId,
+            p_options: pending.map((o) => ({ name: o.name, description: o.description || null })),
+          })
     setBusy(false)
 
     if (rpcError) {
+      // The removals have already gone through, so the draft keeps only what
+      // is left to do rather than offering to delete them again.
+      setDropping(new Set())
       setError(rpcError.message)
       return
     }
-    notifications.show({
-      message: `Added ${pending.length} ${pending.length === 1 ? 'option' : 'options'}`,
-      color: 'green',
-    })
+    notifications.show({ message: 'Options saved', color: 'green' })
     setPending([])
+    setDropping(new Set())
     onDirtyChange(false)
     onChanged()
   }
@@ -521,16 +550,35 @@ function OptionList({
   function dropDraft(key: string) {
     setPending((prev) => {
       const left = prev.filter((o) => o.key !== key)
-      onDirtyChange(left.length > 0)
+      onDirtyChange(left.length > 0 || dropping.size > 0)
       return left
+    })
+  }
+
+  /** Mark an option for removal, or take the marking back. */
+  function toggleDropping(id: string) {
+    setDropping((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      onDirtyChange(next.size > 0 || pending.length > 0)
+      return next
     })
   }
 
   // The creator prunes the list directly, the same way they manage the invite
   // list: the row is theirs to delete under the poll's own policies, and
   // nothing about a poll with no votes in it needs a function to say so.
+  //
+  // Straight away only while the poll is still collecting, where the list
+  // belongs to the group and everybody watching sees a row leave as it leaves.
+  // The creator's own correction drafts it; see `toggleDropping`.
   async function removeOption(option: PollOption) {
     if (busy) return
+    if (drafting) {
+      toggleDropping(option.id)
+      return
+    }
 
     setError(null)
     setBusy(true)
@@ -575,28 +623,51 @@ function OptionList({
             <div className={`${listRow.content} ${listRow.stacked}`}>
               <Group justify="space-between" wrap="nowrap" gap="sm">
                 <div style={{ minWidth: 0 }}>
-                  <Text fw={500}>{option.name}</Text>
+                  {/* Struck through rather than gone, while the removal is
+                      still a draft: the row is what the press acted on, and
+                      showing it crossed out is what makes the press
+                      takeable-back without a second list of what is missing. */}
+                  <Text
+                    fw={500}
+                    c={dropping.has(option.id) ? 'dimmed' : undefined}
+                    td={dropping.has(option.id) ? 'line-through' : undefined}
+                  >
+                    {option.name}
+                  </Text>
                   {option.description && <OptionDescription description={option.description} />}
                 </div>
-                {isCreator && (
-                  <Tooltip label="A poll needs at least two options" disabled={!atFloor} withArrow>
-                    {/* The span is what a tooltip on a disabled button needs:
+                {isCreator &&
+                  (dropping.has(option.id) ? (
+                    <Button
+                      variant="subtle"
+                      size="compact-xs"
+                      onClick={() => toggleDropping(option.id)}
+                    >
+                      Keep
+                    </Button>
+                  ) : (
+                    <Tooltip
+                      label="A poll needs at least two options"
+                      disabled={!atFloor}
+                      withArrow
+                    >
+                      {/* The span is what a tooltip on a disabled button needs:
                       a disabled control fires no pointer events of its
                       own, so the reason it is disabled would never be
                       readable without something around it that does. */}
-                    <span>
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        disabled={atFloor}
-                        aria-label={`Remove ${option.name}`}
-                        onClick={() => removeOption(option)}
-                      >
-                        &times;
-                      </ActionIcon>
-                    </span>
-                  </Tooltip>
-                )}
+                      <span>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          disabled={atFloor}
+                          aria-label={`Remove ${option.name}`}
+                          onClick={() => removeOption(option)}
+                        >
+                          &times;
+                        </ActionIcon>
+                      </span>
+                    </Tooltip>
+                  ))}
               </Group>
               <Divider />
             </div>
@@ -672,15 +743,21 @@ function OptionList({
 
       {/* One request for the lot, which is the whole of the streamlining:
           four corrections used to be four round trips and four re-reads of
-          the poll. */}
-      {pending.length > 0 && (
+          the poll. Both halves wait for it -- an editor where adding is a
+          draft and removing is immediate is two rules for one card. */}
+      {dirty && (
         <Group justify="space-between" wrap="wrap" gap="sm">
           <Text size="sm" c="dimmed">
-            {pending.length} {pending.length === 1 ? 'option is' : 'options are'} waiting to be
-            saved.
+            {[
+              pending.length > 0 && `${pending.length} to add`,
+              dropping.size > 0 && `${dropping.size} to remove`,
+            ]
+              .filter(Boolean)
+              .join(', ')}
+            .
           </Text>
           <Button onClick={saveDraft} loading={busy}>
-            Save {pending.length === 1 ? 'option' : 'options'}
+            Save changes
           </Button>
         </Group>
       )}

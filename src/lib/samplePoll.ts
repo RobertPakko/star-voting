@@ -13,8 +13,8 @@ import type {
  *
  * It is a real three-question poll -- "Movie night" -- in two states: one copy
  * still taking votes, and one that nine people finished, whose questions get
- * progressively harder for STAR to settle. The first of them is a poll that
- * finds a time, so the sample shows both ballots this app has. Both are answered out of
+ * progressively harder to take in. The last of them is a poll that finds a
+ * time, so the sample shows both ballots this app has. Both are answered out of
  * `samplePollData.ts`, which `scripts/sample-poll.sh` records by building the
  * poll in a throwaway database and asking the real RPCs about it.
  *
@@ -49,8 +49,8 @@ export interface SampleQuestion {
 export type SamplePayloads = Record<string, SampleQuestion>
 
 /** Question 1 of each copy: where the About page's two links point. */
-export const SAMPLE_POLL_ID = 'sample-when'
-export const SAMPLE_RESULT_ID = 'sample-result-when'
+export const SAMPLE_POLL_ID = 'sample-dinner'
+export const SAMPLE_RESULT_ID = 'sample-result-dinner'
 
 /**
  * A real poll id is a v4 UUID, so nothing the database can mint begins with

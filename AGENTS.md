@@ -913,10 +913,18 @@ ballot wants beside it is a brush, an apply-to-everything, and a way back to
 the poll's own dates. Four controls of somebody else's next to four of ours was
 the arrangement worth ending.
 
-That way back is a **button** rather than the link it was. It moves the
-calendar rather than going anywhere, and a link the width of a date sitting in
-a row of two icon buttons was the one control there that did not look like
-one.
+That way back is a **control of the header's own** rather than the link it was.
+The whole row is now built from the library's pieces — `ScheduleHeader` and its
+`Previous`, `Control`, `Next` and `ViewSelect` — which are plain buttons taking
+an ordinary `onClick`, with no navigation context behind them, so using them
+costs nothing and buys a header that *is* the calendar's rather than one
+sitting above it in a different shape. `navigationGroup` comes with them, and
+with it the container query that lets the cluster fill a narrow screen.
+
+Two of the library's own wrapper classes are deliberately not used:
+`todayControl` and `viewSelect` are `display: none` under 600px, because the
+library swaps in a compact `NativeSelect` we do not render. Ours are plain
+`Group`s for that reason.
 
 Filling **toggles**: a day that is already exactly what the brush would make it
 is a day the click is taking back. The `Can't` brush never toggles — clearing a
@@ -926,7 +934,17 @@ result, and it is the view somebody has zoomed into to be precise.
 
 **The month view gets one chip per marked block**, which is the ordinary thing
 a Mantine month cell holds: a day with two marked stretches shows `09:00–11:00`
-and `14:00–17:00`, and a day answered in whole days shows what it is rated. It
+and `14:00–17:00`, and a day answered in whole days shows what it is rated. The
+cell keeps the library's own height and its own `+n more` — a `maxEventsPerDay`
+of ten reserves room for ten and leaves a month of near-empty cells four times
+taller than they need to be.
+
+A chip's text colour is chosen here (`inkFor`) rather than left to the
+calendar: Mantine's variant resolver hands it a colour close enough to its own
+background at the dark end of the ramp to be unreadable — `green.9` on
+`green.9`, which is a legible label everywhere except on screen. The painted
+runs in the week and day grids carry no title at all, so this is only ever the
+month. It
 used to get one synthesised line per day instead — `Whole day`, `6–10pm`,
 `4h in 2 blocks` — and all three of those are a summary of an answer rather
 than the answer. `Whole day` was also usually a lie: the poll is rarely asking
@@ -1004,10 +1022,17 @@ option poll whose option is *literally* named `2026-09-01T14:00:00-07:00` gets
 reformatted; it is still the same instant, more legibly, and it is not a poll
 anybody is going to write.
 
+**A window reads `14:00, Tue Sep 1`** — the time first, then the weekday, the
+month and the day. That is the order the answer is spoken in, and it is also
+the order that puts the part telling two neighbouring options apart at the
+front of the line: a ranked list of a Saturday's windows differs only in its
+first five characters. Within the date the month leads the day, for the same
+reason it does in speech.
+
 The window's **end** is deliberately not shown. It would need the schedule
-back, and every window in a poll is the same length — sixty rows each saying
-"– 5:00pm" three hours after their own start is noise. If the length is wanted
-on the results page it belongs once, in a line above the list, rather than once
+back, and every window in a poll is the same length — ten rows each saying
+"– 17:00" four hours after their own start is noise. If the length is wanted on
+the results page it belongs once, in a line above the list, rather than once
 per option.
 
 ### Duplicating one
@@ -1185,9 +1210,19 @@ not, because what it is handed comes from a painted calendar.
 That same plural door is what makes *Edit options* one request rather than
 several. The creator's corrections are drafted in the browser and applied on
 **Save** — four corrections used to be four round trips and four re-reads of
-the poll. The two suggestion paths still add straight away and should: that
-list belongs to the group, everybody watching sees a suggestion land as it
-lands, and that is half of what the collecting stage is for.
+the poll.
+
+**Both halves wait for it.** Adding drafts and removing drafts: a row marked
+for removal is struck through with a *Keep* beside it rather than deleted where
+it stands. Removing used to happen immediately, which is the right behaviour
+everywhere it still happens and the wrong one here — a card where one of its
+two controls applies now and the other waits is a card that has to be
+explained, and the two-option floor cannot be checked honestly against a list
+that is half draft. It is counted against what Save would leave behind.
+
+The two suggestion paths still add straight away and should: that list belongs
+to the group, everybody watching sees a suggestion land as it lands, and that
+is half of what the collecting stage is for.
 
 ### Deliberately not built yet
 
@@ -3808,11 +3843,15 @@ derived, because they sit inside prose.
 
 #### The sample poll is a recording, not rows
 
-`/#/polls/sample-when` is a three-question poll ("Movie night") still taking
-votes; `/#/polls/sample-result-when` is the same poll after nine people
-finished it. Its first question is a poll that **finds a time**, so both of
-this app's ballots are on the one sample: a calendar to paint, and two lists to
-score. Neither exists in Supabase. Both are answered in the browser from
+`/#/polls/sample-dinner` is a three-question poll ("Movie night") still taking
+votes; `/#/polls/sample-result-dinner` is the same poll after nine people
+finished it. Its questions ask more of the reader as they go — a bare list, the
+same list with a paragraph under each option, and then a **calendar**, so both
+of this app's ballots are on the one sample. The calendar is last for that
+reason: it is the most to take in, and a reader arriving at it has already seen
+what a score round and a runoff are. It asks about a Friday evening and a
+Saturday daytime, because two days that are not the same question is the thing
+a grid shows and a list cannot. Neither exists in Supabase. Both are answered in the browser from
 [`src/lib/samplePollData.ts`](src/lib/samplePollData.ts), which
 `scripts/sample-poll.sh` generates by building a throwaway database from the
 migrations (the same one `npm test` uses, and with the same requirements),

@@ -452,24 +452,26 @@ describe('what a poll is asking about, read off its own options', () => {
 
 describe('what a window is called on screen', () => {
   test('reads as a time, in the poll offset and never the reader own', () => {
-    expect(formatWindow('2026-09-01T14:00:00-07:00')).toBe('Tue 1 Sep, 14:00')
+    // The time leads, which is the order the answer is spoken in and the order
+    // that puts the part telling two adjacent options apart first.
+    expect(formatWindow('2026-09-01T14:00:00-07:00')).toBe('14:00, Tue Sep 1')
     // The same instant with a different offset on it is a different wall
     // clock, and this reads the offset the poll declared rather than converting
     // to the reader's -- which is the whole of one-timezone-per-poll.
-    expect(formatWindow('2026-09-05T09:30:00+01:00')).toBe('Sat 5 Sep, 09:30')
+    expect(formatWindow('2026-09-05T09:30:00+01:00')).toBe('09:30, Sat Sep 5')
   })
 
   test('a window that starts at midnight is a day and no time', () => {
     // Every option of a poll answered in whole days starts at 00:00, and sixty
     // rows carrying the same four useless digits is what this saves.
-    expect(formatWindow('2026-09-07T00:00:00-07:00')).toBe('Mon 7 Sep')
+    expect(formatWindow('2026-09-07T00:00:00-07:00')).toBe('Mon Sep 7')
   })
 
   test('and takes no schedule, which is what keeps it out of the database', () => {
     // A name is enough. Nothing above this has to be told which kind of poll
     // it is drawing, so list_polls, poll_status and the three cards that draw
     // a winner all stayed as they were.
-    expect(winnerLabel('2026-09-01T14:00:00-07:00')).toBe('Tue 1 Sep, 14:00')
+    expect(winnerLabel('2026-09-01T14:00:00-07:00')).toBe('14:00, Tue Sep 1')
     // null is "settled, and nobody won"; undefined is "not settled". Both are
     // answers rather than names, so neither is formatted.
     expect(winnerLabel(null)).toBeNull()

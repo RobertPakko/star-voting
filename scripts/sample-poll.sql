@@ -52,22 +52,31 @@ create table if not exists sample.link (
 -- The poll
 -- ---------------------------------------------------------------------------
 --
--- Three questions, each one harder to settle than the last:
+-- Three questions, each one asking more of the reader than the last:
 --
---   when    a plain election, and a calendar. The score leader wins the runoff
---           too, so there is nothing to explain beyond the two rounds -- which
---           is what makes it the right question to show a `time` poll on: a
---           reader here is learning what the ballot is, not what a tie-break
---           is. Its five options are the five two-hour windows that fit inside
---           a Friday evening, and the nine ballots are what nine painted
---           calendars flatten to -- see `scoresFromPainting`, which scores a
---           window by its worst half hour rather than by its average.
---   dinner  the runoff overturns the score round. Taco bar leads on points
---           because the four voters who want it want it badly; pizza wins
---           because five of the nine prefer it, which is the whole reason
---           STAR runs a runoff at all.
---   movie   a three-way tie for the second finalist slot, settled head to
---           head, with one of the three pairs itself tied.
+--   dinner  the plainest ballot there is -- five options, no descriptions,
+--           nothing to read before you can score it -- and the clearest lesson.
+--           The runoff overturns the score round: taco bar leads on points
+--           because the four voters who want it want it badly, and pizza wins
+--           because five of the nine prefer it, which is the whole reason STAR
+--           runs a runoff at all.
+--   movie   the same ballot with a paragraph under each option, and a
+--           three-way tie for the second finalist slot, settled head to head
+--           with one of the three pairs itself tied.
+--   when    a different ballot altogether: a calendar, painted rather than
+--           scored. It is last because it is the most to take in, and it is a
+--           plain election on purpose -- the score leader wins the runoff too,
+--           so a reader here is learning what the ballot is rather than what a
+--           tie-break is.
+--
+--           Its ten options are the four-hour windows that fit inside a Friday
+--           evening and a Saturday daytime -- one on the Friday, nine on the
+--           Saturday -- which is the point of asking about two days at once:
+--           the two are not the same question and the grid says so. The nine
+--           ballots are what nine painted calendars flatten to; see
+--           `scoresFromPainting`, which scores a window by its *worst* half
+--           hour rather than by its average, so a voter free from ten scores
+--           every window that reaches back to nine a zero.
 --
 -- The nine voters are the same nine in every question.
 create or replace function sample.poll() returns jsonb language sql immutable as $$
@@ -76,43 +85,14 @@ select $json${
   "voters": ["Ana", "Ben", "Chloe", "Diego", "Erin", "Farid", "Gina", "Hugo", "Iris"],
   "questions": [
     {
-      "slug": "when",
-      "title": "When are we meeting?",
-      "kind": "time",
-      "schedule": {
-        "timezone": "-07:00",
-        "window": { "start": "18:00", "end": "22:00" },
-        "desired_slots": 4,
-        "granularity": 30
-      },
-      "options": [
-        { "name": "2026-02-20T18:00:00-07:00" },
-        { "name": "2026-02-20T18:30:00-07:00" },
-        { "name": "2026-02-20T19:00:00-07:00" },
-        { "name": "2026-02-20T19:30:00-07:00" },
-        { "name": "2026-02-20T20:00:00-07:00" }
-      ],
-      "ballots": [
-        [5, 5, 5, 4, 4],
-        [0, 0, 5, 5, 5],
-        [4, 4, 0, 0, 0],
-        [3, 3, 4, 5, 5],
-        [0, 4, 5, 5, 0],
-        [5, 3, 0, 0, 0],
-        [2, 2, 3, 2, 2],
-        [1, 1, 5, 5, 5],
-        [5, 5, 5, 3, 3]
-      ]
-    },
-    {
       "slug": "dinner",
       "title": "What are we eating?",
       "options": [
-        { "name": "Two big pizzas", "description": "One pepperoni, one cheese." },
-        { "name": "Taco bar", "description": "Build your own tacos!" },
+        { "name": "Two big pizzas" },
+        { "name": "Taco bar" },
         { "name": "Everyone brings a dish" },
-        { "name": "Thai delivery", "description": "Will take like 40 minutes to get here, we can have an intermission rather than eating beforehand." },
-        { "name": "Just snacks", "description": "Popcorn, chips, whatever." }
+        { "name": "Thai delivery" },
+        { "name": "Just snacks" }
       ],
       "ballots": [
         [1, 5, 2, 3, 1],
@@ -147,6 +127,40 @@ select $json${
         [4, 2, 1, 5, 2, 0],
         [2, 3, 3, 2, 1, 1],
         [3, 0, 2, 2, 2, 1]
+      ]
+    },
+    {
+      "slug": "when",
+      "title": "When are we meeting?",
+      "kind": "time",
+      "schedule": {
+        "timezone": "-07:00",
+        "window": { "start": "09:00", "end": "22:00" },
+        "desired_slots": 8,
+        "granularity": 30
+      },
+      "options": [
+        { "name": "2026-02-20T18:00:00-07:00" },
+        { "name": "2026-02-21T09:00:00-07:00" },
+        { "name": "2026-02-21T09:30:00-07:00" },
+        { "name": "2026-02-21T10:00:00-07:00" },
+        { "name": "2026-02-21T10:30:00-07:00" },
+        { "name": "2026-02-21T11:00:00-07:00" },
+        { "name": "2026-02-21T11:30:00-07:00" },
+        { "name": "2026-02-21T12:00:00-07:00" },
+        { "name": "2026-02-21T12:30:00-07:00" },
+        { "name": "2026-02-21T13:00:00-07:00" }
+      ],
+      "ballots": [
+        [5, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+        [0, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+        [5, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+        [2, 0, 0, 5, 5, 5, 5, 5, 5, 5],
+        [0, 5, 5, 5, 0, 0, 0, 0, 0, 0],
+        [4, 0, 0, 0, 0, 0, 0, 0, 5, 5],
+        [0, 0, 0, 0, 0, 4, 4, 4, 4, 4],
+        [1, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+        [0, 2, 2, 2, 2, 2, 2, 2, 2, 5]
       ]
     }
   ]

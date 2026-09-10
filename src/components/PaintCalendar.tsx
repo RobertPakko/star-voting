@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { ActionIcon, Button, Group, SegmentedControl, Text } from '@mantine/core'
+import { Group } from '@mantine/core'
 import {
   DayView,
   MonthView,
+  ScheduleHeader,
   WeekView,
   type ScheduleEventData,
   type ScheduleViewLevel,
@@ -12,7 +13,6 @@ import {
 // a calendar -- the time ballot and the create form -- are both behind a
 // lazy() of their own. A poll that chooses an option never fetches it.
 import '@mantine/schedule/styles.css'
-import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react'
 import dayjs from 'dayjs'
 import {
   boundsOnDay,
@@ -69,9 +69,7 @@ import type { DailyWindow, PollSchedule } from '../lib/types'
  * paint on one -- a granule *is* a day -- so a week grid would be a wall of
  * cells that all do the same thing and a day grid would be one cell.
  */
-const VIEWS: ScheduleViewLevel[] = ['day', 'week', 'month']
-
-const VIEW_LABELS: Record<string, string> = { day: 'Day', week: 'Week', month: 'Month' }
+const VIEWS: readonly ScheduleViewLevel[] = ['day', 'week', 'month']
 
 /**
  * The week grid gives every day heading the accessible name
@@ -81,6 +79,19 @@ const VIEW_LABELS: Record<string, string> = { day: 'Day', week: 'Week', month: '
  * between a control and a caption.
  */
 const LABELS = { weekday: 'Fill the whole day' }
+
+/**
+ * The one thing drawn inside an event: a month chip's label, in a colour the
+ * calendar would otherwise pick badly.
+ *
+ * A chip takes its text colour from Mantine's variant resolver, and at the
+ * darker end of a rating ramp that comes back close enough to the background
+ * to be unreadable -- `green.9` on `green.9`. The two time grids draw runs with
+ * no title at all, so this is only ever the month.
+ */
+function eventBody(event: ScheduleEventData) {
+  return <span style={{ color: event.payload?.ink as string | undefined }}>{event.title}</span>
+}
 
 /** A cell or a day the poll is not asking about: visible, and not paintable. */
 const outOfBounds = {
@@ -100,7 +111,6 @@ export function PaintCalendar({
   canPaint,
   dayInBounds,
   slotHeight,
-  maxEventsPerDay = 10,
 }: {
   schedule: PollSchedule
   /** The cells that may be painted at all; everything else is drawn greyed. */
@@ -146,7 +156,6 @@ export function PaintCalendar({
   /** And whether a whole day is one the poll is asking about; see `canPaint`. */
   dayInBounds?: (day: ScheduleDay) => boolean
   slotHeight?: number
-  maxEventsPerDay?: number
 }) {
   const days = daysOf(bounds)
   const daily = isDaily(schedule)
@@ -253,51 +262,59 @@ export function PaintCalendar({
           file. What it carries is what a ballot needs: where you are, how to
           move, and how far to zoom. What it does not carry is Today, which is
           a week the poll is probably not asking about; the way back to the
-          poll's own dates is offered beside it, and only when it is needed. */}
-      <Group gap="xs" wrap="wrap" justify="space-between">
-        <Group gap={4} wrap="nowrap">
-          <ActionIcon
-            variant="default"
-            size="md"
+          poll's own dates is offered beside it, and only when it is needed.
+
+          Rebuilt out of the library's own pieces rather than out of ours:
+          `ScheduleHeader.Previous`, `.Control`, `.Next` and `.ViewSelect` are
+          plain buttons taking an ordinary onClick -- no navigation context
+          behind them -- so using them costs nothing and buys a header that is
+          the calendar's rather than one sitting above it in a different
+          shape. `navigationGroup` comes with them, and with it the container
+          query that lets the cluster fill a narrow screen. */}
+      <ScheduleHeader>
+        <div className={ScheduleHeader.classes.navigationGroup}>
+          <ScheduleHeader.Previous
             aria-label={`Previous ${showing}`}
             onClick={() => setDate(step(date, showing, -1))}
-          >
-            <CaretLeftIcon size={14} />
-          </ActionIcon>
-          <Text size="sm" fw={500} ta="center" miw={170}>
+          />
+          <ScheduleHeader.Control interactive={false} miw={190}>
             {rangeLabel(date, showing)}
-          </Text>
-          <ActionIcon
-            variant="default"
-            size="md"
+          </ScheduleHeader.Control>
+          <ScheduleHeader.Next
             aria-label={`Next ${showing}`}
             onClick={() => setDate(step(date, showing, 1))}
-          >
-            <CaretRightIcon size={14} />
-          </ActionIcon>
-          {/* Navigated off the poll's own dates, which a month of arrows makes
-              easy. A way back, rather than a rule against leaving: a voter
-              checking what else is on that week is doing something reasonable.
-              A button rather than a link, because it moves the calendar rather
-              than going anywhere -- and because a link the width of a date, in
-              a row of two icon buttons, is the one control here that did not
-              look like one. */}
-          {adrift && (
-            <Button variant="default" size="compact-sm" onClick={() => setDate(days[0])}>
+          />
+        </div>
+
+        {/* Navigated off the poll's own dates, which a month of arrows makes
+            easy. A way back, rather than a rule against leaving: a voter
+            checking what else is on that week is doing something reasonable.
+            A control of the header's own, because it belongs to the row it
+            sits in -- it moves the calendar rather than going anywhere, and a
+            link the width of a date between two icon buttons was the one
+            thing there that did not look like a control. */}
+        {adrift && (
+          <Group gap="xs" wrap="nowrap">
+            {/* `tt="none"` because the library capitalises every word in a
+                control, which is right for its own one-word labels (Day,
+                Week, Today) and turns this one into "Back To Fri Feb 20". */}
+            <ScheduleHeader.Control tt="none" onClick={() => setDate(days[0])}>
               Back to {formatDay(days[0])}
-            </Button>
-          )}
-        </Group>
+            </ScheduleHeader.Control>
+          </Group>
+        )}
+
         {/* A poll answered in whole days has one view and no switch: see VIEWS. */}
         {!daily && (
-          <SegmentedControl
-            size="xs"
-            value={view}
-            onChange={(next) => setView(next as ScheduleViewLevel)}
-            data={VIEWS.map((level) => ({ value: level, label: VIEW_LABELS[level] }))}
-          />
+          <Group gap="xs" wrap="nowrap" style={{ marginInlineStart: 'auto' }}>
+            <ScheduleHeader.ViewSelect
+              views={VIEWS}
+              value={view}
+              onChange={(next) => setView(next)}
+            />
+          </Group>
         )}
-      </Group>
+      </ScheduleHeader>
 
       {showing === 'month' ? (
         <MonthView
@@ -313,7 +330,7 @@ export function PaintCalendar({
           getDayProps={(day) => (asks(day) ? {} : outOfBounds)}
           firstDayOfWeek={1}
           withOutsideDays={false}
-          maxEventsPerDay={maxEventsPerDay}
+          renderEventBody={eventBody}
         />
       ) : showing === 'day' ? (
         <DayView

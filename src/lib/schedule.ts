@@ -698,7 +698,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /**
- * An option's name, as a person reads it: `Tue 1 Sep, 14:00`.
+ * An option's name, as a person reads it: `14:00, Tue Sep 1`.
  *
  * **It decides from the name alone, and takes no schedule.** That is the whole
  * point of it: formatting a time is presentation, and presentation is the
@@ -713,10 +713,15 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * too -- which is a poll nobody is going to write, and which would still be
  * shown the same instant, more legibly.
  *
+ * **The time leads and the date follows**, which is the order the answer is
+ * spoken in -- "seven on Friday the twentieth" -- and the order that puts the
+ * part that differs between two adjacent options first. Within the date the
+ * month leads the day, for the same reason it does in speech.
+ *
  * **A window starting at midnight is shown as a day and no time**, which is
  * the one concession to not having the schedule: a poll whose meeting is a day
  * or longer is answered in whole days and every one of its options starts at
- * 00:00, so `Mon 7 Sep, 00:00` would be sixty rows each carrying the same four
+ * 00:00, so `00:00, Mon Sep 7` would be sixty rows each carrying the same four
  * useless digits. It costs a half-hour poll whose first window happens to
  * start at midnight the word `00:00` -- still the right day, and a poll nobody
  * has yet made.
@@ -744,14 +749,14 @@ export function formatWindow(name: string): string {
   if (!parsed) return name
 
   const at = toMinutes(parsed.timeOfDay)
-  return at === 0 ? formatDay(parsed.day) : `${formatDay(parsed.day)}, ${parsed.timeOfDay}`
+  return at === 0 ? formatDay(parsed.day) : `${parsed.timeOfDay}, ${formatDay(parsed.day)}`
 }
 
-/** The day part alone, for a column heading over a grid. */
+/** The day part alone, for a column heading over a grid: `Fri Feb 20`. */
 export function formatDay(day: ScheduleDay): string {
   const [year, month, dayOfMonth] = day.split('-').map(Number)
   const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, dayOfMonth)).getUTCDay()]
-  return `${weekday} ${dayOfMonth} ${MONTHS[month - 1]}`
+  return `${weekday} ${MONTHS[month - 1]} ${dayOfMonth}`
 }
 /**
  * The painting as one event per run of neighbouring cells sharing a value, for
