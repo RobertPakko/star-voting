@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest'
 import {
+  carryForward,
   clock,
   countWindows,
   daysOf,
   describeOffset,
   enumerateWindows,
+  formatDay,
   formatWindow,
   granulesInBounds,
   granulesOf,
@@ -21,6 +23,7 @@ import {
   zoneShiftsWithin,
 } from './schedule'
 import { MAX_OPTIONS } from './limits'
+import { resolveZone, zoneOfSchedule } from './timezones'
 import type { PollSchedule } from './types'
 
 /**
@@ -406,5 +409,117 @@ describe('a place, resolved into the offset a poll is held at', () => {
     expect(describeOffset(labelled)).toBe('Mountain Time (Denver) — UTC-07:00')
     // A poll whose creator picked a bare offset has nothing to add to it.
     expect(describeOffset(threeHours)).toBe('UTC-07:00')
+  })
+})
+
+describe('duplicating a poll onto dates that have not gone', () => {
+  /** The weekend poll again: Friday evenings, Saturday from nine. */
+  const weekend: PollSchedule = {
+    timezone: '-06:00',
+    timezone_label: 'Mountain Time (Denver)',
+    window: { start: '09:00', end: '22:00' },
+    day_windows: {
+      '2026-09-04': { start: '18:00', end: '22:00' },
+      '2026-09-05': { start: '09:00', end: '22:00' },
+    },
+    desired_slots: 2,
+    granularity: 60,
+  }
+  // A Friday and the Saturday after it.
+  const days = ['2026-09-04', '2026-09-05']
+
+  test('dates still ahead are left exactly where they were', () => {
+    // Duplicating a poll you made this morning gives back the days you picked
+    // this morning, which is the only answer that is not a surprise.
+    const kept = carryForward(weekend, days, '2026-09-01')
+    expect(kept.weeks).toBe(0)
+    expect(kept.days).toEqual(days)
+    expect(kept.schedule).toBe(weekend)
+  })
+
+  test('and the first day being today counts as ahead', () => {
+    expect(carryForward(weekend, days, '2026-09-04').weeks).toBe(0)
+  })
+
+  test('dates that have gone move by whole weeks, so the weekdays hold', () => {
+    // Five weeks and a bit later: the smallest number of whole weeks that puts
+    // the Friday on or after the day the copy is being made.
+    const moved = carryForward(weekend, days, '2026-10-08')
+    expect(moved.weeks).toBe(5)
+    expect(moved.days).toEqual(['2026-10-09', '2026-10-10'])
+    // Still a Friday and still a Saturday, which is the whole reason the shift
+    // is in weeks: `day_windows` is an answer about days of the week.
+    expect(formatDay(moved.days[0]).startsWith('Fri')).toBe(true)
+    expect(formatDay(moved.days[1]).startsWith('Sat')).toBe(true)
+  })
+
+  test('and the per-day hours move with the days they name', () => {
+    const moved = carryForward(weekend, days, '2026-10-08')
+    expect(moved.schedule.day_windows).toEqual({
+      '2026-10-09': { start: '18:00', end: '22:00' },
+      '2026-10-10': { start: '09:00', end: '22:00' },
+    })
+    // Which is what makes the copy the same poll: Friday evening is still
+    // Friday evening rather than an answer given about the wrong day.
+    expect(windowOn(moved.schedule, moved.days[0])).toEqual({ start: '18:00', end: '22:00' })
+    expect(countWindows(moved.schedule, moved.days)).toBe(countWindows(weekend, days))
+  })
+
+  test('an entry for a day the poll does not ask about is dropped, not moved', () => {
+    // Reachable by ordinary editing before `settle` prunes it, and carrying it
+    // would put a stranded answer on a date nobody chose.
+    const stale = {
+      ...weekend,
+      day_windows: { ...weekend.day_windows, '2026-09-06': { start: '10:00', end: '12:00' } },
+    }
+    const moved = carryForward(stale, days, '2026-10-08')
+    expect(Object.keys(moved.schedule.day_windows ?? {})).toEqual(['2026-10-09', '2026-10-10'])
+  })
+
+  test('a month boundary is a date, not a number of days in September', () => {
+    const moved = carryForward(weekend, ['2026-09-28'], '2026-10-08')
+    expect(moved.weeks).toBe(2)
+    expect(moved.days).toEqual(['2026-10-12'])
+  })
+
+  test('a poll with no per-day hours moves its days and nothing else', () => {
+    const plain: PollSchedule = { ...threeHours }
+    const moved = carryForward(plain, ['2026-09-01'], '2026-09-15')
+    expect(moved.days).toEqual(['2026-09-15'])
+    expect(moved.schedule).toBe(plain)
+  })
+
+  test('nothing to move is nothing to move', () => {
+    expect(carryForward(weekend, [], '2026-10-08')).toEqual({
+      days: [],
+      schedule: weekend,
+      weeks: 0,
+    })
+  })
+
+  test('the whole of what a duplicate does, end to end', () => {
+    // Exactly the pipeline `CreatePoll`'s prefill runs, minus the setters:
+    // options back to days, days forward, place back from its label, place
+    // resolved again on the new first day. The last step is the one worth
+    // asserting -- the copy lands in November, when Denver is back on -07:00,
+    // so a duplicate that kept the stored offset would be an hour out on every
+    // window it generated.
+    const options = enumerateWindows(weekend, days)
+    const renewed = carryForward(weekend, daysOf(options), '2026-11-05')
+    const place = zoneOfSchedule(weekend.timezone, weekend.timezone_label)
+    const copy = { ...renewed.schedule, ...resolveZone(place, renewed.days[0]) }
+
+    expect(place).toBe('America/Denver')
+    expect(renewed.days).toEqual(['2026-11-06', '2026-11-07'])
+    expect(weekend.timezone).toBe('-06:00')
+    expect(copy.timezone).toBe('-07:00')
+    expect(copy.timezone_label).toBe('Mountain Time (Denver)')
+
+    // And the copy is the same poll: the same number of windows, the same
+    // Friday evening, on the offset those November dates are actually on.
+    const copied = enumerateWindows(copy, renewed.days)
+    expect(copied).toHaveLength(options.length)
+    expect(copied[0]).toBe('2026-11-06T18:00:00-07:00')
+    expect(copied.every((start) => start.endsWith('-07:00'))).toBe(true)
   })
 })

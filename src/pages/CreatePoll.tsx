@@ -25,14 +25,16 @@ import { DescriptionField } from '../components/DescriptionField'
 import { ScheduleFields } from '../components/ScheduleFields'
 import {
   blankSchedule,
+  carryForward,
   countWindows,
+  daysOf,
   enumerateWindows,
   formatDay,
   spanOf,
   windowsOn,
 } from '../lib/schedule'
-import { resolveZone, zoneForViewer } from '../lib/timezones'
-import { groupQuestionsSchema, parseAnswer } from '../lib/rpcSchemas'
+import { resolveZone, zoneForViewer, zoneOfSchedule } from '../lib/timezones'
+import { groupQuestionsSchema, parseAnswer, pollScheduleSchema } from '../lib/rpcSchemas'
 import { FormSkeleton } from '../components/Skeletons'
 import styles from './CreatePoll.module.css'
 import listRow from '../components/listRow.module.css'
@@ -477,6 +479,10 @@ export function CreatePoll() {
   const [showErrors, setShowErrors] = useState(false)
   // Only ever true on a duplicate; a blank new poll renders immediately.
   const [prefilling, setPrefilling] = useState(Boolean(duplicateOf))
+  // How many weeks a duplicate's dates had to move to stop being in the past;
+  // 0 on every other poll, and cleared the moment the creator picks a day of
+  // their own. See `carryForward`, and the notice above the calendar fields.
+  const [datesMoved, setDatesMoved] = useState(0)
 
   const myEmail = session?.user.email?.toLowerCase() ?? ''
   const isOpen = mode === 'open'
@@ -536,12 +542,25 @@ export function CreatePoll() {
       }
 
       const { candidates, ...source } = pollRes.data as Poll & { candidates: PollOption[] }
+
+      // The grid, if this is a poll that finds a time. Checked rather than
+      // cast, unlike every other field on this row, for the reason
+      // `pollScheduleSchema` exists at all: it is the one payload the form
+      // does arithmetic with, and a `granularity` that arrived as a string
+      // would make every window start `NaN` several screens away from here. A
+      // schedule that will not parse is handled below rather than trusted.
+      const parsedGrid =
+        source.kind === 'time' ? pollScheduleSchema.safeParse(source.schedule) : null
+      const grid = parsedGrid?.success ? parsedGrid.data : null
+
       setTitle(source.title)
       setDescription(source.description ?? '')
       setMode(source.mode)
       setShowVoters(source.show_voters)
       setShowBallots(source.show_ballots)
-      setSolicitOptions(source.solicit_options)
+      // Off on a time poll, and `create_poll` refuses it there besides; see
+      // switchKind.
+      setSolicitOptions(grid ? false : source.solicit_options)
 
       // Descriptions come across with their options, so a duplicate of a poll
       // that explained its options does not quietly lose the explanations.
@@ -557,37 +576,90 @@ export function CreatePoll() {
           : [...drafted, blankOption(), blankOption()].slice(0, 2)
       }
 
-      // A duplicate of a poll that asks several questions is a poll that asks
-      // the same several, not whichever one the creator happened to press
-      // Duplicate on. The group is read through the same RPC the poll page
-      // uses, and every question's options in one query rather than one each.
-      const { data: groupData } = await supabase.rpc('poll_group', { p_poll_id: sourceId })
-      if (cancelled) return
-      // A group that does not parse is a poll with no group as far as this
-      // form is concerned: the duplicate then carries the one question it was
-      // opened from, which is the same thing every single-question duplicate
-      // does, rather than a half-copied set of questions.
-      const group = parseAnswer(groupQuestionsSchema, 'poll_group', groupData ?? []).value ?? []
+      if (grid) {
+        // A duplicate of a poll that finds a time is a poll that finds a time.
+        // Without this the copy came back as an *option* poll whose options
+        // were sixty ISO timestamps -- a real ballot, drawn as a list, that
+        // nobody could read and the calendar could not score.
+        setKind('time')
+        // Neither works on a calendar, and switchKind turns both off for the
+        // same reasons when the toggle is used by hand.
+        setMultiQuestion(false)
+        // Blank rather than the windows the source enumerated. They are not an
+        // option list anybody wrote, and leaving them in the draft would spill
+        // sixty timestamps into the form the moment somebody switched the copy
+        // back to a poll about options.
+        setQuestions([blankQuestion()])
 
-      if (group.length > 1) {
-        const ids = group.map((q) => q.id)
-        const { data: allOptions } = await supabase
-          .from('candidates')
-          .select('*')
-          .in('poll_id', ids)
-          .order('sort_order')
-        if (cancelled) return
-        const rows = (allOptions as PollOption[]) ?? []
-        setMultiQuestion(true)
-        setQuestions(
-          group.map((question) => ({
-            ...blankQuestion(),
-            title: question.question_title,
-            options: draftFrom(rows.filter((o) => o.poll_id === question.id)),
-          })),
-        )
+        // The days come off the options, exactly as the ballot reads them --
+        // and then forward to the next dates that have not already gone, which
+        // is what makes a duplicate of last Friday's poll a poll about a
+        // Friday somebody can still attend. See `carryForward`.
+        const asked = daysOf((candidates ?? []).map((option) => option.name))
+        const renewed = carryForward(grid, asked, todayInBrowser())
+        setDays(renewed.days)
+        setDatesMoved(renewed.weeks)
+
+        // The place is not stored, only the offset it resolved to, so the
+        // picker is put back from the label -- and then asked again, because
+        // dates that have moved may have moved across a clock change: the same
+        // Friday five weeks later is a different offset in half the world.
+        // `resolveZone` hands a bare offset straight back, so this is one line
+        // rather than a branch.
+        const place = zoneOfSchedule(grid.timezone, grid.timezone_label)
+        setZone(place)
+        setSchedule({
+          ...renewed.schedule,
+          ...resolveZone(place, renewed.days[0] ?? todayInBrowser()),
+        })
       } else {
-        setQuestions([{ ...blankQuestion(), options: draftFrom(candidates ?? []) }])
+        if (source.kind === 'time') {
+          // A time poll whose schedule will not parse: still a time poll, and
+          // still a copy worth making, but with no grid to put under it. Said
+          // plainly over calendar fields that are otherwise blank, rather than
+          // quietly handed back as the list-of-timestamps poll the branch
+          // above exists to stop.
+          setKind('time')
+          setMultiQuestion(false)
+          setQuestions([blankQuestion()])
+          setError(
+            "That poll's calendar could not be read, so this copy has its title and settings but none of its times. Set the days and hours below.",
+          )
+        } else {
+          // A duplicate of a poll that asks several questions is a poll that
+          // asks the same several, not whichever one the creator happened to
+          // press Duplicate on. The group is read through the same RPC the
+          // poll page uses, and every question's options in one query rather
+          // than one each.
+          const { data: groupData } = await supabase.rpc('poll_group', { p_poll_id: sourceId })
+          if (cancelled) return
+          // A group that does not parse is a poll with no group as far as this
+          // form is concerned: the duplicate then carries the one question it
+          // was opened from, which is the same thing every single-question
+          // duplicate does, rather than a half-copied set of questions.
+          const group = parseAnswer(groupQuestionsSchema, 'poll_group', groupData ?? []).value ?? []
+
+          if (group.length > 1) {
+            const ids = group.map((q) => q.id)
+            const { data: allOptions } = await supabase
+              .from('candidates')
+              .select('*')
+              .in('poll_id', ids)
+              .order('sort_order')
+            if (cancelled) return
+            const rows = (allOptions as PollOption[]) ?? []
+            setMultiQuestion(true)
+            setQuestions(
+              group.map((question) => ({
+                ...blankQuestion(),
+                title: question.question_title,
+                options: draftFrom(rows.filter((o) => o.poll_id === question.id)),
+              })),
+            )
+          } else {
+            setQuestions([{ ...blankQuestion(), options: draftFrom(candidates ?? []) }])
+          }
+        }
       }
 
       if (source.mode === 'invite') {
@@ -735,6 +807,9 @@ export function CreatePoll() {
   /** Days, with the offset re-resolved against whichever is now the first. */
   function pickDays(next: string[]) {
     setDays(next)
+    // The notice explains where the dates in the picker came from, so it goes
+    // as soon as they are the creator's own rather than the copy's.
+    setDatesMoved(0)
     const on = [...next].sort()[0]
     if (on) setSchedule((prev) => ({ ...prev, ...resolveZone(zone, on) }))
   }
@@ -1224,20 +1299,34 @@ export function CreatePoll() {
           the ballot. */}
           <Stack gap="sm">
             {kind === 'time' ? (
-              /* No option rows at all: the ballot is generated from these four
+              /* No option rows at all: the ballot is generated from these
                  answers and the days picked below them, which is the whole of
                  what makes a time poll a poll about times. See
                  enumerateWindows, and handleSubmit, where they become the
                  ordinary p_options every other poll sends. */
-              <ScheduleFields
-                schedule={schedule}
-                days={days}
-                zone={zone}
-                onScheduleChange={setSchedule}
-                onDaysChange={pickDays}
-                onZoneChange={(next) => pickZone(next, days)}
-                error={shown.schedule}
-              />
+              <Stack gap="sm">
+                {/* Dates that moved on their own are exactly the kind of thing
+                    a creator notices two screens later, or never -- so a copy
+                    whose dates had already gone says where the ones in the
+                    picker came from. It goes as soon as they pick a day of
+                    their own; see pickDays. */}
+                {datesMoved > 0 && (
+                  <Alert color="blue" title="These dates have moved">
+                    The poll you copied is in the past, so this one asks about the same days of the
+                    week {datesMoved === 1 ? 'a week' : `${datesMoved} weeks`} later. Pick different
+                    days below if that is not where you want it.
+                  </Alert>
+                )}
+                <ScheduleFields
+                  schedule={schedule}
+                  days={days}
+                  zone={zone}
+                  onScheduleChange={setSchedule}
+                  onDaysChange={pickDays}
+                  onZoneChange={(next) => pickZone(next, days)}
+                  error={shown.schedule}
+                />
+              </Stack>
             ) : multiQuestion ? (
               /* One question at a time, behind a strip of tabs. Every question
              laid out at once was a form that grew with the poll: five

@@ -60,7 +60,7 @@ const dailyWindow = z.object({ start: z.string(), end: z.string() })
  * back through them, and a `granularity` that arrived as a string would make
  * every window start `NaN` several screens away from here.
  */
-const pollSchedule = z.object({
+export const pollScheduleSchema = z.object({
   timezone: z.string(),
   // Presentation only, and optional for two reasons at once: a creator may
   // have picked a bare offset, and a poll made before labels existed has none.
@@ -102,7 +102,7 @@ const poll = z.object({
   question_position: z.number().nullable(),
   question_title: z.string().nullable(),
   kind: pollKind.optional(),
-  schedule: pollSchedule.nullable().optional(),
+  schedule: pollScheduleSchema.nullable().optional(),
 })
 
 const groupQuestion = z.object({
@@ -159,7 +159,7 @@ export const openPollViewSchema = z.object({
     question_position: z.number().nullable().optional(),
     question_title: z.string().nullable().optional(),
     kind: pollKind.optional(),
-    schedule: pollSchedule.nullable().optional(),
+    schedule: pollScheduleSchema.nullable().optional(),
   }),
   options: z.array(pollOption),
   voted_count: z.number(),

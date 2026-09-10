@@ -402,7 +402,7 @@ nothing is being run, only compiled, and a pull request from a fork could not
 see them anyway.
 
 ```bash
-npm run test:unit     # vitest, over two files and nothing else
+npm run test:unit     # vitest, over three files and nothing else
 ```
 
 **`test:unit` is deliberately narrow.** It exists because [schedule
@@ -414,10 +414,17 @@ way the tally can — plausibly, and with nothing downstream that would notice,
 because the database sees an ordinary poll either way. The SQL suite cannot
 reach it and there was no JS runner in the repo, so one was added for it.
 
-It covers two things, and both are things neither other check can see:
+It covers three things, and every one of them is something neither other check
+can see:
 
 - `schedule.test.ts`, the derivation above — pure functions of their
   arguments, and not a foothold for testing components.
+- `timezones.test.ts`, over the list of places and the round trip through it.
+  Every entry has to name a zone the runtime has actually heard of, and every
+  label a poll stores has to find its way back to the entry it came from — see
+  [Duplicating one](#duplicating-one), where a broken round trip would leave
+  copies quietly stranded on the wrong side of a daylight-saving change with
+  nothing else looking any different.
 - `limits.test.ts`, which reads `supabase/migrations/` and asserts that every
   number in [`limits.ts`](src/lib/limits.ts) is the number the database
   actually enforces. That file has always said *change a number here and change
@@ -922,6 +929,51 @@ back, and every window in a poll is the same length — sixty rows each saying
 on the results page it belongs once, in a line above the list, rather than once
 per option.
 
+### Duplicating one
+
+A duplicate of a time poll is a time poll. That took saying, because for two
+migrations it was not: `CreatePoll`'s prefill copied the title, the settings
+and the option list and knew nothing about `kind` or `schedule`, so
+**"Duplicate" on a time poll produced an *option* poll whose options were sixty
+ISO timestamps** — a real ballot, drawn as a list, that nobody could read and
+the calendar could not score.
+
+Everything in a schedule copies straight across except the dates, and the
+dates are the whole reason anybody duplicates one of these: the point of
+copying last Friday's poll is to ask about a Friday that is still ahead.
+`carryForward` moves them **by whole weeks**, the fewest that puts the first
+day on or after today — none at all when the source poll's dates have not
+happened yet, so duplicating a poll you made this morning gives back the days
+you picked this morning.
+
+Whole weeks rather than any other shift, because `day_windows` is an answer
+about *days of the week*: "Friday evenings, Saturday from nine" moved onto a
+Wednesday is that answer given about the wrong day. The entries move with the
+days they name, and an entry for a day the poll does not ask about is dropped
+rather than carried onto a date nobody chose. The form says the dates moved
+and by how much, because a date that changed on its own is exactly the kind of
+thing a creator notices two screens later, or never.
+
+**The place has to be found again from its label.** A schedule stores the
+offset and throws the zone away — that is the design — so `zoneOfSchedule`
+reads `timezone_label` back through the same list that generated it, and the
+copy then resolves that place against its *new* first day. A poll about
+September in Denver duplicated onto November comes back on `-07:00` rather
+than the `-06:00` it was stored at, which is what makes the copy the same poll
+rather than one an hour out. A label that no longer names anything in the list
+falls back to the offset itself, which is never wrong and only means the copy
+stops following that zone's clock changes; `timezones.test.ts` asserts the
+round trip over every entry, because a renamed city would break it silently
+and nothing else about the app would look any different.
+
+It is also the one place the form **checks** a column instead of casting it.
+Every other field on that row is trusted, and `schedule` is not, for the reason
+`pollScheduleSchema` exists: it is the payload the form does arithmetic with,
+and a `granularity` that arrived as a string would make every window start
+`NaN` several screens away. One that will not parse leaves a time poll with no
+grid and a line saying so, rather than the list-of-timestamps poll this is all
+here to prevent.
+
 ### Ties, and the poll that elects nobody
 
 Adjacent windows overlap heavily, so their totals and their per-ballot vectors
@@ -1032,13 +1084,9 @@ at a time.
   and the editor is not offered: the options are generated from the schedule,
   and a typed-in name is one the calendar cannot draw and the minimum rule
   cannot score.
-- **Duplicating a time poll as one.** `CreatePoll`'s prefill copies the title,
-  the settings and the option list, and knows nothing about `kind` or
-  `schedule` — so "Duplicate" on a time poll produces an *option* poll whose
-  options are ISO timestamps. It has been that way since 0055 and 0056 did not
-  change it. Fixing it means carrying `kind`, `schedule` and `daysOf(options)`
-  through the prefill, and deciding what a duplicate of a poll about last month
-  should have in its day picker.
+- **A time poll in a poll group.** As above: one calendar per question is a
+  form nobody has drawn, so a duplicate of a time poll is a duplicate of one
+  question.
 
 
 ## The winner is kept with the poll

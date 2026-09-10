@@ -211,3 +211,33 @@ export function zoneForViewer(): string {
   const here = viewerZone()
   return BY_ZONE.has(here) ? here : `${FIXED_OFFSET_PREFIX}${browserOffset()}`
 }
+
+/** Every entry again, by the label it is stored under; see `zoneOfSchedule`. */
+const BY_LABEL = new Map<string, string>(
+  TIME_ZONE_REGIONS.flatMap((region) => TIME_ZONES[region]).map((choice) => [
+    zoneLabel(choice),
+    choice.zone,
+  ]),
+)
+
+/**
+ * The picker value for a schedule that already exists — which is what a
+ * *duplicate* of a time poll opens on.
+ *
+ * The zone is not stored: `resolveZone` turns it into an offset and throws it
+ * away, which is the whole design. What is stored is the label, so the way
+ * back is the label — and it works because a label is generated from this list
+ * rather than typed. A poll whose creator picked a bare offset, one made
+ * before labels existed, and one whose label names a place this list has since
+ * dropped all come back as the offset itself, which is what the poll is
+ * actually held at and never wrong.
+ *
+ * `timezones.test.ts` asserts the round trip over every entry, because a
+ * renamed city would break it silently: duplicates would quietly stop
+ * following their zone across a daylight-saving change and nothing else would
+ * look any different.
+ */
+export function zoneOfSchedule(timezone: string, label?: string | null): string {
+  const zone = label ? BY_LABEL.get(label.trim()) : undefined
+  return zone ?? `${FIXED_OFFSET_PREFIX}${timezone}`
+}

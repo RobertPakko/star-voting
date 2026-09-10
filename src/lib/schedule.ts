@@ -166,6 +166,77 @@ export function spanOf(schedule: PollSchedule, days: ScheduleDay[]): DailyWindow
 }
 
 /**
+ * A date some whole days later, and the whole days between two dates.
+ *
+ * `Date` is used here as a calendar and never as a clock, which is the same
+ * licence `formatWindow` takes further down and is safe for the same reason:
+ * the parts go in as wall clock, come out as wall clock, and no instant is
+ * ever compared against anybody's own zone. Built in UTC so that a browser
+ * sitting in a zone with a daylight-saving change in the middle of the range
+ * cannot turn a week into six days and 23 hours.
+ */
+function addDays(day: ScheduleDay, count: number): ScheduleDay {
+  const [year, month, dayOfMonth] = day.split('-').map(Number)
+  const moved = new Date(Date.UTC(year, month - 1, dayOfMonth + count))
+  return moved.toISOString().slice(0, 10)
+}
+
+function daysApart(from: ScheduleDay, to: ScheduleDay): number {
+  const [fy, fm, fd] = from.split('-').map(Number)
+  const [ty, tm, td] = to.split('-').map(Number)
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000)
+}
+
+/**
+ * The same poll, on the next dates that have not already gone: what a
+ * *duplicate* of a time poll asks about.
+ *
+ * Everything else in a schedule copies straight across -- how long the meeting
+ * is, how finely it is answered, which hours of which days, where in the world
+ * -- and the dates are the one part that cannot, because the whole reason to
+ * duplicate a poll about last Friday is to ask about a Friday that is still
+ * ahead. Copied verbatim they would be a form pre-filled with a fortnight
+ * nobody can attend.
+ *
+ * **Whole weeks, so the weekdays hold.** That is the point of shifting rather
+ * than clearing: `day_windows` says "Friday evenings, Saturday from nine", and
+ * a Friday moved to a Wednesday is that answer given about the wrong day. The
+ * entries move with the days they name -- and an entry for a day the poll does
+ * not ask about is dropped rather than carried into a date nobody chose.
+ *
+ * The smallest number of weeks that puts the first day on or after `today`, so
+ * a poll whose dates are still ahead is not moved at all: duplicating a poll
+ * you made this morning gives you back the dates you picked this morning.
+ * `today` is an argument rather than a reading of the clock, which is what
+ * keeps this in the pure half of the file.
+ *
+ * `weeks` comes back with it because the form says so on screen. Dates that
+ * moved on their own are exactly the kind of thing a creator notices two
+ * screens later, or never.
+ */
+export function carryForward(
+  schedule: PollSchedule,
+  days: ScheduleDay[],
+  today: ScheduleDay,
+): { days: ScheduleDay[]; schedule: PollSchedule; weeks: number } {
+  const asked = [...days].sort()
+  if (asked.length === 0 || asked[0] >= today) return { days: asked, schedule, weeks: 0 }
+
+  const weeks = Math.ceil(daysApart(asked[0], today) / 7)
+  const shift = weeks * 7
+  const moved = asked.map((day) => addDays(day, shift))
+
+  if (!schedule.day_windows) return { days: moved, schedule, weeks }
+
+  const carried: Record<ScheduleDay, DailyWindow> = {}
+  for (const day of asked) {
+    const hours = schedule.day_windows[day]
+    if (hours) carried[addDays(day, shift)] = hours
+  }
+  return { days: moved, schedule: { ...schedule, day_windows: carried }, weeks }
+}
+
+/**
  * Every cell of the grid a voter may paint on one day, in order.
  *
  * A cell counts as in bounds when the whole of it is: a day ending at 10pm
