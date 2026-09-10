@@ -830,24 +830,43 @@ three-hour meeting leaves 12:00 covered by the second window, and painting it
 09:00–11:30 leaves nothing covered at all.
 
 **Voting.** The voter paints a rating per granule. **A window's rating is the
-minimum of its granules.** Not the mean: with a mean, a window containing an
-hour the voter flatly cannot attend still scores 3.3 and can win. With a
-minimum, any window touching a 0 is a 0, which is exactly "I can't be there".
-An untouched granule is 0, a real rating meaning unavailable — the same reading
-`BallotCard` already gives an unscored option.
+mean of its granules, rounded — held off both ends of the scale.** A window
+scores 5 only when every granule under it is a 5, and 0 only when every granule
+under it is a 0; everything else lands in 1–4 however lopsided the mean, so the
+two claims that are not matters of degree are still only made when they are
+true. An untouched granule is 0, a real rating meaning unavailable — the same
+reading `BallotCard` already gives an unscored option.
 
-A consequence worth designing for: a voter whose longest free block is shorter
-than the window scores *every* option 0 and contributes nothing. That is
-correct, and it looks exactly like the app having eaten their vote, so the
-ballot says so before the vote goes in.
+It was the minimum of its granules first, and the reason it is not is the
+ordering: **a window somebody can attend most of is genuinely better than one
+they cannot attend at all**, and a minimum cannot say so. Under it, half an
+hour of conflict inside a three-hour window and a diary full of conflict both
+came out 0 — so a voter whose longest free block was shorter than the meeting
+scored *every* option 0 and contributed nothing, which the ballot had to warn
+about before the vote went in. The mean ranks the near misses instead, and the
+warning is gone with the case it warned about. What the minimum was protecting
+against — a window with an impossible hour in it winning — is now the job of
+the 5 being held back: such a window is a 4 at best, and cannot tie with one
+that works.
 
-**Reading a ballot back.** Invert: a granule's rating is the *maximum* over the
-windows containing it, since a window's score was the minimum over its
-granules. This is lossy and knowingly so — the shape of somebody's availability
-survives, the difference between "fine" and "ideal" within it does not — so
-re-saving an unedited ballot can lower a rating. That is the cost of storing
-windows rather than granules, which is what lets a time poll be an ordinary
-poll everywhere else.
+**Reading a ballot back.** Invert, in two rules. **A 0 vetoes**, because a
+window is only 0 when every granule under it is 0, so a 0 is a promise about
+each of them. **Otherwise a granule takes the highest window covering it**, a 5
+being the mirror promise and the best window over a granule being the closest
+thing to evidence about it there is.
+
+Together they are exact on the paintings people make: a block of one rating at
+least as long as the meeting contains a window made of nothing but itself, and
+an empty stretch that long contains an empty window. **What blurs is anything
+shorter than the meeting**, which is not a choice — the scores do not carry it.
+One busy half hour in a free afternoon lowers every window over it by a step
+and returns as a dip rather than a hole; one free half hour in a busy day
+returns marked but faint. The blur is in the rating rather than the position,
+except within one meeting's length of the ends of the poll's own bounds, where
+there is no room for an empty window to say the times were empty and some of
+the marking smears into them. So re-saving an unedited ballot can move a rating
+a step. That is the cost of storing windows rather than granules, which is what
+lets a time poll be an ordinary poll everywhere else.
 
 ### The ballot
 
@@ -1204,7 +1223,7 @@ sample now does.
 
 **And the creator may correct a time poll's options.** `creator_add_option`
 still refuses one: it is the typed-name path, and a hand-typed name is one the
-calendar cannot draw and the minimum rule cannot score. Its plural sibling does
+calendar cannot draw and the window rule cannot score. Its plural sibling does
 not, because what it is handed comes from a painted calendar.
 
 That same plural door is what makes *Edit options* one request rather than

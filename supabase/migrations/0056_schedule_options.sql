@@ -19,7 +19,7 @@
 --
 --   * **The creator correcting a time poll's options.** `creator_add_option`
 --     still refuses -- it is the typed-name path, and a hand-typed name is one
---     the calendar cannot draw and the minimum rule cannot score. Its plural
+--     the calendar cannot draw and the window rule cannot score. Its plural
 --     sibling does not, because the names it is given come from a painted
 --     calendar rather than from a text box.
 --
@@ -194,7 +194,7 @@ comment on function "public"."open_poll_suggest_options"("p_poll_id" "uuid", "p_
 -- nobody has voted in yet. Unlike `creator_add_option` this one is allowed on
 -- a time poll: what it is handed comes from a painted calendar rather than
 -- from a text box, so the names are window starts the grid can draw and the
--- minimum rule can score. That is the whole of the difference, and it is why
+-- window rule can score. That is the whole of the difference, and it is why
 -- the singular still refuses.
 create or replace function "public"."creator_add_options"("p_poll_id" "uuid", "p_options" jsonb) returns int
     language plpgsql security definer

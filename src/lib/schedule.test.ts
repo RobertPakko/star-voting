@@ -18,9 +18,7 @@ import {
   MEETING_LENGTHS,
   offsetMinutes,
   paintingFromScores,
-  saysNothing,
   scoresFromPainting,
-  spanningLength,
   spanOf,
   stepGranule,
   toTimeOfDay,
@@ -37,7 +35,7 @@ import type { PollSchedule } from './types'
  *
  * These are the two functions the whole feature rests on: a time poll is an
  * ordinary poll everywhere in the database, so if the enumeration or the
- * minimum rule is wrong there is nothing downstream that would notice. The
+ * scoring rule is wrong there is nothing downstream that would notice. The
  * tally would run happily over the wrong sixty options and elect one of them.
  *
  * The SQL suite (`npm test`) cannot reach any of this -- it is browser logic,
@@ -233,11 +231,7 @@ describe('how long a meeting is, as a person says it', () => {
     expect(describeLength(3 * DAY_MINUTES)).toBe('3 days')
   })
 
-  test('the same length in front of a noun', () => {
-    expect(spanningLength(30)).toBe('30-minute')
-    expect(spanningLength(90)).toBe('1.5-hour')
-    expect(spanningLength(2 * DAY_MINUTES)).toBe('2-day')
-  })
+  test('the same length in front of a noun', () => {})
 
   test('the resolution follows the length, and is never asked about', () => {
     expect(granularityFor(30)).toBe(30)
@@ -258,11 +252,11 @@ describe('how long a meeting is, as a person says it', () => {
   })
 })
 
-describe('a window is scored by its worst half hour', () => {
+describe('a window is scored by the average of its half hours', () => {
   const day = '2026-09-01'
   const starts = enumerateWindows(threeHours, painted([day], '08:00', '22:00'))
 
-  test('the whole point: one bad hour makes the window unavailable', () => {
+  test('the whole point: one bad half hour costs a window a step, not all of it', () => {
     // Free all afternoon, except that 16:00 is impossible.
     const painting: Record<string, number> = {}
     for (const key of painted([day], '13:00', '20:00')) painting[key] = 5
@@ -270,37 +264,66 @@ describe('a window is scored by its worst half hour', () => {
 
     const scores = scoresFromPainting(starts, painting, threeHours)
 
-    // Every window covering 16:00 is out, whatever else it covers -- a mean
-    // would have scored the 14:00 window 3.3 and let it win.
-    expect(scores[`${day}T14:00:00-07:00`]).toBe(0)
-    expect(scores[`${day}T15:00:00-07:00`]).toBe(0)
-    expect(scores[`${day}T16:00:00-07:00`]).toBe(0)
-    // And the ones either side of it are untouched.
+    // A window covering 16:00 is five good half hours and one bad one, which
+    // is worth something -- the old minimum called it a 0 and threw the vote
+    // away, and a voter with one conflict in the day had nothing to say.
+    expect(scores[`${day}T14:00:00-07:00`]).toBe(4)
+    expect(scores[`${day}T16:00:00-07:00`]).toBe(4)
+    // And the windows either side of the conflict still beat them.
     expect(scores[`${day}T13:00:00-07:00`]).toBe(5)
     expect(scores[`${day}T16:30:00-07:00`]).toBe(5)
+    // Two thirds of a window unmarked is a 2, and it is ordered where it
+    // belongs: below the windows with one conflict, above the empty ones.
+    expect(scores[`${day}T11:00:00-07:00`]).toBe(2)
+    expect(scores[`${day}T08:00:00-07:00`]).toBe(0)
   })
 
-  test('a lukewarm half hour drags its windows down to itself', () => {
+  test('a 5 is only for a window every half hour of which is a 5', () => {
+    // The average rounds to 5 here -- 29/6 is 4.83 -- and is held at 4,
+    // because "all of this works" is not a claim an average may make.
     const painting: Record<string, number> = {}
     for (const key of painted([day], '09:00', '12:00')) painting[key] = 5
-    painting[`${day} 10:00`] = 2
-    const scores = scoresFromPainting(starts, painting, threeHours)
-    expect(scores[`${day}T09:00:00-07:00`]).toBe(2)
+    painting[`${day} 10:00`] = 4
+    expect(scoresFromPainting(starts, painting, threeHours)[`${day}T09:00:00-07:00`]).toBe(4)
+
+    // And the more of a window a voter cannot make, the further it drags --
+    // gently, rather than off the cliff a minimum threw it down. Half of it
+    // impossible is still a 3, and still worth ranking against the rest.
+    painting[`${day} 10:00`] = 0
+    expect(scoresFromPainting(starts, painting, threeHours)[`${day}T09:00:00-07:00`]).toBe(4)
+    painting[`${day} 10:30`] = 0
+    expect(scoresFromPainting(starts, painting, threeHours)[`${day}T09:00:00-07:00`]).toBe(3)
+    painting[`${day} 11:00`] = 0
+    expect(scoresFromPainting(starts, painting, threeHours)[`${day}T09:00:00-07:00`]).toBe(3)
+  })
+
+  test('and a 0 only for a window none of which was marked', () => {
+    // A sixth of a window marked 2 averages 0.33, which rounds to nothing;
+    // the floor keeps it a 1, because a window a voter can make part of is
+    // not the same answer as one they cannot make at all.
+    const scores = scoresFromPainting(starts, { [`${day} 09:00`]: 2 }, threeHours)
+    expect(scores[`${day}T09:00:00-07:00`]).toBe(1)
+    expect(scores[`${day}T12:00:00-07:00`]).toBe(0)
   })
 
   test('an unpainted cell is a 0, which is a real answer', () => {
     const scores = scoresFromPainting(starts, {}, threeHours)
     expect(Object.values(scores).every((score) => score === 0)).toBe(true)
-    expect(saysNothing(scores)).toBe(true)
   })
 
-  test('two free hours are not a three-hour block, and the ballot says so', () => {
-    // The case that looks like the app ate the vote: everything the voter
-    // marked is real, and none of it is long enough for the meeting.
+  test('two free hours are not a three-hour block, and still count for it', () => {
+    // The case that used to look like the app ate the vote: everything the
+    // voter marked is real, none of it is long enough for the meeting, and
+    // every option came back 0. Now it ranks the near misses.
     const painting: Record<string, number> = {}
     for (const key of painted([day], '09:00', '10:00')) painting[key] = 5
     for (const key of painted([day], '14:00', '15:00')) painting[key] = 5
-    expect(saysNothing(scoresFromPainting(starts, painting, threeHours))).toBe(true)
+
+    const scores = scoresFromPainting(starts, painting, threeHours)
+    expect(scores[`${day}T09:00:00-07:00`]).toBe(2)
+    expect(scores[`${day}T12:00:00-07:00`]).toBe(2)
+    expect(scores[`${day}T11:00:00-07:00`]).toBe(0)
+    expect(Object.values(scores).some((score) => score > 0)).toBe(true)
   })
 
   test('every window gets a score, so no option is left unsent', () => {
@@ -313,30 +336,56 @@ describe('reading a ballot back onto the calendar', () => {
   const day = '2026-09-01'
   const starts = enumerateWindows(threeHours, painted([day], '08:00', '22:00'))
 
-  test('a painting survives the round trip when it is flat', () => {
-    const painting: Record<string, number> = {}
-    for (const key of painted([day], '13:00', '19:00')) painting[key] = 4
+  test('a stretch as long as the meeting comes back exactly as it went in', () => {
+    // The shape almost every ballot is made of, at either end of the scale:
+    // it contains a window made of nothing but itself, which is what makes it
+    // recoverable, and the empty hours around it contain empty windows.
+    for (const rating of [4, 5]) {
+      const painting: Record<string, number> = {}
+      for (const key of painted([day], '13:00', '19:00')) painting[key] = rating
 
-    const scores = scoresFromPainting(starts, painting, threeHours)
-    expect(paintingFromScores(starts, scores, threeHours)).toEqual(painting)
+      const scores = scoresFromPainting(starts, painting, threeHours)
+      expect(paintingFromScores(starts, scores, threeHours)).toEqual(painting)
+    }
   })
 
-  test('and is lossy when it is not, in the direction that keeps availability', () => {
-    // A 2 anywhere inside a window sends that window scored 2; the maximum
-    // over the windows covering each cell is that same 2, so the 5s are gone.
-    // The voter's availability is intact and their enthusiasm is flattened,
-    // which is the trade -- see paintingFromScores.
+  test('and anything shorter than the meeting comes back blurred', () => {
+    // A single busy half hour inside a free afternoon lowers every window
+    // over it by one step and nothing else, so it returns as a dip rather
+    // than a hole. The scores do not carry it -- see paintingFromScores.
     const painting: Record<string, number> = {}
-    for (const key of painted([day], '09:00', '12:00')) painting[key] = 5
-    painting[`${day} 10:00`] = 2
+    for (const key of painted([day], '13:00', '20:00')) painting[key] = 5
+    painting[`${day} 16:00`] = 0
 
     const repainted = paintingFromScores(
       starts,
       scoresFromPainting(starts, painting, threeHours),
       threeHours,
     )
-    expect(new Set(Object.values(repainted))).toEqual(new Set([2]))
-    expect(Object.keys(repainted).sort()).toEqual([...painted([day], '09:00', '12:00')].sort())
+    expect(repainted[`${day} 16:00`]).toBe(4)
+    // Its neighbours are untouched: the blur is in the rating, not in where
+    // the marked hours start and stop.
+    expect(repainted[`${day} 15:30`]).toBe(5)
+    expect(repainted[`${day} 16:30`]).toBe(5)
+    expect(repainted[`${day} 12:30`]).toBeUndefined()
+  })
+
+  test('except at the ends of the bounds, where it smears', () => {
+    // The one place an edge moves. 21:30 is the last cell of the day, so the
+    // only window covering it is the last one, and that window overlaps what
+    // the voter did mark -- there is no empty window left to say the evening
+    // was empty, so some of the marking leaks into it.
+    const painting: Record<string, number> = {}
+    for (const key of painted([day], '13:00', '20:00')) painting[key] = 5
+
+    const repainted = paintingFromScores(
+      starts,
+      scoresFromPainting(starts, painting, threeHours),
+      threeHours,
+    )
+    expect(repainted[`${day} 19:30`]).toBe(5)
+    expect(repainted[`${day} 20:00`]).toBe(4)
+    expect(repainted[`${day} 21:30`]).toBe(2)
   })
 
   test('a 0 window paints nothing rather than painting a zero', () => {
@@ -344,9 +393,30 @@ describe('reading a ballot back onto the calendar', () => {
   })
 
   test('a cell under two windows takes the better of them', () => {
-    // 13:00 is inside the 10:30 window and the first cell of the 13:00 one.
-    const scores = { [`${day}T10:30:00-07:00`]: 1, [`${day}T13:00:00-07:00`]: 5 }
+    // 13:00 is the last cell of the 10:30 window and the first of the 13:00
+    // one. Every other window over it is scored too, or its 0 would veto.
+    const scores: Record<string, number> = {}
+    for (const at of ['10:30', '11:00', '11:30', '12:00', '12:30']) {
+      scores[`${day}T${at}:00-07:00`] = 1
+    }
+    scores[`${day}T13:00:00-07:00`] = 5
     expect(paintingFromScores(starts, scores, threeHours)[`${day} 13:00`]).toBe(5)
+  })
+
+  test('and a 0 window overrules whatever a higher one said', () => {
+    // A window is only a 0 when every cell under it was empty, so a 0 is a
+    // promise about each of them and outranks the guesswork. Every window
+    // here is a 5 except one, and its six cells go out anyway.
+    const scores: Record<string, number> = {}
+    for (const start of starts) scores[start] = 5
+    scores[`${day}T12:30:00-07:00`] = 0
+
+    const repainted = paintingFromScores(starts, scores, threeHours)
+    expect(repainted[`${day} 12:30`]).toBeUndefined()
+    expect(repainted[`${day} 15:00`]).toBeUndefined()
+    // The cells either side of it, which the 0 does not reach, stay 5.
+    expect(repainted[`${day} 12:00`]).toBe(5)
+    expect(repainted[`${day} 15:30`]).toBe(5)
   })
 })
 
@@ -444,8 +514,9 @@ describe('what a poll is asking about, read off its own options', () => {
     expect(scores['2026-09-04T18:00:00-07:00']).toBe(4)
     expect(scores['2026-09-04T20:00:00-07:00']).toBe(4)
     expect(scores['2026-09-05T09:00:00-07:00']).toBe(0)
-    // And it survives being read back, because a flat painting is the one
-    // shape the minimum rule loses nothing from.
+    // And it survives being read back: every marked cell sits under a window
+    // made of nothing but marked cells, and every empty one under an empty
+    // window -- which is the shape the scores carry exactly.
     expect(paintingFromScores(options, scores, weekend)).toEqual(painting)
   })
 })

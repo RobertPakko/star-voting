@@ -160,7 +160,7 @@ begin
   -- ---- its options are its windows, and stay that way ---------------------
 
   -- A hand-typed name among generated ones is not a window: the calendar
-  -- cannot draw it and the minimum rule cannot score it. The typed path still
+  -- cannot draw it and the window rule cannot score it. The typed path still
   -- says so; the plural one does not, because what it is handed comes from a
   -- painted calendar rather than from a text box.
   perform tests.assert_raises('a creator cannot type an option into a calendar',

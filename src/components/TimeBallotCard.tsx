@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Alert, Box, Button, Group, SegmentedControl, Stack, Text } from '@mantine/core'
+import { Box, Button, Group, SegmentedControl, Stack, Text } from '@mantine/core'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { BallotFrame, type BallotScore } from './BallotFrame'
 import { PaintCalendar } from './PaintCalendar'
@@ -15,9 +15,7 @@ import {
   paintingFromScores,
   paintingRuns,
   runBounds,
-  saysNothing,
   scoresFromPainting,
-  spanningLength,
   toTimeOfDay,
   type GranuleKey,
 } from '../lib/schedule'
@@ -134,7 +132,6 @@ export function TimeBallotCard({
     () => scoresFromPainting(windows, painting, schedule),
     [windows, painting, schedule],
   )
-  const nothingFits = saysNothing(scores)
 
   /** Write one rating over a set of cells, or rub them out when it is 0. */
   function apply(keys: GranuleKey[], value: number) {
@@ -245,8 +242,13 @@ export function TimeBallotCard({
               ),
             }))}
           />
+          {/* What the ratings are worth is worth saying, because a window is
+              scored by averaging what is under it: a time somebody can make
+              most of is a 4, not the 0 the old rule gave it, and only a time
+              they can make all of is a 5. */}
           <Text size="xs" c="dimmed">
-            5 is the best time for you; 1 is the worst you would still accept.
+            5 is the best time for you; 1 is the worst you would still accept. Each possible meeting
+            time scores the average of what you marked across it.
           </Text>
         </Group>
 
@@ -284,20 +286,6 @@ export function TimeBallotCard({
           onPaint={apply}
           buildEvents={buildEvents}
         />
-
-        {/* The one way a voter can do everything right and send nothing: mark
-            two separate hours on a poll looking for a three-hour block, and
-            every window contains something unmarked, so every window is 0.
-            That is the correct answer to the question and it looks exactly
-            like the app having eaten the vote -- so it is said before the
-            vote goes in rather than discovered afterwards. */}
-        {nothingFits && Object.keys(painting).length > 0 && (
-          <Alert color="yellow" title={`No ${spanningLength(length)} block yet`}>
-            Nothing you have marked is {describeLength(length)} long without a gap, so every option
-            would score zero and your ballot would not count towards any of them. Paint a longer
-            stretch, or send it as it stands if none of these times work.
-          </Alert>
-        )}
       </Stack>
     </BallotFrame>
   )

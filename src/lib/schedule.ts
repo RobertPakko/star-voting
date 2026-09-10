@@ -361,12 +361,21 @@ export function granulesOf(start: WindowStart, schedule: PollSchedule): GranuleK
 /**
  * A painted calendar, flattened into the score per window that gets sent.
  *
- * **A window's rating is the lowest rating among the granules it covers**, and
- * the choice of minimum over mean is the load-bearing one. With a mean, a
- * three-hour window containing one hour the voter flatly cannot attend still
- * scores 3.3 and can win the poll. With a minimum, any window touching a 0 is
- * a 0 -- which is exactly what "I can't be there" has to mean, since a meeting
- * is not partly attendable.
+ * **A window's rating is the mean of the granules it covers, rounded** -- with
+ * the two ends of the scale kept exact. A window scores 5 only when every
+ * granule under it is a 5, and 0 only when every granule under it is a 0;
+ * everything else lands somewhere in 1-4, however lopsided the mean. So the
+ * two claims that are not matters of degree, "all of this works" and "none of
+ * this does", are still only made when they are true.
+ *
+ * The mean is the load-bearing choice, and it is a mean rather than a minimum
+ * because **a window a voter can attend most of is genuinely better than one
+ * they cannot attend at all.** Taking the lowest granule threw that difference
+ * away: half an hour of conflict inside a three-hour window and a diary full
+ * of conflict both came out as 0, so a poll where nobody is completely free
+ * had nothing to elect and every ballot in it said the same nothing. The
+ * ordering it produces is the one people mean -- a window with one bad half
+ * hour beats a window with three, and neither beats a window with none.
  *
  * An unpainted granule is 0, and 0 is a real rating meaning unavailable rather
  * than a missing answer. That is the same reading `BallotCard` already gives
@@ -379,12 +388,21 @@ export function scoresFromPainting(
 ): Record<WindowStart, number> {
   const scores: Record<WindowStart, number> = {}
   for (const start of windowStarts) {
+    const keys = granulesOf(start, schedule)
+    let total = 0
     let lowest = 5
-    for (const key of granulesOf(start, schedule)) {
-      lowest = Math.min(lowest, painting[key] ?? 0)
-      if (lowest === 0) break
+    let highest = 0
+    for (const key of keys) {
+      const rating = painting[key] ?? 0
+      total += rating
+      lowest = Math.min(lowest, rating)
+      highest = Math.max(highest, rating)
     }
-    scores[start] = lowest
+    if (keys.length === 0 || highest === 0) scores[start] = 0
+    else if (lowest === 5) scores[start] = 5
+    // Rounded to the nearest star, then held off both ends: neither promise
+    // is one an average is allowed to make on the granules' behalf.
+    else scores[start] = Math.max(1, Math.min(4, Math.round(total / keys.length)))
   }
   return scores
 }
@@ -392,21 +410,33 @@ export function scoresFromPainting(
 /**
  * A ballot read back, repainted onto the calendar.
  *
- * The inverse of the rule above, as far as there is one: a granule's rating is
- * the **highest** score among the windows covering it, since a window's score
- * was the lowest among its granules. Take the maximum and every granule the
- * voter marked comes back marked; take anything less and a voter opening
- * "change my vote" finds their availability quietly shrunk.
+ * The inverse of the rule above, as far as there is one, and it is two rules
+ * applied in this order:
  *
- * **It is lossy, and knowingly so.** The minimum threw information away, and
- * no inverse can put it back: a voter who marked 09:00 as 5 and 10:00 as 2 on
- * a two-hour meeting sent one window scored 2, and reading that back paints
- * both hours 2. What survives is the shape of their availability, which is
- * what they will be looking at; what is lost is the difference between "this
- * hour is merely fine" and "the hour beside it is bad". Saving an unedited
- * ballot back is therefore not a no-op -- it can lower a rating. That is the
- * accepted trade for storing windows rather than granules, which is what lets
- * a time poll be an ordinary poll everywhere else in the app.
+ * - **A 0 vetoes.** A window scores 0 only when every granule under it is a 0,
+ *   so a 0 is a promise about each of them and nothing may overrule it.
+ * - **Otherwise a granule takes the highest window covering it.** A 5 is the
+ *   mirror promise, and for the ratings in between, the best window over a
+ *   granule is the closest thing to evidence about that granule there is.
+ *
+ * Between them they are exact on the paintings people actually make: a block
+ * of one rating at least as long as the meeting contains a window made of
+ * nothing but itself, so it comes back as it went in, and an unmarked stretch
+ * that long comes back empty for the same reason.
+ *
+ * **What blurs is anything shorter than the meeting**, and that is not a
+ * choice -- the scores simply do not carry it. One busy half hour inside a
+ * free afternoon lowers every window over it by a step, so it returns as a dip
+ * rather than a hole; one free half hour in a busy day lifts its windows to a
+ * 1, so it returns marked but faint. The blur is in the rating and not in the
+ * position: the veto keeps every edge where the voter put it, except within
+ * one meeting's length of the ends of the poll's own bounds, where there is no
+ * room for an all-zero window to say the times are empty.
+ *
+ * So saving an unedited ballot back is not a no-op -- it can move a rating a
+ * step. That is the accepted trade for storing windows rather than granules,
+ * which is what lets a time poll be an ordinary poll everywhere else in the
+ * app.
  */
 export function paintingFromScores(
   windowStarts: WindowStart[],
@@ -414,29 +444,20 @@ export function paintingFromScores(
   schedule: PollSchedule,
 ): Record<GranuleKey, number> {
   const painting: Record<GranuleKey, number> = {}
+  const vetoed = new Set<GranuleKey>()
   for (const start of windowStarts) {
     const score = scores[start] ?? 0
-    if (score === 0) continue
-    for (const key of granulesOf(start, schedule)) {
+    const keys = granulesOf(start, schedule)
+    if (score === 0) {
+      for (const key of keys) vetoed.add(key)
+      continue
+    }
+    for (const key of keys) {
       painting[key] = Math.max(painting[key] ?? 0, score)
     }
   }
+  for (const key of vetoed) delete painting[key]
   return painting
-}
-
-/**
- * Whether a ballot says nothing at all -- every window scored 0.
- *
- * Worth asking on purpose, because it is reachable by a voter who did
- * everything right: mark two separate hours on a poll looking for a
- * three-hour block and every window contains an unmarked granule, so every
- * window is 0 and the ballot contributes nothing to any option. That is the
- * correct answer to "when can you do three hours" and it looks exactly like
- * the app having eaten the vote, so the ballot says so before it is sent
- * rather than after.
- */
-export function saysNothing(scores: Record<WindowStart, number>): boolean {
-  return Object.values(scores).every((score) => score === 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -477,13 +498,6 @@ export function describeLength(minutes: number): string {
   }
   const days = minutes / DAY_MINUTES
   return days === 1 ? '1 day' : `${trimmed(days)} days`
-}
-
-/** The same length in front of a noun: a `1.5-hour` block, a `3-day` block. */
-export function spanningLength(minutes: number): string {
-  if (minutes < 60) return `${minutes}-minute`
-  if (minutes < DAY_MINUTES) return `${trimmed(minutes / 60)}-hour`
-  return `${trimmed(minutes / DAY_MINUTES)}-day`
 }
 
 /** `2`, and `1.5` -- a number with no decimal point it does not need. */
