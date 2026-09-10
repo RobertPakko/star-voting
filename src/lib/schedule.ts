@@ -412,17 +412,17 @@ export function saysNothing(scores: Record<WindowStart, number>): boolean {
 /**
  * Everything above this line is wall-clock arithmetic in the poll's own offset
  * and touches nothing outside its arguments. Below it sit the offset
- * functions, and four of them -- `browserOffset`, `zoneOffsetOn`,
- * `zoneShiftsWithin`, `viewerZone` -- read `Date` and `Intl`: the reader's own
- * clock and the world's zone database. They are gathered here rather than
- * scattered so that the exception is one place rather than four.
+ * functions, and three of them -- `browserOffset`, `zoneOffsetOn`,
+ * `viewerZone` -- read `Date` and `Intl`: the reader's own clock and the
+ * world's zone database. They are gathered here rather than scattered so that
+ * the exception is one place rather than three.
  *
  * **None of their answers reaches a window start, a granule key or a score.**
- * Two run once, in the create form, to turn "Denver" into the fixed offset the
- * poll is then held at for good; one warns that a poll straddles a clock
- * change; one names the zone the reader is sitting in so they can be told how
- * far from the grid they are. That is the whole list, and it is the line that
- * keeps a voter's zone out of a grid built to exclude it.
+ * `zoneOffsetOn` is what [`timezones.ts`](timezones.ts) asks to work out what
+ * an offset is called on the poll's own dates; the other two say where the
+ * reader is sitting, so the create form can guess an offset and the ballot can
+ * tell a voter how far from the grid they are. That is the whole list, and it
+ * is the line that keeps a voter's zone out of a grid built to exclude it.
  */
 
 /** Minutes as an offset: 870 to `+14:30`, -420 to `-07:00`. */
@@ -511,35 +511,25 @@ function offsetAt(timeZone: string, instant: number): string | null {
 }
 
 /**
- * The days in a poll on which a named zone's clocks are not what they are on
- * the first day of it -- the poll that spans a daylight-saving change.
+ * An offset as a person reads it: `UTC-07:00 · Pacific Time`, or plain
+ * `UTC-07:00` where there is nothing to add.
  *
- * A poll is one offset throughout, so this cannot be fixed; it can only be
- * said. A creator picking "London" for a meeting the week the clocks go back
- * is told that half their grid will read an hour off the wall, and can move
- * the poll or accept it. Empty is the ordinary answer and the quiet one.
- */
-export function zoneShiftsWithin(timeZone: string, days: ScheduleDay[]): ScheduleDay[] {
-  const sorted = [...days].sort()
-  if (sorted.length === 0) return []
-  const held = zoneOffsetOn(timeZone, sorted[0])
-  if (held === null) return []
-  return sorted.filter((day) => zoneOffsetOn(timeZone, day) !== held)
-}
-
-/**
- * An offset as a sentence, for whoever is looking at the grid: `Mountain Time
- * (Denver) -- UTC-06:00`, or just `UTC-06:00` on a poll whose creator picked a
- * bare offset.
+ * **The offset leads and the name follows.** The offset is what the poll *is*
+ * and the name is a caption on it -- one that cannot be exact, because several
+ * zones sit on one offset and which of them is the recognisable one depends on
+ * the time of year. Putting the number first says which way round that is: a
+ * reader who does not recognise `Pacific Time` has still been told the poll's
+ * offset, and one who does not know their offset has been given something to
+ * recognise.
  *
- * The offset is always in it. A label is what the creator meant and the offset
- * is what the poll *is*, and a reader who is shown only the first has been
- * handed the ambiguity that storing an offset was meant to remove.
+ * Pure of the zone list on purpose. This is the formatter every screen uses,
+ * the ballot included, and the ballot has no business loading a table of zones
+ * to draw a line of text -- the name it prints was worked out once, by the
+ * creator's browser, and stored beside the offset it describes.
  */
-export function describeOffset(schedule: PollSchedule): string {
-  const offset = `UTC${schedule.timezone}`
-  const label = schedule.timezone_label?.trim()
-  return label ? `${label} — ${offset}` : offset
+export function describeOffset(offset: string, label?: string | null): string {
+  const named = label?.trim()
+  return named ? `UTC${offset} · ${named}` : `UTC${offset}`
 }
 
 /**

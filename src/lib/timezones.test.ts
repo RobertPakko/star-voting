@@ -1,89 +1,141 @@
 import { describe, expect, test } from 'vitest'
-import {
-  FIXED_OFFSET_PREFIX,
-  TIME_ZONES,
-  TIME_ZONE_REGIONS,
-  fixedOffsetOf,
-  resolveZone,
-  zoneLabel,
-  zoneOfSchedule,
-} from './timezones'
-import { zoneOffsetOn } from './schedule'
+import { NAMED_ZONES, offsetChoices, offsetDrift, offsetName } from './timezones'
+import { offsetMinutes, zoneOffsetOn } from './schedule'
 
 /**
- * The list, and the round trip through it.
+ * One list of offsets, and the names hung off it.
  *
- * A poll stores the *offset* a place resolved to and the *label* that place
- * was called; the place itself is thrown away, because a poll held at a named
- * zone is the thing schedule mode exists not to be. Duplicating a time poll
- * has to find the place again, and the only handle it has is the label.
+ * A poll is held at an offset and never at a zone, so the offsets are what the
+ * picker offers and the zones below are machinery: they answer "what do people
+ * on this offset call it", so a creator who does not know they are on `-07:00`
+ * can recognise `Pacific Time` and pick it.
  *
- * So the round trip is load-bearing and silently breakable: rename a city here
- * and every existing poll's label stops matching, at which point duplicates
- * quietly fall back to the bare offset and stop following their zone across a
- * daylight-saving change. Nothing else about the app would look any different.
- * That is what these check.
+ * Two things can go wrong quietly. A zone id with a typo in it reads fine and
+ * silently names nothing, and a caption worked out for the wrong half of the
+ * year names the wrong place -- `-07:00` is Pacific Time in July and Mountain
+ * Time in January, and either answer looks perfectly reasonable on its own.
+ * Both are checked here.
  */
 
-const EVERY = TIME_ZONE_REGIONS.flatMap((region) => TIME_ZONES[region])
-
-describe('the list of places', () => {
-  test('is not empty, which is the assertion that stops the rest passing vacuously', () => {
-    expect(EVERY.length).toBeGreaterThan(40)
-    expect(TIME_ZONE_REGIONS).toContain('Americas')
+describe('the zones the names come from', () => {
+  test('there are some, which is what stops the rest passing vacuously', () => {
+    expect(NAMED_ZONES.length).toBeGreaterThan(20)
   })
 
-  test('names a zone the runtime has actually heard of', () => {
-    // A typo in an IANA id is invisible until somebody picks it: the label
-    // reads fine and the offset silently comes back null.
-    for (const choice of EVERY) {
-      expect(zoneOffsetOn(choice.zone, '2026-07-01'), choice.zone).not.toBeNull()
-      expect(zoneOffsetOn(choice.zone, '2026-01-01'), choice.zone).not.toBeNull()
+  test('each names a zone the runtime has actually heard of', () => {
+    for (const { zone } of NAMED_ZONES) {
+      expect(zoneOffsetOn(zone, '2026-07-01'), zone).not.toBeNull()
+      expect(zoneOffsetOn(zone, '2026-01-01'), zone).not.toBeNull()
     }
   })
 
-  test('and each of them exactly once', () => {
-    expect(new Set(EVERY.map((c) => c.zone)).size).toBe(EVERY.length)
-    // Labels too: two entries sharing one is a round trip that lands on
-    // whichever happened to be built last.
-    expect(new Set(EVERY.map(zoneLabel)).size).toBe(EVERY.length)
+  test('and each of them once', () => {
+    expect(new Set(NAMED_ZONES.map((z) => z.zone)).size).toBe(NAMED_ZONES.length)
+  })
+
+  test('named by the rule rather than by the season', () => {
+    // `Pacific Daylight Time` is right for half a year and wrong for the other
+    // half; `Pacific Time` is the rule, and the offset beside it says which
+    // half the poll is in.
+    for (const { name } of NAMED_ZONES) {
+      expect(name, name).not.toMatch(/Daylight|Standard|Summer/)
+    }
   })
 })
 
-describe('a stored schedule, read back as the place it came from', () => {
-  test('every label finds its way home', () => {
-    for (const choice of EVERY) {
-      const stored = resolveZone(choice.zone, '2026-09-04')
-      expect(zoneOfSchedule(stored.timezone, stored.timezone_label), choice.zone).toBe(choice.zone)
+describe('what an offset is called', () => {
+  test('depends on the time of year, which is the whole trick', () => {
+    // The same number, two names, and both right on their own dates. Asking on
+    // the poll's own first day is what lets there be one name per offset.
+    expect(offsetName('-07:00', '2026-07-15')).toBe('Pacific Time')
+    expect(offsetName('-07:00', '2026-01-15')).toBe('Mountain Time')
+    expect(offsetName('-06:00', '2026-07-15')).toBe('Mountain Time')
+    expect(offsetName('-06:00', '2026-01-15')).toBe('Central Time')
+    expect(offsetName('-05:00', '2026-07-15')).toBe('Central Time')
+    expect(offsetName('-05:00', '2026-01-15')).toBe('Eastern Time')
+    expect(offsetName('-04:00', '2026-07-15')).toBe('Eastern Time')
+  })
+
+  test('and the same holds across Europe', () => {
+    expect(offsetName('+00:00', '2026-07-15')).toBe('Greenwich Mean Time')
+    expect(offsetName('+01:00', '2026-07-15')).toBe('UK Time')
+    expect(offsetName('+02:00', '2026-07-15')).toBe('Central European Time')
+    expect(offsetName('+01:00', '2026-01-15')).toBe('Central European Time')
+    expect(offsetName('+02:00', '2026-01-15')).toBe('Eastern European Time')
+  })
+
+  test('an offset nobody keeps a clock on has no name', () => {
+    expect(offsetName('-07:15', '2026-07-15')).toBeNull()
+    expect(offsetName('+02:15', '2026-07-15')).toBeNull()
+  })
+
+  test('the part-hours that do exist are named, because that is why they are offered', () => {
+    expect(offsetName('+05:30', '2026-07-15')).toBe('India Time')
+    expect(offsetName('+05:45', '2026-07-15')).toBe('Nepal Time')
+    expect(offsetName('+09:30', '2026-07-15')).toBe('Central Australia Time')
+  })
+})
+
+describe('the list the picker draws', () => {
+  const july = offsetChoices('2026-07-15')
+
+  test('is every whole hour of civil time, in order', () => {
+    const minutes = july.map((choice) => offsetMinutes(choice.offset))
+    expect(minutes[0]).toBe(-12 * 60)
+    expect(minutes[minutes.length - 1]).toBe(14 * 60)
+    expect([...minutes].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual(minutes)
+    for (let hours = -12; hours <= 14; hours++) expect(minutes).toContain(hours * 60)
+  })
+
+  test('plus the part-hours somebody is actually on that day, and no others', () => {
+    const parts = july.filter((choice) => offsetMinutes(choice.offset)! % 60 !== 0)
+    expect(parts.map((choice) => choice.offset)).toContain('+05:30')
+    expect(parts.map((choice) => choice.offset)).toContain('+05:45')
+    // The sixty quarter-hours nobody has ever kept a clock on are the whole
+    // reason the old list was noise, and they are not here.
+    expect(parts.map((choice) => choice.offset)).not.toContain('-07:15')
+    // Every part-hour that survives is here because something is on it, so
+    // every one of them is named.
+    for (const choice of parts) expect(choice.name, choice.offset).not.toBeNull()
+  })
+
+  test('and never a duplicate, whatever the day', () => {
+    for (const day of ['2026-01-15', '2026-07-15', '2026-11-01']) {
+      const offsets = offsetChoices(day).map((choice) => choice.offset)
+      expect(new Set(offsets).size, day).toBe(offsets.length)
     }
   })
 
-  test('a bare offset comes back as itself', () => {
-    const stored = resolveZone(`${FIXED_OFFSET_PREFIX}-03:30`, '2026-09-04')
-    expect(stored).toEqual({ timezone: '-03:30', timezone_label: null })
-    expect(zoneOfSchedule(stored.timezone, stored.timezone_label)).toBe(
-      `${FIXED_OFFSET_PREFIX}-03:30`,
-    )
-    expect(fixedOffsetOf(zoneOfSchedule('-03:30', null))).toBe('-03:30')
+  test('keeps an offset a poll is already held at, however odd', () => {
+    // Otherwise opening or duplicating such a poll shows an empty box where
+    // its own offset should be.
+    const kept = offsetChoices('2026-07-15', '-07:15')
+    expect(kept.map((c) => c.offset)).toContain('-07:15')
+    expect(kept.find((c) => c.offset === '-07:15')?.name).toBeNull()
+    // And does not double up when the list already has it.
+    const already = offsetChoices('2026-07-15', '+05:30').map((c) => c.offset)
+    expect(already.filter((offset) => offset === '+05:30')).toHaveLength(1)
+  })
+})
+
+describe('a poll that runs across a clock change', () => {
+  test('says which day it moves and what it moves to', () => {
+    // The last Sunday in October, when the UK goes back to +00:00. A poll held
+    // at +01:00 over those dates reads an hour off the wall in London from
+    // then on -- which cannot be fixed, one poll being one offset, so it is
+    // said.
+    const across = ['2026-10-23', '2026-10-24', '2026-10-26', '2026-10-27']
+    expect(offsetDrift('+01:00', across)).toEqual({
+      day: '2026-10-26',
+      name: 'UK Time',
+      becomes: '+00:00',
+    })
   })
 
-  test('and so does a label naming a place this list no longer carries', () => {
-    // What a poll made by an older or newer bundle looks like. The offset is
-    // what the poll is actually held at, so falling back to it is never wrong
-    // -- the copy simply stops following that zone's clock changes.
-    expect(zoneOfSchedule('-07:00', 'Pacific Time (Atlantis)')).toBe(`${FIXED_OFFSET_PREFIX}-07:00`)
-    // And a poll made before labels existed at all.
-    expect(zoneOfSchedule('+05:45', null)).toBe(`${FIXED_OFFSET_PREFIX}+05:45`)
-    expect(zoneOfSchedule('+05:45', undefined)).toBe(`${FIXED_OFFSET_PREFIX}+05:45`)
-  })
-
-  test('a place is resolved on the day it is asked about, not on today', () => {
-    // The bug this replaced: a poll made in March about a July meeting stored
-    // March's offset and was an hour out on every option it offered.
-    expect(resolveZone('America/Denver', '2026-07-04').timezone).toBe('-06:00')
-    expect(resolveZone('America/Denver', '2026-01-04').timezone).toBe('-07:00')
-    expect(resolveZone('America/Denver', '2026-07-04').timezone_label).toBe(
-      'Mountain Time (Denver)',
-    )
+  test('and is silent on the ordinary poll that does not', () => {
+    expect(offsetDrift('+01:00', ['2026-07-01', '2026-07-08'])).toBeNull()
+    expect(offsetDrift('+01:00', [])).toBeNull()
+    // An offset nobody is on cannot drift away from anybody.
+    expect(offsetDrift('-07:15', ['2026-10-23', '2026-10-27'])).toBeNull()
   })
 })

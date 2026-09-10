@@ -33,7 +33,7 @@ import {
   spanOf,
   windowsOn,
 } from '../lib/schedule'
-import { resolveZone, zoneForViewer, zoneOfSchedule } from '../lib/timezones'
+import { offsetName, viewerOffsetOn } from '../lib/timezones'
 import { groupQuestionsSchema, parseAnswer, pollScheduleSchema } from '../lib/rpcSchemas'
 import { FormSkeleton } from '../components/Skeletons'
 import styles from './CreatePoll.module.css'
@@ -463,10 +463,6 @@ export function CreatePoll() {
   // the days the generated options start on and the poll reads them back off
   // those; see PollSchedule.
   const [days, setDays] = useState<string[]>([])
-  // Which place the creator picked, which is the question; `schedule.timezone`
-  // is the answer, and the two are re-derived together by `pickZone` below.
-  // Opens on wherever this browser thinks it is, which is a guess they can see.
-  const [zone, setZone] = useState<string>(zoneForViewer)
   const [showVoters, setShowVoters] = useState(false)
   const [showBallots, setShowBallots] = useState(false)
   const [solicitOptions, setSolicitOptions] = useState(false)
@@ -483,6 +479,10 @@ export function CreatePoll() {
   // 0 on every other poll, and cleared the moment the creator picks a day of
   // their own. See `carryForward`, and the notice above the calendar fields.
   const [datesMoved, setDatesMoved] = useState(0)
+  // Whether the offset on the schedule is an answer or a guess. Until the
+  // creator picks one it is wherever this browser is, and it follows the poll's
+  // dates; see `pickDays`.
+  const [offsetPicked, setOffsetPicked] = useState(false)
 
   const myEmail = session?.user.email?.toLowerCase() ?? ''
   const isOpen = mode === 'open'
@@ -600,17 +600,17 @@ export function CreatePoll() {
         setDays(renewed.days)
         setDatesMoved(renewed.weeks)
 
-        // The place is not stored, only the offset it resolved to, so the
-        // picker is put back from the label -- and then asked again, because
-        // dates that have moved may have moved across a clock change: the same
-        // Friday five weeks later is a different offset in half the world.
-        // `resolveZone` hands a bare offset straight back, so this is one line
-        // rather than a branch.
-        const place = zoneOfSchedule(grid.timezone, grid.timezone_label)
-        setZone(place)
+        // The offset copies straight across -- it is what the poll was held at
+        // and there is nothing to resolve. Its caption does not: the copy's
+        // dates may have moved across a clock change, and `-07:00` is Pacific
+        // Time in July and Mountain Time in January, so the name is worked out
+        // again for the dates the copy actually asks about.
+        // The offset came from the poll being copied, so it is an answer
+        // rather than this browser's guess and the dates do not move it.
+        setOffsetPicked(true)
         setSchedule({
           ...renewed.schedule,
-          ...resolveZone(place, renewed.days[0] ?? todayInBrowser()),
+          timezone_label: nameOffset(renewed.schedule.timezone, renewed.days),
         })
       } else {
         if (source.kind === 'time') {
@@ -784,34 +784,52 @@ export function CreatePoll() {
   }
 
   /**
-   * A place, resolved into the fixed offset the poll is actually held at.
+   * An offset, with the name stored beside it worked out for the poll's own
+   * dates.
    *
-   * Two things can move it and both come through here: picking a different
-   * place, and moving the poll's first day. The second is the one that is easy
-   * to forget and expensive to get wrong -- somebody in Denver picking
-   * "Denver" in March for a meeting in July is on `-07:00` today and `-06:00`
-   * then, and a poll built on today's answer is an hour out on every option
-   * it offers.
+   * The offset is what the creator picked and what the poll is held at; the
+   * name is a caption, and which caption is right depends on when the poll is
+   * -- `-07:00` is Pacific Time in July and Mountain Time in January. So it is
+   * derived rather than chosen, and derived again whenever either half of the
+   * question moves: `pickOffset` when the number changes, `pickDays` when the
+   * first day does.
    *
    * Done in the setters rather than in an effect watching the two, because an
    * effect that writes to the state it watches is a loop waiting for a
    * dependency to be listed slightly wrong -- and there are exactly two places
    * the inputs change.
    */
-  function pickZone(next: string, over: string[]) {
-    setZone(next)
-    const on = [...over].sort()[0] ?? todayInBrowser()
-    setSchedule((prev) => ({ ...prev, ...resolveZone(next, on) }))
+  function nameOffset(offset: string, over: string[]): PollSchedule['timezone_label'] {
+    return offsetName(offset, [...over].sort()[0] ?? todayInBrowser())
   }
 
-  /** Days, with the offset re-resolved against whichever is now the first. */
+  function pickOffset(next: string, over: string[]) {
+    setOffsetPicked(true)
+    setSchedule((prev) => ({ ...prev, timezone: next, timezone_label: nameOffset(next, over) }))
+  }
+
+  /**
+   * Days, with the offset caught up to them.
+   *
+   * The caption always follows, for the reason above. **The offset itself
+   * follows only while it is still a guess** -- the form opens on whatever
+   * this browser is on today, and today is not when the meeting is: somebody
+   * in Denver arranging a July meeting in March is on `-07:00` as they type
+   * and `-06:00` when it happens, and a poll left on the opening guess would
+   * be an hour out on every option it offers. Once they have picked an offset
+   * it is theirs and the dates do not move it.
+   */
   function pickDays(next: string[]) {
     setDays(next)
     // The notice explains where the dates in the picker came from, so it goes
     // as soon as they are the creator's own rather than the copy's.
     setDatesMoved(0)
+
     const on = [...next].sort()[0]
-    if (on) setSchedule((prev) => ({ ...prev, ...resolveZone(zone, on) }))
+    setSchedule((prev) => {
+      const timezone = !offsetPicked && on ? viewerOffsetOn(on) : prev.timezone
+      return { ...prev, timezone, timezone_label: nameOffset(timezone, next) }
+    })
   }
 
   function addQuestion() {
@@ -1320,10 +1338,9 @@ export function CreatePoll() {
                 <ScheduleFields
                   schedule={schedule}
                   days={days}
-                  zone={zone}
                   onScheduleChange={setSchedule}
                   onDaysChange={pickDays}
-                  onZoneChange={(next) => pickZone(next, days)}
+                  onOffsetChange={(next) => pickOffset(next, days)}
                   error={shown.schedule}
                 />
               </Stack>

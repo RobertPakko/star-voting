@@ -8,7 +8,7 @@
 --
 --     {
 --       "timezone": "-07:00",
---       "timezone_label": "Mountain Time (Denver)",
+--       "timezone_label": "Mountain Time",
 --       "window": { "start": "09:00", "end": "22:00" },
 --       "day_windows": { "2026-09-04": { "start": "18:00", "end": "22:00" } },
 --       "desired_slots": 2,
@@ -25,15 +25,17 @@
 -- containment rule below more than tidiness: a day reaching outside `window`
 -- is a day with windows the grid cannot draw.
 --
--- **`timezone_label` -- what the creator called the offset.** Presentation,
--- and nothing computes with it. A poll is still held at a fixed UTC offset for
--- the reasons 0055 sets out and this does not reopen; what it does is stop the
--- offset being the only thing a voter is shown. The browser asks the reader's
--- own zone database what "Denver" reads on the poll's first day, stores the
--- number, and keeps the name beside it so the ballot can say "Mountain Time
--- (Denver) — UTC-06:00" instead of four digits. Checked here only for length
--- and type: a label that disagrees with its offset is a label the reader can
--- see disagreeing, because the two are always written together.
+-- **`timezone_label` -- what that offset is called.** Presentation, and
+-- nothing computes with it. A poll is still held at a fixed UTC offset for the
+-- reasons 0055 sets out and this does not reopen; what it does is stop the
+-- offset being the only thing a voter is shown. The creator's browser asks its
+-- own zone database who is on that offset on the poll's first day -- which is
+-- how there can be one name per offset at all, since -07:00 is Pacific Time in
+-- July and Mountain Time in January -- and keeps the answer beside the number,
+-- so the ballot can say "UTC-06:00 · Mountain Time" instead of four digits.
+-- Checked here only for length and type: a label that disagrees with its
+-- offset is a label the reader can see disagreeing, because the two are always
+-- written together.
 --
 -- The dates in `day_windows` are the one thing in a schedule that names a day,
 -- which looks like a contradiction of 0055's rule that the days in bounds are

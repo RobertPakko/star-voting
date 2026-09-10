@@ -419,12 +419,12 @@ can see:
 
 - `schedule.test.ts`, the derivation above — pure functions of their
   arguments, and not a foothold for testing components.
-- `timezones.test.ts`, over the list of places and the round trip through it.
-  Every entry has to name a zone the runtime has actually heard of, and every
-  label a poll stores has to find its way back to the entry it came from — see
-  [Duplicating one](#duplicating-one), where a broken round trip would leave
-  copies quietly stranded on the wrong side of a daylight-saving change with
-  nothing else looking any different.
+- `timezones.test.ts`, over the offsets the picker offers and the names hung
+  off them. Two things can go wrong quietly there: a zone id with a typo in it
+  reads fine and silently names nothing, and a caption worked out for the wrong
+  half of the year names the wrong place — `-07:00` is Pacific Time in July and
+  Mountain Time in January, and either answer looks perfectly reasonable on its
+  own.
 - `limits.test.ts`, which reads `supabase/migrations/` and asserts that every
   number in [`limits.ts`](src/lib/limits.ts) is the number the database
   actually enforces. That file has always said *change a number here and change
@@ -677,7 +677,7 @@ adds two optional keys inside it and no column at all:
 ```json
 {
   "timezone": "-06:00",
-  "timezone_label": "Mountain Time (Denver)",
+  "timezone_label": "Mountain Time",
   "window": { "start": "09:00", "end": "22:00" },
   "day_windows": { "2026-09-04": { "start": "18:00", "end": "22:00" } },
   "desired_slots": 3,
@@ -726,32 +726,57 @@ offset; everybody sees the same grid whatever their own clock says, and
 `validate_schedule` refuses anything else. A distributed group pays a
 conversion tax, and that is the trade.
 
-**But nobody is asked for one.** The form asks for a *place* — a list of about
-sixty in [`timezones.ts`](src/lib/timezones.ts), one per offset-and-rule
-combination somebody plausibly organises a meeting from, named after its
-biggest city — and `zoneOffsetOn` asks the browser's own zone database what
-that place's clock reads **on the poll's first day**. The answer is stored, the
-zone is discarded, and the poll is the fixed-offset poll it always was.
+**So the picker offers offsets, and captions them.** One flat list, in order,
+each row `UTC-07:00 · Pacific Time` — or plain `UTC-07:15` where nobody keeps a
+clock. The offset is what is being chosen and what the poll is; the name is
+there so a creator who does not know they are on `-07:00` can recognise
+*Pacific Time* and pick it. There is one list and one kind of thing in it,
+which the version before this was not: it offered sixty *places* grouped by
+continent and then the offsets separately underneath, so the same choice could
+be made two ways and several rows meant the same thing.
 
-That date is the part worth being careful about, and the reason the zone is
-re-resolved whenever the first day moves (`pickZone` / `pickDays` in
-`CreatePoll`): somebody in Denver picking "Denver" in March for a meeting in
-July is on `-07:00` today and `-06:00` then, and a poll built on today's answer
-is an hour out on every option it offers. The old behaviour — read
-`getTimezoneOffset()` and store it — got exactly that wrong for half the year.
+**A caption is worked out for the poll's own dates, and that is the trick that
+makes one name per offset possible.** `-07:00` is Pacific Time in July and
+Mountain Time in January, because the clocks move and the offset does not;
+asking [`timezones.ts`](src/lib/timezones.ts) on the poll's first day gets the
+one that is true while the poll is running. It follows that the answer changes
+when the dates do, so the name is re-derived rather than kept — `pickOffset`
+when the number changes and `pickDays` when the first day does.
 
-`timezone_label` keeps the name the creator picked, so the ballot can say
-"Mountain Time (Denver) — UTC-06:00" instead of four digits. **It is
-presentation and nothing computes with it**, it is always written beside the
+The zones behind the names are machinery and not choices: nobody picks one and
+nothing stores one. **Order is precedence** — several zones share an offset on
+any given day and the first that matches names it — which is a judgement rather
+than a fact, and a cheap one to get slightly wrong since the offset is written
+beside it. Within a continent it comes out exactly right, because the zones
+there are on different offsets from each other at any one moment: in July
+`-07:00` reaches Los Angeles first and in January it reaches Denver first.
+
+The list is **every whole hour from -12:00 to +14:00, plus every part-hour
+something is actually on that day**. So `+05:30` and `+05:45` are there because
+India and Nepal are, `-02:30` appears only while Newfoundland is on summer
+time, and the sixty quarter-hours nobody has ever kept a clock on are gone. An
+offset a poll is already stored at is kept whatever the list says, so opening
+or duplicating one never shows an empty box.
+
+The **opening guess** is where this browser is, on the poll's first day, and it
+follows the dates until the creator picks an offset of their own (`offsetPicked`
+in `CreatePoll`). That matters more than it sounds: somebody in Denver
+arranging a July meeting in March is on `-07:00` as they type and `-06:00` when
+it happens, and the old behaviour — read `getTimezoneOffset()` once and store
+it — was an hour out on every option for half the year.
+
+`timezone_label` keeps the caption, so the ballot can say "UTC-06:00 · Mountain
+Time" without loading a table of zones to draw one line of text. **It is
+presentation and nothing computes with it**, it is always written after the
 offset and never instead of it, and it is checked only for type and length —
 there is no correct value to compare it against without shipping a zone
-database into Postgres to disagree with the browser's. A poll whose creator
-picked a bare offset from the bottom of the list has none, and so does every
-poll made before 0056.
+database into Postgres to disagree with the browser's. An offset nobody is on
+has none, and neither does a poll made before 0056.
 
-A poll that runs across a clock change in the zone it was built from cannot be
-fixed — one poll, one offset — so it is said: `zoneShiftsWithin` names the days
-that moved, and the create form puts a notice under the picker.
+A poll that runs across a clock change where its offset is kept cannot be fixed
+— one poll, one offset — so it is said: `offsetDrift` names the first day it
+moves and what it moves to, and the create form puts a notice under the
+picker.
 
 **An option's name is its window start, in full ISO 8601:**
 `2026-09-01T14:00:00-07:00`. Unambiguous on its own, unique within the poll
@@ -833,43 +858,49 @@ handful of props, and each one is a gesture:
   now asked cell by cell rather than day by day: a Friday that only starts at
   six is in bounds for part of itself, and a drag down it from nine marks the
   evening and leaves the morning alone rather than being refused whole.
-- The **Today control is hidden**, because "today" is a week the poll is
-  probably not asking about. What replaces it is a link that appears only when
-  the calendar has been navigated off the poll's dates entirely, which a month
-  of arrows makes easy.
-
-**Three views, and a switcher that is the library's own.** `viewSelectProps`
-narrows it to day, week and month; `onViewChange` is held in this component, so
-`DayView`, `WeekView` and `MonthView` are rendered directly rather than through
-the `Schedule` wrapper — that wrapper hands every view the same prop bag, and
-the props one view does not declare (`onDayClick`, `view`) end up on a `div`,
-which React warns about on every render. Clicking a day heading in the week
-view means what it means in every other calendar: show me that day on its own.
-
-**Filling a day in one gesture**, which is what the week grid's day heading
-*looks* like it should do and now cannot, since it means the above:
-
-- The **all-day strip is relabelled "Whole day"** (`labels={{ allDay: … }}`)
-  and its click fills or clears that day's hours. It is the only per-day
-  control a week grid has that does not already mean something else, and it is
-  directly under the heading.
-- It **toggles**: a day that is already exactly what the brush would make it is
-  a day the click is taking back. The `Can't` brush never toggles — clearing a
-  cleared day would fill it.
+- **A day's column heading fills that day**, through `onDateChange`; see below.
 - In the **month view**, which has no time grid at all, a day *is* the unit:
   `onDayClick` fills one and a drag across several fills those.
 
-**One event shape serves all three views.** Besides the painted runs, each
-in-bounds day gets an all-day event summarising it — `Whole day`, `6–10pm`,
-`4h in 2 blocks`, or `Tap to fill` when nothing is marked. An event running
-from midnight to a second before the next is what `isAllDayEvent` recognises,
-so the two time grids put it in the strip above the hours, exactly over the
-control that fills the day, and the month grid draws it across the day's cell —
-where it is the only thing there is to see, since a month has no rows to paint
-an hour onto. Its text colour is chosen here (`inkFor`) rather than left to the
-calendar: Mantine's variant resolver hands a background event a text colour
-equal to its background at these shades, which is dark blue on dark blue. The
-runs carry no text, so it never showed until the day lines did.
+**Three views, and the header is ours.** `DayView`, `WeekView` and `MonthView`
+are rendered directly rather than through the `Schedule` wrapper — that wrapper
+hands every view the same prop bag, and the props one view does not declare
+(`onDayClick`, `view`) end up on a `div`, which React warns about on every
+render. Each is drawn with `withHeader={false}` above one row of our own:
+previous, the range, next, and a `SegmentedControl` for the three views.
+
+**That header is what makes the heading gesture honest.** `onDateChange` is
+fired by four things in a week grid — previous, next, Today, and the day
+heading — and by two in a month. With the library's header off there is exactly
+one caller left in each view: the day heading in the week grid, and nothing at
+all in the other two. So `onDateChange={fillDay}` is a callback with one caller
+and one meaning, rather than a guess about which control fired. The heading's
+accessible name says so as well, through the one label the library exposes on
+it: `labels={{ weekday: 'Fill the whole day' }}` makes a screen reader read
+"Fill the whole day 2026-09-04" instead of "Weekday 2026-09-04".
+
+Rebuilding the header rather than bending it is also the smaller change than it
+looks. It was already half turned off — Today hidden because "today" is a week
+the poll is probably not asking about, the current-time line off because "now"
+is in the reader's zone and the grid is in the poll's, Agenda off — and what a
+ballot wants beside it is a brush, a Clear, and a way back to the poll's own
+dates. Four controls of somebody else's next to four of ours was the
+arrangement worth ending.
+
+Filling **toggles**: a day that is already exactly what the brush would make it
+is a day the click is taking back. The `Can't` brush never toggles — clearing a
+cleared day would fill it. The day view has no heading and needs none: one drag
+from the top of the column to the bottom is the same gesture and the same
+result, and it is the view somebody has zoomed into to be precise.
+
+**The month view gets a line per day**, because it is the one view with nothing
+else to show — no rows to paint an hour onto, so a day either says what is on
+it or says nothing: `Whole day`, `6–10pm`, `4h in 2 blocks`. An untouched day
+is drawn as an ordinary empty cell, since the thing to click is the day itself
+rather than a chip sitting on it. Its text colour is chosen here (`inkFor`)
+rather than left to the calendar: Mantine's variant resolver hands a background
+event a text colour equal to its background at these shades, which is dark blue
+on dark blue.
 
 `useBallotOrder` does not apply, and that is the one deliberate exception to
 the argument in [`ballotOrder.ts`](src/lib/ballotOrder.ts). It shuffles because
@@ -954,17 +985,15 @@ rather than carried onto a date nobody chose. The form says the dates moved
 and by how much, because a date that changed on its own is exactly the kind of
 thing a creator notices two screens later, or never.
 
-**The place has to be found again from its label.** A schedule stores the
-offset and throws the zone away — that is the design — so `zoneOfSchedule`
-reads `timezone_label` back through the same list that generated it, and the
-copy then resolves that place against its *new* first day. A poll about
-September in Denver duplicated onto November comes back on `-07:00` rather
-than the `-06:00` it was stored at, which is what makes the copy the same poll
-rather than one an hour out. A label that no longer names anything in the list
-falls back to the offset itself, which is never wrong and only means the copy
-stops following that zone's clock changes; `timezones.test.ts` asserts the
-round trip over every entry, because a renamed city would break it silently
-and nothing else about the app would look any different.
+**The offset copies straight across; its caption does not.** The offset is
+what the poll was held at and a copy is held at the same one, so there is
+nothing to resolve — but what that offset is *called* depends on when the poll
+is, and the copy's dates have moved. A poll held at `-06:00` about September is
+captioned *Mountain Time*; the same offset in November is *Central Time*,
+because the clocks moved and the number did not. So the caption is worked out
+again for the dates the copy actually asks about, and `offsetPicked` is set,
+because an offset that came from the poll being copied is an answer rather than
+this browser's guess and the dates must not move it.
 
 It is also the one place the form **checks** a column instead of casting it.
 Every other field on that row is trusted, and `schedule` is not, for the reason
@@ -1072,11 +1101,10 @@ at a time.
   drawn.
 - **A calendar heat map of the results.** Decided against; see above.
 - **Named timezones stored as such, and DST-spanning polls.** Still fixed
-  offsets only: what 0056 added is a *place* picker in front of the offset and
-  a caption behind it, not a poll that changes offset partway through. A poll
-  running across a clock change is warned about and then held at one offset for
-  its whole length, so its later days read an hour off the wall in the zone
-  they were built from.
+  offsets only: what 0056 added is a caption on the offset, not a poll that
+  changes offset partway through. A poll running across a clock change is
+  warned about and then held at one offset for its whole length, so its later
+  days read an hour off the wall wherever it was built from.
 - **Cross-timezone rendering.** One poll, one grid, everyone sees the same one.
   The reader's own zone buys them one sentence — `offsetFromViewer`, "6 hours
   behind your clock" — and moves nothing on the calendar.

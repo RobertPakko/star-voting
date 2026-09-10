@@ -20,10 +20,9 @@ import {
   windowsOn,
   winnerLabel,
   zoneOffsetOn,
-  zoneShiftsWithin,
 } from './schedule'
 import { MAX_OPTIONS } from './limits'
-import { resolveZone, zoneOfSchedule } from './timezones'
+import { offsetName } from './timezones'
 import type { PollSchedule } from './types'
 
 /**
@@ -395,20 +394,13 @@ describe('a place, resolved into the offset a poll is held at', () => {
     expect(zoneOffsetOn('Middle/Earth', '2026-07-04')).toBeNull()
   })
 
-  test('a poll that runs across a clock change says which days moved', () => {
-    // The last Sunday in October, when the UK goes back to +00:00.
-    const across = ['2026-10-23', '2026-10-24', '2026-10-26', '2026-10-27']
-    expect(zoneShiftsWithin('Europe/London', across)).toEqual(['2026-10-26', '2026-10-27'])
-    // And the ordinary answer, which is silence.
-    expect(zoneShiftsWithin('Europe/London', ['2026-07-01', '2026-07-08'])).toEqual([])
-    expect(zoneShiftsWithin('Europe/London', [])).toEqual([])
-  })
-
-  test('a reader is told the zone and the offset, never the zone alone', () => {
-    const labelled: PollSchedule = { ...threeHours, timezone_label: 'Mountain Time (Denver)' }
-    expect(describeOffset(labelled)).toBe('Mountain Time (Denver) — UTC-07:00')
-    // A poll whose creator picked a bare offset has nothing to add to it.
-    expect(describeOffset(threeHours)).toBe('UTC-07:00')
+  test('a reader is told the offset first and the name second', () => {
+    expect(describeOffset('-07:00', 'Mountain Time')).toBe('UTC-07:00 · Mountain Time')
+    // An offset nobody is on has nothing to add to it, and so does a poll
+    // stored before names existed.
+    expect(describeOffset('-07:15', null)).toBe('UTC-07:15')
+    expect(describeOffset('-07:00')).toBe('UTC-07:00')
+    expect(describeOffset('-07:00', '   ')).toBe('UTC-07:00')
   })
 })
 
@@ -416,7 +408,7 @@ describe('duplicating a poll onto dates that have not gone', () => {
   /** The weekend poll again: Friday evenings, Saturday from nine. */
   const weekend: PollSchedule = {
     timezone: '-06:00',
-    timezone_label: 'Mountain Time (Denver)',
+    timezone_label: 'Mountain Time',
     window: { start: '09:00', end: '22:00' },
     day_windows: {
       '2026-09-04': { start: '18:00', end: '22:00' },
@@ -499,27 +491,30 @@ describe('duplicating a poll onto dates that have not gone', () => {
 
   test('the whole of what a duplicate does, end to end', () => {
     // Exactly the pipeline `CreatePoll`'s prefill runs, minus the setters:
-    // options back to days, days forward, place back from its label, place
-    // resolved again on the new first day. The last step is the one worth
-    // asserting -- the copy lands in November, when Denver is back on -07:00,
-    // so a duplicate that kept the stored offset would be an hour out on every
-    // window it generated.
+    // options back to days, days forward, and the offset's caption worked out
+    // again on the dates the copy actually asks about. The offset itself is
+    // the one thing that does not move -- it is what the poll was held at, and
+    // a copy is held at the same one.
     const options = enumerateWindows(weekend, days)
     const renewed = carryForward(weekend, daysOf(options), '2026-11-05')
-    const place = zoneOfSchedule(weekend.timezone, weekend.timezone_label)
-    const copy = { ...renewed.schedule, ...resolveZone(place, renewed.days[0]) }
+    const copy = {
+      ...renewed.schedule,
+      timezone_label: offsetName(renewed.schedule.timezone, renewed.days[0]),
+    }
 
-    expect(place).toBe('America/Denver')
     expect(renewed.days).toEqual(['2026-11-06', '2026-11-07'])
-    expect(weekend.timezone).toBe('-06:00')
-    expect(copy.timezone).toBe('-07:00')
-    expect(copy.timezone_label).toBe('Mountain Time (Denver)')
+    expect(copy.timezone).toBe('-06:00')
+    // September's -06:00 is Denver's; November's is Chicago's, because the
+    // clocks moved and the offset did not. The caption says which, so it is
+    // worked out again rather than carried.
+    expect(weekend.timezone_label).toBe('Mountain Time')
+    expect(copy.timezone_label).toBe('Central Time')
 
     // And the copy is the same poll: the same number of windows, the same
-    // Friday evening, on the offset those November dates are actually on.
+    // Friday evening, at the same offset.
     const copied = enumerateWindows(copy, renewed.days)
     expect(copied).toHaveLength(options.length)
-    expect(copied[0]).toBe('2026-11-06T18:00:00-07:00')
-    expect(copied.every((start) => start.endsWith('-07:00'))).toBe(true)
+    expect(copied[0]).toBe('2026-11-06T18:00:00-06:00')
+    expect(copied.every((start) => start.endsWith('-06:00'))).toBe(true)
   })
 })

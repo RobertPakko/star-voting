@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Alert, Anchor, Box, Group, SegmentedControl, Stack, Text } from '@mantine/core'
+import { ActionIcon, Alert, Anchor, Box, Group, SegmentedControl, Stack, Text } from '@mantine/core'
 import {
   DayView,
   MonthView,
@@ -11,6 +11,7 @@ import {
 // chunk: Vite splits a lazy chunk's CSS with it, so a poll that chooses an
 // option never fetches the calendar's stylesheet. See components/deferred.ts.
 import '@mantine/schedule/styles.css'
+import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react'
 import dayjs from 'dayjs'
 import { BallotFrame, type BallotScore } from './BallotFrame'
 import {
@@ -71,16 +72,26 @@ import type { PollOption, PollSchedule } from '../lib/types'
  *   length zero to that hook, it is nothing at all, so both are wired.
  * - Every painted region is rendered back as a *background* event coloured by
  *   its rating.
- * - The **all-day strip is relabelled "Whole day"** and its click fills or
- *   clears that day's hours in one go. That row is the only per-day control a
- *   week grid has that is not the column heading, and the column heading
- *   already means "show me this day on its own" in every calendar anybody has
- *   used.
+ * - **A day's column heading fills that day**, through `onDateChange`.
  * - In the month view, which has no time grid at all, a day *is* the unit:
- *   clicking one fills it, and dragging across several fills those.
+ *   `onDayClick` fills one and a drag across several fills those.
  *
  * The rating itself -- which of the six levels a gesture applies -- is the
  * app's own control, because a calendar has nowhere to put one.
+ *
+ * **The header is ours, and that is what makes the heading gesture honest.**
+ * `onDateChange` is fired by four things in a week grid -- the previous and
+ * next controls, Today, and the day heading -- and by two in a month. Turning
+ * the library's header off (`withHeader={false}`) leaves exactly one caller in
+ * each view: the day heading in the week grid, and nothing at all in the other
+ * two. So the callback means one thing, and the code reads as what it is
+ * rather than as a guess about which control fired.
+ *
+ * That header was already half turned off -- Today hidden because "today" is a
+ * week the poll is probably not asking about, Agenda and the current-time line
+ * off -- and what it wants instead is a brush, a way back to the poll's own
+ * dates, and a Clear. Four controls of somebody else's next to four of ours
+ * was the arrangement worth ending.
  */
 const RATINGS = [
   { value: '0', label: "Can't", color: 'gray.5', ink: 'black' },
@@ -115,6 +126,8 @@ function inkFor(rating: number): string {
  * months is a screen with nothing on it to paint, and no poll spans one.
  */
 const VIEWS: ScheduleViewLevel[] = ['day', 'week', 'month']
+
+const VIEW_LABELS: Record<string, string> = { day: 'Day', week: 'Week', month: 'Month' }
 
 /**
  * The painting, as the time grid wants it: one background event per run of
@@ -164,56 +177,53 @@ function paintingToEvents(
 }
 
 /**
- * One line per day saying what is marked on it, as an all-day event.
+ * One line per day saying what is marked on it, for the month grid.
  *
- * The same events serve all three views, which is why they are shaped like
- * this: an event running from midnight to a second before the next one is what
- * `isAllDayEvent` recognises, so the week and day grids put it in the strip
- * above the hours and the month grid draws it across the day's cell. In the
- * month view it is the only thing there is to see -- a month has no rows to
- * paint a run of hours onto -- and in the week view it is a summary sitting
- * exactly over the control that fills the day.
+ * The month is the one view with nothing else to show: it has no rows to paint
+ * an hour onto, so a day either says what is on it or says nothing. The week
+ * and day grids draw the hours themselves and get none of these.
  *
- * Only in-bounds days get one, marked or not. On a day with nothing on it the
- * line is what says the day can be filled; on a day the poll is not asking
- * about there is deliberately nothing, which is the same silence the greyed-out
- * column gives.
+ * Shaped as an all-day event -- midnight to a second before the next -- which
+ * is what puts it across the whole of the day's cell.
+ *
+ * Only days with something on them get one. An untouched day is drawn as an
+ * ordinary empty cell -- there is nothing to summarise, and the thing to click
+ * is the day itself rather than a chip sitting on it. A day the poll is not
+ * asking about is greyed and disabled instead; see `getDayProps`.
  */
 function daySummaryEvents(
   painting: Record<GranuleKey, number>,
   schedule: PollSchedule,
   days: ScheduleDay[],
 ): ScheduleEventData[] {
-  return days.map((day) => {
+  const lines: ScheduleEventData[] = []
+  for (const day of days) {
     const cells = granulesInBounds(schedule, day)
     const marked = cells.filter((key) => (painting[key] ?? 0) > 0)
-    const best = marked.reduce((top, key) => Math.max(top, painting[key] ?? 0), 0)
+    if (marked.length === 0) continue
 
-    return {
+    const best = marked.reduce((top, key) => Math.max(top, painting[key] ?? 0), 0)
+    lines.push({
       id: `day-${day}`,
       title: describeDay(marked, cells.length, schedule),
       start: `${day} 00:00:00`,
       end: `${day} 23:59:59`,
-      // An untouched day is drawn in the same grey the "Can't" brush uses, so
-      // "nothing said yet" and "said no" look alike -- which is what they are
-      // worth to the tally, since an unpainted granule is a 0.
       color: colorFor(best),
       display: 'background',
       payload: { ink: inkFor(best) },
-    }
-  })
+    })
+  }
+  return lines
 }
 
 /**
- * What that line says: `Whole day`, `6–10pm`, `4h in 2 blocks`, or an
- * invitation to fill the day when nothing is marked on it.
+ * What that line says: `Whole day`, `6–10pm`, `4h in 2 blocks`.
  *
  * Short on purpose. It has a month cell to fit inside on the narrowest screen
  * the app supports, and the exact hours are readable in the week view a tap
  * away; what it is for here is telling a scanned month apart at a glance.
  */
 function describeDay(marked: GranuleKey[], total: number, schedule: PollSchedule): string {
-  if (marked.length === 0) return 'Tap to fill'
   if (marked.length === total) return 'Whole day'
 
   const minutes = marked.map((key) => toMinutes(key.slice(11)))
@@ -281,17 +291,14 @@ export function TimeBallotCard({
   const [view, setView] = useState<ScheduleViewLevel>('week')
 
   const inBounds = useMemo(() => new Set(days), [days])
-  const runs = useMemo(() => paintingToEvents(painting, schedule), [painting, schedule])
-  const summaries = useMemo(
-    () => daySummaryEvents(painting, schedule, days),
-    [painting, schedule, days],
-  )
-  // The month has no hours to draw a run of granules on, so it gets the day
-  // lines alone; the two grids that do get both, with the day line in the
-  // strip above the hours.
+  // A month has no hours to draw a run of granules on, so it gets a line per
+  // day instead; the two grids that do have hours draw the hours.
   const events = useMemo(
-    () => (view === 'month' ? summaries : [...runs, ...summaries]),
-    [view, runs, summaries],
+    () =>
+      view === 'month'
+        ? daySummaryEvents(painting, schedule, days)
+        : paintingToEvents(painting, schedule),
+    [view, painting, schedule, days],
   )
 
   const scores = useMemo(
@@ -351,7 +358,12 @@ export function TimeBallotCard({
    * The `Can't` brush never toggles: clearing a cleared day would fill it,
    * which is the one thing a brush that means "not then" must never do.
    */
-  function fillDay(day: ScheduleDay) {
+  function fillDay(on: string) {
+    // `YYYY-MM-DD` from the month grid's day and `YYYY-MM-DD 00:00:00` from
+    // the week grid's heading, which is the shape every date callback in this
+    // library hands back. Sliced here rather than at each call site, so the two
+    // gestures are one function.
+    const day = on.slice(0, 10)
     if (!inBounds.has(day)) return
     const cells = granulesInBounds(schedule, day)
     const value = Number(rating)
@@ -403,9 +415,9 @@ export function TimeBallotCard({
     >
       <Stack gap="xs">
         <Text size="sm">
-          Mark when you could meet for {describe(length)}. Drag across the calendar to paint, use{' '}
-          <b>Whole day</b> above a column to fill one in a click, and <b>Can&apos;t</b> to rub
-          something out.
+          Mark when you could meet for {describe(length)}. Drag across the calendar to paint, click
+          a day&apos;s heading — or a day in the month view — to fill the whole of it, and use{' '}
+          <b>Can&apos;t</b> to rub something out.
         </Text>
 
         <Group gap="sm" wrap="wrap" align="center">
@@ -446,7 +458,7 @@ export function TimeBallotCard({
             were going to work out anyway. */}
         <Group gap={6} wrap="wrap" justify="space-between">
           <Text size="xs" c="dimmed">
-            All times are {describeOffset(schedule)}
+            All times are {describeOffset(schedule.timezone, schedule.timezone_label)}
             {away && ` · ${away}`}
             {days.length > 0 && ` · ${formatDay(days[0])} to ${formatDay(days[days.length - 1])}`}
           </Text>
@@ -463,27 +475,55 @@ export function TimeBallotCard({
           )}
         </Group>
 
-        {/* Navigated off the poll's own dates, which a month of arrows makes
-            easy. A way back, rather than a rule against leaving: a voter
-            checking what else is on that week is doing something reasonable. */}
-        {adrift && (
-          <Anchor
-            component="button"
-            type="button"
+        {/* The calendar's own header, rebuilt -- see the note at the top of
+            this file. What it carries is what a ballot needs: where you are,
+            how to move, and how far to zoom. What it does not carry is Today,
+            which is a week the poll is probably not asking about; the way back
+            to the poll's own dates is offered beside it, and only when it is
+            needed. */}
+        <Group gap="xs" wrap="wrap" justify="space-between">
+          <Group gap={4} wrap="nowrap">
+            <ActionIcon
+              variant="default"
+              size="md"
+              aria-label={`Previous ${view}`}
+              onClick={() => setDate(step(date, view, -1))}
+            >
+              <CaretLeftIcon size={14} />
+            </ActionIcon>
+            <Text size="sm" fw={500} ta="center" miw={170}>
+              {rangeLabel(date, view)}
+            </Text>
+            <ActionIcon
+              variant="default"
+              size="md"
+              aria-label={`Next ${view}`}
+              onClick={() => setDate(step(date, view, 1))}
+            >
+              <CaretRightIcon size={14} />
+            </ActionIcon>
+            {/* Navigated off the poll's own dates, which a month of arrows
+                makes easy. A way back, rather than a rule against leaving: a
+                voter checking what else is on that week is doing something
+                reasonable. */}
+            {adrift && (
+              <Anchor component="button" type="button" size="xs" onClick={() => setDate(days[0])}>
+                Back to {formatDay(days[0])}
+              </Anchor>
+            )}
+          </Group>
+          <SegmentedControl
             size="xs"
-            onClick={() => setDate(days[0])}
-            style={{ alignSelf: 'flex-start' }}
-          >
-            Back to {formatDay(days[0])}
-          </Anchor>
-        )}
+            value={view}
+            onChange={(next) => setView(next as ScheduleViewLevel)}
+            data={VIEWS.map((level) => ({ value: level, label: VIEW_LABELS[level] }))}
+          />
+        </Group>
 
         {view === 'month' ? (
           <MonthView
             date={date}
-            onDateChange={setDate}
-            onViewChange={setView}
-            viewSelectProps={{ views: VIEWS, value: view }}
+            withHeader={false}
             events={events}
             renderEventBody={eventBody}
             // A month has no hours in it, so a day is the smallest thing there
@@ -493,49 +533,48 @@ export function TimeBallotCard({
             withDragSlotSelect
             onSlotDragEnd={fillDays}
             getDayProps={(day) => (inBounds.has(day) ? {} : outOfBounds)}
-            todayControlProps={hidden}
+            firstDayOfWeek={1}
             withOutsideDays={false}
             maxEventsPerDay={1}
           />
         ) : view === 'day' ? (
           <DayView
             date={date}
-            onDateChange={setDate}
-            onViewChange={setView}
-            viewSelectProps={{ views: VIEWS, value: view }}
+            withHeader={false}
             {...gridProps(schedule)}
             events={events}
-            renderEventBody={eventBody}
             withDragSlotSelect
             onSlotDragEnd={paint}
             onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
-            onAllDaySlotClick={fillDay}
             getTimeSlotProps={({ start }) =>
               paintable(schedule, inBounds, start.slice(0, 10), start.slice(11, 16))
                 ? undefined
                 : outOfBounds
             }
-            labels={LABELS}
-            todayControlProps={hidden}
+            // One day on screen and no heading over it, so there is nothing to
+            // fill it in a click. There is no need: a drag from the top of the
+            // column to the bottom is the same gesture and the same result, and
+            // this is the view somebody has zoomed into to be precise.
+            withAllDaySlot={false}
             withCurrentTimeIndicator={false}
             withAgenda={false}
           />
         ) : (
           <WeekView
             date={date}
-            onDateChange={setDate}
-            onViewChange={setView}
-            viewSelectProps={{ views: VIEWS, value: view }}
+            withHeader={false}
             {...gridProps(schedule)}
             events={events}
-            renderEventBody={eventBody}
             withDragSlotSelect
             onSlotDragEnd={paint}
             onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
-            // The strip under the day headings, relabelled: one cell per day,
-            // already in the right place, and the only per-day control a week
-            // grid has that does not already mean something else.
-            onAllDaySlotClick={fillDay}
+            // The day's own column heading, which with the header off is the
+            // only thing left in this view that changes the date -- so it is a
+            // callback with one caller and one meaning rather than a guess
+            // about which control fired. Its accessible name says so too; see
+            // LABELS.
+            onDateChange={fillDay}
+            labels={LABELS}
             // An hour the poll is not asking about is not an hour to paint --
             // whether because the whole day is out, or because that day starts
             // at six. Disabled rather than hidden: which hours are in bounds is
@@ -546,15 +585,11 @@ export function TimeBallotCard({
                 ? undefined
                 : outOfBounds
             }
-            labels={LABELS}
+            withAllDaySlots={false}
             withWeekNumber={false}
             // Monday first, pinned rather than inherited, because `visibleRange`
-            // above works out which week is on screen and the two have to agree.
+            // works out which week is on screen and the two have to agree.
             firstDayOfWeek={1}
-            // "Today" is a week the poll is probably not asking about, and the
-            // way back to the poll's own dates is offered above when it is
-            // needed rather than standing there when it is not.
-            todayControlProps={hidden}
             // The clock says nothing here: "now" is in the reader's own zone and
             // the grid is in the poll's, so a line across it would be wrong by
             // however far apart the two are.
@@ -581,8 +616,14 @@ export function TimeBallotCard({
   )
 }
 
-/** "All day" is a row about events; here it is a control that fills one. */
-const LABELS = { allDay: 'Whole day' }
+/**
+ * The week grid gives every day heading the accessible name
+ * `<weekday label> <date>`, and that label is the one string this ballot has
+ * to say what the heading does. A screen reader reads "Fill the whole day
+ * 2026-09-04" rather than "Weekday 2026-09-04", which is the difference
+ * between a control and a caption.
+ */
+const LABELS = { weekday: 'Fill the whole day' }
 
 /**
  * The one thing drawn inside an event: a day's summary, in a colour the
@@ -592,8 +633,6 @@ const LABELS = { allDay: 'Whole day' }
 function eventBody(event: ScheduleEventData) {
   return <span style={{ color: event.payload?.ink as string | undefined }}>{event.title}</span>
 }
-
-const hidden = { style: { display: 'none' } }
 
 /** A cell or a day the poll is not asking about: visible, and not paintable. */
 const outOfBounds = {
@@ -617,6 +656,29 @@ function gridProps(schedule: PollSchedule) {
     intervalMinutes: schedule.granularity,
     slotHeight: schedule.granularity < 30 ? 28 : 40,
   }
+}
+
+/** One view's worth of movement: a day, a week or a month, forwards or back. */
+function step(date: string, view: ScheduleViewLevel, by: number): string {
+  const unit = view === 'month' ? 'month' : view === 'week' ? 'week' : 'day'
+  return dayjs(date).add(by, unit).format('YYYY-MM-DD')
+}
+
+/**
+ * What the header says you are looking at: `Fri 4 Sep`, `Mon 31 Aug – Sun 6
+ * Sep`, `September 2026`.
+ *
+ * Formatted from the view's own date, which is a date somebody navigated to
+ * rather than a time in the poll's grid -- so `dayjs` is safe here in a way it
+ * would not be over a window start: it parses `YYYY-MM-DD` as a wall-clock
+ * date and no instant is built from it. The days inside the grid are still
+ * formatted by hand; see `formatWindow`.
+ */
+function rangeLabel(date: string, view: ScheduleViewLevel): string {
+  if (view === 'day') return formatDay(date)
+  if (view === 'month') return dayjs(date).format('MMMM YYYY')
+  const { from, to } = visibleRange(date, view)
+  return `${formatDay(from)} – ${formatDay(to)}`
 }
 
 /**

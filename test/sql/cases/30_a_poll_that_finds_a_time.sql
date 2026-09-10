@@ -111,7 +111,7 @@ begin
 
   -- Presentation, and nothing computes with it: a poll is still held at a
   -- fixed offset, and this is what the browser calls that offset so a voter is
-  -- shown "Mountain Time (Denver) — UTC-07:00" rather than four digits.
+  -- shown "UTC-07:00 · Mountain Time" rather than four digits.
   perform tests.assert_raises('a timezone name is a name',
     format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
            'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
@@ -155,7 +155,7 @@ begin
   v_rich := create_poll('Weekend', null,
     array['2026-09-04T18:00:00-07:00', '2026-09-05T09:00:00-07:00'],
     array['voter1@example.com'], 'invite', true, false, null, false, 'time',
-    '{"timezone":"-07:00","timezone_label":"Mountain Time (Denver)",'
+    '{"timezone":"-07:00","timezone_label":"Mountain Time",'
     '"window":{"start":"09:00","end":"22:00"},'
     '"day_windows":{"2026-09-04":{"start":"18:00","end":"22:00"},'
                    '"2026-09-05":{"start":"09:00","end":"22:00"}},'
@@ -166,7 +166,7 @@ begin
     '{"start": "18:00", "end": "22:00"}'::jsonb);
   perform tests.assert_eq('and the name the creator put on the offset travels with it',
     (select schedule ->> 'timezone_label' from polls where id = v_rich),
-    'Mountain Time (Denver)');
+    'Mountain Time');
 
   -- A day exactly filling the grid is the boundary the containment rule sits
   -- on, and boundaries are where an off-by-one lives.
