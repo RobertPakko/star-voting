@@ -5,6 +5,7 @@ import { PaintCalendar } from './PaintCalendar'
 import {
   boundsOf,
   DAY_MINUTES,
+  daysOf,
   describeLength,
   describeOffset,
   enumerateWindows,
@@ -19,6 +20,7 @@ import {
   type GranuleKey,
   type ScheduleDay,
 } from '../lib/schedule'
+import { offsetName } from '../lib/timezones'
 import type { PollOption, PollSchedule } from '../lib/types'
 
 /**
@@ -95,6 +97,12 @@ export function PaintTimes({
 
   const daily = isDaily(schedule)
   const length = meetingMinutes(schedule)
+  // The poll's offset, captioned with what people on it call it; see
+  // TimeBallotCard, which says the same thing above the same calendar.
+  const zone = useMemo(() => {
+    const first = daysOf(offered)[0]
+    return first ? offsetName(schedule.timezone, first) : null
+  }, [schedule.timezone, offered])
 
   /**
    * The hours a suggestion may be made in: the poll's own axis, on any day.
@@ -206,7 +214,7 @@ export function PaintTimes({
           ]}
         />
         <Text size="xs" c="dimmed">
-          All times are {describeOffset(schedule.timezone)}
+          All times are {describeOffset(schedule.timezone, zone)}
         </Text>
       </Group>
 

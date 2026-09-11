@@ -19,6 +19,7 @@ import {
   toTimeOfDay,
   type GranuleKey,
 } from '../lib/schedule'
+import { offsetName } from '../lib/timezones'
 import type { PollOption, PollSchedule } from '../lib/types'
 
 /**
@@ -159,6 +160,24 @@ export function TimeBallotCard({
   const length = meetingMinutes(schedule)
   const daily = isDaily(schedule)
   const away = offsetFromViewer(schedule, days[0])
+  /**
+   * What the poll's offset is called, on the poll's own dates.
+   *
+   * `UTC-07:00` is an exact answer to a question nobody asked in those words:
+   * a voter knows they are in California, not that they are on -07:00, and the
+   * line above the calendar is the one place the poll says where it is being
+   * held. So the name goes beside the number -- the number first, because it is
+   * what the poll *is* and the name is the caption.
+   *
+   * Worked out from the first day the poll asks about rather than from today,
+   * which is what lets an offset have one name at all: `-07:00` is Pacific
+   * Time in July and Mountain Time in January. Nothing here reads the voter's
+   * own zone, so every voter is told the same name for the same poll.
+   */
+  const zone = useMemo(
+    () => (days[0] ? offsetName(schedule.timezone, days[0]) : null),
+    [schedule.timezone, days],
+  )
 
   /**
    * The painting as events, per view.
@@ -259,7 +278,7 @@ export function TimeBallotCard({
             the part they were going to work out anyway. */}
         <Group gap={6} wrap="wrap" justify="space-between">
           <Text size="xs" c="dimmed">
-            All times are {describeOffset(schedule.timezone)}
+            All times are {describeOffset(schedule.timezone, zone)}
             {away && ` · ${away}`}
             {days.length > 0 && ` · ${formatDay(days[0])} to ${formatDay(days[days.length - 1])}`}
           </Text>

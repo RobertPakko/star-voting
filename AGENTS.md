@@ -704,8 +704,10 @@ the painting says the same thing more exactly — a Wednesday free from nine to
 eleven and again after three is a painting and is not a pair of times — and it
 says it in the one place that cannot disagree with the ballot. The same
 migration added a `timezone_label`, a caption on the offset; that is gone too,
-and the ballot says `UTC-07:00` rather than carrying a second, unverifiable
-copy of what that number is called. A schedule that still carries either key
+rather than carrying a second, unverifiable copy of what that number is called
+— every screen that wants the caption works it out from the poll's own dates,
+which cannot drift out of step with the offset beside it. A schedule that still
+carries either key
 from a poll made against a branch that had 0056 is *stored* and *ignored*,
 which is what an unknown key has always been to `validate_schedule`.
 
@@ -742,7 +744,7 @@ offset; everybody sees the same grid whatever their own clock says, and
 conversion tax, and that is the trade.
 
 **So the picker offers offsets, and captions them.** One flat list, in order,
-each row `UTC-07:00 · Pacific Time` — or plain `UTC-07:15` where nobody keeps a
+each row `UTC-07:00 (Pacific Time)` — or plain `UTC-07:15` where nobody keeps a
 clock. The offset is what is being chosen and what the poll is; the name is
 there so a creator who does not know they are on `-07:00` can recognise
 *Pacific Time* and pick it. There is one list and one kind of thing in it,
@@ -754,10 +756,25 @@ be made two ways and several rows meant the same thing.
 makes one name per offset possible.** `-07:00` is Pacific Time in July and
 Mountain Time in January, because the clocks move and the offset does not;
 asking [`timezones.ts`](src/lib/timezones.ts) on the poll's first day gets the
-one that is true while the poll is running. It is a caption on the *picker* and
-nothing more: it is worked out while the creator is choosing and is never
-stored, so the ballot says `All times are UTC-07:00` and loads no table of
-zones to say it.
+one that is true while the poll is running.
+
+**The ballot says it too** — `All times are UTC-07:00 (Pacific Time)` — and
+works it out the same way, from the poll's own first day, rather than reading
+anything stored. It said the bare number for a while on the grounds that a
+ballot has no business loading a table of zones to draw a line of text, and
+that was the wrong half of the objection to `timezone_label`: what was wrong
+with a stored caption is that it is a second, unverifiable copy of the offset's
+name, which a poll can carry into a month where it is no longer true. A caption
+derived on the spot cannot drift, is the same in every browser, and costs the
+zone table — thirty-four entries and a memoised `Intl` lookup — inside the
+chunk that already carries the calendar. A voter knows they are in California;
+they do not know they are on `-07:00`, and this line is the only place the poll
+says where it is being held.
+
+It is written in brackets rather than after a dot, because the ballot puts it
+into a line that is already a run of dotted clauses — `· 3 hours behind your
+clock · Mon 14 Sep to Tue 15 Sep` — where one more dot reads as one more clause
+rather than as a caption on the number before it.
 
 The zones behind the names are machinery and not choices: nobody picks one and
 nothing stores one. **Order is precedence** — several zones share an offset on
@@ -867,6 +884,43 @@ there is no room for an empty window to say the times were empty and some of
 the marking smears into them. So re-saving an unedited ballot can move a rating
 a step. That is the cost of storing windows rather than granules, which is what
 lets a time poll be an ordinary poll everywhere else.
+
+### Making one
+
+[`ScheduleFields`](src/components/ScheduleFields.tsx) asks three things — how
+long the meeting is, what a whole-day fill lays down, and which offset it is
+held at — over the same `PaintCalendar` the ballot is voted on.
+
+**There is one calendar on that form, and there used to be two.** A month
+`DatePicker` picked the days, and the calendar below it painted the hours of
+the days that had been picked. Two calendars for one answer, and the first
+could not help with the second: picking a Thursday said nothing about when on
+Thursday, and a Thursday picked and then left unpainted was a day the poll did
+not ask about at all — a row in one answer that the other quietly contradicted.
+
+So the picker is gone and **a day is in the poll exactly while something is
+painted on it**. Marking a Thursday puts Thursday in; rubbing the last cell off
+it takes Thursday out. `daysOf(marked)` says which days those are — the same
+function the ballot reads them back with — and `ScheduleFields` reports the
+painting and the day list together through one callback, because they are one
+answer and cannot move apart. The calendar is on screen from the start rather
+than appearing once a day has been picked somewhere else: there is nowhere
+else. `canPaint` and `dayInBounds` are both simply true here, which is what
+lets a drag on a day nobody has mentioned be how that day joins the poll —
+the same shape `PaintTimes` already had for the calendar that collects times.
+
+The two time selects stay, and are a *default* rather than the answer: nobody
+wants to drag 09:00–17:00 across ten days, so clicking a day's heading lays
+these down and the drag is there for the days that differ. They are not stored
+and they are not the poll; what is painted is.
+
+**Nothing between eight hours and a whole day is offered as a meeting length.**
+`MEETING_LENGTHS` ran every half hour to 23:30, and every entry past the eighth
+hour was a length nobody has booked a room for — thirty rows of *13 hours*,
+*13 hours 30 minutes* between *8 hours* and *1 day*, all of them in the way of
+*2 hours*. Both ends of the gap are real questions: under eight hours is "how
+long is the meeting", a day or more is "which days are you free", and the
+whole-day granularity already answers the second. In between is neither.
 
 ### The ballot
 

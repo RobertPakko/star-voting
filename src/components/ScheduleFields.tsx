@@ -1,13 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Alert, Group, SegmentedControl, Select, Stack, Text } from '@mantine/core'
-import { DatePicker } from '@mantine/dates'
-// With the day picker, in the create form's own chunk; see PaintCalendar.
-import '@mantine/dates/styles.css'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { PaintCalendar } from './PaintCalendar'
 import {
   countWindows,
   DAY_MINUTES,
+  daysOf,
   describeLength,
   describeOffset,
   formatDay,
@@ -39,6 +37,16 @@ import type { DailyWindow, PollSchedule } from '../lib/types'
  * faster and more exactly. Anything a row of dropdowns could express, a
  * painting can; a painting can also express a Wednesday free from nine to
  * eleven and again after three, which the rows could not.
+ *
+ * **And it is the only calendar.** There used to be a second one above it -- a
+ * month picker whose whole job was to hand back a list of dates, after which
+ * those dates were painted on the calendar below. Two calendars for one
+ * answer, and the first of them asked a question the second could not help
+ * with and could not disagree with either, since a day picked and then left
+ * unpainted was a day the poll did not ask about. So the picker is gone and
+ * the days are simply the days with something on them: mark a Thursday and
+ * Thursday is in the poll, rub it out and it is not. `daysOf` says which they
+ * are, which is the same function the ballot reads them back with.
  *
  * **What is painted is the poll.** The cells become windows (`enumerateWindows`)
  * and the windows become the options, and nothing about which days or hours
@@ -99,21 +107,13 @@ function inOrder(days: string[]): string[] {
 }
 
 /**
- * Every cell of a day the creator may paint: the whole of it.
+ * The cells one pair of times covers, which is what a day-fill writes.
  *
- * Wider than what a day-fill lays down on purpose -- the two selects are a
- * default and the drag is the exception to it, so an evening outside them has
- * to be reachable. A poll answered in whole days has one cell per day, which
- * is the day itself.
+ * Narrower than what may be painted, on purpose: the two selects are a default
+ * and the drag is the exception to it, so an evening outside them is still
+ * reachable by dragging. A poll answered in whole days has one cell per day,
+ * which is the day itself.
  */
-function cellsOnDay(day: ScheduleDay, granularity: number): GranuleKey[] {
-  const keys: GranuleKey[] = []
-  for (let at = 0; at + granularity <= DAY_MINUTES; at += granularity)
-    keys.push(granuleKey(day, at))
-  return keys
-}
-
-/** And the cells one pair of times covers, which is what a day-fill writes. */
 function cellsInHours(day: ScheduleDay, hours: DailyWindow, granularity: number): GranuleKey[] {
   if (granularity >= DAY_MINUTES) return [granuleKey(day, 0)]
   const last = toMinutes(hours.end)
@@ -137,7 +137,11 @@ export function ScheduleFields({
   error,
 }: {
   schedule: PollSchedule
-  /** The days on the calendar, as `YYYY-MM-DD`. Not stored: see PollSchedule. */
+  /**
+   * The days the poll asks about, as `YYYY-MM-DD`. Not stored: see
+   * PollSchedule. Exactly `daysOf(marked)` -- a day is on the calendar because
+   * something is painted on it, and there is no other way to put one there.
+   */
   days: string[]
   /** The hours a whole-day fill lays down. Not stored either. */
   hours: DailyWindow
@@ -145,9 +149,13 @@ export function ScheduleFields({
   marked: Bounds
   onScheduleChange: (schedule: PollSchedule) => void
   /**
-   * Days, with the painting that goes with them: a day added arrives already
-   * marked and a day removed takes its cells with it, so the two move
-   * together or the form has a moment where they disagree.
+   * The painting, and the days it puts the poll on, together.
+   *
+   * One callback rather than two because the two cannot move apart: a day is
+   * in the poll exactly while something is painted on it. `onMarkedChange`
+   * below is for the changes that cannot add or remove a day -- moving the
+   * default hours, changing how long the meeting is -- and this is for the
+   * gesture that can.
    */
   onDaysChange: (days: string[], marked: Set<GranuleKey>) => void
   onHoursChange: (hours: DailyWindow) => void
@@ -174,7 +182,7 @@ export function ScheduleFields({
 
   /**
    * One list, in order: every offset, each captioned with what people on it
-   * call it -- `UTC-07:00 · Pacific Time` -- where anybody is on it at all.
+   * call it -- `UTC-07:00 (Pacific Time)` -- where anybody is on it at all.
    *
    * The caption is worked out for the poll's own first day, which is what lets
    * there be one per offset: `-07:00` is Pacific Time in July and Mountain
@@ -199,15 +207,6 @@ export function ScheduleFields({
     () => offsetDrift(schedule.timezone, everyDay ? everyDay.split(',') : []),
     [schedule.timezone, everyDay],
   )
-
-  /** Every cell the creator may paint: all of every day they picked. */
-  const paintable = useMemo(() => {
-    const cells = new Set<GranuleKey>()
-    for (const day of everyDay ? everyDay.split(',') : []) {
-      for (const key of cellsOnDay(day, schedule.granularity)) cells.add(key)
-    }
-    return cells
-  }, [everyDay, schedule.granularity])
 
   /**
    * Changing how long the meeting is, which decides the resolution with it.
@@ -238,25 +237,6 @@ export function ScheduleFields({
   }
 
   /**
-   * Choosing days, with the painting kept in step: a day added arrives already
-   * marked with the default hours -- which is what somebody picking a day
-   * meant -- and a day removed takes its cells with it. Anything else leaves
-   * cells on a day nobody is asking about, which would quietly become options.
-   */
-  function setDays(next: string[]) {
-    const asked = new Set(next)
-    const kept = new Set<GranuleKey>()
-    for (const key of marked) {
-      if (asked.has(key.slice(0, 10))) kept.add(key)
-    }
-    for (const day of next) {
-      if ([...marked].some((key) => key.startsWith(day))) continue
-      for (const key of cellsInHours(day, hours, schedule.granularity)) kept.add(key)
-    }
-    onDaysChange(next, kept)
-  }
-
-  /**
    * Moving the default hours, which re-fills the days that are still on the
    * default and leaves the ones that are not.
    *
@@ -282,13 +262,22 @@ export function ScheduleFields({
     onMarkedChange(moved)
   }
 
+  /**
+   * A stroke, and the days it leaves the poll asking about.
+   *
+   * Painting is the only thing that adds or removes a day now, so the day list
+   * is re-derived from the painting here rather than kept beside it -- the two
+   * are one answer and are reported as one. A Thursday marked for the first
+   * time puts Thursday in the poll; rubbing the last cell off it takes it out
+   * again, with no orphaned day left behind for the enumeration to find.
+   */
   function paint(keys: GranuleKey[], value: number) {
     const next = new Set(marked)
     for (const key of keys) {
       if (value === 0) next.delete(key)
       else next.add(key)
     }
-    onMarkedChange(next)
+    onDaysChange(daysOf(next), next)
   }
 
   /**
@@ -332,21 +321,6 @@ export function ScheduleFields({
         comboboxProps={{ withinPortal: false }}
       />
 
-      <Stack gap={4}>
-        <Text size="sm" fw={500}>
-          Which days?
-        </Text>
-        <DatePicker
-          type="multiple"
-          value={days}
-          onChange={setDays}
-          size="sm"
-          // The picker is the only field here whose width is not the form's,
-          // and centring it stops it sitting oddly against the select above.
-          mx="auto"
-        />
-      </Stack>
-
       {/* Hidden on a poll answered in whole days, where there are no hours to
           be earliest or latest: a day is either in or out. */}
       {!daily && (
@@ -380,44 +354,54 @@ export function ScheduleFields({
         </Group>
       )}
 
-      {ordered.length > 0 && (
-        <Stack gap={6}>
-          <Group gap="sm" wrap="wrap" align="center">
-            {/* Two values rather than the ballot's six: the question here is
-                whether the poll is asking about a time at all. The eraser is
-                what a drag needs and a day-click does not -- clicking a day
-                that is already exactly the default takes it back, which is the
-                same toggle the ballot's day-fill has. */}
-            <SegmentedControl
-              size="xs"
-              value={String(brush)}
-              onChange={(v) => setBrush(Number(v))}
-              data={[
-                { value: '1', label: 'Mark' },
-                { value: '0', label: 'Erase' },
-              ]}
-            />
-            <Text size="sm" c="dimmed">
-              {daily
-                ? 'Click a day to put it in or take it out, or drag across several.'
-                : 'Drag to mark the hours people can choose from; click a day’s heading to fill it with the hours above.'}
-            </Text>
-          </Group>
-          <PaintCalendar
-            schedule={schedule}
-            bounds={paintable}
-            axis={WHOLE_DAY}
-            painting={paintingOf(marked)}
-            brush={brush}
-            onPaint={paint}
-            buildEvents={buildEvents}
-            fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
-            // A whole day of half-hours is forty-eight rows, and at the
-            // ballot's row height that is a form nobody can see the bottom of.
-            slotHeight={daily ? undefined : 22}
+      {/* The calendar, which is where every day and every hour of this poll is
+          said. Always on screen, and not only once a day has been picked
+          somewhere else: there is nowhere else. */}
+      <Stack gap={6}>
+        <Text size="sm" fw={500}>
+          Which days, and when?
+        </Text>
+        <Group gap="sm" wrap="wrap" align="center">
+          {/* Two values rather than the ballot's six: the question here is
+              whether the poll is asking about a time at all. The eraser is
+              what a drag needs and a day-click does not -- clicking a day
+              that is already exactly the default takes it back, which is the
+              same toggle the ballot's day-fill has. */}
+          <SegmentedControl
+            size="xs"
+            value={String(brush)}
+            onChange={(v) => setBrush(Number(v))}
+            data={[
+              { value: '1', label: 'Mark' },
+              { value: '0', label: 'Erase' },
+            ]}
           />
-        </Stack>
-      )}
+          <Text size="sm" c="dimmed">
+            {daily
+              ? 'Click a day to put it in, or drag across several.'
+              : 'Drag to mark the hours people can choose from; click a day’s heading to fill it with the hours above.'}
+          </Text>
+        </Group>
+        <PaintCalendar
+          schedule={schedule}
+          // What is painted, which is also which days the poll is on and so
+          // where the calendar opens. Nothing is out of bounds: the two below
+          // say that every cell of every day may be marked, because marking
+          // one is how a day joins the poll in the first place.
+          bounds={marked}
+          canPaint={() => true}
+          dayInBounds={() => true}
+          axis={WHOLE_DAY}
+          painting={paintingOf(marked)}
+          brush={brush}
+          onPaint={paint}
+          buildEvents={buildEvents}
+          fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
+          // A whole day of half-hours is forty-eight rows, and at the
+          // ballot's row height that is a form nobody can see the bottom of.
+          slotHeight={daily ? undefined : 22}
+        />
+      </Stack>
 
       {/* One list of offsets, in order, each captioned with what people on it
           call it. The offset is what is being chosen and what the poll is held
@@ -459,7 +443,7 @@ export function ScheduleFields({
       <Text size="xs" c={error ? 'var(--mantine-color-error)' : 'dimmed'}>
         {error ??
           (ordered.length === 0
-            ? 'Pick the days people can choose between.'
+            ? 'Mark the times people can choose between.'
             : `${total} ${total === 1 ? 'window' : 'windows'} to score across ${ordered.length} ${ordered.length === 1 ? 'day' : 'days'}.` +
               (blank.length > 0
                 ? ` Nothing on ${listDays(blank)} is ${describeLength(meetingMinutes(schedule))} long.`

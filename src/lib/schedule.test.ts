@@ -250,6 +250,17 @@ describe('how long a meeting is, as a person says it', () => {
     expect(MEETING_LENGTHS[0]).toBe(30)
     expect(MEETING_LENGTHS).toContain(DAY_MINUTES)
   })
+
+  test('and nothing between a working day and a whole one is offered at all', () => {
+    // Both ends are real questions -- "how long is the meeting" under eight
+    // hours, "which days are you free" at a day or more. Thirteen and a half
+    // hours is neither, and there were thirty rows of it to scroll past.
+    expect(MEETING_LENGTHS).toContain(8 * 60)
+    expect(MEETING_LENGTHS).toContain(DAY_MINUTES)
+    for (const minutes of MEETING_LENGTHS) {
+      expect(minutes > 8 * 60 && minutes < DAY_MINUTES).toBe(false)
+    }
+  })
 })
 
 describe('a window is scored by the average of its half hours', () => {
@@ -601,8 +612,11 @@ describe('a place, resolved into the offset a poll is held at', () => {
   })
 
   test('a reader is told the offset first and the name second', () => {
-    expect(describeOffset('-07:00', 'Mountain Time')).toBe('UTC-07:00 · Mountain Time')
-    // The ballot has no zone table to load, so it says the number alone.
+    // Bracketed rather than dotted, because the line the ballot writes this
+    // into is already a run of dotted clauses and one more would read as
+    // another clause rather than as a caption on the number.
+    expect(describeOffset('-07:00', 'Mountain Time')).toBe('UTC-07:00 (Mountain Time)')
+    // Nothing on that offset that anybody has a name for, so the number alone.
     expect(describeOffset('-07:15', null)).toBe('UTC-07:15')
     expect(describeOffset('-07:00')).toBe('UTC-07:00')
     expect(describeOffset('-07:00', '   ')).toBe('UTC-07:00')

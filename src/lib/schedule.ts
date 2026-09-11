@@ -464,20 +464,32 @@ export function paintingFromScores(
 // How long a meeting is, as a person says it
 // ---------------------------------------------------------------------------
 
+/** The longest thing anybody calls a meeting: a working day of it. */
+const LONGEST_MEETING = 8 * 60
+
 /**
- * The lengths a meeting may be, in minutes: every half hour up to a day, then
- * whole days.
+ * The lengths a meeting may be, in minutes: every half hour up to a working
+ * day, then whole days.
  *
  * The step is the granularity the length implies -- see `granularityFor` --
  * which is what keeps the two from ever disagreeing: there is no length in
  * this list that its own granularity cannot express.
+ *
+ * **Nothing between eight hours and a day is offered**, and the gap is the
+ * point rather than an oversight. The list used to run every half hour to
+ * 23:30, and every entry past the eighth hour was a length nobody has ever
+ * booked a room for -- thirty rows of *13 hours*, *13 hours 30 minutes* to
+ * scroll past on the way to *2 hours*. Both ends are real: under eight hours
+ * is where meetings live, and a whole day or more is a different question
+ * ("which days are you free?") that the whole-day granularity already answers.
+ * In between is neither.
  *
  * A fortnight is the top, and arbitrarily so; the ballot for one is a month
  * grid with fourteen days to click, and a poll looking for a longer block than
  * that is asking a question about a calendar rather than about a meeting.
  */
 export const MEETING_LENGTHS: number[] = [
-  ...Array.from({ length: 47 }, (_, i) => (i + 1) * 30),
+  ...Array.from({ length: LONGEST_MEETING / 30 }, (_, i) => (i + 1) * 30),
   ...Array.from({ length: 14 }, (_, i) => (i + 1) * DAY_MINUTES),
 ]
 
@@ -610,7 +622,7 @@ function offsetAt(timeZone: string, instant: number): string | null {
 }
 
 /**
- * An offset as a person reads it: `UTC-07:00 · Pacific Time`, or plain
+ * An offset as a person reads it: `UTC-07:00 (Pacific Time)`, or plain
  * `UTC-07:00` where there is nothing to add.
  *
  * **The offset leads and the name follows.** The offset is what the poll *is*
@@ -628,7 +640,11 @@ function offsetAt(timeZone: string, instant: number): string | null {
  */
 export function describeOffset(offset: string, label?: string | null): string {
   const named = label?.trim()
-  return named ? `UTC${offset} · ${named}` : `UTC${offset}`
+  // Bracketed rather than set off by a dot, because the ballot writes this
+  // into a line that is already a run of dotted clauses -- `... · 3 hours
+  // behind you · Mon 14 Sep to Wed 16 Sep` -- where one more dot would read as
+  // one more clause rather than as a caption on the number before it.
+  return named ? `UTC${offset} (${named})` : `UTC${offset}`
 }
 
 /**

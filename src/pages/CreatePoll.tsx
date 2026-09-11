@@ -375,7 +375,7 @@ function validate(form: {
             `Nothing you have marked is ${length} long. Mark a longer stretch, shorten the meeting, or leave the calendar empty and let people add times themselves.`
         }
       } else if (question.days.length === 0) {
-        errors.schedules[questionIndex] = 'Pick the days people can meet on.'
+        errors.schedules[questionIndex] = 'Mark the times people can meet on the calendar.'
       } else if (total === 0) {
         // Nothing painted is long enough, which is the state a creator reaches
         // by asking for three hours on a two-hour evening -- and which would
@@ -1071,13 +1071,13 @@ export function CreatePoll() {
             {/* Dates that moved on their own are exactly the kind of thing a
                 creator notices two screens later, or never -- so a copy whose
                 dates had already gone says where the ones in the picker came
-                from. It goes as soon as they pick a day of their own; see
+                from. It goes as soon as they mark a day of their own; see
                 pickDays. */}
             {question.datesMoved > 0 && (
               <Alert color="blue" title="These dates have moved">
                 The poll you copied is in the past, so this one asks about the same days of the week{' '}
-                {question.datesMoved === 1 ? 'a week' : `${question.datesMoved} weeks`} later. Pick
-                different days below if that is not where you want it.
+                {question.datesMoved === 1 ? 'a week' : `${question.datesMoved} weeks`} later. Mark
+                different days on the calendar below if that is not where you want it.
               </Alert>
             )}
             {solicitOptions && (

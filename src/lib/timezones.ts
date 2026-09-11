@@ -1,4 +1,11 @@
-import { browserOffset, offsetMinutes, toTimeOfDay, viewerZone, zoneOffsetOn } from './schedule'
+import {
+  browserOffset,
+  describeOffset,
+  offsetMinutes,
+  toTimeOfDay,
+  viewerZone,
+  zoneOffsetOn,
+} from './schedule'
 import type { ScheduleDay } from './schedule'
 
 /**
@@ -13,7 +20,7 @@ import type { ScheduleDay } from './schedule'
  * **The zones below are machinery, not choices.** Nobody picks one and nothing
  * stores one. They exist to answer "what do people call this offset", so that
  * a creator who does not know they are on `-07:00` can recognise
- * `UTC-07:00 · Pacific Time` and pick it. The name is a caption on the number
+ * `UTC-07:00 (Pacific Time)` and pick it. The name is a caption on the number
  * and the number is what the poll is.
  *
  * **A name is worked out for the poll's own dates, which is the trick that
@@ -114,9 +121,9 @@ export function offsetName(offset: string, on: ScheduleDay): string | null {
   return null
 }
 
-/** `UTC-07:00 · Pacific Time`, or `UTC-07:15` where there is nothing to add. */
+/** `UTC-07:00 (Pacific Time)`, or `UTC-07:15` where there is nothing to add. */
 export function describeOffsetWith(offset: string, name?: string | null): string {
-  return name ? `UTC${offset} · ${name}` : `UTC${offset}`
+  return describeOffset(offset, name)
 }
 
 /**
