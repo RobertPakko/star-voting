@@ -269,7 +269,8 @@ as one that changes a result.
 
 ### Trying one out, and taking it back
 
-Three ways, in the order to reach for them.
+Three ways, in the order to reach for them. The first two are how a migration
+is tried; the third is the only way back once one has shipped.
 
 **1. `npm test`, which is already the loop.** `test/build-db.sh` drops the
 throwaway database and builds it again from `supabase/migrations/` on every
@@ -294,23 +295,27 @@ byte-identical — function bodies, column list, constraints and ACLs alike.
 neither appears in these migrations.) Nothing in the repo is needed for this,
 and it is the right tool while the SQL is still moving.
 
-**3. A down file, for a migration already committed.** Once the integration
-has applied something to the live project, a transaction is no longer
-available and the only way back is a script that undoes it.
-[`supabase/rollback/`](supabase/rollback) holds those, one per migration that
-has one:
+**3. Another migration, for one that has already shipped.** Once the
+integration has applied something to the live project a transaction is no
+longer available, and the way back is forward: a new migration, at a fresh
+version, that states the schema you want. There are **no down files** — there
+were, under `supabase/rollback/`, and they are gone.
 
-```bash
-psql -d <database> -f supabase/rollback/0055_schedule_polls.down.sql
-```
+They were a poor trade. A down file is a second copy of every definition its
+migration replaced, kept in step with a baseline it is not applied alongside
+and exercised by nothing: `npm test` builds forward from `supabase/migrations/`
+and never runs one, so the only time anybody found out whether one worked was
+the moment they needed it to. And what it restored was never the whole story
+anyway — `0055`'s took `polls.kind` and `polls.schedule` with it, and every
+time poll's grid went too. Writing the correction as an ordinary migration
+costs the same care and is checked by the same suite as everything else.
 
-Deliberately **not** under `supabase/migrations/`, because everything in that
-directory is applied on merge and a down file landing there would undo the
-migration beside it. Each one drops what its migration added, then restores
-every function it replaced to the definition the baseline gives, verbatim —
-including the `REVOKE ALL … FROM PUBLIC` lines, without which a restored
-function is *more* open than the one it replaced. Check one by fingerprinting
-the schema before and after a round trip:
+A migration written to *repair* rather than to add — because the live project
+has drifted from what the repo says, as it did at 0056 — is a special case of
+that, and the one place the care is different: it copies its definitions
+verbatim out of the baseline, grants included, and it has to be a no-op on a
+database that is already right. Both are checkable, by fingerprinting the
+schema and comparing:
 
 ```sql
 select md5(string_agg(x, '|' order by x)) from (
@@ -323,12 +328,13 @@ select md5(string_agg(x, '|' order by x)) from (
     join pg_namespace n on n.oid = t.relnamespace where n.nspname = 'public') s;
 ```
 
-**A down file is not a promise that nothing is lost.** It restores the schema,
-not the data the schema was holding: `0055`'s takes `polls.kind` and
-`polls.schedule` with it, and every time poll's grid goes with them. The polls
-survive — their windows are ordinary rows in `candidates` and their ballots
-ordinary rows in `scores`, which is the whole design — and they still tally.
-Nobody can paint a calendar on them again.
+Run it against a build of the repo's own migrations and against the schema the
+remote actually has, apply the repair to the second, and the two numbers should
+meet. Run it either side of applying the repair to the first, and the number
+should not move at all.
+[`0058_schedule_options_again.sql`](supabase/migrations/0058_schedule_options_again.sql)
+is the worked example; see *A version number is used once, ever* below for what
+it repairs and why.
 
 ### Squashing
 
@@ -400,10 +406,8 @@ branch** — you cannot know it has not been applied, and the cost of a spare
 number is nothing. When a remote does fall behind, the fix is a *new* migration
 at a fresh number that re-asserts the definitions out of the baseline;
 [`0058_schedule_options_again.sql`](supabase/migrations/0058_schedule_options_again.sql)
-is the worked example, and the way to check one is the fingerprint above: build
-the schema the remote actually has, apply the repair, and compare it against a
-build of the repo's own migrations. It has no down file, because what a down
-file would restore is the state it repairs.
+is the worked example, and *Trying one out, and taking it back* above is how
+one is checked.
 
 `supabase migration list`, which the squash script already prints, is what
 would have shown this at the time: local and remote history side by side, with
