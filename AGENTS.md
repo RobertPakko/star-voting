@@ -914,6 +914,36 @@ wants to drag 09:00–17:00 across ten days, so clicking a day's heading lays
 these down and the drag is there for the days that differ. They are not stored
 and they are not the poll; what is painted is.
 
+**A poll cannot ask about a day that has gone.** The calendar's floor is today,
+and the whole of today is in: a day before it is drawn greyed and takes no
+gesture — no drag, no heading, no month cell, and the header's range leaves it
+alone like any other out-of-bounds day — while the arrows stop at the month
+holding it (`earliest`). Nothing downstream would have caught one: the
+enumeration is arithmetic and reads no clock, and a window in the past is a
+perfectly well-formed window, so it is the gesture that puts a day in the poll
+that has to refuse.
+
+**The floor is today on the *poll's* clock, not the reader's** (`todayIn`). A
+creator in Auckland arranging a meeting held at `-07:00` is a day ahead of the
+grid they are painting, and their own calendar would grey out a day the poll
+can perfectly well use. `carryForward` reads the same clock for the same
+reason, so a duplicate never lands on a day the form is about to refuse; the
+browser's own date is still what the offset picker is captioned against, which
+is a question about the reader.
+
+The rest of today is *not* cut off, and that is a choice rather than an
+oversight: a creator marking this afternoon at two is answering a question
+about their own diary, and a floor that crept through the day would rub out
+what they had marked while they were still typing the title.
+
+It is read twice, because a floor is a fact about now and a form is open for a
+while. `ScheduleFields` draws it, and `CreatePoll` reads it again when it
+counts the windows and again when it builds them (`fromDay`) — so a form left
+open across midnight, or moved to an offset already on tomorrow, sends the days
+it may still ask about rather than the ones it could when they were painted.
+The two reads are the same set, so the count the error messages quote is the
+number of options that get made.
+
 **Nothing between eight hours and a whole day is offered as a meeting length.**
 `MEETING_LENGTHS` ran every half hour to 23:30, and every entry past the eighth
 hour was a length nobody has booked a room for — thirty rows of *13 hours*,
@@ -1031,11 +1061,60 @@ too short to hold the old position there is nowhere to put the reader back, and
 the calendar is brought to the top of the screen instead — the new view whole,
 rather than the part of it the clamp happened to leave on screen.
 
-Filling **toggles**: a day that is already exactly what the brush would make it
-is a day the click is taking back. The `Can't` brush never toggles — clearing a
-cleared day would fill it. The day view has no heading and needs none: one drag
-from the top of the column to the bottom is the same gesture and the same
-result, and it is the view somebody has zoomed into to be precise.
+**Every gesture toggles**, the strokes included: a stretch that is already
+exactly what the brush would make it is a stretch the gesture is taking back.
+The `Can't` brush never toggles — clearing a cleared day would fill it. The day
+view has no heading and needs none: one drag from the top of the column to the
+bottom is the same gesture and the same result, and it is the view somebody has
+zoomed into to be precise.
+
+The strokes were the exception to that for a while, and there was no argument
+for it: the day heading and the header's range both took a second press back,
+and a drag over what you had just dragged over re-asserted it. So the only way
+out of a stroke was to find the brush that means nothing and lay it over the
+same cells — a two-step undo for a one-step mistake, on the gesture people make
+most. `paint` now goes through the same `fillCells` the two clicks do, which is
+the whole change; the toggle rule is stated once and every gesture obeys it.
+
+**The time column stays put while the days scroll under it.** Seven day
+columns will not fit on a phone — the library holds each to a five-rem minimum
+and scrolls the lot sideways — and what left the screen first was the one
+column saying what the rows were, which leaves a grid of unlabelled cells.
+`STICKY_TIMES` pins it, and the awkward line in it is the first: the library's
+`weekViewInner` is `overflow: hidden`, which makes it a scroll container in its
+own right, and a sticky element sticks to the nearest of those — a box that
+never scrolls, so it would not stick at all. Opening it up hands the column
+back to the scroll area that actually moves, and costs nothing: every event
+this calendar draws is positioned inside its own day column, and the rounded
+corner is clipped by `weekViewRoot`, outside the scroll area. The corner above
+the column is pinned with it and given a background, because a transparent
+pane is not a pane.
+
+**The ballot's arrows walk the poll rather than the calendar** (`confine`).
+They step to the next range that has a day in bounds on it — so a poll about a
+Friday in September and a Friday in November is one press between them rather
+than seven through October — and they are drawn dead at the ends. A voter has
+nothing to say about a week the poll is not asking about, and a press that
+empties the screen and leaves them to work out why is worse than one that does
+not move. The `Back to …` control is still there and is now unreachable from
+the ballot, which is the point; the two painting screens are unconfined and
+must be, since on the create form the bounds *are* the answer and a poll
+collecting its times is asking about days nobody has named yet.
+
+**And its grids leave out the weekdays the poll has nothing on**
+(`hideEmptyWeekdays`). A poll about a Friday, a Saturday and a Sunday drew four
+columns of greyed cells for the days it was not asking about, and on a phone
+those four were most of the width; dropping them makes the three that matter
+three times wider and takes the week off the horizontal scroll entirely. Said
+through the library's own `weekendDays` with `withWeekendDays={false}`, which
+is its one mechanism for dropping a column and the only one that keeps the
+month's rows and its event spans in step with the drop — the list holds what is
+not drawn rather than what is a weekend, so a poll that does ask about
+Saturdays is drawn with Saturday in it, and spared the red the library paints a
+weekend heading in. It is the ballot's alone for the same reason `confine` is:
+its bounds are the whole of what can ever be answered, so a weekday with
+nothing on it is one nothing will ever be on. On the two painting screens an
+empty Monday is an empty Monday somebody is about to paint.
 
 **The month view gets one chip per marked block**, which is the ordinary thing
 a Mantine month cell holds: a day with two marked stretches shows `09:00–11:00`

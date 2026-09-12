@@ -263,6 +263,12 @@ export function TimeBallotCard({
           brush={Number(rating)}
           onPaint={apply}
           buildEvents={buildEvents}
+          // The ballot is the one screen whose bounds are the whole of the
+          // answer, so it is the one screen that can say where the calendar
+          // stops and which columns are never going to hold anything. Neither
+          // is true of the two screens that paint what a poll asks about.
+          confine
+          hideEmptyWeekdays
         />
       </Stack>
     </BallotFrame>

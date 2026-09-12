@@ -5,6 +5,7 @@ import {
   MonthView,
   ScheduleHeader,
   WeekView,
+  type DayOfWeek,
   type ScheduleEventData,
   type ScheduleViewLevel,
 } from '@mantine/schedule'
@@ -21,6 +22,7 @@ import {
   granuleKey,
   isDaily,
   toMinutes,
+  weekdayOf,
   type Bounds,
   type GranuleKey,
   type ScheduleDay,
@@ -102,6 +104,57 @@ const outOfBounds = {
   style: { background: 'var(--mantine-color-gray-light)', cursor: 'not-allowed' },
 }
 
+/**
+ * An arrow with nowhere left to go; see `stepTo`.
+ *
+ * `disabled` is what stops the press, and the other two are what say so: the
+ * library's control has no disabled state in its own stylesheet, so
+ * `interactive` takes away the pointer and the hover and the dimming is the
+ * rest of it.
+ */
+function dead(is: boolean) {
+  return { disabled: is, interactive: !is, style: is ? { opacity: 0.4 } : undefined }
+}
+
+/**
+ * The time column, held still while the days scroll under it.
+ *
+ * A week of seven days will not fit on a phone -- the library holds every day
+ * column to a five-rem minimum and scrolls the lot sideways -- and what
+ * scrolled out of sight first was the one column saying what the rows are. A
+ * grid of unlabelled cells is not a grid.
+ *
+ * Three declarations, and the first is the one that needs explaining.
+ * `weekViewInner` is `overflow: hidden`, which makes it a scroll container in
+ * its own right, and a sticky element sticks to the nearest one of those --
+ * a box that never scrolls, so it would not stick at all. Opening it up hands
+ * the column back to the scroll area that actually moves. Nothing is lost by
+ * it: every event this calendar draws is positioned inside the day column it
+ * belongs to, and the rounded corner is clipped by `weekViewRoot`, which is
+ * outside the scroll area and still hides what leaves it.
+ */
+const STICKY_TIMES = {
+  weekViewInner: { overflow: 'visible' },
+  weekViewSlotLabels: {
+    position: 'sticky',
+    insetInlineStart: 0,
+    // Over the painted runs, which the library's own sheet puts at 2.
+    zIndex: 3,
+    // The first day column's own border, redrawn on the sticky edge -- the
+    // real one travels with the day that owns it.
+    boxShadow: '1px 0 0 var(--week-view-border-color)',
+  },
+  // The corner above it, which is inside the header's stacking context and so
+  // needs only to beat the day headings sliding beneath it. Transparent by
+  // default, and a transparent pane is not a pane.
+  weekViewCorner: {
+    position: 'sticky',
+    insetInlineStart: 0,
+    zIndex: 1,
+    background: 'var(--mantine-color-body)',
+  },
+} as const
+
 export function PaintCalendar({
   schedule,
   bounds,
@@ -113,6 +166,9 @@ export function PaintCalendar({
   fillOnDay,
   canPaint,
   dayInBounds,
+  confine,
+  earliest,
+  hideEmptyWeekdays,
   slotHeight,
   defaultView,
 }: {
@@ -159,6 +215,50 @@ export function PaintCalendar({
   canPaint?: (key: GranuleKey) => boolean
   /** And whether a whole day is one the poll is asking about; see `canPaint`. */
   dayInBounds?: (day: ScheduleDay) => boolean
+  /**
+   * Keep the arrows on the poll: they step to the next range that has a day in
+   * bounds on it, and stop at the ends.
+   *
+   * **The ballot is the caller, and it is the only screen where the poll's own
+   * days are the whole of the answer.** A voter has nothing to say about a week
+   * the poll is not asking about, so a Next that lands on one is a press that
+   * empties the screen and asks them to work out why -- and on a poll about
+   * three days in September the month arrows do that in one press. Stepping
+   * over the empty ranges rather than into them means every press changes what
+   * there is to answer, and a disabled arrow says there is no more of it.
+   *
+   * The two painting screens do not set it, and must not: on the create form
+   * the bounds *are* the answer, so an empty calendar would confine the arrows
+   * to nothing at all, and a poll collecting its times is asking about days
+   * nobody has proposed yet.
+   */
+  confine?: boolean
+  /**
+   * The earliest day the arrows will reach, where there is one.
+   *
+   * The create form's floor, and a weaker rule than `confine`: it says which
+   * way is out of the question rather than which ranges are worth showing. A
+   * poll cannot ask about a day that has already gone (see `ScheduleFields`),
+   * so the month before it is a screen of greyed cells and no way to say
+   * anything on it.
+   */
+  earliest?: ScheduleDay
+  /**
+   * Leave out the weekdays the poll has nothing on, in the two grids that are
+   * laid out by weekday.
+   *
+   * A poll about a Friday, a Saturday and a Sunday draws four columns of greyed
+   * cells for the days it is not asking about, and on a phone those four are
+   * most of the width. Dropping them makes the three that matter three times
+   * wider, which is the difference between a grid that is scanned and one that
+   * is scrolled.
+   *
+   * The ballot again, and for the ballot's reason: its bounds are the whole of
+   * what can ever be answered, so a weekday with nothing on it is a weekday
+   * nothing will ever be on. On the two painting screens an empty Monday is an
+   * empty Monday somebody is about to paint.
+   */
+  hideEmptyWeekdays?: boolean
   slotHeight?: number
   defaultView?: ScheduleViewLevel
 }) {
@@ -231,7 +331,18 @@ export function PaintCalendar({
     if (row.getBoundingClientRect().top > was + 1) row.scrollIntoView({ block: 'start' })
   }, [showing])
 
-  /** Set every cell in a half-open range to the brush, skipping what is out. */
+  /**
+   * Set every cell in a half-open range to the brush, skipping what is out --
+   * or, where the range is already exactly that, take it back.
+   *
+   * **A stroke toggles, the same way every other gesture on this calendar
+   * does.** Painting over what you have just painted is how somebody says "not
+   * that after all": it is the gesture already to hand, it is the one the day
+   * heading and the header's range have always answered to, and without it the
+   * only way back from a stroke is to find the brush that means nothing and
+   * lay it over the same cells. See `fillCells` for the rule and for why a
+   * brush of 0 is exempt from it.
+   */
   function paint(fromSlot: string, toSlot: string) {
     // `YYYY-MM-DD HH:mm:ss` on the way in, and the grid is keyed to the
     // minute; the end is the end of the last slot dragged over, so the range
@@ -249,7 +360,7 @@ export function PaintCalendar({
       const key = granuleKey(day, at)
       if (open(key)) keys.push(key)
     }
-    onPaint(keys, brush)
+    fillCells(keys)
   }
 
   /** What a click covers across a run of days, from one date to another. */
@@ -261,14 +372,14 @@ export function PaintCalendar({
   }
 
   /**
-   * Lay the brush over a set of cells a single click asked for, or clear them.
+   * Lay the brush over a set of cells a gesture asked for, or clear them.
    *
    * **It toggles**, and that is the difference between a shortcut and a trap.
-   * The gesture is one click with no undo beside it; a stretch that is already
-   * exactly what the brush would make it is a stretch the click was meant to
+   * There is no undo beside any of these gestures; a stretch that is already
+   * exactly what the brush would make it is a stretch the gesture was meant to
    * take back. Anything else fills -- including one that is half-marked, or
-   * marked at a different rating, both of which are answers the click is being
-   * used to replace.
+   * marked at a different rating, both of which are answers the gesture is
+   * being used to replace.
    *
    * A brush of 0 never toggles: clearing a cleared day would fill it, which is
    * the one thing a brush that means "not then" must never do.
@@ -285,7 +396,14 @@ export function PaintCalendar({
     // the week grid's heading, which is the shape every date callback in this
     // library hands back. Sliced here rather than at each call site, so the two
     // gestures are one function.
-    fillCells(fill(on.slice(0, 10)))
+    const day = on.slice(0, 10)
+    // A day the poll is not asking about is not filled by its heading. The
+    // month grid disables such a day outright, but a week grid's heading sits
+    // above the disabled cells rather than among them -- and on the create
+    // form, where a heading is how a day joins the poll at all, that heading is
+    // the one way a day behind the floor could still be marked.
+    if (!asks(day)) return
+    fillCells(fill(day))
   }
 
   /**
@@ -304,8 +422,37 @@ export function PaintCalendar({
   // Whether the calendar has been navigated off the poll entirely. Worth
   // asking now that a month view exists: the arrows move a month at a time,
   // and a poll asking about three days in September is one press away from a
-  // screen with nothing on it and no clue why.
+  // screen with nothing on it and no clue why. A confined calendar cannot get
+  // there at all; see `stepTo`.
   const adrift = days.length > 0 && (days[days.length - 1] < inView.from || days[0] > inView.to)
+
+  /**
+   * Where one arrow goes, or null when there is nowhere for it to go and it is
+   * drawn as a dead control rather than as a press that changes nothing.
+   *
+   * Unconfined this is a view's worth of movement and nothing more, save for
+   * the floor `earliest` puts under it. Confined it is a *jump*: the nearest
+   * day the poll asks about that this range is not already showing, which the
+   * containing week or month is then drawn around. So the arrows walk the poll
+   * rather than the calendar -- on a poll about a Friday in September and a
+   * Friday in November, Next is one press rather than two through October.
+   */
+  function stepTo(by: 1 | -1): string | null {
+    if (confine) {
+      const day =
+        by > 0 ? days.find((on) => on > inView.to) : days.findLast((on) => on < inView.from)
+      return day ?? null
+    }
+    const next = step(date, showing, by)
+    // The whole of the range has to be behind the floor before the arrow dies,
+    // rather than its first day: the week the floor falls in is a week with
+    // days in it, and the poll is asking about them.
+    if (by < 0 && earliest !== undefined && visibleRange(next, showing).to < earliest) return null
+    return next
+  }
+
+  const back = stepTo(-1)
+  const forward = stepTo(1)
 
   /**
    * Everything on screen, from the range the header is already naming.
@@ -326,6 +473,33 @@ export function PaintCalendar({
    */
   function fillVisible() {
     fillCells(cellsAcross(inView.from, inView.to))
+  }
+
+  /**
+   * The weekdays this poll has nothing on, which the two grids laid out by
+   * weekday leave out; see `hideEmptyWeekdays`.
+   *
+   * Said through the library's own `weekendDays` and `withWeekendDays`, which
+   * is its one way of dropping a column and the only one that keeps the
+   * month's rows and its event spans in step with the drop. The name is the
+   * library's and not a description of the list: what is in it is what is not
+   * drawn, and a poll that does ask about Saturdays does not put Saturday in
+   * it -- which also spares those days the red the library paints a weekend
+   * heading in, a colour that means nothing on an availability grid.
+   *
+   * Empty where there is nothing to hide, and it cannot be all seven: a poll
+   * with no days at all is the first case here, and one with any day at all
+   * has that day's weekday in use.
+   */
+  const emptyWeekdays: DayOfWeek[] =
+    !hideEmptyWeekdays || days.length === 0
+      ? []
+      : ([0, 1, 2, 3, 4, 5, 6] as DayOfWeek[]).filter(
+          (weekday) => !days.some((on) => weekdayOf(on) === weekday),
+        )
+  const byWeekday = {
+    weekendDays: emptyWeekdays,
+    withWeekendDays: emptyWeekdays.length === 0,
   }
 
   const grid = {
@@ -372,7 +546,8 @@ export function PaintCalendar({
         <div className={ScheduleHeader.classes.navigationGroup}>
           <ScheduleHeader.Previous
             aria-label={`Previous ${showing}`}
-            onClick={() => setDate(step(date, showing, -1))}
+            {...dead(back === null)}
+            onClick={() => back !== null && setDate(back)}
           />
           {/* The range, which says what is on screen and fills it; see
               `fillVisible`. The accessible name carries the label rather than
@@ -390,7 +565,8 @@ export function PaintCalendar({
           </Tooltip>
           <ScheduleHeader.Next
             aria-label={`Next ${showing}`}
-            onClick={() => setDate(step(date, showing, 1))}
+            {...dead(forward === null)}
+            onClick={() => forward !== null && setDate(forward)}
           />
         </div>
 
@@ -439,6 +615,7 @@ export function PaintCalendar({
           withDragSlotSelect
           onSlotDragEnd={fillDays}
           getDayProps={(day) => (asks(day) ? {} : outOfBounds)}
+          {...byWeekday}
           firstDayOfWeek={1}
           withOutsideDays={false}
           renderEventBody={eventBody}
@@ -469,6 +646,10 @@ export function PaintCalendar({
           // which control fired. Its accessible name says so too; see LABELS.
           onDateChange={fillDay}
           labels={LABELS}
+          {...byWeekday}
+          // The time column, pinned so that scrolling a narrow week sideways
+          // does not take the hours with it; see STICKY_TIMES.
+          styles={STICKY_TIMES}
           withWeekNumber={false}
           // Monday first, pinned rather than inherited, because `visibleRange`
           // works out which week is on screen and the two have to agree.

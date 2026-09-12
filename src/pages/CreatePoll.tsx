@@ -32,8 +32,10 @@ import {
   DEFAULT_HOURS,
   describeLength,
   enumerateWindows,
+  fromDay,
   meetingMinutes,
   spanOf,
+  todayIn,
   type Bounds,
   type GranuleKey,
 } from '../lib/schedule'
@@ -263,20 +265,6 @@ function noErrors(): FormErrors {
 }
 
 /**
- * Today, in this browser's own zone, as the day a place is resolved against
- * before the poll has any days of its own.
- *
- * Local rather than UTC on purpose: it is standing in for "the poll's first
- * day", which is a wall-clock date the creator picked out of a calendar, and
- * `toISOString` would hand back yesterday's for anybody east of Greenwich in
- * the evening.
- */
-function todayInBrowser(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-}
-
-/**
  * The schedule as it is stored, from the schedule as it was drafted.
  *
  * One tidy, and it is the only thing about a day's shape that is stored at
@@ -362,7 +350,15 @@ function validate(form: {
     // apply to it. What it has instead is a painting, and what can be wrong
     // with a painting is the size of the ballot it generates.
     if (question.kind === 'time') {
-      const total = countWindows(question.schedule, question.marked)
+      // What the poll may still ask about. The calendar refuses to mark a day
+      // that has gone, and this is the same floor read again at the moment the
+      // ballot is counted, for the two ways a painting can fall behind one it
+      // was in front of: midnight, and a move to an offset already on
+      // tomorrow. Counted here and enumerated the same way on submit, so the
+      // number this message quotes is the number of options that get made.
+      const marked = fromDay(question.marked, todayIn(question.schedule.timezone))
+      const days = daysOf(marked)
+      const total = countWindows(question.schedule, marked)
       const length = describeLength(meetingMinutes(question.schedule))
 
       // A question collecting its times may be created with none at all, and
@@ -370,11 +366,11 @@ function validate(form: {
       // world it is, and the group says when. What they mark here is a head
       // start, so an empty calendar is an answer rather than a gap.
       if (form.solicitOptions && total === 0) {
-        if (question.days.length > 0) {
+        if (days.length > 0) {
           errors.schedules[questionIndex] =
             `Nothing you have marked is ${length} long. Mark a longer stretch, shorten the meeting, or leave the calendar empty and let people add times themselves.`
         }
-      } else if (question.days.length === 0) {
+      } else if (days.length === 0) {
         errors.schedules[questionIndex] = 'Mark the times people can meet on the calendar.'
       } else if (total === 0) {
         // Nothing painted is long enough, which is the state a creator reaches
@@ -614,7 +610,11 @@ export function CreatePoll() {
               rows.map((option) => option.name),
               grid,
             ),
-            todayInBrowser(),
+            // The poll's own clock rather than this browser's, so the dates a
+            // copy lands on and the floor its calendar draws (see
+            // `ScheduleFields`) agree about which day today is. A creator in
+            // Auckland copying a poll held at -07:00 is a day ahead of it.
+            todayIn(grid.timezone),
           )
           return {
             ...blank,
@@ -940,12 +940,17 @@ export function CreatePoll() {
             .filter((o) => o.name),
         }
       }
-      const grid = settle(question.schedule, question.marked)
+      // Anything behind the floor the calendar draws is dropped here rather
+      // than sent: a poll cannot ask about a day that has gone, and a form
+      // held open across midnight is the one way a painting reaches this line
+      // with such a day still on it. `validate` counts the same set.
+      const marked = fromDay(question.marked, todayIn(question.schedule.timezone))
+      const grid = settle(question.schedule, marked)
       return {
         title: question.title.trim(),
         kind: 'time' as const,
         schedule: grid,
-        options: enumerateWindows(grid, question.marked).map((name) => ({
+        options: enumerateWindows(grid, marked).map((name) => ({
           name,
           description: null,
         })),

@@ -11,6 +11,7 @@ import {
   enumerateWindows,
   formatDay,
   formatWindow,
+  fromDay,
   granularityFor,
   granuleKey,
   granulesOf,
@@ -21,7 +22,9 @@ import {
   scoresFromPainting,
   spanOf,
   stepGranule,
+  todayIn,
   toTimeOfDay,
+  weekdayOf,
   winnerLabel,
   zoneOffsetOn,
   type Bounds,
@@ -695,5 +698,78 @@ describe('duplicating a poll onto dates that have not gone', () => {
     expect(copied).toHaveLength(options.length)
     expect(copied[0]).toBe('2026-11-06T18:00:00-06:00')
     expect(copied.every((start) => start.endsWith('-06:00'))).toBe(true)
+  })
+})
+
+describe('a poll cannot ask about a day that has gone', () => {
+  // The clock is handed in rather than read, which is the whole reason this is
+  // testable: `todayIn` is the one function here allowed to read one, and it
+  // takes the instant as an argument so that nothing else has to.
+  const noon = Date.parse('2026-09-12T12:00:00Z')
+
+  test('today is read on the poll offset, not on the reader', () => {
+    // Noon UTC is the same instant everywhere; which date it is is not.
+    expect(todayIn('+00:00', noon)).toBe('2026-09-12')
+    // Auckland is on the 13th by then, and California is still on the 12th --
+    // and it is the poll's grid the floor belongs to, not the reader's.
+    expect(todayIn('+13:00', noon)).toBe('2026-09-13')
+    expect(todayIn('-07:00', noon)).toBe('2026-09-12')
+  })
+
+  test('and the offset carries a date across midnight either way', () => {
+    const lateEvening = Date.parse('2026-09-12T23:30:00Z')
+    expect(todayIn('+01:00', lateEvening)).toBe('2026-09-13')
+    expect(todayIn('-07:00', lateEvening)).toBe('2026-09-12')
+
+    const earlyMorning = Date.parse('2026-09-12T00:30:00Z')
+    expect(todayIn('+00:00', earlyMorning)).toBe('2026-09-12')
+    expect(todayIn('-07:00', earlyMorning)).toBe('2026-09-11')
+  })
+
+  test('an offset that will not parse is read as UTC rather than as nothing', () => {
+    expect(todayIn('Pacific/Auckland', noon)).toBe('2026-09-12')
+  })
+
+  test('the whole of today is in; only the days before it are dropped', () => {
+    const week = painted(['2026-09-11', '2026-09-12', '2026-09-13'], '09:00', '11:00')
+    expect(daysOf(fromDay(week, '2026-09-12'))).toEqual(['2026-09-12', '2026-09-13'])
+    // Every cell of the kept days survives, including the ones earlier in the
+    // day than the moment the floor was read: a creator marking this morning
+    // is answering about their own diary, not about the clock.
+    expect(boundsOnDay(fromDay(week, '2026-09-12'), '2026-09-12')).toHaveLength(4)
+  })
+
+  test('a floor nothing is behind changes nothing, and one everything is behind empties it', () => {
+    const week = painted(['2026-09-11', '2026-09-12'], '09:00', '11:00')
+    expect(fromDay(week, '2026-09-01').size).toBe(week.size)
+    expect(fromDay(week, '2026-09-13').size).toBe(0)
+  })
+
+  test('what a duplicate lands on is never behind the floor it will be drawn against', () => {
+    // The two now read the same clock; see `CreatePoll`. A poll from last
+    // Friday copied on the 12th comes back on a Friday still ahead.
+    const last = painted(['2026-09-04'], '18:00', '20:00')
+    const renewed = carryForward(last, todayIn('-07:00', noon))
+    expect(daysOf(renewed.bounds)).toEqual(['2026-09-18'])
+    expect(fromDay(renewed.bounds, todayIn('-07:00', noon)).size).toBe(renewed.bounds.size)
+  })
+})
+
+describe('which weekdays a poll has nothing on', () => {
+  // What the ballot leaves out of its two weekday grids; see `PaintCalendar`.
+  test('a date knows its own weekday, in UTC and never in the reader zone', () => {
+    expect(weekdayOf('2026-09-13')).toBe(0)
+    expect(weekdayOf('2026-09-14')).toBe(1)
+    expect(weekdayOf('2026-09-18')).toBe(5)
+    // The same arithmetic the column heading is drawn from.
+    expect(formatDay('2026-09-18')).toBe('Fri Sep 18')
+  })
+
+  test('a weekend poll uses three of the seven', () => {
+    const weekendOnly = daysOf(
+      painted(['2026-09-18', '2026-09-19', '2026-09-20'], '09:00', '11:00'),
+    )
+    const used = new Set(weekendOnly.map(weekdayOf))
+    expect([...used].sort()).toEqual([0, 5, 6])
   })
 })

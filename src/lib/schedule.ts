@@ -219,6 +219,20 @@ export function boundsOf(windowStarts: WindowStart[], schedule: PollSchedule): S
   return cells
 }
 
+/**
+ * The painting, less whatever falls on a day before `first`.
+ *
+ * What a poll asks about cannot start in the past, and the create form's
+ * calendar refuses to mark a day that has gone (see `ScheduleFields`). This is
+ * the same rule applied once more where the options are actually built, for
+ * the two ways a painting can end up behind a floor it was in front of when it
+ * was made: a form left open across midnight, and a creator who moves the poll
+ * to an offset where it is already tomorrow.
+ */
+export function fromDay(bounds: Bounds, first: ScheduleDay): Set<GranuleKey> {
+  return new Set([...bounds].filter((key) => key.slice(0, 10) >= first))
+}
+
 /** The days a poll is asking about: exactly the days its cells fall on. */
 export function daysOf(bounds: Bounds): ScheduleDay[] {
   const days = new Set<ScheduleDay>()
@@ -550,6 +564,25 @@ export function offsetMinutes(offset: string): number | null {
 }
 
 /**
+ * Today, as a wall-clock date in the poll's own offset -- the earliest day a
+ * poll being made now has any business asking about.
+ *
+ * **It is the poll's clock rather than the reader's**, which is the only thing
+ * here worth a comment. A creator in Auckland arranging a meeting held at
+ * `-07:00` is a day ahead of the grid they are painting, and a floor read off
+ * their own calendar would grey out a day the poll can perfectly well use. So
+ * the instant is shifted by the offset and the *UTC* date of the result is
+ * read back, which is exactly the wall-clock date in that offset.
+ *
+ * `now` is an argument so that the rest of this file's rule -- nothing that
+ * decides what a poll asks about reads a clock it cannot be handed -- survives
+ * into the one function whose whole job is to read one.
+ */
+export function todayIn(offset: string, now: number = Date.now()): ScheduleDay {
+  return new Date(now + (offsetMinutes(offset) ?? 0) * 60_000).toISOString().slice(0, 10)
+}
+
+/**
  * The offset this browser is in right now, as a last-resort default.
  *
  * `getTimezoneOffset` is minutes *behind* UTC, so its sign is the opposite of
@@ -784,9 +817,21 @@ export function formatWindow(name: string): string {
 
 /** The day part alone, for a column heading over a grid: `Fri Feb 20`. */
 export function formatDay(day: ScheduleDay): string {
+  const [, month, dayOfMonth] = day.split('-').map(Number)
+  return `${WEEKDAYS[weekdayOf(day)]} ${MONTHS[month - 1]} ${dayOfMonth}`
+}
+
+/**
+ * Which day of the week a date falls on, 0 for Sunday -- the numbering every
+ * calendar library in this app already uses.
+ *
+ * Built in UTC for the reason `addDays` is: the parts go in as wall clock and
+ * no instant is ever compared against anybody's own zone, so a browser sitting
+ * on the wrong side of a daylight-saving change cannot move a Friday.
+ */
+export function weekdayOf(day: ScheduleDay): number {
   const [year, month, dayOfMonth] = day.split('-').map(Number)
-  const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, dayOfMonth)).getUTCDay()]
-  return `${weekday} ${MONTHS[month - 1]} ${dayOfMonth}`
+  return new Date(Date.UTC(year, month - 1, dayOfMonth)).getUTCDay()
 }
 /**
  * The painting as one event per run of neighbouring cells sharing a value, for

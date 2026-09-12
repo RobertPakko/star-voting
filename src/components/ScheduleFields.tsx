@@ -15,6 +15,7 @@ import {
   meetingMinutes,
   paintingRuns,
   runBounds,
+  todayIn,
   toMinutes,
   toTimeOfDay,
   type Bounds,
@@ -171,6 +172,29 @@ export function ScheduleFields({
   const ordered = inOrder(days)
   const daily = isDaily(schedule)
   const [brush, setBrush] = useState(1)
+
+  /**
+   * The first day this poll may ask about: today, on the poll's own clock.
+   *
+   * **A meeting cannot be held in the past**, and a calendar that lets one be
+   * marked there is offering a ballot whose best answer is a day that has
+   * already gone. Nothing downstream would catch it -- the enumeration is
+   * arithmetic and does not read a clock, and a window in the past is a
+   * perfectly well-formed window -- so the floor belongs on the gesture that
+   * puts a day in the poll.
+   *
+   * The whole of today is in, rather than the rest of it. A creator marking
+   * this afternoon at two is answering a question about their own diary, and a
+   * floor that moved through the day would rub out what they had marked while
+   * they were still typing the title.
+   *
+   * Read on the poll's offset rather than on this browser's, which is the
+   * point of `todayIn`: a creator in Auckland arranging a meeting held at
+   * -07:00 is a day ahead of the grid they are painting, and their own
+   * calendar would grey out a day the poll can use. Recomputed on each render
+   * rather than held, so a form left open across midnight is right afterwards.
+   */
+  const floor = todayIn(schedule.timezone)
 
   // The two facts about the chosen days that the offset answers depend on, as
   // scalars: a memo keyed on an array rebuilds on every render, since the array
@@ -382,12 +406,17 @@ export function ScheduleFields({
         <PaintCalendar
           schedule={schedule}
           // What is painted, which is also which days the poll is on and so
-          // where the calendar opens. Nothing is out of bounds: the two below
-          // say that every cell of every day may be marked, because marking
-          // one is how a day joins the poll in the first place.
+          // where the calendar opens. Nothing ahead is out of bounds: the two
+          // below say that every cell of every day still to come may be
+          // marked, because marking one is how a day joins the poll in the
+          // first place. Days that have gone are the one exception; see
+          // `floor`.
           bounds={marked}
-          canPaint={() => true}
-          dayInBounds={() => true}
+          canPaint={(key) => key.slice(0, 10) >= floor}
+          dayInBounds={(day) => day >= floor}
+          // And no walking back into the months that are entirely behind the
+          // floor, which are screens of greyed cells with nothing to say.
+          earliest={floor}
           axis={WHOLE_DAY}
           painting={paintingOf(marked)}
           brush={brush}
