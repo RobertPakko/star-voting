@@ -226,7 +226,10 @@ export function TimeBallotCard({
           <Group gap={6} wrap="wrap" justify="space-between">
             <Text size="xs" c="dimmed">
               All times are {describeOffset(schedule.timezone, zone)}
-              {days.length > 0 && ` · ${formatDay(days[0])} to ${formatDay(days[days.length - 1])}`}
+              {days.length > 0 && ' · '}
+            </Text>
+            <Text size="xs" c="dimmed">
+              {`${formatDay(days[0])} to ${formatDay(days[days.length - 1])}`}
             </Text>
           </Group>
           <SegmentedControl
