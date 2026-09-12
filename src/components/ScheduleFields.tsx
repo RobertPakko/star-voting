@@ -291,7 +291,7 @@ export function ScheduleFields({
         view !== 'month'
           ? ''
           : daily
-            ? 'In bounds'
+            ? ''
             : `${toTimeOfDay(run.from)}–${toTimeOfDay(run.to)}`,
       ...runBounds(run),
       color: 'teal.6',
@@ -367,7 +367,7 @@ export function ScheduleFields({
           said. Always on screen, and not only once a day has been picked
           somewhere else: there is nowhere else. */}
       <Stack gap={6}>
-        <Group gap="sm" wrap="nowrap" align="center">
+        <Group gap="sm" wrap="nowrap" align="center" justify="space-between">
           <Text size="sm" c="dimmed">
             {daily
               ? 'Define which dates voters are choosing between.'
