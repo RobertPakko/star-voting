@@ -332,7 +332,7 @@ export function ScheduleFields({
       {!daily && (
         <Group grow align="flex-start" wrap="wrap">
           <Select
-            label="Default start"
+            label="Default earliest start"
             data={STARTS}
             value={hours.start}
             onChange={(v) =>
@@ -348,7 +348,7 @@ export function ScheduleFields({
             comboboxProps={{ withinPortal: false }}
           />
           <Select
-            label="Default End"
+            label="Default latest end"
             data={ENDS.filter((end) => end.value > hours.start)}
             value={hours.end}
             onChange={(v) => v && setHours({ ...hours, end: v })}
@@ -365,8 +365,8 @@ export function ScheduleFields({
         <Group gap="sm" wrap="nowrap" align="center" justify="space-between">
           <Text size="sm" c="dimmed">
             {daily
-              ? 'Define which dates voters are choosing between. Click a day to include it, or the month in the calendar’s header to take every day on screen.'
-              : 'Define what dates and times voters can choose from. Click a day to populate it with the default hours, the range in the calendar’s header to do that to every day on screen, or paint your schedule manually using the day or week view.'}
+              ? 'Define which dates voters are choosing between.'
+              : 'Define what dates and times voters can choose from. Use the day or week view to paint times manually.'}
           </Text>
           <SegmentedControl
             size="xs"
