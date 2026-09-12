@@ -16,6 +16,7 @@
 @media (hover: hover) {
   .card {
     transition:
+      opacity var(--motion-fast) var(--motion-ease),
       transform var(--motion-fast) var(--motion-ease),
       box-shadow var(--motion-fast) var(--motion-ease);
   }
@@ -30,4 +31,64 @@
     transform: translateY(0);
     box-shadow: none;
   }
+}
+
+/* The card *was* the anchor, and stopped being able to be one the moment it
+ * grew a control: a button inside a link is invalid HTML, and what browsers
+ * make of it is a press that both toggles the button and follows the link.
+ *
+ * So the anchor is the heading, and its own ::after covers the card. The whole
+ * card is still one thing to click and still one thing to tab to — the padding
+ * included, which is most of the right-hand side of a card whose title is
+ * short — while the hide control beside it is a sibling rather than something
+ * nested inside a link. Nothing about the row a reader sees has changed.
+ *
+ * The two rules above are why this is `position: relative` on the card rather
+ * than on the anchor: the overlay is cast over the card, so it has to be the
+ * card the absolute position resolves against. `:active` reaches an element's
+ * ancestors, so a press on the overlay still settles the whole card.
+ */
+.card {
+  position: relative;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.link {
+  /* The heading takes the row; the control beside it takes what it needs and
+     the heading gives, which is what keeps a long title off it. */
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+/* Above the overlay, which is cast over the whole card including this corner
+   of it. It would win on paint order alone — it is the later sibling — but a
+   click target that depends on the order two rules happen to be written in is
+   a click target one refactor from going through the link instead. */
+.hide {
+  position: relative;
+  z-index: 1;
+}
+
+/* A poll that is hidden, while hidden polls are being looked at.
+ *
+ * Faded rather than marked with a word: this state is temporary by
+ * construction — nothing draws it unless *Show hidden* is pressed — and the
+ * reader already knows what they asked to see. What the fade is really for is
+ * the other direction: hiding a poll from the revealed list dims the card
+ * under the press instead of removing it, which is the only feedback a control
+ * has when the thing it acts on is supposed to stay on screen.
+ *
+ * It stays comfortably readable. A hidden poll is still the reader's poll, and
+ * they are looking at it on purpose.
+ */
+.hidden {
+  opacity: 0.55;
 }

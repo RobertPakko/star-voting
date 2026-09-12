@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, Reveal, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order and answered questions, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -3690,6 +3690,58 @@ a poll that has opened not opening again. The sending is untestable here for
 the reason it always was — there is no `pg_net` in the throwaway
 database — so the suite can say
 who *would* have been written to and never that anybody was.
+
+### Hiding a poll from your list
+
+A poll history only grows. A poll cannot be left and an invite cannot be
+declined — being in a poll is what lets you read its result months later — so
+`list_polls` answers with every poll a reader has ever been in, and the only
+thing that has ever taken one off that list is the six-month sweep below.
+**Hiding is the reader's own housekeeping over that list, and it is the whole
+of what it is**: the poll is unchanged, still theirs, still readable at its own
+address, still counted by everything that counts polls.
+
+Each card carries an eye at its bottom right, alongside the badges; pressing it
+takes the poll off the list. When anything is hidden, a **Show hidden (*n*)**
+button appears beside **New poll** and puts them back on screen, dimmed, with
+the eye open — press it again, or bring the last one back, and it is gone.
+
+**Nothing about it reaches the database, and nothing should.** There is no
+column and no table: hiding a poll changes nothing about the poll, tells its
+creator nothing, and grants and withholds nothing. It is a fact about one
+screen in one browser, and the one kind of state that must never be mistaken
+for having left a poll — which is exactly the mistake a column on a shared row
+invites the next person to make. So it goes where the ballot order, the
+remembered name and the sign-in choice already live: `localStorage`, under
+`star-voting:hidden-polls`, in [`src/lib/hiddenPolls.ts`](src/lib/hiddenPolls.ts).
+Per browser rather than per account, on the same terms and with the same
+consequence — hide a poll on your laptop and it is still on the list on your
+phone. The alternative is a table, and a table is a disclosure.
+
+What is stored is a set of poll ids, so nothing in it can go stale in a way
+that matters: a poll renamed, voted in or closed is the same id. A hidden poll
+that has since been deleted leaves an id matching nothing, which draws nothing
+and costs a few bytes — its only visible trace is the count on the button. The
+list is paged in the database, so a hidden id missing from the page on screen
+is nearly always a hidden poll on another page; `pruneHiddenPolls` therefore
+sweeps only on a read whose page *is* the whole list, which is the one read
+that can tell a deleted poll from an absent one.
+
+**The page still asks for ten polls and the pager still counts every poll.**
+Hiding four leaves six cards on that page rather than pulling four up from the
+next one, and a poll stays on the page it was on. Closing the pages up would
+mean a poll's place on the list moving because of something done to a different
+poll, and page two holding different rows for the same reader on two devices.
+A page with nothing left on it says so — *Every poll on this page is hidden* —
+rather than looking like a list that has lost its polls.
+
+Two smaller decisions worth keeping. **Whether hidden polls are being looked at
+is not remembered**: hiding survives a reload, peeking does not, because a
+reader who tidied their list and came back to it untidied would have to tidy it
+again. And **the card is no longer the anchor**: a control inside a link is
+invalid HTML and presses both, so the heading is the link and its `::after`
+covers the card. The whole card is still one thing to click and one thing to
+tab to, with the eye beside it as the second stop.
 
 ### Polls are deleted after six months
 

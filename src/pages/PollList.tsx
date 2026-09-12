@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Button, Card, Group, Pagination, Stack, Text, Title } from '@mantine/core'
+import {
+  ActionIcon,
+  Button,
+  Card,
+  Group,
+  Pagination,
+  Stack,
+  Text,
+  Title,
+  Tooltip,
+} from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
+import { EyeIcon, EyeSlashIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { pruneHiddenPolls, setPollHidden, useHiddenPolls } from '../lib/hiddenPolls'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
@@ -34,6 +46,14 @@ export function PollList() {
   const [polls, setPolls] = useState<PollListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  // The polls this browser keeps off the list, which is the reader's own
+  // housekeeping and lives nowhere but their storage; see lib/hiddenPolls.ts.
+  const hidden = useHiddenPolls()
+  // Whether they are being looked at anyway. Deliberately not remembered: a
+  // peek at what has been put away is a thing you do and then stop doing, and
+  // a reader who reloads onto a list they thought they had tidied would have
+  // to tidy it again. Hiding itself survives; looking at it does not.
+  const [revealed, setRevealed] = useState(false)
   // How many polls there are in total, which only a read can tell us: it
   // arrives on every row (see PollListItem.total_count) because that is the
   // only place a set-returning function can put it.
@@ -77,6 +97,11 @@ export function PollList() {
     // in it rather than a page number that overshot.
     const count = rows[0]?.total_count ?? 0
     setTotal(count)
+    // A page that holds the whole list is the one read that can tell a hidden
+    // poll that has since been deleted from a hidden poll on another page, so
+    // it is the one read allowed to sweep the stored ids; see
+    // pruneHiddenPolls, which is doing nothing at all on most reads.
+    if (count <= PAGE_SIZE) pruneHiddenPolls(rows.map((row) => row.id))
     // The page these rows are actually of, which is not always the page that
     // was asked for — the database clamps a request past the end. Recording
     // the clamped one is what stops the effect below from reading again the
@@ -102,6 +127,16 @@ export function PollList() {
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const current = Math.min(page, pageCount)
   const shown = polls ?? []
+  // The page, less whatever is being kept off it.
+  //
+  // Filtered here rather than paged around: `list_polls` counts every poll the
+  // reader is in, hidden or not, so the pager still reports the same pages and
+  // a poll stays on the page it was on. The alternative — pages that close up
+  // over what is hidden — would mean a poll's place on the list moving because
+  // of something done to a different poll, and a page whose contents depend on
+  // what a browser happens to be storing. The cost is that hiding four polls
+  // leaves six on a page of ten, which reads as exactly what it is.
+  const visible = revealed ? shown : shown.filter((poll) => !hidden.has(poll.id))
 
   // And brought down in state as well, not only in what is drawn. A `page`
   // left pointing past the end is invisible until the list grows back, at
@@ -111,6 +146,14 @@ export function PollList() {
   useEffect(() => {
     if (page > pageCount) setPage(pageCount)
   }, [page, pageCount])
+
+  // Nothing hidden, nothing to reveal. Without this, bringing the last hidden
+  // poll back would leave the control pressed with nothing behind it — and the
+  // next poll hidden after that would stay on screen, under a button offering
+  // to show it.
+  useEffect(() => {
+    if (hidden.size === 0) setRevealed(false)
+  }, [hidden])
 
   // Unlike a single poll, a list has no settled state to stop at: any poll on
   // it can take a vote, and a new invite can add a row. So it watches one
@@ -163,9 +206,26 @@ export function PollList() {
 
         <Group justify="space-between">
           <Title order={2}>Your polls</Title>
-          <Button component={Link} to="/polls/new">
-            New poll
-          </Button>
+          <Group gap="xs">
+            {/* Only there when something is hidden, because that is the only
+                state in which it has anything to say — and its absence is how
+                a reader who has never hidden a poll never learns there is a
+                mode they might be in. It counts what is hidden across the whole
+                list rather than on this page: the number is what makes the
+                control worth reading, and a poll put away on page three is
+                still put away when page one is on screen.
+
+                Left of New poll, which stays where it has always been. This is
+                about the list already there; that one leaves it. */}
+            {hidden.size > 0 && (
+              <Button variant="default" onClick={() => setRevealed((was) => !was)}>
+                {revealed ? 'Hide again' : `Show hidden (${hidden.size})`}
+              </Button>
+            )}
+            <Button component={Link} to="/polls/new">
+              New poll
+            </Button>
+          </Group>
         </Group>
 
         {polls.length === 0 && (
@@ -174,54 +234,107 @@ export function PollList() {
           </Text>
         )}
 
+        {/* Polls, all of them hidden. Said out loud rather than left as a gap
+            under the heading: an empty space says the list is empty, which is
+            a different thing and would be the app losing the reader's polls in
+            front of them. The control that brings them back is the sentence's
+            other half, one row up. */}
+        {polls.length > 0 && visible.length === 0 && (
+          <Text c="dimmed" size="sm">
+            {pageCount > 1 ? 'Every poll on this page is hidden.' : 'Every poll here is hidden.'}
+          </Text>
+        )}
+
         <Stack gap="md">
-          {shown.map((poll) => (
-            <Card
-              key={poll.id}
-              withBorder
-              component={Link}
-              to={`/polls/${poll.id}`}
-              className={classes.card}
-              style={{ textDecoration: 'none' }}
-            >
-              {/* The same heading the poll's own page carries, at card size;
-                see PollHeading. */}
-              <PollHeading
-                compact
-                title={poll.title}
-                description={poll.description}
-                createdBy={poll.created_by === session?.user.id ? 'you' : poll.created_by_email}
-                mode={poll.mode}
-                showVoters={poll.show_voters}
-                showBallots={poll.show_ballots}
-                turnout={{
-                  soliciting: poll.soliciting,
-                  mode: poll.mode,
-                  votedCount: poll.voted_count,
-                  invitedCount: poll.invited_count,
-                  confirmedCount: poll.confirmed_count,
-                  optionCount: poll.option_count,
-                  questionCount: poll.question_count,
-                }}
-                state={{
-                  soliciting: poll.soliciting,
-                  resultsAvailable: poll.results_available,
-                  closed: poll.is_closed,
-                  // `undefined` rather than null where the database has not
-                  // settled an answer — including a database old enough not to
-                  // carry the columns at all — because null is a real answer
-                  // here and means a poll that elected nobody.
-                  //
-                  // A group's row on this list *is* its first question, so this
-                  // is that question's winner rather than the poll's. The badge
-                  // withholds it on `inGroup`, in one place for all three
-                  // screens, rather than leaving three callers to remember.
-                  winner: poll.winner_settled ? winnerLabel(poll.winner_name ?? null) : undefined,
-                  inGroup: poll.question_count > 1,
-                }}
-              />
-            </Card>
-          ))}
+          {visible.map((poll) => {
+            // Only ever true while they are being looked at; a hidden poll is
+            // otherwise not on screen to say so.
+            const isHidden = hidden.has(poll.id)
+            return (
+              <Card
+                key={poll.id}
+                withBorder
+                className={`${classes.card} ${isHidden ? classes.hidden : ''}`}
+              >
+                {/* The heading and the control, on one row, the control at the
+                  bottom of it — which on every card is alongside the badges,
+                  the last thing the row is made of. Placed in the flow rather
+                  than pinned to the corner: the badges wrap on a phone, and a
+                  button floating over the end of a wrapped row is a button
+                  sitting on top of what the card was trying to say. */}
+                <Group align="flex-end" wrap="nowrap" gap="xs">
+                  {/* The same heading the poll's own page carries, at card size;
+                    see PollHeading. */}
+                  <Link to={`/polls/${poll.id}`} className={classes.link}>
+                    <PollHeading
+                      compact
+                      title={poll.title}
+                      description={poll.description}
+                      createdBy={
+                        poll.created_by === session?.user.id ? 'you' : poll.created_by_email
+                      }
+                      mode={poll.mode}
+                      showVoters={poll.show_voters}
+                      showBallots={poll.show_ballots}
+                      turnout={{
+                        soliciting: poll.soliciting,
+                        mode: poll.mode,
+                        votedCount: poll.voted_count,
+                        invitedCount: poll.invited_count,
+                        confirmedCount: poll.confirmed_count,
+                        optionCount: poll.option_count,
+                        questionCount: poll.question_count,
+                      }}
+                      state={{
+                        soliciting: poll.soliciting,
+                        resultsAvailable: poll.results_available,
+                        closed: poll.is_closed,
+                        // `undefined` rather than null where the database has not
+                        // settled an answer — including a database old enough not to
+                        // carry the columns at all — because null is a real answer
+                        // here and means a poll that elected nobody.
+                        //
+                        // A group's row on this list *is* its first question, so this
+                        // is that question's winner rather than the poll's. The badge
+                        // withholds it on `inGroup`, in one place for all three
+                        // screens, rather than leaving three callers to remember.
+                        winner: poll.winner_settled
+                          ? winnerLabel(poll.winner_name ?? null)
+                          : undefined,
+                        inGroup: poll.question_count > 1,
+                      }}
+                    />
+                  </Link>
+
+                  {/* An eye rather than a cross, and the wording is "list"
+                    rather than "hide" alone: nothing here deletes, declines or
+                    leaves a poll, and a control on a card of somebody else's
+                    poll had better not look like it might. The label names the
+                    poll, because a screen reader hearing ten of these needs to
+                    know which one it is on. */}
+                  <Tooltip label={isHidden ? 'Show on this list' : 'Hide from this list'} withArrow>
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      className={classes.hide}
+                      aria-label={
+                        isHidden
+                          ? `Show ${poll.title} on this list`
+                          : `Hide ${poll.title} from this list`
+                      }
+                      onClick={() => setPollHidden(poll.id, !isHidden)}
+                    >
+                      {isHidden ? (
+                        <EyeIcon size={18} aria-hidden />
+                      ) : (
+                        <EyeSlashIcon size={18} aria-hidden />
+                      )}
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              </Card>
+            )
+          })}
         </Stack>
 
         {/* Only once there is a second page to go to. */}
