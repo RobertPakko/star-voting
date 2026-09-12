@@ -81,9 +81,13 @@ CREATE TABLE IF NOT EXISTS "public"."polls" (
     "question_title" "text",
     "winner_name" "text",
     "winner_settled_at" timestamp with time zone,
+    "kind" "text" DEFAULT 'option'::"text" NOT NULL,
+    "schedule" "jsonb",
+    CONSTRAINT "polls_kind_ck" CHECK (("kind" = ANY (ARRAY['option'::"text", 'time'::"text"]))),
     CONSTRAINT "polls_mode_ck" CHECK (("mode" = ANY (ARRAY['invite'::"text", 'open'::"text"]))),
     CONSTRAINT "polls_options_finalized_ck" CHECK ((("options_finalized_at" IS NULL) OR "solicit_options")),
     CONSTRAINT "polls_question_ck" CHECK (((("group_id" IS NULL) AND ("question_position" IS NULL) AND ("question_title" IS NULL)) OR (("group_id" IS NOT NULL) AND ("question_position" >= 1) AND ("question_title" IS NOT NULL)))),
+    CONSTRAINT "polls_schedule_ck" CHECK (((("kind" = 'option'::"text") AND ("schedule" IS NULL)) OR (("kind" = 'time'::"text") AND ("schedule" IS NOT NULL)))),
     CONSTRAINT "polls_winner_settled_ck" CHECK ((("winner_name" IS NULL) OR ("winner_settled_at" IS NOT NULL)))
 );
 
@@ -120,6 +124,14 @@ COMMENT ON COLUMN "public"."polls"."winner_name" IS 'The option this question el
 
 
 COMMENT ON COLUMN "public"."polls"."winner_settled_at" IS 'When this question''s result was worked out. Null means it has none yet -- it is still taking votes, or a reset took its result away.';
+
+
+
+COMMENT ON COLUMN "public"."polls"."kind" IS 'What the poll is choosing between. ''option'' is an ordinary ballot; ''time'' is a poll whose options are the start of a meeting window and whose ballot is a calendar. A setting, frozen at creation like mode.';
+
+
+
+COMMENT ON COLUMN "public"."polls"."schedule" IS 'How a time poll''s grid is laid out: {timezone, window: {start, end}, desired_slots, granularity}. Only what cannot be recovered from the options -- the in-bounds days are exactly the dates the options start on, so the client derives those and the two can never disagree. Null on an option poll; required on a time poll.';
 
 
 
@@ -582,13 +594,14 @@ COMMENT ON FUNCTION "public"."confirming_invitee"("p_poll_id" "uuid") IS 'The po
 
 
 
-CREATE OR REPLACE FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text" DEFAULT 'invite'::"text", "p_show_voters" boolean DEFAULT true, "p_show_ballots" boolean DEFAULT false, "p_option_descriptions" "text"[] DEFAULT NULL::"text"[], "p_solicit_options" boolean DEFAULT false) RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text" DEFAULT 'invite'::"text", "p_show_voters" boolean DEFAULT true, "p_show_ballots" boolean DEFAULT false, "p_option_descriptions" "text"[] DEFAULT NULL::"text"[], "p_solicit_options" boolean DEFAULT false, "p_kind" "text" DEFAULT 'option'::"text", "p_schedule" "jsonb" DEFAULT NULL::"jsonb") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 declare
   v_opts jsonb;
   v_mails text[];
+  v_kind text := coalesce(p_kind, 'option');
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';
@@ -598,8 +611,22 @@ begin
     raise exception 'Unknown poll mode';
   end if;
 
+  if v_kind not in ('option', 'time') then
+    raise exception 'Unknown poll kind';
+  end if;
+
   if coalesce(trim(p_title), '') = '' then
     raise exception 'Title is required';
+  end if;
+
+  if v_kind = 'time' then
+    -- A time poll collecting its times starts with whatever its creator
+    -- painted, which may be nothing at all: insert_poll_row applies the
+    -- two-option floor only to a poll that is not collecting, and
+    -- finalize_options applies it again when the list becomes a ballot.
+    perform validate_schedule(p_schedule);
+  elsif p_schedule is not null then
+    raise exception 'Only a time poll has a schedule';
   end if;
 
   if p_mode = 'invite' then
@@ -625,13 +652,19 @@ begin
     coalesce(p_show_ballots, false),
     coalesce(p_solicit_options, false),
     null,
-    null
+    null,
+    v_kind,
+    case when v_kind = 'time' then p_schedule else null end
   );
 end;
 $$;
 
 
-ALTER FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") IS 'Creates one poll with its options and its invitees. A time poll carries a schedule and options its creator''s browser enumerated from a painted calendar; the database stores it exactly as it stores any other poll. A time poll may collect its times from voters, through suggest_options.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text" DEFAULT 'invite'::"text", "p_show_voters" boolean DEFAULT true, "p_show_ballots" boolean DEFAULT false, "p_solicit_options" boolean DEFAULT false) RETURNS "uuid"
@@ -645,6 +678,8 @@ declare
   v_id uuid;
   v_question jsonb;
   v_question_title text;
+  v_kind text;
+  v_schedule jsonb;
   v_count int;
   i int;
 begin
@@ -696,6 +731,23 @@ begin
       raise exception 'The title of question % is too long', i + 1;
     end if;
 
+    -- What this question is choosing between, question by question: a group
+    -- may ask "what are we watching?" and "when?" and the two are not the
+    -- same shape of ballot. The checks are `create_poll`'s, said again here
+    -- because this is the other way into `insert_poll_row` and the two must
+    -- not disagree about what a schedule is.
+    v_kind := coalesce(nullif(trim(coalesce(v_question ->> 'kind', '')), ''), 'option');
+    if v_kind not in ('option', 'time') then
+      raise exception 'Question % is of an unknown kind', i + 1;
+    end if;
+
+    v_schedule := nullif(v_question -> 'schedule', 'null'::jsonb);
+    if v_kind = 'time' then
+      perform validate_schedule(v_schedule);
+    elsif v_schedule is not null then
+      raise exception 'Only a time question has a schedule; question % is not one', i + 1;
+    end if;
+
     v_id := insert_poll_row(
       trim(p_title),
       nullif(trim(coalesce(p_description, '')), ''),
@@ -707,7 +759,9 @@ begin
       coalesce(p_show_ballots, false),
       coalesce(p_solicit_options, false),
       v_group_id,
-      i + 1
+      i + 1,
+      v_kind,
+      case when v_kind = 'time' then v_schedule else null end
     );
 
     if i = 0 then
@@ -723,7 +777,7 @@ $$;
 ALTER FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) IS 'Creates a poll that asks several questions: one poll row per question, sharing a group, a title, a description, an invite list and their settings. One transaction. A soliciting group collects options question by question and opens all of them at once; see finalize_options.';
+COMMENT ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) IS 'Creates a poll that asks several questions: one poll row per question, sharing a group, a title, a description, an invite list and their settings. One transaction. A question may be a time poll, by carrying a kind and a schedule of its own. A soliciting group collects options question by question and opens all of them at once; see finalize_options.';
 
 
 
@@ -747,6 +801,10 @@ begin
     raise exception 'This poll has been closed';
   end if;
 
+  if v_poll.kind = 'time' then
+    raise exception 'A time poll''s options are its windows; change its schedule instead';
+  end if;
+
   -- The trigger says this too, and would refuse the insert on its own. Saying
   -- it here is what makes the message the one the creator can act on.
   if exists (select 1 from ballots where poll_id = p_poll_id) then
@@ -762,6 +820,41 @@ ALTER FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text"
 
 
 COMMENT ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") IS 'Adds an option to the creator''s own poll while it still has no votes. The window is "no ballots" and nothing else; where the options came from does not enter into it.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+begin
+  select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
+
+  if not found then
+    raise exception 'Poll not found';
+  end if;
+
+  if v_poll.closed_at is not null then
+    raise exception 'This poll has been closed';
+  end if;
+
+  -- The trigger says this too, and would refuse the insert on its own. Saying
+  -- it here is what makes the message the one the creator can act on.
+  if exists (select 1 from ballots where poll_id = p_poll_id) then
+    raise exception 'Cannot change the options of a poll that already has votes';
+  end if;
+
+  return insert_options(v_poll, p_options);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") IS 'The creator''s correction to an option list that is already a ballot, applied in one go rather than one option per request. Allowed on a time poll, where the names come from a painted calendar; the singular creator_add_option is the typed-name path and still refuses one.';
 
 
 
@@ -1019,9 +1112,9 @@ begin
   into v_count, v_next
   from candidates where poll_id = p_poll.id;
 
-  -- A ballot is a list somebody has to read to the end before scoring any of
-  -- it, and a shared list with nothing stopping it grows until nobody does.
-  if v_count >= 50 then
+  -- The ceiling is a ceiling on what the tally can be asked to do in the time
+  -- a voter is waiting for it, rather than on what a reader will put up with.
+  if v_count >= 500 then
     raise exception 'This poll already has as many options as it can hold';
   end if;
 
@@ -1036,11 +1129,71 @@ $$;
 ALTER FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") IS 'The field rules for one option -- name, description, duplicates, the 50-option ceiling -- shared by the suggestion path and the creator''s own. Internal: the caller has already decided it may write to this poll.';
+COMMENT ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") IS 'The field rules for one option -- name, description, duplicates, the 500-option ceiling -- shared by the suggestion path and the creator''s own. Internal: the caller has already decided it may write to this poll.';
 
 
 
-CREATE OR REPLACE FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid" DEFAULT NULL::"uuid", "p_question_position" integer DEFAULT NULL::integer) RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."insert_options"("p_poll" "public"."polls", "p_options" "jsonb") RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_item jsonb;
+  v_name text;
+  v_added int := 0;
+  v_seen text[] := array[]::text[];
+  i int;
+begin
+  if p_options is null or jsonb_typeof(p_options) <> 'array' then
+    raise exception 'Give the options as a list';
+  end if;
+
+  -- Bounded before anything is inserted, so an over-long batch is one message
+  -- rather than four hundred rows and then a message. The real ceiling is
+  -- insert_option's, which counts what is already there.
+  if jsonb_array_length(p_options) > 500 then
+    raise exception 'A poll can hold 500 options; that is %', jsonb_array_length(p_options);
+  end if;
+
+  for i in 0 .. jsonb_array_length(p_options) - 1 loop
+    v_item := p_options -> i;
+    v_name := nullif(trim(coalesce(v_item ->> 'name', '')), '');
+    if v_name is null then
+      continue;
+    end if;
+
+    -- Against the batch as well as against the table: a list with the same
+    -- name twice in it would otherwise insert the first and raise on the
+    -- second, which is the half-applied run this function exists to prevent.
+    if lower(v_name) = any (v_seen) then
+      continue;
+    end if;
+    v_seen := v_seen || lower(v_name);
+
+    if exists (
+      select 1 from candidates c
+      where c.poll_id = p_poll.id and lower(c.name) = lower(v_name)
+    ) then
+      continue;
+    end if;
+
+    perform insert_option(p_poll, v_name, v_item ->> 'description');
+    v_added := v_added + 1;
+  end loop;
+
+  return v_added;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."insert_options"("p_poll" "public"."polls", "p_options" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."insert_options"("p_poll" "public"."polls", "p_options" "jsonb") IS 'Adds a list of options to a poll in one go, skipping the names already on it, and answers how many were added. Internal: the caller has already decided it may write to this poll. The atomicity is the point -- a voter painting an afternoon of a time poll adds a dozen windows, and a run that stopped halfway would leave the ballot offering a day nobody meant.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid" DEFAULT NULL::"uuid", "p_question_position" integer DEFAULT NULL::integer, "p_kind" "text" DEFAULT 'option'::"text", "p_schedule" "jsonb" DEFAULT NULL::"jsonb") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -1077,13 +1230,22 @@ begin
     raise exception 'Add at least two options';
   end if;
 
+  -- The ceiling insert_option applies, applied here too. This path inserts
+  -- into `candidates` directly and checked nothing, so a poll created over
+  -- the cap up front was accepted while the same poll built one option at a
+  -- time was refused -- and the calendar is the first thing that can produce
+  -- a list long enough to find that gap.
+  if jsonb_array_length(v_opts) > 500 then
+    raise exception 'A poll can hold 500 options; this one has %', jsonb_array_length(v_opts);
+  end if;
+
   insert into polls (
     title, description, created_by, mode, show_voters, show_ballots,
-    solicit_options, group_id, question_position, question_title
+    solicit_options, group_id, question_position, question_title, kind, schedule
   )
   values (
     p_title, p_description, auth.uid(), p_mode, p_show_voters, p_show_ballots,
-    p_solicit_options, p_group_id, p_question_position, p_question_title
+    p_solicit_options, p_group_id, p_question_position, p_question_title, p_kind, p_schedule
   )
   returning id into v_poll_id;
 
@@ -1106,10 +1268,10 @@ end;
 $$;
 
 
-ALTER FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer) IS 'One poll row with its options and its invitees, for the two functions that create polls. Internal: it checks the title, the description and the option list, because its callers have checked the rest.';
+COMMENT ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") IS 'One poll row with its options and its invitees, for the two functions that create polls. Internal: it checks the title, the description and the option list, because its callers have checked the rest.';
 
 
 
@@ -1890,6 +2052,33 @@ $$;
 ALTER FUNCTION "public"."open_poll_suggest_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."open_poll_suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+begin
+  select * into v_poll from polls
+  where id = p_poll_id and mode = 'open';
+
+  if not found then
+    raise exception 'Poll not found';
+  end if;
+
+  perform assert_collecting_options(v_poll);
+  return insert_options(v_poll, p_options);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."open_poll_suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") IS 'The same, through an open poll''s link. Reachable by anon, like every other open_poll_ function, and refused on any poll that is not open or is no longer collecting.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."open_poll_unconfirm_options"("p_poll_id" "uuid", "p_voter_key" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -2030,7 +2219,12 @@ begin
       -- to render no question strip rather than a strip of one.
       'group_id', v_poll.group_id,
       'question_position', v_poll.question_position,
-      'question_title', v_poll.question_title
+      'question_title', v_poll.question_title,
+      -- What the ballot is: an ordinary list of options, or a calendar and
+      -- the grid to draw it on. Both readings of a poll page need them, and
+      -- the account branch of poll_page gets them free from to_jsonb.
+      'kind', v_poll.kind,
+      'schedule', v_poll.schedule
     ),
     'options', v_options,
     'voted_count', v_voted,
@@ -3869,6 +4063,48 @@ $$;
 ALTER FUNCTION "public"."suggest_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_email text := lower(auth.jwt() ->> 'email');
+  v_poll polls;
+begin
+  select * into v_poll from polls where id = p_poll_id;
+
+  if not found then
+    raise exception 'Poll not found';
+  end if;
+
+  -- Same "not found" for a poll that exists but isn't yours: whether a given
+  -- id is a real poll is not something an outsider needs to learn.
+  if not (
+    v_poll.created_by = auth.uid()
+    or exists (
+      select 1 from invited_voters iv where iv.poll_id = p_poll_id and iv.email = v_email
+    )
+  ) then
+    raise exception 'Poll not found';
+  end if;
+
+  if v_poll.mode <> 'invite' then
+    raise exception 'This poll is open to anyone with the link, so its options are suggested through that link';
+  end if;
+
+  perform assert_collecting_options(v_poll);
+  return insert_options(v_poll, p_options);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") IS 'Suggests several options at once to a poll that is collecting them, from inside the poll. One transaction; names already on the list are skipped. This is how a voter adds times to a time poll, where one gesture is a dozen windows.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."unconfirm_options"("p_poll_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3892,6 +4128,73 @@ ALTER FUNCTION "public"."unconfirm_options"("p_poll_id" "uuid") OWNER TO "postgr
 
 
 COMMENT ON FUNCTION "public"."unconfirm_options"("p_poll_id" "uuid") IS 'Takes back a confirmation while the poll is still collecting, for somebody who has thought of one more thing. Refused once the list has become a ballot, which is a door that only closes.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."validate_schedule"("p_schedule" "jsonb") RETURNS "void"
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $_$
+declare
+  v_start text := p_schedule #>> '{window,start}';
+  v_end text := p_schedule #>> '{window,end}';
+  v_slots int;
+  v_granularity int;
+begin
+  if p_schedule is null or jsonb_typeof(p_schedule) <> 'object' then
+    raise exception 'A time poll needs a schedule';
+  end if;
+
+  -- A fixed offset, never a named zone. A named zone spanning a DST
+  -- transition gives one day 23 or 25 hours and a 1am that happens twice or
+  -- not at all, which makes the generated option names ambiguous in precisely
+  -- the way declaring a timezone was meant to prevent.
+  if coalesce(p_schedule ->> 'timezone', '') !~ '^[+-][0-9]{2}:[0-9]{2}$' then
+    raise exception 'A schedule''s timezone is a fixed UTC offset, like -07:00';
+  end if;
+
+  -- 24:00 is allowed as a time of day here, and only ever as the end: a
+  -- window that runs to midnight is an ordinary thing to want, and '00:00'
+  -- would say the day before's midnight. The v_end > v_start check below is
+  -- what keeps it out of the start.
+  if coalesce(v_start, '') !~ '^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$'
+     or coalesce(v_end, '') !~ '^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$' then
+    raise exception 'A schedule''s daily window is two times, like 08:00 and 22:00';
+  end if;
+
+  if v_end <= v_start then
+    raise exception 'A schedule''s daily window has to end after it starts';
+  end if;
+
+  -- jsonb_typeof rather than a cast, because `'"3"'::jsonb ->> …` casts
+  -- happily and a string where a number belongs is exactly the kind of drift
+  -- this is here to catch.
+  if jsonb_typeof(p_schedule -> 'granularity') <> 'number'
+     or jsonb_typeof(p_schedule -> 'desired_slots') <> 'number' then
+    raise exception 'A schedule''s granularity and desired_slots are numbers';
+  end if;
+
+  v_granularity := (p_schedule ->> 'granularity')::int;
+  v_slots := (p_schedule ->> 'desired_slots')::int;
+
+  -- The calendar draws a row per granule, and a granule that does not divide
+  -- the hour draws a grid whose lines do not line up with the labels beside
+  -- it. The same rule @mantine/schedule applies to intervalMinutes.
+  if v_granularity < 1 or (60 % v_granularity <> 0 and v_granularity % 60 <> 0) then
+    raise exception 'A schedule''s granularity divides an hour evenly, or is a whole number of hours';
+  end if;
+
+  if v_slots < 1 then
+    raise exception 'A meeting is at least one granule long';
+  end if;
+end;
+$_$;
+
+
+ALTER FUNCTION "public"."validate_schedule"("p_schedule" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."validate_schedule"("p_schedule" "jsonb") IS 'Raises unless the jsonb handed in is a schedule a calendar can be drawn from. The front end enumerates the options, so nothing here can check that they agree with it; what it can check is that the grid itself is describable. Internal.';
 
 
 
@@ -4546,8 +4849,8 @@ REVOKE ALL ON FUNCTION "public"."confirming_invitee"("p_poll_id" "uuid") FROM PU
 
 
 
-REVOKE ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") TO "authenticated";
 
 
 
@@ -4558,6 +4861,11 @@ GRANT ALL ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_descript
 
 REVOKE ALL ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") TO "authenticated";
 
 
 
@@ -4580,7 +4888,11 @@ REVOKE ALL ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_na
 
 
 
-REVOKE ALL ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."insert_options"("p_poll" "public"."polls", "p_options" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") FROM PUBLIC;
 
 
 
@@ -4672,6 +4984,12 @@ GRANT ALL ON FUNCTION "public"."open_poll_submit"("p_poll_id" "uuid", "p_scores"
 REVOKE ALL ON FUNCTION "public"."open_poll_suggest_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."open_poll_suggest_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."open_poll_suggest_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") TO "authenticated";
 
 
 
@@ -4844,6 +5162,11 @@ GRANT ALL ON FUNCTION "public"."submit_ballot"("p_poll_id" "uuid", "p_scores" "j
 
 REVOKE ALL ON FUNCTION "public"."suggest_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."suggest_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."suggest_options"("p_poll_id" "uuid", "p_options" "jsonb") TO "authenticated";
 
 
 
