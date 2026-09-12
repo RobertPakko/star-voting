@@ -680,46 +680,6 @@ export function describeOffset(offset: string, label?: string | null): string {
   return named ? `UTC${offset} (${named})` : `UTC${offset}`
 }
 
-/**
- * How far the poll's offset is from the clock on the wall behind whoever is
- * reading -- `3 hours behind you`, `half an hour ahead of you`, or nothing at
- * all when the two agree.
- *
- * The one genuinely useful thing a voter's own zone can be used for on this
- * screen, and the reason it is safe: it is a sentence *about* the difference
- * rather than a conversion of the grid. Nothing on the calendar moves. A voter
- * in Berlin still paints the same cells with the same labels as a voter in
- * Denver -- they are just told, in words, that 2pm on it is 10pm to them.
- *
- * Null when the browser is in the poll's own offset today, which is the
- * common case and wants no sentence at all. Also null when the browser is in
- * a zone that changes between now and the poll, in which case the honest
- * answer would need a date this function has not been given -- and a slightly
- * stale hint is worse than no hint, so it says nothing.
- */
-export function offsetFromViewer(schedule: PollSchedule, on?: ScheduleDay): string | null {
-  const poll = offsetMinutes(schedule.timezone)
-  if (poll === null) return null
-
-  // The reader's own zone on the poll's first day where one was given, so a
-  // hint about a July meeting is not computed from a January clock.
-  const here = on
-    ? offsetMinutes(zoneOffsetOn(viewerZone(), on) ?? '')
-    : -new Date().getTimezoneOffset()
-  if (here === null) return null
-
-  const gap = poll - here
-  if (gap === 0) return null
-
-  const size = Math.abs(gap)
-  const hours = Math.floor(size / 60)
-  const minutes = size % 60
-  const parts: string[] = []
-  if (hours > 0) parts.push(hours === 1 ? '1 hour' : `${hours} hours`)
-  if (minutes > 0) parts.push(`${minutes} minutes`)
-  return `${parts.join(' ')} ${gap > 0 ? 'ahead of' : 'behind'} your clock`
-}
-
 /** The zone this browser believes it is in, or `UTC` if it will not say. */
 export function viewerZone(): string {
   try {

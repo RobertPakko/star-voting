@@ -448,7 +448,6 @@ export function ScheduleFields({
           // selects to the whole day is back to forty-eight rows, and this is
           // a form with a poll's worth of other fields under it either way.
           slotHeight={daily ? undefined : 26}
-          defaultView={'month'}
         />
         {error && (
           <Text size="sm" c="red" fw={500}>

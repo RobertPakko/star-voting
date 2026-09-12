@@ -170,7 +170,6 @@ export function PaintCalendar({
   earliest,
   hideEmptyWeekdays,
   slotHeight,
-  defaultView,
 }: {
   schedule: PollSchedule
   /** The cells that may be painted at all; everything else is drawn greyed. */
@@ -260,7 +259,6 @@ export function PaintCalendar({
    */
   hideEmptyWeekdays?: boolean
   slotHeight?: number
-  defaultView?: ScheduleViewLevel
 }) {
   const days = daysOf(bounds)
   const daily = isDaily(schedule)
@@ -274,7 +272,7 @@ export function PaintCalendar({
   // the answer is. One date across all three views, so switching between them
   // stays where the reader was.
   const [date, setDate] = useState(() => days[0] ?? dayjs().format('YYYY-MM-DD'))
-  const [view, setView] = useState<ScheduleViewLevel>(daily ? 'month' : (defaultView ?? 'week'))
+  const [view, setView] = useState<ScheduleViewLevel>(daily ? 'month' : 'week')
   const showing = daily ? 'month' : view
 
   const events = buildEvents(showing)

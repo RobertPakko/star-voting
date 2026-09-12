@@ -1081,8 +1081,7 @@ export function CreatePoll() {
             )}
             {solicitOptions && (
               <Text size="xs" c="dimmed">
-                Voters will be able to add times of their own later; what you mark here is the head
-                start.
+                Voters will be able to add more times to the calendar later.
               </Text>
             )}
             {/* No option rows at all: the ballot is generated from these
