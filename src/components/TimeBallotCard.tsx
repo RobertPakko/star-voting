@@ -220,8 +220,7 @@ export function TimeBallotCard({
       <Stack gap="xs">
         <Text size="sm">
           Mark the calendar with your availability. 5 is the highest preference while 0 is the
-          lowest. Each possible meeting time scores the average of what you marked across it. Click
-          a day, or the dates in the calendar’s own header, to mark the whole of it at once.
+          lowest. Each possible meeting time scores the average of what you marked across it.
         </Text>
         <Group gap="sm" wrap="wrap" align="center" justify="space-between">
           <Group gap={6} wrap="wrap" justify="space-between">
