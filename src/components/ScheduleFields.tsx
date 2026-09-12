@@ -304,30 +304,42 @@ export function ScheduleFields({
     }))
   }
 
-  const blank = ordered.filter(
-    (day) =>
-      countWindows(schedule, new Set([...marked].filter((key) => key.startsWith(day)))) === 0,
-  )
-
   return (
     <Stack gap="sm">
+      <Group grow align="flex-start" wrap="wrap">
       <Select
-        label="How long is it?"
-        description="Every option is a window this long"
+        label="Length"
         data={LENGTHS}
         value={String(meetingMinutes(schedule))}
         onChange={(v) => v && setLength(Number(v))}
         allowDeselect={false}
         comboboxProps={{ withinPortal: false }}
       />
+            {/* One list of offsets, in order, each captioned with what people on it
+          call it. The offset is what is being chosen and what the poll is held
+          at; the name is there so that a creator who does not know they are on
+          -07:00 can recognise Pacific Time and pick it. */}
+      <Select
+        label="Timezone"
+        data={offsets.map((choice) => ({
+          value: choice.offset,
+          label: describeOffset(choice.offset, choice.name),
+        }))}
+        value={schedule.timezone}
+        onChange={(v) => v && onOffsetChange(v)}
+        searchable
+        nothingFoundMessage="No offset like that — try the number, or the name of a zone"
+        allowDeselect={false}
+        comboboxProps={{ withinPortal: false }}
+      />
+      </Group>
 
       {/* Hidden on a poll answered in whole days, where there are no hours to
           be earliest or latest: a day is either in or out. */}
       {!daily && (
         <Group grow align="flex-start" wrap="wrap">
           <Select
-            label="Earliest start"
-            description="What clicking a whole day fills in"
+            label="Default start"
             data={STARTS}
             value={hours.start}
             onChange={(v) =>
@@ -343,8 +355,7 @@ export function ScheduleFields({
             comboboxProps={{ withinPortal: false }}
           />
           <Select
-            label="Latest end"
-            description="Drag on the calendar for the days that differ"
+            label="Default End"
             data={ENDS.filter((end) => end.value > hours.start)}
             value={hours.end}
             onChange={(v) => v && setHours({ ...hours, end: v })}
@@ -358,17 +369,15 @@ export function ScheduleFields({
           said. Always on screen, and not only once a day has been picked
           somewhere else: there is nowhere else. */}
       <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          Which days, and when?
-        </Text>
-        <Group gap="sm" wrap="wrap" align="center">
-          {/* Two values rather than the ballot's six: the question here is
-              whether the poll is asking about a time at all. The eraser is
-              what a drag needs and a day-click does not -- clicking a day
-              that is already exactly the default takes it back, which is the
-              same toggle the ballot's day-fill has. */}
+        <Group gap="sm" wrap="nowrap" align="center">
+          <Text size="sm" c="dimmed">
+            {daily
+              ? 'Define which dates voters are choosing between.'
+              : 'Define what dates and times voters can choose from. Click a day to populate it with the default hours, or paint your schedule manually using the day or week view.'}
+          </Text>
           <SegmentedControl
             size="xs"
+            miw={100}
             value={String(brush)}
             onChange={(v) => setBrush(Number(v))}
             data={[
@@ -376,11 +385,6 @@ export function ScheduleFields({
               { value: '0', label: 'Erase' },
             ]}
           />
-          <Text size="sm" c="dimmed">
-            {daily
-              ? 'Click a day to put it in, or drag across several.'
-              : 'Drag to mark the hours people can choose from; click a day’s heading to fill it with the hours above.'}
-          </Text>
         </Group>
         <PaintCalendar
           schedule={schedule}
@@ -399,28 +403,10 @@ export function ScheduleFields({
           fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
           // A whole day of half-hours is forty-eight rows, and at the
           // ballot's row height that is a form nobody can see the bottom of.
-          slotHeight={daily ? undefined : 22}
+          slotHeight={daily ? undefined : 26}
+          defaultView={'month'}
         />
       </Stack>
-
-      {/* One list of offsets, in order, each captioned with what people on it
-          call it. The offset is what is being chosen and what the poll is held
-          at; the name is there so that a creator who does not know they are on
-          -07:00 can recognise Pacific Time and pick it. */}
-      <Select
-        label="Times are in"
-        description="Everybody sees the same grid, at this offset, wherever they are"
-        data={offsets.map((choice) => ({
-          value: choice.offset,
-          label: describeOffset(choice.offset, choice.name),
-        }))}
-        value={schedule.timezone}
-        onChange={(v) => v && onOffsetChange(v)}
-        searchable
-        nothingFoundMessage="No offset like that — try the number, or the name of a zone"
-        allowDeselect={false}
-        comboboxProps={{ withinPortal: false }}
-      />
 
       {/* A poll that runs across a clock change where its offset is kept. One
           poll is one offset -- the whole reason an offset is what is stored --
@@ -434,21 +420,6 @@ export function ScheduleFields({
           ones to check before you send it.
         </Alert>
       )}
-
-      {/* What the answers above actually add up to. The creator is writing a
-          ballot without seeing one, and this is the only place the size of it
-          is visible before the poll exists. A day with nothing long enough on
-          it is named rather than left to vanish, since a silently absent day
-          looks exactly like the form having dropped it. */}
-      <Text size="xs" c={error ? 'var(--mantine-color-error)' : 'dimmed'}>
-        {error ??
-          (ordered.length === 0
-            ? 'Mark the times people can choose between.'
-            : `${total} ${total === 1 ? 'window' : 'windows'} to score across ${ordered.length} ${ordered.length === 1 ? 'day' : 'days'}.` +
-              (blank.length > 0
-                ? ` Nothing on ${listDays(blank)} is ${describeLength(meetingMinutes(schedule))} long.`
-                : ''))}
-      </Text>
     </Stack>
   )
 }

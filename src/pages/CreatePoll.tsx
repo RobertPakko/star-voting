@@ -534,11 +534,7 @@ export function CreatePoll() {
   // is named after the one thing it wants.
   const sectionTitle = multiQuestion
     ? 'Questions'
-    : questions[0]?.kind === 'time'
-      ? 'Times'
-      : solicitOptions
-        ? 'Starting options'
-        : 'Options'
+    : 'Decision'
 
   // Duplicating copies the source poll's settings into the form and stops
   // there; nothing is created until the user submits, so the copy can be
@@ -1253,7 +1249,7 @@ export function CreatePoll() {
   if (prefilling) return <FormSkeleton />
 
   return (
-    <Stack maw={560} mx="auto" gap="md">
+    <Stack maw={720} mx="auto" gap="md">
       <Title order={2} ta="center">
         {duplicateOf ? 'Duplicate poll' : 'New poll'}
       </Title>

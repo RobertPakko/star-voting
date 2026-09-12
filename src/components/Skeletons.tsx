@@ -544,7 +544,7 @@ export function AboutSkeleton() {
 export function FormSkeleton() {
   return (
     <Loading>
-      <Stack maw={560} mx="auto" gap="md">
+      <Stack maw={720} mx="auto" gap="md">
         <Group justify="center">
           <Skeleton height={bar.title} width={168} radius="sm" />
         </Group>

@@ -111,6 +111,7 @@ export function PaintCalendar({
   canPaint,
   dayInBounds,
   slotHeight,
+  defaultView,
 }: {
   schedule: PollSchedule
   /** The cells that may be painted at all; everything else is drawn greyed. */
@@ -156,6 +157,7 @@ export function PaintCalendar({
   /** And whether a whole day is one the poll is asking about; see `canPaint`. */
   dayInBounds?: (day: ScheduleDay) => boolean
   slotHeight?: number
+  defaultView?: ScheduleViewLevel
 }) {
   const days = daysOf(bounds)
   const daily = isDaily(schedule)
@@ -169,7 +171,7 @@ export function PaintCalendar({
   // the answer is. One date across all three views, so switching between them
   // stays where the reader was.
   const [date, setDate] = useState(() => days[0] ?? dayjs().format('YYYY-MM-DD'))
-  const [view, setView] = useState<ScheduleViewLevel>(daily ? 'month' : 'week')
+  const [view, setView] = useState<ScheduleViewLevel>(daily ? 'month' : (defaultView ?? 'week'))
   const showing = daily ? 'month' : view
 
   const events = buildEvents(showing)
@@ -397,7 +399,7 @@ function rangeLabel(date: string, view: ScheduleViewLevel): string {
   if (view === 'day') return formatDay(date)
   if (view === 'month') return dayjs(date).format('MMMM YYYY')
   const { from, to } = visibleRange(date, view)
-  return `${formatDay(from)} – ${formatDay(to)}`
+  return `${dayjs(from).format('MMM DD')} – ${dayjs(to).format('MMM DD')}`
 }
 
 /**
