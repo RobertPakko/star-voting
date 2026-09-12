@@ -6,13 +6,11 @@ import {
   boundsOf,
   DAY_MINUTES,
   daysOf,
-  describeLength,
   describeOffset,
   enumerateWindows,
   granuleKey,
   granulesOf,
   isDaily,
-  meetingMinutes,
   paintingRuns,
   runBounds,
   toMinutes,
@@ -96,9 +94,6 @@ export function PaintTimes({
   const [brush, setBrush] = useState(ADDING)
 
   const daily = isDaily(schedule)
-  const length = meetingMinutes(schedule)
-  // The poll's offset, captioned with what people on it call it; see
-  // TimeBallotCard, which says the same thing above the same calendar.
   const zone = useMemo(() => {
     const first = daysOf(offered)[0]
     return first ? offsetName(schedule.timezone, first) : null
@@ -196,9 +191,7 @@ export function PaintTimes({
 
   return (
     <Stack gap="xs">
-      <Text size="sm">
-        Mark the times this poll should offer.
-      </Text>
+      <Text size="sm">Mark the times this poll should offer.</Text>
 
       <Group gap="sm" wrap="wrap" align="center">
         <SegmentedControl
