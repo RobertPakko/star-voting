@@ -210,16 +210,21 @@ export function PollList() {
             {/* Only there when something is hidden, because that is the only
                 state in which it has anything to say — and its absence is how
                 a reader who has never hidden a poll never learns there is a
-                mode they might be in. It counts what is hidden across the whole
-                list rather than on this page: the number is what makes the
-                control worth reading, and a poll put away on page three is
-                still put away when page one is on screen.
+                mode they might be in.
+
+                It carries no count, and the reason is that the only number it
+                could show is how many ids are in storage. An id outlives the
+                poll it names — a hidden poll deleted on another device leaves
+                one behind, and only a read of the whole list can sweep it up
+                (see pruneHiddenPolls) — so the number would sometimes promise
+                more than pressing it delivers, and a reader counting cards
+                against it would be looking for a poll that no longer exists.
 
                 Left of New poll, which stays where it has always been. This is
                 about the list already there; that one leaves it. */}
             {hidden.size > 0 && (
               <Button variant="default" onClick={() => setRevealed((was) => !was)}>
-                {revealed ? 'Hide again' : `Show hidden (${hidden.size})`}
+                {revealed ? 'Hide again' : 'Show hidden'}
               </Button>
             )}
             <Button component={Link} to="/polls/new">

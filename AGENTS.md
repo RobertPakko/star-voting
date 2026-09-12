@@ -3702,7 +3702,7 @@ of what it is**: the poll is unchanged, still theirs, still readable at its own
 address, still counted by everything that counts polls.
 
 Each card carries an eye at its bottom right, alongside the badges; pressing it
-takes the poll off the list. When anything is hidden, a **Show hidden (*n*)**
+takes the poll off the list. When anything is hidden, a **Show hidden**
 button appears beside **New poll** and puts them back on screen, dimmed, with
 the eye open — press it again, or bring the last one back, and it is gone.
 
@@ -3721,11 +3721,16 @@ phone. The alternative is a table, and a table is a disclosure.
 What is stored is a set of poll ids, so nothing in it can go stale in a way
 that matters: a poll renamed, voted in or closed is the same id. A hidden poll
 that has since been deleted leaves an id matching nothing, which draws nothing
-and costs a few bytes — its only visible trace is the count on the button. The
-list is paged in the database, so a hidden id missing from the page on screen
-is nearly always a hidden poll on another page; `pruneHiddenPolls` therefore
-sweeps only on a read whose page *is* the whole list, which is the one read
-that can tell a deleted poll from an absent one.
+and costs a few bytes; all it can do is leave the button on screen with nothing
+behind it. The list is paged in the database, so a hidden id missing from the
+page on screen is nearly always a hidden poll on another page;
+`pruneHiddenPolls` therefore sweeps only on a read whose page *is* the whole
+list, which is the one read that can tell a deleted poll from an absent one.
+
+**The button carries no count**, and that is the same fact stated as a
+decision: the only number it could show is how many ids are in storage, an id
+outlives the poll it names, and a number that sometimes promises more than
+pressing it delivers sends the reader looking for a poll that is not there.
 
 **The page still asks for ten polls and the pager still counts every poll.**
 Hiding four leaves six cards on that page rather than pulling four up from the

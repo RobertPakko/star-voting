@@ -148,9 +148,11 @@ export function setPollHidden(id: string, hide: boolean): void {
  * that is the whole list — the total says so — is the one read that can tell
  * a deleted poll from an absent one.
  *
- * Nothing depends on it. A stale id hides nothing and breaks nothing; all it
- * does is inflate the count on the button offering to show hidden polls, which
- * is the one place a reader would notice a poll that is no longer there.
+ * Nothing depends on it. A stale id hides nothing and breaks nothing, and the
+ * button that offers to show hidden polls deliberately carries no number for
+ * one to inflate. What it can still do is leave that button on screen with
+ * nothing behind it, which is the one place a reader would meet a poll that is
+ * no longer there.
  */
 export function pruneHiddenPolls(alive: Iterable<string>): void {
   if (hidden.size === 0) return
