@@ -914,6 +914,32 @@ wants to drag 09:00–17:00 across ten days, so clicking a day's heading lays
 these down and the drag is there for the days that differ. They are not stored
 and they are not the poll; what is painted is.
 
+**They do not touch what is already painted.** Moving them used to re-fill
+every day whose painting was still exactly the old default, on the grounds that
+such a day was a day nobody had touched — so "the working day starts at eight"
+did not mean re-dragging nine days. That is a guess about intent, and it is
+wrong as often as it is right: a day filled from its heading and then
+deliberately left alone is an answer, and it is indistinguishable from one
+nobody has reached yet. Worse, it is a guess made about days the creator is not
+looking at, so the correction arrives silently and several screens away from
+the select that caused it. The selects now decide what the *next* whole-day
+fill lays down and nothing else; the painting changes when somebody paints.
+
+**And the grid is drawn between them** (`axisFor`), rather than on all
+forty-eight half hours of a day whatever the poll is asking about. A week of
+the working day fits on a phone; a week of the whole day is a form whose bottom
+nobody can see, most of it there so the small hours can be greyed out in it.
+
+The axis is **widened rather than clipped**, which is the half that has to be
+right: a cell painted at seven in the evening and then left off the axis would
+be an answer nobody can see and nobody can rub out, still generating windows on
+the ballot. So narrowing the selects under what is painted narrows the grid as
+far as the painting and no further — and the way to reach an hour outside them
+is to move the select that excludes it, which is also now the only way, since
+the grid has no row for one. That is the trade for the vertical space: the
+selects used to be a default with the whole day still to hand behind them, and
+they are now the range of the day this poll is about.
+
 **A poll cannot ask about a day that has gone.** The calendar's floor is today,
 and the whole of today is in: a day before it is drawn greyed and takes no
 gesture — no drag, no heading, no month cell, and the header's range leaves it

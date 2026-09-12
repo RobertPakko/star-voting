@@ -15,6 +15,7 @@ import {
   meetingMinutes,
   paintingRuns,
   runBounds,
+  spanOf,
   todayIn,
   toMinutes,
   toTimeOfDay,
@@ -54,12 +55,23 @@ import type { DailyWindow, PollSchedule } from '../lib/types'
  * option list with `boundsOf`. So there is no second copy of the answer to
  * disagree with the first.
  *
- * **The two time selects stay, as the default a whole day is filled with.**
- * Nobody wants to drag out 09:00 to 17:00 on each of ten days, and "the
- * working day, except Friday which is only the afternoon" is the common
+ * **The two time selects stay, and say which part of the day this poll is
+ * about.** Nobody wants to drag out 09:00 to 17:00 on each of ten days, and
+ * "the working day, except Friday which is only the afternoon" is the common
  * answer. So clicking a day's heading lays down these hours, and the drag is
- * there for the days that differ. They are not stored and they are not the
- * poll: what is painted is.
+ * there for the days that differ. They are also the hours the grid is drawn
+ * between (`axisFor`), which is what keeps a week of it on a phone: it used to
+ * be drawn on all forty-eight half hours of a day whatever the poll was asking
+ * about. They are not stored and they are not the poll: what is painted is.
+ *
+ * **And they do not touch what is already painted.** Moving them used to
+ * re-fill every day whose painting was still exactly the old default, on the
+ * grounds that such a day was a day nobody had touched. It was a guess about
+ * intent, and it was wrong as often as not -- a day filled from its heading
+ * and then deliberately left alone is an answer, and it looks identical to one
+ * nobody has reached yet. So the selects are a default and nothing more: they
+ * decide what the *next* whole-day fill lays down, and the painting changes
+ * only when somebody paints.
  *
  * **Granularity is not asked about**, which it used to be. It is a
  * consequence of how long the meeting is -- half an hour under a day, a whole
@@ -88,8 +100,37 @@ const LENGTHS = MEETING_LENGTHS.map((minutes) => ({
   label: describeLength(minutes),
 }))
 
-/** The whole of a day, which is what the create form's grid is drawn between. */
-const WHOLE_DAY: DailyWindow = { start: '00:00', end: '24:00' }
+/**
+ * The hours the create form's grid is drawn between: the two selects, widened
+ * to hold anything painted outside them.
+ *
+ * **It used to be the whole of the day, every time.** Forty-eight rows of half
+ * hours, of which the poll was usually asking about sixteen -- a form whose
+ * bottom nobody could see, mostly so that the small hours could be greyed out
+ * in it. The selects already say which part of the day this poll is about, so
+ * that is the part it is drawn on, and a week of it fits on a phone.
+ *
+ * **Widened rather than clipped**, which is the half that has to be right: a
+ * cell painted at seven in the evening and then left off the axis would be an
+ * answer nobody can see and nobody can rub out, still generating windows on
+ * the ballot. So narrowing the selects under what is painted narrows the grid
+ * as far as the painting and no further, and the way to reach an hour outside
+ * them is to move the select that excludes it.
+ *
+ * With nothing painted there is nothing to hold, and the selects stand alone.
+ * `spanOf` answers `00:00`-`24:00` in that case, which would make this the
+ * whole day again -- hence the first line rather than a union of three things.
+ */
+function axisFor(hours: DailyWindow, marked: Bounds, schedule: PollSchedule): DailyWindow {
+  if (marked.size === 0) return hours
+  const painted = spanOf(marked, schedule)
+  // Both ends are `HH:mm`, fixed width, so they compare as plain strings --
+  // `24:00` included, which is the latest of them and sorts as the latest.
+  return {
+    start: painted.start < hours.start ? painted.start : hours.start,
+    end: painted.end > hours.end ? painted.end : hours.end,
+  }
+}
 
 /** The marked set as a painting, which is the shape `PaintCalendar` speaks. */
 function paintingOf(marked: Bounds): Record<GranuleKey, number> {
@@ -109,10 +150,12 @@ function inOrder(days: string[]): string[] {
 /**
  * The cells one pair of times covers, which is what a day-fill writes.
  *
- * Narrower than what may be painted, on purpose: the two selects are a default
- * and the drag is the exception to it, so an evening outside them is still
- * reachable by dragging. A poll answered in whole days has one cell per day,
- * which is the day itself.
+ * Usually the whole of the drawn column, since the grid is drawn between the
+ * same two times (`axisFor`) -- and less than it where something painted
+ * elsewhere has widened the axis past them, which is the one case the two
+ * differ. The drag is there for the days that want less than the default, and
+ * an hour outside it is reached by moving the select that excludes it. A poll
+ * answered in whole days has one cell per day, which is the day itself.
  */
 function cellsInHours(day: ScheduleDay, hours: DailyWindow, granularity: number): GranuleKey[] {
   if (granularity >= DAY_MINUTES) return [granuleKey(day, 0)]
@@ -259,32 +302,6 @@ export function ScheduleFields({
   }
 
   /**
-   * Moving the default hours, which re-fills the days that are still on the
-   * default and leaves the ones that are not.
-   *
-   * A day whose painting is exactly the old default is a day nobody has
-   * touched, and moving the default is how somebody says "the working day
-   * starts at eight" -- they should not then have to re-drag nine days. A day
-   * painted into something else is an answer, and answers are not moved.
-   */
-  function setHours(next: DailyWindow) {
-    const before = hours
-    const moved = new Set(marked)
-    for (const day of ordered) {
-      const was = cellsInHours(day, before, schedule.granularity)
-      const untouched =
-        was.length > 0 &&
-        was.every((key) => marked.has(key)) &&
-        [...marked].filter((key) => key.startsWith(day)).length === was.length
-      if (!untouched) continue
-      for (const key of was) moved.delete(key)
-      for (const key of cellsInHours(day, next, schedule.granularity)) moved.add(key)
-    }
-    onHoursChange(next)
-    onMarkedChange(moved)
-  }
-
-  /**
    * A stroke, and the days it leaves the poll asking about.
    *
    * Painting is the only thing that adds or removes a day now, so the day list
@@ -361,7 +378,7 @@ export function ScheduleFields({
             value={hours.start}
             onChange={(v) =>
               v &&
-              setHours({
+              onHoursChange({
                 start: v,
                 end: ENDS.some((end) => end.value > v && end.value === hours.end)
                   ? hours.end
@@ -375,7 +392,7 @@ export function ScheduleFields({
             label="Default latest end"
             data={ENDS.filter((end) => end.value > hours.start)}
             value={hours.end}
-            onChange={(v) => v && setHours({ ...hours, end: v })}
+            onChange={(v) => v && onHoursChange({ ...hours, end: v })}
             allowDeselect={false}
             comboboxProps={{ withinPortal: false }}
           />
@@ -417,14 +434,19 @@ export function ScheduleFields({
           // And no walking back into the months that are entirely behind the
           // floor, which are screens of greyed cells with nothing to say.
           earliest={floor}
-          axis={WHOLE_DAY}
+          // The two selects, widened to hold whatever is painted outside
+          // them; see `axisFor`. A poll about the working day is drawn on the
+          // working day rather than on all forty-eight half hours of a day.
+          axis={axisFor(hours, marked, schedule)}
           painting={paintingOf(marked)}
           brush={brush}
           onPaint={paint}
           buildEvents={buildEvents}
           fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
-          // A whole day of half-hours is forty-eight rows, and at the
-          // ballot's row height that is a form nobody can see the bottom of.
+          // Shorter rows than the ballot's, which the axis above no longer
+          // makes urgent and has not made pointless: a creator who opens the
+          // selects to the whole day is back to forty-eight rows, and this is
+          // a form with a poll's worth of other fields under it either way.
           slotHeight={daily ? undefined : 26}
           defaultView={'month'}
         />
