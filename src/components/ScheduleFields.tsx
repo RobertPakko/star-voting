@@ -3,7 +3,6 @@ import { Alert, Group, SegmentedControl, Select, Stack, Text } from '@mantine/co
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { PaintCalendar } from './PaintCalendar'
 import {
-  countWindows,
   DAY_MINUTES,
   daysOf,
   describeLength,
@@ -171,7 +170,6 @@ export function ScheduleFields({
 }) {
   const ordered = inOrder(days)
   const daily = isDaily(schedule)
-  const total = countWindows(schedule, marked)
   const [brush, setBrush] = useState(1)
 
   // The two facts about the chosen days that the offset answers depend on, as
@@ -422,18 +420,6 @@ export function ScheduleFields({
       )}
     </Stack>
   )
-}
-
-/**
- * A handful of days in a sentence: `Sat 5 Sep`, `Fri 4 Sep and Sat 5 Sep`,
- * `Fri 4 Sep, Sat 5 Sep and 3 others`.
- */
-function listDays(days: string[]): string {
-  const named = days.slice(0, 3).map(formatDay)
-  const rest = days.length - named.length
-  if (rest > 0) return `${named.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'}`
-  if (named.length === 1) return named[0]
-  return `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`
 }
 
 /**

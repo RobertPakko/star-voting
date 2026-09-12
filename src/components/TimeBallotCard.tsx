@@ -73,7 +73,7 @@ import type { PollOption, PollSchedule } from '../lib/types'
  * and they do not change.
  */
 const RATINGS = [
-  { value: '0', label: "Can't", color: 'gray.5', ink: 'black' },
+  { value: '0', label: "0", color: 'gray.5', ink: 'black' },
   { value: '1', label: '1', color: 'red.4', ink: 'black' },
   { value: '2', label: '2', color: 'orange.5', ink: 'black' },
   { value: '3', label: '3', color: 'yellow.5', ink: 'black' },
@@ -223,20 +223,23 @@ export function TimeBallotCard({
       arriving
     >
       <Stack gap="xs">
-        <Text size="sm">
-          Mark when you could meet for {describeLength(length)}.{' '}
-          {daily ? (
-            <>Click a day to mark it, or drag across several.</>
-          ) : (
-            <>
-              Drag across the calendar to paint, click a day&apos;s heading — or a day in the month
-              view — to fill the whole of it.
-            </>
-          )}{' '}
-          Use <b>Can&apos;t</b> to rub something out.
-        </Text>
-
-        <Group gap="sm" wrap="wrap" align="center">
+                  <Button
+            variant="default"
+            size="compact-xs"
+            onClick={() => apply([...bounds], Number(rating))}
+          >
+            Apply {RATINGS[Number(rating)].label.toLowerCase()} to every time
+          </Button>
+          <Text size="sm">
+            Mark the calendar with your availability. 5 is the highest preference while 0 is the lowest. Each possible meeting time scores the average of what you marked across it.
+          </Text>
+        <Group gap="sm" wrap="wrap" align="center" justify="space-between">
+                  <Group gap={6} wrap="wrap" justify="space-between">
+          <Text size="xs" c="dimmed">
+            All times are {describeOffset(schedule.timezone, zone)}
+            {days.length > 0 && ` · ${formatDay(days[0])} to ${formatDay(days[days.length - 1])}`}
+          </Text>
+        </Group>
           <SegmentedControl
             size="xs"
             value={rating}
@@ -261,39 +264,6 @@ export function TimeBallotCard({
               ),
             }))}
           />
-          {/* What the ratings are worth is worth saying, because a window is
-              scored by averaging what is under it: a time somebody can make
-              most of is a 4, not the 0 the old rule gave it, and only a time
-              they can make all of is a 5. */}
-          <Text size="xs" c="dimmed">
-            5 is the best time for you; 1 is the worst you would still accept. Each possible meeting
-            time scores the average of what you marked across it.
-          </Text>
-        </Group>
-
-        {/* The zone is stated rather than converted, because converting it is
-            the one thing this poll promised not to do: everybody is looking at
-            the same grid, and a voter elsewhere needs to be told which one --
-            and then how many hours from the clock on their own wall, which is
-            the part they were going to work out anyway. */}
-        <Group gap={6} wrap="wrap" justify="space-between">
-          <Text size="xs" c="dimmed">
-            All times are {describeOffset(schedule.timezone, zone)}
-            {away && ` · ${away}`}
-            {days.length > 0 && ` · ${formatDay(days[0])} to ${formatDay(days[days.length - 1])}`}
-          </Text>
-          {/* One press for the answer most people are giving. *Clear
-              everything* used to live here, which is the same gesture with one
-              value hard-coded into it -- so it is this, with the brush deciding
-              which value: `5` for somebody free throughout, and `Can't` for
-              somebody starting again. */}
-          <Button
-            variant="default"
-            size="compact-xs"
-            onClick={() => apply([...bounds], Number(rating))}
-          >
-            Apply {RATINGS[Number(rating)].label.toLowerCase()} to every time
-          </Button>
         </Group>
 
         <PaintCalendar
