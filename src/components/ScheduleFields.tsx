@@ -305,31 +305,31 @@ export function ScheduleFields({
   return (
     <Stack gap="sm">
       <Group grow align="flex-start" wrap="wrap">
-      <Select
-        label="Length"
-        data={LENGTHS}
-        value={String(meetingMinutes(schedule))}
-        onChange={(v) => v && setLength(Number(v))}
-        allowDeselect={false}
-        comboboxProps={{ withinPortal: false }}
-      />
-            {/* One list of offsets, in order, each captioned with what people on it
+        <Select
+          label="Length"
+          data={LENGTHS}
+          value={String(meetingMinutes(schedule))}
+          onChange={(v) => v && setLength(Number(v))}
+          allowDeselect={false}
+          comboboxProps={{ withinPortal: false }}
+        />
+        {/* One list of offsets, in order, each captioned with what people on it
           call it. The offset is what is being chosen and what the poll is held
           at; the name is there so that a creator who does not know they are on
           -07:00 can recognise Pacific Time and pick it. */}
-      <Select
-        label="Timezone"
-        data={offsets.map((choice) => ({
-          value: choice.offset,
-          label: describeOffset(choice.offset, choice.name),
-        }))}
-        value={schedule.timezone}
-        onChange={(v) => v && onOffsetChange(v)}
-        searchable
-        nothingFoundMessage="No offset like that — try the number, or the name of a zone"
-        allowDeselect={false}
-        comboboxProps={{ withinPortal: false }}
-      />
+        <Select
+          label="Timezone"
+          data={offsets.map((choice) => ({
+            value: choice.offset,
+            label: describeOffset(choice.offset, choice.name),
+          }))}
+          value={schedule.timezone}
+          onChange={(v) => v && onOffsetChange(v)}
+          searchable
+          nothingFoundMessage="No offset like that — try the number, or the name of a zone"
+          allowDeselect={false}
+          comboboxProps={{ withinPortal: false }}
+        />
       </Group>
 
       {/* Hidden on a poll answered in whole days, where there are no hours to
@@ -404,6 +404,11 @@ export function ScheduleFields({
           slotHeight={daily ? undefined : 26}
           defaultView={'month'}
         />
+        {error && (
+          <Text size="sm" c="red" fw={500}>
+            {error}
+          </Text>
+        )}
       </Stack>
 
       {/* A poll that runs across a clock change where its offset is kept. One

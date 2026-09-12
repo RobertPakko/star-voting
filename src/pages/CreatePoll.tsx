@@ -532,9 +532,7 @@ export function CreatePoll() {
   // What the last section of the form is called. A poll of several questions
   // is a list of questions whatever each of them is asking for; a poll of one
   // is named after the one thing it wants.
-  const sectionTitle = multiQuestion
-    ? 'Questions'
-    : 'Decision'
+  const sectionTitle = multiQuestion ? 'Questions' : 'Decision'
 
   // Duplicating copies the source poll's settings into the form and stops
   // there; nothing is created until the user submits, so the copy can be

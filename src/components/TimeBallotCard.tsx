@@ -6,12 +6,9 @@ import { PaintCalendar } from './PaintCalendar'
 import {
   boundsOf,
   daysOf,
-  describeLength,
   describeOffset,
   formatDay,
   isDaily,
-  meetingMinutes,
-  offsetFromViewer,
   paintingFromScores,
   paintingRuns,
   runBounds,
@@ -73,7 +70,7 @@ import type { PollOption, PollSchedule } from '../lib/types'
  * and they do not change.
  */
 const RATINGS = [
-  { value: '0', label: "0", color: 'gray.5', ink: 'black' },
+  { value: '0', label: '0', color: 'gray.5', ink: 'black' },
   { value: '1', label: '1', color: 'red.4', ink: 'black' },
   { value: '2', label: '2', color: 'orange.5', ink: 'black' },
   { value: '3', label: '3', color: 'yellow.5', ink: 'black' },
@@ -157,9 +154,7 @@ export function TimeBallotCard({
     }))
   }
 
-  const length = meetingMinutes(schedule)
   const daily = isDaily(schedule)
-  const away = offsetFromViewer(schedule, days[0])
   /**
    * What the poll's offset is called, on the poll's own dates.
    *
@@ -223,23 +218,24 @@ export function TimeBallotCard({
       arriving
     >
       <Stack gap="xs">
-                  <Button
-            variant="default"
-            size="compact-xs"
-            onClick={() => apply([...bounds], Number(rating))}
-          >
-            Apply {RATINGS[Number(rating)].label.toLowerCase()} to every time
-          </Button>
-          <Text size="sm">
-            Mark the calendar with your availability. 5 is the highest preference while 0 is the lowest. Each possible meeting time scores the average of what you marked across it.
-          </Text>
+        <Button
+          variant="default"
+          size="compact-xs"
+          onClick={() => apply([...bounds], Number(rating))}
+        >
+          Apply {RATINGS[Number(rating)].label.toLowerCase()} to every time
+        </Button>
+        <Text size="sm">
+          Mark the calendar with your availability. 5 is the highest preference while 0 is the
+          lowest. Each possible meeting time scores the average of what you marked across it.
+        </Text>
         <Group gap="sm" wrap="wrap" align="center" justify="space-between">
-                  <Group gap={6} wrap="wrap" justify="space-between">
-          <Text size="xs" c="dimmed">
-            All times are {describeOffset(schedule.timezone, zone)}
-            {days.length > 0 && ` · ${formatDay(days[0])} to ${formatDay(days[days.length - 1])}`}
-          </Text>
-        </Group>
+          <Group gap={6} wrap="wrap" justify="space-between">
+            <Text size="xs" c="dimmed">
+              All times are {describeOffset(schedule.timezone, zone)}
+              {days.length > 0 && ` · ${formatDay(days[0])} to ${formatDay(days[days.length - 1])}`}
+            </Text>
+          </Group>
           <SegmentedControl
             size="xs"
             value={rating}
