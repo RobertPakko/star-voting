@@ -199,8 +199,8 @@ export function PaintTimes({
       <Text size="sm">
         Mark the times this poll should offer, in blocks of {describeLength(length)}.{' '}
         {daily
-          ? 'Click a day to offer it, or drag across several.'
-          : 'Drag across the calendar, or click a day’s heading to take the whole of it.'}
+          ? 'Click a day to offer it, drag across several, or click the month in the calendar’s header to take every day on screen.'
+          : 'Drag across the calendar, click a day’s heading to take the whole of it, or click the range in the calendar’s header to take everything on screen.'}
       </Text>
 
       <Group gap="sm" wrap="wrap" align="center">

@@ -287,12 +287,7 @@ export function ScheduleFields({
     for (const key of marked) asPainting[key] = 1
     return paintingRuns(asPainting, schedule).map((run) => ({
       id: `${run.day} ${run.from}`,
-      title:
-        view !== 'month'
-          ? ''
-          : daily
-            ? ''
-            : `${toTimeOfDay(run.from)}–${toTimeOfDay(run.to)}`,
+      title: view !== 'month' ? '' : daily ? '' : `${toTimeOfDay(run.from)}–${toTimeOfDay(run.to)}`,
       ...runBounds(run),
       color: 'teal.6',
       display: view === 'month' ? 'default' : 'background',
@@ -370,8 +365,8 @@ export function ScheduleFields({
         <Group gap="sm" wrap="nowrap" align="center" justify="space-between">
           <Text size="sm" c="dimmed">
             {daily
-              ? 'Define which dates voters are choosing between.'
-              : 'Define what dates and times voters can choose from. Click a day to populate it with the default hours, or paint your schedule manually using the day or week view.'}
+              ? 'Define which dates voters are choosing between. Click a day to include it, or the month in the calendar’s header to take every day on screen.'
+              : 'Define what dates and times voters can choose from. Click a day to populate it with the default hours, the range in the calendar’s header to do that to every day on screen, or paint your schedule manually using the day or week view.'}
           </Text>
           <SegmentedControl
             size="xs"

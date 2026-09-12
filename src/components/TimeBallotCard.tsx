@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Box, Button, Group, SegmentedControl, Stack, Text } from '@mantine/core'
+import { Box, Group, SegmentedControl, Stack, Text } from '@mantine/core'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { BallotFrame, type BallotScore } from './BallotFrame'
 import { PaintCalendar } from './PaintCalendar'
@@ -218,16 +218,10 @@ export function TimeBallotCard({
       arriving
     >
       <Stack gap="xs">
-        <Button
-          variant="default"
-          size="compact-xs"
-          onClick={() => apply([...bounds], Number(rating))}
-        >
-          Apply {RATINGS[Number(rating)].label.toLowerCase()} to every time
-        </Button>
         <Text size="sm">
           Mark the calendar with your availability. 5 is the highest preference while 0 is the
-          lowest. Each possible meeting time scores the average of what you marked across it.
+          lowest. Each possible meeting time scores the average of what you marked across it. Click
+          a day, or the dates in the calendar’s own header, to mark the whole of it at once.
         </Text>
         <Group gap="sm" wrap="wrap" align="center" justify="space-between">
           <Group gap={6} wrap="wrap" justify="space-between">

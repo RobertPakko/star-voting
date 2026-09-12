@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Group } from '@mantine/core'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { Group, Tooltip } from '@mantine/core'
 import {
   DayView,
   MonthView,
@@ -51,6 +51,9 @@ import type { DailyWindow, PollSchedule } from '../lib/types'
  * - **A day's column heading fills that day**, through `onDateChange`.
  * - In the month view, which has no time grid at all, a day *is* the unit:
  *   `onDayClick` fills one and a drag across several fills those.
+ * - **The range in the header fills everything on screen**, which is the one
+ *   gesture here that is not the library's at all: its own label made clickable
+ *   (`fillVisible`), so the answer to "all of September" is the word September.
  *
  * **The header is ours, and that is what makes the heading gesture honest.**
  * `onDateChange` is fired by four things in a week grid -- the previous and
@@ -119,7 +122,7 @@ export function PaintCalendar({
   /** The hours the grid is drawn between -- the poll's `window` on a ballot. */
   axis: DailyWindow
   painting: Record<GranuleKey, number>
-  /** What a gesture writes. 0 rubs out, and never toggles; see `fillDay`. */
+  /** What a gesture writes. 0 rubs out, and never toggles; see `fillCells`. */
   brush: number
   /**
    * Write one value over a set of cells. The caller keeps the painting,
@@ -176,6 +179,58 @@ export function PaintCalendar({
 
   const events = buildEvents(showing)
 
+  // The header, and where its top sat on screen when the zoom last changed;
+  // see `showView`. `null` between changes, so that scrolling for any other
+  // reason -- reading the page, moving a week -- is never corrected.
+  const header = useRef<HTMLDivElement>(null)
+  const held = useRef<number | null>(null)
+
+  /**
+   * Change the zoom, and leave the calendar where it was on screen.
+   *
+   * The three views are wildly different heights: a week of half-hours is over
+   * a thousand pixels tall and the same poll's month is a few hundred. So
+   * switching between them moves the page under the reader -- the document
+   * becomes shorter than the position it is scrolled to, the browser clamps
+   * that position, and a calendar that was filling the screen is suddenly
+   * halfway down it. Nothing scrolled on purpose, which is exactly why it
+   * reads as a fault rather than as a consequence.
+   *
+   * So the calendar's own top is measured before the switch and the page is
+   * scrolled by however far it moved after it, which pins the header and lets
+   * the grid change size below it. Where the document is too short to hold the
+   * position the reader was at, there is nowhere to put them back and the
+   * effect below brings the calendar to the top of the screen instead.
+   */
+  function showView(next: ScheduleViewLevel) {
+    held.current = header.current?.getBoundingClientRect().top ?? null
+    setView(next)
+  }
+
+  // After React has committed the new view and before the browser paints it,
+  // so neither correction is ever a visible jump and back.
+  useLayoutEffect(() => {
+    const was = held.current
+    held.current = null
+    const row = header.current
+    if (was === null || !row) return
+
+    // Reading the rectangle forces layout, so this is the new view's geometry
+    // with the browser's own clamping already applied. Nothing above the header
+    // moved, so all the difference can be is that clamping.
+    window.scrollBy({ top: row.getBoundingClientRect().top - was })
+
+    // And when it could not be undone, the page had no room for the position
+    // the reader was at: they were a thousand pixels into a week of half-hours
+    // and the month that replaced it is a few hundred tall, so the scroll above
+    // asked to go past the bottom of a document that had just got shorter. The
+    // reader cannot be put back, so the calendar is brought to the top of the
+    // screen instead -- the new view whole, rather than the part of it the
+    // clamp happened to leave on screen. `scrollMarginTop` is what keeps it out
+    // from under the app's own fixed header; see the element itself.
+    if (row.getBoundingClientRect().top > was + 1) row.scrollIntoView({ block: 'start' })
+  }, [showing])
+
   /** Set every cell in a half-open range to the brush, skipping what is out. */
   function paint(fromSlot: string, toSlot: string) {
     // `YYYY-MM-DD HH:mm:ss` on the way in, and the grid is keyed to the
@@ -197,40 +252,52 @@ export function PaintCalendar({
     onPaint(keys, brush)
   }
 
+  /** What a click covers across a run of days, from one date to another. */
+  function cellsAcross(from: string, to: string): GranuleKey[] {
+    // Every day in the range rather than only the days already in bounds: on a
+    // calendar that is collecting times the range is exactly the days nobody
+    // has proposed yet, and `asks` is what says which of them count.
+    return daysBetween(from, to).filter(asks).flatMap(fill)
+  }
+
   /**
-   * Fill a whole day, or clear it.
+   * Lay the brush over a set of cells a single click asked for, or clear them.
    *
    * **It toggles**, and that is the difference between a shortcut and a trap.
-   * The gesture is one click on a strip with no undo beside it; a day that is
-   * already exactly what the brush would make it is a day the click was meant
-   * to take back. Anything else fills -- including a day that is half-marked,
-   * or marked at a different rating, both of which are answers the click is
-   * being used to replace.
+   * The gesture is one click with no undo beside it; a stretch that is already
+   * exactly what the brush would make it is a stretch the click was meant to
+   * take back. Anything else fills -- including one that is half-marked, or
+   * marked at a different rating, both of which are answers the click is being
+   * used to replace.
    *
    * A brush of 0 never toggles: clearing a cleared day would fill it, which is
    * the one thing a brush that means "not then" must never do.
    */
-  function fillDay(on: string) {
-    // `YYYY-MM-DD` from the month grid's day and `YYYY-MM-DD 00:00:00` from
-    // the week grid's heading, which is the shape every date callback in this
-    // library hands back. Sliced here rather than at each call site, so the two
-    // gestures are one function.
-    const day = on.slice(0, 10)
-    const cells = fill(day)
+  function fillCells(cells: GranuleKey[]) {
     if (cells.length === 0) return
     const already = brush > 0 && cells.every((key) => painting[key] === brush)
     onPaint(cells, already ? 0 : brush)
   }
 
-  /** The same over a run of days, from a drag across the month. Never toggles. */
+  /** Fill a whole day, or clear it. */
+  function fillDay(on: string) {
+    // `YYYY-MM-DD` from the month grid's day and `YYYY-MM-DD 00:00:00` from
+    // the week grid's heading, which is the shape every date callback in this
+    // library hands back. Sliced here rather than at each call site, so the two
+    // gestures are one function.
+    fillCells(fill(on.slice(0, 10)))
+  }
+
+  /**
+   * The same over a run of days, from a drag across the month.
+   *
+   * Never toggles, unlike the two clicks: a drag says which days it means by
+   * covering them, so there is no gesture left over to mean "and take that
+   * back" -- releasing over a stretch that is already marked would undo the
+   * drag that made it.
+   */
   function fillDays(fromDay: string, toDay: string) {
-    const first = fromDay.slice(0, 10)
-    const last = toDay.slice(0, 10)
-    // Every day in the dragged range, rather than only the days already in
-    // bounds: on a calendar that is collecting times the range is exactly the
-    // days nobody has proposed yet.
-    const cells = daysBetween(first, last).filter(asks).flatMap(fill)
-    onPaint(cells, brush)
+    onPaint(cellsAcross(fromDay.slice(0, 10), toDay.slice(0, 10)), brush)
   }
 
   const inView = visibleRange(date, showing)
@@ -239,6 +306,27 @@ export function PaintCalendar({
   // and a poll asking about three days in September is one press away from a
   // screen with nothing on it and no clue why.
   const adrift = days.length > 0 && (days[days.length - 1] < inView.from || days[0] > inView.to)
+
+  /**
+   * Everything on screen, from the range the header is already naming.
+   *
+   * This is the header's own label made into the gesture it describes: a reader
+   * looking at September clicks *September 2026* to answer for the whole of it,
+   * and the same control on the week grid answers for the week and on the day
+   * grid for the day. It replaced a button beside the calendar reading *apply 5
+   * to every time*, which was the same idea attached to nothing a reader was
+   * looking at -- it answered for the whole poll however much of it was on
+   * screen, so a fortnight in two halves could only be answered in one go or
+   * cell by cell.
+   *
+   * It reaches exactly what is drawn, which is what makes the label honest: the
+   * month grid hides the days either side of its month (`withOutsideDays`) and
+   * both time grids run Monday to Sunday, which is what `visibleRange` works
+   * out. Out-of-bounds days inside the range are left alone, by `cellsAcross`.
+   */
+  function fillVisible() {
+    fillCells(cellsAcross(inView.from, inView.to))
+  }
 
   const grid = {
     startTime: `${axis.start}:00`,
@@ -273,15 +361,33 @@ export function PaintCalendar({
           the calendar's rather than one sitting above it in a different
           shape. `navigationGroup` comes with them, and with it the container
           query that lets the cluster fill a narrow screen. */}
-      <ScheduleHeader>
+      <ScheduleHeader
+        ref={header}
+        // Clear of the app's own header, which is fixed over the top of the
+        // page: this row is what a view change scrolls back into view, and
+        // `scrollIntoView` measures the viewport rather than what is painted
+        // over it. See `showView`.
+        style={{ scrollMarginTop: 'var(--app-shell-header-offset, 0px)' }}
+      >
         <div className={ScheduleHeader.classes.navigationGroup}>
           <ScheduleHeader.Previous
             aria-label={`Previous ${showing}`}
             onClick={() => setDate(step(date, showing, -1))}
           />
-          <ScheduleHeader.Control interactive={false} miw={190}>
-            {rangeLabel(date, showing)}
-          </ScheduleHeader.Control>
+          {/* The range, which says what is on screen and fills it; see
+              `fillVisible`. The accessible name carries the label rather than
+              replacing it, so a screen reader is told both -- "Apply to all of
+              September 2026" -- the way the week grid's day headings are; see
+              LABELS. */}
+          <Tooltip label="Apply to everything on screen" withArrow>
+            <ScheduleHeader.Control
+              miw={190}
+              aria-label={`Apply to all of ${rangeLabel(date, showing)}`}
+              onClick={fillVisible}
+            >
+              {rangeLabel(date, showing)}
+            </ScheduleHeader.Control>
+          </Tooltip>
           <ScheduleHeader.Next
             aria-label={`Next ${showing}`}
             onClick={() => setDate(step(date, showing, 1))}
@@ -312,7 +418,10 @@ export function PaintCalendar({
             <ScheduleHeader.ViewSelect
               views={VIEWS}
               value={view}
-              onChange={(next) => setView(next)}
+              // Not `setView`: the three views are different heights, and
+              // changing one without holding the calendar still scrolls the
+              // page out from under the reader. See `showView`.
+              onChange={showView}
             />
           </Group>
         )}
@@ -405,10 +514,12 @@ function rangeLabel(date: string, view: ScheduleViewLevel): string {
 /**
  * The first and last dates a view has on screen.
  *
- * Only ever used to decide whether the calendar has wandered off the poll, so
- * it is allowed to be arithmetic rather than exact: a month view shows a few
- * days either side of its month and this does not count them, which at worst
- * offers a way back to the poll on a screen that already shows one day of it.
+ * Exact, and it has to be: as well as deciding whether the calendar has
+ * wandered off the poll, it is what the header's range control fills. The two
+ * things that make it exact are set on the grids themselves -- the month draws
+ * only its own days (`withOutsideDays={false}`, so the week either side of it
+ * is blank rather than borrowed) and both time grids start on Monday
+ * (`firstDayOfWeek={1}`) -- so a change to either of those belongs here too.
  */
 function visibleRange(date: string, view: ScheduleViewLevel): { from: string; to: string } {
   const on = dayjs(date)

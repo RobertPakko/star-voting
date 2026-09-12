@@ -934,11 +934,10 @@ produce the same `BallotScore[]` for the same `onSubmit`, so both ballot paths,
 
 The calendar under it is [`PaintCalendar`](src/components/PaintCalendar.tsx),
 which the create form and the time-collecting card also draw. What the ballot
-adds to it is the six-value brush, the sentence about the offset, and one
-control: **apply the brush to every time in the poll**. That replaced *Clear
-everything*, which is the same gesture with one value hard-coded into it — `5`
-for somebody free throughout, `Can't` for somebody starting again, and no
-button that only does the second.
+adds to it is the six-value brush and the sentence about the offset, and that
+is now all it adds: it had a button beside those reading *apply 5 to every
+time*, and the calendar's own header does that job better — see *Three views*
+below.
 
 The calendar is [`@mantine/schedule`](https://mantine.dev), and it is worth
 being clear about what that is: an event calendar in the Google Calendar mould,
@@ -960,6 +959,8 @@ handful of props, and each one is a gesture:
 - **A day's column heading fills that day**, through `onDateChange`; see below.
 - In the **month view**, which has no time grid at all, a day *is* the unit:
   `onDayClick` fills one and a drag across several fills those.
+- **The range in the header fills everything on screen**, which is the one
+  gesture here that is not the library's at all; see below.
 
 **Three views, and the header is ours.** `DayView`, `WeekView` and `MonthView`
 are rendered directly rather than through the `Schedule` wrapper — that wrapper
@@ -998,6 +999,37 @@ Two of the library's own wrapper classes are deliberately not used:
 `todayControl` and `viewSelect` are `display: none` under 600px, because the
 library swaps in a compact `NativeSelect` we do not render. Ours are plain
 `Group`s for that reason.
+
+**The range in the middle of that header is a control**, and it fills what it
+names: *September 2026* answers for September, and the same button on the week
+grid answers for the week and on the day grid for the day. It replaced the
+ballot's *apply 5 to every time*, which was the same idea attached to nothing
+the reader was looking at — it reached the whole poll however much of it was on
+screen, so a fortnight in two halves could be answered in one go or cell by
+cell and nothing in between. All three screens get it, because it is the
+calendar's rather than the ballot's: `fillVisible`.
+
+It reaches exactly what is drawn, which is what makes the label honest, and two
+props already set on the grids are what make that true — the month draws only
+its own days (`withOutsideDays={false}`) and both time grids start on Monday
+(`firstDayOfWeek={1}`) — so `visibleRange`, which works the range out, is exact
+rather than approximate and has to stay that way. Out-of-bounds days inside the
+range are left alone, and like every other click on this calendar it **toggles**:
+a stretch that is already exactly what the brush would make it is cleared, which
+is the undo a gesture that large needs.
+
+**Changing the view holds the calendar still.** The three views are wildly
+different heights — a week of half-hours at the create form's row height is over
+a thousand pixels and the same poll's month is a few hundred — so switching
+between them used to move the page under the reader: the document became
+shorter than the position it was scrolled to, the browser clamped that position,
+and a calendar that filled the screen ended up halfway down it. Nothing scrolled
+on purpose, which is exactly why it read as a fault. So `showView` measures the
+header's own top before the switch and a `useLayoutEffect` scrolls the page by
+however far it moved after it, before the browser paints. Where the document is
+too short to hold the old position there is nowhere to put the reader back, and
+the calendar is brought to the top of the screen instead — the new view whole,
+rather than the part of it the clamp happened to leave on screen.
 
 Filling **toggles**: a day that is already exactly what the brush would make it
 is a day the click is taking back. The `Can't` brush never toggles — clearing a
