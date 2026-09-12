@@ -56,13 +56,21 @@ const DROPPING = 1
 const OFFERED = 2
 const ADDING = 3
 
+/**
+ * The difference between the painting and the list: the window starts to add,
+ * and the ids of the options to drop. One edit, whichever of the two halves
+ * is empty.
+ */
+export type PaintedEdit = { add: string[]; removeIds: string[] }
+
 export function PaintTimes({
   schedule,
   options,
   canRemove,
   saving,
+  showSave,
   onSave,
-  onDirtyChange,
+  onDraftChange,
 }: {
   schedule: PollSchedule
   /** The windows already on the list, as ordinary options. */
@@ -71,12 +79,18 @@ export function PaintTimes({
   canRemove: boolean
   saving: boolean
   /**
-   * Apply the difference: the window starts to add, and the ids of the options
-   * to drop. One call, whichever of the two is empty.
+   * Whether the calendar carries its own *Save times*.
+   *
+   * False where the card around it ends in *Confirm options*, which is the
+   * same press: confirming a list is saying the list in front of you is the
+   * one you mean, and an afternoon painted but not saved is part of it. Two
+   * buttons for one act was the thing that was wrong. See CollectOptions.
    */
-  onSave: (add: string[], removeIds: string[]) => Promise<void>
-  /** Whether the calendar holds a change the poll does not; see CollectOptions. */
-  onDirtyChange: (dirty: boolean) => void
+  showSave: boolean
+  /** Apply the difference, and answer whether it went in. */
+  onSave: (add: string[], removeIds: string[]) => Promise<boolean>
+  /** The difference as it now stands, or null when there is none. */
+  onDraftChange: (edit: PaintedEdit | null) => void
 }) {
   const offered = useMemo(
     () =>
@@ -184,10 +198,17 @@ export function PaintTimes({
   const nothing = adding.length === 0 && removing.length === 0
 
   // Reported up rather than asked for, because the card around this is what
-  // says "you have changes that have not been saved" and it cannot see the
-  // painting. An effect rather than a call inside `paint`, since the diff is
-  // enumerated from the whole painting and not tracked cell by cell.
-  useEffect(() => onDirtyChange(!nothing), [nothing, onDirtyChange])
+  // says "you have changes that have not been saved" -- and, where the way
+  // out of it is *Confirm options*, what puts them in -- and it cannot see
+  // the painting. An effect rather than a call inside `paint`, since the diff
+  // is enumerated from the whole painting and not tracked cell by cell.
+  useEffect(() => {
+    onDraftChange(
+      adding.length === 0 && removing.length === 0
+        ? null
+        : { add: adding, removeIds: removing.map((option) => option.id) },
+    )
+  }, [adding, removing, onDraftChange])
 
   return (
     <Stack gap="xs">
@@ -237,18 +258,20 @@ export function PaintTimes({
                 .filter(Boolean)
                 .join(', ')}
         </Text>
-        <Button
-          onClick={() =>
-            onSave(
-              adding,
-              removing.map((o) => o.id),
-            )
-          }
-          loading={saving}
-          disabled={nothing}
-        >
-          Save times
-        </Button>
+        {showSave && (
+          <Button
+            onClick={() =>
+              onSave(
+                adding,
+                removing.map((o) => o.id),
+              )
+            }
+            loading={saving}
+            disabled={nothing}
+          >
+            Save times
+          </Button>
+        )}
       </Group>
     </Stack>
   )

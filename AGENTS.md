@@ -1485,6 +1485,13 @@ The two suggestion paths still add straight away and should: that list belongs
 to the group, everybody watching sees a suggestion land as it lands, and that
 is half of what the collecting stage is for.
 
+One request, but for a while not one *edit*: the removals went as a `delete`
+of their own and the additions followed, which is what put the two-option
+floor on a list the creator never asked for. See [The creator can correct the
+options until somebody
+votes](#the-creator-can-correct-the-options-until-somebody-votes) for
+`creator_edit_options`, which is that same draft applied in one go.
+
 ### Deliberately not built yet
 
 - **A calendar heat map of the results.** Decided against; see above.
@@ -2918,6 +2925,33 @@ sends the same letter to everybody but the creator, who pressed it — see
 "the list changed, please look again" round trip, and adding that would be a
 poll that can never open: every confirmation would invite one more suggestion.
 
+**Confirming is the save.** The card holds things this reader has not sent
+yet — an afternoon painted on a time poll's calendar, an option typed into
+the box and not added — and pressing *I have nothing more to add* while one of
+them is still sitting there is not a mistake to warn about. It is the press
+that should put it in: confirming a list is saying *the list in front of me is
+the one I mean*, and what is in front of them includes what they just drew. It
+was two buttons for one intention — **Save times** and then **Confirm
+options** — and a reader who pressed only the second confirmed a list without
+the thing they had spent the last minute painting.
+
+So each list leaves what it is holding where the card can reach it (`DraftHold`
+in `CollectOptions`), and *Confirm options* applies it and then confirms: one
+press, whether or not there was anything outstanding, and nothing confirmed if
+the save is refused — a list the server would not take is not the list they
+were saying yes to. The failure is reported where the reader was looking, on
+the field or under the list, by the list itself.
+
+The calendar keeps a **Save times** of its own only where there is nothing to
+confirm — the creator correcting a ballot's windows, and a soliciting poll's
+creator who did not invite themselves — because there it is the only way the
+painting reaches the poll at all. Adding an option is still its own press while
+the list is still a list, for the reason at the end of [Collecting times, and a
+calendar among several
+questions](#collecting-times-and-a-calendar-among-several-questions): a
+suggestion belongs to the group and lands live for everybody watching. What
+confirming flushes is the one still in the box.
+
 ### The creator can correct the options until somebody votes
 
 Separate from where the options came from, and deliberately blind to it: a
@@ -2951,6 +2985,33 @@ write to `candidates` from any path at all. What `0028` added on top:
   becomes a ballot; a list that already *is* a ballot has no later checkpoint,
   so the floor is applied to the delete itself. Otherwise correcting an option
   list could leave a live poll with one option and no election in it.
+
+**A correction is one edit, and the floor is a rule about where it lands.**
+The card drafts the whole of it — some options going, some coming — and
+applied it as two requests: a `delete` on the rows being dropped, and then
+`creator_add_options`. Which put the poll through a list nobody had asked for
+and nobody ever saw, and the floor above was applied to *that*: a poll of two
+options, corrected to drop one and add two, was refused with *A poll needs at
+least two options* on its way to three.
+[`0059_editing_options_in_one_go.sql`](supabase/migrations/0059_editing_options_in_one_go.sql)
+adds **`creator_edit_options()`**, which takes both halves and applies them in
+one transaction, and moves the floor to the end of it — counted against what
+the edit leaves behind, which is the list the creator actually asked for and
+the only one anybody is offered.
+
+The trigger still judges a bare `delete` a row at a time, because that grant
+is one the browser holds directly and the guard is the whole of what stands
+behind it. What it now steps aside for is a delete inside an edit that has
+said so: `creator_edit_options` names the poll it is mid-edit on in
+`app.editing_options`, transaction-local and cleared the moment the removals
+are in, exactly as `purge_old_polls` sets `app.purging_polls` for
+`broadcast_poll_gone`. The flag names a poll rather than being a bare *on*, so
+an edit of one list cannot lift the floor off another in the same transaction.
+
+A refusal now also leaves the poll exactly as it was. The two-request version
+deleted the rows before the additions were refused, so the card had to throw
+that half of the draft away and the creator was left standing part-way through
+a correction they had made in one press.
 
 The creator reaches it from **Edit options** in `CreatorControls`, and it
 replaces the ballot while it is open — they are two readings of one list, and

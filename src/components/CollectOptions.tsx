@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActionIcon,
@@ -14,6 +14,7 @@ import {
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { PaintTimes } from './PaintTimes'
+import type { PaintedEdit } from './PaintTimes'
 import { openPollRpc } from '../lib/samplePoll'
 import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
@@ -48,6 +49,23 @@ export type OptionsSource =
   | { kind: 'poll'; pollId: string }
   | { kind: 'open'; pollId: string }
   | { kind: 'creator'; pollId: string }
+
+/**
+ * The unsaved edit a list is holding, left where the card around it can apply
+ * it.
+ *
+ * Confirming the options is one act -- *this list, the one in front of me, is
+ * the one I mean* -- and it used to be two: save the windows you painted, or
+ * add the option you typed, and then say you were done with the list they
+ * went into. So the list writes what it is holding into this hole, and
+ * *Confirm options* puts it in before it confirms anything. It answers
+ * whether the save went through; the list has already said what was wrong
+ * with it, against the field or under the list, where the reader was looking.
+ *
+ * Null whenever there is nothing outstanding, which is what makes a
+ * confirmation with no edits behind it a single request as it always was.
+ */
+export type DraftHold = { current: (() => Promise<boolean>) | null }
 
 /**
  * How this reader says they are done with the list, when they have a say in
@@ -167,6 +185,9 @@ export function CollectOptions({
   // Whether the list below holds something the poll does not yet; see the
   // note beside the line that says so.
   const [dirty, setDirty] = useState(false)
+  // And what to do about it when this reader says they are done. See
+  // DraftHold: the list fills it in, `confirmOptions` empties it.
+  const draft = useRef<(() => Promise<boolean>) | null>(null)
 
   // The name is what a confirmation is given under, so it is asked for only
   // where there is something to confirm: the creator correcting a ballot's
@@ -182,6 +203,19 @@ export function CollectOptions({
     }
 
     setBusy(true)
+
+    // Whatever the list is holding goes in first, because that is what is
+    // being confirmed: an afternoon painted on the calendar, or an option
+    // typed into the box and not yet added, is part of the list this reader
+    // is saying they are happy with. Saving it and then saying so were two
+    // presses of two buttons for one intention, and the intention is the
+    // button. The list reports its own failure, so this only has to stop.
+    const save = draft.current
+    if (save && !(await save())) {
+      setBusy(false)
+      return
+    }
+
     const { error: rpcError } = await sendConfirmation(source, voterName?.trimmed ?? null)
     setBusy(false)
 
@@ -263,6 +297,14 @@ export function CollectOptions({
             options={options}
             schedule={schedule}
             isCreator={isCreator}
+            // Where this card ends in *Confirm options*, that button is the
+            // save; see DraftHold. The list keeps a save of its own only
+            // where there is nothing to confirm -- the creator correcting a
+            // ballot's options, and the creator of a soliciting poll who did
+            // not invite themselves -- because there it is the only way the
+            // edit reaches the poll at all.
+            ownSave={!confirm}
+            draft={draft}
             onChanged={onChanged}
             onDirtyChange={setDirty}
           />
@@ -271,6 +313,8 @@ export function CollectOptions({
             source={source}
             options={options}
             isCreator={isCreator}
+            ownSave={!confirm}
+            draft={draft}
             onChanged={onChanged}
             onDirtyChange={setDirty}
           />
@@ -280,10 +324,14 @@ export function CollectOptions({
             one request -- so there is a moment where the card holds an answer
             the poll does not, and the way out of the card sits a few lines
             below. Said rather than guarded against: a Save button that is the
-            only way out is worse than one that is the obvious way out. */}
+            only way out is worse than one that is the obvious way out. Where
+            the way out is *Confirm options* there is no other button to name,
+            so the line says which press is the one that keeps it. */}
         {dirty && (
           <Text size="sm" c="orange">
-            You have changes that have not been saved yet.
+            {confirm
+              ? 'These changes go in when you confirm the options.'
+              : 'You have changes that have not been saved yet.'}
           </Text>
         )}
 
@@ -362,12 +410,18 @@ function OptionList({
   source,
   options,
   isCreator,
+  ownSave,
+  draft,
   onChanged,
   onDirtyChange,
 }: {
   source: OptionsSource
   options: PollOption[]
   isCreator: boolean
+  /** Whether this list carries its own *Save changes*; see CollectOptions. */
+  ownSave: boolean
+  /** Where the edit it is holding goes instead, when it does not. */
+  draft: DraftHold
   onChanged: () => void
   onDirtyChange: (dirty: boolean) => void
 }) {
@@ -424,8 +478,16 @@ function OptionList({
   // list already at the floor.
   const atFloor = drafting && kept <= 2
 
-  async function addOption() {
-    if (busy) return
+  /**
+   * Put what is in the box on the list, and answer whether it got there.
+   *
+   * `quiet` is the same add made on the way past: *Confirm options* flushes
+   * the box before it confirms, and an option arriving is not news to the
+   * person who just said they were done adding it -- the confirmation's own
+   * message and its re-read cover both. See DraftHold.
+   */
+  async function addOption(quiet = false): Promise<boolean> {
+    if (busy) return false
 
     const trimmed = name.trim()
     const trimmedDescription = description.trim()
@@ -441,11 +503,11 @@ function OptionList({
 
     if (!trimmed) {
       setNameError('Give the option a name.')
-      return
+      return false
     }
     if (trimmed.length > OPTION_NAME_MAX) {
       setNameError(tooLong('An option name', trimmed.length, OPTION_NAME_MAX))
-      return
+      return false
     }
     // Case-insensitive, like the database: two options differing only in
     // case are one option to everybody scoring the ballot. The draft is
@@ -457,17 +519,17 @@ function OptionList({
       )
     ) {
       setNameError(`“${trimmed}” is already on the list.`)
-      return
+      return false
     }
     if (trimmedDescription.length > OPTION_DESCRIPTION_MAX) {
       setDescriptionError(
         tooLong('A description', trimmedDescription.length, OPTION_DESCRIPTION_MAX),
       )
-      return
+      return false
     }
     if (full) {
       setNameError(`This poll already holds the ${MAX_OPTIONS} options a ballot can.`)
-      return
+      return false
     }
 
     if (drafting) {
@@ -479,7 +541,7 @@ function OptionList({
       setName('')
       setDescription('')
       onDirtyChange(true)
-      return
+      return true
     }
 
     setBusy(true)
@@ -496,56 +558,71 @@ function OptionList({
 
     if (rpcError) {
       setError(rpcError.message)
-      return
+      return false
     }
     setName('')
     setDescription('')
+    if (quiet) return true
     notifications.show({ message: `Added “${trimmed}”`, color: 'green' })
     onChanged()
+    return true
   }
 
-  /** The whole draft -- what is going and what is coming -- in one press. */
-  async function saveDraft() {
-    if (busy || !dirty) return
+  /**
+   * The whole draft -- what is going and what is coming -- in one press, and
+   * in one request.
+   *
+   * It was two: a `delete` on the rows being dropped, and then the additions.
+   * Which meant the poll passed through a list nobody had asked for, and the
+   * floor under a live ballot was applied to it -- a poll of two options,
+   * edited to drop one and add two, was refused for having fewer than two on
+   * the way to three. `creator_edit_options` takes both halves and applies
+   * the floor to where they land; see 0059_editing_options_in_one_go.sql.
+   * A refusal now leaves the poll exactly as it was, so the draft is still
+   * the whole of what is left to do and is kept intact.
+   */
+  async function saveDraft(quiet = false): Promise<boolean> {
+    if (busy) return false
+    if (!dirty) return true
     setError(null)
     setBusy(true)
 
-    // Removals first, so a save that swaps one option for another cannot trip
-    // over the 500-option ceiling on its way through the middle.
-    if (dropping.size > 0) {
-      const { error: deleteError } = await supabase
-        .from('candidates')
-        .delete()
-        .in('id', [...dropping])
-      if (deleteError) {
-        setBusy(false)
-        setError(deleteError.message)
-        return
-      }
-    }
-
-    const { error: rpcError } =
-      pending.length === 0
-        ? { error: null }
-        : await supabase.rpc('creator_add_options', {
-            p_poll_id: source.pollId,
-            p_options: pending.map((o) => ({ name: o.name, description: o.description || null })),
-          })
+    const { error: rpcError } = await supabase.rpc('creator_edit_options', {
+      p_poll_id: source.pollId,
+      p_options: pending.map((o) => ({ name: o.name, description: o.description || null })),
+      p_remove: [...dropping],
+    })
     setBusy(false)
 
     if (rpcError) {
-      // The removals have already gone through, so the draft keeps only what
-      // is left to do rather than offering to delete them again.
-      setDropping(new Set())
       setError(rpcError.message)
-      return
+      return false
     }
-    notifications.show({ message: 'Options saved', color: 'green' })
     setPending([])
     setDropping(new Set())
     onDirtyChange(false)
+    // Saved on the way to something else -- see DraftHold -- which says so
+    // itself and re-reads the poll once, at the end of the whole act.
+    if (quiet) return true
+    notifications.show({ message: 'Options saved', color: 'green' })
     onChanged()
+    return true
   }
+
+  // What this list is holding that the poll does not, left where the card's
+  // own button can apply it; see DraftHold. Written after every render rather
+  // than once, because it closes over the draft and the box as they are now,
+  // and taken back on the way out so no card confirms a list it has stopped
+  // drawing.
+  useEffect(() => {
+    if (dirty) draft.current = () => saveDraft(true)
+    else if (name.trim()) draft.current = () => addOption(true)
+    else draft.current = null
+
+    return () => {
+      draft.current = null
+    }
+  })
 
   function dropDraft(key: string) {
     setPending((prev) => {
@@ -736,7 +813,7 @@ function OptionList({
             error={descriptionError}
           />
         </Stack>
-        <Button variant="light" onClick={addOption} disabled={full}>
+        <Button variant="light" onClick={() => addOption()} disabled={full}>
           Add
         </Button>
       </Group>
@@ -745,7 +822,7 @@ function OptionList({
           four corrections used to be four round trips and four re-reads of
           the poll. Both halves wait for it -- an editor where adding is a
           draft and removing is immediate is two rules for one card. */}
-      {dirty && (
+      {ownSave && dirty && (
         <Group justify="space-between" wrap="wrap" gap="sm">
           <Text size="sm" c="dimmed">
             {[
@@ -756,7 +833,7 @@ function OptionList({
               .join(', ')}
             .
           </Text>
-          <Button onClick={saveDraft} loading={busy}>
+          <Button onClick={() => saveDraft()} loading={busy}>
             Save changes
           </Button>
         </Group>
@@ -792,6 +869,8 @@ function TimeList({
   options,
   schedule,
   isCreator,
+  ownSave,
+  draft,
   onChanged,
   onDirtyChange,
 }: {
@@ -799,25 +878,64 @@ function TimeList({
   options: PollOption[]
   schedule: PollSchedule
   isCreator: boolean
+  /** Whether the calendar carries its own *Save times*; see CollectOptions. */
+  ownSave: boolean
+  /** Where the painting goes instead, when it does not. */
+  draft: DraftHold
   onChanged: () => void
   onDirtyChange: (dirty: boolean) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The painting's difference from the list, as the calendar last reported
+  // it. Held rather than read back out of it: a window is a run of cells, so
+  // working out which windows a painting means is the calendar's job and is
+  // done in one place.
+  const [painted, setPainted] = useState<PaintedEdit | null>(null)
 
-  async function save(add: string[], removeIds: string[]) {
-    if (busy) return
+  const noteDraft = useCallback(
+    (edit: PaintedEdit | null) => {
+      setPainted(edit)
+      onDirtyChange(edit !== null)
+    },
+    [onDirtyChange],
+  )
+
+  async function save(add: string[], removeIds: string[], quiet = false): Promise<boolean> {
+    if (busy) return false
     setError(null)
     setBusy(true)
 
+    // The creator's correction to a list that is already a ballot goes in as
+    // one edit, because the two-option floor is applied to a live ballot a
+    // row at a time: an afternoon swapped for another afternoon passes
+    // through a list of one window, which is not a list anybody was offered.
+    // See 0059_editing_options_in_one_go.sql.
+    if (source.kind === 'creator') {
+      const { error: rpcError } = await supabase.rpc('creator_edit_options', {
+        p_poll_id: source.pollId,
+        p_options: add.map((name) => ({ name })),
+        p_remove: removeIds,
+      })
+      setBusy(false)
+
+      if (rpcError) {
+        setError(rpcError.message)
+        return false
+      }
+      return landed(add, removeIds, quiet)
+    }
+
     // Removals first, so a save that swaps one window for another cannot trip
-    // over the 500-option ceiling on its way through the middle.
+    // over the 500-option ceiling on its way through the middle. A list still
+    // being collected has no floor to fall through in between; that is
+    // finalize_options's, when the list becomes a ballot.
     if (removeIds.length > 0) {
       const { error: deleteError } = await supabase.from('candidates').delete().in('id', removeIds)
       if (deleteError) {
         setBusy(false)
         setError(deleteError.message)
-        return
+        return false
       }
     }
 
@@ -826,8 +944,22 @@ function TimeList({
 
     if (rpcError) {
       setError(rpcError.message)
-      return
+      return false
     }
+
+    return landed(add, removeIds, quiet)
+  }
+
+  /**
+   * What every path does once the windows are in.
+   *
+   * `quiet` is a save made on the way past: *Confirm options* puts the
+   * painting in before it confirms it, and that act says so itself and
+   * re-reads the poll once, at the end. See DraftHold.
+   */
+  function landed(add: string[], removeIds: string[], quiet: boolean) {
+    onDirtyChange(false)
+    if (quiet) return true
 
     notifications.show({
       message:
@@ -836,9 +968,20 @@ function TimeList({
           : `Removed ${removeIds.length} ${removeIds.length === 1 ? 'time' : 'times'}`,
       color: 'green',
     })
-    onDirtyChange(false)
     onChanged()
+    return true
   }
+
+  // The painting, left where the card's own button can apply it; see
+  // DraftHold. After every render rather than once, so that what it puts in
+  // is the painting as it now stands.
+  useEffect(() => {
+    draft.current = painted ? () => save(painted.add, painted.removeIds, true) : null
+
+    return () => {
+      draft.current = null
+    }
+  })
 
   return (
     <Stack gap="sm">
@@ -849,8 +992,9 @@ function TimeList({
         // everywhere else in this app, and is that here too.
         canRemove={isCreator}
         saving={busy}
+        showSave={ownSave}
         onSave={save}
-        onDirtyChange={onDirtyChange}
+        onDraftChange={noteDraft}
       />
       {error && (
         <Text c="red" size="sm">
