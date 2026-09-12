@@ -1127,7 +1127,7 @@ the ballot, which is the point; the two painting screens are unconfined and
 must be, since on the create form the bounds *are* the answer and a poll
 collecting its times is asking about days nobody has named yet.
 
-**And its grids leave out the weekdays the poll has nothing on**
+**And its grids leave out the weekdays with nothing on them**
 (`hideEmptyWeekdays`). A poll about a Friday, a Saturday and a Sunday drew four
 columns of greyed cells for the days it was not asking about, and on a phone
 those four were most of the width; dropping them makes the three that matter
@@ -1135,9 +1135,19 @@ three times wider and takes the week off the horizontal scroll entirely. Said
 through the library's own `weekendDays` with `withWeekendDays={false}`, which
 is its one mechanism for dropping a column and the only one that keeps the
 month's rows and its event spans in step with the drop — the list holds what is
-not drawn rather than what is a weekend, so a poll that does ask about
-Saturdays is drawn with Saturday in it, and spared the red the library paints a
-weekend heading in. It is the ballot's alone for the same reason `confine` is:
+not drawn rather than what is a weekend, so a week that does hold a Saturday is
+drawn with Saturday in it, and spared the red the library paints a weekend
+heading in.
+
+**It is asked of the range on screen, not of the poll**, which is the part that
+took a second go. A poll about a Saturday, a Sunday and the Monday after uses
+three weekdays and spans two weeks, and the poll-wide answer drew all three
+columns on *both* of them — a Monday on the first week that the poll is not
+asking about, and a Saturday and a Sunday on the second. Each week is its own
+question and is now drawn with the days it actually holds: two columns, then
+one. The month asks the same question of its own month, which is as far as it
+can go — one row of columns is shared by every week of a month grid, so
+per-week is not something a month can say. It is the ballot's alone for the same reason `confine` is:
 its bounds are the whole of what can ever be answered, so a weekday with
 nothing on it is one nothing will ever be on. On the two painting screens an
 empty Monday is an empty Monday somebody is about to paint.

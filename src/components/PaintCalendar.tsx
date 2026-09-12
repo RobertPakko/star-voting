@@ -474,26 +474,39 @@ export function PaintCalendar({
   }
 
   /**
-   * The weekdays this poll has nothing on, which the two grids laid out by
-   * weekday leave out; see `hideEmptyWeekdays`.
+   * The weekdays with nothing on them **in what is on screen**, which the two
+   * grids laid out by weekday leave out; see `hideEmptyWeekdays`.
+   *
+   * **Asked of the range rather than of the poll**, which is the whole of what
+   * makes it right. A poll about a Saturday, a Sunday and the Monday after
+   * spans two weeks and uses three weekdays, and taken poll-wide that drew
+   * three columns on *both* weeks -- a Monday on the first that the poll is
+   * not asking about, and a Saturday and Sunday on the second. Each week is
+   * its own question, so each is drawn with the days it actually holds: two
+   * columns, then one.
+   *
+   * The month asks the same question of its own month, which is as fine as it
+   * can be: one grid of columns is shared by all its weeks, so per-week is not
+   * a thing a month can express.
    *
    * Said through the library's own `weekendDays` and `withWeekendDays`, which
    * is its one way of dropping a column and the only one that keeps the
    * month's rows and its event spans in step with the drop. The name is the
    * library's and not a description of the list: what is in it is what is not
-   * drawn, and a poll that does ask about Saturdays does not put Saturday in
-   * it -- which also spares those days the red the library paints a weekend
-   * heading in, a colour that means nothing on an availability grid.
+   * drawn, and a week that does hold a Saturday does not put Saturday in it --
+   * which also spares that day the red the library paints a weekend heading
+   * in, a colour that means nothing on an availability grid.
    *
-   * Empty where there is nothing to hide, and it cannot be all seven: a poll
-   * with no days at all is the first case here, and one with any day at all
-   * has that day's weekday in use.
+   * Empty where there is nothing to hide, and it can never be all seven: a
+   * range holding no day of the poll is the first case here, and one holding
+   * any day at all has that day's weekday in use.
    */
+  const onScreen = days.filter((on) => on >= inView.from && on <= inView.to)
   const emptyWeekdays: DayOfWeek[] =
-    !hideEmptyWeekdays || days.length === 0
+    !hideEmptyWeekdays || onScreen.length === 0
       ? []
       : ([0, 1, 2, 3, 4, 5, 6] as DayOfWeek[]).filter(
-          (weekday) => !days.some((on) => weekdayOf(on) === weekday),
+          (weekday) => !onScreen.some((on) => weekdayOf(on) === weekday),
         )
   const byWeekday = {
     weekendDays: emptyWeekdays,
