@@ -372,6 +372,43 @@ This is not a hypothetical: a plain squash silently dropped the purge schedule
 once. `12_poll_retention` now asserts the job exists, so a squash that loses it
 again fails the suite instead of quietly disabling retention.
 
+### A version number is used once, ever
+
+Not once per file — once. The integration records the number in front of a
+migration's name, and a number in `supabase_migrations.schema_migrations` is a
+number that will never be applied again, whatever file is wearing it now.
+
+**A migration replaced before it ships does not give its number back.**
+`0056_schedule_day_windows.sql` reached `main`, was applied, and put `0056` in
+that table. The next commit deleted it and added `0056_schedule_options.sql` —
+a different migration at the same number — which the integration skipped as
+already applied. So did `0056_baseline.sql`, the squash, for the same reason: a
+third file at 0056. The squash's rename deliberately keeps the version prefix,
+on the sound assumption that the remote already holds the state that number
+stands for; here it did not, and nothing said so.
+
+Nothing caught it for two weeks. `test/build-db.sh` builds a fresh database
+from every file in the directory, so the suite has always run against the
+schema the repo *claims*, and a version the remote skipped is invisible to it —
+the tests, the front end and the committed SQL all agreed with each other about
+a database that disagreed with all three. What surfaced it was a person trying
+to make a poll: `suggest_options` did not exist on the live project, and
+`create_poll` still carried the refusal that migration lifted.
+
+So: **renumber, even when the file you are replacing has never left your
+branch** — you cannot know it has not been applied, and the cost of a spare
+number is nothing. When a remote does fall behind, the fix is a *new* migration
+at a fresh number that re-asserts the definitions out of the baseline;
+[`0058_schedule_options_again.sql`](supabase/migrations/0058_schedule_options_again.sql)
+is the worked example, and the way to check one is the fingerprint above: build
+the schema the remote actually has, apply the repair, and compare it against a
+build of the repo's own migrations. It has no down file, because what a down
+file would restore is the state it repairs.
+
+`supabase migration list`, which the squash script already prints, is what
+would have shown this at the time: local and remote history side by side, with
+0056 present on both and standing for different things.
+
 ## Tests
 
 ```bash
