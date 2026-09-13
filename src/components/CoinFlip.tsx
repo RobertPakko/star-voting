@@ -57,19 +57,8 @@ export function CoinFlip({
         Flip a coin
       </Button>
 
-      <Modal
-        opened={opened}
-        onClose={modal.close}
-        centered
-        title={<Text fw={600}>Flip a coin</Text>}
-      >
-        <Stack gap="lg">
-          {/* The coin carries both names and neither is the announcement: it
-              spins, so whichever face is readable at a given frame is an
-              accident of timing. The result is stated underneath in text,
-              which is also what a reader who has asked for less motion gets —
-              the animation collapses to its final frame and the sentence was
-              never part of it. */}
+      <Modal opened={opened} onClose={modal.close} centered>
+        <Stack gap="xl" className={classes.modal}>
           <div className={classes.stage} aria-hidden>
             <div className={classes.coin}>
               <div className={classes.face}>
@@ -84,19 +73,6 @@ export function CoinFlip({
           <Text fw={700} size="lg" ta="center">
             {won.name} wins the toss.
           </Text>
-
-          <Stack gap="xs">
-            <Text size="sm">
-              <strong>Everybody gets this same flip.</strong> The side it lands on comes from the
-              poll and its two finalists rather than from this browser, so reopening it, reloading
-              the page, or opening it on somebody else&rsquo;s phone lands it the same way up. There
-              is nothing to re-roll and nobody to tell.
-            </Text>
-            <Text size="sm" c="dimmed">
-              The election itself is still tied. This settles the argument, not the poll: nothing is
-              recorded, and {won.name} and {lost.name} stay exactly as level as the votes left them.
-            </Text>
-          </Stack>
         </Stack>
       </Modal>
     </>

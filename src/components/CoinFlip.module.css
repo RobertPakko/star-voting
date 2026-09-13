@@ -20,12 +20,14 @@
  * the coin, not the coin, is what states the result.
  */
 
+.modal {
+  padding-top: 32px;
+  padding-bottom: 32px;
+}
+
 .stage {
   display: flex;
   justify-content: center;
-  /* Shallow enough that the turn reads as a coin rather than as a card
-     swinging on a hinge, and applied here because perspective is a property of
-     the thing being looked *through*, not of the thing turning. */
   perspective: 700px;
 }
 
@@ -79,6 +81,7 @@
  */
 .name {
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
