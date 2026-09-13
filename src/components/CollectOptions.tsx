@@ -545,10 +545,18 @@ function OptionList({
     // case are one option to everybody scoring the ballot. The draft is
     // checked alongside the list, because a name waiting to be saved is one
     // the save is about to refuse.
+    //
+    // Rows struck through are not on the list this save is about: the
+    // removals go in before the additions, in one transaction, so replacing
+    // an option with another of the same name and a different description is
+    // a save the database takes. Checking against what is on screen rather
+    // than against what it would leave behind was refusing that edit for a
+    // clash with the very row being dropped.
     if (
-      [...options.map((o) => o.name), ...pending.map((o) => o.name)].some(
-        (existing) => existing.toLowerCase() === trimmed.toLowerCase(),
-      )
+      [
+        ...options.filter((o) => !dropping.has(o.id)).map((o) => o.name),
+        ...pending.map((o) => o.name),
+      ].some((existing) => existing.toLowerCase() === trimmed.toLowerCase())
     ) {
       setNameError(`“${trimmed}” is already on the list.`)
       return null
@@ -755,70 +763,95 @@ function OptionList({
           Nothing suggested yet. Add the first one.
         </Text>
       ) : (
-        options.map((option) => (
-          /* The row's own box, which is what opens and closes; see
-             listRow.module.css. Two things travel in it — the option and the
-             rule under it — so the box has to space them itself, having taken
-             them out of the `Stack` that was doing it. */
-          <div
-            key={option.id}
-            className={`${listRow.row} ${arriving.has(option.id) ? listRow.joining : ''} ${
-              removing === option.id ? listRow.leaving : ''
-            }`}
-          >
-            <div className={`${listRow.content} ${listRow.stacked}`}>
-              <Group justify="space-between" wrap="nowrap" gap="sm">
-                <div style={{ minWidth: 0 }}>
-                  {/* Struck through rather than gone, while the removal is
-                      still a draft: the row is what the press acted on, and
-                      showing it crossed out is what makes the press
-                      takeable-back without a second list of what is missing. */}
-                  <Text
-                    fw={500}
-                    c={dropping.has(option.id) ? 'dimmed' : undefined}
-                    td={dropping.has(option.id) ? 'line-through' : undefined}
-                  >
-                    {option.name}
-                  </Text>
-                  {option.description && <OptionDescription description={option.description} />}
-                </div>
-                {isCreator &&
-                  (dropping.has(option.id) ? (
-                    <Button
-                      variant="subtle"
-                      size="compact-xs"
-                      onClick={() => toggleDropping(option.id)}
+        options.map((option) => {
+          const struck = dropping.has(option.id)
+          // A struck row whose name a draft has already taken cannot simply
+          // come back: two options of that name is the one list this save
+          // cannot leave behind. Swapping an option for another under the
+          // same name is what makes that reachable at all (see
+          // `typedOption`), so the way back to this row is to discard the
+          // draft that replaced it.
+          const replaced =
+            struck && pending.some((o) => o.name.toLowerCase() === option.name.toLowerCase())
+
+          return (
+            /* The row's own box, which is what opens and closes; see
+               listRow.module.css. Two things travel in it — the option and the
+               rule under it — so the box has to space them itself, having taken
+               them out of the `Stack` that was doing it. */
+            <div
+              key={option.id}
+              className={`${listRow.row} ${arriving.has(option.id) ? listRow.joining : ''} ${
+                removing === option.id ? listRow.leaving : ''
+              }`}
+            >
+              <div className={`${listRow.content} ${listRow.stacked}`}>
+                <Group justify="space-between" wrap="nowrap" gap="sm">
+                  <div style={{ minWidth: 0 }}>
+                    {/* Struck through rather than gone, while the removal is
+                        still a draft: the row is what the press acted on, and
+                        showing it crossed out is what makes the press
+                        takeable-back without a second list of what is missing.
+                        Name and description together, because what is leaving
+                        is the option rather than what it is called. */}
+                    <Text
+                      fw={500}
+                      c={struck ? 'dimmed' : undefined}
+                      td={struck ? 'line-through' : undefined}
                     >
-                      Keep
-                    </Button>
-                  ) : (
-                    <Tooltip
-                      label="A poll needs at least two options"
-                      disabled={!atFloor}
-                      withArrow
-                    >
-                      {/* The span is what a tooltip on a disabled button needs:
-                      a disabled control fires no pointer events of its
-                      own, so the reason it is disabled would never be
-                      readable without something around it that does. */}
-                      <span>
-                        <ActionIcon
-                          variant="subtle"
-                          color="red"
-                          disabled={atFloor}
-                          aria-label={`Remove ${option.name}`}
-                          onClick={() => removeOption(option)}
-                        >
-                          &times;
-                        </ActionIcon>
-                      </span>
-                    </Tooltip>
-                  ))}
-              </Group>
-              <Divider />
+                      {option.name}
+                    </Text>
+                    {option.description && (
+                      <OptionDescription description={option.description} struck={struck} />
+                    )}
+                  </div>
+                  {isCreator &&
+                    (struck ? (
+                      <Tooltip
+                        label={`“${option.name}” is being replaced`}
+                        disabled={!replaced}
+                        withArrow
+                      >
+                        <span>
+                          <Button
+                            variant="subtle"
+                            size="compact-xs"
+                            disabled={replaced}
+                            onClick={() => toggleDropping(option.id)}
+                          >
+                            Keep
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip
+                        label="A poll needs at least two options"
+                        disabled={!atFloor}
+                        withArrow
+                      >
+                        {/* The span is what a tooltip on a disabled button needs:
+                        a disabled control fires no pointer events of its
+                        own, so the reason it is disabled would never be
+                        readable without something around it that does. */}
+                        <span>
+                          <ActionIcon
+                            variant="subtle"
+                            color="red"
+                            disabled={atFloor}
+                            aria-label={`Remove ${option.name}`}
+                            onClick={() => removeOption(option)}
+                          >
+                            &times;
+                          </ActionIcon>
+                        </span>
+                      </Tooltip>
+                    ))}
+                </Group>
+                <Divider />
+              </div>
             </div>
-          </div>
-        ))
+          )
+        })
       )}
 
       {/* The draft, under the list it is about to join, and drawn exactly as

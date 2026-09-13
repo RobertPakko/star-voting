@@ -1616,6 +1616,19 @@ two controls applies now and the other waits is a card that has to be
 explained, and the two-option floor cannot be checked honestly against a list
 that is half draft. It is counted against what *Done* would leave behind.
 
+**A struck row is struck whole, and is not on the list any more.** The
+description goes through the crossing-out with the name — what is leaving is
+the option, not what it is called — and the duplicate-name check counts only
+the rows *Done* would leave behind. Checking it against everything on screen
+made the commonest correction of all impossible: striking "Other" and adding
+another "Other" with a better description under it was refused for clashing
+with the very row being dropped, and `creator_edit_options` would have taken
+it happily, since the removals go in before the additions in one transaction.
+The one way back is closed while it is taken: *Keep* is disabled, and says
+why, on a struck row whose name a draft now holds — two options of that name
+is the one list the save cannot leave behind, so the way to that row is to
+discard the draft that replaced it.
+
 The two suggestion paths still add straight away and should: that list belongs
 to the group, everybody watching sees a suggestion land as it lands, and that
 is half of what the collecting stage is for.

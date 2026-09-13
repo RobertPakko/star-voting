@@ -19,7 +19,7 @@ const URL_RE = /(?:https?:\/\/|www\.)\S+/gi
 // page whose path ends in a full stop.
 const TRAILING_PUNCTUATION = /[.,;:!?)\]}'"]+$/
 
-function linkify(text: string): ReactNode[] {
+function linkify(text: string, struck: boolean): ReactNode[] {
   const parts: ReactNode[] = []
   let cursor = 0
 
@@ -38,6 +38,11 @@ function linkify(text: string): ReactNode[] {
         target="_blank"
         rel="noopener noreferrer"
         inherit
+        // An anchor draws its own underline, and text-decoration set on an
+        // ancestor does not reach through one, so a struck description with a
+        // link in it would leave the link standing. Said again here, on the
+        // one part of the text that would otherwise miss it.
+        td={struck ? 'line-through' : undefined}
       >
         {url}
       </Anchor>,
@@ -53,11 +58,28 @@ function linkify(text: string): ReactNode[] {
  * The optional detail under an option's name on a ballot. Line breaks are
  * kept, since a description of a few options is usually written as a few
  * lines, and a long URL wraps rather than pushing the card sideways.
+ *
+ * `struck` is for the one place an option is drawn as being on its way off the
+ * list -- the creator's correction, where a removal is a draft until they are
+ * done. The name is crossed out there, and the description is part of the same
+ * option: striking one and not the other reads as though only the name were
+ * going.
  */
-export function OptionDescription({ description }: { description: string }) {
+export function OptionDescription({
+  description,
+  struck = false,
+}: {
+  description: string
+  struck?: boolean
+}) {
   return (
-    <Text size="sm" c="dimmed" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-      {linkify(description)}
+    <Text
+      size="sm"
+      c="dimmed"
+      td={struck ? 'line-through' : undefined}
+      style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+    >
+      {linkify(description, struck)}
     </Text>
   )
 }
