@@ -1,4 +1,5 @@
 import type { Poll } from './types'
+import { pollPath } from './pollId'
 
 /**
  * The app is served under a base path and routes off the hash, so the app
@@ -24,7 +25,7 @@ function appRoot(): string {
  * and still be on the list. `ShareLink` says which in so many words.
  */
 export function shareLinkFor(poll: Pick<Poll, 'id'>): string {
-  return `${appRoot()}#/polls/${poll.id}`
+  return `${appRoot()}#${pollPath(poll.id)}`
 }
 
 /**

@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -2782,6 +2782,46 @@ answer off the reply:
    links to exactly this address — so where they were headed is stashed
    through `rememberDestination` and the magic link brings them back to it.
    Signed in and refused, the link really is dead, and `PublicPoll` says so.
+
+**The id is spelled short in the URL.** A uuid the way Postgres writes it is
+36 characters carrying 122 random bits — about three and a half bits per
+character, because hex spends four bits on every six its alphabet could hold
+and then adds four hyphens. The same sixteen bytes in base64url are 22
+characters:
+
+```
+3a2697f9-dd9d-4b24-8519-4837d9da6c22   36
+OiaX-d2dSySFGUg32dpsIg                 22   the same bits
+```
+
+Nothing is traded for the fourteen characters that go. This matters because
+for an open poll the link *is* the capability, so the entropy is the guard —
+and the entropy is untouched. A shorter *id* would have been a different
+change and a worse one; this is a shorter *spelling* of the same id.
+
+**One spelling in URLs, the other everywhere else.** `polls.id` is still a
+`uuid`, every `p_poll_id uuid` still takes one, and every id the app holds in
+a variable, compares, or keys storage by is canonical. `src/lib/pollId.ts` is
+the only place the two meet: `pollPath` converts on the way into a URL and
+`pollIdFromParam` converts on the way out of a route parameter. It could not
+have been done the other way round — `voterKeyFor` names a `localStorage`
+entry after a poll id, so keying by the short form would have orphaned the key
+of every browser that has already voted, and `questionsCovered` tells a
+crossing between questions from an arrival at a different poll by comparing
+ids, which two spellings loose in the app would quietly break.
+
+**Old links keep working, and permanently.** `pollIdFromParam` reads a full
+uuid as readily as a short one, so every `#/polls/<uuid>` already pasted into
+a chat resolves as it did. Unlike `0039` this is not a break that was judged
+affordable: the schema writes poll ids into email bodies, those bodies do not
+expire, and there is no later date at which dropping the long form becomes
+safe. It costs one regex, which is cheaper than the shim `0039` declined.
+
+`0062` gives Postgres the same encoding as `short_poll_id`, so the link in an
+invitation email is spelled the way the app spells it. The sample's ids are
+words rather than uuids and both directions hand them back untouched — which
+is the point of them being words, since those links are meant to be read
+aloud.
 
 ### Whether respondents are shown
 

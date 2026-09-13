@@ -39,6 +39,7 @@ import { Respondents } from '../components/Respondents'
 import { readPollPage } from '../lib/pollPage'
 import { openPollViewSchema, parseAnswer, pollStatusSchema } from '../lib/rpcSchemas'
 import { winnerLabel } from '../lib/schedule'
+import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type {
   AccountRead,
   BallotSheet,
@@ -82,7 +83,10 @@ export function PollDetail({
    */
   watch: (onSignal: (() => boolean | void | Promise<boolean | void>) | null) => void
 }) {
-  const { pollId } = useParams<{ pollId: string }>()
+  const { pollId: param } = useParams<{ pollId: string }>()
+  // See lib/pollId.ts: the URL carries the short spelling, everything
+  // below this line carries the canonical one.
+  const pollId = param && pollIdFromParam(param)
   const { session } = useAuth()
   const navigate = useNavigate()
   const [poll, setPoll] = useState<Poll | null>(null)
@@ -484,11 +488,7 @@ export function PollDetail({
   // was a chance per branch to hand one of them a different list.
   const questionStrip = (
     <>
-      <QuestionStrip
-        questions={strip}
-        current={pollId ?? poll.id}
-        hrefFor={(id) => `/polls/${id}`}
-      />
+      <QuestionStrip questions={strip} current={pollId ?? poll.id} hrefFor={(id) => pollPath(id)} />
       {strip.length > 1 && <Divider />}
     </>
   )
@@ -522,7 +522,7 @@ export function PollDetail({
         // opened needs it recorded to mark this question behind them. Which
         // mark is whichever the stage is about, as above.
         if (isOpen) (status.soliciting ? rememberConfirmed : rememberAnswered)(poll.id)
-        navigate(`/polls/${onwards}`)
+        navigate(pollPath(onwards))
       }
     : undefined
   // One option list for this page. An open poll's arrives inside its view,

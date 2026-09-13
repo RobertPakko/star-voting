@@ -6,6 +6,7 @@ import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { ShareLink } from './ShareLink'
 import type { GroupQuestion, Poll, PollStatus } from '../lib/types'
+import { shortPollId } from '../lib/pollId'
 
 /**
  * Creator-only lifecycle controls: everything the creator does to the *poll*,
@@ -228,7 +229,10 @@ export function CreatorControls({
             )}
             {/* Opens the create form prefilled from this poll, so the copy can
                 be edited before it exists. */}
-            <Button variant="light" onClick={() => navigate(`/polls/new?from=${pollId}`)}>
+            <Button
+              variant="light"
+              onClick={() => navigate(`/polls/new?from=${shortPollId(pollId)}`)}
+            >
               Duplicate
             </Button>
             <Button variant="subtle" color="red" onClick={deleteModal.open} ml="auto">
@@ -252,7 +256,10 @@ export function CreatorControls({
               <Button variant="default" onClick={frozenModal.close}>
                 Cancel
               </Button>
-              <Button variant="light" onClick={() => navigate(`/polls/new?from=${pollId}`)}>
+              <Button
+                variant="light"
+                onClick={() => navigate(`/polls/new?from=${shortPollId(pollId)}`)}
+              >
                 Duplicate
               </Button>
               <Button

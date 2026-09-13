@@ -53,6 +53,7 @@ import {
   TITLE_MAX,
   tooLong,
 } from '../lib/limits'
+import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type {
   DailyWindow,
   Invitee,
@@ -462,7 +463,11 @@ export function CreatePoll() {
   const { session } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const duplicateOf = searchParams.get('from')
+  // Written short by `CreatorControls` like every other poll id in a URL,
+  // and read back canonical here because it goes straight to the `polls`
+  // table below. See lib/pollId.ts.
+  const fromParam = searchParams.get('from')
+  const duplicateOf = fromParam && pollIdFromParam(fromParam)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -1019,7 +1024,7 @@ export function CreatePoll() {
     }
 
     notifications.show({ message: 'Poll created', color: 'green' })
-    navigate(`/polls/${data as string}`)
+    navigate(pollPath(data as string))
   }
 
   /**

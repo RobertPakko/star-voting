@@ -23,6 +23,7 @@ import {
 } from '@phosphor-icons/react'
 import { useAuth } from '../lib/auth'
 import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID } from '../lib/samplePoll'
+import { pollPath } from '../lib/pollId'
 
 /**
  * The /about route: what STAR voting is and why this site uses it. Public,
@@ -400,7 +401,7 @@ function Samples() {
     <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
       <Sample
         newTab
-        to={`/polls/${SAMPLE_POLL_ID}`}
+        to={pollPath(SAMPLE_POLL_ID)}
         icon={<StarIcon size={22} weight="fill" aria-hidden />}
         gradient="standard"
         title="See a sample poll"
@@ -409,7 +410,7 @@ function Samples() {
       />
       <Sample
         newTab
-        to={`/polls/${SAMPLE_RESULT_ID}`}
+        to={pollPath(SAMPLE_RESULT_ID)}
         icon={<ChartBarIcon size={22} aria-hidden />}
         gradient="alt"
         title="Read an example result"

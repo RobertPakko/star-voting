@@ -14,6 +14,7 @@ import { PublicPoll } from './pages/PublicPoll'
 import { NotFound } from './pages/NotFound'
 import { AboutSkeleton, FormSkeleton, PollPageSkeleton } from './components/Skeletons'
 import type { PollRead } from './lib/types'
+import { pollIdFromParam } from './lib/pollId'
 
 /**
  * The two routes nobody is on when the app first paints, fetched when they
@@ -141,7 +142,10 @@ function App() {
  */
 function PollPage() {
   const { session } = useAuth()
-  const { pollId } = useParams<{ pollId: string }>()
+  const { pollId: param } = useParams<{ pollId: string }>()
+  // The address is spelled short and the app is spelled canonical; this is
+  // one of the three places the two meet. See lib/pollId.ts.
+  const pollId = param && pollIdFromParam(param)
   const location = useLocation()
   // The read that decides everything below, held as the poll it was made for
   // rather than as a bare answer: what the last address turned out to be says

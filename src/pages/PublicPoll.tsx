@@ -23,6 +23,7 @@ import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
 import { winnerLabel } from '../lib/schedule'
+import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type {
   BallotSheet,
   OpenGroupQuestion,
@@ -70,7 +71,10 @@ export function PublicPoll({
    */
   watch: (onSignal: (() => boolean | void | Promise<boolean | void>) | null) => void
 }) {
-  const { pollId } = useParams<{ pollId: string }>()
+  const { pollId: param } = useParams<{ pollId: string }>()
+  // See lib/pollId.ts: the URL carries the short spelling, everything
+  // below this line carries the canonical one.
+  const pollId = param && pollIdFromParam(param)
   const navigate = useNavigate()
   // The most recent read, and which question it was of, held as one value so
   // the two cannot drift. A poll of several questions is served by one page
@@ -354,7 +358,7 @@ export function PublicPoll({
   const advance = onwards
     ? () => {
         ;(collecting ? rememberConfirmed : rememberAnswered)(pollId)
-        navigate(`/polls/${onwards}`)
+        navigate(pollPath(onwards))
       }
     : undefined
   // One strip for the page, built here rather than inside the panel's prop,
@@ -364,7 +368,7 @@ export function PublicPoll({
   // invite reading keeps it in one place for the same reason.
   const questionStrip = (
     <>
-      <QuestionStrip questions={strip} current={pollId} hrefFor={(next) => `/polls/${next}`} />
+      <QuestionStrip questions={strip} current={pollId} hrefFor={(next) => pollPath(next)} />
       {strip.length > 1 && <Divider />}
     </>
   )

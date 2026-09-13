@@ -24,6 +24,7 @@ import { PollListSkeleton } from '../components/Skeletons'
 import type { PollListItem } from '../lib/types'
 import { winnerLabel } from '../lib/schedule'
 import classes from './PollList.module.css'
+import { pollPath } from '../lib/pollId'
 
 /**
  * How many polls a page of the list holds.
@@ -270,7 +271,7 @@ export function PollList() {
                 <Group align="flex-end" wrap="nowrap" gap="xs">
                   {/* The same heading the poll's own page carries, at card size;
                     see PollHeading. */}
-                  <Link to={`/polls/${poll.id}`} className={classes.link}>
+                  <Link to={pollPath(poll.id)} className={classes.link}>
                     <PollHeading
                       compact
                       title={poll.title}
