@@ -99,9 +99,10 @@ export function PaintTimes({
   /**
    * Whether the calendar carries its own *Save times*.
    *
-   * False where the card around it ends in *Confirm options*, which is the
-   * same press: confirming a list is saying the list in front of you is the
-   * one you mean, and an afternoon painted but not saved is part of it. Two
+   * False wherever the card around it ends in a button of its own -- *Confirm
+   * options*, or the *Done* that leaves the creator's correction -- because
+   * that press is the same press: saying the list in front of you is the one
+   * you mean, and an afternoon painted but not saved is part of it. Two
    * buttons for one act was the thing that was wrong. See CollectOptions.
    */
   showSave: boolean
@@ -257,18 +258,11 @@ export function PaintTimes({
         fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
       />
 
-      <Group justify="space-between" wrap="wrap" gap="sm">
-        <Text size="sm" c="dimmed">
-          {nothing
-            ? `${options.length} ${options.length === 1 ? 'time' : 'times'} on the list.`
-            : [
-                adding.length > 0 && `${adding.length} to add`,
-                removing.length > 0 && `${removing.length} to take off`,
-              ]
-                .filter(Boolean)
-                .join(', ')}
-        </Text>
-        {showSave && (
+      {/* No tally of what is on the list or of what the painting would change
+          it to: the calendar is the tally, and a line of counting under it was
+          a second reading of the same thing. */}
+      {showSave && (
+        <Group justify="flex-end">
           <Button
             onClick={() =>
               onSave(
@@ -281,8 +275,8 @@ export function PaintTimes({
           >
             Save times
           </Button>
-        )}
-      </Group>
+        </Group>
+      )}
     </Stack>
   )
 }

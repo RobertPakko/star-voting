@@ -639,16 +639,12 @@ export function PollDetail({
               schedule={poll.kind === 'time' ? poll.schedule : null}
               isCreator
               questionStrip={questionStrip}
-              footer={
-                <Group justify="space-between" wrap="wrap" gap="sm">
-                  <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
-                    Nobody has voted yet, so options can still be updated.
-                  </Text>
-                  <Button variant="light" onClick={() => setEditingOptions(false)}>
-                    Done
-                  </Button>
-                </Group>
-              }
+              // One press out, and it is the save: *Done* puts in whatever the
+              // editor is holding and only then closes it. See CollectOptions.
+              done={{
+                note: 'Nobody has voted yet, so options can still be updated.',
+                onDone: () => setEditingOptions(false),
+              }}
               onChanged={reloadAll}
             />
           ) : /* Open polls are voted through the same anon RPCs the public route

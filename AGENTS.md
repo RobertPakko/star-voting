@@ -1503,7 +1503,7 @@ not, because what it is handed comes from a painted calendar.
 
 That same plural door is what makes *Edit options* one request rather than
 several. The creator's corrections are drafted in the browser and applied on
-**Save** — four corrections used to be four round trips and four re-reads of
+**Done** — four corrections used to be four round trips and four re-reads of
 the poll.
 
 **Both halves wait for it.** Adding drafts and removing drafts: a row marked
@@ -1512,7 +1512,7 @@ it stands. Removing used to happen immediately, which is the right behaviour
 everywhere it still happens and the wrong one here — a card where one of its
 two controls applies now and the other waits is a card that has to be
 explained, and the two-option floor cannot be checked honestly against a list
-that is half draft. It is counted against what Save would leave behind.
+that is half draft. It is counted against what *Done* would leave behind.
 
 The two suggestion paths still add straight away and should: that list belongs
 to the group, everybody watching sees a suggestion land as it lands, and that
@@ -2975,10 +2975,28 @@ the save is refused — a list the server would not take is not the list they
 were saying yes to. The failure is reported where the reader was looking, on
 the field or under the list, by the list itself.
 
-The calendar keeps a **Save times** of its own only where there is nothing to
-confirm — the creator correcting a ballot's windows, and a soliciting poll's
-creator who did not invite themselves — because there it is the only way the
-painting reaches the poll at all. Adding an option is still its own press while
+**And *Done* is the save, for the same reason.** The creator correcting a list
+that is already a ballot has nothing to confirm — the list is already a ballot,
+and there is nobody left to be done adding to it — so their way out of the
+editor is *Done* rather than *Confirm options*. It was two presses for the
+same one intention: **Save changes** and then **Done**, with a line of orange
+under the list to say which of them was the one that kept anything. Now *Done*
+puts in whatever the editor is holding and closes it only if that went in; a
+save the server refuses leaves the editor open with the edit still in it, and
+the reason under the list.
+
+Both halves of that streamlining are the same move: the way out of the card is
+the save, so there is nothing outstanding for the card to warn about. Which is
+why the warning is gone, and why the drafted rows are drawn exactly like the
+saved ones rather than dimmed — the dimming marked a difference only a separate
+Save button could act on. The count beside it (*2 to add, 1 to remove*, and the
+calendar's *N times on the list*) went with them: the list is the count, and a
+line under it saying the same thing in numbers was a second reading of what was
+already on screen.
+
+The calendar keeps a **Save times** of its own only where the card ends in
+neither button — a soliciting poll's creator who did not invite themselves —
+because there it is the only way the painting reaches the poll at all. Adding an option is still its own press while
 the list is still a list, for the reason at the end of [Collecting times, and a
 calendar among several
 questions](#collecting-times-and-a-calendar-among-several-questions): a
@@ -3312,9 +3330,10 @@ they do to the *poll*:
 - **Edit options** — on any poll that has a ballot and has not closed. With no
   votes in it, it swaps the ballot for the option list so it can be corrected;
   with votes in it, it says why it can't and offers the two things that do
-  work. The way back out of the editor is **Done**, under the list itself, and
-  this button is not offered while that list is up: finishing with something
-  belongs beside the thing, not in a block further down the page. See [The
+  work. The way back out of the editor is **Done**, under the list itself,
+  which saves the correction and then closes the editor, and this button is not
+  offered while that list is up: finishing with something belongs beside the
+  thing, not in a block further down the page. See [The
   creator can correct the options until somebody
   votes](#the-creator-can-correct-the-options-until-somebody-votes).
 - **Close voting** — reveals results using the votes cast so far. One-way.

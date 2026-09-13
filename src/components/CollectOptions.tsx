@@ -128,7 +128,7 @@ export function CollectOptions({
   isCreator,
   voterName,
   questionStrip,
-  footer,
+  done,
   confirm,
   onChanged,
   onConfirmed,
@@ -158,11 +158,21 @@ export function CollectOptions({
   /** Navigation for a multi-question poll, rendered inside the card as on the ballot. */
   questionStrip?: ReactNode
   /**
-   * What goes in the footer row when there is nothing to confirm: the way out
-   * of the creator's correction. Passed in because it belongs to the page's
-   * situation rather than to the list.
+   * The way out of the creator's correction, on the one path with nothing to
+   * confirm.
+   *
+   * One press, as *Confirm options* is on every other path: whatever the list
+   * is holding goes in, and only a save that went through leaves the editor.
+   * It used to be two buttons -- *Save changes* and then *Done* -- for what is
+   * one intention, and a reader who pressed only the second lost the edit. See
+   * DraftHold.
    */
-  footer?: ReactNode
+  done?: {
+    /** Said beside the button; the page's situation rather than the list's. */
+    note?: ReactNode
+    /** Leave the editor, once there is nothing outstanding to leave behind. */
+    onDone: () => void
+  }
   /** How this reader says they are done adding; see `Confirmation`. */
   confirm?: Confirmation
   /** An option arrived or left, or a confirmation moved: re-read the poll. */
@@ -225,6 +235,33 @@ export function CollectOptions({
     voterName?.remember()
     notifications.show({ message: 'Options confirmed', color: 'green' })
     ;(onConfirmed ?? onChanged)()
+  }
+
+  /**
+   * The way out of the creator's correction: put in whatever the list is
+   * holding, and leave only if it went in.
+   *
+   * The same shape as `confirmOptions`, and for the same reason -- an option
+   * typed into the box, or an afternoon painted on the calendar, is part of
+   * the list this reader means. The list reports its own failure, so a save
+   * that did not go through only has to keep the editor open, with the edit
+   * still in it.
+   */
+  async function finishEditing() {
+    if (busy || !done) return
+    setError(null)
+
+    const save = draft.current
+    if (save) {
+      setBusy(true)
+      const saved = await save()
+      setBusy(false)
+      if (!saved) return
+      // The quiet save says nothing and re-reads nothing; the page behind this
+      // editor is about to draw the list that was just saved.
+      onChanged()
+    }
+    done.onDone()
   }
 
   async function reopenList() {
@@ -294,13 +331,13 @@ export function CollectOptions({
             options={options}
             schedule={schedule}
             isCreator={isCreator}
-            // Where this card ends in *Confirm options*, that button is the
-            // save; see DraftHold. The list keeps a save of its own only
-            // where there is nothing to confirm -- the creator correcting a
-            // ballot's options, and the creator of a soliciting poll who did
-            // not invite themselves -- because there it is the only way the
-            // edit reaches the poll at all.
-            ownSave={!confirm}
+            // Wherever this card ends in a button -- *Confirm options*, or
+            // the *Done* that leaves a correction -- that button is the save;
+            // see DraftHold. The calendar keeps a save of its own only where
+            // the card ends in neither, which is the creator of a soliciting
+            // poll who did not invite themselves, because there it is the
+            // only way the painting reaches the poll at all.
+            ownSave={!confirm && !done}
             draft={draft}
             onChanged={onChanged}
           />
@@ -309,7 +346,6 @@ export function CollectOptions({
             source={source}
             options={options}
             isCreator={isCreator}
-            ownSave={!confirm}
             draft={draft}
             onChanged={onChanged}
           />
@@ -321,12 +357,12 @@ export function CollectOptions({
           </Text>
         )}
 
-        {/* The line is what stops *Add* and *Confirm options* reading as one
-            row of buttons: they are the two things this card is for, and one
-            adds to a list while the other says you are finished with it. The
-            ballot rules its footer off the same way, off the last option's
-            divider. */}
-        {confirm && <Divider />}
+        {/* The line is what stops *Add* and the button that ends the card
+            reading as one row: they are the two things this card is for, and
+            one adds to a list while the other says you are finished with it.
+            The ballot rules its footer off the same way, off the last
+            option's divider. */}
+        {(confirm || done) && <Divider />}
 
         {confirm ? (
           <Group justify="space-between" wrap="wrap" gap="sm" align="flex-end">
@@ -348,7 +384,23 @@ export function CollectOptions({
             </Button>
           </Group>
         ) : (
-          footer
+          done && (
+            <Group justify="space-between" wrap="wrap" gap="sm">
+              {done.note && (
+                <Text size="sm" c="dimmed" style={{ flex: 1, minWidth: 200 }}>
+                  {done.note}
+                </Text>
+              )}
+              <Button
+                variant="light"
+                onClick={finishEditing}
+                loading={busy}
+                style={{ marginLeft: 'auto' }}
+              >
+                Done
+              </Button>
+            </Group>
+          )
         )}
       </Stack>
     </Card>
@@ -390,16 +442,19 @@ function OptionList({
   source,
   options,
   isCreator,
-  ownSave,
   draft,
   onChanged,
 }: {
   source: OptionsSource
   options: PollOption[]
   isCreator: boolean
-  /** Whether this list carries its own *Save changes*; see CollectOptions. */
-  ownSave: boolean
-  /** Where the edit it is holding goes instead, when it does not. */
+  /**
+   * Where the edit this list is holding goes: *Confirm options* on the
+   * suggestion paths, *Done* on the creator's correction, and those are the
+   * only two paths that draft anything. See DraftHold -- this list has no
+   * save button of its own, because on every path that can hold a draft the
+   * way out of the card is the save.
+   */
   draft: DraftHold
   onChanged: () => void
 }) {
@@ -451,22 +506,21 @@ function OptionList({
   // applies the floor when it becomes a ballot. The trigger enforces both,
   // and this only decides whether to offer the button. See
   // 0028_creator_edits_options.sql.
-  // Counted against what Save would leave behind rather than against what is
+  // Counted against what *Done* would leave behind rather than against what is
   // on the poll now, since three options with two of them struck through is a
   // list already at the floor.
   const atFloor = drafting && kept <= 2
 
   /**
-   * Put what is in the box on the list, and answer whether it got there.
+   * What is in the box, checked the way the database would check it, or null
+   * with the reason marked on the field it is about.
    *
-   * `quiet` is the same add made on the way past: *Confirm options* flushes
-   * the box before it confirms, and an option arriving is not news to the
-   * person who just said they were done adding it -- the confirmation's own
-   * message and its re-read cover both. See DraftHold.
+   * Split from the add because the box is read twice: by *Add*, and by
+   * whatever ends the card -- *Confirm options*, or the *Done* that leaves a
+   * correction -- since an option typed and not added is part of the list
+   * this reader means. See DraftHold.
    */
-  async function addOption(quiet = false): Promise<boolean> {
-    if (busy) return false
-
+  function typedOption(): { name: string; description: string } | null {
     const trimmed = name.trim()
     const trimmedDescription = description.trim()
 
@@ -481,11 +535,11 @@ function OptionList({
 
     if (!trimmed) {
       setNameError('Give the option a name.')
-      return false
+      return null
     }
     if (trimmed.length > OPTION_NAME_MAX) {
       setNameError(tooLong('An option name', trimmed.length, OPTION_NAME_MAX))
-      return false
+      return null
     }
     // Case-insensitive, like the database: two options differing only in
     // case are one option to everybody scoring the ballot. The draft is
@@ -497,18 +551,36 @@ function OptionList({
       )
     ) {
       setNameError(`“${trimmed}” is already on the list.`)
-      return false
+      return null
     }
     if (trimmedDescription.length > OPTION_DESCRIPTION_MAX) {
       setDescriptionError(
         tooLong('A description', trimmedDescription.length, OPTION_DESCRIPTION_MAX),
       )
-      return false
+      return null
     }
     if (full) {
       setNameError(`This poll already holds the ${MAX_OPTIONS} options a ballot can.`)
-      return false
+      return null
     }
+
+    return { name: trimmed, description: trimmedDescription }
+  }
+
+  /**
+   * Put what is in the box on the list, and answer whether it got there.
+   *
+   * `quiet` is the same add made on the way past: the suggestion paths flush
+   * the box before they confirm, and an option arriving is not news to the
+   * person who just said they were done adding it. That act's own message and
+   * its re-read cover both. See DraftHold.
+   */
+  async function addOption(quiet = false): Promise<boolean> {
+    if (busy) return false
+
+    const typed = typedOption()
+    if (!typed) return false
+    const { name: trimmed, description: trimmedDescription } = typed
 
     if (drafting) {
       draftSeq += 1
@@ -558,15 +630,18 @@ function OptionList({
    * A refusal now leaves the poll exactly as it was, so the draft is still
    * the whole of what is left to do and is kept intact.
    */
-  async function saveDraft(quiet = false): Promise<boolean> {
+  async function saveDraft(extra: { name: string; description: string }[] = []): Promise<boolean> {
     if (busy) return false
-    if (!dirty) return true
+    if (!dirty && extra.length === 0) return true
     setError(null)
     setBusy(true)
 
     const { error: rpcError } = await supabase.rpc('creator_edit_options', {
       p_poll_id: source.pollId,
-      p_options: pending.map((o) => ({ name: o.name, description: o.description || null })),
+      p_options: [...pending, ...extra].map((o) => ({
+        name: o.name,
+        description: o.description || null,
+      })),
       p_remove: [...dropping],
     })
     setBusy(false)
@@ -577,11 +652,30 @@ function OptionList({
     }
     setPending([])
     setDropping(new Set())
-    // Saved on the way to something else -- see DraftHold -- which says so
-    // itself and re-reads the poll once, at the end of the whole act.
-    if (quiet) return true
-    notifications.show({ message: 'Options saved', color: 'green' })
-    onChanged()
+    // Nothing said and nothing re-read: this is only ever a save made on the
+    // way out of the card -- see DraftHold -- and the act it is part of says
+    // so itself and re-reads the poll once, at the end.
+    return true
+  }
+
+  /**
+   * Everything this list is holding, in one request: the draft, and the option
+   * still sitting in the box.
+   *
+   * The box goes in with the rest rather than being added first, because
+   * adding it first is a second request and a second thing to be refused
+   * half-way through -- and because `addOption` only stages it here, so a
+   * *Done* that staged and then saved would save the list as it was a moment
+   * before, without it.
+   */
+  async function saveEverything(): Promise<boolean> {
+    const typed = name.trim() ? typedOption() : null
+    if (name.trim() && !typed) return false
+
+    const saved = await saveDraft(typed ? [typed] : [])
+    if (!saved) return false
+    setName('')
+    setDescription('')
     return true
   }
 
@@ -591,9 +685,10 @@ function OptionList({
   // and taken back on the way out so no card confirms a list it has stopped
   // drawing.
   useEffect(() => {
-    if (dirty) draft.current = () => saveDraft(true)
-    else if (name.trim()) draft.current = () => addOption(true)
-    else draft.current = null
+    if (drafting) draft.current = dirty || name.trim() ? () => saveEverything() : null
+    // The suggestion paths hold nothing but the box: what is on the list is
+    // already on the poll, having gone in as it was typed.
+    else draft.current = name.trim() ? () => addOption(true) : null
 
     return () => {
       draft.current = null
@@ -726,18 +821,17 @@ function OptionList({
         ))
       )}
 
-      {/* The draft, under the list it is about to join. Marked rather than
-          slipped in among the saved rows: an option that is only in this
-          browser and an option the poll holds are two different things, and
-          the difference is exactly what the Save button is for. */}
+      {/* The draft, under the list it is about to join, and drawn exactly as
+          the rest of it. It used to be dimmed, to mark what the poll did not
+          hold yet -- which was a distinction for a Save button that no longer
+          exists: the way out of this card is the save, so an option waiting
+          here is an option on the list. */}
       {pending.map((option) => (
         <div key={option.key} className={`${listRow.row} ${listRow.joining}`}>
           <div className={`${listRow.content} ${listRow.stacked}`}>
             <Group justify="space-between" wrap="nowrap" gap="sm">
               <div style={{ minWidth: 0 }}>
-                <Text fw={500} c="dimmed">
-                  {option.name}
-                </Text>
+                <Text fw={500}>{option.name}</Text>
                 {option.description && <OptionDescription description={option.description} />}
               </div>
               <ActionIcon
@@ -791,27 +885,6 @@ function OptionList({
           Add
         </Button>
       </Group>
-
-      {/* One request for the lot, which is the whole of the streamlining:
-          four corrections used to be four round trips and four re-reads of
-          the poll. Both halves wait for it -- an editor where adding is a
-          draft and removing is immediate is two rules for one card. */}
-      {ownSave && dirty && (
-        <Group justify="space-between" wrap="wrap" gap="sm">
-          <Text size="sm" c="dimmed">
-            {[
-              pending.length > 0 && `${pending.length} to add`,
-              dropping.size > 0 && `${dropping.size} to remove`,
-            ]
-              .filter(Boolean)
-              .join(', ')}
-            .
-          </Text>
-          <Button onClick={() => saveDraft()} loading={busy}>
-            Save changes
-          </Button>
-        </Group>
-      )}
 
       {full && (
         <Text size="xs" c="dimmed">
@@ -921,9 +994,10 @@ function TimeList({
   /**
    * What every path does once the windows are in.
    *
-   * `quiet` is a save made on the way past: *Confirm options* puts the
-   * painting in before it confirms it, and that act says so itself and
-   * re-reads the poll once, at the end. See DraftHold.
+   * `quiet` is a save made on the way past: the way out of the card --
+   * *Confirm options*, or *Done* -- puts the painting in before it goes, and
+   * that act says so itself and re-reads the poll once, at the end. See
+   * DraftHold.
    */
   function landed(add: string[], removeIds: string[], quiet: boolean) {
     if (quiet) return true
