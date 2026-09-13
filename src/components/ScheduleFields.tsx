@@ -443,11 +443,6 @@ export function ScheduleFields({
           onPaint={paint}
           buildEvents={buildEvents}
           fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
-          // Shorter rows than the ballot's, which the axis above no longer
-          // makes urgent and has not made pointless: a creator who opens the
-          // selects to the whole day is back to forty-eight rows, and this is
-          // a form with a poll's worth of other fields under it either way.
-          slotHeight={daily ? undefined : 26}
         />
         {error && (
           <Text size="sm" c="red" fw={500}>

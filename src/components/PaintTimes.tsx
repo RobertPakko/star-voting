@@ -223,7 +223,6 @@ export function PaintTimes({
         canPaint={canPaint}
         dayInBounds={() => true}
         fillOnDay={cellsOn}
-        slotHeight={daily ? undefined : 26}
       />
 
       <Group justify="space-between" wrap="wrap" gap="sm">
