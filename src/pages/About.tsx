@@ -124,7 +124,9 @@ const PROCEDURE_NOTES: ReactNode[] = [
   <>
     A tie in the runoff is broken in favor of the option with the higher total score. If both
     finalists also have the same score, it goes to the one given five stars on more ballots. If they
-    are level on all three, the election has no winner.
+    are level on all three, the election has no winner. The results page then offers to flip a coin
+    between the two, which is not part of the method and changes nothing about the result &mdash; it
+    settles the argument rather than the election. Everyone who opens it sees the same flip.
   </>,
 ]
 

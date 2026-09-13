@@ -1,0 +1,109 @@
+/* The coin, and the one animation in the app that is allowed to be enjoyed.
+ *
+ * The rule for motion here is that an animation has to answer a question the
+ * reader would otherwise have to work out (see AGENTS.md, "Motion"), and this
+ * one does, narrowly: the question is whether the name under it was *decided*
+ * or *drawn*. A poll that elected nobody, followed by a card simply stating a
+ * name, reads as a verdict arrived at by some rule the reader missed — which
+ * is the one thing this must not look like, since the value of a coin is
+ * entirely in being seen to be a coin. Spinning it is how the page says "this
+ * was arbitrary, on purpose".
+ *
+ * It is also the one place a longer duration is earned. `--motion-slow` is for
+ * the results bars, which are meant to be watched; a coin has to leave the
+ * hand, turn, and settle, and half a second is a flick. Twice slow rather than
+ * a fourth number invented here: the scale still decides how long things take.
+ *
+ * A reader who has asked their system for less motion gets the resting frame
+ * and nothing else, by the rule in index.css — which is why the animation ends
+ * on the winner's face rather than beginning on it, and why the sentence below
+ * the coin, not the coin, is what states the result.
+ */
+
+.stage {
+  display: flex;
+  justify-content: center;
+  /* Shallow enough that the turn reads as a coin rather than as a card
+     swinging on a hinge, and applied here because perspective is a property of
+     the thing being looked *through*, not of the thing turning. */
+  perspective: 700px;
+}
+
+.coin {
+  position: relative;
+  width: 128px;
+  height: 128px;
+  transform-style: preserve-3d;
+  animation: toss calc(var(--motion-slow) * 2) var(--motion-ease) both;
+}
+
+/* Both sides of it: the winner's name on the face it lands on, the other
+ * finalist's on the one it doesn't. `backface-visibility` is what makes the two
+ * one object — without it both faces are painted at once and the coin is a
+ * disc with two names on top of each other.
+ *
+ * The gold is the same in both colour schemes, and deliberately so: everything
+ * else on the page belongs to the app and follows the reader's theme, while
+ * this is meant to read as an object that was tossed. The near-black lettering
+ * comes from Mantine's `dark` palette, which is fixed rather than flipped by
+ * the scheme, so it stays legible on the gold either way.
+ */
+.face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-radius: 50%;
+  text-align: center;
+  color: var(--mantine-color-dark-9);
+  background: radial-gradient(
+    circle at 32% 28%,
+    var(--mantine-color-yellow-2),
+    var(--mantine-color-yellow-4) 62%,
+    var(--mantine-color-yellow-6)
+  );
+  border: 2px solid var(--mantine-color-yellow-7);
+  box-shadow: var(--mantine-shadow-sm);
+  backface-visibility: hidden;
+}
+
+/* A window start on a time poll is a long name — "Sat 21 Feb, 11:30am" — and a
+ * name that outgrew the coin would be drawn outside it. Three lines is what
+ * fits inside one; the sentence under the coin carries the name in full
+ * whatever happens here, so a clip costs nothing.
+ *
+ * It is its own element because clamping needs `-webkit-box` and the face
+ * needs `flex` to centre what it holds, and one element cannot be both.
+ */
+.name {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.back {
+  transform: rotateY(180deg);
+}
+
+/* Three turns and a small arc, ending square on the winner's face. Ending on
+   a whole number of turns is not a detail: it is what decides which name the
+   coin is showing when it stops. */
+@keyframes toss {
+  from {
+    transform: translateY(0) rotateY(0deg);
+  }
+
+  50% {
+    transform: translateY(-26px) rotateY(540deg);
+  }
+
+  to {
+    transform: translateY(0) rotateY(1080deg);
+  }
+}

@@ -17,6 +17,7 @@ import { badgeColor } from '../lib/badgeColors'
 import { parseAnswer, pollResultsSchema } from '../lib/rpcSchemas'
 import { relabelResults } from '../lib/schedule'
 import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
+import { CoinFlip, type Finalist } from './CoinFlip'
 import { FullRanking } from './FullRanking'
 import { NameList } from './NameList'
 import { OptionDescription } from './OptionDescription'
@@ -175,9 +176,19 @@ export function Results({
         {!shown.winner_id && shown.finalists.length === 2 && (
           <Reveal>
             <Card withBorder bg="var(--mantine-color-orange-light)">
-              <Text fw={700} size="lg">
-                No winner
-              </Text>
+              {/* The news, and the one thing this page can offer a group it
+                has just left without an answer: a coin. It goes on the card
+                that states the tie rather than under the runoff that explains
+                it, because the reader who needs it is the one reading the
+                headline and wondering what happens now — the explanation is a
+                working, and by then the question has moved on to what to do.
+                See CoinFlip. */}
+              <Group justify="space-between" align="center" gap="sm">
+                <Text fw={700} size="lg">
+                  No winner
+                </Text>
+                <CoinFlip pollId={key} finalists={tiedPair(shown, nameById)} />
+              </Group>
             </Card>
           </Reveal>
         )}
@@ -325,6 +336,25 @@ export function Results({
       </Stack>
     </Reveal>
   )
+}
+
+/**
+ * The two finalists of a tie, named, as a pair rather than as a list.
+ *
+ * `finalists` arrives from the tally as an array of ids, and the coin takes
+ * exactly two of them — so the tuple is where "exactly two" is stated, and the
+ * component never has to wonder what to do with one or three. The only caller
+ * is the card above, which has already established the length.
+ *
+ * A name is looked up rather than carried, and falls back to the id: every
+ * finalist is an option of the same tally and so is always in the map, and a
+ * coin showing a uuid would be a visible bug rather than a page that failed to
+ * draw.
+ */
+function tiedPair(results: PollResults, nameById: Map<string, string>): [Finalist, Finalist] {
+  const named = (id: string): Finalist => ({ id, name: nameById.get(id) ?? id })
+
+  return [named(results.finalists[0]), named(results.finalists[1])]
 }
 
 /**

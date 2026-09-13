@@ -15,8 +15,8 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, Reveal, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, …)
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -4347,6 +4347,62 @@ There is deliberately no fallback for a browser holding this code against an
 older `star_round`: the app deploys on push and the migration applies on the
 same merge, so that window is minutes long, and a branch nothing reaches after
 them is worse than the window is.
+
+### Settling a tie with a coin
+
+A poll that elects nobody is the correct output of the method and no use at all
+to the people who ran it. Every rule is spent by the time the card says **No
+winner** — the two finalists are level on preference, on points and on
+five-star ballots alike — so there is nothing left to compute, and what the
+group wants at that point is not a better tally but a fair way to stop. The
+card carries a **Flip a coin** button, and the modal behind it names one of the
+two.
+
+**It is not part of the election, and the page is careful not to let it look
+like one.** `winner_id` is still null, `poll_winner_name` still returns null,
+the poll list still shows the poll as having settled nothing, and the modal
+says in as many words that the election is still tied. Nothing is written
+anywhere. The coin decides who buys the pizza, not who won.
+
+**Every reader gets the same side.** This is the whole of the design problem: a
+draw made in each browser is a different answer per reader, which is strictly
+worse than no answer — two people close the page believing two different
+options won, and neither has any way to find out the other saw something else.
+So nothing is drawn at the moment of asking. `src/lib/coinFlip.ts` seeds a hash
+on the poll's id and its two finalists' — sorted, so the order the tally
+happened to list them in cannot matter — and reads one bit off it. The side is
+therefore a function of the tie itself, identical on every device, on the night
+and a week later.
+
+That is the shape the score round's own last resort already has: it reports
+`resolved_by: 'random'` and in fact orders by candidate id, arbitrary and
+stable. Deriving rather than storing buys all of the coordination — nobody has
+to have flipped first and there is no race over who did, no write, no new
+grant on either read path, and the About page's sample poll, which is a
+recording with no rows behind it, draws the coin like anything else. Arbitrary
+is not riggable either: every id in the seed is a uuid Postgres minted, and
+the creator cannot touch the option list once a ballot is in, which is well
+before anyone could know a tie was coming.
+
+The hash is FNV-1a followed by murmur3's final avalanche, and the avalanche is
+load-bearing: the low bits of a raw FNV hash are barely mixed — the last step
+multiplies by an odd constant, which leaves the lowest bit as the parity of the
+bytes that went in — and one bit is the entire answer here.
+`src/lib/coinFlip.test.ts` asserts both halves of what the feature claims: that
+the side never moves (same call, either order of finalists, different poll ids
+giving different sides) and that it is fair to within three standard deviations
+over two thousand ties.
+
+The coin itself turns, which is a deliberate exception to [Motion](#motion)'s
+rule that nothing animates merely to be pleasant. The question it answers is
+whether the name under it was *decided* or *drawn*: a poll that elected nobody
+followed by a card stating a name reads as a verdict reached by some rule the
+reader missed, and the value of a coin is entirely in being seen to be a coin.
+It is the one animation given twice `--motion-slow`, because a coin has to
+leave the hand, turn and settle, and it ends on a whole number of turns —
+which is what decides which name it is showing when it stops. A reader who has
+asked for less motion gets the resting frame, and the result is stated in text
+below the coin either way.
 
 ### The About page and its sample poll
 
