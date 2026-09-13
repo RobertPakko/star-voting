@@ -320,21 +320,6 @@ export function CollectOptions({
           />
         )}
 
-        {/* Whichever list is on screen, its edits are drafted and applied in
-            one request -- so there is a moment where the card holds an answer
-            the poll does not, and the way out of the card sits a few lines
-            below. Said rather than guarded against: a Save button that is the
-            only way out is worse than one that is the obvious way out. Where
-            the way out is *Confirm options* there is no other button to name,
-            so the line says which press is the one that keeps it. */}
-        {dirty && (
-          <Text size="sm" c="orange">
-            {confirm
-              ? 'These changes go in when you confirm the options.'
-              : 'You have changes that have not been saved yet.'}
-          </Text>
-        )}
-
         {error && (
           <Text c="red" size="sm">
             {error}

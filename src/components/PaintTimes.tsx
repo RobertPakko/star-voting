@@ -230,17 +230,8 @@ export function PaintTimes({
 
   return (
     <Stack gap="xs">
-      {/* What the gesture is, and what the gesture undone is: there is no
-          eraser to switch to, because marking a stretch that is already marked
-          takes it back. A reader who may not take a window off the list is
-          told which marks that reaches -- their own, the ones not yet saved --
-          rather than being invited to press at somebody else's and watch
-          nothing happen. */}
       <Text size="sm">
-        Mark the times this poll should offer.{' '}
-        {canRemove
-          ? 'Mark them again to take them back.'
-          : 'Mark your own again to take them back.'}
+        Mark the times this poll should offer.
       </Text>
 
       {/* Hidden on a poll answered in whole days, where there are no hours to
