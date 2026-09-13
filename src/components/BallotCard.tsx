@@ -78,6 +78,10 @@ export function BallotCard({
       onVoted={onVoted}
       onCancel={onCancel}
     >
+      <Text size="sm">
+        Rate each option from 0 to 5 stars. 5 is the best score while 0 is the worst.
+      </Text>
+      <Divider />
       {ballot.map((option) => (
         <Fragment key={option.id}>
           <Group justify="space-between" wrap="nowrap" gap="sm">
