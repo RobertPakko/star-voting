@@ -182,9 +182,6 @@ export function CollectOptions({
   // field: what is wrong with the name is marked on the box it was typed in,
   // by the field itself.
   const [error, setError] = useState<string | null>(null)
-  // Whether the list below holds something the poll does not yet; see the
-  // note beside the line that says so.
-  const [dirty, setDirty] = useState(false)
   // And what to do about it when this reader says they are done. See
   // DraftHold: the list fills it in, `confirmOptions` empties it.
   const draft = useRef<(() => Promise<boolean>) | null>(null)
@@ -306,7 +303,6 @@ export function CollectOptions({
             ownSave={!confirm}
             draft={draft}
             onChanged={onChanged}
-            onDirtyChange={setDirty}
           />
         ) : (
           <OptionList
@@ -316,7 +312,6 @@ export function CollectOptions({
             ownSave={!confirm}
             draft={draft}
             onChanged={onChanged}
-            onDirtyChange={setDirty}
           />
         )}
 
@@ -398,7 +393,6 @@ function OptionList({
   ownSave,
   draft,
   onChanged,
-  onDirtyChange,
 }: {
   source: OptionsSource
   options: PollOption[]
@@ -408,7 +402,6 @@ function OptionList({
   /** Where the edit it is holding goes instead, when it does not. */
   draft: DraftHold
   onChanged: () => void
-  onDirtyChange: (dirty: boolean) => void
 }) {
   /**
    * Whether *Add* puts the option on the list or into a draft of one.
@@ -525,7 +518,6 @@ function OptionList({
       ])
       setName('')
       setDescription('')
-      onDirtyChange(true)
       return true
     }
 
@@ -585,7 +577,6 @@ function OptionList({
     }
     setPending([])
     setDropping(new Set())
-    onDirtyChange(false)
     // Saved on the way to something else -- see DraftHold -- which says so
     // itself and re-reads the poll once, at the end of the whole act.
     if (quiet) return true
@@ -612,7 +603,6 @@ function OptionList({
   function dropDraft(key: string) {
     setPending((prev) => {
       const left = prev.filter((o) => o.key !== key)
-      onDirtyChange(left.length > 0 || dropping.size > 0)
       return left
     })
   }
@@ -623,7 +613,6 @@ function OptionList({
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
-      onDirtyChange(next.size > 0 || pending.length > 0)
       return next
     })
   }
@@ -857,7 +846,6 @@ function TimeList({
   ownSave,
   draft,
   onChanged,
-  onDirtyChange,
 }: {
   source: OptionsSource
   options: PollOption[]
@@ -868,7 +856,6 @@ function TimeList({
   /** Where the painting goes instead, when it does not. */
   draft: DraftHold
   onChanged: () => void
-  onDirtyChange: (dirty: boolean) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -878,13 +865,9 @@ function TimeList({
   // done in one place.
   const [painted, setPainted] = useState<PaintedEdit | null>(null)
 
-  const noteDraft = useCallback(
-    (edit: PaintedEdit | null) => {
-      setPainted(edit)
-      onDirtyChange(edit !== null)
-    },
-    [onDirtyChange],
-  )
+  const noteDraft = useCallback((edit: PaintedEdit | null) => {
+    setPainted(edit)
+  }, [])
 
   async function save(add: string[], removeIds: string[], quiet = false): Promise<boolean> {
     if (busy) return false
@@ -943,7 +926,6 @@ function TimeList({
    * re-reads the poll once, at the end. See DraftHold.
    */
   function landed(add: string[], removeIds: string[], quiet: boolean) {
-    onDirtyChange(false)
     if (quiet) return true
 
     notifications.show({

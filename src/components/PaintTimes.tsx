@@ -230,9 +230,7 @@ export function PaintTimes({
 
   return (
     <Stack gap="xs">
-      <Text size="sm">
-        Mark the times this poll should offer.
-      </Text>
+      <Text size="sm">Mark the times this poll should offer.</Text>
 
       {/* Hidden on a poll answered in whole days, where there are no hours to
           be earliest or latest: a day is either in or out. */}
