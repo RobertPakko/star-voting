@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Group, Tooltip } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
 import {
   DayView,
   MonthView,
@@ -52,7 +53,12 @@ import type { DailyWindow, PollSchedule } from '../lib/types'
  *   callers colour a cell by different things.
  * - **A day's column heading fills that day**, through `onDateChange`.
  * - In the month view, which has no time grid at all, a day *is* the unit:
- *   `onDayClick` fills one and a drag across several fills those.
+ *   `onDayClick` fills one and a drag across several fills those -- on a
+ *   pointer that is not a finger; see the view for why touch gets the tap
+ *   alone and the scrolling back in exchange.
+ * - **Which way a touch means the calendar and which way it means the answer**
+ *   is `PAN_SIDEWAYS`, on the two time grids: sideways scrolls the days,
+ *   downwards paints.
  * - **The range in the header fills everything on screen**, which is the one
  *   gesture here that is not the library's at all: its own label made clickable
  *   (`fillVisible`), so the answer to "all of September" is the word September.
@@ -98,10 +104,63 @@ function eventBody(event: ScheduleEventData) {
   return <span style={{ color: event.payload?.ink as string | undefined }}>{event.title}</span>
 }
 
+/**
+ * Which way a finger on a time grid means the calendar and which way it means
+ * the answer: **sideways is the view, downwards is a stroke.**
+ *
+ * A week of seven days is wider than a phone, so the days have always had to
+ * scroll sideways -- and they could not. The library gives every paintable
+ * slot a `data-drag-slot-index`, and its stylesheet gives everything holding
+ * that attribute `touch-action: none`, so the browser did nothing at all with
+ * a touch that started on the grid: a sideways swipe moved no days, and a
+ * downwards one painted the column it started in rather than scrolling the
+ * page. The one way across a week was to find the hour column or the day
+ * headings, which carry no slots and so were the only part of the calendar
+ * that still scrolled.
+ *
+ * `pan-x` hands the sideways axis back to the browser and keeps the other,
+ * which is the split the grid already means: a drag down a column is how a
+ * stretch of the day gets painted, and there is nothing down there to scroll
+ * to, since the days run across. The browser decides which it is from the
+ * first few pixels and holds that for the rest of the gesture, so a swipe
+ * that is not quite straight still does one thing rather than half of each --
+ * and what it hands back is a real scroll, with the momentum and the overscroll
+ * a hand-rolled one never quite has.
+ *
+ * `pinch-zoom` is kept beside it because the alternative is taking it away:
+ * `pan-x` alone is the whole of what the browser may do, and a grid nobody can
+ * zoom into is a grid somebody cannot read. It costs nothing here -- a pinch
+ * is two fingers and a stroke is one.
+ *
+ * Only touch and pen ever read this. A mouse drag is unaffected, so painting
+ * with one is exactly what it was.
+ */
+const PAN_SIDEWAYS = { touchAction: 'pan-x pinch-zoom' }
+
 /** A cell or a day the poll is not asking about: visible, and not paintable. */
 const outOfBounds = {
   disabled: true,
   style: { background: 'var(--mantine-color-gray-light)', cursor: 'not-allowed' },
+}
+
+/**
+ * The same on a time grid, where it also has to say which way it may be
+ * swiped.
+ *
+ * A greyed cell takes no gesture, and that is exactly why it needs this: the
+ * library hands every slot a drag index whether or not the caller will paint
+ * it, so an out-of-bounds cell is `touch-action: none` like any other and a
+ * whole greyed morning is a patch the days will not scroll under. Refusing to
+ * be painted and refusing to be swiped across are different refusals.
+ *
+ * Not shared with the month, whose out-of-bounds days go through `getDayProps`
+ * and want no restriction at all: with the drag off there (see the view) a
+ * greyed day is simply part of the page, and `pan-x` would make it the one
+ * square on the month that will not scroll.
+ */
+const outOfBoundsSlot = {
+  ...outOfBounds,
+  style: { ...outOfBounds.style, ...PAN_SIDEWAYS },
 }
 
 /**
@@ -282,6 +341,62 @@ export function PaintCalendar({
   // reason -- reading the page, moving a week -- is never corrected.
   const header = useRef<HTMLDivElement>(null)
   const held = useRef<number | null>(null)
+
+  /**
+   * Whether the pointer on this device is a finger, asked of the device rather
+   * than of the screen's width: a narrow window on a laptop is still a mouse,
+   * and a tablet turned sideways is still not one. It is what decides whether
+   * the month may be dragged across; see the view itself.
+   *
+   * Read during the first render rather than in an effect, which is what
+   * `getInitialValueInEffect` turns off. The default defers the answer by a
+   * commit, and the month would mount with the drag on and lose it a frame
+   * later -- a gesture that exists for the length of one frame is worse than
+   * one that never existed. There is no server to render this for, so there is
+   * nothing the early answer can disagree with.
+   */
+  const touch = useMediaQuery('(pointer: coarse)', false, { getInitialValueInEffect: false })
+
+  /**
+   * A drag the browser took away, and the paint it must not leave behind.
+   *
+   * `PAN_SIDEWAYS` lets the browser claim a sideways swipe, and the way it
+   * claims one is `pointercancel` -- fired after `pointerdown` has already
+   * opened a drag in the library, and after a move or two has already widened
+   * it. The library's own drag listens for `pointermove` and `pointerup` and
+   * for nothing else, so a cancelled gesture leaves it holding a drag that
+   * never ends: the cells keep the border that says they are selected, and the
+   * *next* `pointerup` anywhere on the page -- a tap on Submit, a minute later
+   * -- closes it and paints the range. A stroke nobody made, arriving after
+   * they had stopped looking.
+   *
+   * So the cancel is turned into the ending the library is waiting for. A
+   * `pointerup` on the document runs its handler, which clears the drag and
+   * the border; the flag is what stops that handler's one side effect, since
+   * the range it would commit is the swipe that scrolled. Both drag-end
+   * callbacks read it -- the month cannot be cancelled this way while its drag
+   * is off on touch, but a cancel has other causes than a scroll, and a rule
+   * that holds for one of the two gestures is a rule the next reader has to
+   * check.
+   *
+   * Sent on the next frame rather than now, so that a drag opened microseconds
+   * ago has had its listeners attached by the effect that attaches them; the
+   * flag is dropped immediately after, because the handler runs inside the
+   * dispatch and a cancel that commits nothing must not disarm the next drag.
+   */
+  const cancelled = useRef(false)
+
+  useEffect(() => {
+    function onCancel() {
+      cancelled.current = true
+      requestAnimationFrame(() => {
+        document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+        cancelled.current = false
+      })
+    }
+    document.addEventListener('pointercancel', onCancel)
+    return () => document.removeEventListener('pointercancel', onCancel)
+  }, [])
 
   /**
    * Change the zoom, and leave the calendar where it was on screen.
@@ -524,11 +639,16 @@ export function PaintCalendar({
     withCurrentTimeIndicator: false as const,
     withAgenda: false as const,
     withDragSlotSelect: true as const,
-    onSlotDragEnd: paint,
+    onSlotDragEnd: (fromSlot: string, toSlot: string) => {
+      // The swipe that scrolled the days, not a stroke; see `cancelled`.
+      if (!cancelled.current) paint(fromSlot, toSlot)
+    },
+    // Every slot says which way it may be swiped, in bounds or out; see
+    // `PAN_SIDEWAYS` and `outOfBoundsSlot`.
     getTimeSlotProps: ({ start }: { start: string }) =>
       open(granuleKey(start.slice(0, 10), toMinutes(start.slice(11, 16))))
-        ? undefined
-        : outOfBounds,
+        ? { style: PAN_SIDEWAYS }
+        : outOfBoundsSlot,
   }
 
   return (
@@ -623,8 +743,31 @@ export function PaintCalendar({
           // is to say something about -- which makes the day itself the
           // gesture rather than a shortcut for one.
           onDayClick={fillDay}
-          withDragSlotSelect
-          onSlotDragEnd={fillDays}
+          // And on a finger it is the *only* gesture: a run of days is tapped
+          // out one at a time, or taken in one press by the range in the
+          // header.
+          //
+          // A month cannot make the bargain the two time grids make. There the
+          // axes mean different things -- across is which day, down is what
+          // time -- so `PAN_SIDEWAYS` can give one to the browser and keep the
+          // other. A drag across a month means neither: Monday the 5th to
+          // Friday the 16th sweeps down the weeks and across them at once, and
+          // it is one range, not two. There is no axis to hand over that does
+          // not cut the gesture in half.
+          //
+          // So on touch the drag goes and the scrolling comes back -- seven
+          // columns at the library's five-and-a-quarter-rem floor is wider than
+          // a phone, and while the days carry a drag slot they carry
+          // `touch-action: none` with it and will not move. The attribute is
+          // the drag's: turning the drag off is what lets the month scroll, and
+          // `onDayClick` is wired past it, so a tap still fills a day.
+          withDragSlotSelect={!touch}
+          onSlotDragEnd={(fromDay: string, toDay: string) => {
+            // As on the time grids, and for a cancel that was not a scroll:
+            // this drag is off on the devices that scroll one away. See
+            // `cancelled`.
+            if (!cancelled.current) fillDays(fromDay, toDay)
+          }}
           getDayProps={(day) => (asks(day) ? {} : outOfBounds)}
           {...byWeekday}
           firstDayOfWeek={1}

@@ -1157,6 +1157,71 @@ corner is clipped by `weekViewRoot`, outside the scroll area. The corner above
 the column is pinned with it and given a background, because a transparent
 pane is not a pane.
 
+**On a finger, sideways is the view and downwards is a stroke**
+(`PAN_SIDEWAYS`). The days scrolling sideways is the paragraph above; for a
+long time they could not, because the library gives every paintable slot a
+`data-drag-slot-index` and its stylesheet gives everything holding that
+attribute `touch-action: none`. So the browser did nothing at all with a touch
+that began on the grid: a sideways swipe moved no days, and a downwards one
+painted the column it started in rather than scrolling the page. The only part
+of the calendar that still scrolled was the hour column and the day headings,
+which carry no slots — an escape hatch nobody would guess at.
+
+`touch-action: pan-x pinch-zoom`, set on every slot through `getTimeSlotProps`,
+hands the sideways axis back to the browser and keeps the other. That is the
+split the grid already means: across is which day, down is what time, and a
+drag down a column is how a stretch of one gets painted. The browser decides
+which of the two a swipe is from its first few pixels and holds that for the
+rest of the gesture, so one that is not quite straight still does one thing
+rather than half of each — and what comes back is a real scroll, with momentum
+and overscroll. `pinch-zoom` rides along because `pan-x` alone is the whole of
+what the browser may do, and a grid nobody can zoom into is a grid somebody
+cannot read. Only touch and pen read any of it; a mouse drag paints exactly as
+it did.
+
+**A cell out of bounds needs it too** (`outOfBoundsSlot`), which is the part
+that looks redundant and is not. The library stamps its drag index on every
+slot whether or not the caller will paint one, so a greyed cell is
+`touch-action: none` like any other and a greyed morning is a patch of the
+week the days will not scroll under. Refusing a gesture and refusing to be
+swiped across are different refusals. The month's own out-of-bounds days go
+through `getDayProps` and deliberately do *not* share it: with the drag off
+there, `pan-x` would make a greyed day the one square on the month that will
+not scroll.
+
+**And the drag the browser takes away has to be given an ending**
+(`cancelled`). Letting the browser claim a swipe means `pointercancel`, which
+arrives after `pointerdown` has already opened a drag inside the library and
+after a move or two has already widened it — two of them, measured. The
+library's hook listens for `pointermove` and `pointerup` and for nothing else,
+so a cancelled gesture leaves it holding a drag that never ends: the cells keep
+the border that says they are selected, and the *next* `pointerup` anywhere on
+the page — a tap on Submit, a minute later — closes it and paints the range. A
+stroke nobody made, arriving after they had stopped looking. So the cancel is
+turned into the ending the hook is waiting for: a synthetic `pointerup` on the
+document runs its handler, and a flag read by both drag-end callbacks stops the
+one side effect, since the range it would commit is the swipe that scrolled.
+Sent on the next frame, so a drag opened microseconds earlier has had its
+listeners attached; the flag drops immediately after, because a cancel that
+commits nothing must not disarm the next drag.
+
+**The month gives up its drag on touch instead** (`withDragSlotSelect={!touch}`).
+It cannot make the bargain the two time grids make. There the axes mean
+different things, so one can be handed over and the other kept; a drag across a
+month means neither — Monday the 5th to Friday the 16th sweeps down the weeks
+and across them at once, and it is one range, not two. There is no axis to give
+away that does not cut the gesture in half. So on a finger the drag goes and
+the scrolling comes back, which it has to: seven columns at the library's
+five-and-a-quarter-rem floor is 588px against a phone's ~390, and while the
+days carry a drag slot they carry `touch-action: none` with it. The attribute
+belongs to the drag, so turning the drag off is itself what lets the month
+scroll, and `onDayClick` is wired past it — a tap still fills a day, and a run
+of days is tapped out one at a time or taken whole by the range in the header.
+`(pointer: coarse)` is asked of the device rather than the window, since a
+narrow window on a laptop is still a mouse; it is read during the first render
+(`getInitialValueInEffect: false`) so the month does not mount with a gesture
+it loses a frame later.
+
 **The ballot's arrows walk the poll rather than the calendar** (`confine`).
 They step to the next range that has a day in bounds on it — so a poll about a
 Friday in September and a Friday in November is one press between them rather
