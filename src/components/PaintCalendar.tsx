@@ -176,6 +176,58 @@ function dead(is: boolean) {
 }
 
 /**
+ * How tall one hour of the two time grids is, in pixels.
+ *
+ * The library's `slotHeight` is an hour and not a row: a row is that times
+ * `intervalMinutes / 60`, so a half-hour grid draws forty-pixel hours as
+ * twenty-pixel rows. The hours column beside them is laid out from the same
+ * number, which is why this is a constant rather than a literal in `grid` --
+ * a grid whose rows and whose labels disagreed about the height of an hour is
+ * exactly the fault `hoursColumn` exists to correct.
+ */
+const HOUR_HEIGHT = 40
+
+/**
+ * The hours column, lined up with the rows beside it on an axis that does not
+ * begin or end on the hour.
+ *
+ * The library draws that column as one box per whole hour the axis contains,
+ * each an hour tall and stacked from the top of the grid -- which is the same
+ * thing as assuming the axis starts on one. A poll whose earliest start is
+ * 14:30 begins half an hour above its first label, so every hour in the column
+ * named the row half an hour before it -- `15:00` against the 14:30 row -- and
+ * the column ran out of labels before the grid ran out of rows, leaving the
+ * last hour listed with three half-hours under it instead of two.
+ *
+ * One declaration for each end of the axis:
+ *
+ * - **`paddingTop`** is the part of the first hour the axis begins inside --
+ *   half an hour at 14:30, nothing at 14:00 -- which drops the first label
+ *   onto the line where its hour really starts, and every label after it with
+ *   it, since they are a stack.
+ * - **`height`, with the overflow hidden**, is the other end. An axis ending
+ *   at 17:30 has a `17:00` box an hour tall over a grid with half an hour left
+ *   in it, so the column hung half a row below the last row and took the
+ *   grid's bottom edge down with it. Cut to the height of the rows, the last
+ *   label is as tall as the row it names.
+ *
+ * Neither is a special case: an axis that does start and end on the hour gets
+ * no padding and the height the column already had.
+ */
+function hoursColumn(axis: DailyWindow, granularity: number) {
+  const start = toMinutes(axis.start)
+  const perMinute = HOUR_HEIGHT / 60
+  // The rows the library will draw: one per granule, and a last one drawn
+  // whole even where the axis ends partway through it.
+  const rows = Math.ceil((toMinutes(axis.end) - start) / granularity)
+  return {
+    paddingTop: ((60 - (start % 60)) % 60) * perMinute,
+    height: rows * granularity * perMinute,
+    overflow: 'hidden',
+  }
+}
+
+/**
  * The time column, held still while the days scroll under it.
  *
  * A week of seven days will not fit on a phone -- the library holds every day
@@ -630,6 +682,10 @@ export function PaintCalendar({
     withWeekendDays: emptyWeekdays.length === 0,
   }
 
+  // The hours down the side of the two time grids, which the library lays out
+  // as though the axis began on the hour; see `hoursColumn`.
+  const timeColumn = hoursColumn(axis, schedule.granularity)
+
   const dayStyle = {
     '--day-view-slot-labels-width': timeLabelWidth,
   } as CSSProperties
@@ -647,7 +703,7 @@ export function PaintCalendar({
     // as a time of day; a second before it is the same last row.
     endTime: axis.end === '24:00' ? '23:59:59' : `${axis.end}:00`,
     intervalMinutes: schedule.granularity,
-    slotHeight: 40,
+    slotHeight: HOUR_HEIGHT,
     withAllDaySlots: false as const,
     withCurrentTimeIndicator: false as const,
     withAgenda: false as const,
@@ -794,6 +850,20 @@ export function PaintCalendar({
           withHeader={false}
           {...grid}
           style={dayStyle}
+          styles={{
+            // The hours, lined up with the rows; see `hoursColumn`.
+            dayViewSlotLabels: timeColumn,
+            // And the line back over the first of them, which this view --
+            // alone of the two -- takes away on the grounds that the first
+            // label sits at the top of the grid where the header has already
+            // drawn one. Pushed down onto its own hour it has a row under it
+            // to be the top of, and every label below it already has this.
+            dayViewSlotLabel: {
+              borderTop: timeColumn.paddingTop
+                ? '1px solid var(--day-view-border-color)'
+                : undefined,
+            },
+          }}
           withAllDaySlot={false}
           events={events}
           onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
@@ -817,9 +887,13 @@ export function PaintCalendar({
           onDateChange={fillDay}
           labels={LABELS}
           {...byWeekday}
-          // The time column, pinned so that scrolling a narrow week sideways
-          // does not take the hours with it; see STICKY_TIMES.
-          styles={STICKY_TIMES}
+          // The time column: pinned so that scrolling a narrow week sideways
+          // does not take the hours with it (STICKY_TIMES), and lined up with
+          // the rows it names (`hoursColumn`).
+          styles={{
+            ...STICKY_TIMES,
+            weekViewSlotLabels: { ...STICKY_TIMES.weekViewSlotLabels, ...timeColumn },
+          }}
           withWeekNumber={false}
           // Monday first, pinned rather than inherited, because `visibleRange`
           // works out which week is on screen and the two have to agree.

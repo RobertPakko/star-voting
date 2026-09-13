@@ -1184,6 +1184,27 @@ corner is clipped by `weekViewRoot`, outside the scroll area. The corner above
 the column is pinned with it and given a background, because a transparent
 pane is not a pane.
 
+**And it is lined up with the rows it names** (`hoursColumn`), which it was
+not on an axis that does not start on the hour. The library draws that column
+as one box per whole hour the axis contains, each an hour tall and stacked
+from the top of the grid — which is the same thing as assuming the axis starts
+on one. A poll whose earliest start is 14:30 begins half an hour above its
+first label, so every hour named the row half an hour before it — `15:00`
+against the 14:30 row — and the column ran out of labels before the grid ran
+out of rows, leaving the last hour listed with three half-hours under it
+instead of two. The fix is one declaration for each end of the axis: the
+column is padded at the top by the part of the first hour the axis begins
+inside, which drops every label onto the line where its hour really starts,
+and cut to the height of the rows, so that an axis ending at 17:30 — a `17:00`
+box an hour tall over half an hour of grid — no longer hangs half a row below
+the last row and takes the grid's bottom edge with it. Both ends are computed
+rather than special-cased: an axis that does start and end on the hour gets no
+padding and the height the column already had. The day view needs one line
+more, because it is the view that leaves the first label's top border off on
+the grounds that the header has already drawn one there: pushed down onto its
+own hour, that label has a row under it to be the top of, and gets the border
+back.
+
 **On a finger, sideways is the view and downwards is a stroke**
 (`PAN_SIDEWAYS`). The days scrolling sideways is the paragraph above; for a
 long time they could not, because the library gives every paintable slot a
