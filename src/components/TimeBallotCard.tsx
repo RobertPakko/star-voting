@@ -4,6 +4,7 @@ import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { BallotFrame, type BallotScore } from './BallotFrame'
 import { PaintCalendar } from './PaintCalendar'
 import {
+  axisFor,
   boundsOf,
   daysOf,
   describeOffset,
@@ -261,7 +262,13 @@ export function TimeBallotCard({
         <PaintCalendar
           schedule={schedule}
           bounds={bounds}
-          axis={schedule.window}
+          // The poll's own axis, widened to hold every window on the ballot.
+          // `window` is the axis the poll was *created* with, and the list has
+          // been able to grow past it ever since a group could add to it -- a
+          // window outside it would otherwise be a row the grid does not draw,
+          // which is an option nobody can score and nobody can see. See
+          // `axisFor`.
+          axis={axisFor(schedule.window, bounds, schedule)}
           painting={painting}
           brush={Number(rating)}
           onPaint={apply}

@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'vitest'
 import {
+  axisFor,
   boundsOf,
   boundsOnDay,
   carryForward,
+  cellsInHours,
   countWindows,
   DAY_MINUTES,
   daysOf,
@@ -532,6 +534,86 @@ describe('what a poll is asking about, read off its own options', () => {
     // made of nothing but marked cells, and every empty one under an empty
     // window -- which is the shape the scores carry exactly.
     expect(paintingFromScores(options, scores, weekend)).toEqual(painting)
+  })
+})
+
+describe('the hours a grid is drawn between', () => {
+  /**
+   * Three screens ask this and the ballot is the one that must never get it
+   * wrong: a window the grid has no row for is an option nobody can score and
+   * nobody can see, on a ballot that still demands a score for it.
+   */
+  test('a pair with nothing painted outside it stands as it is', () => {
+    const marked = painted(['2026-09-04'], '09:00', '12:00')
+    expect(axisFor({ start: '08:00', end: '22:00' }, marked, threeHours)).toEqual({
+      start: '08:00',
+      end: '22:00',
+    })
+  })
+
+  test('and is widened at whichever end the painting runs past', () => {
+    const early = painted(['2026-09-04'], '06:00', '07:00')
+    expect(axisFor({ start: '09:00', end: '17:00' }, early, threeHours)).toEqual({
+      start: '06:00',
+      end: '17:00',
+    })
+
+    const late = painted(['2026-09-04'], '19:00', '21:00')
+    expect(axisFor({ start: '09:00', end: '17:00' }, late, threeHours)).toEqual({
+      start: '09:00',
+      end: '21:00',
+    })
+  })
+
+  // `spanOf` answers the whole day when there is nothing to take a union of,
+  // which would make an empty calendar forty-eight rows tall.
+  test('an empty painting leaves the pair alone rather than opening the day', () => {
+    expect(axisFor({ start: '09:00', end: '17:00' }, new Set<GranuleKey>(), threeHours)).toEqual({
+      start: '09:00',
+      end: '17:00',
+    })
+  })
+
+  test('a ballot drawn this way holds a window offered after the poll was made', () => {
+    // The poll was created about the working day; the group added an evening
+    // to it, which is exactly what collecting times is for.
+    const evening = enumerateWindows(threeHours, painted(['2026-09-04'], '19:00', '22:30'))
+    const axis = axisFor(
+      { start: '09:00', end: '17:00' },
+      boundsOf(evening, threeHours),
+      threeHours,
+    )
+
+    expect(axis.start).toBe('09:00')
+    // The last window starts at 19:30 and is three hours long, so the grid has
+    // to reach 22:30 or its bottom row is an option with no cell.
+    expect(axis.end).toBe('22:30')
+  })
+
+  test('a window running to midnight stops the axis at the end of the day', () => {
+    const lateNight = enumerateWindows(threeHours, painted(['2026-09-04'], '21:00', '24:00'))
+    const axis = axisFor(
+      { start: '09:00', end: '17:00' },
+      boundsOf(lateNight, threeHours),
+      threeHours,
+    )
+
+    expect(axis.end).toBe('24:00')
+  })
+
+  test("a day fill lays down the pair, at the poll's own resolution", () => {
+    expect(cellsInHours('2026-09-04', { start: '09:00', end: '11:00' }, 30)).toEqual([
+      '2026-09-04 09:00',
+      '2026-09-04 09:30',
+      '2026-09-04 10:00',
+      '2026-09-04 10:30',
+    ])
+  })
+
+  test('and is one cell on a poll answered in whole days', () => {
+    expect(cellsInHours('2026-09-04', { start: '09:00', end: '17:00' }, DAY_MINUTES)).toEqual([
+      '2026-09-04 00:00',
+    ])
   })
 })
 

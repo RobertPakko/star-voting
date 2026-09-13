@@ -216,9 +216,19 @@ $$;
 -- assertion phrased as "did it say anything".
 -- ---------------------------------------------------------------------------
 
+-- Starts the measurement again: the messages sent so far, and the record of
+-- which topics have already been told.
+--
+-- Both halves, because announce() sends to a topic at most once per
+-- transaction and a whole case here *is* one transaction -- where in the app
+-- a transaction is one RPC. Clearing only the messages would measure "since
+-- the case began" rather than "since this line", and every count after the
+-- first would be 0.
 create or replace function tests.forget_signals()
 returns void language sql as $$
-  delete from realtime.messages
+  delete from realtime.messages;
+  select set_config('app.announced', '', true);
+  select null::void
 $$;
 
 create or replace function tests.signals(p_topic text)

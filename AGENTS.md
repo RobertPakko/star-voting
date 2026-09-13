@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, Reveal, …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, Reveal, …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -636,9 +636,23 @@ Four rules govern the telling half:
   ballots and a creator correcting the option list takes rows back off. A page
   told only about arrivals would sit showing a tally that has just been thrown
   away, which is worse than being slow.
-- **One statement, one message.** The triggers are statement-level, so a reset
-  clearing twenty ballots is one message rather than twenty landing on
-  everybody connected.
+- **One change, one message — and a change is a transaction.** The triggers
+  are statement-level, so a reset clearing twenty ballots is one message
+  rather than twenty. That is not far enough on its own: `insert_options`
+  checks each option against the list as it stands, so it loops and writes a
+  row at a time, and five windows painted onto a time poll were five
+  statements and so five messages. Every bulk path went through it —
+  `suggest_options`, `open_poll_suggest_options`, `creator_add_options`,
+  `creator_edit_options`, and `create_poll` with its options and its invitees.
+  So `announce()` holds the unit one level up: it remembers the topics it has
+  already sent to in this transaction and drops the repeats. This is safe
+  because a message carries nothing and `realtime.messages` is an ordinary
+  table — nothing reaches a listener before the commit, and every message
+  means only *re-read*, which the reader does once afterwards and sees the
+  whole change. A second message from one transaction was always a wasted
+  round trip rather than news. It is also why the fix belongs there rather
+  than in each writer: the guarantee covers bulk writes nobody has written
+  yet. See `0060_one_signal_per_change.sql`.
 - **A poll on its way out says one thing, to the lists it was on.** Its rows
   are silent — they cascade behind it, and `broadcast_poll_change` returns early
   when the poll is already gone, which stops a delete broadcasting once per
@@ -649,8 +663,10 @@ Four rules govern the telling half:
   `user:<id>` — `broadcast_poll_gone`, on a **BEFORE** DELETE row trigger,
   because the audience is `invited_voters` and those rows go in the same
   statement. Without it a deleted poll sat on everyone else's list as a card
-  that opens onto *Poll not found*. The unit is the poll, so deleting a
-  five-question group is five messages. **The nightly purge is still silent**:
+  that opens onto *Poll not found*. Deleting a five-question group reaches
+  exactly the lists one question would and tells each of them once, by the
+  rule above: the questions go in one transaction, and a list re-read after it
+  already has all five gone. **The nightly purge is still silent**:
   it can take hundreds of expired polls in one statement, months after anybody
   looked, so `purge_old_polls` raises `app.purging_polls` over its own
   transaction and the trigger stands down.
@@ -758,6 +774,17 @@ earliest cell any day asks about and the latest — so a poll whose Friday runs
 18:00–22:00 and whose Saturday runs 09:00–22:00 is drawn on one axis with
 Friday morning greyed out, rather than on two grids or on one that clips
 whichever day it was not built for. `spanOf` computes it on the way out.
+
+**It is the axis the poll was *created* with, and every grid widens it to hold
+what the poll now holds.** A list that is collected can outgrow the hours its
+creator first drew — that is the whole point of collecting it — and a window
+outside the axis would be a row the grid does not draw: an option nobody can
+see, nobody can rub out, and, on a ballot that demands a score for every
+option, nobody can score. So `axisFor` is what each of the three calendars is
+drawn between: the pair of times that screen is about, widened by `spanOf` of
+whatever is painted or offered outside it. Recomputing `window` on every
+suggestion would be the other way round, and would be a second stored answer
+of exactly the kind the section above is about.
 
 A meeting's length is not stored either — it is `desired_slots * granularity`.
 
@@ -1515,10 +1542,32 @@ card says on screen.
 The gesture is [`PaintTimes`](src/components/PaintTimes.tsx): the same calendar
 again, marking the hours you would *offer* rather than the hours you are free.
 The days are open — a poll collecting its times is asking about days nobody has
-named yet, so the arrows are the whole of the range — and the hours are not,
-because `window` is the grid the ballot will be drawn on and a window outside
-it is one the ballot has no rows for. Taking a suggestion off the list stays
-the creator's job, here as everywhere else.
+named yet, so the arrows are the whole of the range. Taking a suggestion off
+the list stays the creator's job, here as everywhere else.
+
+**The hours were not open, and are now.** They were the poll's stored `window`,
+full stop, so a group could only ever be asked about the hours its creator had
+already thought of: a poll painted 09:00–17:00 had no way to be offered an
+evening, by anybody, ever — the rows were not on the grid and the reason was
+nowhere on the screen. The card now draws `HoursFields`, the same two selects
+the create form has and for the same two jobs (what the grid is drawn between,
+and what clicking a day's heading lays down), and they are this reader's
+working view rather than anything stored: moving them adds nothing to the poll
+and takes nothing away. What makes that safe is the widening above — the axis
+holds everything already offered, so narrowing the pair hides nothing, and a
+window offered at seven in the evening is drawn on every screen that comes
+after it, the ballot included.
+
+**And the *Offer* / *Take off* toggle is gone.** It was a mode to be in for a
+gesture that already says which of the two it means: every gesture on this
+calendar toggles, so marking a stretch that is already marked is how anybody
+says "not that after all" — `fillCells` in `PaintCalendar`, the same rule the
+day heading and the header's range have always answered to. The toggle bought
+one case the brush does not cover, a drag across a half-marked stretch, and
+charged a mode for it on every other. What it meant for somebody who may not
+take a window off the list was narrower still — *Undo*, reaching their own
+unsaved marks and stopping there — which is exactly what painting over them
+does, and the line above the calendar now says so in those words.
 
 **A question of a group may be a calendar.** `create_poll_group` took no kind,
 so every question it made was an ordinary one. It now reads `kind` and
@@ -1535,7 +1584,7 @@ not, because what it is handed comes from a painted calendar.
 
 That same plural door is what makes *Edit options* one request rather than
 several. The creator's corrections are drafted in the browser and applied on
-**Save** — four corrections used to be four round trips and four re-reads of
+**Done** — four corrections used to be four round trips and four re-reads of
 the poll.
 
 **Both halves wait for it.** Adding drafts and removing drafts: a row marked
@@ -1544,11 +1593,18 @@ it stands. Removing used to happen immediately, which is the right behaviour
 everywhere it still happens and the wrong one here — a card where one of its
 two controls applies now and the other waits is a card that has to be
 explained, and the two-option floor cannot be checked honestly against a list
-that is half draft. It is counted against what Save would leave behind.
+that is half draft. It is counted against what *Done* would leave behind.
 
 The two suggestion paths still add straight away and should: that list belongs
 to the group, everybody watching sees a suggestion land as it lands, and that
 is half of what the collecting stage is for.
+
+One request, but for a while not one *edit*: the removals went as a `delete`
+of their own and the additions followed, which is what put the two-option
+floor on a list the creator never asked for. See [The creator can correct the
+options until somebody
+votes](#the-creator-can-correct-the-options-until-somebody-votes) for
+`creator_edit_options`, which is that same draft applied in one go.
 
 ### Deliberately not built yet
 
@@ -2983,6 +3039,51 @@ sends the same letter to everybody but the creator, who pressed it — see
 "the list changed, please look again" round trip, and adding that would be a
 poll that can never open: every confirmation would invite one more suggestion.
 
+**Confirming is the save.** The card holds things this reader has not sent
+yet — an afternoon painted on a time poll's calendar, an option typed into
+the box and not added — and pressing *I have nothing more to add* while one of
+them is still sitting there is not a mistake to warn about. It is the press
+that should put it in: confirming a list is saying *the list in front of me is
+the one I mean*, and what is in front of them includes what they just drew. It
+was two buttons for one intention — **Save times** and then **Confirm
+options** — and a reader who pressed only the second confirmed a list without
+the thing they had spent the last minute painting.
+
+So each list leaves what it is holding where the card can reach it (`DraftHold`
+in `CollectOptions`), and *Confirm options* applies it and then confirms: one
+press, whether or not there was anything outstanding, and nothing confirmed if
+the save is refused — a list the server would not take is not the list they
+were saying yes to. The failure is reported where the reader was looking, on
+the field or under the list, by the list itself.
+
+**And *Done* is the save, for the same reason.** The creator correcting a list
+that is already a ballot has nothing to confirm — the list is already a ballot,
+and there is nobody left to be done adding to it — so their way out of the
+editor is *Done* rather than *Confirm options*. It was two presses for the
+same one intention: **Save changes** and then **Done**, with a line of orange
+under the list to say which of them was the one that kept anything. Now *Done*
+puts in whatever the editor is holding and closes it only if that went in; a
+save the server refuses leaves the editor open with the edit still in it, and
+the reason under the list.
+
+Both halves of that streamlining are the same move: the way out of the card is
+the save, so there is nothing outstanding for the card to warn about. Which is
+why the warning is gone, and why the drafted rows are drawn exactly like the
+saved ones rather than dimmed — the dimming marked a difference only a separate
+Save button could act on. The count beside it (*2 to add, 1 to remove*, and the
+calendar's *N times on the list*) went with them: the list is the count, and a
+line under it saying the same thing in numbers was a second reading of what was
+already on screen.
+
+The calendar keeps a **Save times** of its own only where the card ends in
+neither button — a soliciting poll's creator who did not invite themselves —
+because there it is the only way the painting reaches the poll at all. Adding an option is still its own press while
+the list is still a list, for the reason at the end of [Collecting times, and a
+calendar among several
+questions](#collecting-times-and-a-calendar-among-several-questions): a
+suggestion belongs to the group and lands live for everybody watching. What
+confirming flushes is the one still in the box.
+
 ### The creator can correct the options until somebody votes
 
 Separate from where the options came from, and deliberately blind to it: a
@@ -3016,6 +3117,33 @@ write to `candidates` from any path at all. What `0028` added on top:
   becomes a ballot; a list that already *is* a ballot has no later checkpoint,
   so the floor is applied to the delete itself. Otherwise correcting an option
   list could leave a live poll with one option and no election in it.
+
+**A correction is one edit, and the floor is a rule about where it lands.**
+The card drafts the whole of it — some options going, some coming — and
+applied it as two requests: a `delete` on the rows being dropped, and then
+`creator_add_options`. Which put the poll through a list nobody had asked for
+and nobody ever saw, and the floor above was applied to *that*: a poll of two
+options, corrected to drop one and add two, was refused with *A poll needs at
+least two options* on its way to three.
+[`0059_editing_options_in_one_go.sql`](supabase/migrations/0059_editing_options_in_one_go.sql)
+adds **`creator_edit_options()`**, which takes both halves and applies them in
+one transaction, and moves the floor to the end of it — counted against what
+the edit leaves behind, which is the list the creator actually asked for and
+the only one anybody is offered.
+
+The trigger still judges a bare `delete` a row at a time, because that grant
+is one the browser holds directly and the guard is the whole of what stands
+behind it. What it now steps aside for is a delete inside an edit that has
+said so: `creator_edit_options` names the poll it is mid-edit on in
+`app.editing_options`, transaction-local and cleared the moment the removals
+are in, exactly as `purge_old_polls` sets `app.purging_polls` for
+`broadcast_poll_gone`. The flag names a poll rather than being a bare *on*, so
+an edit of one list cannot lift the floor off another in the same transaction.
+
+A refusal now also leaves the poll exactly as it was. The two-request version
+deleted the rows before the additions were refused, so the card had to throw
+that half of the draft away and the creator was left standing part-way through
+a correction they had made in one press.
 
 The creator reaches it from **Edit options** in `CreatorControls`, and it
 replaces the ballot while it is open — they are two readings of one list, and
@@ -3283,9 +3411,10 @@ they do to the *poll*:
 - **Edit options** — on any poll that has a ballot and has not closed. With no
   votes in it, it swaps the ballot for the option list so it can be corrected;
   with votes in it, it says why it can't and offers the two things that do
-  work. The way back out of the editor is **Done**, under the list itself, and
-  this button is not offered while that list is up: finishing with something
-  belongs beside the thing, not in a block further down the page. See [The
+  work. The way back out of the editor is **Done**, under the list itself,
+  which saves the correction and then closes the editor, and this button is not
+  offered while that list is up: finishing with something belongs beside the
+  thing, not in a block further down the page. See [The
   creator can correct the options until somebody
   votes](#the-creator-can-correct-the-options-until-somebody-votes).
 - **Close voting** — reveals results using the votes cast so far. One-way.

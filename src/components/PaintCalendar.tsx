@@ -228,7 +228,6 @@ export function PaintCalendar({
   confine,
   earliest,
   hideEmptyWeekdays,
-  slotHeight,
 }: {
   schedule: PollSchedule
   /** The cells that may be painted at all; everything else is drawn greyed. */
@@ -317,7 +316,6 @@ export function PaintCalendar({
    * empty Monday somebody is about to paint.
    */
   hideEmptyWeekdays?: boolean
-  slotHeight?: number
 }) {
   const days = daysOf(bounds)
   const daily = isDaily(schedule)
@@ -634,7 +632,7 @@ export function PaintCalendar({
     // as a time of day; a second before it is the same last row.
     endTime: axis.end === '24:00' ? '23:59:59' : `${axis.end}:00`,
     intervalMinutes: schedule.granularity,
-    slotHeight: slotHeight ?? (schedule.granularity < 30 ? 28 : 40),
+    slotHeight: 40,
     withAllDaySlots: false as const,
     withCurrentTimeIndicator: false as const,
     withAgenda: false as const,
