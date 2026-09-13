@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Card, Group, Stack, Text } from '@mantine/core'
+import { Button, Card, Divider, Group, Stack, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Reveal } from './Reveal'
 
@@ -111,10 +111,10 @@ export function BallotFrame({
       <Stack gap="sm">
         {nameField}
         {questionStrip}
-        {/* One element, never several: `Reveal` is a `div`, and a `div` around
-            several children that this `Stack` was spacing would take them out
-            of it. Both ballots hand over a single element, so the box stands
-            exactly where that element stood. */}
+        <Text size="sm">
+          Rate each option from 0 to 5 stars. 5 is the best score while 0 is the worst.
+        </Text>
+        <Divider />
         {arriving ? <Reveal>{children}</Reveal> : children}
 
         {error && (
