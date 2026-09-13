@@ -46,7 +46,8 @@ self.addEventListener('install', (event) => {
   // page can still ask for a lazily-loaded chunk the new worker has just
   // dropped from the cache — the About page's sample poll is the app's one
   // such chunk — but that only bites a tab left open across a deploy, which
-  // has already lost that chunk from the server. Against it: a worker that
+  // has already lost that chunk from the server and is reloaded for it by
+  // lib/staleBuild.ts. Against it: a worker that
   // waits is one nobody can be sure has ever activated.
   self.skipWaiting()
 })

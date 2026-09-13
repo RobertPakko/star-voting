@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -1900,6 +1900,65 @@ of them mounted so the heading and the strip do not blink. Keying the route's
 fade on `pathname` would have thrown all of that away and re-mounted the poll
 on every step through it, which is why `Layout` keys on `pageKey()` instead.
 
+
+## A deploy takes the old build with it
+
+[`deploy.yml`](.github/workflows/deploy.yml) builds the site and uploads the
+whole of `dist/` as the Pages artifact, and publishing that artifact replaces
+what was there. Nothing of the build before it is kept, so the moment a deploy
+lands every hashed filename the previous build used stops resolving.
+
+That is invisible to a reader who loads the page afterwards, and it is the
+whole of the problem for one who loaded it before. The hashed names are written
+into the `index.html` their tab is running: the results cards and the calendar
+from [`components/deferred.ts`](src/components/deferred.ts), the create form
+and the About page from the `lazy` calls in [`App.tsx`](src/App.tsx), and the
+sample poll's data from [`samplePoll.ts`](src/lib/samplePoll.ts). Until that
+tab loads the page again it is holding names that are gone, and nothing makes
+it load the page again. **The window is not the minute the deploy takes** — it
+is however long the tab stays open, which on a phone, or in the installed app
+that is never really closed, is days.
+
+Nothing is wrong until the tab reaches for one of them, which is why it reads
+as intermittent: the chunks are fetched once each and mostly early, so the one
+that is still unspent when a deploy lands is usually `Results`, asked for the
+first time a poll on screen finishes. Then the import 404s — GitHub Pages
+answers with its own HTML, which is not a module — and because a rejected
+`lazy()` throws during render with no error boundary over it, React unmounts
+the whole tree. The reader gets a blank page and the console gets `Failed to
+fetch dynamically imported module`.
+
+**[`lib/staleBuild.ts`](src/lib/staleBuild.ts) reloads the page when that
+happens.** A reload is what the reader would have done and the only thing that
+does fix it: the page is fetched network-first (see below), so it comes back
+naming the build that exists. Hash routing carries the address through, so they
+land back on the page they were opening and the import is tried again against
+the new files. The same reload is also the right answer to the rarer version of
+this, a file that is genuinely there but was not served because an edge had not
+caught up yet.
+
+It listens for `vite:preloadError`, which Vite's build dispatches on the window
+when a dynamic import — or a stylesheet split out with one — cannot be loaded.
+That is one listener for every split above and any added later, which is why it
+is there rather than an error boundary at each `Suspense`: a new `lazy()` call
+is covered without anybody remembering to cover it. The event is dispatched
+only by the built app, so none of this is live under `vite dev`.
+
+**The part to be careful with is the loop**, and it is worth understanding
+before changing anything here. A reload that does not fix the import puts the
+tab straight back where it was, so reloading on every failure is a page that
+reloads forever. Nothing on the page can tell a stale build from a broken one
+except the clock: a reload and the retry after it are a page load apart, so a
+second failure within `LOOP_WINDOW_MS` is treated as the loop and left alone,
+while one an hour later is the next deploy and gets its own reload. The marker
+is written to `sessionStorage` — per tab, because a second tab hitting the same
+dead chunk is a second reader who should get their own reload — and **a marker
+that cannot be written means no reload at all**, since a reload nothing
+recorded is one whose repeat cannot be recognised.
+
+What is still not handled is the second failure: it throws, and the blank page
+is what the reader gets, exactly as before. That is the case for an error
+boundary, which the app does not have.
 
 ## Installing it to a home screen
 

@@ -9,6 +9,7 @@ import './index.css'
 import { AuthProvider } from './lib/AuthProvider'
 import { ThemeColorMeta } from './components/ThemeColorMeta'
 import { registerServiceWorker } from './lib/serviceWorker'
+import { reloadOnStaleBuild } from './lib/staleBuild'
 import App from './App.tsx'
 
 /**
@@ -49,6 +50,9 @@ const theme = createTheme({
   },
 })
 
+// Before the first render rather than after it, because the render is itself
+// a thing that can ask for a chunk the last deploy took away.
+reloadOnStaleBuild()
 registerServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
