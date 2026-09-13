@@ -160,6 +160,35 @@ $$;
 ALTER FUNCTION "public"."add_suggested_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."announce"("p_topic" "text", "p_event" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_told text := coalesce(current_setting('app.announced', true), '');
+  v_key text := '|' || p_topic || '|';
+begin
+  if position(v_key in v_told) > 0 then
+    return;
+  end if;
+
+  -- Both halves live in the same (sub)transaction and so are undone together:
+  -- a send rolled back by an exception takes the record of it with it, and
+  -- the topic can be told again by whatever runs next. The setting is local,
+  -- so the commit clears it with nothing to remember to do.
+  perform set_config('app.announced', v_told || v_key, true);
+  perform realtime.send('{}'::jsonb, p_event, p_topic, false);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."announce"("p_topic" "text", "p_event" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."announce"("p_topic" "text", "p_event" "text") IS 'Tells one topic that something moved, at most once per transaction. Every live-update message goes through here: the payload is empty and nothing reaches a listener before the commit, so a second message from the same transaction is a wasted round trip rather than news. Internal.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."assert_collecting_options"("p_poll" "public"."polls") RETURNS "void"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -345,7 +374,7 @@ begin
     return;
   end if;
 
-  perform realtime.send('{}'::jsonb, 'poll_changed', 'poll:' || p_poll_id::text, false);
+  perform announce('poll:' || p_poll_id::text, 'poll_changed');
 
   -- And the same trick for the poll list, which holds no poll id at all until
   -- it has read one. `union` rather than `union all`: a creator who invited
@@ -358,7 +387,7 @@ begin
     join auth.users u on lower(u.email) = lower(iv.email)
     where iv.poll_id = p_poll_id
   loop
-    perform realtime.send('{}'::jsonb, 'polls_changed', 'user:' || v_user::text, false);
+    perform announce('user:' || v_user::text, 'polls_changed');
   end loop;
 end;
 $$;
@@ -367,7 +396,7 @@ $$;
 ALTER FUNCTION "public"."broadcast_poll_change"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."broadcast_poll_change"("p_poll_id" "uuid") IS 'Tells anyone watching this poll that it moved, without saying how: the poll''s own topic, its share token, and the list of everyone who can see it. Internal: called from the broadcast triggers, never by a client.';
+COMMENT ON FUNCTION "public"."broadcast_poll_change"("p_poll_id" "uuid") IS 'Tells anyone watching this poll that it moved, without saying how: the poll''s own topic, its share token, and the list of everyone who can see it. Each of them once per transaction, however many statements the change took; see announce(). Internal: called from the broadcast triggers, never by a client.';
 
 
 
@@ -392,6 +421,11 @@ begin
   -- The audience broadcast_poll_change() reaches, minus the poll's own topic
   -- and read while it can still be read. `union` rather than `union all`: a
   -- creator who invited themselves is one reader with one list.
+  --
+  -- A group goes out as several polls through this same trigger, and each
+  -- question reaches the same lists. They hear once: a list re-read after the
+  -- commit already has every question gone, so the second message was only
+  -- ever a second round trip to show the same thing. See announce().
   for v_user in
     select u.id from auth.users u where u.id = old.created_by
     union
@@ -400,7 +434,7 @@ begin
     join auth.users u on lower(u.email) = lower(iv.email)
     where iv.poll_id = old.id
   loop
-    perform realtime.send('{}'::jsonb, 'polls_changed', 'user:' || v_user::text, false);
+    perform announce('user:' || v_user::text, 'polls_changed');
   end loop;
 
   return old;
@@ -411,7 +445,7 @@ $$;
 ALTER FUNCTION "public"."broadcast_poll_gone"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."broadcast_poll_gone"() IS 'Tells the list of everyone who can see this poll that it is going, while its invitee list still exists to be read. Internal: the BEFORE DELETE trigger on polls, never called by a client.';
+COMMENT ON FUNCTION "public"."broadcast_poll_gone"() IS 'Tells the list of everyone who can see this poll that it is going, while its invitee list still exists to be read. Once per list per transaction, so a group of questions going out together is one message rather than one each. Internal: the BEFORE DELETE trigger on polls, never called by a client.';
 
 
 
@@ -858,6 +892,75 @@ COMMENT ON FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_option
 
 
 
+CREATE OR REPLACE FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "p_options" "jsonb" DEFAULT '[]'::"jsonb", "p_remove" "uuid"[] DEFAULT '{}'::"uuid"[]) RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+  v_added int := 0;
+  v_left int;
+begin
+  select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
+
+  -- The same 'not found' a poll that exists but isn't yours gets everywhere
+  -- else: whether a given id is a real poll is not something an outsider
+  -- needs to learn.
+  if not found then
+    raise exception 'Poll not found';
+  end if;
+
+  if v_poll.closed_at is not null then
+    raise exception 'This poll has been closed';
+  end if;
+
+  -- The trigger says this too, and would refuse the write on its own. Saying
+  -- it here is what makes the message the one the creator can act on.
+  if exists (select 1 from ballots where poll_id = p_poll_id) then
+    raise exception 'Cannot change the options of a poll that already has votes';
+  end if;
+
+  -- Transaction-local, and cleared the moment the deletes are done: it lifts
+  -- the per-row floor off this poll for exactly as long as the list is
+  -- part-way between two states. See guard_options_frozen.
+  perform set_config('app.editing_options', p_poll_id::text, true);
+
+  -- Removals first, so an edit that swaps one option for another cannot trip
+  -- over the 500-option ceiling on its way through the middle. Scoped to this
+  -- poll, so an id from somewhere else is a no-op rather than a delete: the
+  -- caller has been shown to own this poll and nothing more.
+  delete from candidates
+  where poll_id = p_poll_id and id = any (coalesce(p_remove, '{}'::uuid[]));
+
+  perform set_config('app.editing_options', '', true);
+
+  if p_options is not null and jsonb_array_length(p_options) > 0 then
+    v_added := insert_options(v_poll, p_options);
+  end if;
+
+  -- The floor the trigger would have applied a row at a time, applied once to
+  -- the list the creator actually asked for. A list still being collected has
+  -- none, exactly as it has none there: its checkpoint is finalize_options.
+  if not (v_poll.solicit_options and v_poll.options_finalized_at is null) then
+    select count(*)::int into v_left from candidates where poll_id = p_poll_id;
+
+    if v_left < 2 then
+      raise exception 'A poll needs at least two options';
+    end if;
+  end if;
+
+  return v_added;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "p_options" "jsonb", "p_remove" "uuid"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "p_options" "jsonb", "p_remove" "uuid"[]) IS 'The creator''s correction to an option list, both halves of it -- the options to drop and the options to add -- in one transaction, answering how many were added. The two-option floor is applied to what the edit leaves behind rather than to the states it passes through, which is the whole reason it exists beside creator_add_options.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."email_escape"("p_text" "text") RETURNS "text"
     LANGUAGE "sql" IMMUTABLE
     AS $$
@@ -1056,7 +1159,14 @@ begin
     -- Only once the list is a ballot. While it is still being collected there
     -- is a later checkpoint -- finalize_options -- and pruning back to one
     -- option, or to none, is a normal thing to do on the way there.
-    if not (v_poll.solicit_options and v_poll.options_finalized_at is null) then
+    --
+    -- And only when the delete is the whole of what is happening. A creator
+    -- swapping one option for two passes through two options and one on the
+    -- way to three, and neither of those is a list anybody was ever offered:
+    -- creator_edit_options names the poll it is mid-edit on and applies this
+    -- same floor to what it leaves behind. See that function.
+    if not (v_poll.solicit_options and v_poll.options_finalized_at is null)
+       and coalesce(current_setting('app.editing_options', true), '') <> v_poll_id::text then
       select count(*)::int into v_remaining
       from candidates where poll_id = v_poll_id and id <> old.id;
 
@@ -1074,6 +1184,10 @@ $$;
 
 
 ALTER FUNCTION "public"."guard_options_frozen"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."guard_options_frozen"() IS 'Holds an option list still from the first ballot on, and holds a live ballot to two options. The floor steps aside for a poll still collecting, whose floor is finalize_options, and for the poll named in app.editing_options, whose floor is creator_edit_options.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") RETURNS "void"
@@ -4807,6 +4921,10 @@ REVOKE ALL ON FUNCTION "public"."add_suggested_option"("p_poll" "public"."polls"
 
 
 
+REVOKE ALL ON FUNCTION "public"."announce"("p_topic" "text", "p_event" "text") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."assert_collecting_options"("p_poll" "public"."polls") FROM PUBLIC;
 
 
@@ -4866,6 +4984,11 @@ GRANT ALL ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name"
 
 REVOKE ALL ON FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "p_options" "jsonb", "p_remove" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "p_options" "jsonb", "p_remove" "uuid"[]) TO "authenticated";
 
 
 
