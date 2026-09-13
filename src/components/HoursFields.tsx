@@ -52,7 +52,7 @@ export function HoursFields({
   return (
     <Group grow align="flex-start" wrap="wrap">
       <Select
-        label="Default earliest start"
+        label="Earliest start"
         data={STARTS}
         value={hours.start}
         onChange={(v) =>
@@ -72,7 +72,7 @@ export function HoursFields({
         comboboxProps={{ withinPortal: false }}
       />
       <Select
-        label="Default latest end"
+        label="Latest end"
         data={ENDS.filter((end) => end.value > hours.start)}
         value={hours.end}
         onChange={(v) => v && onChange({ ...hours, end: v })}
