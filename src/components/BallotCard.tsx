@@ -79,7 +79,7 @@ export function BallotCard({
       onCancel={onCancel}
     >
       <Text size="sm">
-        Rate each option from 0 to 5 stars. 5 is the best score while 0 is the worst.
+        Rate each option from 0 to 5 stars. 5 is the highest preference while 0 is the lowest.
       </Text>
       <Divider />
       {ballot.map((option) => (
