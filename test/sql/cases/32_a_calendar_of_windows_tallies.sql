@@ -35,6 +35,42 @@ create or replace function pg_temp.voters(p_count int) returns text[] language s
   select array_agg('voter' || g || '@example.com' order by g) from generate_series(1, p_count) g;
 $$;
 
+-- What voter i scores window j, for the twelve-ballot poll below.
+--
+-- Two parts, and both are needed to make the case deterministic while leaving
+-- it the shape it is about.
+--
+-- **Fifty-seven ordinary windows**, one twelve-hour week rotated by one per
+-- voter. Every window carries the same total, which is what ties the score
+-- round sixty ways -- the expensive shape this case exists to time.
+--
+-- **Three that split the group three ways**: the times a third of the team
+-- cannot make, each a different third. They beat every ordinary window head
+-- to head and cycle among themselves -- 58 beats 60 beats 59 beats 58 -- so
+-- they are level on wins and on five-star votes, and the draw picks two of
+-- the three. Which two is random; that the runoff can separate them is not.
+--
+-- The case used to be one rotation for all sixty, which is where the flake
+-- was: `((i + j) % 12)` depends on j only through its remainder, so windows
+-- twelve apart had *identical* ballots behind them. Sixty windows were twelve
+-- distinct ones in five copies, and a draw that happened on two copies of the
+-- same window -- 120 of the 1,770 pairs -- reached a runoff level on every
+-- measure there is, so it elected nobody and `winner_name` came back null.
+-- A further 150 pairs were distinct but level on preference, which the runoff
+-- then settled on five-star votes rather than the `preference` the assertion
+-- names. 270 of 1,770 is a failure about one run in seven.
+create or replace function pg_temp.score(p_voter int, p_window int) returns int
+language sql immutable as $$
+  select case
+    -- The three, by which quarter of the twelve voters is asking.
+    when p_window = 58 then (array[5, 4, 0])[(p_voter - 1) / 4 + 1]
+    when p_window = 59 then (array[0, 5, 4])[(p_voter - 1) / 4 + 1]
+    when p_window = 60 then (array[4, 0, 5])[(p_voter - 1) / 4 + 1]
+    -- ...and the week everyone else is handed, rotated by one per voter.
+    else (array[4, 4, 4, 3, 3, 3, 3, 3, 3, 2, 2, 2])[((p_voter + p_window) % 12) + 1]
+  end;
+$$;
+
 do $$
 declare
   v_poll uuid;
@@ -44,12 +80,6 @@ declare
   v_scores jsonb;
   v_tally jsonb;
   v_started timestamptz;
-  -- One voter's week, twelve hours of it, and every voter is handed the same
-  -- week rotated by one. Every window then carries the same total -- so the
-  -- score round ties all sixty at once, which is the expensive shape -- while
-  -- no two windows have the same ballots behind them, which is what a real
-  -- calendar looks like once voters disagree about the edges of a day.
-  v_pattern int[] := array[5, 5, 4, 3, 3, 2, 2, 1, 1, 0, 0, 4];
   i int; j int;
 begin
   perform tests.sign_in('creator@example.com');
@@ -68,7 +98,7 @@ begin
     v_scores := '[]'::jsonb;
     for j in 1 .. 60 loop
       v_scores := v_scores || jsonb_build_array(jsonb_build_object(
-        'candidate_id', v_cands[j], 'score', v_pattern[((i + j) % 12) + 1]));
+        'candidate_id', v_cands[j], 'score', pg_temp.score(i, j)));
     end loop;
     perform submit_ballot(v_poll, v_scores);
   end loop;
@@ -80,7 +110,7 @@ begin
   v_scores := '[]'::jsonb;
   for j in 1 .. 60 loop
     v_scores := v_scores || jsonb_build_array(jsonb_build_object(
-      'candidate_id', v_cands[j], 'score', v_pattern[((12 + j) % 12) + 1]));
+      'candidate_id', v_cands[j], 'score', pg_temp.score(12, j)));
   end loop;
 
   set local statement_timeout = '20s';
@@ -108,10 +138,17 @@ begin
   -- produces as a matter of course rather than by accident.
   perform tests.assert_eq('with all sixty tied in the score round',
     jsonb_array_length(v_tally #> '{tiebreaks,0,tied}'), 60);
+  -- Head to head narrows the sixty to the three that cycle, and there is
+  -- nothing left to separate *those*: level on wins and on five-star votes
+  -- alike, so the draw picks which two go through.
   perform tests.assert_eq('and nothing to separate them but the draw',
     v_tally #>> '{tiebreaks,0,resolved_by}', 'random');
+  -- Whichever two it drew. A cycle has no pair that is level on preference,
+  -- so this holds for all three draws rather than for most of them.
   perform tests.assert_eq('the runoff still decides between the two it drew',
     v_tally #>> '{runoff,resolved_by}', 'preference');
+  perform tests.assert_eq('and it drew from the three, not from the fifty-seven',
+    (select winner_name = any(v_names[58:60]) from polls where id = v_poll), true);
 end $$;
 
 -- ---------------------------------------------------------------------------
