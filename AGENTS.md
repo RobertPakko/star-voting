@@ -1616,18 +1616,33 @@ two controls applies now and the other waits is a card that has to be
 explained, and the two-option floor cannot be checked honestly against a list
 that is half draft. It is counted against what *Done* would leave behind.
 
-**A struck row is struck whole, and is not on the list any more.** The
-description goes through the crossing-out with the name — what is leaving is
-the option, not what it is called — and the duplicate-name check counts only
-the rows *Done* would leave behind. Checking it against everything on screen
-made the commonest correction of all impossible: striking "Other" and adding
-another "Other" with a better description under it was refused for clashing
-with the very row being dropped, and `creator_edit_options` would have taken
-it happily, since the removals go in before the additions in one transaction.
-The one way back is closed while it is taken: *Keep* is disabled, and says
-why, on a struck row whose name a draft now holds — two options of that name
-is the one list the save cannot leave behind, so the way to that row is to
-discard the draft that replaced it.
+**A struck row is struck whole.** The description goes through the
+crossing-out with the name: what is leaving is the option, not what it is
+called.
+
+**And a third half: an option can be corrected in place.** A pencil beside
+the cross opens the row's two fields where the row is, filled in with what is
+there. Before it existed, fixing a typo in a description meant striking the
+option out and typing the whole description again under a new one — and the
+list would not even take that, because the name being retyped was a name
+already on it. The duplicate check is unchanged and deliberately still counts
+struck rows: a name the list visibly holds is taken, and the answer to wanting
+it is to correct the option holding it.
+
+**A correction travels as a removal and an addition**, in the same
+`creator_edit_options` call as the rest of the draft. There is no update door
+into `candidates` — no UPDATE policy, and every write goes through a function
+— and adding one is a migration this did not need: removals are applied
+before additions in that one transaction, so an option corrected without being
+renamed never collides with itself. What it costs is `sort_order`: a corrected
+option comes back at the end of the list, where an added option goes. Worth
+knowing before reaching for it on a long list, and the reason the row shows the
+correction *in place* while it is still a draft — it is the same option, and
+only the save moves it.
+
+The two suggestion paths send a correction as they send everything else,
+straight away. A draft row is corrected by the same pencil and never leaves
+the browser at all.
 
 The two suggestion paths still add straight away and should: that list belongs
 to the group, everybody watching sees a suggestion land as it lands, and that
