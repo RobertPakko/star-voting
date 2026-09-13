@@ -229,8 +229,8 @@ export function Results({
               ))}
               {scoreRound.hidden > 0 && (
                 <Text size="sm" c="dimmed">
-                  The {scoreRound.rows.length} highest of {shown.options.length} options. See the
-                  full ranking below for the whole field.
+                  The {scoreRound.rows.length} highest of {shown.options.length} options. Open the
+                  full ranking below to see all the options.
                 </Text>
               )}
             </Stack>
