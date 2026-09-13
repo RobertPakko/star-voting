@@ -300,7 +300,7 @@ export function ScheduleFields({
           <Text size="sm" c="dimmed">
             {daily
               ? 'Define which dates voters are choosing between.'
-              : 'Define what dates and times voters can choose from. Use the day or week view to paint times manually.'}
+              : 'Define what dates and times voters can choose from.'}
           </Text>
           <SegmentedControl
             size="xs"

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Group, Tooltip } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import {
@@ -331,6 +331,10 @@ export function PaintCalendar({
   const [date, setDate] = useState(() => days[0] ?? dayjs().format('YYYY-MM-DD'))
   const [view, setView] = useState<ScheduleViewLevel>(daily ? 'month' : 'week')
   const showing = daily ? 'month' : view
+  const narrowLabels = useMediaQuery('(max-width: 560px)', false, {
+    getInitialValueInEffect: false,
+  })
+  const timeLabelWidth = narrowLabels ? '3rem' : '5rem'
 
   const events = buildEvents(showing)
 
@@ -626,6 +630,17 @@ export function PaintCalendar({
     withWeekendDays: emptyWeekdays.length === 0,
   }
 
+  const dayStyle = {
+    '--day-view-slot-labels-width': timeLabelWidth,
+  } as CSSProperties
+  const weekStyle = {
+    '--week-view-slots-label-width': timeLabelWidth,
+    '--week-view-min-slot-width': timeLabelWidth,
+  } as CSSProperties
+  const monthStyle = {
+    '--min-day-width': '6rem',
+  } as CSSProperties
+
   const grid = {
     startTime: `${axis.start}:00`,
     // 24:00 is midnight at the end of the day, which the calendar cannot draw
@@ -736,6 +751,7 @@ export function PaintCalendar({
         <MonthView
           date={date}
           withHeader={false}
+          style={monthStyle}
           events={events}
           // A month has no hours in it, so a day is the smallest thing there
           // is to say something about -- which makes the day itself the
@@ -777,6 +793,7 @@ export function PaintCalendar({
           date={date}
           withHeader={false}
           {...grid}
+          style={dayStyle}
           withAllDaySlot={false}
           events={events}
           onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
@@ -790,6 +807,7 @@ export function PaintCalendar({
           date={date}
           withHeader={false}
           {...grid}
+          style={weekStyle}
           events={events}
           onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
           // The day's own column heading, which with the header off is the
