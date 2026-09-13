@@ -273,6 +273,69 @@ export function spanOf(bounds: Bounds, schedule: PollSchedule): DailyWindow {
 }
 
 /**
+ * The hours a grid has to be drawn between: a pair of times, widened to hold
+ * anything painted outside them.
+ *
+ * **It used to be the whole of the day, every time.** Forty-eight rows of half
+ * hours, of which the poll was usually asking about sixteen -- a grid whose
+ * bottom nobody could see, mostly so that the small hours could be greyed out
+ * in it. Wherever a screen can say which part of the day it is about, that is
+ * the part it is drawn on, and a week of it fits on a phone.
+ *
+ * **Widened rather than clipped**, which is the half that has to be right: a
+ * cell painted at seven in the evening and then left off the axis would be an
+ * answer nobody can see and nobody can rub out, still generating windows on
+ * the ballot -- and, on a ballot, a row nobody can score. So the axis holds
+ * whatever is painted outside the pair and no more, and the way to reach an
+ * hour outside them is to move the end that excludes it.
+ *
+ * With nothing painted there is nothing to hold, and the pair stands alone.
+ * `spanOf` answers `00:00`-`24:00` in that case, which would make this the
+ * whole day again -- hence the first line rather than a union of three things.
+ *
+ * Three screens draw a calendar and all three ask this: the create form, the
+ * card that collects times from a group, and the ballot -- which asks it of
+ * its own options, because the poll's stored `window` is the axis it was
+ * created with and the list has been able to grow past it ever since a group
+ * could add to it.
+ */
+export function axisFor(hours: DailyWindow, marked: Bounds, schedule: PollSchedule): DailyWindow {
+  if (marked.size === 0) return hours
+  const painted = spanOf(marked, schedule)
+  // Both ends are `HH:mm`, fixed width, so they compare as plain strings --
+  // `24:00` included, which is the latest of them and sorts as the latest.
+  return {
+    start: painted.start < hours.start ? painted.start : hours.start,
+    end: painted.end > hours.end ? painted.end : hours.end,
+  }
+}
+
+/**
+ * The cells one pair of times covers on one day, which is what a day-fill
+ * writes.
+ *
+ * Usually the whole of the drawn column, since a grid is drawn between the
+ * same two times (`axisFor`) -- and less than it where something painted
+ * elsewhere has widened the axis past them, which is the one case the two
+ * differ. The drag is there for the days that want less than the default, and
+ * an hour outside it is reached by moving the end that excludes it. A poll
+ * answered in whole days has one cell per day, which is the day itself.
+ */
+export function cellsInHours(
+  day: ScheduleDay,
+  hours: DailyWindow,
+  granularity: number,
+): GranuleKey[] {
+  if (granularity >= DAY_MINUTES) return [granuleKey(day, 0)]
+  const last = toMinutes(hours.end)
+  const keys: GranuleKey[] = []
+  for (let at = toMinutes(hours.start); at + granularity <= last; at += granularity) {
+    keys.push(granuleKey(day, at))
+  }
+  return keys
+}
+
+/**
  * A date some whole days later, and the whole days between two dates.
  *
  * `Date` is used here as a calendar and never as a clock, which is the same

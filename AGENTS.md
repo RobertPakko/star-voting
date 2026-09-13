@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, Reveal, …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, Reveal, …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -759,6 +759,17 @@ earliest cell any day asks about and the latest — so a poll whose Friday runs
 Friday morning greyed out, rather than on two grids or on one that clips
 whichever day it was not built for. `spanOf` computes it on the way out.
 
+**It is the axis the poll was *created* with, and every grid widens it to hold
+what the poll now holds.** A list that is collected can outgrow the hours its
+creator first drew — that is the whole point of collecting it — and a window
+outside the axis would be a row the grid does not draw: an option nobody can
+see, nobody can rub out, and, on a ballot that demands a score for every
+option, nobody can score. So `axisFor` is what each of the three calendars is
+drawn between: the pair of times that screen is about, widened by `spanOf` of
+whatever is painted or offered outside it. Recomputing `window` on every
+suggestion would be the other way round, and would be a second stored answer
+of exactly the kind the section above is about.
+
 A meeting's length is not stored either — it is `desired_slots * granularity`.
 
 **Granularity is derived, not chosen.** Half an hour under a day, a whole day
@@ -1450,10 +1461,32 @@ card says on screen.
 The gesture is [`PaintTimes`](src/components/PaintTimes.tsx): the same calendar
 again, marking the hours you would *offer* rather than the hours you are free.
 The days are open — a poll collecting its times is asking about days nobody has
-named yet, so the arrows are the whole of the range — and the hours are not,
-because `window` is the grid the ballot will be drawn on and a window outside
-it is one the ballot has no rows for. Taking a suggestion off the list stays
-the creator's job, here as everywhere else.
+named yet, so the arrows are the whole of the range. Taking a suggestion off
+the list stays the creator's job, here as everywhere else.
+
+**The hours were not open, and are now.** They were the poll's stored `window`,
+full stop, so a group could only ever be asked about the hours its creator had
+already thought of: a poll painted 09:00–17:00 had no way to be offered an
+evening, by anybody, ever — the rows were not on the grid and the reason was
+nowhere on the screen. The card now draws `HoursFields`, the same two selects
+the create form has and for the same two jobs (what the grid is drawn between,
+and what clicking a day's heading lays down), and they are this reader's
+working view rather than anything stored: moving them adds nothing to the poll
+and takes nothing away. What makes that safe is the widening above — the axis
+holds everything already offered, so narrowing the pair hides nothing, and a
+window offered at seven in the evening is drawn on every screen that comes
+after it, the ballot included.
+
+**And the *Offer* / *Take off* toggle is gone.** It was a mode to be in for a
+gesture that already says which of the two it means: every gesture on this
+calendar toggles, so marking a stretch that is already marked is how anybody
+says "not that after all" — `fillCells` in `PaintCalendar`, the same rule the
+day heading and the header's range have always answered to. The toggle bought
+one case the brush does not cover, a drag across a half-marked stretch, and
+charged a mode for it on every other. What it meant for somebody who may not
+take a window off the list was narrower still — *Undo*, reaching their own
+unsaved marks and stopping there — which is exactly what painting over them
+does, and the line above the calendar now says so in those words.
 
 **A question of a group may be a calendar.** `create_poll_group` took no kind,
 so every question it made was an ordinary one. It now reads `kind` and

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Group, SegmentedControl, Stack, Text } from '@mantine/core'
+import { Button, Group, Stack, Text } from '@mantine/core'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { PaintCalendar } from './PaintCalendar'
+import { HoursFields } from './HoursFields'
 import {
+  axisFor,
   boundsOf,
+  cellsInHours,
   DAY_MINUTES,
   daysOf,
   describeOffset,
   enumerateWindows,
-  granuleKey,
   granulesOf,
   isDaily,
   paintingRuns,
@@ -16,10 +18,9 @@ import {
   toMinutes,
   toTimeOfDay,
   type GranuleKey,
-  type ScheduleDay,
 } from '../lib/schedule'
 import { offsetName } from '../lib/timezones'
-import type { PollOption, PollSchedule } from '../lib/types'
+import type { DailyWindow, PollOption, PollSchedule } from '../lib/types'
 
 /**
  * Choosing which times a poll offers, by painting them.
@@ -37,6 +38,23 @@ import type { PollOption, PollSchedule } from '../lib/types'
  *   everywhere else in this app and is that here too.
  * - the **creator** correcting a list that is already a ballot, who may do
  *   both.
+ *
+ * **One brush, and painting over a stretch takes it back.** There used to be
+ * an *Offer* / *Take off* toggle above the calendar, which was a mode to be in
+ * for a gesture that already says which of the two it means: every gesture on
+ * this calendar toggles, so marking a stretch that is already marked is how
+ * anybody says "not that after all" -- see `fillCells` in `PaintCalendar`. The
+ * toggle answered one case the brush does not, a drag across a half-marked
+ * stretch, and cost a mode on every other.
+ *
+ * **The hours are this reader's, not the poll's.** `HoursFields` says which
+ * part of the day the grid is drawn on and which hours a day's heading lays
+ * down, exactly as it does on the create form. It used to be the poll's stored
+ * `window`, full stop, which meant a group could only ever be asked about the
+ * hours its creator had already thought of: a poll painted 09:00-17:00 had no
+ * way to be offered an evening, by anybody, ever. The axis still holds
+ * whatever is already on the list (`axisFor`), so narrowing the pair hides
+ * nothing that has been offered.
  *
  * **It saves in one request**, which is the whole reason a time poll can
  * collect its times at all. One gesture here is a handful of windows -- a
@@ -105,7 +123,10 @@ export function PaintTimes({
   // it already offers, so the first thing a reader sees is the poll as it
   // stands, and the difference below is empty until they touch something.
   const [wanted, setWanted] = useState<Set<GranuleKey>>(() => new Set(offered))
-  const [brush, setBrush] = useState(ADDING)
+  // Which part of the day this reader is working in; see HoursFields. It opens
+  // as the poll's own axis, so the calendar is the one the creator drew until
+  // somebody says otherwise.
+  const [hours, setHours] = useState<DailyWindow>(schedule.window)
 
   const daily = isDaily(schedule)
   const zone = useMemo(() => {
@@ -114,28 +135,25 @@ export function PaintTimes({
   }, [schedule.timezone, offered])
 
   /**
-   * The hours a suggestion may be made in: the poll's own axis, on any day.
+   * The hours a suggestion may be made in: the pair above, widened to hold
+   * everything already painted, on any day.
    *
-   * Horizontally open and vertically closed, and both halves are deliberate. A
-   * poll collecting its times is asking about days nobody has named yet, so
+   * Horizontally open and vertically bounded, and both halves are deliberate.
+   * A poll collecting its times is asking about days nobody has named yet, so
    * there is nothing to bound the days by -- the calendar's arrows are the
-   * whole of the range. The hours are the grid the ballot will be drawn on,
-   * and a window outside them is one the ballot has no rows for.
+   * whole of the range. The hours are what the grid is drawn between, so an
+   * hour outside them is reached by moving the end that excludes it rather
+   * than by scrolling to a row that is not there.
    */
-  const first = toMinutes(schedule.window.start)
-  const last = toMinutes(schedule.window.end)
+  const axis = useMemo(
+    () => axisFor(hours, new Set([...offered, ...wanted]), schedule),
+    [hours, offered, wanted, schedule],
+  )
+  const first = toMinutes(axis.start)
+  const last = toMinutes(axis.end)
   const canPaint = (key: GranuleKey) => {
     const at = toMinutes(key.slice(11))
     return at >= first && at + schedule.granularity <= last
-  }
-
-  const cellsOn = (day: ScheduleDay): GranuleKey[] => {
-    if (daily) return [granuleKey(day, 0)]
-    const keys: GranuleKey[] = []
-    for (let at = first; at + schedule.granularity <= last; at += schedule.granularity) {
-      keys.push(granuleKey(day, at))
-    }
-    return keys
   }
 
   function paint(keys: GranuleKey[], value: number) {
@@ -143,8 +161,8 @@ export function PaintTimes({
       const next = new Set(prev)
       for (const key of keys) {
         // A cell already on the list is only rubbed out by somebody allowed to
-        // take a window off it; for everybody else the eraser reaches their
-        // own unsaved marks and stops there.
+        // take a window off it; for everybody else painting over one of their
+        // own unsaved marks takes it back and there it stops.
         if (value === 0) {
           if (canRemove || !offered.has(key)) next.delete(key)
         } else {
@@ -212,38 +230,42 @@ export function PaintTimes({
 
   return (
     <Stack gap="xs">
-      <Text size="sm">Mark the times this poll should offer.</Text>
+      {/* What the gesture is, and what the gesture undone is: there is no
+          eraser to switch to, because marking a stretch that is already marked
+          takes it back. A reader who may not take a window off the list is
+          told which marks that reaches -- their own, the ones not yet saved --
+          rather than being invited to press at somebody else's and watch
+          nothing happen. */}
+      <Text size="sm">
+        Mark the times this poll should offer.{' '}
+        {canRemove
+          ? 'Mark them again to take them back.'
+          : 'Mark your own again to take them back.'}
+      </Text>
 
-      <Group gap="sm" wrap="wrap" align="center">
-        <SegmentedControl
-          size="xs"
-          value={String(brush)}
-          onChange={(v) => setBrush(Number(v))}
-          data={[
-            { value: String(ADDING), label: 'Offer' },
-            { value: '0', label: canRemove ? 'Take off' : 'Undo' },
-          ]}
-        />
-        <Text size="xs" c="dimmed">
-          All times are {describeOffset(schedule.timezone, zone)}
-        </Text>
-      </Group>
+      {/* Hidden on a poll answered in whole days, where there are no hours to
+          be earliest or latest: a day is either in or out. */}
+      {!daily && <HoursFields hours={hours} onChange={setHours} />}
+
+      <Text size="xs" c="dimmed">
+        All times are {describeOffset(schedule.timezone, zone)}
+      </Text>
 
       <PaintCalendar
         schedule={schedule}
         bounds={offered}
-        axis={schedule.window}
+        axis={axis}
         // Keyed to the brush rather than to what the cell is, so that clicking
         // a day that is already entirely marked takes it back -- which is the
         // toggle every day-fill in this app has. What a cell *is* is drawn by
         // `buildEvents`; this is only what a gesture compares against.
         painting={Object.fromEntries([...wanted].map((key) => [key, ADDING]))}
-        brush={brush}
+        brush={ADDING}
         onPaint={paint}
         buildEvents={buildEvents}
         canPaint={canPaint}
         dayInBounds={() => true}
-        fillOnDay={cellsOn}
+        fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
         slotHeight={daily ? undefined : 22}
       />
 
