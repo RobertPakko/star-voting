@@ -9,6 +9,7 @@ import {
   Stack,
   VisuallyHidden,
 } from '@mantine/core'
+import { RESULTS_ROWS_MAX } from '../lib/resultsRows'
 
 /**
  * The shapes each page draws while it is waiting for its first read.
@@ -201,6 +202,13 @@ function BannerShape() {
  * need an option count this is not always given.
  */
 function TallyShape({ options }: { options: number }) {
+  // The same ceiling the score round itself draws to, so a schedule poll's
+  // hundred windows do not put up a page of bars for a card that arrives
+  // twenty rows long. A shape taller than the thing it is waiting for is the
+  // lie this file's own note warns about, and at that length it is the whole
+  // page rather than a row of it. See resultsRows.ts.
+  const rows = Math.min(options, RESULTS_ROWS_MAX)
+
   return (
     <Stack gap="md">
       <BannerShape />
@@ -209,7 +217,7 @@ function TallyShape({ options }: { options: number }) {
         <Skeleton height={bar.heading} width={112} radius="sm" />
         <Card withBorder p="sm">
           <Stack gap="xs">
-            {Array.from({ length: options }, (_, i) => (
+            {Array.from({ length: rows }, (_, i) => (
               <div key={i}>
                 <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
                   <Skeleton height={bar.line} width="35%" radius="sm" />

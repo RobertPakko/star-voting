@@ -4288,6 +4288,44 @@ Two consequences, which the modal states rather than hides:
   option scoring too low to reach the first runoff enters the ladder below
   options it would have beaten. Only first place is what STAR itself produces.
 
+#### The page stops at twenty rows
+
+Two of the lists on a results page have no natural ceiling, and a schedule
+poll reaches both. The score round is a row per option, and an option there is
+a half-hour window: a working week of them is over a hundred rows, and
+`MAX_OPTIONS` allows five hundred. A head-to-head tie-break is a row per
+*pair* in the tied group, which is quadratic, and windows tie at the top score
+readily -- thirty of them level is four hundred and thirty-five lines of
+working. Either one buries the runoff card, the full-ranking button and the
+published ballots under a document nobody scrolls to the end of, in front of
+a reader who came for the name in the green card at the top.
+
+So both stop at [`RESULTS_ROWS_MAX`](src/lib/resultsRows.ts) rows and say what
+they left out: the score round, the per-option totals and the pair list inside
+a head-to-head step, the five-star step's list, and the names in the sentence
+saying who tied (`NameList`'s `max`, which counts the rest as "and 28 others"
+rather than naming them). `capRows` makes the cut and `count` words the
+remainder; `TallyShape` draws to the same ceiling, so the shape standing in
+for a long tally is not four screens taller than the tally.
+
+**Nothing is hidden by it.** The whole field in placed order is behind the
+button underneath, and any poll long enough to be cut short has that button --
+it appears from three options up. The line under a cut-short score round says
+so.
+
+**The cut is in the browser, not in `poll_tally`.** The tally's option list is
+not only the score round. `FullRanking` reads its names out of it and names
+every place down to last, so a payload that stopped at twenty would leave the
+modal drawing places it could not label -- and the option count it decides
+whether to offer a button at all from would be a count of the rows the page
+drew. The rows are a few hundred bytes that are already in hand; what was long
+was the page.
+
+It also ends an animation that had grown into a wait. The score bars are
+staggered 40ms apart (`Results.module.css`), which is a reading of the ranking
+over ten options and five and a half seconds of bars still arriving over a
+hundred and thirty-seven.
+
 ### Tie-breaks
 
 Documented for readers on the `/about` page (`src/pages/About.tsx`) and

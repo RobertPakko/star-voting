@@ -16,13 +16,14 @@ import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
 import { parseAnswer, pollResultsSchema } from '../lib/rpcSchemas'
 import { relabelResults } from '../lib/schedule'
-import type { HeadToHeadStep, Matchup, PollResults } from '../lib/types'
+import type { FiveStarStep, HeadToHeadStep, Matchup, PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { NameList } from './NameList'
 import { OptionDescription } from './OptionDescription'
 import { Reveal } from './Reveal'
 import { ResultsSkeleton } from './Skeletons'
-import { voters } from '../lib/plural'
+import { count, voters } from '../lib/plural'
+import { capRows, RESULTS_ROWS_MAX } from '../lib/resultsRows'
 import classes from './Results.module.css'
 
 /**
@@ -147,6 +148,12 @@ export function Results({
   const shown = relabelResults(results)
   const nameById = new Map(shown.options.map((o) => [o.id, o.name]))
   const maxScore = Math.max(1, ...shown.options.map((o) => o.total_score))
+  // The score round, as far down it as this page goes. The bars are scaled
+  // against the whole field's best rather than the shown rows' -- the two are
+  // the same number, since the rows are taken off the top -- and the full
+  // ranking below still receives every option, which is what it names places
+  // from. See resultsRows.ts.
+  const scoreRound = capRows(shown.options)
 
   // Wrapped so the tally fades in over the shape that was standing in for it,
   // rather than replacing it between two frames. The winner card below has an
@@ -186,7 +193,7 @@ export function Results({
           <Title order={4}>Score round</Title>
           <Card withBorder p="sm">
             <Stack gap="xs">
-              {shown.options.map((o, index) => (
+              {scoreRound.rows.map((o, index) => (
                 <div key={o.id}>
                   <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
                     <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
@@ -209,6 +216,12 @@ export function Results({
                   />
                 </div>
               ))}
+              {scoreRound.hidden > 0 && (
+                <Text size="sm" c="dimmed">
+                  The {scoreRound.rows.length} highest of {shown.options.length} options. See the
+                  full ranking below for the whole field.
+                </Text>
+              )}
             </Stack>
           </Card>
         </Stack>
@@ -220,7 +233,7 @@ export function Results({
               <Card withBorder key={i} p="sm">
                 <Stack gap="xs">
                   <Text size="sm">
-                    <NameList names={tb.tied} /> tied at {tb.tied_at} pts for{' '}
+                    <NameList names={tb.tied} max={RESULTS_ROWS_MAX} /> tied at {tb.tied_at} pts for{' '}
                     {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}.
                   </Text>
                   {tb.steps.map((step, j) => (
@@ -243,12 +256,7 @@ export function Results({
                       {step.rule === 'head_to_head' ? (
                         <HeadToHead step={step} />
                       ) : (
-                        step.results.map((r) => (
-                          <Text key={r.id} size="sm" c="dimmed" pl="md">
-                            <strong>{r.name}</strong>: {r.value}{' '}
-                            {r.value === 1 ? 'five-star vote' : 'five-star votes'}
-                          </Text>
-                        ))
+                        <FiveStars step={step} />
                       )}
                     </Stack>
                   ))}
@@ -367,25 +375,77 @@ function HeadToHead({ step }: { step: HeadToHeadStep }) {
     )
   }
 
+  // Both lists are cut short on a group large enough to need it, and the pair
+  // list is the one that needs it first: pairs grow as the square of the group,
+  // so a dozen options tied at the top score is sixty-six lines of working
+  // under a tie-break whose answer is the three lines above them. The
+  // denominator stays the whole group -- "3 of 29 matchups won" is the count
+  // the rule made its decision on, whether or not all 29 are listed.
+  const totals = capRows(step.results)
+  const pairs = capRows(matchups)
+
   return (
     <Stack gap={2} pl="md">
       <Text size="sm" c="dimmed">
         Each option meets each of the others one on one, and wins that matchup if more voters scored
         it higher.
       </Text>
-      {step.results.map((r) => (
+      {totals.rows.map((r) => (
         <Text key={r.id} size="sm" c="dimmed">
           {r.name}: {r.value} of {step.results.length - 1} matchups won
         </Text>
       ))}
+      {totals.hidden > 0 && <Rest hidden={totals.hidden} what="option" />}
       <Stack gap={2} mt={4}>
-        {matchups.map((m) => (
+        {pairs.rows.map((m) => (
           <Text key={`${m.a}-${m.b}`} size="sm" c="dimmed">
             {matchupLine(m)}
           </Text>
         ))}
+        {pairs.hidden > 0 && <Rest hidden={pairs.hidden} what="pair" />}
       </Stack>
     </Stack>
+  )
+}
+
+/**
+ * The five-star tie-break: how many ballots gave each tied option full marks.
+ *
+ * Cut short at the same twenty as everything else here. The options this rule
+ * settles a tie *for* are at the top of it — it is read in descending order —
+ * so what a long group loses from the bottom is the options that were never
+ * going to advance on it.
+ */
+function FiveStars({ step }: { step: FiveStarStep }) {
+  const { rows, hidden } = capRows(step.results)
+
+  return (
+    <>
+      {rows.map((r) => (
+        <Text key={r.id} size="sm" c="dimmed" pl="md">
+          <strong>{r.name}</strong>: {r.value}{' '}
+          {r.value === 1 ? 'five-star vote' : 'five-star votes'}
+        </Text>
+      ))}
+      {hidden > 0 && <Rest hidden={hidden} what="option" pl="md" />}
+    </>
+  )
+}
+
+/**
+ * What a cut-short list left out, in the list's own place.
+ *
+ * Said rather than implied, because a list that stops at twenty and says
+ * nothing is a list claiming the poll had twenty of whatever it is counting —
+ * and on this page of all pages a reader is checking numbers against each
+ * other. Dimmed and last: it is the one line here that is about the page
+ * rather than about the poll.
+ */
+function Rest({ hidden, what, pl }: { hidden: number; what: string; pl?: string }) {
+  return (
+    <Text size="sm" c="dimmed" pl={pl}>
+      …and {count(hidden, what)} not shown.
+    </Text>
   )
 }
 

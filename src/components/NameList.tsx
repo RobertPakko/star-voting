@@ -1,4 +1,5 @@
 import { Fragment } from 'react'
+import { count } from '../lib/plural'
 
 /**
  * A run of option names read back inside a sentence: **A**, **B** and **C**.
@@ -13,18 +14,29 @@ import { Fragment } from 'react'
  *
  * Bold, because these are the options themselves rather than the prose
  * around them, which is how all four sites already drew them.
+ *
+ * `max` cuts the run short at that many names and finishes it with the count
+ * of the rest: **A**, **B** and 28 others. For the one of these sentences
+ * that can be given a group of any size — a schedule poll's windows tie at
+ * the top score readily, and every one of them is named in the line saying
+ * what tied — where the sentence is there to say *that* a large group was
+ * level, and naming thirty windows inside it says that less well than
+ * counting them. Left off everywhere else: the names are the sentence.
  */
-export function NameList({ names }: { names: { id: string; name: string }[] }) {
-  const last = names.length - 1
+export function NameList({ names, max }: { names: { id: string; name: string }[]; max?: number }) {
+  const shown = max !== undefined && names.length > max ? names.slice(0, max) : names
+  const rest = names.length - shown.length
+  const last = shown.length - 1
 
   return (
     <>
-      {names.map((entry, index) => (
+      {shown.map((entry, index) => (
         <Fragment key={entry.id}>
-          {index > 0 && (index === last ? ' and ' : ', ')}
+          {index > 0 && (index === last && rest === 0 ? ' and ' : ', ')}
           <strong>{entry.name}</strong>
         </Fragment>
       ))}
+      {rest > 0 && ` and ${count(rest, 'other')}`}
     </>
   )
 }
