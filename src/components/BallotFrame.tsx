@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Card, Divider, Group, Stack, Text } from '@mantine/core'
+import { Button, Card, Group, Stack, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Reveal } from './Reveal'
 
@@ -111,10 +111,7 @@ export function BallotFrame({
       <Stack gap="sm">
         {nameField}
         {questionStrip}
-        <Text size="sm">
-          Rate each option from 0 to 5 stars. 5 is the best score while 0 is the worst.
-        </Text>
-        <Divider />
+
         {arriving ? <Reveal>{children}</Reveal> : children}
 
         {error && (
