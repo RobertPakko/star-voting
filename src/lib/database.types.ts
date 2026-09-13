@@ -372,6 +372,10 @@ export type Database = {
         Args: { p_options: Json; p_poll_id: string }
         Returns: number
       }
+      creator_edit_options: {
+        Args: { p_options?: Json; p_poll_id: string; p_remove?: string[] }
+        Returns: number
+      }
       email_escape: { Args: { p_text: string }; Returns: string }
       finalize_options: { Args: { p_poll_id: string }; Returns: undefined }
       get_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }

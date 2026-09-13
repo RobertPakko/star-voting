@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, Reveal, …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, Reveal, …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), the About page's sample poll, service-worker registration and the held install prompt, shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -269,7 +269,8 @@ as one that changes a result.
 
 ### Trying one out, and taking it back
 
-Three ways, in the order to reach for them.
+Three ways, in the order to reach for them. The first two are how a migration
+is tried; the third is the only way back once one has shipped.
 
 **1. `npm test`, which is already the loop.** `test/build-db.sh` drops the
 throwaway database and builds it again from `supabase/migrations/` on every
@@ -294,23 +295,27 @@ byte-identical — function bodies, column list, constraints and ACLs alike.
 neither appears in these migrations.) Nothing in the repo is needed for this,
 and it is the right tool while the SQL is still moving.
 
-**3. A down file, for a migration already committed.** Once the integration
-has applied something to the live project, a transaction is no longer
-available and the only way back is a script that undoes it.
-[`supabase/rollback/`](supabase/rollback) holds those, one per migration that
-has one:
+**3. Another migration, for one that has already shipped.** Once the
+integration has applied something to the live project a transaction is no
+longer available, and the way back is forward: a new migration, at a fresh
+version, that states the schema you want. There are **no down files** — there
+were, under `supabase/rollback/`, and they are gone.
 
-```bash
-psql -d <database> -f supabase/rollback/0055_schedule_polls.down.sql
-```
+They were a poor trade. A down file is a second copy of every definition its
+migration replaced, kept in step with a baseline it is not applied alongside
+and exercised by nothing: `npm test` builds forward from `supabase/migrations/`
+and never runs one, so the only time anybody found out whether one worked was
+the moment they needed it to. And what it restored was never the whole story
+anyway — `0055`'s took `polls.kind` and `polls.schedule` with it, and every
+time poll's grid went too. Writing the correction as an ordinary migration
+costs the same care and is checked by the same suite as everything else.
 
-Deliberately **not** under `supabase/migrations/`, because everything in that
-directory is applied on merge and a down file landing there would undo the
-migration beside it. Each one drops what its migration added, then restores
-every function it replaced to the definition the baseline gives, verbatim —
-including the `REVOKE ALL … FROM PUBLIC` lines, without which a restored
-function is *more* open than the one it replaced. Check one by fingerprinting
-the schema before and after a round trip:
+A migration written to *repair* rather than to add — because the live project
+has drifted from what the repo says, as it did at 0056 — is a special case of
+that, and the one place the care is different: it copies its definitions
+verbatim out of the baseline, grants included, and it has to be a no-op on a
+database that is already right. Both are checkable, by fingerprinting the
+schema and comparing:
 
 ```sql
 select md5(string_agg(x, '|' order by x)) from (
@@ -323,12 +328,13 @@ select md5(string_agg(x, '|' order by x)) from (
     join pg_namespace n on n.oid = t.relnamespace where n.nspname = 'public') s;
 ```
 
-**A down file is not a promise that nothing is lost.** It restores the schema,
-not the data the schema was holding: `0055`'s takes `polls.kind` and
-`polls.schedule` with it, and every time poll's grid goes with them. The polls
-survive — their windows are ordinary rows in `candidates` and their ballots
-ordinary rows in `scores`, which is the whole design — and they still tally.
-Nobody can paint a calendar on them again.
+Run it against a build of the repo's own migrations and against the schema the
+remote actually has, apply the repair to the second, and the two numbers should
+meet. Run it either side of applying the repair to the first, and the number
+should not move at all.
+[`0058_schedule_options_again.sql`](supabase/migrations/0058_schedule_options_again.sql)
+is the worked example; see *A version number is used once, ever* below for what
+it repairs and why.
 
 ### Squashing
 
@@ -371,6 +377,41 @@ replacement is easy to review.
 This is not a hypothetical: a plain squash silently dropped the purge schedule
 once. `12_poll_retention` now asserts the job exists, so a squash that loses it
 again fails the suite instead of quietly disabling retention.
+
+### A version number is used once, ever
+
+Not once per file — once. The integration records the number in front of a
+migration's name, and a number in `supabase_migrations.schema_migrations` is a
+number that will never be applied again, whatever file is wearing it now.
+
+**A migration replaced before it ships does not give its number back.**
+`0056_schedule_day_windows.sql` reached `main`, was applied, and put `0056` in
+that table. The next commit deleted it and added `0056_schedule_options.sql` —
+a different migration at the same number — which the integration skipped as
+already applied. So did `0056_baseline.sql`, the squash, for the same reason: a
+third file at 0056. The squash's rename deliberately keeps the version prefix,
+on the sound assumption that the remote already holds the state that number
+stands for; here it did not, and nothing said so.
+
+Nothing caught it for two weeks. `test/build-db.sh` builds a fresh database
+from every file in the directory, so the suite has always run against the
+schema the repo *claims*, and a version the remote skipped is invisible to it —
+the tests, the front end and the committed SQL all agreed with each other about
+a database that disagreed with all three. What surfaced it was a person trying
+to make a poll: `suggest_options` did not exist on the live project, and
+`create_poll` still carried the refusal that migration lifted.
+
+So: **renumber, even when the file you are replacing has never left your
+branch** — you cannot know it has not been applied, and the cost of a spare
+number is nothing. When a remote does fall behind, the fix is a *new* migration
+at a fresh number that re-asserts the definitions out of the baseline;
+[`0058_schedule_options_again.sql`](supabase/migrations/0058_schedule_options_again.sql)
+is the worked example, and *Trying one out, and taking it back* above is how
+one is checked.
+
+`supabase migration list`, which the squash script already prints, is what
+would have shown this at the time: local and remote history side by side, with
+0056 present on both and standing for different things.
 
 ## Tests
 
@@ -717,6 +758,17 @@ earliest cell any day asks about and the latest — so a poll whose Friday runs
 18:00–22:00 and whose Saturday runs 09:00–22:00 is drawn on one axis with
 Friday morning greyed out, rather than on two grids or on one that clips
 whichever day it was not built for. `spanOf` computes it on the way out.
+
+**It is the axis the poll was *created* with, and every grid widens it to hold
+what the poll now holds.** A list that is collected can outgrow the hours its
+creator first drew — that is the whole point of collecting it — and a window
+outside the axis would be a row the grid does not draw: an option nobody can
+see, nobody can rub out, and, on a ballot that demands a score for every
+option, nobody can score. So `axisFor` is what each of the three calendars is
+drawn between: the pair of times that screen is about, widened by `spanOf` of
+whatever is painted or offered outside it. Recomputing `window` on every
+suggestion would be the other way round, and would be a second stored answer
+of exactly the kind the section above is about.
 
 A meeting's length is not stored either — it is `desired_slots * granularity`.
 
@@ -1409,10 +1461,32 @@ card says on screen.
 The gesture is [`PaintTimes`](src/components/PaintTimes.tsx): the same calendar
 again, marking the hours you would *offer* rather than the hours you are free.
 The days are open — a poll collecting its times is asking about days nobody has
-named yet, so the arrows are the whole of the range — and the hours are not,
-because `window` is the grid the ballot will be drawn on and a window outside
-it is one the ballot has no rows for. Taking a suggestion off the list stays
-the creator's job, here as everywhere else.
+named yet, so the arrows are the whole of the range. Taking a suggestion off
+the list stays the creator's job, here as everywhere else.
+
+**The hours were not open, and are now.** They were the poll's stored `window`,
+full stop, so a group could only ever be asked about the hours its creator had
+already thought of: a poll painted 09:00–17:00 had no way to be offered an
+evening, by anybody, ever — the rows were not on the grid and the reason was
+nowhere on the screen. The card now draws `HoursFields`, the same two selects
+the create form has and for the same two jobs (what the grid is drawn between,
+and what clicking a day's heading lays down), and they are this reader's
+working view rather than anything stored: moving them adds nothing to the poll
+and takes nothing away. What makes that safe is the widening above — the axis
+holds everything already offered, so narrowing the pair hides nothing, and a
+window offered at seven in the evening is drawn on every screen that comes
+after it, the ballot included.
+
+**And the *Offer* / *Take off* toggle is gone.** It was a mode to be in for a
+gesture that already says which of the two it means: every gesture on this
+calendar toggles, so marking a stretch that is already marked is how anybody
+says "not that after all" — `fillCells` in `PaintCalendar`, the same rule the
+day heading and the header's range have always answered to. The toggle bought
+one case the brush does not cover, a drag across a half-marked stretch, and
+charged a mode for it on every other. What it meant for somebody who may not
+take a window off the list was narrower still — *Undo*, reaching their own
+unsaved marks and stopping there — which is exactly what painting over them
+does, and the line above the calendar now says so in those words.
 
 **A question of a group may be a calendar.** `create_poll_group` took no kind,
 so every question it made was an ordinary one. It now reads `kind` and
@@ -1443,6 +1517,13 @@ that is half draft. It is counted against what Save would leave behind.
 The two suggestion paths still add straight away and should: that list belongs
 to the group, everybody watching sees a suggestion land as it lands, and that
 is half of what the collecting stage is for.
+
+One request, but for a while not one *edit*: the removals went as a `delete`
+of their own and the additions followed, which is what put the two-option
+floor on a list the creator never asked for. See [The creator can correct the
+options until somebody
+votes](#the-creator-can-correct-the-options-until-somebody-votes) for
+`creator_edit_options`, which is that same draft applied in one go.
 
 ### Deliberately not built yet
 
@@ -2877,6 +2958,33 @@ sends the same letter to everybody but the creator, who pressed it — see
 "the list changed, please look again" round trip, and adding that would be a
 poll that can never open: every confirmation would invite one more suggestion.
 
+**Confirming is the save.** The card holds things this reader has not sent
+yet — an afternoon painted on a time poll's calendar, an option typed into
+the box and not added — and pressing *I have nothing more to add* while one of
+them is still sitting there is not a mistake to warn about. It is the press
+that should put it in: confirming a list is saying *the list in front of me is
+the one I mean*, and what is in front of them includes what they just drew. It
+was two buttons for one intention — **Save times** and then **Confirm
+options** — and a reader who pressed only the second confirmed a list without
+the thing they had spent the last minute painting.
+
+So each list leaves what it is holding where the card can reach it (`DraftHold`
+in `CollectOptions`), and *Confirm options* applies it and then confirms: one
+press, whether or not there was anything outstanding, and nothing confirmed if
+the save is refused — a list the server would not take is not the list they
+were saying yes to. The failure is reported where the reader was looking, on
+the field or under the list, by the list itself.
+
+The calendar keeps a **Save times** of its own only where there is nothing to
+confirm — the creator correcting a ballot's windows, and a soliciting poll's
+creator who did not invite themselves — because there it is the only way the
+painting reaches the poll at all. Adding an option is still its own press while
+the list is still a list, for the reason at the end of [Collecting times, and a
+calendar among several
+questions](#collecting-times-and-a-calendar-among-several-questions): a
+suggestion belongs to the group and lands live for everybody watching. What
+confirming flushes is the one still in the box.
+
 ### The creator can correct the options until somebody votes
 
 Separate from where the options came from, and deliberately blind to it: a
@@ -2910,6 +3018,33 @@ write to `candidates` from any path at all. What `0028` added on top:
   becomes a ballot; a list that already *is* a ballot has no later checkpoint,
   so the floor is applied to the delete itself. Otherwise correcting an option
   list could leave a live poll with one option and no election in it.
+
+**A correction is one edit, and the floor is a rule about where it lands.**
+The card drafts the whole of it — some options going, some coming — and
+applied it as two requests: a `delete` on the rows being dropped, and then
+`creator_add_options`. Which put the poll through a list nobody had asked for
+and nobody ever saw, and the floor above was applied to *that*: a poll of two
+options, corrected to drop one and add two, was refused with *A poll needs at
+least two options* on its way to three.
+[`0059_editing_options_in_one_go.sql`](supabase/migrations/0059_editing_options_in_one_go.sql)
+adds **`creator_edit_options()`**, which takes both halves and applies them in
+one transaction, and moves the floor to the end of it — counted against what
+the edit leaves behind, which is the list the creator actually asked for and
+the only one anybody is offered.
+
+The trigger still judges a bare `delete` a row at a time, because that grant
+is one the browser holds directly and the guard is the whole of what stands
+behind it. What it now steps aside for is a delete inside an edit that has
+said so: `creator_edit_options` names the poll it is mid-edit on in
+`app.editing_options`, transaction-local and cleared the moment the removals
+are in, exactly as `purge_old_polls` sets `app.purging_polls` for
+`broadcast_poll_gone`. The flag names a poll rather than being a bare *on*, so
+an edit of one list cannot lift the floor off another in the same transaction.
+
+A refusal now also leaves the poll exactly as it was. The two-request version
+deleted the rows before the additions were refused, so the card had to throw
+that half of the draft away and the creator was left standing part-way through
+a correction they had made in one press.
 
 The creator reaches it from **Edit options** in `CreatorControls`, and it
 replaces the ballot while it is open — they are two readings of one list, and

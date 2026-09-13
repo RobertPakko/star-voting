@@ -15,6 +15,8 @@ declare
   v_soliciting uuid;
   v_scores jsonb;
   v_extra uuid;
+  v_pizza uuid;
+  v_other uuid;
 begin
   v_creator := tests.sign_in('creator@example.com');
 
@@ -75,6 +77,66 @@ begin
     'at least two options');
 
   -- ------------------------------------------------------------------
+  -- A correction is one edit, and the floor is applied to where it lands.
+  -- ------------------------------------------------------------------
+  --
+  -- Taken apart into a delete and an insert, a swap is judged on a list
+  -- nobody asked for: two options, remove one, and the floor refuses a poll
+  -- that was on its way to three. creator_edit_options takes both halves.
+
+  select id into v_pizza from candidates where poll_id = v_poll and name = 'Pizza';
+
+  perform tests.assert_eq('removing one option and adding two is one edit',
+    creator_edit_options(v_poll,
+      jsonb_build_array(jsonb_build_object('name', 'Ramen'),
+                        jsonb_build_object('name', 'Curry')),
+      array[v_pizza]),
+    2);
+  perform tests.assert_eq('and lands where the creator aimed it',
+    (select count(*)::int from candidates where poll_id = v_poll), 3);
+  perform tests.assert_eq('with the option it dropped gone',
+    (select count(*)::int from candidates where poll_id = v_poll and name = 'Pizza'), 0);
+
+  -- The floor did not go away; it moved to the end of the edit.
+  perform tests.assert_raises('an edit that ends below two options is refused',
+    format('select creator_edit_options(%L, %L, %L)', v_poll, '[]'::jsonb,
+           (select array_agg(id) from candidates
+             where poll_id = v_poll and name in ('Ramen', 'Curry'))),
+    'at least two options');
+  perform tests.assert_eq('and takes none of its removals with it',
+    (select count(*)::int from candidates where poll_id = v_poll), 3);
+
+  -- Which is the same floor a bare delete still meets a row at a time: the
+  -- browser holds that grant, and lifting the check inside an edit is not
+  -- lifting it outside one.
+  delete from candidates where poll_id = v_poll and name = 'Curry';
+  perform tests.assert_raises('a bare delete is still judged on its own',
+    format('delete from candidates where poll_id = %L and name = %L', v_poll, 'Ramen'),
+    'at least two options');
+
+  -- Nobody else's poll, as everywhere else, and nobody else's options: an id
+  -- from another list is not a row this poll's creator may reach through.
+  perform tests.sign_in('voter1@example.com');
+  perform tests.assert_raises('only the creator edits this way',
+    format('select creator_edit_options(%L)', v_poll),
+    'Poll not found');
+  perform tests.sign_in('creator@example.com');
+
+  v_other := create_poll('Elsewhere', null, array['Here', 'There'],
+                         array['voter1@example.com'], 'invite', true, false);
+  select id into v_extra from candidates where poll_id = v_other and name = 'Here';
+  perform creator_edit_options(v_poll, '[]'::jsonb, array[v_extra]);
+  perform tests.assert_eq('an id from another poll is a no-op, not a delete',
+    (select count(*)::int from candidates where poll_id = v_other), 2);
+
+  -- Back to the two it started with, which is a shrink and a growth in one
+  -- press as well.
+  perform creator_edit_options(v_poll, jsonb_build_array(jsonb_build_object('name', 'Pizza')),
+    (select array_agg(id) from candidates where poll_id = v_poll and name = 'Ramen'));
+  perform tests.assert_eq('and an edit may land exactly on the floor',
+    (select count(*)::int from candidates where poll_id = v_poll), 2);
+
+  -- ------------------------------------------------------------------
   -- The first vote closes the window, and a reset reopens it.
   -- ------------------------------------------------------------------
 
@@ -90,6 +152,10 @@ begin
     'already has votes');
   perform tests.assert_raises('and loses none either',
     format('delete from candidates where poll_id = %L and name = %L', v_poll, 'Pizza'),
+    'already has votes');
+  perform tests.assert_raises('however the two halves arrive',
+    format('select creator_edit_options(%L, %L)', v_poll,
+           jsonb_build_array(jsonb_build_object('name', 'Curry'))),
     'already has votes');
 
   perform reset_poll(v_poll);
@@ -117,6 +183,31 @@ begin
   perform tests.assert_raises('because the floor is applied when it becomes a ballot',
     format('select finalize_options(%L)', v_soliciting),
     'at least two options');
+
+  -- And an edit of one is under the same rule as a delete from one: there is
+  -- no floor to land on yet, whichever way the list is being pruned.
+  perform creator_edit_options(v_soliciting,
+    jsonb_build_array(jsonb_build_object('name', 'Ramen')));
+  perform tests.assert_eq('an edit of a list still being collected has no floor either',
+    (select count(*)::int from candidates where poll_id = v_soliciting), 1);
+
+  -- ------------------------------------------------------------------
+  -- And the new door is no wider than the ones beside it.
+  -- ------------------------------------------------------------------
+  --
+  -- `anon` reaches PostgREST as a member of PUBLIC, and a newly created
+  -- function is executable by PUBLIC until told otherwise -- which is easy to
+  -- leave out and invisible when you do.
+
+  perform tests.assert_eq('editing a list is not something anyone can do',
+    (select bool_or(a::text like '=%')
+       from pg_proc p, unnest(coalesce(p.proacl, acldefault('f', p.proowner))) a
+      where p.pronamespace = 'public'::regnamespace and p.proname = 'creator_edit_options'),
+    false);
+  perform tests.assert_eq('while an account can still correct its own poll',
+    has_function_privilege('authenticated',
+      'public.creator_edit_options(uuid, jsonb, uuid[])', 'execute'),
+    true);
 end $$;
 
 rollback;
