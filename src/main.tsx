@@ -8,6 +8,7 @@ import '@mantine/notifications/styles.css'
 import './index.css'
 import { AuthProvider } from './lib/AuthProvider'
 import { ThemeColorMeta } from './components/ThemeColorMeta'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { registerServiceWorker } from './lib/serviceWorker'
 import { reloadOnStaleBuild } from './lib/staleBuild'
 import App from './App.tsx'
@@ -58,13 +59,18 @@ registerServiceWorker()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MantineProvider theme={theme} defaultColorScheme="auto">
-      <ThemeColorMeta />
-      <Notifications />
-      <HashRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </HashRouter>
+      {/* Inside the provider, so the card it falls back to is themed, and
+          outside everything else, so there is nothing left in the app that
+          can throw where this would not catch it. */}
+      <ErrorBoundary>
+        <ThemeColorMeta />
+        <Notifications />
+        <HashRouter>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </HashRouter>
+      </ErrorBoundary>
     </MantineProvider>
   </StrictMode>,
 )

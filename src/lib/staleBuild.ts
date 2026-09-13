@@ -16,9 +16,10 @@
  * long the tab stays open, which on a phone, or in the installed app, is days.
  *
  * Nothing is wrong until the tab reaches for one of those files. Then the
- * import 404s, and since a rejected `lazy()` throws during render with nothing
- * catching it, React unmounts the app: a blank page, and "Failed to fetch
- * dynamically imported module" in a console the reader is not looking at.
+ * import 404s and the rejected `lazy()` throws during render, which is the end
+ * of the page it was on: components/ErrorBoundary.tsx catches it below the
+ * root and asks the reader to refresh, which is a good deal better than the
+ * blank page that used to be there and still worse than not having to.
  *
  * What fixes it is a reload -- the page is fetched network-first (see
  * public/sw.js) so it comes back naming the files that do exist. This does
@@ -89,7 +90,8 @@ export function reloadOnStaleBuild(): void {
       // Storage refused -- private browsing, or a policy. A reload we cannot
       // write down is one we cannot recognise the repeat of, which is exactly
       // the case that loops, so this is where we stop and let the error
-      // through. The reader gets the refresh they were getting before.
+      // through -- to the boundary at the root, which asks the reader for the
+      // refresh rather than taking it.
       return
     }
     window.location.reload()

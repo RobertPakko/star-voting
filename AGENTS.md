@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -1810,6 +1810,37 @@ survive the same test because both are still reachable holding nothing.
 The one wait that is still a spinner is the app's own boot, before the session
 is known — at that point there is no page to draw the shape of.
 
+### When a wait ends badly
+
+Everything above is about a wait that ends. The one that does not is a render
+that throws, and what React does with an error that reaches the root uncaught
+is unmount the tree: not an error screen but an empty `#root`, which is the one
+state this app can be in where a reader cannot tell a broken page from a slow
+one. Every shape in `Skeletons.tsx` exists to stop a wait looking like a
+failure; a blank page is a failure that looks like a wait.
+
+[`components/ErrorBoundary.tsx`](src/components/ErrorBoundary.tsx) is what
+stands there instead, and it says the two things
+[`NotFound`](src/pages/NotFound.tsx) says: what happened, and that the reader
+is not stuck. The way out is a refresh, because for everything this stands to
+catch a fresh page is the only thing that clears it — the code already loaded
+is in a state this page cannot get out of. It promises no more than that: the
+second sentence says that a refresh which does not help means the fault is at
+our end, rather than leaving somebody refreshing a page that is never going to
+come good.
+
+**Above the router rather than inside it.** A boundary per route would keep the
+header up and look better, and would also be a boundary that is part of what
+broke — `Layout` and the router are the two things most worth surviving an
+error in. This one sits directly under `MantineProvider`, so the card is themed
+and nothing else in the app is outside it. It does not reset on navigation:
+there is nothing to go back to that has not already failed once, and a boundary
+that clears itself flickers the app back through the thing that threw.
+
+The error it will meet most often is the one
+[a deploy leaves behind](#a-deploy-takes-the-old-build-with-it) when the reload
+for it has already been spent.
+
 
 ## Motion
 
@@ -1956,9 +1987,11 @@ dead chunk is a second reader who should get their own reload — and **a marker
 that cannot be written means no reload at all**, since a reload nothing
 recorded is one whose repeat cannot be recognised.
 
-What is still not handled is the second failure: it throws, and the blank page
-is what the reader gets, exactly as before. That is the case for an error
-boundary, which the app does not have.
+The second failure is not reloaded for, and that is the case
+[`ErrorBoundary`](src/components/ErrorBoundary.tsx) exists to cover — see
+[When a wait ends badly](#when-a-wait-ends-badly). It catches the throw and
+offers the reader the refresh, rather than the blank page that used to be the
+end of it.
 
 ## Installing it to a home screen
 
