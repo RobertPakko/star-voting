@@ -636,9 +636,23 @@ Four rules govern the telling half:
   ballots and a creator correcting the option list takes rows back off. A page
   told only about arrivals would sit showing a tally that has just been thrown
   away, which is worse than being slow.
-- **One statement, one message.** The triggers are statement-level, so a reset
-  clearing twenty ballots is one message rather than twenty landing on
-  everybody connected.
+- **One change, one message — and a change is a transaction.** The triggers
+  are statement-level, so a reset clearing twenty ballots is one message
+  rather than twenty. That is not far enough on its own: `insert_options`
+  checks each option against the list as it stands, so it loops and writes a
+  row at a time, and five windows painted onto a time poll were five
+  statements and so five messages. Every bulk path went through it —
+  `suggest_options`, `open_poll_suggest_options`, `creator_add_options`,
+  `creator_edit_options`, and `create_poll` with its options and its invitees.
+  So `announce()` holds the unit one level up: it remembers the topics it has
+  already sent to in this transaction and drops the repeats. This is safe
+  because a message carries nothing and `realtime.messages` is an ordinary
+  table — nothing reaches a listener before the commit, and every message
+  means only *re-read*, which the reader does once afterwards and sees the
+  whole change. A second message from one transaction was always a wasted
+  round trip rather than news. It is also why the fix belongs there rather
+  than in each writer: the guarantee covers bulk writes nobody has written
+  yet. See `0060_one_signal_per_change.sql`.
 - **A poll on its way out says one thing, to the lists it was on.** Its rows
   are silent — they cascade behind it, and `broadcast_poll_change` returns early
   when the poll is already gone, which stops a delete broadcasting once per
@@ -649,8 +663,10 @@ Four rules govern the telling half:
   `user:<id>` — `broadcast_poll_gone`, on a **BEFORE** DELETE row trigger,
   because the audience is `invited_voters` and those rows go in the same
   statement. Without it a deleted poll sat on everyone else's list as a card
-  that opens onto *Poll not found*. The unit is the poll, so deleting a
-  five-question group is five messages. **The nightly purge is still silent**:
+  that opens onto *Poll not found*. Deleting a five-question group reaches
+  exactly the lists one question would and tells each of them once, by the
+  rule above: the questions go in one transaction, and a list re-read after it
+  already has all five gone. **The nightly purge is still silent**:
   it can take hundreds of expired polls in one statement, months after anybody
   looked, so `purge_old_polls` raises `app.purging_polls` over its own
   transaction and the trigger stands down.
