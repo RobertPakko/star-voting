@@ -6,7 +6,6 @@ import {
   MonthView,
   ScheduleHeader,
   WeekView,
-  type DayOfWeek,
   type ScheduleEventData,
   type ScheduleViewLevel,
 } from '@mantine/schedule'
@@ -21,9 +20,9 @@ import {
   daysOf,
   formatDay,
   granuleKey,
+  granulesBetween,
   isDaily,
   toMinutes,
-  weekdayOf,
   type Bounds,
   type GranuleKey,
   type ScheduleDay,
@@ -55,7 +54,9 @@ import type { DailyWindow, PollSchedule } from '../lib/types'
  * - In the month view, which has no time grid at all, a day *is* the unit:
  *   `onDayClick` fills one and a drag across several fills those -- on a
  *   pointer that is not a finger; see the view for why touch gets the tap
- *   alone and the scrolling back in exchange.
+ *   alone and the scrolling back in exchange. **A tap on a chip rubs out what
+ *   it covers** (`onEventClick`), which is the way back from the tap that drew
+ *   it.
  * - **Which way a touch means the calendar and which way it means the answer**
  *   is `PAN_SIDEWAYS`, on the two time grids: sideways scrolls the days,
  *   downwards paints.
@@ -279,7 +280,6 @@ export function PaintCalendar({
   dayInBounds,
   confine,
   earliest,
-  hideEmptyWeekdays,
 }: {
   schedule: PollSchedule
   /** The cells that may be painted at all; everything else is drawn greyed. */
@@ -352,22 +352,6 @@ export function PaintCalendar({
    * anything on it.
    */
   earliest?: ScheduleDay
-  /**
-   * Leave out the weekdays the poll has nothing on, in the two grids that are
-   * laid out by weekday.
-   *
-   * A poll about a Friday, a Saturday and a Sunday draws four columns of greyed
-   * cells for the days it is not asking about, and on a phone those four are
-   * most of the width. Dropping them makes the three that matter three times
-   * wider, which is the difference between a grid that is scanned and one that
-   * is scrolled.
-   *
-   * The ballot again, and for the ballot's reason: its bounds are the whole of
-   * what can ever be answered, so a weekday with nothing on it is a weekday
-   * nothing will ever be on. On the two painting screens an empty Monday is an
-   * empty Monday somebody is about to paint.
-   */
-  hideEmptyWeekdays?: boolean
 }) {
   const days = daysOf(bounds)
   const daily = isDaily(schedule)
@@ -511,23 +495,42 @@ export function PaintCalendar({
    * brush of 0 is exempt from it.
    */
   function paint(fromSlot: string, toSlot: string) {
-    // `YYYY-MM-DD HH:mm:ss` on the way in, and the grid is keyed to the
-    // minute; the end is the end of the last slot dragged over, so the range
-    // is half-open.
-    const day = fromSlot.slice(0, 10)
-    const from = toMinutes(fromSlot.slice(11, 16))
-    const to = toMinutes(toSlot.slice(11, 16))
+    fillCells(cellsBetween(fromSlot, toSlot))
+  }
 
-    const keys: GranuleKey[] = []
-    for (let at = from; at < to; at += schedule.granularity) {
-      // Filtered cell by cell rather than day by day, because a day can be in
-      // bounds for part of itself: a drag from 09:00 down a Friday that only
-      // starts at 18:00 marks the evening and leaves the morning alone, rather
-      // than being refused whole.
-      const key = granuleKey(day, at)
-      if (open(key)) keys.push(key)
-    }
-    fillCells(keys)
+  /**
+   * The cells one stretch of a day covers and the poll is asking about -- the
+   * shape a dragged range and a drawn event both arrive in; see
+   * `granulesBetween`.
+   *
+   * Filtered cell by cell rather than day by day, because a day can be in
+   * bounds for part of itself: a drag from 09:00 down a Friday that only
+   * starts at 18:00 marks the evening and leaves the morning alone, rather
+   * than being refused whole.
+   */
+  function cellsBetween(fromSlot: string, toSlot: string): GranuleKey[] {
+    return granulesBetween(fromSlot, toSlot, schedule.granularity).filter(open)
+  }
+
+  /**
+   * Rub out what one drawn block covers, which is what tapping it means.
+   *
+   * The month is where this matters: a day there is filled by tapping it, and
+   * the chip that appears is the only thing left on top of that day -- so the
+   * tap that would take it back lands on the chip and, until this, did
+   * nothing. Two gestures a finger cannot tell apart, one of which worked.
+   *
+   * It clears rather than toggling. The stretch under the chip is by
+   * definition painted, so the only thing "again" could mean is gone.
+   */
+  function erase(event: ScheduleEventData) {
+    // Every event this calendar draws comes back from `runBounds` as wall
+    // clock in the poll's own offset. The library's type also allows a `Date`,
+    // which is the one thing that could carry a reader's zone into this grid,
+    // so it is refused rather than converted.
+    if (typeof event.start !== 'string' || typeof event.end !== 'string') return
+    const keys = cellsBetween(event.start, event.end)
+    if (keys.length > 0) onPaint(keys, 0)
   }
 
   /** What a click covers across a run of days, from one date to another. */
@@ -640,46 +643,6 @@ export function PaintCalendar({
    */
   function fillVisible() {
     fillCells(cellsAcross(inView.from, inView.to))
-  }
-
-  /**
-   * The weekdays with nothing on them **in what is on screen**, which the two
-   * grids laid out by weekday leave out; see `hideEmptyWeekdays`.
-   *
-   * **Asked of the range rather than of the poll**, which is the whole of what
-   * makes it right. A poll about a Saturday, a Sunday and the Monday after
-   * spans two weeks and uses three weekdays, and taken poll-wide that drew
-   * three columns on *both* weeks -- a Monday on the first that the poll is
-   * not asking about, and a Saturday and Sunday on the second. Each week is
-   * its own question, so each is drawn with the days it actually holds: two
-   * columns, then one.
-   *
-   * The month asks the same question of its own month, which is as fine as it
-   * can be: one grid of columns is shared by all its weeks, so per-week is not
-   * a thing a month can express.
-   *
-   * Said through the library's own `weekendDays` and `withWeekendDays`, which
-   * is its one way of dropping a column and the only one that keeps the
-   * month's rows and its event spans in step with the drop. The name is the
-   * library's and not a description of the list: what is in it is what is not
-   * drawn, and a week that does hold a Saturday does not put Saturday in it --
-   * which also spares that day the red the library paints a weekend heading
-   * in, a colour that means nothing on an availability grid.
-   *
-   * Empty where there is nothing to hide, and it can never be all seven: a
-   * range holding no day of the poll is the first case here, and one holding
-   * any day at all has that day's weekday in use.
-   */
-  const onScreen = days.filter((on) => on >= inView.from && on <= inView.to)
-  const emptyWeekdays: DayOfWeek[] =
-    !hideEmptyWeekdays || onScreen.length === 0
-      ? []
-      : ([0, 1, 2, 3, 4, 5, 6] as DayOfWeek[]).filter(
-          (weekday) => !onScreen.some((on) => weekdayOf(on) === weekday),
-        )
-  const byWeekday = {
-    weekendDays: emptyWeekdays,
-    withWeekendDays: emptyWeekdays.length === 0,
   }
 
   // The hours down the side of the two time grids, which the library lays out
@@ -838,8 +801,12 @@ export function PaintCalendar({
             // `cancelled`.
             if (!cancelled.current) fillDays(fromDay, toDay)
           }}
+          // And a tap on what a day's tap put there takes it back; see
+          // `erase`. The chips sit in a layer of their own above the day
+          // buttons, so this is the only handler such a tap reaches -- it
+          // never doubles as a day click.
+          onEventClick={erase}
           getDayProps={(day) => (asks(day) ? {} : outOfBounds)}
-          {...byWeekday}
           firstDayOfWeek={1}
           withOutsideDays={false}
           renderEventBody={eventBody}
@@ -886,7 +853,6 @@ export function PaintCalendar({
           // which control fired. Its accessible name says so too; see LABELS.
           onDateChange={fillDay}
           labels={LABELS}
-          {...byWeekday}
           // The time column: pinned so that scrolling a narrow week sideways
           // does not take the hours with it (STICKY_TIMES), and lined up with
           // the rows it names (`hoursColumn`).

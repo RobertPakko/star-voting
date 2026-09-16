@@ -908,6 +908,31 @@ export function runBounds(run: { day: ScheduleDay; from: number; to: number }): 
   }
 }
 
+/**
+ * And back again: the cells one stretch of a day covers, from
+ * `YYYY-MM-DD HH:mm:ss` at each end.
+ *
+ * The inverse of `runBounds`, and the shape a dragged range arrives in too, so
+ * the calendar reads both through this. Half-open, because the end of a range
+ * is where the last cell finishes rather than where it starts -- and that is
+ * also what makes the `23:59:59` above come back whole: the last cell of a run
+ * reaching midnight starts before it, so `at < to` still holds for it and for
+ * nothing after.
+ *
+ * Both ends are read as wall clock on the day the start names. A stretch never
+ * crosses midnight -- `paintingRuns` breaks its runs at the day -- so there is
+ * one day here and no instant is built from either.
+ */
+export function granulesBetween(start: string, end: string, granularity: number): GranuleKey[] {
+  const day = start.slice(0, 10)
+  const to = toMinutes(end.slice(11, 16))
+  const keys: GranuleKey[] = []
+  for (let at = toMinutes(start.slice(11, 16)); at < to; at += granularity) {
+    keys.push(granuleKey(day, at))
+  }
+  return keys
+}
+
 // ---------------------------------------------------------------------------
 // Reading a time poll's results
 // ---------------------------------------------------------------------------

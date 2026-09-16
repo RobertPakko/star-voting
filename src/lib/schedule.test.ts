@@ -14,8 +14,11 @@ import {
   formatDay,
   formatWindow,
   fromDay,
+  paintingRuns,
+  runBounds,
   granularityFor,
   granuleKey,
+  granulesBetween,
   granulesOf,
   isDaily,
   MEETING_LENGTHS,
@@ -837,21 +840,60 @@ describe('a poll cannot ask about a day that has gone', () => {
   })
 })
 
-describe('which weekdays a poll has nothing on', () => {
-  // What the ballot leaves out of its two weekday grids; see `PaintCalendar`.
+describe('which weekday a date falls on', () => {
   test('a date knows its own weekday, in UTC and never in the reader zone', () => {
     expect(weekdayOf('2026-09-13')).toBe(0)
     expect(weekdayOf('2026-09-14')).toBe(1)
     expect(weekdayOf('2026-09-18')).toBe(5)
-    // The same arithmetic the column heading is drawn from.
+    // The same arithmetic the day label is drawn from.
     expect(formatDay('2026-09-18')).toBe('Fri Sep 18')
   })
+})
 
-  test('a weekend poll uses three of the seven', () => {
-    const weekendOnly = daysOf(
-      painted(['2026-09-18', '2026-09-19', '2026-09-20'], '09:00', '11:00'),
+describe('a drawn block and the cells under it', () => {
+  /**
+   * What tapping a chip in the month view rubs out; see `erase` in
+   * `PaintCalendar`. The chips are drawn from `runBounds` and the tap reads
+   * them back with `granulesBetween`, so the two have to be exact inverses --
+   * a tap that cleared one cell fewer than it covers would leave a chip on
+   * screen that a reader has just asked to be rid of.
+   */
+  function roundTrip(painting: Record<GranuleKey, number>, schedule: PollSchedule) {
+    return paintingRuns(painting, schedule).map((run) =>
+      granulesBetween(runBounds(run).start, runBounds(run).end, schedule.granularity),
     )
-    const used = new Set(weekendOnly.map(weekdayOf))
-    expect([...used].sort()).toEqual([0, 5, 6])
+  }
+
+  test('a run reads back as exactly the cells it was merged from', () => {
+    const painting: Record<GranuleKey, number> = {}
+    for (const key of painted(['2026-09-01'], '09:00', '11:00')) painting[key] = 5
+    expect(roundTrip(painting, threeHours)).toEqual([
+      [...painted(['2026-09-01'], '09:00', '11:00')],
+    ])
+  })
+
+  test('two ratings on one day are two blocks, each covering its own cells', () => {
+    const painting: Record<GranuleKey, number> = {}
+    for (const key of painted(['2026-09-01'], '09:00', '10:00')) painting[key] = 5
+    for (const key of painted(['2026-09-01'], '10:00', '11:00')) painting[key] = 2
+    expect(roundTrip(painting, threeHours)).toEqual([
+      [...painted(['2026-09-01'], '09:00', '10:00')],
+      [...painted(['2026-09-01'], '10:00', '11:00')],
+    ])
+  })
+
+  test('a block running to midnight comes back whole, 23:59:59 and all', () => {
+    const painting: Record<GranuleKey, number> = {}
+    for (const key of painted(['2026-09-01'], '22:00', '24:00')) painting[key] = 4
+    expect(runBounds(paintingRuns(painting, threeHours)[0]).end).toBe('2026-09-01 23:59:59')
+    expect(roundTrip(painting, threeHours)).toEqual([
+      [...painted(['2026-09-01'], '22:00', '24:00')],
+    ])
+  })
+
+  test('a whole-day poll, where one block is one day', () => {
+    const painting: Record<GranuleKey, number> = {}
+    for (const key of wholeDays(['2026-09-01'])) painting[key] = 3
+    expect(roundTrip(painting, retreat)).toEqual([[...wholeDays(['2026-09-01'])]])
   })
 })

@@ -1281,30 +1281,16 @@ the ballot, which is the point; the two painting screens are unconfined and
 must be, since on the create form the bounds *are* the answer and a poll
 collecting its times is asking about days nobody has named yet.
 
-**And its grids leave out the weekdays with nothing on them**
-(`hideEmptyWeekdays`). A poll about a Friday, a Saturday and a Sunday drew four
-columns of greyed cells for the days it was not asking about, and on a phone
-those four were most of the width; dropping them makes the three that matter
-three times wider and takes the week off the horizontal scroll entirely. Said
-through the library's own `weekendDays` with `withWeekendDays={false}`, which
-is its one mechanism for dropping a column and the only one that keeps the
-month's rows and its event spans in step with the drop — the list holds what is
-not drawn rather than what is a weekend, so a week that does hold a Saturday is
-drawn with Saturday in it, and spared the red the library paints a weekend
-heading in.
-
-**It is asked of the range on screen, not of the poll**, which is the part that
-took a second go. A poll about a Saturday, a Sunday and the Monday after uses
-three weekdays and spans two weeks, and the poll-wide answer drew all three
-columns on *both* of them — a Monday on the first week that the poll is not
-asking about, and a Saturday and a Sunday on the second. Each week is its own
-question and is now drawn with the days it actually holds: two columns, then
-one. The month asks the same question of its own month, which is as far as it
-can go — one row of columns is shared by every week of a month grid, so
-per-week is not something a month can say. It is the ballot's alone for the same reason `confine` is:
-its bounds are the whole of what can ever be answered, so a weekday with
-nothing on it is one nothing will ever be on. On the two painting screens an
-empty Monday is an empty Monday somebody is about to paint.
+**Every weekday is drawn, on every view.** The ballot used to leave out the
+weekdays its poll had nothing on — a poll about a Friday, a Saturday and a
+Sunday drew three columns instead of seven — by handing the library's own
+`weekendDays`/`withWeekendDays` a list of the columns to drop. It bought width
+on a phone and cost more than it bought: a week missing four of its days, and a
+month whose columns changed as you paged through it, read as a calendar that
+had gone wrong rather than as one that had been tidied. A greyed day is a
+legible "not this one"; an absent day is a puzzle. So the grids are the
+library's own again, seven columns wide, and out-of-bounds days say so by being
+greyed (`outOfBounds`) rather than by being missing.
 
 **The month view gets one chip per marked block**, which is the ordinary thing
 a Mantine month cell holds: a day with two marked stretches shows `09:00–11:00`
@@ -1312,6 +1298,19 @@ and `14:00–17:00`, and a day answered in whole days shows what it is rated. Th
 cell keeps the library's own height and its own `+n more` — a `maxEventsPerDay`
 of ten reserves room for ten and leaves a month of near-empty cells four times
 taller than they need to be.
+
+**And a tap on a chip rubs out what it covers** (`onEventClick` → `erase`),
+which is the way back from the tap that drew it. Filling a day in the month is
+a tap on the day; the chip that appears then sits on top of that day and is the
+only thing a second tap in the same place can reach, so until this the obvious
+undo landed on a control that did nothing — two gestures a finger cannot tell
+apart, one of which worked. The chips live in a layer of their own above the
+day buttons, so the handler never doubles as a day click. It clears rather than
+toggling: the stretch under a chip is by definition painted, so the only thing
+"again" could mean is gone. A chip's bounds are read back into cells by
+`granulesBetween`, which is `runBounds` inverted and tested against it — a tap
+that cleared one cell fewer than its chip covers would leave the chip on screen
+after the reader had asked to be rid of it.
 
 A chip's text colour is chosen here (`inkFor`) rather than left to the
 calendar: Mantine's variant resolver hands it a colour close enough to its own
