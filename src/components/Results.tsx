@@ -422,15 +422,13 @@ function HeadToHead({ step }: { step: HeadToHeadStep }) {
       </Text>
       {totals.rows.map((r) => (
         <Text key={r.id} size="sm" c="dimmed">
-          {r.name}: {r.value} of {step.results.length - 1} matchups won
+          <strong>{r.name}</strong>: {r.value} of {step.results.length - 1} matchups won
         </Text>
       ))}
       {totals.hidden > 0 && <Rest hidden={totals.hidden} what="option" />}
       <Stack gap={2} mt={4}>
         {pairs.rows.map((m) => (
-          <Text key={`${m.a}-${m.b}`} size="sm" c="dimmed">
-            {matchupLine(m)}
-          </Text>
+          <MatchupLine key={`${m.a}-${m.b}`} matchup={m} />
         ))}
         {pairs.hidden > 0 && <Rest hidden={pairs.hidden} what="pair" />}
       </Stack>
@@ -494,16 +492,27 @@ function renderAdvancedNames(
 }
 
 /** One pair of the tied group, and which way its voters went. */
-function matchupLine(m: Matchup): string {
-  const equal = m.prefers_a === m.prefers_b
+function MatchupLine({ matchup }: { matchup: Matchup }) {
+  const equal = matchup.prefers_a === matchup.prefers_b
   const [ahead, behind, won, lost] =
-    m.prefers_a >= m.prefers_b
-      ? [m.a_name, m.b_name, m.prefers_a, m.prefers_b]
-      : [m.b_name, m.a_name, m.prefers_b, m.prefers_a]
+    matchup.prefers_a >= matchup.prefers_b
+      ? [matchup.a_name, matchup.b_name, matchup.prefers_a, matchup.prefers_b]
+      : [matchup.b_name, matchup.a_name, matchup.prefers_b, matchup.prefers_a]
 
-  return equal
-    ? `${m.a_name} vs ${m.b_name}: ${voters(won)} each, so neither wins`
-    : `${ahead} vs ${behind}: ${voters(won)} to ${lost}`
+  if (equal) {
+    return (
+      <Text size="sm" c="dimmed">
+        <strong>{matchup.a_name}</strong> vs <strong>{matchup.b_name}</strong>: {voters(won)} each,
+        so neither wins
+      </Text>
+    )
+  }
+
+  return (
+    <Text size="sm" c="dimmed">
+      <strong>{ahead}</strong> vs <strong>{behind}</strong>: {voters(won)} to {lost}
+    </Text>
+  )
 }
 
 /**
