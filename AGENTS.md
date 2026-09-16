@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -2937,6 +2937,27 @@ Four rules hold the published setting together:
   has already drawn, and the "not unlocked yet" sentence now picks between the
   two wordings the app already had — *until everyone has voted* for a poll
   with an invite list, *until the poll is closed* for one without.
+- **The grid can be taken away as a file.** A poll's ballots being readable is
+  only half of auditing it: a sheet with fifty voters on it can be read and
+  cannot be *added up*, which is the whole of what checking a STAR result
+  means. So the grid's heading carries a small download beside it
+  (`lib/ballotCsv.ts`) handing over the same rows as a CSV — the same sheet,
+  gated in the database on exactly the terms it is gated on there, so nothing
+  new is disclosed and there is no second endpoint to keep in step. The file
+  is the rows the grid draws, in the order the database answered with, and
+  **no totals line**: the totals are the claim the file exists to let somebody
+  test, and a claim written into the evidence is a row every tool that opens
+  it would have to be told to ignore.
+
+  Two details in that file are not about CSV. A **UTF-8 byte-order mark**,
+  because without one Excel reads the file in its machine's legacy code page
+  and every voter whose name is not plain ASCII opens misspelled. And a
+  **leading apostrophe on any field starting `=`, `+`, `-` or `@`**, because
+  those open a formula in every spreadsheet and both text columns here — the
+  voters' names and the options' — were typed by whoever holds the poll's
+  link. A file this app hands somebody to open in Excel must not be a way to
+  run something in it. Both are tested in `ballotCsv.test.ts`.
+
 - **Voters are told before they vote.** Whether the scores will be published,
   and whether a name will be attached, is on screen and readable before
   anything is sent — nothing about a ballot can be discovered only after it is

@@ -787,7 +787,12 @@ export function PollDetail({
           question already answered. */}
       {!isOpen && status.results_available && poll.show_ballots && (
         <Suspense fallback={<BallotsSkeleton rows={status.voted_count || undefined} />}>
-          <Ballots source={{ kind: 'poll', pollId: poll.id }} initial={ballots} />
+          <Ballots
+            source={{ kind: 'poll', pollId: poll.id }}
+            title={poll.title}
+            question={poll.question_title}
+            initial={ballots}
+          />
         </Suspense>
       )}
 

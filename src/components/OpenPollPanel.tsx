@@ -190,7 +190,12 @@ export function OpenPollPanel({
         {participation}
         {view.poll.show_ballots && (
           <Suspense fallback={<BallotsSkeleton rows={view.voted_count || undefined} />}>
-            <Ballots source={{ kind: 'open', pollId }} initial={ballots} />
+            <Ballots
+              source={{ kind: 'open', pollId }}
+              title={view.poll.title}
+              question={view.poll.question_title}
+              initial={ballots}
+            />
           </Suspense>
         )}
       </Stack>

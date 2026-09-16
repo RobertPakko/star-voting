@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Stack, Table, Text, Title } from '@mantine/core'
+import { ActionIcon, Group, Stack, Table, Text, Title, Tooltip } from '@mantine/core'
+import { DownloadSimpleIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { ballotsCsv, ballotsFileName, downloadCsv } from '../lib/ballotCsv'
 import { Reveal } from './Reveal'
 import { BallotsSkeleton } from './Skeletons'
 import { relabelSheet } from '../lib/schedule'
@@ -26,9 +28,19 @@ export type BallotsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
  */
 export function Ballots({
   source,
+  title,
+  question,
   initial = null,
 }: {
   source: BallotsSource
+  /**
+   * What the poll is called, and what this question of it asks -- the two
+   * halves of the downloaded file's name, and nothing else. Both optional:
+   * a caller that has no title in hand gets `poll-ballots.csv`, which is a
+   * duller filename and the same file.
+   */
+  title?: string
+  question?: string | null
   /**
    * The sheet the read that opened this page already brought, or null when it
    * brought none. `poll_page` carries it on exactly the polls whose page
@@ -110,7 +122,30 @@ export function Ballots({
   return (
     <Reveal>
       <Stack gap={2}>
-        <Title order={4}>Ballots</Title>
+        {/* The download sits on the heading rather than under the grid,
+            because the grid is as long as the poll had voters and a control
+            below it is a control nobody scrolls to. An icon and no label:
+            adding a poll up for yourself is a thing a handful of readers will
+            ever want, and the ones who do go looking for exactly this. Absent
+            on a sheet with no ballots on it, which is a file with nothing in
+            it. See lib/ballotCsv.ts. */}
+        <Group justify="space-between" wrap="nowrap" align="center" gap="xs">
+          <Title order={4}>Ballots</Title>
+          {shown.ballots.length > 0 && (
+            <Tooltip label="Download these ballots as a CSV" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                aria-label="Download these ballots as a CSV"
+                onClick={() =>
+                  downloadCsv(ballotsCsv(shown), ballotsFileName(title ?? '', question))
+                }
+              >
+                <DownloadSimpleIcon size={18} aria-hidden />
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </Group>
         <Table.ScrollContainer minWidth={120 + shown.options.length * 90}>
           <Table striped withTableBorder withColumnBorders>
             <Table.Thead>
