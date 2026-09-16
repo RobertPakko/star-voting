@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Divider, Stack, Text, Title } from '@mantine/core'
-import { isSampleId, openPollRpc } from '../lib/samplePoll'
+import { isSampleId, openPollRpc, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 import { readPollPage } from '../lib/pollPage'
 import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
@@ -350,15 +350,33 @@ export function PublicPoll({
   // a poll with no group asks one question.
   const questionCount = !shell.poll.group_id ? 1 : known ? questions.length : 1
   const onwards = nextUnansweredKey(strip, pollId)
+  /**
+   * And where the sample's last ballot goes, which is the one poll in this app
+   * with somewhere to be after it: the finished copy of itself.
+   *
+   * The About page offers the two copies side by side, and the pair is the
+   * point -- the same poll before and after it was decided. A reader who takes
+   * the first of them and scores all three questions has just done the half of
+   * that the page is really asking for, and the answer to "so what happens to
+   * those" is the other link they have already scrolled past. Left to the rule
+   * above they got *your vote is in* instead, which is a true sentence and a
+   * dead end.
+   *
+   * Only the copy still taking votes, and only from a ballot: a question being
+   * confirmed is a stage earlier, and the finished copy is `finished` and has
+   * nowhere further to send anybody.
+   */
+  const leaving = sample && !onwards && !collecting && !finished ? pollPath(SAMPLE_RESULT_ID) : null
+  const onward = onwards ? pollPath(onwards) : leaving
   // The way on, taken rather than offered, at both stages: whoever has just
   // finished with this question's list or ballot is carried to the next one
   // they owe. Recorded here as well as in `load`, because this path is the
   // one that does not re-read: the page being left is left at once, and the
   // strip on the page being opened has to know what went in.
-  const advance = onwards
+  const advance = onward
     ? () => {
         ;(collecting ? rememberConfirmed : rememberAnswered)(pollId)
-        navigate(pollPath(onwards))
+        navigate(onward)
       }
     : undefined
   // One strip for the page, built here rather than inside the panel's prop,

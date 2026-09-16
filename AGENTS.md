@@ -4716,9 +4716,32 @@ Three consequences worth knowing:
   recorded JSON and most readers never open the sample.
 - **The open copy takes a vote**, and behaves afterwards exactly as a real poll
   does — your vote is in, you can change it, you are on the roster. The ballot
-  is kept in `localStorage` and goes nowhere else, which the poll's own
-  description says in the first line a voter reads.
+  goes nowhere else, which the poll's own description says in the first line a
+  voter reads.
+- **And the vote lasts as long as the visit that cast it.** It used to be kept
+  in `localStorage`, on the reasoning that a sample which forgets is a sample
+  unlike the real thing. It reads the other way round: a real poll is voted in
+  once, and the sample is a thing people come back to — from a talk, from the
+  About page, to show somebody. A reader returning wants the ballot they came
+  to try, not the one they filled in weeks ago behind a *your vote is in* they
+  have to find their way past. So the ballots live in a module-level map in
+  `samplePoll.ts` and `PollPage` clears them (`forgetSampleBallots`) on its way
+  off the poll routes — enough memory to walk the three questions and keep the
+  roster right while that happens, and none by the next arrival. The strip's
+  ticks go with them: a sample question is marked answered exactly where that
+  map holds a ballot, and a tick outliving its ballot would leave a reader on a
+  blank ballot under a strip saying they had finished.
+- **Its last ballot leads to the finished copy.** The About page offers the two
+  side by side and the pair is the point — the same poll before and after it
+  was decided — so a reader who has just scored all three questions is taken to
+  the result rather than left on *your vote is in*, which is a true sentence
+  and a dead end. It is `PublicPoll`'s ordinary "next question you owe" rule
+  (`nextUnansweredKey`) with one more step on the end for the sample alone; a
+  revision does not move anybody, as on any poll.
 - **The sample is never watched.** Subscribing is also what triggers every
   other poll's first read (see [Live updates](#live-updates)), so `PublicPoll`
   reads the sample itself, once. There is nothing on the other end of a
   subscription to a file.
+- **The About page's sample links open in this tab.** They used to open a new
+  one; see `Samples` there for why they no longer do. Its links off the site
+  still get their own tab.

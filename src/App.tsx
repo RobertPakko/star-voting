@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Center, Loader, Text } from '@mantine/core'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './lib/auth'
-import { isSampleId } from './lib/samplePoll'
+import { forgetSampleBallots, isSampleId } from './lib/samplePoll'
 import { questionsCovered, readPollPage } from './lib/pollPage'
 import { pollTopic, useLiveStream } from './lib/useLiveStream'
 import { rememberDestination, takeDestination } from './lib/shareLink'
@@ -232,6 +232,12 @@ function PollPage() {
   // The sample watches nothing: it is answered out of a file in this browser,
   // so there is no topic and `PublicPoll` reads it for itself.
   const liveStatus = useLiveStream(pollId && !sample ? [pollTopic(pollId)] : [], onSignal)
+
+  // A sample ballot lasts as long as the visit that cast it, and this route is
+  // that visit: it stays mounted while a reader walks the sample's three
+  // questions and on to the finished copy, and goes when they leave the poll
+  // addresses altogether. See `SampleBallot` for why the sample forgets at all.
+  useEffect(() => forgetSampleBallots, [])
 
   // A read that failed is remembered against the poll it failed for, so that
   // it is reported rather than retried on every render — but only for as long

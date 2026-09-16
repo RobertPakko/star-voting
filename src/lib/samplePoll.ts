@@ -1,3 +1,4 @@
+import { forgetAnswered } from './questionMarks'
 import { supabase } from './supabase'
 import type { Database } from './database.types'
 import type {
@@ -160,30 +161,45 @@ const ok = (data: unknown): RpcAnswer => ({ data, error: null })
 const failed = (message: string): RpcAnswer => ({ data: null, error: { message } })
 
 /**
- * A ballot cast in the sample, which stays in this browser.
+ * A ballot cast in the sample, which lasts as long as the visit that cast it.
  *
  * Voting is half of what the sample is for, so the open copy takes a vote and
  * behaves afterwards exactly as a real poll does: it says your vote is in, it
  * hands the ballot back to be changed, and it adds you to the roster. What it
  * does not do is tell anybody, which the poll's own description says in the
  * first line a voter reads.
+ *
+ * **And it is not kept.** These lived in `localStorage`, on the reasoning that
+ * a sample which forgets your vote is a sample that behaves unlike the real
+ * thing. It reads the other way round: a real poll is a thing you vote in
+ * once, and the sample is a thing you come back to -- from a talk, from the
+ * About page, to show somebody. A reader returning to it wants the ballot they
+ * came to try, not the one they filled in weeks ago and a *your vote is in*
+ * they have to find their way past. So the visit is the whole of the memory:
+ * enough for the three questions to be walked through and the roster to be
+ * right while that is happening, and gone by the next arrival. `PollPage`
+ * calls `forgetSampleBallots` on its way off the poll routes.
  */
 interface SampleBallot {
   name: string | null
   scores: Record<string, number>
 }
 
-const BALLOTS_KEY = 'star-voting:sample-ballots'
+const ballots = new Map<string, SampleBallot>()
 
-function storedBallots(): Record<string, SampleBallot> {
-  try {
-    return JSON.parse(localStorage.getItem(BALLOTS_KEY) ?? '{}') as Record<string, SampleBallot>
-  } catch {
-    // Private browsing, storage disabled, or something else's key. The sample
-    // is then a poll you can vote in once per page load, which is a smaller
-    // loss than a page that fails to load.
-    return {}
-  }
+/**
+ * Leaving the sample behind; see `SampleBallot`.
+ *
+ * The strip's ticks go with them. They are the same fact written down twice --
+ * a sample question is marked answered exactly where this map holds a ballot
+ * for it -- and a tick outliving the ballot it stands for is the worse half of
+ * what this is here to prevent: a reader coming back to a blank ballot under a
+ * strip saying they had already finished, and a poll that thinks it is over
+ * before its first question has been answered.
+ */
+export function forgetSampleBallots(): void {
+  for (const pollId of ballots.keys()) forgetAnswered(pollId)
+  ballots.clear()
 }
 
 function castLocally(question: SampleQuestion, args: OpenPollArgs): RpcAnswer {
@@ -192,33 +208,24 @@ function castLocally(question: SampleQuestion, args: OpenPollArgs): RpcAnswer {
   const scores: Record<string, number> = {}
   for (const { candidate_id, score } of args.p_scores ?? []) scores[candidate_id] = score
 
-  const ballots = storedBallots()
-  const existing = ballots[args.p_poll_id]
-  ballots[args.p_poll_id] = {
+  const existing = ballots.get(args.p_poll_id)
+  ballots.set(args.p_poll_id, {
     // A revision keeps the name given when the ballot went in, which is what
     // open_poll_revise does: it takes no name at all.
     name: existing ? existing.name : (args.p_voter_name ?? null),
     scores,
-  }
-
-  try {
-    localStorage.setItem(BALLOTS_KEY, JSON.stringify(ballots))
-  } catch {
-    // Nothing to do. The vote is accepted and shown; it just won't survive a
-    // reload, which is the same thing that happens to a real open-poll ballot
-    // whose voter key could not be kept.
-  }
+  })
 
   return ok(null)
 }
 
 /**
- * The recorded view, with this browser's own sample ballot folded into it --
+ * The recorded view, with this visit's own sample ballot folded into it --
  * the three fields `open_poll_view` fills in for whoever presents the voter
  * key that cast one, plus the two counts that a ballot moves.
  */
 function withYourBallot(view: OpenPollView, pollId: string): OpenPollView {
-  const ballot = storedBallots()[pollId]
+  const ballot = ballots.get(pollId)
   if (!ballot) return view
 
   return {

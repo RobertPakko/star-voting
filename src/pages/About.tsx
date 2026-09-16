@@ -14,13 +14,7 @@ import {
   ThemeIcon,
   Title,
 } from '@mantine/core'
-import {
-  ArrowRightIcon,
-  ArrowSquareOutIcon,
-  ChartBarIcon,
-  SignInIcon,
-  StarIcon,
-} from '@phosphor-icons/react'
+import { ArrowRightIcon, ChartBarIcon, SignInIcon, StarIcon } from '@phosphor-icons/react'
 import { useAuth } from '../lib/auth'
 import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 import { pollPath } from '../lib/pollId'
@@ -389,6 +383,13 @@ const PROPERTIES: Entry[] = [
  * The votable copy leads. Reading a result of an election you have not voted
  * in explains the arithmetic; scoring five options yourself explains why the
  * arithmetic is the shape it is, and it takes about fifteen seconds.
+ *
+ * All three go in this tab. The two sample links used to open a new one, on
+ * the theory that the page explaining the sample is worth keeping -- but a
+ * second tab is a thing the reader now has to close, the Back button is the
+ * way everybody already knows back, and on a phone a new tab is a context
+ * switch rather than a window. The external links on this page still open
+ * their own tab (`Ext`), which is the distinction: those leave the app.
  */
 function Samples() {
   // The third card is the only part of this page that depends on who is
@@ -400,7 +401,6 @@ function Samples() {
   return (
     <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
       <Sample
-        newTab
         to={pollPath(SAMPLE_POLL_ID)}
         icon={<StarIcon size={22} weight="fill" aria-hidden />}
         gradient="standard"
@@ -409,7 +409,6 @@ function Samples() {
         action="Sample poll"
       />
       <Sample
-        newTab
         to={pollPath(SAMPLE_RESULT_ID)}
         icon={<ChartBarIcon size={22} aria-hidden />}
         gradient="alt"
@@ -445,7 +444,6 @@ function Sample({
   body,
   action,
   gradient,
-  newTab = false,
 }: {
   to: string
   icon: ReactNode
@@ -453,7 +451,6 @@ function Sample({
   body: string
   action: string
   gradient: 'standard' | 'alt' | 'create'
-  newTab?: boolean
 }) {
   const gradientValue =
     gradient === 'alt'
@@ -481,19 +478,11 @@ function Sample({
         <Button
           component={Link}
           to={to}
-          target={newTab ? '_blank' : undefined}
-          rel={newTab ? 'noopener noreferrer' : undefined}
           fullWidth
           mt="xs"
           variant="gradient"
           gradient={gradientValue}
-          rightSection={
-            newTab ? (
-              <ArrowSquareOutIcon size={16} aria-hidden />
-            ) : (
-              <ArrowRightIcon size={16} aria-hidden />
-            )
-          }
+          rightSection={<ArrowRightIcon size={16} aria-hidden />}
         >
           {action}
         </Button>
