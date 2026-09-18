@@ -9,7 +9,7 @@
 --
 -- The two failures worth guarding are opposite. A change that says nothing is
 -- a stale page. A change that says something once per row is a page that
--- re-reads the poll twenty times because one reset cleared twenty ballots --
+-- re-reads the poll twenty times because one statement moved twenty rows --
 -- so the counts below are as much the point as the topics.
 --
 -- The unit of a change is the **transaction**, not the statement and not the
@@ -97,16 +97,14 @@ begin
   perform tests.assert_eq('closing a poll announces it',
     tests.signals(tests.poll_topic(v_poll)), 1);
 
-  -- Deletes are the half that is easy to forget, and the one that matters
-  -- most: a page told only about arrivals would sit there showing a tally
-  -- that has just been thrown away.
-  -- Two statements -- the ballots deleted, the poll reopened -- and one
+  -- And opening it again, which is the same column moving the other way.
+  -- Two statements -- the questions marked, the close lifted -- and one
   -- transaction, so one message. A page hearing it re-reads once and sees
   -- both halves; hearing it twice would be the same page reading the same
   -- state again.
   perform tests.forget_signals();
-  perform reset_poll(v_poll);
-  perform tests.assert_eq('clearing a poll and reopening it is one change, so one message',
+  perform reopen_poll(v_poll);
+  perform tests.assert_eq('reopening a closed poll is one change, so one message',
     tests.signals(tests.poll_topic(v_poll)), 1);
 
   perform tests.forget_signals();
@@ -114,8 +112,12 @@ begin
   perform tests.assert_eq('an option added announces the poll',
     tests.signals(tests.poll_topic(v_poll)), 1);
 
+  -- Through the creator's own edit rather than a bare delete, because this
+  -- poll has a ballot in it by now and that is the only door open on one.
+  -- See 14_creator_edits_options.
   perform tests.forget_signals();
-  delete from candidates where poll_id = v_poll and name = 'Tacos';
+  perform creator_edit_options(v_poll, '[]'::jsonb,
+    (select array_agg(id) from candidates where poll_id = v_poll and name = 'Tacos'));
   perform tests.assert_eq('and an option taken back off announces it too',
     tests.signals(tests.poll_topic(v_poll)), 1);
 
@@ -270,10 +272,16 @@ begin
   -- ------------------------------------------------------------------
   -- One change, one signal, however many rows it moved.
   --
-  -- reset_poll clears every ballot in one delete and reopens the poll in one
-  -- update. Row triggers would make that forty-one messages on a poll with
-  -- forty votes, each one landing on everybody connected; statement triggers
-  -- made it two; the transaction is one.
+  -- Deletes are the half that is easy to forget, and the one that matters
+  -- most: a page told only about arrivals would sit there showing a tally
+  -- that has just been thrown away. Row triggers would make forty ballots
+  -- leaving forty messages, each one landing on everybody connected;
+  -- statement triggers make it one.
+  --
+  -- Nothing the app offers empties a poll any more -- Reset is gone, and
+  -- deleting the poll itself is announced as the poll going away, further
+  -- down. The trigger behind a bulk delete is still statement-level, and this
+  -- is what says so.
   -- ------------------------------------------------------------------
 
   v_poll := tests.seed_poll(array['Apple', 'Banana'],
@@ -283,8 +291,8 @@ begin
     (select voted_count from poll_status(v_poll)), 3);
 
   perform tests.forget_signals();
-  perform reset_poll(v_poll);
-  perform tests.assert_eq('clearing three ballots and reopening the poll is one signal',
+  delete from ballots where poll_id = v_poll;
+  perform tests.assert_eq('three ballots leaving in one statement is one signal',
     tests.signals(tests.poll_topic(v_poll)), 1);
 
   -- ------------------------------------------------------------------

@@ -4,7 +4,8 @@
 -- database, and send_results_ready_email() returns without doing anything when
 -- it finds no mailer. What can be tested is everything around it: whether the
 -- poll has a result at all, who would be told, and the notice row that makes
--- the announcement happen exactly once and happen again after a reset.
+-- the announcement happen exactly once and happen again after the poll is
+-- reopened and finishes a second time.
 
 begin;
 
@@ -73,26 +74,6 @@ begin
     array['creator@example.com', 'voter1@example.com']);
 
   -- ---------------------------------------------------------------------
-  -- A reset takes the announcement back, so a poll that finishes again is
-  -- announced again.
-  -- ---------------------------------------------------------------------
-  perform tests.sign_in('creator@example.com');
-  perform reset_poll(v_poll);
-
-  perform tests.assert_eq('a reset poll has no result again',
-    poll_results_ready((select p from polls p where p.id = v_poll)), false);
-  perform tests.assert_eq('and its announcement is forgotten',
-    (select count(*)::int from results_notices where poll_id = v_poll), 0);
-
-  perform tests.sign_in('voter1@example.com');
-  perform tests.cast_ballot(v_poll, array[5, 1]);
-  perform tests.sign_in('voter2@example.com');
-  perform tests.cast_ballot(v_poll, array[2, 4]);
-
-  perform tests.assert_eq('finishing a second time announces a second time',
-    (select count(*)::int from results_notices where poll_id = v_poll), 1);
-
-  -- ---------------------------------------------------------------------
   -- Closing is the other way across the line, and an open poll's audience
   -- is its creator: nobody else in it ever gave an address.
   -- ---------------------------------------------------------------------
@@ -143,6 +124,31 @@ begin
        from poll_results_audience((select p from polls p where p.id = v_closed),
                                   'creator@example.com') a),
     array['voter1@example.com', 'voter2@example.com']);
+
+  -- ---------------------------------------------------------------------
+  -- Reopening takes the announcement back, so a poll that finishes a second
+  -- time is announced a second time.
+  --
+  -- Being announced is a property of the poll *being* finished rather than of
+  -- it having once been finished, so the notice row is reconciled with that
+  -- rather than written once and left.
+  -- ---------------------------------------------------------------------
+  perform reopen_poll(v_closed);
+
+  perform tests.assert_eq('a reopened poll has no result again',
+    poll_results_ready((select p from polls p where p.id = v_closed)), false);
+  perform tests.assert_eq('and its announcement is forgotten',
+    (select count(*)::int from results_notices where poll_id = v_closed), 0);
+
+  -- The two who had not voted do, which finishes the poll the other way --
+  -- on turnout rather than on the creator's button.
+  perform tests.sign_in('voter2@example.com');
+  perform tests.cast_ballot(v_closed, array[1, 5]);
+  perform tests.sign_in('creator@example.com');
+  perform tests.cast_ballot(v_closed, array[3, 3]);
+
+  perform tests.assert_eq('finishing a second time announces a second time',
+    (select count(*)::int from results_notices where poll_id = v_closed), 1);
 
   -- ---------------------------------------------------------------------
   -- A poll of several questions is one result and one announcement, filed

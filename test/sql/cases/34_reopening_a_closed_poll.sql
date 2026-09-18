@@ -1,8 +1,9 @@
 -- A closed poll can be opened again, and says so afterwards.
 --
--- Closing used to be one-way: the only path back was `reset_poll`, which buys
--- it by deleting every vote. `reopen_poll` is the other way -- the votes stay,
--- the results go back under their gate, and the poll takes more.
+-- Closing used to be one-way: the only path back was `reset_poll`, which
+-- bought it by deleting every vote and is gone. `reopen_poll` is the other
+-- way -- the votes stay, the results go back under their gate, and the poll
+-- takes more.
 --
 -- What has to hold is what a reader of the result is owed. A poll that showed
 -- its tally and then took another vote is a different thing from one that

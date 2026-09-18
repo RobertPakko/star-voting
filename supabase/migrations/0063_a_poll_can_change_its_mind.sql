@@ -24,21 +24,31 @@
 -- The results page draws a banner for each, under the winner. They are flags
 -- rather than a log on purpose: what a reader needs is to know the tally has a
 -- caveat before they act on it, and *which* option was renamed is not
--- something the banner could usefully say — the ballots were secret either
+-- something the banner could usefully say -- the ballots were secret either
 -- way, and a poll keeps no history of what was scored before.
 --
 -- `reopen_poll` is the third piece: the way back from a close, without the
 -- votes going with it. Everything a reopened poll has to forget it already
 -- forgets, because closing and reopening are the same column moving and the
--- triggers on it have always reconciled rather than assumed — `settle_winner`
+-- triggers on it have always reconciled rather than assumed -- `settle_winner`
 -- takes the winner back off a poll that is taking votes again, and
 -- `notify_results_ready` drops the notice row so a second finish is announced
 -- like the first.
 --
--- `reset_poll` is left exactly as it is. It is no longer offered anywhere in
--- the app — Reset is gone from the Manage poll block, and Duplicate is the
--- true fresh start — but it is still the database's own way of emptying a
--- poll, and the tally suite uses it as one.
+-- And `reset_poll` goes. It existed because those two doors were shut: the
+-- only way to correct a list people had scored, or to take another vote on a
+-- poll that had closed, was to delete every vote in it and ask everybody
+-- again. Both are reachable now without spending anybody's ballot, so the
+-- function that spent them has nothing left to do, and a granted RPC that
+-- empties a poll is not a thing to leave lying behind a button that no longer
+-- exists. Duplicate is what "start again" means now, and it is honest about
+-- being a different poll on a different link.
+--
+-- Nothing else in the schema referred to it. The triggers that reconcile a
+-- poll with having fewer votes than it had -- settle_winner_for_emptied,
+-- notify_results_for_emptied, broadcast_polls_emptied -- stay where they are:
+-- they answer for the whole of their table, and a poll's ballots still leave
+-- in bulk when the poll itself is deleted.
 
 
 -- ---------------------------------------------------------------------------
@@ -508,6 +518,17 @@ begin
   );
 end;
 $$;
+
+
+-- ---------------------------------------------------------------------------
+-- The door that is closing
+-- ---------------------------------------------------------------------------
+--
+-- Dropped rather than left ungranted, so that there is one answer to "can a
+-- poll's votes be thrown away" rather than a function in the schema and a
+-- convention about not calling it.
+
+DROP FUNCTION IF EXISTS "public"."reset_poll"("p_poll_id" "uuid");
 
 
 -- ---------------------------------------------------------------------------

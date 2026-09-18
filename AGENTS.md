@@ -638,12 +638,12 @@ own topic — so what the extra rows buy is one round trip per reader.
 
 Four rules govern the telling half:
 
-- **Deletes are announced as loudly as inserts.** `reset_poll` clears a poll's
-  ballots and a creator correcting the option list takes rows back off. A page
-  told only about arrivals would sit showing a tally that has just been thrown
-  away, which is worse than being slow.
+- **Deletes are announced as loudly as inserts.** A creator correcting the
+  option list takes rows back off, an invitee is withdrawn, a poll is deleted
+  with everything in it. A page told only about arrivals would sit showing a
+  tally that has just been thrown away, which is worse than being slow.
 - **One change, one message — and a change is a transaction.** The triggers
-  are statement-level, so a reset clearing twenty ballots is one message
+  are statement-level, so twenty rows leaving in one delete is one message
   rather than twenty. That is not far enough on its own: `insert_options`
   checks each option against the list as it stands, so it loops and writes a
   row at a time, and five windows painted onto a time poll were five
@@ -1685,8 +1685,9 @@ out*, so the option it elected is fixed until the poll is put back to taking
 votes, and running STAR again in the meantime can only ever produce the same
 answer. `polls.winner_name` holds it. `settle_winner()` fills it in when the
 poll crosses the line into having a result and empties it again when the poll
-goes back over that line — a reopen, or the `reset_poll` this was written for —
-and the three reads that draw the three screens carrying the badge —
+goes back over that line — **Reopen poll**, or the `reset_poll` this was
+written for and which has since gone — and the three reads that draw the three
+screens carrying the badge —
 `list_polls`, `poll_status`, `open_poll_view` — carry it with them. See
 `0047_the_winner_is_kept_with_the_poll.sql` and
 [Reopening a closed poll](#reopening-a-closed-poll).
@@ -3070,11 +3071,11 @@ controls. The creator additionally gets a
 Ending the stage is the other way round — that is something the creator does
 to the *poll*, so **Open poll** is in `CreatorControls`.
 
-**Opening a poll for voting is still one-way.** Neither **Reopen poll** nor
-`reset_poll` behind it puts a finalized list back to collecting: what they
-promise is the same poll taking votes again, and the list everyone was shown
-is part of the same poll. A poll closed while it was still collecting does
-reopen collecting, because that is the stage it was in.
+**Opening a poll for voting is still one-way.** **Reopen poll** does not put a
+finalized list back to collecting: what it promises is the same poll taking
+votes again, and the list everyone was shown is part of the same poll. A poll
+closed while it was still collecting does reopen collecting, because that is
+the stage it was in.
 
 ### Saying you are done adding options
 
@@ -3528,9 +3529,11 @@ promise rather than a new hole in it.
 ### Reopening a closed poll
 
 Closing used to be one-way. The only path back was **Reset**, which bought the
-open poll by deleting every vote in it — so a creator who closed a poll an hour
-early, or who closed the wrong one of two, had a choice between losing nine
-people's ballots and starting a different poll on a different link.
+open poll by deleting every vote in it — so a creator who closed a poll an
+hour early, or who closed the wrong one of two, had a choice between losing
+nine people's ballots and starting a different poll on a different link. That
+is the button `0063` removes, and `reset_poll` goes out of the schema with
+it.
 
 `reopen_poll()` is the third thing that moves `closed_at`, and it moves it back
 to null for **every question in the group at once**, exactly as `close_poll`
@@ -3766,8 +3769,9 @@ and a poll that would take votes again — were otherwise unreachable. Both are
 reachable now without paying for them in other people's votes, so the button
 that charged that price is gone. What is left of "start again" is
 **Duplicate**, which is honest about being a different poll. `reset_poll` is
-still in the database, unreferenced by the app and used by the tally suite as
-a lever; nothing in the UI calls it.
+dropped from the database too, in the same migration: a granted RPC that
+empties a poll is not a thing to leave lying behind a button that no longer
+exists.
 
 Open, close, reopen and delete all confirm in a modal first, and **the modal
 is where what the button will do is spelled out** — none of them carries a
@@ -4181,9 +4185,9 @@ noticed exactly once.
   grants and RLS on with no policies; only the `SECURITY DEFINER` functions
   that maintain it can see it.
 
-- **Reopening takes the notice back.** A poll put back to taking votes —
-  `reopen_poll`, or `reset_poll` behind it — can finish again with a different
-  answer; that is a second result, and the people in it are told about it. So
+- **Reopening takes the notice back.** A poll put back to taking votes by
+  `reopen_poll` can finish again with a different answer; that is a second
+  result, and the people in it are told about it. So
   anything that puts a poll back to taking votes drops its notice row, and
   being announced is a property of the poll *being* finished rather than of it
   having once been finished.
@@ -4252,9 +4256,9 @@ every transient Resend outage into a duplicate on the next vote.
 itself: whether a poll has a result, who would be told for each of the two ways
 a poll can end and who is left out of each — the creator who closed it, the
 voter whose ballot ended it, in whatever case their address arrives — that the
-notice appears exactly once when the poll crosses the line, that a reset takes
-it back and a second finish announces again, and that a group is one notice
-filed against question 1.
+notice appears exactly once when the poll crosses the line, that reopening
+takes it back and a second finish announces again, and that a group is one
+notice filed against question 1.
 
 ### What a poll writes to people
 

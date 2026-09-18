@@ -169,13 +169,13 @@ begin
     format('select close_poll(%L)', v_q2),
     'This poll is already closed');
 
-  perform reset_poll(v_q2);
+  perform reopen_poll(v_q2);
 
-  perform tests.assert_eq('resetting clears every question''s ballots',
-    (select count(*)::int from ballots where poll_id = any(v_questions)), 0);
-  perform tests.assert_eq('and reopens every question',
+  perform tests.assert_eq('reopening acts on every question, like closing',
     (select count(*)::int from polls
       where id = any(v_questions) and closed_at is not null), 0);
+  perform tests.assert_eq('and keeps every ballot already cast',
+    (select count(*)::int from ballots where poll_id = any(v_questions)), 2);
 end $$;
 
 rollback;

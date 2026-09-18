@@ -635,7 +635,6 @@ export type Database = {
         Returns: undefined
       }
       reopen_poll: { Args: { p_poll_id: string }; Returns: undefined }
-      reset_poll: { Args: { p_poll_id: string }; Returns: undefined }
       revise_ballot: {
         Args: { p_poll_id: string; p_scores: Json }
         Returns: undefined

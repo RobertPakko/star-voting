@@ -3,13 +3,13 @@
 -- The winner used to be re-elected on demand by whoever asked, and remembered
 -- only in the browser that asked. Now `polls.winner_name` holds it, filled in
 -- by settle_winner() when the poll crosses the line into having a result and
--- emptied when a reset takes that result away. Five things have to hold, and
--- the first is the one an implementation gets wrong quietly:
+-- emptied when the poll goes back over that line. Five things have to hold,
+-- and the first is the one an implementation gets wrong quietly:
 --
 --  * the ballot that opens the gate is counted *with its scores*, which are
 --    written after the ballot row it belongs to;
---  * a reset takes the answer back, and a second finish gives the second
---    answer rather than the first one again;
+--  * a poll put back to taking votes takes the answer back with it, and a
+--    second finish gives the second answer rather than the first one again;
 --  * "no winner" and "not worked out yet" stay different answers;
 --  * every question in a group gets its answer when the group stops, not
 --    just the question that was closed;
@@ -118,18 +118,21 @@ begin
   select * into v_row from polls where id = v_poll;
   perform tests.assert_eq('closing works the winner out', v_row.winner_name, 'Apple');
 
-  -- The whole reason the answer moved out of the browser. A reset deletes
-  -- every vote and reopens the poll, and it is announced to nobody -- so an
-  -- answer cached anywhere but here outlives the votes it was made of.
-  perform reset_poll(v_poll);
+  -- The whole reason the answer moved out of the browser. Reopening a poll
+  -- puts it back to taking votes and is announced to nobody who is holding a
+  -- cached answer -- so an answer kept anywhere but here outlives the tally
+  -- it was made of.
+  perform reopen_poll(v_poll);
   select * into v_row from polls where id = v_poll;
-  perform tests.assert_null('a reset takes the answer back', v_row.winner_name);
+  perform tests.assert_null('reopening takes the answer back', v_row.winner_name);
   perform tests.assert_null('and says it has none, rather than none yet',
     v_row.winner_settled_at);
 
   -- Voting again, the other way, and closing again: a poll that finishes
-  -- twice has two results, and the second one is the one it reports.
-  perform open_poll_submit(v_poll, tests.open_scores(v_poll, array[0, 5]), 'key-1');
+  -- twice has two results, and the second one is the one it reports. The
+  -- ballot is still there -- reopening keeps every vote -- so this is the
+  -- same voter changing their mind rather than a second one arriving.
+  perform open_poll_revise(v_poll, tests.open_scores(v_poll, array[0, 5]), 'key-1');
   perform tests.sign_in('creator@example.com');
   perform close_poll(v_poll);
 
@@ -141,7 +144,7 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- A reset that reopens a poll nobody ever closed.
+-- A poll nobody ever closed, emptied.
 -- ---------------------------------------------------------------------------
 
 do $$
@@ -150,9 +153,10 @@ declare
   v_row polls;
 begin
   -- An invite poll at full turnout was revealed without ever being closed, so
-  -- reset_poll's `closed_at = null` writes the null it already held and the
-  -- update it makes cannot be what takes the winner back. The ballots going
-  -- away is.
+  -- there is no `closed_at` moving here and no update on polls to hang a
+  -- reconcile off. The ballots going away is what has to do it -- which is
+  -- what deleting the poll does to every question in it, and the statement
+  -- trigger on ballots is the whole of what notices.
   v_poll := tests.seed_poll(array['Apple', 'Banana'], array[[5, 0], [5, 0]]);
 
   select * into v_row from polls where id = v_poll;
@@ -161,9 +165,9 @@ begin
   perform tests.assert_null('with the poll never having been closed',
     v_row.closed_at);
 
-  perform reset_poll(v_poll);
+  delete from ballots where poll_id = v_poll;
   select * into v_row from polls where id = v_poll;
-  perform tests.assert_null('and clearing the ballots takes it back',
+  perform tests.assert_null('and the ballots going away takes it back',
     v_row.winner_settled_at);
 end $$;
 
