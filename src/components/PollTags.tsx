@@ -325,7 +325,7 @@ export function PollStateBadge({
 
   if (closed) {
     // Closed with nothing in it: there is no result to name, and never will
-    // be unless the creator resets it.
+    // be unless the creator opens it again.
     return (
       <Badge color={badgeColor.closed} variant="light" style={{ flexShrink: 0 }}>
         Closed

@@ -1,10 +1,13 @@
--- A poll's creator can correct its option list until somebody votes.
+-- A poll's creator can correct its option list until the poll closes.
 --
 -- The option list makes one promise -- everyone who votes scores the same
 -- list -- and a poll with no ballots in it has nobody who has scored
--- anything, so nothing is broken by changing it there. The window is exactly
--- "no ballots": it opens at creation, closes on the first vote, and reopens
--- if the creator resets. Where the options came from does not enter into it.
+-- anything, so nothing is broken by changing it there. A poll with ballots in
+-- it is a different matter, and the answer is not a refusal: the correction
+-- goes through, every ballot already cast scores a new option zero, and the
+-- poll remembers that its list moved so that its results can say so. The
+-- window closes when the poll does. Where the options came from does not
+-- enter into it.
 
 begin;
 
@@ -137,8 +140,14 @@ begin
     (select count(*)::int from candidates where poll_id = v_poll), 2);
 
   -- ------------------------------------------------------------------
-  -- The first vote closes the window, and a reset reopens it.
+  -- The first vote does not close the window; it marks what goes through it.
   -- ------------------------------------------------------------------
+
+  -- A second invitee, so that the one ballot below leaves the poll voting
+  -- rather than finished: what is under test here is a live poll with votes in
+  -- it, and a poll at full turnout has its results out and a different set of
+  -- rules over it. See 28_one_gate_over_the_results.
+  insert into invited_voters (poll_id, email) values (v_poll, 'voter2@example.com');
 
   select jsonb_agg(jsonb_build_object('candidate_id', id, 'score', 5))
   into v_scores from candidates where poll_id = v_poll;
@@ -147,21 +156,54 @@ begin
   perform submit_ballot(v_poll, v_scores);
 
   perform tests.sign_in('creator@example.com');
-  perform tests.assert_raises('a poll with a vote in it takes no more options',
-    format('select creator_add_option(%L, %L)', v_poll, 'Curry'),
-    'already has votes');
-  perform tests.assert_raises('and loses none either',
+  perform tests.assert_eq('a poll with a vote in it starts unmarked',
+    (select options_edited_after_votes from polls where id = v_poll), false);
+
+  perform creator_add_option(v_poll, 'Curry');
+  perform tests.assert_eq('and still takes an option',
+    (select count(*)::int from candidates where poll_id = v_poll), 3);
+  perform tests.assert_eq('which marks the poll for its results to report',
+    (select options_edited_after_votes from polls where id = v_poll), true);
+
+  -- One score per option per ballot is an invariant, not an accident: the
+  -- tally would read a missing row as zero, and replace_scores would read it
+  -- as a ballot that has come apart and refuse every revision after this.
+  perform tests.assert_eq('the ballot already cast scores the new option zero',
+    (select s.score::int from scores s
+      join candidates c on c.id = s.candidate_id
+     where c.poll_id = v_poll and c.name = 'Curry'), 0);
+  perform tests.assert_eq('and scores every option exactly once',
+    (select count(*)::int from scores s
+      join ballots b on b.id = s.ballot_id where b.poll_id = v_poll), 3);
+
+  -- Which is what keeps the vote changeable over a list that moved.
+  select jsonb_agg(jsonb_build_object('candidate_id', id, 'score', 3))
+  into v_scores from candidates where poll_id = v_poll;
+  perform tests.sign_in('voter1@example.com');
+  perform revise_ballot(v_poll, v_scores);
+  perform tests.assert_eq('so the voter can still change their vote',
+    (select sum(s.score)::int from scores s
+      join ballots b on b.id = s.ballot_id where b.poll_id = v_poll), 9);
+
+  -- The door is the creator's own, and it is the only one that opens. A bare
+  -- delete through the candidates_delete policy is judged as it always was.
+  perform tests.sign_in('creator@example.com');
+  perform tests.assert_raises('a bare delete still takes nothing off a live poll',
     format('delete from candidates where poll_id = %L and name = %L', v_poll, 'Pizza'),
     'already has votes');
-  perform tests.assert_raises('however the two halves arrive',
-    format('select creator_edit_options(%L, %L)', v_poll,
-           jsonb_build_array(jsonb_build_object('name', 'Curry'))),
-    'already has votes');
 
-  perform reset_poll(v_poll);
-  perform creator_add_option(v_poll, 'Curry');
-  perform tests.assert_eq('clearing the votes opens the list again',
-    (select count(*)::int from candidates where poll_id = v_poll), 3);
+  -- And an edit that drops one and adds one, on a poll with votes in it, is
+  -- the same one edit it is anywhere else.
+  select id into v_pizza from candidates where poll_id = v_poll and name = 'Pizza';
+  perform tests.assert_eq('the creator swaps an option on a poll being voted in',
+    creator_edit_options(v_poll,
+      jsonb_build_array(jsonb_build_object('name', 'Katsu')), array[v_pizza]),
+    1);
+  perform tests.assert_eq('and the ballots follow the list',
+    (select count(*)::int from scores s
+      join ballots b on b.id = s.ballot_id where b.poll_id = v_poll), 3);
+  perform tests.assert_eq('with the scores of the option it dropped gone with it',
+    (select count(*)::int from candidates where poll_id = v_poll and name = 'Pizza'), 0);
 
   perform close_poll(v_poll);
   perform tests.assert_raises('a closed poll is not corrected, it is duplicated',

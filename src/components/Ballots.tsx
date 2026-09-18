@@ -59,14 +59,14 @@ export function Ballots({
   const key = source.pollId
 
   // Read every time the grid is drawn, like the tally above it and for the
-  // same reason: a reset takes a poll's ballots away and tells nobody, so a
-  // sheet held for the life of the tab is a sheet that can outlive the votes
-  // on it. See the note in Results.
+  // same reason: a reopened poll takes more ballots and tells nobody who is
+  // holding a sheet, so a sheet held for the life of the tab is a sheet that
+  // can outlive the votes on it. See the note in Results.
   const [sheet, setSheet] = useState<BallotSheet | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Taken once and then gone, for the reason this grid re-reads at all: a
-  // reset takes a poll's ballots away and tells nobody, so a re-read must
-  // never come back with the sheet from before it.
+  // Taken once and then gone, for the reason this grid re-reads at all: the
+  // ballots under it can move, so a re-read must never come back with the
+  // sheet from before it.
   const handoff = useRef(initial)
 
   useEffect(() => {

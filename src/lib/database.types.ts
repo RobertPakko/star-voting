@@ -159,14 +159,17 @@ export type Database = {
           id: string
           kind: string
           mode: string
+          options_edited_after_votes: boolean
           options_finalized_at: string | null
           question_position: number | null
           question_title: string | null
+          reopened_after_reveal: boolean
           schedule: Json | null
           show_ballots: boolean
           show_voters: boolean
           solicit_options: boolean
           title: string
+          votes_after_reveal: boolean
           winner_name: string | null
           winner_settled_at: string | null
         }
@@ -180,14 +183,17 @@ export type Database = {
           id?: string
           kind?: string
           mode?: string
+          options_edited_after_votes?: boolean
           options_finalized_at?: string | null
           question_position?: number | null
           question_title?: string | null
+          reopened_after_reveal?: boolean
           schedule?: Json | null
           show_ballots?: boolean
           show_voters?: boolean
           solicit_options?: boolean
           title: string
+          votes_after_reveal?: boolean
           winner_name?: string | null
           winner_settled_at?: string | null
         }
@@ -201,14 +207,17 @@ export type Database = {
           id?: string
           kind?: string
           mode?: string
+          options_edited_after_votes?: boolean
           options_finalized_at?: string | null
           question_position?: number | null
           question_title?: string | null
+          reopened_after_reveal?: boolean
           schedule?: Json | null
           show_ballots?: boolean
           show_voters?: boolean
           solicit_options?: boolean
           title?: string
+          votes_after_reveal?: boolean
           winner_name?: string | null
           winner_settled_at?: string | null
         }
@@ -625,6 +634,7 @@ export type Database = {
         Args: { p_ballot_id: string; p_poll_id: string; p_scores: Json }
         Returns: undefined
       }
+      reopen_poll: { Args: { p_poll_id: string }; Returns: undefined }
       reset_poll: { Args: { p_poll_id: string }; Returns: undefined }
       revise_ballot: {
         Args: { p_poll_id: string; p_scores: Json }

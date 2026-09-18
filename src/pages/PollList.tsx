@@ -184,8 +184,8 @@ export function PollList() {
   // on it moves; what `list_polls` carries now is not an election but a
   // column the database settled once, when the poll finished. So the badge is
   // final on the first paint, there is nothing in flight for it to wait on,
-  // and a poll reset on another device cannot leave a name on this card that
-  // its votes no longer support. See
+  // and a poll reopened on another device cannot leave a name on this card
+  // that its votes no longer support. See
   // 0047_the_winner_is_kept_with_the_poll.sql.
 
   if (error) {

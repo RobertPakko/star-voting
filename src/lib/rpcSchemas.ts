@@ -238,6 +238,8 @@ export const pollResultsSchema = z.object({
   invited_count: z.number(),
   mode: pollMode,
   closed_early: z.boolean(),
+  options_edited_after_votes: z.boolean().optional(),
+  votes_after_reveal: z.boolean().optional(),
 }) satisfies z.ZodType<PollResults>
 
 export const rankingSchema = z.array(

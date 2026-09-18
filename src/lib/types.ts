@@ -236,9 +236,9 @@ export interface PollStatus {
    * optional.
    *
    * The database settles it once, when the poll crosses into having a result,
-   * and clears it when a reset takes that result away — so it arrives with the
-   * read that draws the page, and a poll reset on another device cannot leave
-   * a name here its votes no longer support.
+   * and clears it when the poll goes back to taking votes — so it arrives with
+   * the read that draws the page, and a poll reopened on another device cannot
+   * leave a name here its votes no longer support.
    */
   winner_name?: string | null
   winner_settled?: boolean
@@ -588,6 +588,24 @@ export interface PollResults {
   mode: PollMode
   /** Closed by the creator before everyone had voted. */
   closed_early: boolean
+  /**
+   * The creator corrected the option list while the poll already held
+   * ballots, so some of the votes below were cast on a different list from
+   * the one they are being counted against. The results page says so under
+   * the winner; see `Results`.
+   *
+   * Optional for the same reason `expires_at` is: this app deploys on push
+   * and its migrations apply on merge, so a browser can be holding this code
+   * against a database whose `poll_tally` predates the column. Absent says
+   * nothing rather than claiming there was no caveat.
+   */
+  options_edited_after_votes?: boolean
+  /**
+   * A vote was cast or changed after this poll had shown somebody its tally,
+   * which it can only have done by being closed and opened again. Optional on
+   * the same terms as the flag above.
+   */
+  votes_after_reveal?: boolean
 }
 
 /** One voter's scores, keyed by option id. */

@@ -10,8 +10,21 @@ import { shortPollId } from '../lib/pollId'
 
 /**
  * Creator-only lifecycle controls: everything the creator does to the *poll*,
- * in one block. Open it for voting, close voting early, correct the options,
- * duplicate it, clear its votes, delete it.
+ * in one block. Open it for voting, close voting early, open it again,
+ * correct the options, duplicate it, delete it.
+ *
+ * Two of those used to be refusals. The option list froze on the first ballot
+ * and a closed poll stayed closed, and both of them sent the creator to
+ * Duplicate — which is a different poll on a different link, and everyone who
+ * had the old one has to be told. They are allowed now, and what stands in
+ * for the refusal is a modal that says what the act will leave behind: the
+ * results carry a banner saying the options moved under the votes, or that
+ * votes moved after the results were out. See the flags on `polls`.
+ *
+ * **Reset is gone.** It cleared every vote to buy back an option list or an
+ * unclosed poll, and both of those are now had without paying for them.
+ * Duplicate is the honest version of what was left: a genuinely fresh poll,
+ * rather than one whose voters are quietly asked to vote a second time.
  *
  * The share link lives here rather than beside the ballot: handing the poll
  * out is something the creator does to the poll, not something a voter needs
@@ -65,22 +78,22 @@ export function CreatorControls({
   const [error, setError] = useState<string | null>(null)
   const [deleteOpened, deleteModal] = useDisclosure(false)
   const [closeOpened, closeModal] = useDisclosure(false)
-  const [resetOpened, resetModal] = useDisclosure(false)
+  const [reopenOpened, reopenModal] = useDisclosure(false)
   const [openOpened, openModal] = useDisclosure(false)
-  const [frozenOpened, frozenModal] = useDisclosure(false)
+  const [lateEditOpened, lateEditModal] = useDisclosure(false)
 
-  async function resetPoll() {
+  async function reopenPoll() {
     setError(null)
     setBusy(true)
-    const { error: rpcError } = await supabase.rpc('reset_poll', { p_poll_id: pollId })
+    const { error: rpcError } = await supabase.rpc('reopen_poll', { p_poll_id: pollId })
     setBusy(false)
-    resetModal.close()
+    reopenModal.close()
 
     if (rpcError) {
       setError(rpcError.message)
       return
     }
-    notifications.show({ message: 'Votes cleared', color: 'green' })
+    notifications.show({ message: 'Voting is open again', color: 'green' })
     onChange()
   }
 
@@ -117,7 +130,7 @@ export function CreatorControls({
   async function deletePoll() {
     setBusy(true)
     // The whole poll, not the question in front of the creator. Close and
-    // reset already act on the group -- they go through functions that walk
+    // reopen already act on the group -- they go through functions that walk
     // it -- and deleting one question of a poll would leave the rest of it
     // standing with a gap in the middle. The row-level security is the same
     // either way: it allows the creator to delete polls they created, and
@@ -138,9 +151,13 @@ export function CreatorControls({
   }
 
   const canClose = !status.is_closed && !status.is_complete && status.voted_count > 0
-  // Nothing to clear on a fresh poll, but a closed one is worth offering
-  // even with no votes, since resetting is the only way to reopen it.
-  const canReset = status.voted_count > 0 || status.is_closed
+  // The way back, and the only state it means anything in. An invite poll
+  // everyone has voted in is revealed by its turnout rather than by its close
+  // -- see poll_gate_open -- so reopening one would put the poll back to
+  // taking votes it has nobody left to take, and leave its results on screen
+  // throughout. The database would allow it and change nothing visible, which
+  // is the worst of both; the button says no instead.
+  const canReopen = status.is_closed && !status.is_complete
   // Ending the collecting stage, and the floor it has to clear: the same two
   // options `create_poll` demands of a poll whose creator wrote the list.
   const canOpen = status.soliciting && !status.is_closed
@@ -152,18 +169,16 @@ export function CreatorControls({
   const short = questions.filter((question) => question.option_count < 2)
   const enoughToOpen = questions.length > 0 ? short.length === 0 : optionCount >= 2
   // Correcting a list that is already a ballot. The database allows it on the
-  // creator's own poll, open, with nobody having voted -- see
-  // 0028_creator_edits_options.sql -- and that is what `optionsEditable` is.
+  // creator's own poll for as long as the poll is open -- votes in it or not,
+  // see 0063 -- so the button is offered for exactly that long and the only
+  // thing that changes is what is said on the way in: with no votes cast
+  // there is nothing to warn anybody about, and with votes cast there is a
+  // modal spelling out what the correction will leave on the results.
   //
-  // The *button* is offered more widely than that, on purpose. It used to
-  // disappear the moment the first vote landed, on a page that otherwise
-  // looked exactly as it had a second earlier, so the only thing a creator
-  // could learn from it was that something they had just been able to do was
-  // gone. Now it stays and says why, and points at the two things that do
-  // work. Closing the poll takes it away, but a poll that has closed rewrites
-  // this whole block and the page under it, so nothing there vanishes
-  // quietly.
-  const optionsEditable = !status.is_closed && status.voted_count === 0
+  // Closing the poll does take it away, and that is not the same problem: a
+  // poll that has closed rewrites this whole block and the page under it, so
+  // nothing there vanishes quietly.
+  const lateEdit = status.voted_count > 0
   const showEditOptions = !status.soliciting && !status.is_closed && !editingOptions
   // Open polls have no invite list, so invited_count is 0 and there is
   // nobody we can say we're cutting off.
@@ -214,17 +229,17 @@ export function CreatorControls({
                 Close poll
               </Button>
             )}
+            {canReopen && (
+              <Button variant="light" color="orange" onClick={reopenModal.open}>
+                Reopen poll
+              </Button>
+            )}
             {showEditOptions && (
               <Button
                 variant="light"
-                onClick={() => (optionsEditable ? onEditOptions(true) : frozenModal.open())}
+                onClick={() => (lateEdit ? lateEditModal.open() : onEditOptions(true))}
               >
                 Edit options
-              </Button>
-            )}
-            {canReset && (
-              <Button variant="light" color="orange" onClick={resetModal.open}>
-                Reset
               </Button>
             )}
             {/* Opens the create form prefilled from this poll, so the copy can
@@ -242,18 +257,24 @@ export function CreatorControls({
         </Stack>
 
         <Modal
-          opened={frozenOpened}
-          onClose={frozenModal.close}
-          title={<Text fw={600}>Cannot edit options</Text>}
+          opened={lateEditOpened}
+          onClose={lateEditModal.close}
+          title={<Text fw={600}>Edit options after voting has started?</Text>}
           centered
         >
           <Stack gap="md">
             <Text size="sm">
-              Options cannot be changed after votes have been cast. You can either reset the votes
-              and correct the list or duplicate the poll and correct the copy.
+              {status.voted_count === 1 ? 'One vote has' : `${status.voted_count} votes have`}{' '}
+              already been cast on the list as it stands. You can still correct it, and the results
+              will carry a note saying the options were edited after votes had been cast.
+            </Text>
+            <Text size="sm" c="dimmed">
+              Ballots already cast score an option you add as zero, and the scores given to an
+              option you remove go with it. Duplicating the poll instead leaves this one alone — but
+              it is a new poll on a new link.
             </Text>
             <Group justify="flex-end">
-              <Button variant="default" onClick={frozenModal.close}>
+              <Button variant="default" onClick={lateEditModal.close}>
                 Cancel
               </Button>
               <Button
@@ -263,14 +284,13 @@ export function CreatorControls({
                 Duplicate
               </Button>
               <Button
-                variant="light"
                 color="orange"
                 onClick={() => {
-                  frozenModal.close()
-                  resetModal.open()
+                  lateEditModal.close()
+                  onEditOptions(true)
                 }}
               >
-                Reset
+                Edit options
               </Button>
             </Group>
           </Stack>
@@ -329,29 +349,28 @@ export function CreatorControls({
         </Modal>
 
         <Modal
-          opened={resetOpened}
-          onClose={resetModal.close}
-          title={<Text fw={600}>Reset poll?</Text>}
+          opened={reopenOpened}
+          onClose={reopenModal.close}
+          title={<Text fw={600}>Reopen this poll?</Text>}
           centered
         >
           <Stack gap="md">
             <Text size="sm">
-              {status.voted_count === 0
-                ? 'This poll has no votes to clear.'
-                : `The ${status.voted_count} current vote${status.voted_count === 1 ? '' : 's'} will be deleted, along with any results.`}
+              Voting opens again on the same poll and the same link, keeping the{' '}
+              {status.voted_count === 1 ? 'one vote' : `${status.voted_count} votes`} already cast.
+              The results go back out of sight until the poll closes again.
             </Text>
-            <Text size="sm">
-              The poll keeps its options{status.invited_count > 0 && ', its invitee list'} and its
-              link
-              {status.is_closed && ', and reopens for voting'}. Everyone who already voted will be
-              able to vote again.
+            <Text size="sm" c="dimmed">
+              {status.voted_count > 0
+                ? 'The results have been seen, so from here the results will carry a note if any vote is added or changed.'
+                : 'Nobody has voted, so there are no results anybody can have seen; the votes this poll takes now are its first.'}
             </Text>
             <Group justify="flex-end">
-              <Button variant="default" onClick={resetModal.close}>
+              <Button variant="default" onClick={reopenModal.close}>
                 Cancel
               </Button>
-              <Button color="orange" onClick={resetPoll} loading={busy}>
-                Reset poll
+              <Button color="orange" onClick={reopenPoll} loading={busy}>
+                Reopen poll
               </Button>
             </Group>
           </Stack>

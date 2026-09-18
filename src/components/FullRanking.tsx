@@ -33,9 +33,10 @@ export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
  * on fifty options takes 19ms. Almost nobody presses the button, so almost
  * nobody should pay for it. See AGENTS.md, "Results and the full ranking".
  *
- * The answer is not held on to, because a creator can reset the poll — which
- * deletes every vote and is announced to nobody. So the wait is once per
- * opening rather than once per reader.
+ * The answer is not held on to, because the votes under it can move: a
+ * creator can open a closed poll again, or correct its options over the votes
+ * already in it, and neither is announced to whoever is reading the ranking.
+ * So the wait is once per opening rather than once per reader.
  */
 export function FullRanking({
   source,

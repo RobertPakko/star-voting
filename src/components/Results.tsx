@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ActionIcon,
   Badge,
@@ -10,7 +10,7 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { InfoIcon } from '@phosphor-icons/react'
+import { InfoIcon, WarningIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
@@ -62,19 +62,21 @@ export function Results({
   //
   // This used to be remembered for the life of the tab, on the grounds that a
   // poll whose results are out has taken its last vote and a second read could
-  // only say the same thing. True — unless the creator resets the poll, which
-  // deletes every vote and is announced to nobody, and then the tally held
-  // here was of votes that no longer exist. That window is gone rather than
-  // narrowed: nothing is held. The head round is cheap now that the full
-  // ranking is fetched only when somebody opens it (see FullRanking), which
-  // is what makes paying for it on every load the easy trade.
+  // only say the same thing. It is not true: a creator can open a closed poll
+  // again and a reopened poll takes more votes, and can correct its options
+  // over the votes it already has — neither is announced to the reader of a
+  // tally held here, which would then be of a poll that has moved on. That
+  // window is gone rather than narrowed: nothing is held. The head round is
+  // cheap now that the full ranking is fetched only when somebody opens it
+  // (see FullRanking), which is what makes paying for it on every load the
+  // easy trade.
   const [results, setResults] = useState<PollResults | null>(null)
   const [error, setError] = useState<string | null>(null)
   // The handed-over tally, taken once and then gone. A ref rather than the
   // prop read straight through, because one read's worth of work already done
   // is a thing that gets used up: this card re-reads whenever it is drawn,
-  // deliberately — a reset takes a poll's votes away and tells nobody — and a
-  // re-read must never come back with the answer from before it.
+  // deliberately — a poll can be reopened and take more votes — and a re-read
+  // must never come back with the answer from before it.
   const handoff = useRef(initial)
   // Whether the bars have been let go. They are drawn at nothing for one
   // frame and then at their real lengths, which is what there is to animate:
@@ -198,6 +200,25 @@ export function Results({
               </Group>
             </Card>
           </Reveal>
+        )}
+
+        {/* What happened to this poll that the numbers below cannot show, said
+            before the working rather than after it: a reader who takes the
+            headline and leaves is exactly the reader who needs it. Under the
+            winner, because the winner is the news and these are a caveat on
+            it; above everything else, because everything else is the
+            arithmetic that produced it. See Caveat. */}
+        {shown.options_edited_after_votes && (
+          <Caveat>
+            The options were edited after votes had been cast, so not everyone scored the same list.
+            A ballot cast before the change scores an option added after it as zero.
+          </Caveat>
+        )}
+        {shown.votes_after_reveal && (
+          <Caveat>
+            These results were revealed, and votes were added or changed afterwards. Whoever voted
+            last could have seen the standings first.
+          </Caveat>
         )}
 
         <Stack gap={2}>
@@ -343,6 +364,41 @@ export function Results({
         <FullRanking source={source} results={shown} />
       </Stack>
     </Reveal>
+  )
+}
+
+/**
+ * Something that happened to this poll after people started voting in it,
+ * stated on the results themselves.
+ *
+ * Both of the things it says are consequences of rules this app deliberately
+ * relaxed: a creator may now correct an option list that already has ballots
+ * scored against it, and may open a closed poll again rather than duplicating
+ * it. Neither is a mistake, and neither is announced as one — but both of them
+ * mean the tally below rests on something a reader would otherwise assume did
+ * not happen, and a result is only worth as much as what the reader knows
+ * about how it was reached.
+ *
+ * Yellow rather than red: nothing here is broken, and the card is not the
+ * news. Yellow rather than the orange the no-winner card wears, so that a tie
+ * and a caveat are never the same colour on the same screen.
+ *
+ * The database says *whether*, not *what*: see the flags on `polls`. A poll
+ * keeps no history of which option was renamed or whose vote moved, because
+ * the ballots it holds are secret and were secret when they were cast, so
+ * there is nothing more truthful to put here than the fact itself.
+ */
+function Caveat({ children }: { children: ReactNode }) {
+  return (
+    <Card withBorder bg="var(--mantine-color-yellow-light)" p="sm">
+      <Group gap="xs" wrap="nowrap" align="flex-start">
+        {/* Nudged down to the text's own line, since the sentence wraps to two
+            or three on a phone and an icon centred against the block would
+            float away from the words it belongs to. */}
+        <WarningIcon size={18} weight="fill" style={{ flexShrink: 0, marginTop: 2 }} />
+        <Text size="sm">{children}</Text>
+      </Group>
+    </Card>
   )
 }
 

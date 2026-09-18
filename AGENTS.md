@@ -523,8 +523,13 @@ Covered: the score round, finalist selection, both score-round tie-break rules,
 the runoff and its tie-breaks, the genuine-tie result, the full ranking, the
 `create_poll` / `submit_ballot` write path the seeding runs through, the two
 windows in which a poll's option list may move — the collecting stage, and the
-creator's own corrections before the first vote, who may say they are done
-adding to that list and what happens when the last of them does — the two ways
+creator's own corrections for as long as the poll is open, including what a
+correction made over votes already cast does to those ballots and the mark it
+leaves on the poll, who may say they are done adding to that list and what
+happens when the last of them does — reopening a closed poll: that the votes
+stay, the winner and the results-ready notice are taken back, that a vote cast
+or changed afterwards marks the poll and the mark reaches the tally, and that
+a poll closed with nothing in it revealed nothing to be late to — the two ways
 a poll runs out of people to wait for, and the two reasons it can be waited on
 after everyone has confirmed, the window in which a voter
 may change their vote and the reveal that closes it, that an open poll's share
@@ -543,7 +548,8 @@ that the total is of the list rather than the page, and that asking past the
 end lands on the last page there is; everything about the results-ready
 announcement except the sending — whether a poll has a result at all, who
 would be told and who is deliberately not, and that the notice is made exactly
-once, forgotten on reset and made again when the poll finishes a second time;
+once, forgotten when the poll goes back to taking votes and made again when it
+finishes a second time;
 and the same half of the other emails — which invitation an address is owed at
 each stage a poll goes through, that the creator is owed none, and who hears
 that a poll opened by hand as against one that opened itself, minus in each
@@ -1650,8 +1656,8 @@ is half of what the collecting stage is for.
 One request, but for a while not one *edit*: the removals went as a `delete`
 of their own and the additions followed, which is what put the two-option
 floor on a list the creator never asked for. See [The creator can correct the
-options until somebody
-votes](#the-creator-can-correct-the-options-until-somebody-votes) for
+options until the poll
+closes](#the-creator-can-correct-the-options-until-the-poll-closes) for
 `creator_edit_options`, which is that same draft applied in one go.
 
 ### Deliberately not built yet
@@ -1674,13 +1680,16 @@ votes](#the-creator-can-correct-the-options-until-somebody-votes) for
 
 ## The winner is kept with the poll
 
-A poll whose results are out has taken its last vote, so the option it elected
-is fixed for good and running STAR again can only ever produce the same
+A poll whose results are out has taken its last vote *for as long as it stays
+out*, so the option it elected is fixed until the poll is put back to taking
+votes, and running STAR again in the meantime can only ever produce the same
 answer. `polls.winner_name` holds it. `settle_winner()` fills it in when the
-poll crosses the line into having a result and empties it when a reset takes
-that result away, and the three reads that draw the three screens carrying the
-badge — `list_polls`, `poll_status`, `open_poll_view` — carry it with them.
-See `0047_the_winner_is_kept_with_the_poll.sql`.
+poll crosses the line into having a result and empties it again when the poll
+goes back over that line — a reopen, or the `reset_poll` this was written for —
+and the three reads that draw the three screens carrying the badge —
+`list_polls`, `poll_status`, `open_poll_view` — carry it with them. See
+`0047_the_winner_is_kept_with_the_poll.sql` and
+[Reopening a closed poll](#reopening-a-closed-poll).
 
 That is one election per result rather than one per reader, and the badge is
 final on the first paint of every screen it appears on.
@@ -1689,13 +1698,14 @@ final on the first paint of every screen it appears on.
 answer used to be fetched per tab from `poll_winners()` and remembered in
 `src/lib/settled.ts` for the life of that tab, along with the tally, the full
 ranking and the ballot grid. A settled poll is settled *unless its creator
-resets it* — reset deletes every vote and reopens the poll, which can then
-finish again with a different answer, and [nobody is told](#creator-controls).
-A tab that reset the poll itself threw its own copy away; every other tab, on
-every other device, kept the name of an option elected by votes that no longer
-existed and drew it as a settled green badge until it was reloaded. The
-answer's living in one place, owned by the thing it is about, is what closes
-that: a reset anywhere reaches everywhere on the next read.
+puts it back to taking votes* — **Reopen poll** today, `reset_poll` when this
+was written — which can then finish again with a different answer, and
+[nobody is told](#creator-controls). A tab that did it itself threw its own
+copy away; every other tab, on every other device, kept the name of an option
+elected by a tally that had moved on and drew it as a settled green badge
+until it was reloaded. The answer's living in one place, owned by the thing it
+is about, is what closes that: a reopen anywhere reaches everywhere on the
+next read.
 
 Nothing in the browser is held on to now: `Results`, `Ballots` and
 `FullRanking` each read on every draw.
@@ -2312,7 +2322,7 @@ Each poll fixes four things when it is created, and none can be changed
 afterwards: `authenticated` has no `UPDATE` grant on the `polls` table at all.
 A poll's terms are settled the moment it exists. Everything that *does* move
 afterwards moves through a `SECURITY DEFINER` function with its own rules —
-`close_poll`, `reset_poll`, `finalize_options`, `creator_add_option` — never
+`close_poll`, `reopen_poll`, `finalize_options`, `creator_add_option` — never
 through a write from the client.
 
 Three of the four are surfaced by `PollTags` (`src/components/PollTags.tsx`)
@@ -2541,12 +2551,12 @@ to make it once rather than once per read.
 
 What that got wrong is that the answer being fixed is a fact about the
 *poll*, not about the reader looking at it. Held per tab, it had to be
-re-derived by every tab and could not be corrected in any of them: a reset
-elsewhere left the name of an option elected by votes that no longer existed
-on every other screen in the world until it was reloaded. Held on the row, it
-is derived once and correct everywhere. `list_polls()` is still one cheap
-`STABLE` query with no election in it — reading a column off a row it has
-already fetched is not one.
+re-derived by every tab and could not be corrected in any of them: a poll put
+back to taking votes elsewhere left the name of an option elected by a tally
+that had moved on, on every other screen in the world, until it was reloaded.
+Held on the row, it is derived once and correct everywhere. `list_polls()` is
+still one cheap `STABLE` query with no election in it — reading a column off a
+row it has already fetched is not one.
 
 So the cost is one election per *result*, rather than one per poll per tab. It
 stops growing with the number of people looking, which is a stronger property
@@ -3060,10 +3070,11 @@ controls. The creator additionally gets a
 Ending the stage is the other way round — that is something the creator does
 to the *poll*, so **Open poll** is in `CreatorControls`.
 
-**Reset votes leaves a finalized poll finalized.** Resetting promises the same
-poll with its votes cleared, and the list everyone was shown is part of the
-same poll. A poll closed while it was still collecting does reopen collecting,
-because that is the stage it was in.
+**Opening a poll for voting is still one-way.** Neither **Reopen poll** nor
+`reset_poll` behind it puts a finalized list back to collecting: what they
+promise is the same poll taking votes again, and the list everyone was shown
+is part of the same poll. A poll closed while it was still collecting does
+reopen collecting, because that is the stage it was in.
 
 ### Saying you are done adding options
 
@@ -3285,24 +3296,50 @@ questions](#collecting-times-and-a-calendar-among-several-questions): a
 suggestion belongs to the group and lands live for everybody watching. What
 confirming flushes is the one still in the box.
 
-### The creator can correct the options until somebody votes
+### The creator can correct the options until the poll closes
 
 Separate from where the options came from, and deliberately blind to it: a
-poll's creator can add and remove options for as long as the poll has **no
-ballots in it**. Before that existed, a typo in an option was permanent the
-moment the ballot was — the fix was to duplicate the poll and send a new link
-out, which costs everyone who already had the old one.
+poll's creator can add and remove options for as long as the poll is **open**.
+Before that existed, a typo in an option was permanent the moment the ballot
+was — the fix was to duplicate the poll and send a new link out, which costs
+everyone who already had the old one.
 
-The window is exactly "no ballots", and nothing else enters into it. Not
-`solicit_options`, which says where the list came from and is frozen either
-way; not `options_finalized_at`, which is a stage. What the option list
-promises is that **everyone who votes scores the same list**, and a poll
-nobody has voted in has nobody who has scored anything — so changing it there
-changes no answer anybody has given. `reset_poll` reopens the window, on the
-same reasoning: everyone is being asked to vote again regardless.
+**The window used to be exactly "no ballots".** The reasoning was that the
+option list promises that *everyone who votes scores the same list*, and a
+poll nobody has voted in has nobody who has scored anything — so changing it
+there changes no answer anybody has given. True, and too strict to be the
+whole rule: the poll where a typo actually gets noticed is the one people have
+started voting in, and "duplicate it and tell nine people the link has moved"
+is a worse answer than an honest one. `0063` opens the window to the whole of
+the poll's open life and makes the poll say what went through it — see
+[The two caveats on a result](#the-two-caveats-on-a-result). What has not
+moved is the promise itself: it is now *kept by being stated* rather than by
+being enforced.
 
-`guard_options_frozen` has always drawn that line and still does, on every
-write to `candidates` from any path at all. What `0028` added on top:
+Nothing else enters into it. Not `solicit_options`, which says where the list
+came from and is frozen either way; not `options_finalized_at`, which is a
+stage. Closing the poll ends it, because a closed poll is a result rather than
+a ballot.
+
+**A late edit lands on the ballots that are already in.** An option added to a
+poll with votes in it is scored zero on every ballot already cast, written
+down rather than inferred: `fill_scores_for_new_option` inserts the rows on
+the `candidates` insert. *One score per option per ballot* is an invariant the
+rest of the schema reads rather than checks — `replace_scores` counts the rows
+it moved and refuses a ballot it could only half-rewrite, `poll_ballots`
+publishes a grid and the CSV is that grid — so a ballot left un-scored on the
+new option would have been a ballot nobody could revise again for the rest of
+the poll's life. Removing an option takes its scores with it, which the
+`ON DELETE CASCADE` on `scores.candidate_id` has always done.
+
+`guard_options_frozen` still draws a line on every write to `candidates` from
+any path at all: a poll with ballots in it takes no change *except* through
+the creator's own correction, which says so in `app.editing_options` — the
+same transaction-local marker the two-option floor already stepped aside for.
+A bare `delete` through the `candidates_delete` policy, or a suggestion
+arriving late, meets the rule exactly as it always did.
+
+What `0028` added on top:
 
 - **`creator_add_option()`**, because `authenticated` has no `INSERT` grant on
   `candidates` and `suggest_option` only serves a poll that is still
@@ -3334,12 +3371,15 @@ the only one anybody is offered.
 
 The trigger still judges a bare `delete` a row at a time, because that grant
 is one the browser holds directly and the guard is the whole of what stands
-behind it. What it now steps aside for is a delete inside an edit that has
-said so: `creator_edit_options` names the poll it is mid-edit on in
-`app.editing_options`, transaction-local and cleared the moment the removals
-are in, exactly as `purge_old_polls` sets `app.purging_polls` for
+behind it. What it steps aside for is a delete inside an edit that has said
+so: `creator_edit_options` names the poll it is mid-edit on in
+`app.editing_options`, transaction-local and held across both halves of the
+edit, exactly as `purge_old_polls` sets `app.purging_polls` for
 `broadcast_poll_gone`. The flag names a poll rather than being a bare *on*, so
 an edit of one list cannot lift the floor off another in the same transaction.
+Since `0063` the same marker is what lifts the *has votes* refusal, and
+`creator_add_option` and `creator_add_options` set it too: one marker, one
+meaning — the creator's own correction, in flight, on this poll.
 
 A refusal now also leaves the poll exactly as it was. The two-request version
 deleted the rows before the additions were refused, so the card had to throw
@@ -3348,20 +3388,21 @@ a correction they had made in one press.
 
 The creator reaches it from **Edit options** in `CreatorControls`, and it
 replaces the ballot while it is open — they are two readings of one list, and
-a poll with no votes in it has no ballot anybody is part-way through. A vote
-arriving while it is open closes it and puts the ballot back.
+the editor is the reading that is being changed.
 
-**The button outlives the window it opens.** It used to disappear the moment
-the first vote landed, on a page that otherwise looked exactly as it had a
-second earlier, so the only thing a creator could learn from it was that
-something they had just been able to do was gone — and nothing said whether
-that was the rule or a bug. It now stays for as long as the poll has a ballot
-and has not closed, and on a poll with votes in it opens a modal that says
-what the rule is and offers the two ways round it: **Clear votes**, which
-reopens the list on this same poll and its same link, and **Duplicate**, which
-starts a fresh poll with the options you want and leaves this one alone. Both
-are buttons in that modal rather than instructions to go and find them — they
-live in the same block the modal is covering.
+**The button is offered for as long as the act is, and what changes is what
+is said on the way in.** With no votes cast it opens the editor directly.
+With votes cast it opens a modal first, which says how many votes are already
+on the list as it stands, that the results will carry a note saying the
+options were edited after voting started, and what a late edit does to those
+ballots — an added option scored zero, a removed option's scores gone with it.
+**Duplicate** is offered beside it, because a fresh poll on a fresh link is
+still the right answer for some corrections; it is a button in that modal
+rather than an instruction to go and find one.
+
+The same sentence is repeated under the editor itself, where **Done** is: the
+creator may have opened the card several minutes ago, and the line that
+matters is the one in front of them while they type.
 
 Closing the poll does take the button away, and that is not the same problem:
 a poll that closes rewrites this whole block and the page under it at once, so
@@ -3483,6 +3524,95 @@ scores filled in where they used to see "your vote is in". The key is
 per-poll, in that browser's `localStorage`, and never leaves it; open polls
 already promise less than invite polls do, and this is inside what they
 promise rather than a new hole in it.
+
+### Reopening a closed poll
+
+Closing used to be one-way. The only path back was **Reset**, which bought the
+open poll by deleting every vote in it — so a creator who closed a poll an hour
+early, or who closed the wrong one of two, had a choice between losing nine
+people's ballots and starting a different poll on a different link.
+
+`reopen_poll()` is the third thing that moves `closed_at`, and it moves it back
+to null for **every question in the group at once**, exactly as `close_poll`
+sets it. It keeps every ballot. It refuses a poll that is not closed, and it is
+the creator's alone.
+
+**Everything a reopened poll has to forget, it already forgets**, and that is
+not luck: closing and reopening are the same column moving, and the triggers on
+that column were written to reconcile rather than to assume.
+
+- `settle_winner` takes the winner back off a poll that is taking votes again —
+  it asks `poll_results_revealed` of every question and clears the answer of
+  any that no longer has one. A poll that finishes a second time is elected
+  again, from the votes it has then. See [The winner is kept with the
+  poll](#the-winner-is-kept-with-the-poll).
+- `notify_results_ready` drops the poll's `results_notices` row, so the second
+  finish is announced like the first. See [Telling people the results are
+  ready](#telling-people-the-results-are-ready).
+- `broadcast_poll_updated` wakes every page holding the poll, which re-reads
+  and puts the results back under their gate.
+
+**The one state it cannot undo is full turnout.** `poll_gate_open` reveals an
+invite poll whose every invitee has voted, closed or not — see [Who can
+vote](#who-can-vote) — so clearing `closed_at` on such a poll leaves its
+results exactly where they were. The database allows it and changes nothing
+visible, which is the worst of both, so `CreatorControls` does not offer the
+button there: **Reopen poll** wants `is_closed && !is_complete`. The way to
+take more votes on a poll everyone has already answered has always been a new
+poll.
+
+### The two caveats on a result
+
+Two of this app's rules were relaxed at once — an option list may be corrected
+with ballots already in it, and a closed poll may take votes again — and both
+of them can move a tally that somebody has already read. Neither is a mistake
+and neither is refused; what they are is **something the reader of the result
+is owed**, so the poll records that it happened and the results page says so.
+
+Two booleans on `polls`, and a third behind them:
+
+| column | means |
+| --- | --- |
+| `options_edited_after_votes` | the option list was corrected while the poll already held ballots |
+| `votes_after_reveal` | a vote was cast or changed after this question had shown its tally |
+| `reopened_after_reveal` | internal: this question was reopened *having* shown its tally, which is what makes the next vote a late one |
+
+The third exists because `poll_results_revealed` is computed from `closed_at`
+and turnout rather than stored, so it goes false the moment the poll reopens
+and cannot answer "was it ever out" afterwards. `reopen_poll` asks it once,
+before it lifts the close, and writes the answer down.
+
+**Flags, not a log.** What a reader needs before acting on a result is that
+there is a caveat on it; *which* option was renamed and *whose* vote moved are
+not things this app could truthfully add. The ballots are secret, and a
+revision overwrites scores in place precisely so that no history of them
+exists — see `ballots.revised_at`. A count of late votes would be the same
+promise half-broken.
+
+**Raised where every door passes.** `votes_after_reveal` is set by
+`ballots_mark_late_votes`, a row trigger on `ballots`: the two submit paths
+insert a row and the two revise paths stamp `revised_at` on one, so a trigger
+on the table catches all four and any fifth somebody adds later.
+`options_edited_after_votes` is set by the three creator functions that write
+options, and only when the edit actually moved something — the option card
+sends the whole list on every save, so most of what arrives is the list as it
+already stands.
+
+**Carried by the tally, not by the poll read.** Both flags travel inside
+`poll_tally`'s json, which means `get_poll_results` and `open_poll_results`
+serve them through the two gates they already have, and everyone who can read
+the result reads the caveat with it. `Results` draws each as a yellow card
+directly under the winner — under it because the winner is the news, above
+everything else because everything else is the arithmetic that produced it,
+and yellow rather than the orange the no-winner card wears so that a tie and a
+caveat are never the same colour on one screen.
+`PollResults.options_edited_after_votes` and `.votes_after_reveal` are optional
+in `types.ts` for the reason `expires_at` is: a browser can be a deploy ahead
+of the database, and a missing flag says nothing rather than claiming there was
+no caveat.
+
+Neither flag is ever cleared. A poll cannot un-edit a list people have already
+scored, and cannot un-show a tally people have already read.
 
 ### The order the options come in
 
@@ -3609,26 +3739,38 @@ they do to the *poll*:
 - **Open poll** — on a poll collecting its options, and only there: finalizes
   the list and lets people vote. One-way. Disabled until the list has the two
   options an election needs, with the reason on a tooltip.
-- **Edit options** — on any poll that has a ballot and has not closed. With no
-  votes in it, it swaps the ballot for the option list so it can be corrected;
-  with votes in it, it says why it can't and offers the two things that do
-  work. The way back out of the editor is **Done**, under the list itself,
-  which saves the correction and then closes the editor, and this button is not
-  offered while that list is up: finishing with something belongs beside the
-  thing, not in a block further down the page. See [The
-  creator can correct the options until somebody
-  votes](#the-creator-can-correct-the-options-until-somebody-votes).
-- **Close voting** — reveals results using the votes cast so far. One-way.
+- **Edit options** — on any poll that has a ballot and has not closed. It
+  swaps the ballot for the option list so it can be corrected; with votes
+  already in the poll it puts a modal in front of that saying what the
+  correction will cost. The way back out of the editor is **Done**, under the
+  list itself, which saves the correction and then closes the editor, and this
+  button is not offered while that list is up: finishing with something
+  belongs beside the thing, not in a block further down the page. See [The
+  creator can correct the options until the poll
+  closes](#the-creator-can-correct-the-options-until-the-poll-closes).
+- **Close voting** — reveals results using the votes cast so far.
+- **Reopen poll** — puts a closed poll back to taking votes, keeping every
+  ballot in it, and puts the results back out of sight until it closes again.
+  Offered only on a poll that is closed *and* not at full turnout, since an
+  invite poll everyone has answered is revealed by its turnout rather than by
+  its close and reopening one would change nothing on screen. See [Reopening a
+  closed poll](#reopening-a-closed-poll).
 - **Duplicate** — opens the create form prefilled from this poll (options,
   invitees, all four settings). Nothing is created until submit, so the copy
   can be edited first, and the original is untouched.
-- **Reset votes** — deletes every vote and reopens the poll, keeping its id,
-  options, invitee list and link. Anyone who already voted can vote again,
-  and they aren't told the poll was reset.
 - **Delete poll** — removes the poll and every vote cast, permanently.
 
-Open, close, reset and delete all confirm in a modal first, and **the modal is
-where what the button will do is spelled out** — none of them carries a
+**There is no Reset.** It deleted every vote in the poll, and it existed
+because the two things a creator actually wanted — a correctable option list
+and a poll that would take votes again — were otherwise unreachable. Both are
+reachable now without paying for them in other people's votes, so the button
+that charged that price is gone. What is left of "start again" is
+**Duplicate**, which is honest about being a different poll. `reset_poll` is
+still in the database, unreferenced by the app and used by the tally suite as
+a lever; nothing in the UI calls it.
+
+Open, close, reopen and delete all confirm in a modal first, and **the modal
+is where what the button will do is spelled out** — none of them carries a
 paragraph of explanation out beside it. A block of six buttons each with its
 own sentence is a block nobody reads, and the sentence that matters is the one
 in front of you at the moment you are deciding, not the one you scrolled past
@@ -3692,7 +3834,7 @@ existing rule widened rather than a second rule to keep in step:
    **"Has anyone answered" stays per question**, so a poll closed with nobody
    having reached question 5 still shows question 1's result, and question 5
    says it took no votes.
-3. **One lifecycle.** `close_poll` and `reset_poll` walk the group, and the
+3. **One lifecycle.** `close_poll` and `reopen_poll` walk the group, and the
    Delete button removes every question. The creator acts on the poll, not on
    the question they happen to be looking at.
 
@@ -4039,11 +4181,12 @@ noticed exactly once.
   grants and RLS on with no policies; only the `SECURITY DEFINER` functions
   that maintain it can see it.
 
-- **A reset takes the notice back.** Reset deletes every vote and reopens the
-  poll, which can then finish again with a different answer; that is a second
-  result, and the people in it are told about it. So anything that puts a poll
-  back to taking votes drops its notice row, and being announced is a property
-  of the poll *being* finished rather than of it having once been finished.
+- **Reopening takes the notice back.** A poll put back to taking votes —
+  `reopen_poll`, or `reset_poll` behind it — can finish again with a different
+  answer; that is a second result, and the people in it are told about it. So
+  anything that puts a poll back to taking votes drops its notice row, and
+  being announced is a property of the poll *being* finished rather than of it
+  having once been finished.
 
 - **`poll_results_ready()` is not `poll_results_revealed()`**, and the
   difference is the one that matters to an inbox. The latter answers about one
@@ -4179,12 +4322,12 @@ is the four letters and the two rules that decide them.
   rule, applied to the same session.
 
 - **Opening needs no notice row, and finishing does.** `options_finalized_at`
-  is written once and nothing puts it back — a reset reopens voting, not the
-  option list — so the two functions that open a poll are the two openings
-  there are, and each writes once. `open_options_when_all_confirmed` still
-  has to check: it runs inside every confirmation and every invitee removal
-  on a soliciting poll, so it announces only where its update actually opened
-  something, and a second call after the poll is open writes to nobody.
+  is written once and nothing puts it back — reopening a poll reopens voting,
+  not the option list — so the two functions that open a poll are the two
+  openings there are, and each writes once. `open_options_when_all_confirmed`
+  still has to check: it runs inside every confirmation and every invitee
+  removal on a soliciting poll, so it announces only where its update actually
+  opened something, and a second call after the poll is open writes to nobody.
 
 - **One letterhead, one mailer, one button.** `poll_email_html` is the card —
   a heading, a sentence, and the button onto the poll with the link repeated

@@ -285,8 +285,8 @@ export function PublicPoll({
   // Handed up to the route, which owns the subscription. Registered for as
   // long as this page is on screen, a settled poll included: an open poll
   // whose results are out has taken its last vote, but its creator can still
-  // reset it, and a reset is the one thing a page that had stopped listening
-  // would not hear. See useLiveStream.
+  // open it again, and that is the one thing a page that had stopped
+  // listening would not hear. See useLiveStream.
   useEffect(() => {
     watch(load)
     return () => watch(null)

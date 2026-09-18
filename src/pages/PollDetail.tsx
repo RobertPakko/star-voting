@@ -138,8 +138,9 @@ export function PollDetail({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Bumped only by creator actions, and used as OpenPollPanel's key so it
-  // remounts. Closing or resetting invalidates a half-filled ballot in the
-  // panel, and remounting is what discards it.
+  // remounts. Closing the poll, opening it again, or correcting its options
+  // invalidates a half-filled ballot in the panel, and remounting is what
+  // discards it.
   const [refreshKey, setRefreshKey] = useState(0)
   // The scores on this reader's own ballot while they are changing it, or
   // null when they are not. Read from the database at the moment they ask
@@ -284,10 +285,10 @@ export function PollDetail({
   const refresh = useCallback(async () => {
     if (!pollId) return true
     // The handed-over tally and sheet are dropped, because this read is not
-    // the one that brought them: a creator resetting the poll takes the results
-    // away and puts them back, so a tally still lying here would be handed to
-    // that card a second time, of votes that have since been deleted. Null is
-    // the card reading for itself.
+    // the one that brought them: a creator reopening the poll takes the
+    // results away and a later close puts them back, so a tally still lying
+    // here would be handed to that card a second time, of a poll that has
+    // moved on since. Null is the card reading for itself.
     //
     // The roster is not dropped — this page holds it for as long as there is a
     // card, and this read replaces it below. Dropping it would blink the card
@@ -364,16 +365,17 @@ export function PollDetail({
   // Handed up to the route, which owns the subscription. Registered for as
   // long as this page is on screen, including while it is showing a settled
   // poll: a poll whose results are out has taken its last vote, but its
-  // creator can still reset it, and a reset is the one thing a page that had
-  // stopped listening would not hear — it would sit showing a tally of votes
-  // that no longer exist. See useLiveStream.
+  // creator can still open it again, and that is the one thing a page that
+  // had stopped listening would not hear — it would sit showing a tally as
+  // settled while the poll went back to taking votes. See useLiveStream.
   useEffect(() => {
     watch(onSignal)
     return () => watch(null)
   }, [watch, onSignal])
 
-  // Close and reset invalidate a ballot half-filled in the open-poll panel,
-  // so they remount it as well as re-reading the poll. A vote doesn't: the
+  // Close, reopen and a correction to the options all invalidate a ballot
+  // half-filled in the open-poll panel, so they remount it as well as
+  // re-reading the poll. A vote doesn't: the
   // ballot it was filling in is gone either way, and a remount would only
   // throw away a panel that is already showing the right thing.
   const reloadAll = useCallback(() => {
@@ -382,20 +384,21 @@ export function PollDetail({
   }, [load])
 
   // Whether the creator may correct the option list as things stand: their own
-  // poll, past the collecting stage, still open, and nobody has voted — the
-  // same terms the database allows it on.
+  // poll, past the collecting stage, and still open — the same terms the
+  // database allows it on. Votes in the poll no longer end it: they change
+  // what the creator is told on the way in and what the results say
+  // afterwards, which is CreatorControls' business and the banner's. See 0063.
   //
-  // Computed above the early returns so the effect below can watch it: a vote
-  // arriving while the editor is open has to put the ballot back, and closing
-  // the editor rather than hiding it is what stops it springing open again if
-  // those votes are later cleared.
+  // Computed above the early returns so the effect below can watch it: the
+  // poll closing while the editor is open has to put the page back, and
+  // closing the editor rather than hiding it is what stops it springing open
+  // again if the poll is later reopened.
   const editable =
     !!poll &&
     !!status &&
     poll.created_by === session?.user.id &&
     !status.soliciting &&
-    !status.is_closed &&
-    status.voted_count === 0
+    !status.is_closed
 
   useEffect(() => {
     if (!editable) setEditingOptions(false)
@@ -625,9 +628,8 @@ export function PollDetail({
           {/* The creator's correction to an option list that is already a ballot,
           in place of that ballot while it is open. It replaces the ballot
           rather than sitting beside it because they are two readings of one
-          list, and a poll with no votes in it has no ballot anybody is
-          part-way through. See 0028_creator_edits_options.sql for when this
-          is allowed at all. */}
+          list. See 0028_creator_edits_options.sql for when this is allowed at
+          all, and 0063 for the votes it may now be done over. */}
           {editingOptions && editable ? (
             <CollectOptions
               source={{ kind: 'creator', pollId: poll.id }}
@@ -641,8 +643,16 @@ export function PollDetail({
               questionStrip={questionStrip}
               // One press out, and it is the save: *Done* puts in whatever the
               // editor is holding and only then closes it. See CollectOptions.
+              // The state of the poll being corrected, said where the
+              // correction is being made rather than only in the modal that
+              // led here: the creator may have opened this card several
+              // minutes ago, and the sentence that matters is the one in
+              // front of them while they type.
               done={{
-                note: 'Nobody has voted yet, so options can still be updated.',
+                note:
+                  status.voted_count > 0
+                    ? 'Votes have already been cast. The results will say the options were edited after voting started.'
+                    : 'Nobody has voted yet, so options can still be updated.',
                 onDone: () => setEditingOptions(false),
               }}
               onChanged={reloadAll}
@@ -652,7 +662,7 @@ export function PollDetail({
              else does; one code path, one set of rules. */
           isOpen ? (
             view && (
-              // Keyed so a close or a reset remounts it; see where refreshKey
+              // Keyed so a close or a reopen remounts it; see where refreshKey
               // is declared. A live refresh only replaces the view prop, which
               // leaves a half-filled ballot inside the panel alone.
               <OpenPollPanel

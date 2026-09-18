@@ -86,9 +86,9 @@ export type LiveStatus = 'connecting' | 'live' | 'offline'
  * by then. Live updates are what such a network costs; the poll is not.
  *
  * **Nothing stops watching while it is on screen**, a settled poll included.
- * Its creator can reset it, which deletes every ballot and broadcasts like
- * everything else, and a page that had stopped listening would sit showing a
- * tally of votes that no longer exist.
+ * Its creator can open it again, which puts the results back under their gate
+ * and broadcasts like everything else, and a page that had stopped listening
+ * would sit showing a settled tally of a poll that is taking votes again.
  *
  * **A hidden tab holds no socket.** Nobody is reading a backgrounded poll, and
  * twenty behind a closed lid should not each hold a connection open. Coming
