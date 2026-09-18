@@ -185,13 +185,6 @@ export function Results({
         {!shown.winner_id && shown.finalists.length === 2 && (
           <Reveal>
             <Card withBorder bg="var(--mantine-color-orange-light)">
-              {/* The news, and the one thing this page can offer a group it
-                has just left without an answer: a coin. It goes on the card
-                that states the tie rather than under the runoff that explains
-                it, because the reader who needs it is the one reading the
-                headline and wondering what happens now — the explanation is a
-                working, and by then the question has moved on to what to do.
-                See CoinFlip. */}
               <Group justify="space-between" align="center" gap="sm">
                 <Text fw={700} size="lg">
                   No winner
@@ -202,22 +195,16 @@ export function Results({
           </Reveal>
         )}
 
-        {/* What happened to this poll that the numbers below cannot show, said
-            before the working rather than after it: a reader who takes the
-            headline and leaves is exactly the reader who needs it. Under the
-            winner, because the winner is the news and these are a caveat on
-            it; above everything else, because everything else is the
-            arithmetic that produced it. See Caveat. */}
         {shown.options_edited_after_votes && (
           <Caveat>
-            The options were edited after votes had been cast, so not everyone scored the same list.
-            A ballot cast before the change scores an option added after it as zero.
+            The options for this poll were edited after votes had been cast; so the integrity of
+            this poll is a little suspect.
           </Caveat>
         )}
         {shown.votes_after_reveal && (
           <Caveat>
-            These results were revealed, and votes were added or changed afterwards. Whoever voted
-            last could have seen the standings first.
+            Votes were added or changed after the results were revealed; so the integrity of this
+            poll is a little suspect.
           </Caveat>
         )}
 

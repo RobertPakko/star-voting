@@ -264,24 +264,12 @@ export function CreatorControls({
         >
           <Stack gap="md">
             <Text size="sm">
-              {status.voted_count === 1 ? 'One vote has' : `${status.voted_count} votes have`}{' '}
-              already been cast on the list as it stands. You can still correct it, and the results
-              will carry a note saying the options were edited after votes had been cast.
-            </Text>
-            <Text size="sm" c="dimmed">
-              Ballots already cast score an option you add as zero, and the scores given to an
-              option you remove go with it. Duplicating the poll instead leaves this one alone — but
-              it is a new poll on a new link.
+              Votes have already been cast. You can still update the options, but the results will
+              carry a note saying the options were edited after votes had been cast.
             </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={lateEditModal.close}>
                 Cancel
-              </Button>
-              <Button
-                variant="light"
-                onClick={() => navigate(`/polls/new?from=${shortPollId(pollId)}`)}
-              >
-                Duplicate
               </Button>
               <Button
                 color="orange"
@@ -356,14 +344,8 @@ export function CreatorControls({
         >
           <Stack gap="md">
             <Text size="sm">
-              Voting opens again on the same poll and the same link, keeping the{' '}
-              {status.voted_count === 1 ? 'one vote' : `${status.voted_count} votes`} already cast.
-              The results go back out of sight until the poll closes again.
-            </Text>
-            <Text size="sm" c="dimmed">
-              {status.voted_count > 0
-                ? 'The results have been seen, so from here the results will carry a note if any vote is added or changed.'
-                : 'Nobody has voted, so there are no results anybody can have seen; the votes this poll takes now are its first.'}
+              New votes can be cast and existing votes can be changed. If any updates are made, the
+              results will carry a note saying that votes were changed after results were revealed.
             </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={reopenModal.close}>
