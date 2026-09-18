@@ -37,7 +37,7 @@ import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
-import { readPollPage } from '../lib/pollPage'
+import { readPollPage, statusFromOpenView } from '../lib/pollPage'
 import { openPollViewSchema, parseAnswer, pollStatusSchema } from '../lib/rpcSchemas'
 import { winnerLabel } from '../lib/schedule'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
@@ -72,6 +72,7 @@ export function PollDetail({
   initial,
   live,
   watch,
+  reread,
 }: {
   initial: AccountRead | null
   /** Whether the route's subscription is carrying, for the notice below. */
@@ -83,6 +84,17 @@ export function PollDetail({
    * subscribing here is what keeps the poll to one topic and one read.
    */
   watch: (onSignal: (() => boolean | void | Promise<boolean | void>) | null) => void
+  /**
+   * Ask for a read, through the same funnel a signal goes through.
+   *
+   * Every re-read this page asks for itself goes through here rather than
+   * calling `load` or `refresh` directly, and the reason is one press: a vote
+   * or a confirmation is a write, a write broadcasts, and the broadcast comes
+   * back to the page that made it. Read beside the subscription rather than
+   * through it, the press and its own echo were two reads of the same poll
+   * that could not see each other. See `LiveStream.reread`.
+   */
+  reread: () => void
 }) {
   const { pollId: param } = useParams<{ pollId: string }>()
   // See lib/pollId.ts: the URL carries the short spelling, everything
@@ -177,40 +189,64 @@ export function PollDetail({
   // re-read after a vote must never come back with the answer from before.
   const handoff = useRef(initial)
 
+  // The date this poll is deleted on, from the read that opened the page.
+  //
+  // Held rather than re-read because nothing that happens in the poll moves
+  // it: it is the day it was created plus the retention window, fixed then and
+  // never revised — see `poll_expires_at`. Which is what lets an open poll's
+  // live tick stop asking `poll_status` for it; that call carried nothing else
+  // the view it is read beside does not already say. See `statusFromOpenView`.
+  const retention = useRef<PollStatus['expires_at']>(undefined)
+
+  // What this browser has answered and finished with, on an *open* poll, from
+  // whichever read brought the view.
+  //
+  // The public reading of this same question is at this same address and marks
+  // the same entries, so a question answered — or finished with — either way
+  // is marked both ways without either page knowing about the other. Erased as
+  // well as written: a confirmation can be taken back, and a creator can clear
+  // a poll's votes, so a read that comes back "no" is what stops a stale mark
+  // outliving what it stood for.
+  //
+  // Done by every read rather than only by the one that opens the page, which
+  // is what lets the narrow read carry a confirmation going in: a reader who
+  // confirms the last list they owe stays on it, and the strip above them has
+  // to say so.
+  const markFromView = useCallback((questionId: string, openView: OpenPollView) => {
+    if (openView.voted) rememberAnswered(questionId)
+    else forgetAnswered(questionId)
+    if (openView.confirmed) rememberConfirmed(questionId)
+    else forgetConfirmed(questionId)
+    setAnswered(answeredQuestions())
+    setConfirmed(confirmedQuestions())
+  }, [])
+
   // What every read of the whole poll does with what it came back with,
   // wherever it came from: the route's read, or one of this page's own.
-  const apply = useCallback((page: AccountRead) => {
-    setPoll(page.poll)
-    setOptions(page.options)
-    setStatus(page.status)
-    setQuestions(page.questions)
-    setResults(page.results)
-    setBallots(page.ballots)
-    setInvitees(page.invitees)
+  const apply = useCallback(
+    (page: AccountRead) => {
+      setPoll(page.poll)
+      setOptions(page.options)
+      setStatus(page.status)
+      setQuestions(page.questions)
+      setResults(page.results)
+      setBallots(page.ballots)
+      setInvitees(page.invitees)
+      retention.current = page.status.expires_at
 
-    // An open poll read by its own creator: the panel they manage it through
-    // is the one everybody else votes in, and it wants this.
-    if (page.view) {
-      const openView = page.view
-      setView(openView)
-      // The public reading of this same question is at this same address and
-      // marks the same entries, so a question answered — or finished with —
-      // either way is marked both ways without either page knowing about the
-      // other. Erased as well as written: a confirmation can be taken back,
-      // and a creator can clear a poll's votes, so a read that comes back
-      // "no" is what stops a stale mark outliving what it stood for.
-      if (openView.voted) rememberAnswered(page.poll.id)
-      else forgetAnswered(page.poll.id)
-      if (openView.confirmed) rememberConfirmed(page.poll.id)
-      else forgetConfirmed(page.poll.id)
-      setAnswered(answeredQuestions())
-      setConfirmed(confirmedQuestions())
-    }
+      // An open poll read by its own creator: the panel they manage it through
+      // is the one everybody else votes in, and it wants this.
+      if (page.view) {
+        setView(page.view)
+        markFromView(page.poll.id, page.view)
+      }
 
-    readQuestion.current = page.poll.id
-    setLoadedFor(page.poll.id)
-    setLoading(false)
-  }, [])
+      readQuestion.current = page.poll.id
+      setLoadedFor(page.poll.id)
+      setLoading(false)
+    },
+    [markFromView],
+  )
 
   // The route's read, drawn at once rather than waiting to be asked for. Every
   // other read happens on subscribing, but this one has already happened, and
@@ -299,7 +335,14 @@ export function PollDetail({
 
     const openId = poll?.mode === 'open' ? poll.id : null
     const [statusRes, viewRes, optionsRes, inviteesRes] = await Promise.all([
-      supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
+      // Not asked for on an open poll, where the view beside it already
+      // carries every field this page reads from it: the same counts off the
+      // same `count(*) from ballots`, the same `poll_confirmed_count()`, the
+      // same two winner columns, the same three derived states. What only
+      // `poll_status` has is the retention date, which cannot move and is
+      // already in hand. See `statusFromOpenView`, where the translation and
+      // the reasoning for each field are.
+      openId ? null : supabase.rpc('poll_status', { p_poll_id: pollId }).single(),
       openId
         ? supabase.rpc('open_poll_view', { p_poll_id: openId, p_voter_key: voterKeyFor(openId) })
         : null,
@@ -320,15 +363,24 @@ export function PollDetail({
     // a race with a flaky connection, would be much worse than being a few
     // seconds out of date. An answer that came back the wrong shape is the
     // same event and is dropped the same way.
-    const status = statusRes.error
-      ? null
-      : parseAnswer(pollStatusSchema, 'poll_status', statusRes.data).value
+    const view =
+      viewRes && !viewRes.error && viewRes.data
+        ? parseAnswer(openPollViewSchema, 'open_poll_view', viewRes.data).value
+        : null
+    if (view && openId) {
+      setView(view)
+      markFromView(openId, view)
+    }
+
+    // One of the two, never both: whichever of them this poll's page asked
+    // for above.
+    const status = statusRes
+      ? statusRes.error
+        ? null
+        : parseAnswer(pollStatusSchema, 'poll_status', statusRes.data).value
+      : view && statusFromOpenView(view, retention.current)
     if (status) setStatus(status)
 
-    if (viewRes && !viewRes.error && viewRes.data) {
-      const { value } = parseAnswer(openPollViewSchema, 'open_poll_view', viewRes.data)
-      if (value) setView(value)
-    }
     if (optionsRes && !optionsRes.error && optionsRes.data)
       setOptions(optionsRes.data as PollOption[])
     if (inviteesRes && !inviteesRes.error && inviteesRes.data)
@@ -336,22 +388,44 @@ export function PollDetail({
 
     // The status is what every other part of this page is derived from, so it
     // decides whether this counts as a read at all — a status that did not
-    // arrive, or did not parse, is a read to try again. The other three are
-    // allowed to have missed: an option list or a roster one signal late costs
+    // arrive, or did not parse, is a read to try again, and on an open poll
+    // that is the same thing as the view not arriving. The others are allowed
+    // to have missed: an option list or a roster one signal late costs
     // nothing, and the page keeps the copy it has.
     return !!status
-  }, [pollId, poll?.mode, poll?.id, optionsMayMove, hasRoster])
+  }, [pollId, poll?.mode, poll?.id, optionsMayMove, hasRoster, markFromView])
 
-  // What a signal on this poll means, which depends on whether the question
-  // in the address bar is the one this page has read: the whole poll the
-  // first time, and only the parts that can move on every one after that.
-  // Navigating from one question to another remounts nothing — the poll
-  // around them is the same page and must not blink — so a crossing arrives
-  // here as a read of the *previous* question, which is a first read of this
-  // one and says so by itself. Nothing has to remember to clear anything.
-  const onSignal = useCallback(async () => {
-    if (readQuestion.current === pollId) return refresh()
-    return load()
+  // Whether the next read has to be the whole page rather than the parts that
+  // move, set by whoever asks for a read that a narrow one cannot answer and
+  // cleared by the read that honours it.
+  //
+  // Two things need it. A **creator's action** — a close, a reopen, an invite
+  // list edit, a correction to the options of a poll that already holds votes
+  // — because `refresh` re-reads the option list only while a poll has no
+  // votes in it, and re-reads neither the poll row nor its question group at
+  // all. And a **ballot or confirmation on an invite poll**, whose question
+  // strip is marked from `poll_group.voted` and `.confirmed`: those are the
+  // server's answers and only the whole page brings them. An open poll's marks
+  // are this browser's own and travel with the view, which is why its panel
+  // needs none of this; see `markFromView`.
+  const wholePage = useRef(false)
+
+  // The one read this page makes, whoever asked for it — a signal, or the page
+  // itself after a write. Which of the two it is does not enter into it: what
+  // decides is whether the read would see everything that can have moved.
+  //
+  // Narrow whenever the question in the address bar is the one this page has
+  // already read and nothing has asked for more. Navigating from one question
+  // to another remounts nothing — the poll around them is the same page and
+  // must not blink — so a crossing arrives here as a read of the *previous*
+  // question, which is a first read of this one and says so by itself. Nothing
+  // has to remember to clear anything.
+  const onRead = useCallback(async () => {
+    if (wholePage.current || readQuestion.current !== pollId) {
+      wholePage.current = false
+      return load()
+    }
+    return refresh()
   }, [pollId, load, refresh])
 
   // A ballot half-changed in the question being left, cleared on the way
@@ -370,9 +444,26 @@ export function PollDetail({
   // had stopped listening would not hear — it would sit showing a tally as
   // settled while the poll went back to taking votes. See useLiveStream.
   useEffect(() => {
-    watch(onSignal)
+    watch(onRead)
     return () => watch(null)
-  }, [watch, onSignal])
+  }, [watch, onRead])
+
+  // A read this page asks for after writing something, through the funnel the
+  // signals go through rather than beside it: the write's own broadcast is
+  // coming back, and two reads that cannot see each other is what that used to
+  // cost. See the `reread` prop.
+  //
+  // Narrow-eligible, which is what makes it worth having apart from the two
+  // below: a ballot or a confirmation on an *open* poll moves the counts, this
+  // browser's own mark and — while the poll is collecting — the option list,
+  // and all three are inside `open_poll_view`.
+  const reload = reread
+
+  // The same, for a read that has to be the whole page; see `wholePage`.
+  const reloadPage = useCallback(() => {
+    wholePage.current = true
+    reread()
+  }, [reread])
 
   // Close, reopen and a correction to the options all invalidate a ballot
   // half-filled in the open-poll panel, so they remount it as well as
@@ -381,8 +472,9 @@ export function PollDetail({
   // throw away a panel that is already showing the right thing.
   const reloadAll = useCallback(() => {
     setRefreshKey((k) => k + 1)
-    load()
-  }, [load])
+    wholePage.current = true
+    reread()
+  }, [reread])
 
   // Whether the creator may correct the option list as things stand: their own
   // poll, past the collecting stage, and still open — the same terms the
@@ -674,7 +766,7 @@ export function PollDetail({
                 ballots={ballots}
                 isCreator={isCreator}
                 voterName={voterName}
-                onChanged={load}
+                onChanged={reload}
                 onFirstVote={advance}
                 onFirstConfirm={advance}
                 questionStrip={questionStrip}
@@ -727,7 +819,7 @@ export function PollDetail({
                 initial={revising}
                 onVoted={() => {
                   setRevising(null)
-                  load()
+                  reloadPage()
                 }}
                 onCancel={() => setRevising(null)}
                 questionStrip={questionStrip}
@@ -748,7 +840,7 @@ export function PollDetail({
               key={refreshKey}
               poll={poll}
               options={options}
-              onVoted={advance ?? load}
+              onVoted={advance ?? reloadPage}
               questionStrip={questionStrip}
             />
           )}

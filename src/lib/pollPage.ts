@@ -1,7 +1,7 @@
 import { openPollRpc } from './samplePoll'
 import { parseAnswer, pollReadSchema } from './rpcSchemas'
 import { heldVoterKeyFor } from './voterKey'
-import type { PollRead } from './types'
+import type { OpenPollView, PollRead, PollStatus } from './types'
 
 /**
  * The one read that opens a poll page, whoever is opening it.
@@ -39,6 +39,61 @@ export async function readPollPage(
   const { value, error: shape } = parseAnswer(pollReadSchema, 'poll_page', data)
   if (shape) return { page: null, error: shape }
   return { page: value, error: null }
+}
+
+/**
+ * An **open** poll's status, read off the view its own link answers with.
+ *
+ * `poll_status` and `open_poll_view` are two readings of one poll, and on an
+ * open poll the second contains the first: the counts come from the same
+ * `count(*) from ballots`, `confirmed_count` from the same
+ * `poll_confirmed_count()`, the winner from the same two columns, and
+ * `is_closed`, `soliciting` and `results_available` from the same derivations.
+ * So the creator's own page — the one screen that reads both — asks for one of
+ * them and works the other out here, rather than paying a round trip for a
+ * strict subset of what it already has.
+ *
+ * Five of the fields are `poll_status`' alone, and all five are answered here
+ * exactly as it answers them on an open poll. That is the whole point: this
+ * has to be a translation rather than a second opinion.
+ *
+ *  - **The invite list is empty**, because an open poll has none. `poll_status`
+ *    counts `invited_voters` and gets nothing, so `is_complete` — which needs
+ *    `invited > 0` — is false and stays false however many people vote.
+ *  - **`voted` and `confirmed` are false**, and not because they are unknown.
+ *    They are `poll_status`' questions about the *account*, and an open poll
+ *    records neither against one: `open_poll_submit` inserts a ballot with
+ *    `voter_id` null and `open_poll_confirm_options` stores no voter at all,
+ *    both keyed by the browser's `voter_key` instead. So `poll_status` returns
+ *    false here for a creator who has voted in their own open poll, and so
+ *    does this. What that browser has done is in `OpenPollView.voted` and
+ *    `.confirmed`, which is where the page reads it.
+ *
+ * And `expires_at` is the one field the view genuinely does not carry, which
+ * is why it is asked for rather than derived: it is `created_at` plus the
+ * retention window, fixed on the day the poll is made and never revised, so
+ * the read that opened the page is holding the only copy anybody needs. See
+ * `poll_expires_at`.
+ */
+export function statusFromOpenView(
+  view: OpenPollView,
+  expiresAt: PollStatus['expires_at'],
+): PollStatus {
+  return {
+    invited_count: 0,
+    voted_count: view.voted_count,
+    is_complete: false,
+    voted: false,
+    is_closed: view.is_closed,
+    results_available: view.results_available,
+    soliciting: view.soliciting,
+    expires_at: expiresAt,
+    invited: false,
+    confirmed: false,
+    confirmed_count: view.confirmed_count,
+    winner_name: view.winner_name,
+    winner_settled: view.winner_settled,
+  }
 }
 
 /**

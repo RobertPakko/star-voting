@@ -55,6 +55,7 @@ export function PublicPoll({
   initial,
   live,
   watch,
+  reread,
 }: {
   /**
    * The read `PollPage` made on this question's behalf, or null when it had
@@ -70,6 +71,16 @@ export function PublicPoll({
    * read once there is a page to ask.
    */
   watch: (onSignal: (() => boolean | void | Promise<boolean | void>) | null) => void
+  /**
+   * Ask for a read, through the same funnel a signal goes through.
+   *
+   * Every re-read this page asks for itself comes through here rather than
+   * calling `load` directly, because a ballot or a confirmation is a write and
+   * a write broadcasts: read beside the subscription rather than through it,
+   * the press and the echo of its own write were two reads of the same poll
+   * that could not see each other. See `LiveStream.reread`.
+   */
+  reread: () => void
 }) {
   const { pollId: param } = useParams<{ pollId: string }>()
   // See lib/pollId.ts: the URL carries the short spelling, everything
@@ -472,7 +483,7 @@ export function PublicPoll({
             view={view}
             results={results}
             ballots={ballots}
-            onChanged={load}
+            onChanged={reread}
             onFirstVote={advance}
             onFirstConfirm={advance}
             voterName={voterName}

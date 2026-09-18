@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -443,7 +443,7 @@ nothing is being run, only compiled, and a pull request from a fork could not
 see them anyway.
 
 ```bash
-npm run test:unit     # vitest, over three files and nothing else
+npm run test:unit     # vitest, over four files and nothing else
 ```
 
 **`test:unit` is deliberately narrow.** It exists because [schedule
@@ -455,7 +455,7 @@ way the tally can — plausibly, and with nothing downstream that would notice,
 because the database sees an ordinary poll either way. The SQL suite cannot
 reach it and there was no JS runner in the repo, so one was added for it.
 
-It covers three things, and every one of them is something neither other check
+It covers four things, and every one of them is something neither other check
 can see:
 
 - `schedule.test.ts`, the derivation above — pure functions of their
@@ -477,6 +477,15 @@ can see:
   each function across the migrations in order, which is what a database built
   from them runs, and it goes through `import.meta.glob` rather than `node:fs`
   so that a test under `src/` is still held to the browser's typing.
+- `readLedger.test.ts`, over what a live page is owed a read for and what the
+  read it has just made covers — see [Live updates](#live-updates). The rule is
+  one sentence of ordering and the arithmetic under it is eight lines, and both
+  directions of getting it wrong are silent: cover too much and a page sits
+  showing votes that have been overtaken, cover too little and every press
+  costs a round trip nobody can see. It is a module rather than a closure
+  inside `useLiveStream` precisely so that it can be one — the rest of that
+  hook is sockets, timers and a hidden tab, and none of it is testable without
+  standing all three up.
 
 Getting to a server is `test/build-db.sh`'s job, and it is the same job for
 `scripts/sample-poll.sh`, which arrives through the same file: start the local
@@ -684,12 +693,71 @@ Four rules govern the telling half:
   answer they already had. There is no trigger on `scores` and none on `UPDATE`
   of `ballots`.
 
+**One funnel, and a page's own reads go through it.** A page that has just
+written something wants what it wrote on screen without waiting to be told
+about it, and it used to get that by calling its read directly — beside the
+hook rather than through it. Which made one press two reads of the same poll:
+one because the page asked, and one because the write's own broadcast came back
+to the page that made it. The messages are empty by design, so nothing can tell
+your echo from somebody else's vote.
+
+`useLiveStream` now hands back a `reread` alongside the status, and every
+page-initiated read goes through it — a vote, a confirmation, a creator's
+action, a turn of the poll list's pages. One queue, so the throttle and the
+chaining apply to all of them, a burst collapses into one trailing read
+whatever mixture it was, and a page's own read can account for signals that
+arrived before it started.
+
+**Which it can, because of the order the database does things in.** A broadcast
+is sent when the transaction behind it commits, so it can only reach a browser
+afterwards — and a read that *starts* after it arrives therefore reads a
+database that already holds it. A signal that turns up while a read is in the
+air is not covered, since its commit may fall after that read's snapshot, and
+is read for when the read lands. That is the whole rule, and
+[`readLedger.ts`](src/lib/readLedger.ts) is the whole of it: it was a boolean —
+*something arrived while I was reading* — which could say a read was
+outstanding but never that one had already accounted for it, so every echo cost
+a second read. It is a module of its own because it is the one part of this
+that can be wrong quietly: too generous and a page sits showing votes that have
+been overtaken, too mean and it costs a round trip nobody sees. See
+`readLedger.test.ts`.
+
+A subscription arriving is the exception and reads unconditionally: Realtime
+replays nothing sent while a socket was down, so there is no signal to count
+and nothing a finished read could be said to cover.
+
 **There is no live indicator, and there is one notice.** A page that updates
 itself demonstrates that by updating itself. A page that has *stopped* is the
 one state a reader cannot work out by looking, so
 [`LiveConnectionNotice`](src/components/LiveConnectionNotice.tsx) says it. There is
 deliberately no polling fallback — refreshing is the fallback, which is what
 the notice asks for.
+
+**An open poll's tick asks one function, not two.** Its creator's page is the
+one screen that reads a poll both ways — as an account through `poll_status`,
+and through the link as everybody else does with `open_poll_view` — and on an
+open poll the second contains the first. The counts come from the same
+`count(*) from ballots`, `confirmed_count` from the same
+`poll_confirmed_count()`, the winner from the same two columns, the three
+derived states from the same derivations. So the page asks for the view and
+translates, in `statusFromOpenView` (`src/lib/pollPage.ts`).
+
+Four of the status fields are its own and all four are answered as constants,
+because that is what `poll_status` answers on an open poll: there is no invite
+list, so `invited_count` is 0, `is_complete` needs `invited > 0` and can never
+be true, and `invited` is false. And `voted` and `confirmed` are false *however
+much that account has done through the link* — they ask about the account, and
+`open_poll_submit` writes a ballot with `voter_id` null while
+`open_poll_confirm_options` stores no voter at all, both keyed by the browser's
+`voter_key`. What that browser has done is in the view, which is where the page
+reads it.
+
+The one field the view genuinely does not carry is `expires_at`, and it is
+carried from the read that opened the page rather than asked for again:
+`created_at` plus the retention window, fixed on the day the poll is made and
+never revised. Nothing in the database holds those two functions together, so
+`36_two_readings_of_one_open_poll` does — field by field, over a poll walked
+through collecting, voting and closed.
 
 One request per page on a first read, and one per change after that: the poll
 list included, and a finished poll included since

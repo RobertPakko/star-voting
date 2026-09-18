@@ -111,14 +111,32 @@ export function PollList() {
     return true
   }, [])
 
+  // Unlike a single poll, a list has no settled state to stop at: any poll on
+  // it can take a vote, and a new invite can add a row. So it watches one
+  // thing, and that thing is the reader rather than the polls.
+  //
+  // Watching the polls would mean holding one channel per row, which the page
+  // cannot even name until it has read the list — so it would read once to
+  // learn them, subscribe, and read again on subscribing. The reader's own
+  // topic is known from the session before anything is read, so the page
+  // subscribes on mount and its first read is its only read. It also does not
+  // change when the reader turns a page, so a page turn costs the one read it
+  // genuinely needs and no re-subscription on top of it.
+  //
+  // It carries every change to every poll on the list, invites included; see
+  // 0035_broadcast_polls_to_watchers.sql for the fan-out that makes it so.
+  const topics = session?.user.id ? [userTopic(session.user.id)] : []
+
+  const { status: liveStatus, reread } = useLiveStream(topics, load)
+
   // Turning a page is the one change the socket will not bring: the topic
   // does not depend on which page is on screen, so nothing announces it. The
   // first read is deliberately left to the subscription — see useLiveStream
   // — which is why this waits for one to have landed before it fires.
   useEffect(() => {
     if (fetched.current === 0 || fetched.current === page) return
-    load()
-  }, [page, load])
+    reread()
+  }, [page, reread])
 
   // Clamped rather than reset: a poll deleted from page three should leave
   // the reader on page three, or on the last page there is if that was it.
@@ -155,24 +173,6 @@ export function PollList() {
   useEffect(() => {
     if (hidden.size === 0) setRevealed(false)
   }, [hidden])
-
-  // Unlike a single poll, a list has no settled state to stop at: any poll on
-  // it can take a vote, and a new invite can add a row. So it watches one
-  // thing, and that thing is the reader rather than the polls.
-  //
-  // Watching the polls would mean holding one channel per row, which the page
-  // cannot even name until it has read the list — so it would read once to
-  // learn them, subscribe, and read again on subscribing. The reader's own
-  // topic is known from the session before anything is read, so the page
-  // subscribes on mount and its first read is its only read. It also does not
-  // change when the reader turns a page, so a page turn costs the one read it
-  // genuinely needs and no re-subscription on top of it.
-  //
-  // It carries every change to every poll on the list, invites included; see
-  // 0035_broadcast_polls_to_watchers.sql for the fan-out that makes it so.
-  const topics = session?.user.id ? [userTopic(session.user.id)] : []
-
-  const liveStatus = useLiveStream(topics, load)
 
   // The winner of a finished poll arrives on the row that draws the card.
   //

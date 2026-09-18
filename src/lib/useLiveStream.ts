@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { readLedger } from './readLedger'
 import { supabase } from './supabase'
 
 /**
@@ -59,6 +60,33 @@ const FIRST_READ_MS = 5000
  */
 export type LiveStatus = 'connecting' | 'live' | 'offline'
 
+/** What a watching page gets back: what to say, and how to ask. */
+export interface LiveStream {
+  /** Whether the page is still being told; see `LiveConnectionNotice`. */
+  status: LiveStatus
+  /**
+   * Read now, through the same funnel a signal goes through.
+   *
+   * This is for a page that has just written something and wants what it
+   * wrote on screen. It exists because the alternative — the page calling its
+   * own read directly — is a *second* funnel, and two funnels cannot see each
+   * other: the write's own broadcast comes back to the page that caused it,
+   * the hook cannot tell that echo from somebody else's vote, and the press
+   * ends up reading the poll twice. Asking here puts both reads in one queue,
+   * where the throttle, the chaining and the accounting below apply to them
+   * equally.
+   *
+   * It does not answer. A read is not this caller's to wait for — the poll is
+   * one thing and several presses may be asking about it at once — and every
+   * page here renders from state a read sets rather than from what a read
+   * returned.
+   */
+  reread: () => void
+}
+
+/** Until the effect below is running, and after it has stopped. */
+const noop = () => {}
+
 /**
  * Re-read `onChange` whenever the database says one of `topics` moved.
  *
@@ -94,7 +122,14 @@ export type LiveStatus = 'connecting' | 'live' | 'offline'
  * twenty behind a closed lid should not each hold a connection open. Coming
  * back re-subscribes, which re-reads.
  *
- * Returns what to tell the reader; see `LiveConnectionNotice`.
+ * **One funnel, and the page's own reads go through it too.** A page that has
+ * just written something wants it on screen without waiting to be told about
+ * it, and it used to get that by calling its read directly — beside this hook
+ * rather than through it. Which meant a single press read the poll twice: once
+ * because the page asked, and once because the write's own broadcast came back
+ * to the page that made it. `reread` is the way in; see `LiveStream`.
+ *
+ * Returns what to tell the reader and how to ask; see `LiveStream`.
  */
 export function useLiveStream(
   topics: readonly string[],
@@ -104,8 +139,16 @@ export function useLiveStream(
    * nothing at all, means it did.
    */
   onChange: () => boolean | void | Promise<boolean | void>,
-): LiveStatus {
+): LiveStream {
   const [status, setStatus] = useState<LiveStatus>('connecting')
+
+  // The way into the funnel, which lives inside the effect below with the
+  // rest of its bookkeeping. A ref because `reread` has to keep one identity
+  // for the life of the page — it is handed down through a route and into
+  // callbacks — while what it reaches changes whenever the subscription is
+  // rebuilt.
+  const demand = useRef<() => void>(noop)
+  const reread = useCallback(() => demand.current(), [])
 
   // Held in a ref so a caller passing a fresh closure every render resubscribes
   // nothing: the channels belong to the poll being watched, not to the identity
@@ -126,17 +169,37 @@ export function useLiveStream(
     // true of: it is answered out of a file in this browser, so there is
     // nothing on the other end of a subscription to it and nothing that could
     // ever change. Its page reads for itself instead.
-    if (key === '') return
+    //
+    // Which is what `reread` has to keep doing here. There is no funnel to
+    // queue behind and nothing that could ever be waiting in it, but the
+    // sample takes a ballot, and a card that asked for a re-read and got
+    // silence would sit there as though the press had missed.
+    if (key === '') {
+      demand.current = () => {
+        void onChangeRef.current()
+      }
+      return () => {
+        demand.current = noop
+      }
+    }
 
     let cancelled = false
     let channels: RealtimeChannel[] = []
     let settle: number | undefined
     let grace: number | undefined
-    // Whether a read is in flight, and whether something arrived while it
-    // was. Reads are chained rather than run in parallel, so a slow
-    // connection spaces them out instead of stacking them up.
+    // Whether a read is in flight. Reads are chained rather than run in
+    // parallel, so a slow connection spaces them out instead of stacking them
+    // up -- and so a page's own read and the echo of its write queue behind
+    // one another rather than racing.
     let reading = false
-    let missed = false
+    // What this page is owed a read for, and what the read it has just made
+    // covers. It was a boolean — *something arrived while I was reading* —
+    // which could say that a read was outstanding but never that one had
+    // already accounted for it, so a page's own read could not absorb the
+    // echo of its own write. See readLedger.ts, where the rule and its
+    // reasoning are, and readLedger.test.ts, which is the only place any of
+    // it can be checked.
+    const ledger = readLedger()
     // The throttle is measured between read starts, so a slow read does not
     // add another delay before the trailing read.
     let lastReadAt: number | undefined
@@ -156,12 +219,16 @@ export function useLiveStream(
     let first: number | undefined
 
     async function read() {
-      if (reading) {
-        missed = true
-        return
-      }
+      // Nothing queues here: what is outstanding is in the counters, and the
+      // read in flight checks them again when it lands.
+      if (reading) return
       reading = true
       lastReadAt = Date.now()
+      // What this read will have accounted for, taken before it is sent
+      // rather than after it answers: a signal that arrives while it is in
+      // the air is about a commit that may be later than what it is about to
+      // see. See readLedger.ts.
+      const mark = ledger.starting()
       let ok = true
       try {
         ok = (await onChangeRef.current()) !== false
@@ -173,6 +240,7 @@ export function useLiveStream(
       // A read that was in flight when the tab went away still finishes, and
       // what it found is kept; what it must not do is report on a page
       // nobody is looking at, or line up another.
+      ledger.settled(mark, ok)
       if (cancelled || paused) return
 
       if (ok) {
@@ -184,19 +252,23 @@ export function useLiveStream(
         if (subscribed) setStatus('live')
       } else if (failures < RETRY_LIMIT) {
         failures += 1
+        // Nothing was read, so everything is still outstanding -- the ledger
+        // has already put it back -- and the retry below is the read that
+        // owes it.
         again(RETRY_MS)
         return
       } else {
         // Out of patience. The socket may well be fine, but nothing this
         // page shows can be trusted to be current, which is the thing the
-        // notice actually says.
+        // notice actually says. Nothing is chained from here — the next
+        // signal, or the next subscription, is what tries again — because
+        // what this page is still owed has not moved and would otherwise
+        // read in a tight loop.
         setStatus('offline')
+        return
       }
 
-      if (missed) {
-        missed = false
-        soon()
-      }
+      schedule()
     }
 
     function again(delay: number) {
@@ -206,14 +278,38 @@ export function useLiveStream(
       }, delay)
     }
 
-    function soon() {
-      failures = 0
-      if (reading) {
-        missed = true
-        return
-      }
+    /**
+     * Read, unless there is nothing outstanding or a read is already on its
+     * way.
+     *
+     * The throttle is measured between read *starts*, so a slow read does not
+     * add another delay before the trailing one.
+     */
+    function schedule() {
+      if (!ledger.owing()) return
+      if (reading) return
       const delay = lastReadAt === undefined ? 0 : Math.max(0, lastReadAt + SETTLE_MS - Date.now())
       again(delay)
+    }
+
+    /**
+     * A read this page has asked for outright: a subscription arriving, or the
+     * page saying it has just written. Never absorbed by a read already in
+     * flight; see `owed`.
+     *
+     * It forgives past failures, as every signal does: a page that is fine
+     * apart from one dropped request should not be held to a budget it spent
+     * minutes ago.
+     */
+    function insist() {
+      // A tab behind something holds no subscription and reads nothing:
+      // coming back re-subscribes, and that is itself an `insist`. Nothing
+      // presses a button on a page nobody is looking at, but a read started
+      // here would outlive the pause and report on it.
+      if (cancelled || paused) return
+      ledger.insisted()
+      failures = 0
+      schedule()
     }
 
     // Start counting towards telling the reader that this page has gone
@@ -246,7 +342,13 @@ export function useLiveStream(
         // arrive under different names and both mean the same thing here:
         // ask again.
         channel.on('broadcast', { event: '*' }, () => {
-          if (!cancelled && !paused) soon()
+          if (cancelled || paused) return
+          ledger.signalled()
+          // Forgiven for the reason `insist` forgives them: a run of failed
+          // reads minutes ago should not stop this page answering a poll that
+          // has just moved.
+          failures = 0
+          schedule()
         })
         channel.subscribe((state) => {
           if (cancelled || paused) return
@@ -260,16 +362,18 @@ export function useLiveStream(
             subscribed = true
             setStatus('live')
             // Both the first read and the catch-up after a reconnect. Every
-            // SUBSCRIBED reads, unconditionally: a redundant read is a wasted
-            // round trip, where a suppressed one is a page left showing votes
-            // that have since been overtaken.
+            // SUBSCRIBED reads, unconditionally: Realtime replays nothing
+            // sent while the socket was down, so there is no signal to count
+            // and nothing a finished read could be said to cover. A redundant
+            // read is a wasted round trip, where a suppressed one is a page
+            // left showing votes that have since been overtaken.
             //
             // Affordable because every page subscribes to exactly one topic. A
-            // caller passing several would get one read per channel, and any
-            // landing while the first was in flight would each queue a trailing
-            // read behind it — `missed` cannot tell a genuine signal from a
-            // wave of channels arriving.
-            soon()
+            // caller passing several would get one read per channel, and the
+            // ones landing while the first was in flight would each queue a
+            // trailing read behind it — an outright demand is one flag and
+            // cannot tell a genuine catch-up from a wave of channels arriving.
+            insist()
           } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
             subscribed = false
             armGrace()
@@ -310,11 +414,18 @@ export function useLiveStream(
       }
     }
 
+    // The way in for the page's own reads, pointed at this funnel for as long
+    // as it is the one running — including while the tab is away, since a page
+    // that comes back and presses something must not find `reread` pointing at
+    // nothing. See `LiveStream.reread`.
+    demand.current = insist
+
     document.addEventListener('visibilitychange', onVisibilityChange)
     if (!document.hidden) open()
 
     return () => {
       cancelled = true
+      demand.current = noop
       window.clearTimeout(settle)
       window.clearTimeout(grace)
       window.clearTimeout(first)
@@ -323,7 +434,10 @@ export function useLiveStream(
     }
   }, [key])
 
-  return status
+  // `reread` never changes identity, so this is one object for as long as the
+  // status holds still: a page holding it in a dependency list is watching the
+  // status rather than the render it arrived on.
+  return useMemo(() => ({ status, reread }), [status, reread])
 }
 
 /** The topic a poll is announced on: one, for every page that watches it. */

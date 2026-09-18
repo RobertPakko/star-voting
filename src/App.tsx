@@ -231,7 +231,10 @@ function PollPage() {
   //
   // The sample watches nothing: it is answered out of a file in this browser,
   // so there is no topic and `PublicPoll` reads it for itself.
-  const liveStatus = useLiveStream(pollId && !sample ? [pollTopic(pollId)] : [], onSignal)
+  const { status: liveStatus, reread } = useLiveStream(
+    pollId && !sample ? [pollTopic(pollId)] : [],
+    onSignal,
+  )
 
   // A sample ballot lasts as long as the visit that cast it, and this route is
   // that visit: it stays mounted while a reader walks the sample's three
@@ -256,7 +259,7 @@ function PollPage() {
   // is nobody's poll and never was a row. It reads for itself, and a sample
   // id `samplePollData.ts` holds nothing for is a mistyped sample link, which
   // `PublicPoll` draws "poll not found" for.
-  if (sample) return <PublicPoll initial={null} live={liveStatus} watch={watch} />
+  if (sample) return <PublicPoll initial={null} live={liveStatus} watch={watch} reread={reread} />
 
   if (error) {
     return (
@@ -278,8 +281,17 @@ function PollPage() {
   // An open poll to somebody outside it, and — to a signed-in reader who has
   // been refused — the card that says a link is not a link.
   if (covering.kind !== 'account')
-    return <PublicPoll initial={exact ? covering : null} live={liveStatus} watch={watch} />
-  return <PollDetail initial={exact ? covering : null} live={liveStatus} watch={watch} />
+    return (
+      <PublicPoll
+        initial={exact ? covering : null}
+        live={liveStatus}
+        watch={watch}
+        reread={reread}
+      />
+    )
+  return (
+    <PollDetail initial={exact ? covering : null} live={liveStatus} watch={watch} reread={reread} />
+  )
 }
 
 export default App
