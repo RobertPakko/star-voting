@@ -30,6 +30,16 @@ export const Results = lazy(() => import('./Results').then((m) => ({ default: m.
 export const Ballots = lazy(() => import('./Ballots').then((m) => ({ default: m.Ballots })))
 
 /**
+ * And the reader's own ballot, which is the other half of the same branch: a
+ * poll's results draw the published grid or this, never both, so exactly one
+ * of the two chunks is ever fetched. See `YourBallot`, and `PollDetail`, which
+ * picks between them.
+ */
+export const YourBallot = lazy(() =>
+  import('./YourBallot').then((m) => ({ default: m.YourBallot })),
+)
+
+/**
  * And the calendar a time poll is voted on, for the same reason and a
  * sharper one: it is the only part of this app with a real dependency behind
  * it. `@mantine/schedule` and the `rrule` it carries are around 250 kB

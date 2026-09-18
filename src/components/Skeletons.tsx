@@ -475,6 +475,45 @@ export function BallotsSkeleton({ rows = 5 }: { rows?: number }) {
   )
 }
 
+/**
+ * The reader's own ballot, while `YourBallot` reads it: a heading, and a card
+ * with a row per option -- the name, and the five stars it was scored on.
+ *
+ * The star row is claimed exactly rather than guessed at, unlike anything in
+ * the published grid beside it: a ballot is five stars wide whatever the poll
+ * is about. What is guessed at is how many rows, and the caller knows -- the
+ * page holds the option list long before it holds the ballot scored against
+ * it.
+ *
+ * Capped at the score round's ceiling, which is the one place this shape is
+ * deliberately *shorter* than what arrives: the card itself draws every option,
+ * because a reader who came to see what they scored came to see all of it, and
+ * a time poll's hundred windows would otherwise be a page of bars waiting on a
+ * card. Short is the safe direction -- the page grows into it rather than
+ * losing a row that was promised. See resultsRows.ts and TallyShape.
+ */
+export function YourBallotSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <Loading>
+      <Stack gap={2}>
+        <Skeleton height={bar.heading} width={84} radius="sm" />
+        <Card withBorder p="sm">
+          <Stack gap="xs">
+            {Array.from({ length: Math.min(rows, RESULTS_ROWS_MAX) }, (_, i) => (
+              <Group key={i} justify="space-between" wrap="nowrap" gap="sm">
+                <Skeleton height={bar.line} width="40%" radius="sm" />
+                {/* Five 18px stars with 2px between them, which is what the
+                    row beside the name actually is. */}
+                <Skeleton height={18} width={98} radius="sm" />
+              </Group>
+            ))}
+          </Stack>
+        </Card>
+      </Stack>
+    </Loading>
+  )
+}
+
 /** A heading and what the create form stacks under it: a field, or a card. */
 function FieldShape({ label, children }: { label: number; children: ReactNode }) {
   return (

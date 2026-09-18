@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -1611,19 +1611,30 @@ not, because what it is handed comes from a painted calendar.
 That same plural door is what makes *Edit options* one request rather than
 several. The creator's corrections are drafted in the browser and applied on
 **Done** — four corrections used to be four round trips and four re-reads of
-the poll.
+the poll. Everything from here down describes the collecting card too: it
+drafts exactly the same way now, and the press it applies the draft on is
+*Confirm options*.
 
 **Both halves wait for it.** Adding drafts and removing drafts: a row marked
 for removal is struck through with a *Keep* beside it rather than deleted where
-it stands. Removing used to happen immediately, which is the right behaviour
-everywhere it still happens and the wrong one here — a card where one of its
-two controls applies now and the other waits is a card that has to be
-explained, and the two-option floor cannot be checked honestly against a list
-that is half draft. It is counted against what *Done* would leave behind.
+it stands. Removing used to happen immediately — a card where one of its two
+controls applies now and the other waits is a card that has to be explained,
+and the two-option floor cannot be checked honestly against a list that is
+half draft. It is counted against what the save would leave behind.
 
 **A struck row is struck whole.** The description goes through the
 crossing-out with the name: what is leaving is the option, not what it is
 called.
+
+**And *Keep* gives back what the reader last meant, not what the poll last
+held.** Striking a row out used to throw away any correction sitting on it, on
+the reasoning that a correction to a row that is leaving is a correction to
+nothing. True of the row, wrong about the reader: changing your mind twice
+about one option — fix its description, strike it out, keep it after all —
+came back with the description you had just replaced, or with none at all where
+you had just written the first one. The correction is now held for as long as
+the row it is about, and the one place it is dropped is the save, which is the
+one place it can be dropped without also closing the way back.
 
 **And a third half: an option can be corrected in place.** A pencil beside
 the cross opens the row's two fields where the row is, filled in with what is
@@ -1645,13 +1656,14 @@ knowing before reaching for it on a long list, and the reason the row shows the
 correction *in place* while it is still a draft — it is the same option, and
 only the save moves it.
 
-The two suggestion paths send a correction as they send everything else,
-straight away. A draft row is corrected by the same pencil and never leaves
-the browser at all.
-
-The two suggestion paths still add straight away and should: that list belongs
-to the group, everybody watching sees a suggestion land as it lands, and that
-is half of what the collecting stage is for.
+**And the two suggestion paths now draft as well.** They used to send each
+edit as it was made — a correction, an addition, a removal, one request each —
+on the grounds that the list belongs to the group and a suggestion should land
+live for everybody watching. One card, one press, one save is the better trade
+and it is now the same on every path; see [Confirming is the
+save](#saying-you-are-done-adding-options) for what that press sends and
+through which doors. A draft row is corrected by the same pencil and never
+leaves the browser at all.
 
 One request, but for a while not one *edit*: the removals went as a `delete`
 of their own and the additions followed, which is what put the two-option
@@ -2933,6 +2945,24 @@ Four rules hold the published setting together:
 - **The creator gets no exception.** Hiding ballots is a promise made to the
   people who voted, not an access level, so an unpublished poll's ballots are
   unreadable by everybody.
+- **Your own is not one of them.** An unpublished poll's results now carry
+  *your ballot* — the one this reader wrote, on the results of the poll they
+  wrote it in. It is not an exception to the rule above and not a hole in it:
+  `poll_ballot_scores` reads the caller's own scores and nobody else's, at any
+  stage of any poll, and is the same function *Edit vote* has always filled the
+  ballot back in from. All that changed is that it is now asked one stage
+  later, on a page where the reader used to be able to see everybody's votes
+  added together and none of their own. `YourBallot` draws it, in the place the
+  published grid would have stood and only there — a poll that publishes its
+  ballots is already showing this one, on a grid with everybody else's, so the
+  two are exclusive and `PollDetail` picks between them.
+
+  The invite side is the whole of it, because that is the side with an account
+  to ask under. A ballot cast through a share link is identified by a
+  `voter_key` minted per question precisely so one browser's cannot be joined;
+  `open_poll_view` already hands that browser its own scores back, and what
+  that page should do with them afterwards is a separate question and is not
+  answered yet.
 - **The route in is not one of the terms.** `poll_ballots` reads the sheet for
   an account and `open_poll_ballots` reads it for a link, and they apply the
   same three rules: who may see the poll, whether it publishes ballots, and
@@ -3038,10 +3068,14 @@ list**, and every rule under it is holding that up:
   controls](#creator-controls).
 - **Everyone suggests through a function, the creator included.** An invitee
   has no `INSERT` grant on `candidates` and `anon` has no grant on any table, so
-  `suggest_option` (invite polls) and `open_poll_suggest_option` (open polls)
+  `suggest_options` (invite polls) and `open_poll_suggest_options` (open polls)
   are the only ways in. One path means the rules are stated once, and the
   creator's list cannot be built under rules nobody else's is — the same reason
-  the creator votes in their own open poll through the `anon` RPC.
+  the creator votes in their own open poll through the `anon` RPC. It is the
+  *plural* pair the browser asks now, because a reader's whole draft goes in as
+  one list; the singular two still exist and still refuse a duplicate by name,
+  which is the one rule that differs between them. See [Confirming is the
+  save](#saying-you-are-done-adding-options).
 - **Suggestions carry no name.** Who suggested what is a third disclosure
   question on top of *who responded* and *how they voted*, and the poll's tags
   answer neither of those about the option list. Storing a name nothing
@@ -3065,8 +3099,8 @@ different order. Everyone sees the same list, the same box to add to it, and
 the same button to say they are done with it — see [Saying you are done adding
 options](#saying-you-are-done-adding-options), which is where that button comes
 from and why it belongs in this card rather than beside the poll's other
-controls. The creator additionally gets a
-`×` on each row, which sits beside the list it acts on rather than in
+controls. The creator additionally gets a pencil and a
+`×` on each row, which sit beside the list they act on rather than in
 `CreatorControls`, the same way the invite controls sit inside `Respondents`.
 Ending the stage is the other way round — that is something the creator does
 to the *poll*, so **Open poll** is in `CreatorControls`.
@@ -3288,14 +3322,56 @@ calendar's *N times on the list*) went with them: the list is the count, and a
 line under it saying the same thing in numbers was a second reading of what was
 already on screen.
 
-The calendar keeps a **Save times** of its own only where the card ends in
-neither button — a soliciting poll's creator who did not invite themselves —
-because there it is the only way the painting reaches the poll at all. Adding an option is still its own press while
-the list is still a list, for the reason at the end of [Collecting times, and a
-calendar among several
-questions](#collecting-times-and-a-calendar-among-several-questions): a
-suggestion belongs to the group and lands live for everybody watching. What
-confirming flushes is the one still in the box.
+**And now the whole of the card waits for that press, on every path.** For a
+while only two things did — the painted calendar, and the option sitting in the
+box unadded — while on a poll still collecting its options every *other* edit
+went straight out: one request per option typed, per row corrected, per row
+struck out. The reasoning was real and it was the wrong trade. That list does
+belong to the group, and a suggestion landing live for everybody watching is
+half of what the collecting stage is for; what it cost was a card whose
+*Confirm options* meant something different from the *Done* three lines of code
+away. Four typed options were four round trips and four re-reads of the poll,
+striking a row out deleted it before the reader had decided anything, and there
+was no way to change your mind about any of it. So the two cards are now one
+card: **every edit is a draft, and the press that ends the card is the save.**
+
+Which press that is depends on what the card ends in, and the list and the
+calendar answer to the same rule:
+
+- ***Confirm options***, wherever this reader has a say in the stage.
+- ***Done***, on the creator's correction to a list that is already a ballot.
+- **A *Save options* / *Save times* of the list's own**, only where the card
+  ends in neither — a soliciting poll's creator who did not invite themselves,
+  who confirms nothing — because there it is the only way anything reaches the
+  poll at all.
+
+**One press, but not always one request, and the split is who is writing.**
+`sendDraft` in `CollectOptions` is where it is decided. The creator's
+correction to a list that is already a ballot is one `creator_edit_options`, as
+it was. A list still being *collected* is up to two, because two different
+people write it: the corrections and removals are the creator's alone and go
+through `creator_edit_options`, in one transaction so that a rename cannot
+leave the option deleted and not come back; the suggestions are everybody's and
+go through the plural suggestion door every reader in the poll shares, the
+creator included. Corrections go first, so the option ceiling cannot be met
+part-way through a swap. `35_the_whole_list_in_one_press` is the case over
+both, and the two things it is really pinning down are that the plural
+endpoints carry a typed option's *description* — they existed for a painted
+calendar, whose windows have a name and nothing else — and that
+`creator_edit_options` applies a removal to a list that is still collecting,
+where the browser used to send a bare delete per row.
+
+**A name the list already holds is skipped rather than refused** on the way in
+now, which is the plural doors' one rule the singular pair did not have, and it
+is the right one for a press that means a whole list: the card checks
+duplicates as they are typed, so the only way to reach it is for somebody else
+to have suggested the same name since — and there is nothing the second of them
+could do about being told so.
+
+What is paid for it is that a suggestion is no longer live to the rest of the
+group the instant it is typed: it lands when its author says they are done
+adding. That is the same deal the painted calendar has always had, and the
+sentence beside the button has always said what to do about it.
 
 ### The creator can correct the options until the poll closes
 
@@ -4561,7 +4637,9 @@ unasked.
 Results show the winner, every option's score-round total, any tie-break that
 had to be resolved, and the automatic runoff between the two finalists. On a
 poll that publishes its ballots, the grid of every ballot cast follows
-underneath, with column totals to check the score round against, and the
+underneath, with column totals to check the score round against; on an invite
+poll that does not, the reader's *own* ballot follows there instead — see
+[Whether ballots are published](#whether-ballots-are-published) — and the
 participation card is last — it is where turnout is stated, and the results
 no longer state it themselves (see [Whether respondents are
 shown](#whether-respondents-are-shown)). The one thing they do still say

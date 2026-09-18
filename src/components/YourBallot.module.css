@@ -1,0 +1,20 @@
+/* The stars a ballot is handed back on, on the results of a poll that does
+   not publish its ballots.
+
+   Not the ballot's own control -- that is five buttons in a radio group, and
+   a score nobody can change must not offer a tab stop -- but deliberately the
+   same two colours, so the row a reader reads back is the row they pressed.
+   See StarRating.module.css, whose empty star this is, and which is why these
+   are here rather than inline: the dark scheme is reached with a mixin, and a
+   `style` prop cannot hold one. */
+.star {
+  color: var(--mantine-color-gray-3);
+
+  @mixin dark {
+    color: var(--mantine-color-dark-3);
+  }
+}
+
+.star[data-filled] {
+  color: var(--mantine-color-yellow-filled);
+}

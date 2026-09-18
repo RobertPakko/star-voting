@@ -25,12 +25,13 @@ import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { RetentionNote } from '../components/RetentionNote'
-import { Ballots, Results, TimeBallotCard } from '../components/deferred'
+import { Ballots, Results, TimeBallotCard, YourBallot } from '../components/deferred'
 import {
   BallotsSkeleton,
   PollPageSkeleton,
   QuestionSkeleton,
   ResultsSkeleton,
+  YourBallotSkeleton,
 } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
@@ -803,6 +804,23 @@ export function PollDetail({
             question={poll.question_title}
             initial={ballots}
           />
+        </Suspense>
+      )}
+
+      {/* And where that grid is withheld, the one ballot this reader is
+          entitled to either way: their own. It is the same place on the page,
+          because it is the same question — *what were the votes* — answered
+          as far as this poll will answer it, and the two are deliberately
+          exclusive: a poll that publishes its ballots is already showing this
+          one on the grid above, with everybody else's.
+
+          Behind `voted` as well as behind the gate the grid is behind, since
+          a creator who did not invite themselves has no ballot to hand back
+          and `poll_ballot_scores` says so rather than returning an empty one.
+          See YourBallot. */}
+      {!isOpen && status.results_available && !poll.show_ballots && status.voted && (
+        <Suspense fallback={<YourBallotSkeleton rows={optionList.length || undefined} />}>
+          <YourBallot pollId={poll.id} options={optionList} />
         </Suspense>
       )}
 
