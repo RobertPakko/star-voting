@@ -325,7 +325,7 @@ select md5(string_agg(x, '|' order by x)) from (
     from information_schema.columns where table_schema = 'public'
   union all select 'con:' || conname from pg_constraint c
     join pg_class t on t.oid = c.conrelid
-    join pg_namespace n on n.oid = t.relnamespace where n.nspname = 'public') s;
+    join pg_namespace n on n.oid = t.relnamespace where n.nspname = 'public') s(x);
 ```
 
 Run it against a build of the repo's own migrations and against the schema the
@@ -377,6 +377,29 @@ replacement is easy to review.
 This is not a hypothetical: a plain squash silently dropped the purge schedule
 once. `12_poll_retention` now asserts the job exists, so a squash that loses it
 again fails the suite instead of quietly disabling retention.
+
+**The remote's history has to match the directory afterwards, or nothing
+applies again.** Before it runs anything, the integration checks that every
+version the live project has recorded still has a file here, and it refuses
+the whole run if one does not — `Remote migration versions not found in local
+migrations directory`, and nothing else in the log. A squash deletes exactly
+those files. On 2026-09-25 the squash to `0063` left the remote holding
+`0060`–`0063` with no files behind them, every run failed from that moment,
+and three migrations merged the same day (`0065`–`0067`) were folded into the
+next squash's baseline without ever having been applied; `0069` is the repair
+that put them back. So after a squash, and before anything else merges, read
+the `supabase migration list` the script prints, and make the remote's column
+say what the directory says:
+
+```bash
+npx supabase migration repair --status reverted <each version with no file>
+npx supabase migration repair --status applied <the baseline's version>
+```
+
+Both only edit `supabase_migrations.schema_migrations`; neither runs SQL
+against the schema. Mark the baseline applied only when the live schema really
+is the baseline — which is true only if everything folded into it had been
+applied first, and is exactly what went wrong here.
 
 ### A version number is used once, ever
 
