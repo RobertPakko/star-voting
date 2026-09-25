@@ -10,7 +10,7 @@ import { openPollRpc } from '../lib/samplePoll'
 import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
 import { voterKeyFor } from '../lib/voterKey'
 import type { VoterName } from '../lib/voterName'
-import { DescriptionField } from './DescriptionField'
+import { DescriptionField, DescriptionToggle } from './DescriptionField'
 import { NameRoster } from './NameRoster'
 import { OptionDescription } from './OptionDescription'
 import listRow from './listRow.module.css'
@@ -36,9 +36,23 @@ import type { PollOption, PollSchedule } from '../lib/types'
 /** Only has to be unique within one open card, and never leaves it. */
 let draftSeq = 0
 
-/** An option this reader is typing and has not sent. */
-type Draft = { key: string; name: string; description: string }
+/**
+ * An option's two fields as they are being typed. `description` is null when
+ * its field is not on screen, which is the same as the option having none:
+ * the `−` beside it throws the text away rather than hiding it, as it does on
+ * the create form, so an option never carries a description nobody can see.
+ */
+type OptionText = { name: string; description: string | null }
 
+/** An option this reader is typing and has not sent. */
+type Draft = OptionText & { key: string }
+
+/**
+ * A new option opens with its description field showing, because *Add
+ * option* is one option at a time and the field costs two rows of a card
+ * with nothing else in it. The `−` beside it is there for whoever has
+ * nothing to say.
+ */
 function blankDraft(): Draft {
   draftSeq += 1
   return { key: `draft-${draftSeq}`, name: '', description: '' }
@@ -46,8 +60,20 @@ function blankDraft(): Draft {
 
 /** A field nobody has typed into, which is room for an option and not one. */
 function isBlank(d: Draft): boolean {
-  return !d.name.trim() && !d.description.trim()
+  return !d.name.trim() && !d.description?.trim()
 }
+
+/**
+ * The fields for a row already on the poll, filled in with what it says now.
+ * An option with no description opens without the field, the way the create
+ * form lays out an option that has none; the `+` beside it adds one.
+ */
+function fieldsOf(option: PollOption): OptionText {
+  return { name: option.name, description: option.description || null }
+}
+
+/** Which field the next field to mount should put the cursor in, by row. */
+type Focus = { key: string; field: 'name' | 'description' }
 
 /**
  * What is wrong with an option somebody has typed, and which of its two
@@ -543,8 +569,12 @@ function OptionList({
   const [drafts, setDrafts] = useState<Draft[]>([])
   /** What is wrong with each draft, by key, marked on the field it is about. */
   const [draftProblems, setDraftProblems] = useState<ReadonlyMap<string, Problem>>(new Map())
-  /** The draft *Add option* just opened, which takes the cursor. */
-  const [focusKey, setFocusKey] = useState<string | null>(null)
+  /**
+   * The field that was just asked for, which takes the cursor: the name of a
+   * draft *Add option* just opened or a row its pencil just opened, or a
+   * description its `+` just showed.
+   */
+  const [focus, setFocus] = useState<Focus | null>(null)
   /**
    * Rows already on the poll whose fields are open, by option id, and what is
    * in them.
@@ -563,9 +593,7 @@ function OptionList({
    * arrives at the end of the list, where an added option goes. A row opened
    * and left as it was is not a correction and is not sent.
    */
-  const [editing, setEditing] = useState<
-    ReadonlyMap<string, { name: string; description: string }>
-  >(new Map())
+  const [editing, setEditing] = useState<ReadonlyMap<string, OptionText>>(new Map())
   /** What is wrong with each open row, on the field it is wrong in. */
   const [editProblems, setEditProblems] = useState<ReadonlyMap<string, Problem>>(new Map())
   // Rows on their way off the list, by id. Held rather than deleted for the
@@ -585,7 +613,7 @@ function OptionList({
     return (
       e &&
       !dropping.has(o.id) &&
-      (e.name.trim() !== o.name || e.description.trim() !== (o.description ?? ''))
+      (e.name.trim() !== o.name || (e.description ?? '').trim() !== (o.description ?? ''))
     )
   })
   // What the poll holds and keeps, before anything this reader is suggesting.
@@ -696,7 +724,7 @@ function OptionList({
     const added: { name: string; description: string }[] = []
     for (const d of drafts) {
       if (isBlank(d)) continue
-      const result = checkOption(d.name, d.description, {
+      const result = checkOption(d.name, d.description ?? '', {
         adding: staying + added.length + addProblems.size + 1,
         exceptKey: d.key,
       })
@@ -708,7 +736,7 @@ function OptionList({
     const corrected: { key: string; name: string; description: string }[] = []
     for (const o of changed) {
       const e = editing.get(o.id)!
-      const result = checkOption(e.name, e.description, { adding: false, exceptKey: o.id })
+      const result = checkOption(e.name, e.description ?? '', { adding: false, exceptKey: o.id })
       if ('field' in result) fixProblems.set(o.id, result)
       else corrected.push({ key: o.id, ...result })
     }
@@ -728,7 +756,7 @@ function OptionList({
   function addDraft() {
     const next = blankDraft()
     setDrafts((prev) => [...prev, next])
-    setFocusKey(next.key)
+    setFocus({ key: next.key, field: 'name' })
   }
 
   /** Take one of the drafts back off. */
@@ -737,16 +765,26 @@ function OptionList({
     setDraftProblems((prev) => without(prev, key))
   }
 
-  /** Turn a row into its two fields, filled in with what it says now. */
+  /** Turn a row into its fields, filled in with what it says now. */
   function openEditor(option: PollOption) {
-    setEditing((prev) =>
-      new Map(prev).set(option.id, { name: option.name, description: option.description ?? '' }),
-    )
+    setEditing((prev) => new Map(prev).set(option.id, fieldsOf(option)))
+    setFocus({ key: option.id, field: 'name' })
   }
 
-  function changeEdit(id: string, fields: { name: string; description: string }) {
+  function changeEdit(id: string, fields: OptionText) {
     setEditing((prev) => new Map(prev).set(id, fields))
     setEditProblems((prev) => without(prev, id))
+  }
+
+  /**
+   * Show a description field, or take it away with whatever was in it. A
+   * field the `+` has just shown is a field somebody is about to type in, so
+   * it takes the cursor.
+   */
+  function toggleDescription(key: string, fields: OptionText, change: (f: OptionText) => void) {
+    const opening = fields.description === null
+    change({ ...fields, description: opening ? '' : null })
+    if (opening) setFocus({ key, field: 'description' })
   }
 
   /** Mark an option for removal, or take the marking back. */
@@ -838,7 +876,7 @@ function OptionList({
         const open = editing.get(option.id)
         // The row as the save would leave it, which is what a struck row
         // shows too, since *Keep* gives that back.
-        const shown = open ?? { name: option.name, description: option.description ?? '' }
+        const shown = open ?? fieldsOf(option)
 
         return (
           /* The row's own box, which is what opens and closes; see
@@ -856,7 +894,7 @@ function OptionList({
                   <OptionFields
                     value={open}
                     problem={editProblems.get(option.id) ?? null}
-                    autoFocus
+                    focus={focus?.key === option.id ? focus.field : undefined}
                     ariaLabel={`Name of ${option.name}`}
                     onChange={(fields) => changeEdit(option.id, fields)}
                   />
@@ -890,10 +928,19 @@ function OptionList({
                   ) : (
                     <Group gap={4} wrap="nowrap" mt={open ? 6 : 0}>
                       {/* The pencil turns the row into fields and goes: there
-                          is nothing more for it to do once they are open. The
+                          is nothing more for it to do once they are open, and
+                          the description's `+` / `−` takes its place. The
                           cross stays, so an option can still be taken off
                           altogether after its fields have been opened. */}
-                      {!open && (
+                      {open ? (
+                        <DescriptionToggle
+                          open={open.description !== null}
+                          subject={option.name}
+                          onToggle={() =>
+                            toggleDescription(option.id, open, (f) => changeEdit(option.id, f))
+                          }
+                        />
+                      ) : (
                         <ActionIcon
                           variant="subtle"
                           aria-label={`Edit ${option.name}`}
@@ -936,22 +983,28 @@ function OptionList({
               <OptionFields
                 value={d}
                 problem={draftProblems.get(d.key) ?? null}
-                autoFocus={d.key === focusKey}
+                focus={focus?.key === d.key ? focus.field : undefined}
                 placeholder={
                   options.length === 0 && i === 0 ? 'Add an option' : 'Add another option'
                 }
                 ariaLabel="Option you are suggesting"
                 onChange={(fields) => changeDraft(d.key, fields)}
               />
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                mt={6}
-                aria-label={`Discard ${d.name.trim() || 'this option'}`}
-                onClick={() => discardDraft(d.key)}
-              >
-                &times;
-              </ActionIcon>
+              <Group gap={4} wrap="nowrap" mt={6}>
+                <DescriptionToggle
+                  open={d.description !== null}
+                  subject={d.name.trim() || 'this option'}
+                  onToggle={() => toggleDescription(d.key, d, (f) => changeDraft(d.key, f))}
+                />
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  aria-label={`Discard ${d.name.trim() || 'this option'}`}
+                  onClick={() => discardDraft(d.key)}
+                >
+                  &times;
+                </ActionIcon>
+              </Group>
             </Group>
             <Divider />
           </div>
@@ -1103,41 +1156,43 @@ async function applyToCollecting(
 function OptionFields({
   value,
   problem,
-  autoFocus,
+  focus,
   placeholder,
   ariaLabel,
   onChange,
 }: {
-  value: { name: string; description: string }
+  value: OptionText
   /** What is wrong with it, or null. Marked on the field it is about. */
   problem: Problem | null
   /**
-   * Whether the name field takes the cursor on arriving: a row opened by its
-   * pencil or a field opened by *Add option*, which were each a press asking
-   * for exactly that. The blank field the card starts with does not, since it
-   * is here on arrival rather than opened.
+   * Which field takes the cursor on arriving, if either: the name of a row
+   * opened by its pencil or a field opened by *Add option*, or a description
+   * its `+` has just shown -- each a press asking for exactly that.
    */
-  autoFocus?: boolean
+  focus?: 'name' | 'description'
   placeholder?: string
   ariaLabel: string
-  onChange: (value: { name: string; description: string }) => void
+  onChange: (value: OptionText) => void
 }) {
   return (
     <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
       <TextInput
         value={value.name}
-        autoFocus={autoFocus}
+        autoFocus={focus === 'name'}
         placeholder={placeholder}
         aria-label={ariaLabel}
         onChange={(e) => onChange({ ...value, name: e.currentTarget.value })}
         error={problem?.field === 'name' ? problem.message : null}
       />
-      <DescriptionField
-        value={value.description}
-        onChange={(e) => onChange({ ...value, description: e.currentTarget.value })}
-        placeholder="Description (optional)"
-        error={problem?.field === 'description' ? problem.message : null}
-      />
+      {value.description !== null && (
+        <DescriptionField
+          value={value.description}
+          autoFocus={focus === 'description'}
+          onChange={(e) => onChange({ ...value, description: e.currentTarget.value })}
+          placeholder="Description (optional)"
+          error={problem?.field === 'description' ? problem.message : null}
+        />
+      )}
     </Stack>
   )
 }

@@ -16,12 +16,11 @@ import {
   Textarea,
   TextInput,
   Title,
-  Tooltip,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
-import { DescriptionField } from '../components/DescriptionField'
+import { DescriptionField, DescriptionToggle } from '../components/DescriptionField'
 import { ScheduleFields } from '../components/ScheduleFields'
 import {
   blankSchedule,
@@ -1155,23 +1154,11 @@ export function CreatePoll() {
                       />
                     )}
                   </Stack>
-                  <Tooltip
-                    label={option.description === null ? 'Add description' : 'Remove description'}
-                    withArrow
-                  >
-                    <ActionIcon
-                      variant="subtle"
-                      color="gray"
-                      onClick={() => toggleDescription(questionIndex, index)}
-                      aria-label={
-                        option.description === null
-                          ? `Add a description to option ${index + 1}`
-                          : `Remove the description from option ${index + 1}`
-                      }
-                    >
-                      {option.description === null ? '+' : '−'}
-                    </ActionIcon>
-                  </Tooltip>
+                  <DescriptionToggle
+                    open={option.description !== null}
+                    subject={`option ${index + 1}`}
+                    onToggle={() => toggleDescription(questionIndex, index)}
+                  />
                   <ActionIcon
                     variant="subtle"
                     color="red"

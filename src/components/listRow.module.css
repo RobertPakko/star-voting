@@ -30,10 +30,21 @@
 /* The grid's single cell. It has to clip, or the row's contents keep their
    full height while the track around them collapses and the list ends up
    overlapping itself. `min-height: 0` is the other half of that: a grid item
-   will not shrink below its content without it. */
+   will not shrink below its content without it.
+
+   The clip is pushed out past the row's own edges by padding the cell and
+   taking the same amount back in margin, so the row lays out exactly as it
+   would without either. Clipping at the edge itself cut the keyboard focus
+   ring off every control sitting against it -- the `×` at the end of each
+   option, whose ring is drawn outside the button (a 2px outline, 2px off it)
+   and lost its whole right-hand side. `overflow-clip-margin` says this in one
+   line and Safari does not read it. */
 .content {
+  --ring-room: 6px;
   overflow: hidden;
   min-height: 0;
+  padding: var(--ring-room);
+  margin: calc(var(--ring-room) * -1);
 }
 
 /* For a row that is more than one thing — `CollectOptions` puts a divider
