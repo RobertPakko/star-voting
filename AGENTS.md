@@ -1705,8 +1705,15 @@ the row it is about, and the one place it is dropped is the save, which is the
 one place it can be dropped without also closing the way back.
 
 **And a third half: an option can be corrected in place.** A pencil beside
-the cross opens the row's two fields where the row is, filled in with what is
-there. Before it existed, fixing a typo in a description meant striking the
+the cross turns the row into its two fields where the row is, filled in with
+what is there, and that is all it does. There is no *Save* or *Cancel* on the
+row: there were, and a *Save* beside one option reads as a save to the poll
+when it only ever put the correction into the draft — the same misreading
+the old *Add* invited. What is typed goes in on the press that ends the card,
+several rows may be open at once, and a row opened and left as it was is not
+sent. The cross stays beside the open fields, so an option can still be taken
+off altogether after its pencil has been pressed; striking an open row keeps
+what was typed, and *Keep* gives it back. Before it existed, fixing a typo in a description meant striking the
 option out and typing the whole description again under a new one — and the
 list would not even take that, because the name being retyped was a name
 already on it. The duplicate check is unchanged and deliberately still counts
@@ -1730,8 +1737,8 @@ on the grounds that the list belongs to the group and a suggestion should land
 live for everybody watching. One card, one press, one save is the better trade
 and it is now the same on every path; see [Confirming is the
 save](#saying-you-are-done-adding-options) for what that press sends and
-through which doors. A draft row is corrected by the same pencil and never
-leaves the browser at all.
+through which doors. A draft is a pair of fields already, and is corrected by
+typing in it.
 
 One request, but for a while not one *edit*: the removals went as a `delete`
 of their own and the additions followed, which is what put the two-option
@@ -3420,8 +3427,12 @@ saw their option on the list, and took the row for a saved option — which is
 exactly what a row that looks like every other row says — and left without
 pressing *Confirm options*. The row was a lie about where the option was. So
 what is typed now stays in the text field it was typed into, still editable,
-and a fresh blank field opens under it the moment it stops being blank, which
-is how a second option gets somewhere to go. A blank field is room, not an
+with a × to discard it. The card starts with one blank field, and **Add
+option**, beside the button that ends the card, opens another and puts the
+cursor in it. For a day the next field opened by itself the moment the last
+one was typed into, and a field appearing under your typing is a field you
+did not ask for; a button is somewhere to look for "one more", and sits beside
+the press that sends them all. A blank field is room, not an
 option, and is never sent; every filled one is checked on the press that ends
 the card, all at once, with each problem marked on its own field — two drafts
 with one name mark the later, as the create form does.
