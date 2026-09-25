@@ -16,7 +16,8 @@ import { EyeIcon, EyeSlashIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { pruneHiddenPolls, setPollHidden, useHiddenPolls } from '../lib/hiddenPolls'
-import { openedPolls, pruneOpenedPolls } from '../lib/openedPolls'
+import { openedCandidates, openedPolls, pruneOpenedPolls } from '../lib/openedPolls'
+import type { ListCursor } from '../lib/openedPolls'
 import { pollTopic, userTopic, useLiveStream } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
@@ -70,6 +71,29 @@ export function PollList() {
   // The page most recently *asked* for, which is how turning a page tells
   // itself apart from the first read. 0 until the first read lands.
   const fetched = useRef(0)
+  // Where each page ended when it was last read: its last row's sort key. It
+  // is what says which opened polls can be on the page after it, before that
+  // page is read; see `candidatesFor`.
+  const ends = useRef(new Map<number, ListCursor>())
+
+  // The opened polls that can be on a page, from what this browser knows
+  // before reading it — the dates it stored beside each id, and where the
+  // page before ended. Exact for page one; for a later page, as good as that
+  // page's last read, and nothing at all for a page reached by jumping past
+  // one never read. The check in `load` covers every way this can be short.
+  const candidatesFor = useCallback((target: number) => {
+    const after = target === 1 ? null : ends.current.get(target - 1)
+    if (after === undefined) return []
+    return openedCandidates(after, PAGE_SIZE).sort()
+  }, [])
+
+  // The opened polls being watched: the candidates for the page being read,
+  // plus any the check below found on it that the candidates missed. Only
+  // replaced when the page changes and otherwise only grown, so a read never
+  // takes a topic away from the page it is on.
+  const [watched, setWatched] = useState<string[]>(() => candidatesFor(1))
+  const watchedRef = useRef(watched)
+  watchedRef.current = watched
 
   // One round trip for a page of polls, their status, and the total. This
   // used to be a select plus one poll_status RPC per poll; which is also what
@@ -111,6 +135,22 @@ export function PollList() {
     setError(null)
     const rows = (data as PollListItem[]) ?? []
     setPolls(rows)
+    // Where this page ends, for the page after it.
+    const last = rows[rows.length - 1]
+    if (last) ends.current.set(asked, { created_at: last.created_at, id: last.id })
+    // The check. An opened poll on this page that was not being watched when
+    // the read was made is a card whose changes nobody is hearing about, and
+    // whose next vote could already have gone by unannounced — the candidates
+    // were a guess, and the list can have shifted under the page since. So
+    // it is watched from now on, and the stream reads once more when its
+    // topic joins, which is the read that covers it. On nearly every load
+    // there is nothing here and this read was the only one.
+    const unwatched = rows
+      .filter((row) => row.created_by === null && !watchedRef.current.includes(row.id))
+      .map((row) => row.id)
+    if (unwatched.length > 0) {
+      setWatched((was) => [...new Set([...was, ...unwatched])].sort())
+    }
     // No rows means no total to read off one, and that can only be an empty
     // list: the database clamps a page request past the end onto the last
     // page there is, so a page that comes back empty is a list with nothing
@@ -156,24 +196,17 @@ export function PollList() {
   // The one kind of card it says nothing about is an open poll that is here
   // because this browser opened its link: its creator is not the reader and
   // it has no invite list, so nothing it does reaches `user:<id>`. Those are
-  // watched on their own topics — and all of them, not the ones on the page
-  // in front of the reader, for the reason the reader's own topic works at
-  // all: the ids are known before anything is read. They are in this
-  // browser's storage, so the page subscribes to every topic it could need
-  // on mount and the first read is still its only read. Watching only the
-  // page's would mean reading to learn them and reading again on
-  // subscribing, the scheme the paragraph above exists to have ended.
+  // watched on their own topics, the ones on the page in front of the reader
+  // — ten at most, and none on a page without one.
   //
-  // The price is the one `user:<id>` already pays: a vote in an opened poll
-  // on another page re-reads this one to find it unchanged. And a channel
-  // each, which is why openedPolls keeps fifty at most.
-  //
-  // Sorted so the key does not depend on the order they were opened in;
-  // opening a poll puts it at the front of the list, and that is not a reason
-  // to resubscribe.
-  const topics = session?.user.id
-    ? [userTopic(session.user.id), ...[...openedPolls()].sort().map(pollTopic)]
-    : []
+  // And watched *before* the page is read, for the reason the reader's own
+  // topic is: a topic joined after the read that drew the page leaves a gap
+  // in which a vote goes unannounced. The page is not known until it is
+  // read, but which opened polls can be on it is: the list is newest first,
+  // and the browser stored each one's creation date beside its id. See
+  // `candidatesFor`, and the check in `load` for when that is wrong.
+  const topics = session?.user.id ? [userTopic(session.user.id), ...watched.map(pollTopic)] : []
+  const topicKey = topics.join(' ')
 
   const { status: liveStatus, reread } = useLiveStream(topics, load)
 
@@ -181,10 +214,18 @@ export function PollList() {
   // does not depend on which page is on screen, so nothing announces it. The
   // first read is deliberately left to the subscription — see useLiveStream
   // — which is why this waits for one to have landed before it fires.
+  //
+  // Unless the page brought different topics with it: the stream resubscribes
+  // then, and reads once they have joined, which is this read — asking here
+  // as well would be a second one, made before the new topics could cover it.
+  const readKey = useRef(topicKey)
   useEffect(() => {
+    const moved = readKey.current !== topicKey
+    readKey.current = topicKey
+    if (moved) return
     if (fetched.current === 0 || fetched.current === page) return
     reread()
-  }, [page, reread])
+  }, [page, topicKey, reread])
 
   // Clamped rather than reset: a poll deleted from page three should leave
   // the reader on page three, or on the last page there is if that was it.
@@ -402,6 +443,7 @@ export function PollList() {
               value={current}
               onChange={(next) => {
                 setPage(next)
+                setWatched(candidatesFor(next))
                 // The list is taller than a phone; landing halfway down the
                 // new page reads as nothing having happened.
                 window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })

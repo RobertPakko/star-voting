@@ -68,6 +68,16 @@ begin
     (select created_by_email from list_polls(10, 0, array[v_mine]) where id = v_mine),
     'reader@example.com');
 
+  -- The date the browser stores beside the id comes from open_poll_view, and
+  -- the list compares it with the created_at of its own rows to work out
+  -- which opened polls a page can hold before reading it (openedPolls.ts).
+  -- It compares them as text, so the two must be the same text, not merely
+  -- the same instant: both go out as JSON, which is how PostgREST writes a
+  -- column too.
+  perform tests.assert_eq('the link''s view spells the creation date the way the list does',
+    open_poll_view(v_open) -> 'poll' ->> 'created_at',
+    to_json(v_row.created_at) #>> '{}');
+
   -- ------------------------------------------------------------------
   -- Only an open poll.
   -- ------------------------------------------------------------------

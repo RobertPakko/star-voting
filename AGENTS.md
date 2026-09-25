@@ -556,7 +556,9 @@ open poll — and that a page of the poll list is a page of the same list every
 time: that two pages partition it with nothing on both and nothing on neither,
 that the total is of the list rather than the page, and that asking past the
 end lands on the last page there is — and that the list carries an open poll
-whose id the browser hands it, and no other kind, without naming who made it;
+whose id the browser hands it, and no other kind, without naming who made it,
+and that the link's own view spells the poll's creation date exactly as the
+list does;
 everything about the results-ready
 announcement except the sending — whether a poll has a result at all, who
 would be told and who is deliberately not, and that the notice is made exactly
@@ -4618,7 +4620,8 @@ reachable only by the link it arrived by, wherever that link had got to. Now
 date, counted by the pager and hidden by the same eye.
 
 **The browser remembers, and the database lists.** `src/lib/openedPolls.ts`
-keeps the ids — newest first, fifty at most, for the channel count below — and `PublicPoll` adds one
+keeps the ids, each with its poll's creation date — newest-opened first, a
+hundred at most — and `PublicPoll` adds one
 every time it arrives at an open poll, signed in or not. `PollList` hands them
 to `list_polls` as `p_open_ids`
 ([`0065_opened_polls_on_the_list.sql`](supabase/migrations/0065_opened_polls_on_the_list.sql)),
@@ -4665,39 +4668,65 @@ rather than showing no list at all.
 **The cards are live, on their own topics, and the list still opens on one
 read.** The list listens on `user:<id>` (see [Live updates](#live-updates)),
 which fans out to a poll's creator and invitees, and the reader of an open
-poll is neither — so the list also watches `poll:<id>` for every open poll
-this browser has opened.
+poll is neither — so the list also watches `poll:<id>` for the opened polls on
+the page in front of the reader. Ten at the most, and none on a page without
+one.
 
-Every one, rather than the ones on the page in front of the reader, and that
-is the whole of how it avoids paying for them. A page learns what it is
-showing only by reading, so watching the page's opened polls meant reading,
-subscribing to what the read named, and reading again once those joined —
-the circularity [the list watches its reader](#live-updates) was written to
-end. The poll page never had it because its topic is in its URL; the list's
-opened polls are in this browser's storage, which is just as known before
-anything is read. So the list subscribes to `user:<id>` and every stored
-`poll:<id>` on mount, in one stream, and the first read is its only read.
+The difficulty is the order. A topic joined *after* the read that drew the
+page leaves a gap, a vote committed between that read and the join is never
+announced, and the card sits stale until something else moves it. The poll
+page never has this, because its topic is in its URL and it subscribes before
+it reads. The list does not know which opened polls are on a page until it
+has read the page — but it can work it out beforehand, because **the list is
+ordered newest first and the browser knows when each opened poll was made**:
 
-That needed one change to `useLiveStream`: **a stream reads when the last of
-its channels joins, not once per channel.** It used to insist on a read for
-every `SUBSCRIBED`, on the grounds that every page held exactly one topic; a
-page of fifty-one would have read once and then trailed a second read behind
-it. A read made before the last channel joined does not cover that channel,
-so it waits for the wave and reads once. A channel that drops and rejoins on
-its own is a wave of one and reads at once, as before; the page reports
-itself live only while every channel is carrying, since one that has dropped
-is a set of polls nobody is hearing about.
+- **Page one** holds the ten newest rows of the whole list. An opened poll on
+  it has fewer than ten rows ahead of it, so fewer than ten *opened* polls
+  ahead of it — it is among the ten newest opened polls. That is exact, and it
+  is ten topics at most whatever else the reader is in.
+- **A later page** starts after the last row of the page before, so its opened
+  polls are among the ten newest opened polls older than that row.
+  `PollList` keeps each page's last row from its last read (`ends`) for this.
 
-What it costs is what `user:<id>` already costs, and a channel each:
+`openedCandidates` in `src/lib/openedPolls.ts` is that rule, and the dates it
+needs come from the page that opened each poll:
+[`0067_open_poll_view_says_when.sql`](supabase/migrations/0067_open_poll_view_says_when.sql)
+adds `created_at` to `open_poll_view`, and `PublicPoll` stores it beside the id.
+It is a date anybody holding the link could already see the poll exist on;
+the page still draws no expiry. The two sides compare dates as text, which
+only works if both are Postgres's own JSON spelling of the same column —
+`37_opened_polls_on_the_list` holds them to each other.
 
-- **Wasted reads.** A vote in an opened poll on page three re-reads page one
-  to find it unchanged — the trade the reader's own topic has always made.
-- **Channels.** Realtime bounds how many channels one client may hold, which
-  is why openedPolls keeps fifty rather than a hundred.
-- **A resubscription when the set moves.** Opening a new poll does not move
-  it — the ids are sorted into the key, and the list is not on screen while a
-  poll is being opened — but pruning a deleted one does, and costs the one
-  read a fresh subscription always costs.
+**And the guess is checked on every read.** A later page's boundary can have
+moved since it was recorded — a poll created or deleted shifts every page
+after it — and a page reached by jumping past one never read has no boundary
+at all. So after each read, `load` looks for an opened poll on the page that
+was not being watched, and when there is one it adds that topic; the stream
+reads once more when it has joined, which is the read that covers it. The
+watched set is only ever grown by that, and only replaced when the page
+changes, so a read never takes a topic away from the page it is on. On nearly
+every load the check finds nothing and the first read was the only one.
+
+Two changes to `useLiveStream` hold this up. **A stream reads when the last
+of its channels joins, not once per channel**: it used to insist on a read for
+every `SUBSCRIBED`, on the grounds that every page held one topic, and a page
+of eleven would have read once and then trailed a second read behind it. A
+channel that drops and rejoins alone is a wave of one and reads at once, as
+before, and the page reports itself live only while every channel is
+carrying. And **a page turn that changes the topics does not ask for a read
+of its own**: the stream resubscribes and reads when the new topics have
+joined, and a second read made before they could cover anything would be
+wasted.
+
+What it costs:
+
+- **No wasted reads of its own.** Only the page's opened polls are watched,
+  so one on another page wakes nobody; the wasted reads the list does make
+  are `user:<id>`'s, as they always were.
+- **A resubscription when the page's opened polls change.** Turning onto a
+  page whose candidates differ rebuilds the stream — `user:<id>` included,
+  since a changed topic list rebuilds every channel — and reads once when it
+  has, in place of the read the page turn would have made anyway.
 
 A deleted opened poll comes off the list at once: its own topic says
 `poll_deleted`, which the list reads like any other signal.
@@ -4778,9 +4807,11 @@ names Duplicate. An automatic deletion is only fair if it was never a surprise,
 which is the whole reason the date is on the poll from the day it is created —
 and why it is the same date on the last day as on the first.
 
-The public voting page carries no date, and `open_poll_view` no field for
-one: it answers to a link rather than to an account, and it is read once by
-someone who came to vote. The policy is on the [About](src/pages/About.tsx)
+The public voting page carries no date, and `open_poll_view` no expiry: it
+answers to a link rather than to an account, and it is read once by someone
+who came to vote. It does carry `created_at`, since
+`0067_open_poll_view_says_when.sql`, for the poll list rather than the page —
+see [Open polls you have opened](#open-polls-you-have-opened). The policy is on the [About](src/pages/About.tsx)
 page, which is public, and on the poll page its creator uses.
 
 ### The QR code

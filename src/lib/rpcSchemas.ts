@@ -145,6 +145,7 @@ export const openPollViewSchema = z.object({
     show_ballots: z.boolean(),
     solicit_options: z.boolean(),
     closed_at: z.string().nullable(),
+    created_at: z.string().optional(),
     group_id: z.string().nullable().optional(),
     question_position: z.number().nullable().optional(),
     question_title: z.string().nullable().optional(),

@@ -402,6 +402,13 @@ export interface OpenPollView {
     solicit_options: boolean
     closed_at: string | null
     /**
+     * When the poll was made. The poll list uses it to know which opened
+     * polls can be on a page before reading it; see lib/openedPolls.ts.
+     * Undefined against a database whose open_poll_view predates it, and on
+     * the About page's sample, which is a recording from before it.
+     */
+    created_at?: string
+    /**
      * Which multi-question poll this question belongs to, where it sits, and
      * what it asks. All three null on a poll asking one question, and all
      * three undefined against a database whose open_poll_view predates them

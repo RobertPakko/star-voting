@@ -170,7 +170,10 @@ export function PublicPoll({
         // strip only comes with one. The sample is refused in there: its ids
         // are words, and it is nobody's poll to come back to.
         // See lib/openedPolls.ts.
-        rememberOpenedPoll(strip.find((question) => question.question_position === 1)?.id ?? of)
+        rememberOpenedPoll(
+          strip.find((question) => question.question_position === 1)?.id ?? of,
+          openView.poll.created_at,
+        )
       }
       loadedFor.current = of
       setRead({ pollId: of, view: openView, results: tally ?? null, ballots: sheet ?? null })
