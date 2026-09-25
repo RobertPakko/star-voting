@@ -139,6 +139,15 @@ export function useLiveStream(
    * nothing at all, means it did.
    */
   onChange: () => boolean | void | Promise<boolean | void>,
+  /**
+   * What to do when a poll this page watches has been deleted, which arrives
+   * as `poll_deleted` on its own topic rather than as a change: a re-read of
+   * a poll that has gone is a read that fails, so answering this one with a
+   * read would retry five times and then call the page offline. Given the
+   * topic it came on. Left out, it is read like any other signal — right for
+   * the poll list, whose read simply comes back without the card.
+   */
+  onGone?: (topic: string) => void,
 ): LiveStream {
   const [status, setStatus] = useState<LiveStatus>('connecting')
 
@@ -154,8 +163,10 @@ export function useLiveStream(
   // nothing: the channels belong to the poll being watched, not to the identity
   // of the function watching it.
   const onChangeRef = useRef(onChange)
+  const onGoneRef = useRef(onGone)
   useEffect(() => {
     onChangeRef.current = onChange
+    onGoneRef.current = onGone
   })
 
   // `topics` is a fresh array on every render, so the effect depends on its
@@ -203,8 +214,11 @@ export function useLiveStream(
     // The throttle is measured between read starts, so a slow read does not
     // add another delay before the trailing read.
     let lastReadAt: number | undefined
-    // Whether at least one channel is currently carrying messages.
+    // Whether every channel is currently carrying messages, and which of them
+    // are. A page is live only while all of its topics are: one that has
+    // dropped is a set of polls whose changes nobody is hearing about.
     let subscribed = false
+    const joined = new Set<RealtimeChannel>()
     // Whether the channels were let go on purpose, because the tab went
     // behind something. Closing them reports itself back through the same
     // callback a channel that broke would, and a tab put away deliberately
@@ -341,8 +355,13 @@ export function useLiveStream(
         // Every event on the topic, because a poll change and an invite
         // arrive under different names and both mean the same thing here:
         // ask again.
-        channel.on('broadcast', { event: '*' }, () => {
+        channel.on('broadcast', { event: '*' }, (message) => {
           if (cancelled || paused) return
+          // The one message that is not a prompt to re-read; see `onGone`.
+          if (message.event === 'poll_deleted' && onGoneRef.current) {
+            onGoneRef.current(topic)
+            return
+          }
           ledger.signalled()
           // Forgiven for the reason `insist` forgives them: a run of failed
           // reads minutes ago should not stop this page answering a poll that
@@ -353,6 +372,15 @@ export function useLiveStream(
         channel.subscribe((state) => {
           if (cancelled || paused) return
           if (state === 'SUBSCRIBED') {
+            joined.add(channel)
+            // Not until the last of them. A read now would not cover a channel
+            // still joining — anything it missed while it joined is exactly
+            // what the read on subscribing is for — so every channel but the
+            // last would cost a read the last one then has to repeat. Waiting
+            // is what lets a page of several topics open on one read, as a
+            // page of one always has. A channel rejoining alone is the whole
+            // wave by itself, and reads at once.
+            if (joined.size < channels.length) return
             window.clearTimeout(grace)
             grace = undefined
             // The subscription arrived in time, so the floor is not needed:
@@ -368,16 +396,13 @@ export function useLiveStream(
             // read is a wasted round trip, where a suppressed one is a page
             // left showing votes that have since been overtaken.
             //
-            // Affordable because nearly every page subscribes to exactly one
-            // topic. A caller passing several gets one demand per channel:
-            // the first reads and the rest, landing while it is in flight,
-            // collapse into one trailing read behind it — an outright demand
-            // is one flag and cannot tell a genuine catch-up from a wave of
-            // channels arriving. The poll list's opened polls are that
-            // caller, up to ten topics, and pay those two reads when a page
-            // of them subscribes; see PollList.
+            // One demand per wave rather than per channel, because of the
+            // wait above: a page of several topics — the poll list, with the
+            // open polls this browser has opened — reads once when the last
+            // of them joins, not once for each.
             insist()
           } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
+            joined.delete(channel)
             subscribed = false
             armGrace()
           }
@@ -389,6 +414,7 @@ export function useLiveStream(
     function close() {
       for (const channel of channels) supabase.removeChannel(channel)
       channels = []
+      joined.clear()
     }
 
     function onVisibilityChange() {

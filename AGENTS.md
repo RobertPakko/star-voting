@@ -546,8 +546,9 @@ link discloses no email address, its creator's included, and which changes
 announce themselves to which topics for [Live updates](#live-updates) — counts
 as well as topics, since a change that announces itself once per row rather
 than once per statement passes any assertion phrased as "did it say
-anything", and including the two halves of a poll being deleted, whose lists
-are told once each while its own topic and its cascading rows stay silent, and
+anything", and including a poll being deleted, whose lists are told once
+each and whose own topic is told `poll_deleted` rather than `poll_changed`,
+while its cascading rows stay silent, and
 the nightly purge that stays silent through all of it; who may read a
 published ballot sheet and on which of the two terms it unlocks, including
 that the account door and the link door hand back the same sheet on the same
@@ -624,8 +625,8 @@ not the socket, that decides what comes back.
 There are two: `poll:<id>`, for every page watching one poll, whichever side
 of it they are on; and `user:<id>`, for one person's poll list — every change
 to every poll they made or are invited to, invites included. (The open polls
-a browser adds to that list are watched on their own `poll:<id>` topics
-instead; see [Open polls you have opened](#open-polls-you-have-opened).)
+a browser adds to that list are watched on their own `poll:<id>` topics as
+well, in the same stream; see [Open polls you have opened](#open-polls-you-have-opened).)
 
 **The list watches its reader, not its rows, and that is what keeps it to one
 request.** It used to subscribe to one topic per poll on the page: a set it
@@ -672,13 +673,26 @@ Four rules govern the telling half:
   round trip rather than news. It is also why the fix belongs there rather
   than in each writer: the guarantee covers bulk writes nobody has written
   yet. See `0060_one_signal_per_change.sql`.
-- **A poll on its way out says one thing, to the lists it was on.** Its rows
-  are silent — they cascade behind it, and `broadcast_poll_change` returns early
-  when the poll is already gone, which stops a delete broadcasting once per
-  option, invitee and ballot. Its own topic is silent too: a watcher answers a
-  signal by re-reading, and a re-read of a poll that has gone *fails*, so it
-  would retry five times and then tell its reader they were offline. What is
-  left is the announcement the poll owes its lists, and it goes to
+- **A poll on its way out says it has gone — to its own topic, and to the
+  lists it was on.** Its rows are silent — they cascade behind it, and
+  `broadcast_poll_change` returns early when the poll is already gone, which
+  stops a delete broadcasting once per option, invitee and ballot.
+
+  Its own topic hears **`poll_deleted`**, the one event that is not a prompt
+  to re-read. It was silent for a long time, for a real reason: a watcher
+  answers a signal by re-reading, a re-read of a poll that has gone *fails*,
+  and the page would retry five times and then tell its reader they were
+  offline. So somebody with a poll open went on looking at a ballot for a poll
+  that no longer existed. The answer was a message that is the news rather
+  than a knock on the door: `useLiveStream` hands `poll_deleted` to the
+  page's `onGone` instead of reading, and the poll page says the poll has been
+  deleted. A page that passes no `onGone` — the poll list — reads it like any
+  other signal, which is right there: its read simply comes back without the
+  card. `announce()` remembers a topic *and event* as told, so a transaction
+  that changes a poll and then deletes it says both. See
+  `0066_a_deleted_poll_says_so.sql`.
+
+  The lists hear the announcement the poll owes them, on
   `user:<id>` — `broadcast_poll_gone`, on a **BEFORE** DELETE row trigger,
   because the audience is `invited_voters` and those rows go in the same
   statement. Without it a deleted poll sat on everyone else's list as a card
@@ -4604,7 +4618,7 @@ reachable only by the link it arrived by, wherever that link had got to. Now
 date, counted by the pager and hidden by the same eye.
 
 **The browser remembers, and the database lists.** `src/lib/openedPolls.ts`
-keeps the ids — newest first, a hundred at most — and `PublicPoll` adds one
+keeps the ids — newest first, fifty at most, for the channel count below — and `PublicPoll` adds one
 every time it arrives at an open poll, signed in or not. `PollList` hands them
 to `list_polls` as `p_open_ids`
 ([`0065_opened_polls_on_the_list.sql`](supabase/migrations/0065_opened_polls_on_the_list.sql)),
@@ -4648,37 +4662,45 @@ always did; a browser on this build talking to a database that has not had
 the migration gets `PGRST202`, and `PollList` asks again without the ids
 rather than showing no list at all.
 
-**The cards are live, on their own topics.** The list listens on
-`user:<id>` (see [Live updates](#live-updates)), which fans out to a poll's
-creator and invitees, and the reader of an open poll is neither — so the list
-also watches `poll:<id>` for each opened poll on the page on screen. That is
-ten topics at the very most, the same ceiling as the cards the page holds, and
-none at all on a page without one. They are the rows whose `created_by` came
-back null, which is exactly the rows on the list only by their link, so no
-poll is watched on two topics at once.
+**The cards are live, on their own topics, and the list still opens on one
+read.** The list listens on `user:<id>` (see [Live updates](#live-updates)),
+which fans out to a poll's creator and invitees, and the reader of an open
+poll is neither — so the list also watches `poll:<id>` for every open poll
+this browser has opened.
 
-It is the one place the list takes on the circularity [the list watches its
-reader](#live-updates) was written to avoid: those ids cannot be named until
-the page has been read. So a page showing opened polls pays for it when their
-topics subscribe — a read, and at most one trailing read behind it for the
-channels that land while it is in flight. Two things keep it to that:
+Every one, rather than the ones on the page in front of the reader, and that
+is the whole of how it avoids paying for them. A page learns what it is
+showing only by reading, so watching the page's opened polls meant reading,
+subscribing to what the read named, and reading again once those joined —
+the circularity [the list watches its reader](#live-updates) was written to
+end. The poll page never had it because its topic is in its URL; the list's
+opened polls are in this browser's storage, which is just as known before
+anything is read. So the list subscribes to `user:<id>` and every stored
+`poll:<id>` on mount, in one stream, and the first read is its only read.
 
-- **A stream of its own.** The opened polls' topics sit in a second
-  `useLiveStream` rather than beside `user:<id>`, because a changed topic list
-  tears down and rebuilds every channel in the stream; together, every page
-  turn that changed which opened polls are on screen would drop and rejoin
-  the reader's own topic as well.
-- **Its reads are not its own.** What that stream does with a signal is call
-  the first stream's `reread`, so every read the list makes still goes
-  through one funnel and a burst across both topics collapses into one read.
+That needed one change to `useLiveStream`: **a stream reads when the last of
+its channels joins, not once per channel.** It used to insist on a read for
+every `SUBSCRIBED`, on the grounds that every page held exactly one topic; a
+page of fifty-one would have read once and then trailed a second read behind
+it. A read made before the last channel joined does not cover that channel,
+so it waits for the wave and reads once. A channel that drops and rejoins on
+its own is a wave of one and reads at once, as before; the page reports
+itself live only while every channel is carrying, since one that has dropped
+is a set of polls nobody is hearing about.
 
-The notice counts both: the page says it has stopped being told only when
-either stream has, and the second counts only while it has topics.
+What it costs is what `user:<id>` already costs, and a channel each:
 
-One thing is still not live: an opened poll being **deleted**. A poll on its
-way out announces itself to `user:<id>` for the lists it was on and stays
-silent on its own topic (see [Live updates](#live-updates) for why), so the
-card goes on the list's next read rather than at once.
+- **Wasted reads.** A vote in an opened poll on page three re-reads page one
+  to find it unchanged — the trade the reader's own topic has always made.
+- **Channels.** Realtime bounds how many channels one client may hold, which
+  is why openedPolls keeps fifty rather than a hundred.
+- **A resubscription when the set moves.** Opening a new poll does not move
+  it — the ids are sorted into the key, and the list is not on screen while a
+  poll is being opened — but pruning a deleted one does, and costs the one
+  read a fresh subscription always costs.
+
+A deleted opened poll comes off the list at once: its own topic says
+`poll_deleted`, which the list reads like any other signal.
 
 ### Polls are deleted after six months
 

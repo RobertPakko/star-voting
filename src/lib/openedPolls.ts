@@ -36,13 +36,15 @@ import { isCanonicalPollId } from './pollId'
 const STORAGE_KEY = 'star-voting:opened-polls'
 
 /**
- * How many are kept, newest first. The list hands every one of them to the
- * database on every read, so this is a bound on a request body rather than on
- * how much anybody cares about: a browser that has opened more open polls than
- * this is keeping the most recent ones, and the oldest drop off the end the
- * way they would drop off the bottom of a feed.
+ * How many are kept, newest first. Each is a channel the poll list holds open
+ * for as long as it is on screen — it watches every one of them, so that it
+ * can subscribe before it reads and open on one read (see PollList) — and
+ * Realtime bounds the channels one client may hold. Fifty leaves that bound
+ * well clear, beside the reader's own topic, and is more open polls than
+ * anybody is still following at once: the oldest drop off the end the way
+ * they would drop off the bottom of a feed.
  */
-const LIMIT = 100
+const LIMIT = 50
 
 /**
  * What is in storage, defensively: newest first, uuids only, no repeats.

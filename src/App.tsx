@@ -1,6 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { Center, Loader, Text } from '@mantine/core'
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Button, Center, Loader, Stack, Text, Title } from '@mantine/core'
+import {
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useParams,
+} from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import { forgetSampleBallots, isSampleId } from './lib/samplePoll'
 import { questionsCovered, readPollPage } from './lib/pollPage'
@@ -158,6 +166,10 @@ function PollPage() {
   // and the page drawing it is what asks again — see `onSignal`.
   const [read, setRead] = useState<{ pollId: string; page: PollRead } | null>(null)
   const [failed, setFailed] = useState<{ pollId: string; message: string } | null>(null)
+  // The poll that was deleted while it was open here, if it was. Told rather
+  // than found out: its topic says `poll_deleted`, and asking the poll again
+  // would only be refused. See `onGone` in useLiveStream.
+  const [gone, setGone] = useState<string | null>(null)
 
   const sample = !!pollId && isSampleId(pollId)
   // The read in hand, if it describes the address being rendered. A read of
@@ -224,6 +236,12 @@ function PollPage() {
     return ask ? ask() : arrive()
   }, [arrive])
 
+  // The one topic this route holds is the question on screen, so whatever
+  // was deleted is this.
+  const onGone = useCallback(() => {
+    if (pollId) setGone(pollId)
+  }, [pollId])
+
   // The route holds the subscription, and the poll's first read happens on
   // subscribing — the rule every other page follows. The topic is `poll:<id>`
   // and the id is in the URL, so there is nothing left to read the poll to
@@ -234,6 +252,7 @@ function PollPage() {
   const { status: liveStatus, reread } = useLiveStream(
     pollId && !sample ? [pollTopic(pollId)] : [],
     onSignal,
+    onGone,
   )
 
   // A sample ballot lasts as long as the visit that cast it, and this route is
@@ -260,6 +279,10 @@ function PollPage() {
   // id `samplePollData.ts` holds nothing for is a mistyped sample link, which
   // `PublicPoll` draws "poll not found" for.
   if (sample) return <PublicPoll initial={null} live={liveStatus} watch={watch} reread={reread} />
+
+  // Ahead of whatever was on screen, ballot and all: a vote cast on it now
+  // would only be refused, with nothing to say why.
+  if (gone === pollId) return <PollDeleted signedIn={!!session} />
 
   if (error) {
     return (
@@ -291,6 +314,30 @@ function PollPage() {
     )
   return (
     <PollDetail initial={exact ? covering : null} live={liveStatus} watch={watch} reread={reread} />
+  )
+}
+
+/**
+ * A poll that was deleted while somebody had it open.
+ *
+ * The same two things `NotFound` says — what happened, and that the reader is
+ * not stuck — but in the past tense, because this one is known rather than
+ * guessed at: the poll's own topic said so. The way out is the poll list, for
+ * a reader who has one.
+ */
+function PollDeleted({ signedIn }: { signedIn: boolean }) {
+  return (
+    <Stack maw={720} mx="auto" gap="md" align="center">
+      <Title order={3}>This poll has been deleted</Title>
+      <Text c="dimmed" ta="center">
+        Its creator deleted it, along with every vote in it.
+      </Text>
+      {signedIn && (
+        <Button component={Link} to="/" variant="light">
+          Back to your polls
+        </Button>
+      )}
+    </Stack>
   )
 }
 

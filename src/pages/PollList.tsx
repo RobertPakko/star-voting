@@ -18,7 +18,6 @@ import { useAuth } from '../lib/auth'
 import { pruneHiddenPolls, setPollHidden, useHiddenPolls } from '../lib/hiddenPolls'
 import { openedPolls, pruneOpenedPolls } from '../lib/openedPolls'
 import { pollTopic, userTopic, useLiveStream } from '../lib/useLiveStream'
-import type { LiveStatus } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
@@ -153,46 +152,30 @@ export function PollList() {
   //
   // It carries every change to every poll the reader made or is invited to;
   // see 0035_broadcast_polls_to_watchers.sql for the fan-out that makes it so.
-  const topics = session?.user.id ? [userTopic(session.user.id)] : []
-
-  const { status: userStatus, reread } = useLiveStream(topics, load)
-
-  // The one kind of card that topic says nothing about: an open poll that is
-  // here because this browser opened its link. Its creator is not the reader
-  // and it has no invite list, so nothing it does reaches `user:<id>`. Those
-  // cards are watched on their own topics instead — the ones on the page on
-  // screen, which is ten at the most and usually none.
   //
-  // This is the circularity the paragraph above avoids, taken on knowingly
-  // and only where it has to be: the ids cannot be named until the page has
-  // been read, so a page that shows opened polls pays one more read when
-  // those topics subscribe. It is a stream of its own for that reason. Were
-  // these topics beside `user:<id>` in one list, every page turn that changed
-  // them would tear that channel down and rebuild it too; apart, the reader's
-  // own topic stays up for the life of the page and only these move.
+  // The one kind of card it says nothing about is an open poll that is here
+  // because this browser opened its link: its creator is not the reader and
+  // it has no invite list, so nothing it does reaches `user:<id>`. Those are
+  // watched on their own topics — and all of them, not the ones on the page
+  // in front of the reader, for the reason the reader's own topic works at
+  // all: the ids are known before anything is read. They are in this
+  // browser's storage, so the page subscribes to every topic it could need
+  // on mount and the first read is still its only read. Watching only the
+  // page's would mean reading to learn them and reading again on
+  // subscribing, the scheme the paragraph above exists to have ended.
   //
-  // Its reads are not its own. What it does with a signal is ask the stream
-  // above, so every read the list makes still goes through the one funnel —
-  // a burst across both collapses into one read, as it would in one stream.
-  // Sorted so the same polls in a different order are the same topics, and
-  // resubscribe nothing.
-  const openedTopics = (polls ?? [])
-    .filter((poll) => poll.created_by === null)
-    .map((poll) => pollTopic(poll.id))
-    .sort()
-  const { status: openedStatus } = useLiveStream(openedTopics, reread)
+  // The price is the one `user:<id>` already pays: a vote in an opened poll
+  // on another page re-reads this one to find it unchanged. And a channel
+  // each, which is why openedPolls keeps fifty at most.
+  //
+  // Sorted so the key does not depend on the order they were opened in;
+  // opening a poll puts it at the front of the list, and that is not a reason
+  // to resubscribe.
+  const topics = session?.user.id
+    ? [userTopic(session.user.id), ...[...openedPolls()].sort().map(pollTopic)]
+    : []
 
-  // One notice for both: the page is live only while everything on it is.
-  // The second stream counts only while it has something to watch — with no
-  // topics it never reports, and a status left over from the last page's
-  // opened polls says nothing about this one.
-  const watchingOpened = openedTopics.length > 0
-  const liveStatus: LiveStatus =
-    userStatus === 'offline' || (watchingOpened && openedStatus === 'offline')
-      ? 'offline'
-      : userStatus === 'connecting' || (watchingOpened && openedStatus === 'connecting')
-        ? 'connecting'
-        : 'live'
+  const { status: liveStatus, reread } = useLiveStream(topics, load)
 
   // Turning a page is the one change the socket will not bring: the topic
   // does not depend on which page is on screen, so nothing announces it. The

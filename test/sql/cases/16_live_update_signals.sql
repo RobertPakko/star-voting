@@ -414,10 +414,14 @@ begin
   --
   -- Its **rows** say nothing: they cascade out behind it, and without that
   -- every delete would broadcast once per option, invitee and ballot of a
-  -- poll nobody can read any more. Neither does the **poll's own topic**: a
-  -- page watching one poll answers a signal by re-reading it, and a re-read
-  -- of a poll that is gone is a read that fails, which useLiveStream retries
-  -- and then reports as a lost connection.
+  -- poll nobody can read any more.
+  --
+  -- The **poll's own topic** is told, and told differently: `poll_deleted`
+  -- rather than `poll_changed`. A page watching one poll answers
+  -- `poll_changed` by re-reading, and a re-read of a poll that is gone is a
+  -- read that fails -- which is why this topic used to be left silent. The
+  -- event of its own is the answer rather than a prompt to fetch one, so the
+  -- page can say the poll has been deleted. See 0066_a_deleted_poll_says_so.
   --
   -- The **lists** are told, once each. A poll arrives on somebody's homepage
   -- by itself the moment they are invited to it, so a homepage that adds
@@ -427,8 +431,25 @@ begin
 
   perform tests.forget_signals();
   delete from polls where id = v_open;
-  perform tests.assert_eq('deleting a poll tells the lists it was on, and nothing else',
-    tests.signalled(), array[tests.user_topic('creator@example.com')]);
+  perform tests.assert_eq('deleting a poll tells its own topic and the lists it was on',
+    tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_open),
+      tests.user_topic('creator@example.com')]));
+  perform tests.assert_eq('and tells its own topic that it has gone, not that it changed',
+    (select array_agg(event) from realtime.messages where topic = tests.poll_topic(v_open)),
+    array['poll_deleted']);
+
+  -- A change and then a deletion in one transaction says both. announce()
+  -- tells a topic once per event, so the deletion is not swallowed as a
+  -- repeat of the change that came before it.
+  v_open := create_poll('Short-lived', null, array['A', 'B'], array[]::text[], 'open', true, false);
+  perform tests.forget_signals();
+  perform close_poll(v_open);
+  delete from polls where id = v_open;
+  perform tests.assert_eq('a poll changed and then deleted in one go says both',
+    (select array_agg(event order by event) from realtime.messages
+      where topic = tests.poll_topic(v_open)),
+    array['poll_changed', 'poll_deleted']);
 
   -- The one that would have been missed by an AFTER trigger: everyone on the
   -- invite list is told, and the invite list is deleted by the same statement.
@@ -439,6 +460,7 @@ begin
   delete from polls where id = v_poll;
   perform tests.assert_eq('and reaches everyone who could see it, not only its creator',
     tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_poll),
       tests.user_topic('creator@example.com'),
       tests.user_topic('voter1@example.com'),
       tests.user_topic('voter2@example.com')]));
@@ -460,8 +482,10 @@ begin
   delete from polls where id = any(v_questions);
   perform tests.assert_eq('deleting a poll of two questions tells each list once',
     tests.signals(tests.user_topic('voter1@example.com')), 1);
-  perform tests.assert_eq('and still says nothing on any question''s own topic',
+  perform tests.assert_eq('and tells every question''s own topic, since each has its own page',
     tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_questions[1]),
+      tests.poll_topic(v_questions[2]),
       tests.user_topic('creator@example.com'),
       tests.user_topic('voter1@example.com')]));
 
