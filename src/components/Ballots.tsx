@@ -6,6 +6,7 @@ import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { ballotsCsv, ballotsFileName, downloadCsv } from '../lib/ballotCsv'
 import { Reveal } from './Reveal'
 import { BallotsSkeleton } from './Skeletons'
+import classes from './Ballots.module.css'
 import { relabelSheet } from '../lib/schedule'
 import type { BallotSheet } from '../lib/types'
 
@@ -150,7 +151,7 @@ export function Ballots({
           <Table striped withTableBorder withColumnBorders>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>{named ? 'Voter' : 'Ballot'}</Table.Th>
+                <Table.Th className={classes.label}>{named ? 'Voter' : 'Ballot'}</Table.Th>
                 {shown.options.map((o) => (
                   <Table.Th key={o.id} ta="right">
                     {o.name}
@@ -163,7 +164,7 @@ export function Ballots({
                   unnamed sheet has nothing else to key on by design. */}
               {shown.ballots.map((ballot, i) => (
                 <Table.Tr key={i}>
-                  <Table.Td>
+                  <Table.Td className={classes.label}>
                     {named ? (
                       ballot.voter
                     ) : (
@@ -182,7 +183,7 @@ export function Ballots({
             </Table.Tbody>
             <Table.Tfoot>
               <Table.Tr>
-                <Table.Th>Total</Table.Th>
+                <Table.Th className={classes.label}>Total</Table.Th>
                 {totals.map((total, i) => (
                   <Table.Th key={shown.options[i].id} ta="right">
                     {total}

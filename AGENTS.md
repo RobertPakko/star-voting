@@ -1725,8 +1725,15 @@ the row it is about, and the one place it is dropped is the save, which is the
 one place it can be dropped without also closing the way back.
 
 **And a third half: an option can be corrected in place.** A pencil beside
-the cross opens the row's two fields where the row is, filled in with what is
-there. Before it existed, fixing a typo in a description meant striking the
+the cross turns the row into its two fields where the row is, filled in with
+what is there, and that is all it does. There is no *Save* or *Cancel* on the
+row: there were, and a *Save* beside one option reads as a save to the poll
+when it only ever put the correction into the draft — the same misreading
+the old *Add* invited. What is typed goes in on the press that ends the card,
+several rows may be open at once, and a row opened and left as it was is not
+sent. The cross stays beside the open fields, so an option can still be taken
+off altogether after its pencil has been pressed; striking an open row keeps
+what was typed, and *Keep* gives it back. Before it existed, fixing a typo in a description meant striking the
 option out and typing the whole description again under a new one — and the
 list would not even take that, because the name being retyped was a name
 already on it. The duplicate check is unchanged and deliberately still counts
@@ -1750,8 +1757,8 @@ on the grounds that the list belongs to the group and a suggestion should land
 live for everybody watching. One card, one press, one save is the better trade
 and it is now the same on every path; see [Confirming is the
 save](#saying-you-are-done-adding-options) for what that press sends and
-through which doors. A draft row is corrected by the same pencil and never
-leaves the browser at all.
+through which doors. A draft is a pair of fields already, and is corrected by
+typing in it.
 
 One request, but for a while not one *edit*: the removals went as a `delete`
 of their own and the additions followed, which is what put the two-option
@@ -3376,7 +3383,7 @@ poll that can never open: every confirmation would invite one more suggestion.
 
 **Confirming is the save.** The card holds things this reader has not sent
 yet — an afternoon painted on a time poll's calendar, an option typed into
-the box and not added — and pressing *I have nothing more to add* while one of
+its fields — and pressing *I have nothing more to add* while one of
 them is still sitting there is not a mistake to warn about. It is the press
 that should put it in: confirming a list is saying *the list in front of me is
 the one I mean*, and what is in front of them includes what they just drew. It
@@ -3432,6 +3439,27 @@ calendar answer to the same rule:
   ends in neither — a soliciting poll's creator who did not invite themselves,
   who confirms nothing — because there it is the only way anything reaches the
   poll at all.
+
+**There is no *Add*, and a typed option stays a field until that press.**
+There was one, between the box and the list: it took what was typed and drew
+it as a row of the list, and nothing had left the browser. People pressed it,
+saw their option on the list, and took the row for a saved option — which is
+exactly what a row that looks like every other row says — and left without
+pressing *Confirm options*. The row was a lie about where the option was. So
+what is typed now stays in the text field it was typed into, still editable,
+with a × to discard it and a rule under it like any row of the list. The card
+starts with **no** field: **Add option**, beside the button that ends the
+card, opens one and puts the cursor in it. A blank field sitting there on
+arrival left a creator who had only come to correct or strike an option
+wondering whether it would be added as it stood; with no field until one is
+asked for, the question does not come up. A list with nothing on it and
+nothing being typed says *Nothing suggested yet* until then. For a day the next field opened by itself the moment the last
+one was typed into, and a field appearing under your typing is a field you
+did not ask for; a button is somewhere to look for "one more", and sits beside
+the press that sends them all. A blank field is room, not an
+option, and is never sent; every filled one is checked on the press that ends
+the card, all at once, with each problem marked on its own field — two drafts
+with one name mark the later, as the create form does.
 
 **One press, but not always one request, and the split is who is writing.**
 `sendDraft` in `CollectOptions` is where it is decided. The creator's
@@ -3545,6 +3573,14 @@ an edit of one list cannot lift the floor off another in the same transaction.
 Since `0063` the same marker is what lifts the *has votes* refusal, and
 `creator_add_option` and `creator_add_options` set it too: one marker, one
 meaning — the creator's own correction, in flight, on this poll.
+
+**The card does not enforce the floor, and the cross never greys out.** It
+used to disable every row's remove once the draft would leave two, which made
+the crosses flick between enabled and disabled as a list crossed three — a
+rule shown on a control whose only job is to mark a row. The draft may strike
+as many rows as it likes; *Done* sends it, and `creator_edit_options` refuses
+a list below two with *A poll needs at least two options*, shown under the
+list with the draft still intact.
 
 A refusal now also leaves the poll exactly as it was. The two-request version
 deleted the rows before the additions were refused, so the card had to throw

@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import {
-  ActionIcon,
-  Button,
-  Card,
-  Divider,
-  Group,
-  Stack,
-  Text,
-  TextInput,
-  Tooltip,
-} from '@mantine/core'
+import { ActionIcon, Button, Card, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import { PencilSimpleIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
@@ -45,6 +35,19 @@ import type { PollOption, PollSchedule } from '../lib/types'
  */
 /** Only has to be unique within one open card, and never leaves it. */
 let draftSeq = 0
+
+/** An option this reader is typing and has not sent. */
+type Draft = { key: string; name: string; description: string }
+
+function blankDraft(): Draft {
+  draftSeq += 1
+  return { key: `draft-${draftSeq}`, name: '', description: '' }
+}
+
+/** A field nobody has typed into, which is room for an option and not one. */
+function isBlank(d: Draft): boolean {
+  return !d.name.trim() && !d.description.trim()
+}
 
 /**
  * What is wrong with an option somebody has typed, and which of its two
@@ -345,58 +348,25 @@ export function CollectOptions({
     )
   }
 
-  return (
-    <Card withBorder>
-      <Stack gap="sm">
-        {nameField}
-        {questionStrip}
-
-        {schedule ? (
-          <TimeList
-            source={source}
-            options={options}
-            schedule={schedule}
-            isCreator={isCreator}
-            // Wherever this card ends in a button -- *Confirm options*, or
-            // the *Done* that leaves a correction -- that button is the save;
-            // see DraftHold. The calendar keeps a save of its own only where
-            // the card ends in neither, which is the creator of a soliciting
-            // poll who did not invite themselves, because there it is the
-            // only way the painting reaches the poll at all.
-            ownSave={!confirm && !done}
-            draft={draft}
-            onChanged={onChanged}
-          />
-        ) : (
-          <OptionList
-            source={source}
-            options={options}
-            isCreator={isCreator}
-            // The same rule the calendar beside it answers to: wherever this
-            // card ends in a button, that button is the save. The list keeps
-            // one of its own only where the card ends in neither *Confirm
-            // options* nor *Done*, which is the creator of a soliciting
-            // invite poll who did not invite themselves — they confirm
-            // nothing, and without it the list would have no way to reach the
-            // poll at all.
-            ownSave={!confirm && !done}
-            draft={draft}
-            onChanged={onChanged}
-          />
-        )}
-
+  /**
+   * The foot of the card: the button that ends it, what happens next, and --
+   * on a list, not a calendar -- the list's *Add option* beside that button,
+   * which is where somebody looking for "one more" looks. Drawn by the list,
+   * below its fields, so the button can sit here and still act on them.
+   */
+  function footer(addButton: ReactNode, ruled = false) {
+    return (
+      <>
         {error && (
           <Text c="red" size="sm">
             {error}
           </Text>
         )}
 
-        {/* The line is what stops *Add* and the button that ends the card
-            reading as one row: they are the two things this card is for, and
-            one adds to a list while the other says you are finished with it.
-            The ballot rules its footer off the same way, off the last
-            option's divider. */}
-        {(confirm || done) && <Divider />}
+        {/* The line is what stops the list and the buttons that end the card
+            reading as one block. A list of options draws it already, under
+            its last row, as the ballot does; the calendar does not. */}
+        {ruled && (confirm || done) && <Divider />}
 
         {confirm ? (
           <Group justify="space-between" wrap="wrap" gap="sm" align="flex-end">
@@ -413,9 +383,12 @@ export function CollectOptions({
                 </>
               )}
             </Text>
-            <Button onClick={confirmOptions} loading={busy} style={{ marginLeft: 'auto' }}>
-              Confirm options
-            </Button>
+            <Group gap="xs" wrap="nowrap" style={{ marginLeft: 'auto' }}>
+              {addButton}
+              <Button onClick={confirmOptions} loading={busy}>
+                Confirm options
+              </Button>
+            </Group>
           </Group>
         ) : (
           done && (
@@ -425,16 +398,61 @@ export function CollectOptions({
                   {done.note}
                 </Text>
               )}
-              <Button
-                variant="light"
-                onClick={finishEditing}
-                loading={busy}
-                style={{ marginLeft: 'auto' }}
-              >
-                Done
-              </Button>
+              <Group gap="xs" wrap="nowrap" style={{ marginLeft: 'auto' }}>
+                {addButton}
+                <Button variant="light" onClick={finishEditing} loading={busy}>
+                  Done
+                </Button>
+              </Group>
             </Group>
           )
+        )}
+      </>
+    )
+  }
+
+  return (
+    <Card withBorder>
+      <Stack gap="sm">
+        {nameField}
+        {questionStrip}
+
+        {schedule ? (
+          <>
+            <TimeList
+              source={source}
+              options={options}
+              schedule={schedule}
+              isCreator={isCreator}
+              // Wherever this card ends in a button -- *Confirm options*, or
+              // the *Done* that leaves a correction -- that button is the save;
+              // see DraftHold. The calendar keeps a save of its own only where
+              // the card ends in neither, which is the creator of a soliciting
+              // poll who did not invite themselves, because there it is the
+              // only way the painting reaches the poll at all.
+              ownSave={!confirm && !done}
+              draft={draft}
+              onChanged={onChanged}
+            />
+            {footer(null, true)}
+          </>
+        ) : (
+          <OptionList
+            source={source}
+            options={options}
+            isCreator={isCreator}
+            // The same rule the calendar beside it answers to: wherever this
+            // card ends in a button, that button is the save. The list keeps
+            // one of its own only where the card ends in neither *Confirm
+            // options* nor *Done*, which is the creator of a soliciting
+            // invite poll who did not invite themselves — they confirm
+            // nothing, and without it the list would have no way to reach the
+            // poll at all.
+            ownSave={!confirm && !done}
+            draft={draft}
+            footer={footer}
+            onChanged={onChanged}
+          />
         )}
       </Stack>
     </Card>
@@ -463,7 +481,7 @@ function withdrawConfirmation(source: OptionsSource) {
 }
 
 /**
- * The list itself, and the box that adds to it.
+ * The list itself, and the fields that add to it.
  *
  * Split from the card around it because they answer to different people: this
  * is the poll's list, which everybody in the poll writes, and the card is one
@@ -478,6 +496,7 @@ function OptionList({
   isCreator,
   ownSave,
   draft,
+  footer,
   onChanged,
 }: {
   source: OptionsSource
@@ -497,86 +516,89 @@ function OptionList({
    * the one path that ends in neither. See DraftHold.
    */
   draft: DraftHold
+  /**
+   * The foot of the card, drawn by the card and handed the list's *Add
+   * option* to put beside its own button. Absent on the `ownSave` path,
+   * where the list draws its own foot.
+   */
+  footer?: (addButton: ReactNode, ruled: boolean) => ReactNode
   onChanged: () => void
 }) {
   /**
-   * Whether this list is already a ballot, which is the creator's correction
-   * (`source.kind === 'creator'`) and nothing else.
+   * The options this reader is suggesting, as the fields they are typing them
+   * into. There is no *Add* between typing an option and it being on the list:
+   * there was, and people pressed it, saw a row drawn like every other row, and
+   * took it for an option the poll now held when nothing had left the browser.
+   * So what is typed stays a field until the press that ends the card puts it
+   * in. See DraftHold.
    *
-   * All it decides here is whether the two-option floor applies: a list still
-   * being collected has none, because `finalize_options` applies it when the
-   * list becomes a ballot. Which doors the save goes through is the same
-   * question asked one layer down, in `sendDraft`.
-   *
-   * What it no longer decides is *when* anything is saved. Every path drafts;
-   * see CollectOptions.
+   * None to start with, and *Add option* beside the button that ends the card
+   * for each one: a blank field sitting under the list on arrival left a
+   * reader who came to correct or strike an option wondering whether it would
+   * be added as it stood. It used to open the next field by
+   * itself as soon as the last one was typed into, and a field appearing
+   * under your typing is a field you did not ask for. A blank field is room,
+   * not an option, and is never sent.
    */
-  const correcting = source.kind === 'creator'
-
-  const [pending, setPending] = useState<{ key: string; name: string; description: string }[]>([])
+  const [drafts, setDrafts] = useState<Draft[]>([])
+  /** What is wrong with each draft, by key, marked on the field it is about. */
+  const [draftProblems, setDraftProblems] = useState<ReadonlyMap<string, Problem>>(new Map())
+  /** The draft *Add option* just opened, which takes the cursor. */
+  const [focusKey, setFocusKey] = useState<string | null>(null)
   /**
-   * Corrections to rows already on the poll, by id, held exactly as the
-   * additions and removals beside them are: one press of the way out of the
-   * card applies the three of them together.
+   * Rows already on the poll whose fields are open, by option id, and what is
+   * in them.
+   *
+   * The pencil turns a row into its two fields and that is all it does: there
+   * is no *Save* on the row, because a *Save* beside one option reads as a
+   * save to the poll when it was only ever a save into the draft. What is in
+   * the fields goes in with everything else on the press that ends the card,
+   * and several rows may be open at once for the same reason several drafts
+   * may be.
    *
    * A correction travels as a removal and an addition -- there is no update
    * door into `candidates`, and `creator_edit_options` applies its removals
    * before its additions, so a row keeping its name through an edit does not
    * collide with itself. The one visible cost is that the corrected option
-   * arrives at the end of the list, where an added option goes.
+   * arrives at the end of the list, where an added option goes. A row opened
+   * and left as it was is not a correction and is not sent.
    */
-  const [edits, setEdits] = useState<ReadonlyMap<string, { name: string; description: string }>>(
-    new Map(),
-  )
-  /**
-   * The row whose fields are open, keyed by option id or by draft key, and
-   * what is in them.
-   *
-   * One at a time: two rows open at once is two half-made corrections and a
-   * reader wondering which of them the way out of the card is about.
-   *
-   * Held here rather than inside the editor because it is part of the list
-   * this reader means, exactly as the box at the foot of the list is -- a
-   * correction typed and not saved goes in when *Done* does. See DraftHold.
-   */
-  const [editing, setEditing] = useState<{ key: string; name: string; description: string } | null>(
-    null,
-  )
-  /** What is wrong with it, on the field it is wrong in. */
-  const [editProblem, setEditProblem] = useState<Problem | null>(null)
+  const [editing, setEditing] = useState<
+    ReadonlyMap<string, { name: string; description: string }>
+  >(new Map())
+  /** What is wrong with each open row, on the field it is wrong in. */
+  const [editProblems, setEditProblems] = useState<ReadonlyMap<string, Problem>>(new Map())
   // Rows on their way off the list, by id. Held rather than deleted for the
   // reason the additions are held: one press applies the whole list, and a
   // card where adding waits and removing does not is a card that has to be
-  // explained.
+  // explained. A row struck out while its fields are open keeps what was typed
+  // in them, so *Keep* gives it back as the reader left it.
   const [dropping, setDropping] = useState<ReadonlySet<string>>(new Set())
-  const [name, setName] = useState('')
-  // Always on screen here, unlike the create form, where a `+` opens one per
-  // row: that form shows a dozen option rows at once and a field under each
-  // would bury the list, while this box is one option at a time. So there is
-  // nothing to open and no state for whether it is open — the string is the
-  // whole of it, and empty means no description.
-  const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
-  // What is wrong with the suggestion being typed, against the field it is
-  // wrong in rather than as a line of red under the whole card, which is
-  // where the request that failed still reports itself.
-  const [nameError, setNameError] = useState<string | null>(null)
-  const [descriptionError, setDescriptionError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const arriving = useArrivals(options)
 
-  const kept = options.length - dropping.size + pending.length
+  const filled = drafts.filter((d) => !isBlank(d))
+  /** Open rows whose fields say something other than the option does. */
+  const changed = options.filter((o) => {
+    const e = editing.get(o.id)
+    return (
+      e &&
+      !dropping.has(o.id) &&
+      (e.name.trim() !== o.name || e.description.trim() !== (o.description ?? ''))
+    )
+  })
+  // What the poll holds and keeps, before anything this reader is suggesting.
+  const staying = options.length - dropping.size
+  const kept = staying + filled.length
   const full = kept >= MAX_OPTIONS
-  const dirty = pending.length > 0 || dropping.size > 0 || edits.size > 0
-  // A list that is already a ballot cannot be pruned below what an election
-  // needs; a list still being collected can, because `finalize_options`
-  // applies the floor when it becomes a ballot. The trigger enforces both,
-  // and this only decides whether to offer the button. See
-  // 0028_creator_edits_options.sql.
-  // Counted against what the save would leave behind rather than against what
-  // is on the poll now, since three options with two of them struck through is
-  // a list already at the floor.
-  const atFloor = correcting && kept <= 2
+  const dirty = filled.length > 0 || dropping.size > 0 || changed.length > 0
+  // No two-option floor here. A list that is already a ballot cannot be saved
+  // below what an election needs, and `creator_edit_options` says so in its
+  // own words when the press that ends the card tries; a cross that went grey
+  // and came back as the list crossed two was a rule shown the wrong way
+  // round, on a control whose job is only to mark a row. See
+  // 0059_editing_options_in_one_go.sql.
 
   /**
    * Every name the list would hold if it were saved as it stands, apart from
@@ -588,48 +610,28 @@ function OptionList({
    * explain itself twice: once for accepting a name the list visibly holds,
    * and again when the way back has been quietly closed off behind it.
    * Correcting the option that holds the name is the answer to wanting the
-   * name, and is a press away; see `OptionEditor`.
+   * name, and is a press away.
    *
    * The other side of that is the name a *renamed* struck row has let go of,
    * which is genuinely free -- and is why the save applies its removals
    * before its additions. See `sendDraft`.
    */
   function namesInUse(exceptKey?: string): string[] {
-    // A row open for correcting counts as what is being typed into it rather
-    // than as what it used to say: a name freed by a rename nobody has
-    // pressed *Save* on yet is a name this list is about to want.
-    const nameOf = (key: string, saved: string) =>
-      editing?.key === key ? editing.name.trim() : saved
+    // An open row counts as what is being typed into it rather than as what
+    // it used to say: a name freed by a rename is a name this list is about
+    // to want.
+    const nameOf = (o: PollOption) => editing.get(o.id)?.name.trim() ?? o.name
+
+    // Of the drafts, only the ones above the draft being checked: two drafts
+    // holding one name mark the later of them, as the create form does, so
+    // the earlier keeps the name and is not the one that has to change.
+    const draftAt = drafts.findIndex((d) => d.key === exceptKey)
+    const above = draftAt === -1 ? drafts : drafts.slice(0, draftAt)
 
     return [
-      ...options
-        .filter((o) => o.id !== exceptKey)
-        .map((o) => nameOf(o.id, (edits.get(o.id) ?? o).name)),
-      ...pending.filter((o) => o.key !== exceptKey).map((o) => nameOf(o.key, o.name)),
+      ...options.filter((o) => o.id !== exceptKey).map(nameOf),
+      ...above.filter((d) => !isBlank(d)).map((d) => d.name.trim()),
     ]
-  }
-
-  /**
-   * The correction in the open row, checked, or null with the reason marked
-   * on the field it is about.
-   *
-   * The same shape `typedOption` has, and read in the same two places: by the
-   * row's own *Save*, and by whatever ends the card.
-   */
-  function checkedEdit(): { key: string; name: string; description: string } | null {
-    if (!editing) return null
-    setEditProblem(null)
-
-    const checked = checkOption(editing.name, editing.description, {
-      adding: false,
-      exceptKey: editing.key,
-    })
-    if ('field' in checked) {
-      setEditProblem(checked)
-      return null
-    }
-
-    return { key: editing.key, ...checked }
   }
 
   /**
@@ -643,15 +645,16 @@ function OptionList({
    * refuses for a reason not listed here still comes back as the error under
    * the card.
    *
-   * Shared by the box at the foot of the list and by a row being corrected in
-   * place, which are the same four questions asked of the same two fields.
-   * `adding` is the one difference: a correction puts nothing new on the
-   * list, so the ceiling is not its to meet.
+   * Shared by the drafts and by the rows being corrected in place, which are
+   * the same four questions asked of the same two fields. `adding` is the one
+   * difference: a correction puts nothing new on the list, so the ceiling is
+   * not its to meet. When it is set it is how many options the list would
+   * hold with this one on it.
    */
   function checkOption(
     rawName: string,
     rawDescription: string,
-    { adding, exceptKey }: { adding: boolean; exceptKey?: string },
+    { adding, exceptKey }: { adding: number | false; exceptKey?: string },
   ): { name: string; description: string } | Problem {
     const trimmed = rawName.trim()
     const trimmedDescription = rawDescription.trim()
@@ -660,9 +663,7 @@ function OptionList({
     if (trimmed.length > OPTION_NAME_MAX)
       return { field: 'name', message: tooLong('An option name', trimmed.length, OPTION_NAME_MAX) }
     // Case-insensitive, like the database: two options differing only in
-    // case are one option to everybody scoring the ballot. The draft is
-    // checked alongside the list, because a name waiting to be saved is one
-    // the save is about to refuse.
+    // case are one option to everybody scoring the ballot.
     if (namesInUse(exceptKey).some((existing) => existing.toLowerCase() === trimmed.toLowerCase()))
       return { field: 'name', message: `“${trimmed}” is already on the list.` }
     if (trimmedDescription.length > OPTION_DESCRIPTION_MAX)
@@ -670,7 +671,7 @@ function OptionList({
         field: 'description',
         message: tooLong('A description', trimmedDescription.length, OPTION_DESCRIPTION_MAX),
       }
-    if (adding && full)
+    if (adding !== false && adding > MAX_OPTIONS)
       return {
         field: 'name',
         message: `This poll already holds the ${MAX_OPTIONS} options a ballot can.`,
@@ -680,181 +681,72 @@ function OptionList({
   }
 
   /**
-   * What is in the box, checked, or null with the reason marked on the field
-   * it is about.
-   *
-   * Split from the add because the box is read twice: by *Add*, and by
-   * whatever ends the card -- *Confirm options*, or the *Done* that leaves a
-   * correction -- since an option typed and not added is part of the list
-   * this reader means. See DraftHold.
+   * Everything this list is holding, checked: the options typed and the rows
+   * corrected. Null if anything is wrong, with every problem marked on its
+   * own field at once, so a press that fails says all of it rather than the
+   * first.
    */
-  function typedOption(): { name: string; description: string } | null {
-    setNameError(null)
-    setDescriptionError(null)
+  function checkedDraft(): {
+    added: { name: string; description: string }[]
+    corrected: { key: string; name: string; description: string }[]
+  } | null {
     setError(null)
 
-    const checked = checkOption(name, description, { adding: true })
-    if ('field' in checked) {
-      if (checked.field === 'name') setNameError(checked.message)
-      else setDescriptionError(checked.message)
-      return null
+    const addProblems = new Map<string, Problem>()
+    const added: { name: string; description: string }[] = []
+    for (const d of drafts) {
+      if (isBlank(d)) continue
+      const result = checkOption(d.name, d.description, {
+        adding: staying + added.length + addProblems.size + 1,
+        exceptKey: d.key,
+      })
+      if ('field' in result) addProblems.set(d.key, result)
+      else added.push(result)
     }
 
-    return checked
+    const fixProblems = new Map<string, Problem>()
+    const corrected: { key: string; name: string; description: string }[] = []
+    for (const o of changed) {
+      const e = editing.get(o.id)!
+      const result = checkOption(e.name, e.description, { adding: false, exceptKey: o.id })
+      if ('field' in result) fixProblems.set(o.id, result)
+      else corrected.push({ key: o.id, ...result })
+    }
+
+    setDraftProblems(addProblems)
+    setEditProblems(fixProblems)
+    return addProblems.size > 0 || fixProblems.size > 0 ? null : { added, corrected }
   }
 
-  /**
-   * Put what is in the box on the list, and answer whether it got there.
-   *
-   * Nothing leaves the browser: the option joins the draft under the list,
-   * drawn exactly as the rows already on the poll are, and the press that
-   * ends the card is what sends it. Which is why there is no notification
-   * here and nothing to re-read -- the row appearing where the list is *is*
-   * the confirmation that the press was taken, and the option has not gone
-   * anywhere yet.
-   */
-  function addOption(): boolean {
-    if (busy) return false
-
-    const typed = typedOption()
-    if (!typed) return false
-
-    draftSeq += 1
-    setPending((prev) => [...prev, { key: `draft-${draftSeq}`, ...typed }])
-    setName('')
-    setDescription('')
-    return true
+  /** One of the drafts, changed, and its message cleared with it. */
+  function changeDraft(key: string, fields: Partial<Omit<Draft, 'key'>>) {
+    setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...fields } : d)))
+    setDraftProblems((prev) => without(prev, key))
   }
 
-  /**
-   * The whole draft -- what is going, what is coming and what has been
-   * corrected -- in one press.
-   *
-   * It was one press per edit on the suggestion paths and, before that, two
-   * requests on the creator's: a `delete` on the rows being dropped and then
-   * the additions. Which meant the poll passed through a list nobody had
-   * asked for, and the floor under a live ballot was applied to it -- a poll
-   * of two options, edited to drop one and add two, was refused for having
-   * fewer than two on the way to three. `creator_edit_options` takes both
-   * halves and applies the floor to where they land; see
-   * 0059_editing_options_in_one_go.sql.
-   *
-   * A refusal leaves the draft intact, because it is still the whole of what
-   * is left to do: nothing here clears state it has not been told went in.
-   */
-  async function saveDraft(
-    extra: { name: string; description: string }[] = [],
-    openEdit: { key: string; name: string; description: string } | null = null,
-  ): Promise<boolean> {
-    if (busy) return false
-    if (!dirty && extra.length === 0 && !openEdit) return true
-    setError(null)
-    setBusy(true)
+  /** A fresh blank field at the foot of the drafts, with the cursor in it. */
+  function addDraft() {
+    const next = blankDraft()
+    setDrafts((prev) => [...prev, next])
+    setFocusKey(next.key)
+  }
 
-    // The correction still open in a row, folded in where it belongs: a row
-    // of the poll joins the corrections, a row that is still a draft replaces
-    // itself among them. Folded here rather than staged first, because
-    // staging is state and this call reads the state it was rendered with.
-    const drafts = pending.map((o) =>
-      o.key === openEdit?.key
-        ? { ...o, name: openEdit.name, description: openEdit.description }
-        : o,
+  /** Take one of the drafts back off. */
+  function discardDraft(key: string) {
+    setDrafts((prev) => prev.filter((d) => d.key !== key))
+    setDraftProblems((prev) => without(prev, key))
+  }
+
+  /** Turn a row into its two fields, filled in with what it says now. */
+  function openEditor(option: PollOption) {
+    setEditing((prev) =>
+      new Map(prev).set(option.id, { name: option.name, description: option.description ?? '' }),
     )
-    // A correction to a row that is also struck out is a correction to
-    // nothing: the row is leaving, and sending its corrected self as an
-    // addition would put back the option the removal beside it just took
-    // away. It is *kept* rather than discarded, because *Keep* has to have
-    // something to give back; see `toggleDropping`.
-    const staged = new Map([...edits].filter(([id]) => !dropping.has(id)))
-    if (openEdit && !pending.some((o) => o.key === openEdit.key) && !dropping.has(openEdit.key))
-      staged.set(openEdit.key, { name: openEdit.name, description: openEdit.description })
-
-    const { error: rpcError } = await sendDraft(source, {
-      added: [...drafts, ...extra],
-      corrected: [...staged.values()],
-      removed: [...dropping, ...staged.keys()],
-    })
-    setBusy(false)
-
-    if (rpcError) {
-      setError(rpcError.message)
-      return false
-    }
-    setPending([])
-    setDropping(new Set())
-    setEdits(new Map())
-    setEditing(null)
-    // Nothing said and nothing re-read: this is nearly always a save made on
-    // the way out of the card -- see DraftHold -- and the act it is part of
-    // says so itself and re-reads the poll once, at the end. The one press
-    // that is not part of anything, `saveOwn`, does both for itself.
-    return true
   }
 
-  /**
-   * Everything this list is holding, in one press: the draft, the option
-   * still sitting in the box, and the row still open for correcting.
-   *
-   * The box goes in with the rest rather than being added first, because
-   * adding it first is a second request and a second thing to be refused
-   * half-way through -- and because `addOption` only stages it here, so a
-   * press that staged and then saved would save the list as it was a moment
-   * before, without it.
-   */
-  async function saveEverything(): Promise<boolean> {
-    const typed = name.trim() ? typedOption() : null
-    if (name.trim() && !typed) return false
-    // A row left open is part of what this reader means as much as the box
-    // is, so it goes in with everything else rather than being thrown away
-    // for not having been saved by its own button.
-    const openEdit = checkedEdit()
-    if (editing && !openEdit) return false
-
-    const saved = await saveDraft(typed ? [typed] : [], openEdit)
-    if (!saved) return false
-    setName('')
-    setDescription('')
-    return true
-  }
-
-  /**
-   * The same save, pressed on this list's own button rather than on the one
-   * that ends the card; see `ownSave`.
-   *
-   * The one difference is that nothing happens afterwards: there is no card
-   * to leave and no confirmation to go in behind it, so this press has to say
-   * so itself and re-read the poll itself.
-   */
-  async function saveOwn() {
-    if (!(await saveEverything())) return
-    notifications.show({ message: 'Options saved', color: 'green' })
-    onChanged()
-  }
-
-  // What this list is holding that the poll does not, left where the card's
-  // own button can apply it; see DraftHold. Written after every render rather
-  // than once, because it closes over the draft and the box as they are now,
-  // and taken back on the way out so no card confirms a list it has stopped
-  // drawing.
-  //
-  // One branch for every path, which is the whole of what changed: the
-  // suggestion paths used to hold nothing but the box and the open row,
-  // because what was on the list was already on the poll, having gone in as
-  // it was typed.
-  useEffect(() => {
-    draft.current = dirty || name.trim() || editing ? () => saveEverything() : null
-
-    return () => {
-      draft.current = null
-    }
-  })
-
-  function dropDraft(key: string) {
-    if (editing?.key === key) setEditing(null)
-    setPending((prev) => {
-      const left = prev.filter((o) => o.key !== key)
-      return left
-    })
+  function changeEdit(id: string, fields: { name: string; description: string }) {
+    setEditing((prev) => new Map(prev).set(id, fields))
+    setEditProblems((prev) => without(prev, id))
   }
 
   /** Mark an option for removal, or take the marking back. */
@@ -865,260 +757,206 @@ function OptionList({
       else next.add(id)
       return next
     })
-    // The fields close, since a struck row draws *Keep* where they were --
-    // which is why a press can never reach this with them open, and why it
-    // is written anyway.
-    //
-    // What a *saved* correction to this row says is deliberately left alone.
-    // It is held for as long as the row it is about, so *Keep* gives the
-    // option back as this reader last meant it rather than as the poll last
-    // had it: discarding it here lost the description of an option struck out
-    // and then kept, which is the commonest way to change your mind twice
-    // about one row. Where a correction to a row that is *still* struck when
-    // the save goes is dropped is `saveDraft` -- the one place it can be
-    // dropped without also closing the way back.
-    if (editing?.key === id) setEditing(null)
-  }
-
-  /** Open a row's fields, filled in with what is in them now. */
-  function openEditor(key: string, name: string, description: string) {
-    setEditing({ key, name, description })
-    setEditProblem(null)
-  }
-
-  /** A checked correction, into whichever draft the row it is about lives in. */
-  function stage(edit: { key: string; name: string; description: string }) {
-    const { key, ...fields } = edit
-    if (pending.some((o) => o.key === key))
-      setPending((prev) => prev.map((o) => (o.key === key ? { ...o, ...fields } : o)))
-    else setEdits((prev) => new Map(prev).set(key, fields))
+    setEditProblems((prev) => without(prev, id))
   }
 
   /**
-   * The open row's correction, put in -- which means into the draft, on every
-   * path. It used to be sent straight away on the two suggestion paths, which
-   * was the same split adding and removing were under; all three now wait for
-   * the one press that ends the card. See CollectOptions.
+   * The whole draft -- what is going, what is coming and what has been
+   * corrected -- in one press.
    *
-   * Nothing leaves the browser, so there is nothing to report and nothing to
-   * wait for: the row closing over the correction it now reads under is the
-   * whole of what the press did.
+   * `creator_edit_options` takes both halves and applies the floor to where
+   * they land rather than to the list the edit passes through; see
+   * 0059_editing_options_in_one_go.sql.
+   *
+   * A refusal leaves the draft intact, because it is still the whole of what
+   * is left to do: nothing here clears state it has not been told went in.
    */
-  function saveEdit(): boolean {
+  async function saveEverything(): Promise<boolean> {
     if (busy) return false
+    const checked = checkedDraft()
+    if (!checked) return false
+    const { added, corrected } = checked
+    if (added.length === 0 && corrected.length === 0 && dropping.size === 0) return true
 
-    const edit = checkedEdit()
-    if (!edit) return false
+    setError(null)
+    setBusy(true)
+    const { error: rpcError } = await sendDraft(source, {
+      added,
+      corrected: corrected.map(({ name, description }) => ({ name, description })),
+      removed: [...dropping, ...corrected.map((c) => c.key)],
+    })
+    setBusy(false)
 
-    stage(edit)
-    setEditing(null)
+    if (rpcError) {
+      setError(rpcError.message)
+      return false
+    }
+    setDrafts([])
+    setDraftProblems(new Map())
+    setDropping(new Set())
+    setEditing(new Map())
+    setEditProblems(new Map())
+    // Nothing said and nothing re-read: this is nearly always a save made on
+    // the way out of the card -- see DraftHold -- and the act it is part of
+    // says so itself and re-reads the poll once, at the end. The one press
+    // that is not part of anything, `saveOwn`, does both for itself.
     return true
   }
 
+  /**
+   * The same save, pressed on this list's own button rather than on the one
+   * that ends the card; see `ownSave`.
+   */
+  async function saveOwn() {
+    if (!(await saveEverything())) return
+    notifications.show({ message: 'Options saved', color: 'green' })
+    onChanged()
+  }
+
+  // What this list is holding that the poll does not, left where the card's
+  // own button can apply it; see DraftHold. Written after every render rather
+  // than once, because it closes over the draft as it is now, and taken back
+  // on the way out so no card confirms a list it has stopped drawing.
+  useEffect(() => {
+    draft.current = dirty ? () => saveEverything() : null
+
+    return () => {
+      draft.current = null
+    }
+  })
+
+  const addButton = (
+    <Button variant="default" onClick={addDraft} disabled={full || busy}>
+      Add option
+    </Button>
+  )
+
   return (
     <Stack gap="sm">
-      {options.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          Nothing suggested yet. Add the first one.
-        </Text>
-      ) : (
-        options.map((option) => {
-          const struck = dropping.has(option.id)
-          // The row as the save would leave it: a correction waiting on the
-          // press that ends the card is shown where the option is rather than
-          // as a second row somewhere else, because it is not a second option
-          // -- it is this one, as this reader now means it. A struck row is
-          // drawn the same way, since *Keep* gives that correction back.
-          const shown = edits.get(option.id) ?? option
+      {options.map((option) => {
+        const struck = dropping.has(option.id)
+        const open = editing.get(option.id)
+        // The row as the save would leave it, which is what a struck row
+        // shows too, since *Keep* gives that back.
+        const shown = open ?? { name: option.name, description: option.description ?? '' }
 
-          return (
-            /* The row's own box, which is what opens and closes; see
-               listRow.module.css. Two things travel in it — the option and the
-               rule under it — so the box has to space them itself, having taken
-               them out of the `Stack` that was doing it.
-
-               No leaving animation: a removal is a draft everywhere now, so a
-               row never actually goes while this list is on screen. It is
-               struck through where it stands and comes back with a press. */
-            <div
-              key={option.id}
-              className={`${listRow.row} ${arriving.has(option.id) ? listRow.joining : ''}`}
-            >
-              <div className={`${listRow.content} ${listRow.stacked}`}>
-                {editing?.key === option.id ? (
-                  <OptionEditor
-                    value={editing}
-                    problem={editProblem}
-                    busy={busy}
-                    onChange={setEditing}
-                    onCancel={() => setEditing(null)}
-                    onSave={() => saveEdit()}
+        return (
+          /* The row's own box, which is what opens and closes; see
+             listRow.module.css. No leaving animation: a removal is a draft
+             everywhere now, so a row never actually goes while this list is on
+             screen. It is struck through where it stands and comes back with a
+             press. */
+          <div
+            key={option.id}
+            className={`${listRow.row} ${arriving.has(option.id) ? listRow.joining : ''}`}
+          >
+            <div className={`${listRow.content} ${listRow.stacked}`}>
+              <Group justify="space-between" wrap="nowrap" gap="sm" align="flex-start">
+                {open && !struck ? (
+                  <OptionFields
+                    value={open}
+                    problem={editProblems.get(option.id) ?? null}
+                    autoFocus
+                    ariaLabel={`Name of ${option.name}`}
+                    onChange={(fields) => changeEdit(option.id, fields)}
                   />
                 ) : (
-                  <Group justify="space-between" wrap="nowrap" gap="sm">
-                    <div style={{ minWidth: 0 }}>
-                      {/* Struck through rather than gone, while the removal is
-                          still a draft: the row is what the press acted on, and
-                          showing it crossed out is what makes the press
-                          takeable-back without a second list of what is missing.
-                          Name and description together, because what is leaving
-                          is the option rather than what it is called. */}
-                      <Text
-                        fw={500}
-                        c={struck ? 'dimmed' : undefined}
-                        td={struck ? 'line-through' : undefined}
-                      >
-                        {shown.name}
-                      </Text>
-                      {shown.description && (
-                        <OptionDescription description={shown.description} struck={struck} />
-                      )}
-                    </div>
-                    {isCreator &&
-                      (struck ? (
-                        <Button
-                          variant="subtle"
-                          size="compact-xs"
-                          onClick={() => toggleDropping(option.id)}
-                        >
-                          Keep
-                        </Button>
-                      ) : (
-                        <Group gap={4} wrap="nowrap">
-                          {/* Beside the remove rather than instead of it: an
-                              option that is wrong in a word is corrected, and
-                              one that is wrong altogether goes. Fixing a typo
-                              in a description used to mean typing the whole
-                              description again under a new option. */}
-                          <ActionIcon
-                            variant="subtle"
-                            aria-label={`Edit ${shown.name}`}
-                            onClick={() =>
-                              openEditor(option.id, shown.name, shown.description ?? '')
-                            }
-                          >
-                            <PencilSimpleIcon size={16} aria-hidden />
-                          </ActionIcon>
-                          <Tooltip
-                            label="A poll needs at least two options"
-                            disabled={!atFloor}
-                            withArrow
-                          >
-                            {/* The span is what a tooltip on a disabled button
-                            needs: a disabled control fires no pointer events of
-                            its own, so the reason it is disabled would never be
-                            readable without something around it that does. */}
-                            <span>
-                              <ActionIcon
-                                variant="subtle"
-                                color="red"
-                                disabled={atFloor}
-                                aria-label={`Remove ${shown.name}`}
-                                onClick={() => toggleDropping(option.id)}
-                              >
-                                &times;
-                              </ActionIcon>
-                            </span>
-                          </Tooltip>
-                        </Group>
-                      ))}
-                  </Group>
+                  <div style={{ minWidth: 0 }}>
+                    {/* Struck through rather than gone, while the removal is
+                        still a draft. Name and description together, because
+                        what is leaving is the option rather than what it is
+                        called. */}
+                    <Text
+                      fw={500}
+                      c={struck ? 'dimmed' : undefined}
+                      td={struck ? 'line-through' : undefined}
+                    >
+                      {shown.name}
+                    </Text>
+                    {shown.description && (
+                      <OptionDescription description={shown.description} struck={struck} />
+                    )}
+                  </div>
                 )}
-                <Divider />
-              </div>
+                {isCreator &&
+                  (struck ? (
+                    <Button
+                      variant="subtle"
+                      size="compact-xs"
+                      onClick={() => toggleDropping(option.id)}
+                    >
+                      Keep
+                    </Button>
+                  ) : (
+                    <Group gap={4} wrap="nowrap" mt={open ? 6 : 0}>
+                      {/* The pencil turns the row into fields and goes: there
+                          is nothing more for it to do once they are open. The
+                          cross stays, so an option can still be taken off
+                          altogether after its fields have been opened. */}
+                      {!open && (
+                        <ActionIcon
+                          variant="subtle"
+                          aria-label={`Edit ${option.name}`}
+                          onClick={() => openEditor(option)}
+                        >
+                          <PencilSimpleIcon size={16} aria-hidden />
+                        </ActionIcon>
+                      )}
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        aria-label={`Remove ${option.name}`}
+                        onClick={() => toggleDropping(option.id)}
+                      >
+                        &times;
+                      </ActionIcon>
+                    </Group>
+                  ))}
+              </Group>
+              <Divider />
             </div>
-          )
-        })
+          </div>
+        )
+      })}
+
+      {options.length === 0 && drafts.length === 0 && (
+        <Text size="sm" c="dimmed">
+          Nothing suggested yet.
+        </Text>
       )}
 
-      {/* The draft, under the list it is about to join, and drawn exactly as
-          the rest of it. It used to be dimmed, to mark what the poll did not
-          hold yet -- which was a distinction for a Save button that no longer
-          exists: the way out of this card is the save, so an option waiting
-          here is an option on the list. */}
-      {pending.map((option) => (
-        <div key={option.key} className={`${listRow.row} ${listRow.joining}`}>
+      {/* What this reader is suggesting, as the fields they typed it into.
+          They stay fields until the press that ends the card puts them in,
+          and each is ruled off like a row of the list, since that is where it
+          is going. */}
+      {drafts.map((d, i) => (
+        <div key={d.key} className={`${listRow.row} ${listRow.joining}`}>
           <div className={`${listRow.content} ${listRow.stacked}`}>
-            {editing?.key === option.key ? (
-              <OptionEditor
-                value={editing}
-                problem={editProblem}
-                busy={busy}
-                onChange={setEditing}
-                onCancel={() => setEditing(null)}
-                onSave={() => saveEdit()}
+            <Group gap="xs" align="flex-start" wrap="nowrap">
+              <OptionFields
+                value={d}
+                problem={draftProblems.get(d.key) ?? null}
+                autoFocus={d.key === focusKey}
+                placeholder={
+                  options.length === 0 && i === 0 ? 'Add an option' : 'Add another option'
+                }
+                ariaLabel="Option you are suggesting"
+                onChange={(fields) => changeDraft(d.key, fields)}
               />
-            ) : (
-              <Group justify="space-between" wrap="nowrap" gap="sm">
-                <div style={{ minWidth: 0 }}>
-                  <Text fw={500}>{option.name}</Text>
-                  {option.description && <OptionDescription description={option.description} />}
-                </div>
-                {/* Corrected the same way as a row already on the poll, and it
-                    is the same press: a draft is an option this reader means,
-                    and the only difference is that nothing has to be sent
-                    anywhere to change it. */}
-                <Group gap={4} wrap="nowrap">
-                  <ActionIcon
-                    variant="subtle"
-                    aria-label={`Edit ${option.name}`}
-                    onClick={() => openEditor(option.key, option.name, option.description)}
-                  >
-                    <PencilSimpleIcon size={16} aria-hidden />
-                  </ActionIcon>
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    aria-label={`Discard ${option.name}`}
-                    onClick={() => dropDraft(option.key)}
-                  >
-                    &times;
-                  </ActionIcon>
-                </Group>
-              </Group>
-            )}
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                mt={6}
+                aria-label={`Discard ${d.name.trim() || 'this option'}`}
+                onClick={() => discardDraft(d.key)}
+              >
+                &times;
+              </ActionIcon>
+            </Group>
             <Divider />
           </div>
         </div>
       ))}
-
-      <Group gap="xs" align="flex-start" wrap="nowrap">
-        <Stack gap={4} style={{ flex: 1 }}>
-          <TextInput
-            value={name}
-            onChange={(e) => {
-              setName(e.currentTarget.value)
-              // The message was about what was in the box; it stops being
-              // true the moment that changes.
-              setNameError(null)
-            }}
-            placeholder="Add an option"
-            error={nameError}
-            /* The field stands alone rather than in a form, so Enter has
-               nothing to submit unless it is given something. */
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return
-              e.preventDefault()
-              addOption()
-            }}
-          />
-          {/* No autoFocus: the field is here on arrival rather than
-              opened, so taking the cursor off the name field would be
-              taking it off the one thing every option needs. */}
-          <DescriptionField
-            value={description}
-            onChange={(e) => {
-              setDescription(e.currentTarget.value)
-              setDescriptionError(null)
-            }}
-            placeholder="Description (optional)"
-            error={descriptionError}
-          />
-        </Stack>
-        <Button variant="light" onClick={() => addOption()} disabled={full}>
-          Add
-        </Button>
-      </Group>
 
       {full && (
         <Text size="xs" c="dimmed">
@@ -1136,15 +974,28 @@ function OptionList({
           its own, so the list has to carry the save; see `ownSave`. Placed
           and worded like the calendar's *Save times*, because it is the same
           button doing the same job on the other kind of list. */}
-      {ownSave && (
-        <Group justify="flex-end">
-          <Button onClick={saveOwn} loading={busy} disabled={!dirty && !name.trim() && !editing}>
+      {ownSave ? (
+        <Group justify="flex-end" gap="xs">
+          {addButton}
+          <Button onClick={saveOwn} loading={busy} disabled={!dirty}>
             Save options
           </Button>
         </Group>
+      ) : (
+        // With no rows there is no last row to rule the foot off, so the foot
+        // draws its own line.
+        footer?.(addButton, options.length === 0 && drafts.length === 0)
       )}
     </Stack>
   )
+}
+
+/** A map without one key, or the same map where it never had it. */
+function without<V>(map: ReadonlyMap<string, V>, key: string): ReadonlyMap<string, V> {
+  if (!map.has(key)) return map
+  const next = new Map(map)
+  next.delete(key)
+  return next
 }
 
 /**
@@ -1242,59 +1093,44 @@ async function applyToCollecting(
 }
 
 /**
- * One option's two fields, opened in the row the option is in.
+ * One option's two fields: a draft being typed, or a row already on the poll
+ * opened by its pencil.
  *
- * In place rather than in a modal, because a correction is usually a word: a
- * dialog over the list would hide the thing being corrected and the list it
- * has to be read against. The row keeps its divider, so the list does not
- * come apart as one of its rows opens.
- *
- * Controlled, and holding nothing of its own: what is typed here belongs to
- * the list, which is what lets the way out of the card put in a correction
- * that was never saved by its own button. See DraftHold, and `editing`.
+ * Controlled, and holding nothing of its own, with no button of its own
+ * either: what is typed here belongs to the list, and goes in on the press
+ * that ends the card. See DraftHold.
  */
-function OptionEditor({
+function OptionFields({
   value,
   problem,
-  busy,
+  autoFocus,
+  placeholder,
+  ariaLabel,
   onChange,
-  onCancel,
-  onSave,
 }: {
-  value: { key: string; name: string; description: string }
+  value: { name: string; description: string }
   /** What is wrong with it, or null. Marked on the field it is about. */
   problem: Problem | null
-  /** Whether the correction is in the air; the row's buttons wait for it. */
-  busy: boolean
-  onChange: (value: { key: string; name: string; description: string }) => void
-  onCancel: () => void
-  onSave: () => void
+  /**
+   * Whether the name field takes the cursor on arriving: a row opened by its
+   * pencil or a field opened by *Add option*, which were each a press asking
+   * for exactly that. The blank field the card starts with does not, since it
+   * is here on arrival rather than opened.
+   */
+  autoFocus?: boolean
+  placeholder?: string
+  ariaLabel: string
+  onChange: (value: { name: string; description: string }) => void
 }) {
   return (
-    /* Escape on the row rather than on the name field, so it is the way out
-       from either box. */
-    <Stack
-      gap={4}
-      onKeyDown={(e) => {
-        if (e.key !== 'Escape') return
-        e.preventDefault()
-        onCancel()
-      }}
-    >
+    <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
       <TextInput
         value={value.name}
-        /* Focused on opening, unlike the box at the foot of the list: that
-           field is here on arrival, while this one was opened by a press that
-           was about this option, and the cursor being in it is the whole of
-           what that press asked for. */
-        autoFocus
+        autoFocus={autoFocus}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
         onChange={(e) => onChange({ ...value, name: e.currentTarget.value })}
         error={problem?.field === 'name' ? problem.message : null}
-        onKeyDown={(e) => {
-          if (e.key !== 'Enter') return
-          e.preventDefault()
-          onSave()
-        }}
       />
       <DescriptionField
         value={value.description}
@@ -1302,14 +1138,6 @@ function OptionEditor({
         placeholder="Description (optional)"
         error={problem?.field === 'description' ? problem.message : null}
       />
-      <Group gap="xs" justify="flex-end">
-        <Button variant="subtle" size="compact-sm" disabled={busy} onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button variant="light" size="compact-sm" loading={busy} onClick={onSave}>
-          Save
-        </Button>
-      </Group>
     </Stack>
   )
 }
