@@ -400,7 +400,7 @@ export function CollectOptions({
               )}
               <Group gap="xs" wrap="nowrap" style={{ marginLeft: 'auto' }}>
                 {addButton}
-                <Button variant="light" onClick={finishEditing} loading={busy}>
+                <Button onClick={finishEditing} loading={busy}>
                   Done
                 </Button>
               </Group>
@@ -826,7 +826,7 @@ function OptionList({
   })
 
   const addButton = (
-    <Button variant="default" onClick={addDraft} disabled={full || busy}>
+    <Button variant="light" onClick={addDraft} disabled={full || busy}>
       Add option
     </Button>
   )
@@ -882,7 +882,7 @@ function OptionList({
                   (struck ? (
                     <Button
                       variant="subtle"
-                      size="compact-xs"
+                      size="compact-sm"
                       onClick={() => toggleDropping(option.id)}
                     >
                       Keep

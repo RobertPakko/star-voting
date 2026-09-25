@@ -1220,7 +1220,6 @@ export function CreatePoll() {
               variant="light"
               size="xs"
               onClick={() => addOption(questionIndex)}
-              w="fit-content"
               disabled={question.options.length >= MAX_OPTIONS}
             >
               Add option
