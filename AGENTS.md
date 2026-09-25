@@ -3356,7 +3356,7 @@ poll that can never open: every confirmation would invite one more suggestion.
 
 **Confirming is the save.** The card holds things this reader has not sent
 yet — an afternoon painted on a time poll's calendar, an option typed into
-the box and not added — and pressing *I have nothing more to add* while one of
+its fields — and pressing *I have nothing more to add* while one of
 them is still sitting there is not a mistake to warn about. It is the press
 that should put it in: confirming a list is saying *the list in front of me is
 the one I mean*, and what is in front of them includes what they just drew. It
@@ -3412,6 +3412,19 @@ calendar answer to the same rule:
   ends in neither — a soliciting poll's creator who did not invite themselves,
   who confirms nothing — because there it is the only way anything reaches the
   poll at all.
+
+**There is no *Add*, and a typed option stays a field until that press.**
+There was one, between the box and the list: it took what was typed and drew
+it as a row of the list, and nothing had left the browser. People pressed it,
+saw their option on the list, and took the row for a saved option — which is
+exactly what a row that looks like every other row says — and left without
+pressing *Confirm options*. The row was a lie about where the option was. So
+what is typed now stays in the text field it was typed into, still editable,
+and a fresh blank field opens under it the moment it stops being blank, which
+is how a second option gets somewhere to go. A blank field is room, not an
+option, and is never sent; every filled one is checked on the press that ends
+the card, all at once, with each problem marked on its own field — two drafts
+with one name mark the later, as the create form does.
 
 **One press, but not always one request, and the split is who is writing.**
 `sendDraft` in `CollectOptions` is where it is decided. The creator's
