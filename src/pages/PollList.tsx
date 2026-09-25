@@ -16,6 +16,7 @@ import { EyeIcon, EyeSlashIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { pruneHiddenPolls, setPollHidden, useHiddenPolls } from '../lib/hiddenPolls'
+import { openedPolls, pruneOpenedPolls } from '../lib/openedPolls'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
@@ -73,12 +74,30 @@ export function PollList() {
   // One round trip for a page of polls, their status, and the total. This
   // used to be a select plus one poll_status RPC per poll; which is also what
   // makes it cheap enough to re-read whenever anything on it moves.
+  //
+  // Open polls somebody else made are on it too, where this browser has opened
+  // their links: the browser remembers which, and hands the ids in for the
+  // database to list among the rest. See lib/openedPolls.ts.
   const load = useCallback(async () => {
     const asked = chosen.current
-    const { data, error: rpcError } = await supabase.rpc('list_polls', {
-      p_limit: PAGE_SIZE,
-      p_offset: (asked - 1) * PAGE_SIZE,
-    })
+    const page = { p_limit: PAGE_SIZE, p_offset: (asked - 1) * PAGE_SIZE }
+    const opened = openedPolls()
+    // Sent only when there are some, so a reader who has never opened
+    // anybody's link makes exactly the call they always did.
+    let withOpened = opened.length > 0
+    let { data, error: rpcError } = await supabase.rpc(
+      'list_polls',
+      withOpened ? { ...page, p_open_ids: [...opened] } : page,
+    )
+    // PGRST202 is PostgREST finding no function with those arguments, which
+    // is this build talking to a database that has not had
+    // 0065_opened_polls_on_the_list.sql yet — the app deploys on push and the
+    // migrations apply on merge. The list without the opened polls is a
+    // working list; no list at all is not.
+    if (rpcError?.code === 'PGRST202' && withOpened) {
+      withOpened = false
+      ;({ data, error: rpcError } = await supabase.rpc('list_polls', page))
+    }
     if (rpcError) {
       // A refresh that fails keeps the list already on screen; only a first
       // read that fails leaves nothing to show.
@@ -102,7 +121,15 @@ export function PollList() {
     // poll that has since been deleted from a hidden poll on another page, so
     // it is the one read allowed to sweep the stored ids; see
     // pruneHiddenPolls, which is doing nothing at all on most reads.
-    if (count <= PAGE_SIZE) pruneHiddenPolls(rows.map((row) => row.id))
+    //
+    // The opened polls are swept on the same read and the same terms. Both
+    // sweeps wait for a read that asked about them, since a list read without
+    // them leaves them out whether they still exist or not — and a hidden
+    // poll can be one of them.
+    if (count <= PAGE_SIZE && (withOpened || opened.length === 0)) {
+      pruneHiddenPolls(rows.map((row) => row.id))
+      pruneOpenedPolls(rows.map((row) => row.id))
+    }
     // The page these rows are actually of, which is not always the page that
     // was asked for — the database clamps a request past the end. Recording
     // the clamped one is what stops the effect below from reading again the
@@ -236,7 +263,7 @@ export function PollList() {
 
         {polls.length === 0 && (
           <Text c="dimmed" size="sm">
-            No polls yet. Create one, or wait for an invite.
+            No polls yet. Create one, wait for an invite, or open a poll&rsquo;s link.
           </Text>
         )}
 
@@ -276,6 +303,9 @@ export function PollList() {
                       compact
                       title={poll.title}
                       description={poll.description}
+                      // Null on an open poll that is here because its link was
+                      // opened in this browser, which is told no more about
+                      // who made it than the link's own page is.
                       createdBy={
                         poll.created_by === session?.user.id ? 'you' : poll.created_by_email
                       }

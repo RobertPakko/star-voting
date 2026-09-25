@@ -78,6 +78,16 @@ function toUuid(short: string): string | null {
 }
 
 /**
+ * Whether this is a poll id in the database's own spelling -- a uuid, which a
+ * sample's word and a mistyped address are not. For anything about to be
+ * handed to Postgres as a `uuid`, where one stray string fails the whole
+ * request rather than just itself.
+ */
+export function isCanonicalPollId(id: string): boolean {
+  return UUID.test(id)
+}
+
+/**
  * How a poll id is written into a URL: short where there is a short form, and
  * unchanged where there is not.
  */

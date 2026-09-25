@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions and which polls this browser keeps off its list, which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list and which open polls it has opened (openedPolls.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -554,7 +554,9 @@ that the account door and the link door hand back the same sheet on the same
 open poll — and that a page of the poll list is a page of the same list every
 time: that two pages partition it with nothing on both and nothing on neither,
 that the total is of the list rather than the page, and that asking past the
-end lands on the last page there is; everything about the results-ready
+end lands on the last page there is — and that the list carries an open poll
+whose id the browser hands it, and no other kind, without naming who made it;
+everything about the results-ready
 announcement except the sending — whether a poll has a result at all, who
 would be told and who is deliberately not, and that the notice is made exactly
 once, forgotten when the poll goes back to taking votes and made again when it
@@ -621,7 +623,9 @@ not the socket, that decides what comes back.
 
 There are two: `poll:<id>`, for every page watching one poll, whichever side
 of it they are on; and `user:<id>`, for one person's poll list — every change
-to every poll on it, invites included.
+to every poll they made or are invited to, invites included. (The open polls
+a browser adds to that list are the exception; see [Open polls you have
+opened](#open-polls-you-have-opened).)
 
 **The list watches its reader, not its rows, and that is what keeps it to one
 request.** It used to subscribe to one topic per poll on the page: a set it
@@ -4589,6 +4593,68 @@ again. And **the card is no longer the anchor**: a control inside a link is
 invalid HTML and presses both, so the heading is the link and its `::after`
 covers the card. The whole card is still one thing to click and one thing to
 tab to, with the eye beside it as the second stop.
+
+### Open polls you have opened
+
+An open poll made by somebody else used to be on nobody's list: `list_polls`
+answered with the polls you made and the polls you were invited to, and an
+open poll has no invite list. So a poll you had voted in three times was
+reachable only by the link it arrived by, wherever that link had got to. Now
+**an open poll this browser has opened is on the list**, among the rest, by
+date, counted by the pager and hidden by the same eye.
+
+**The browser remembers, and the database lists.** `src/lib/openedPolls.ts`
+keeps the ids — newest first, a hundred at most — and `PublicPoll` adds one
+every time it arrives at an open poll, signed in or not. `PollList` hands them
+to `list_polls` as `p_open_ids`
+([`0065_opened_polls_on_the_list.sql`](supabase/migrations/0065_opened_polls_on_the_list.sql)),
+which adds any **open** poll named there to what the reader can see. Reading
+each one in the browser instead would have been a request per poll and a
+second list with no place in the first one's order or its pages; handing them
+in keeps the list one request, one order and one pager.
+
+**Nothing is recorded on the server, and that is why it is in the browser.**
+A ballot cast through a link is keyed per question so that one browser's
+ballots cannot be joined; a row saying *this account opened that poll* would
+be that join, made about every open poll anybody signed in has looked at. So
+it is per browser, which is the trade [hiding a
+poll](#hiding-a-poll-from-your-list) already makes, with the same consequence — opened on the phone is not on the
+laptop's list, and a poll opened before signing in is on the list of whoever
+signs in afterwards in that browser.
+
+**The list tells nobody more than the link does.** Holding an open poll's id
+is the whole of the right to read it, so listing one discloses nothing
+`open_poll_view` would not. Two things keep it there: `mode = 'open'` is part
+of the test, so an invite poll's id in the array lists nothing however it was
+come by; and a row that is on the list only because its id was handed in
+carries a null `created_by` and `created_by_email`, so the card has no
+*Created by* line — the same silence as the link's own page, for [the same
+reason](#the-polls-high-level-details). `37_opened_polls_on_the_list` holds
+both.
+
+**Recorded by the first question.** A poll of several questions is one row on
+the list and that row is question 1, so the browser records question 1's id
+whichever question the link opened. That is also what makes pruning honest:
+on a read that is the whole list, a remembered id matching no row is a poll
+that has been deleted, and `pruneOpenedPolls` drops it on exactly the terms
+`pruneHiddenPolls` uses — and only when the read was made with the ids, since
+one without them says nothing about whether they exist.
+
+**The new argument is optional, and the call is made without it when there is
+nothing to send.** A different argument list is a different function, so the
+old `list_polls` was dropped and recreated with its grant restated. A browser
+still on the previous build calls it with two arguments and gets the list it
+always did; a browser on this build talking to a database that has not had
+the migration gets `PGRST202`, and `PollList` asks again without the ids
+rather than showing no list at all.
+
+**The list is not told when an opened poll moves.** It listens on
+`user:<id>` (see [Live updates](#live-updates)), which fans out to a poll's
+creator and invitees, and the reader of an open poll is neither. Subscribing
+to each opened poll's own topic would be up to a hundred channels on the page
+people land on, so the card is as fresh as the list's last read — which is
+every time the list is opened, and every time anything on the reader's own
+polls moves.
 
 ### Polls are deleted after six months
 

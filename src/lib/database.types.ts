@@ -425,7 +425,7 @@ export type Database = {
       is_invited_to_poll: { Args: { p_poll_id: string }; Returns: boolean }
       is_poll_creator: { Args: { p_poll_id: string }; Returns: boolean }
       list_polls: {
-        Args: { p_limit: number; p_offset: number }
+        Args: { p_limit: number; p_offset: number; p_open_ids?: string[] }
         Returns: {
           closed_at: string
           confirmed_count: number

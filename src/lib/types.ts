@@ -335,7 +335,15 @@ export interface UnreadableRead {
 }
 
 /** One row from list_polls(): a poll and its status, fetched together. */
-export interface PollListItem extends Poll, PollStatus {
+export interface PollListItem extends Omit<Poll, 'created_by' | 'created_by_email'>, PollStatus {
+  /**
+   * Who made the poll — null on an open poll that is on the list only because
+   * this browser has opened its link, for the reason `OpenPollView` carries no
+   * creator: a link goes wherever it is forwarded, and the list must not be
+   * the way round that. See lib/openedPolls.ts.
+   */
+  created_by: string | null
+  created_by_email: string | null
   /** How many options the poll has; its turnout number while collecting. */
   option_count: number
   /**

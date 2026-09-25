@@ -14,6 +14,7 @@ import {
   rememberConfirmed,
 } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
+import { rememberOpenedPoll } from '../lib/openedPolls'
 import type { LiveStatus } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
@@ -163,6 +164,13 @@ export function PublicPoll({
         // the strip it already knows it does not have.
         covered.current = [of, ...strip.map((question) => question.id)]
         setQuestions(strip)
+        // This browser has opened the poll, so the poll list carries it from
+        // now on — by its first question, which is the row the list has for
+        // it, whichever question the link opened. Once per arrival, since the
+        // strip only comes with one. The sample is refused in there: its ids
+        // are words, and it is nobody's poll to come back to.
+        // See lib/openedPolls.ts.
+        rememberOpenedPoll(strip.find((question) => question.question_position === 1)?.id ?? of)
       }
       loadedFor.current = of
       setRead({ pollId: of, view: openView, results: tally ?? null, ballots: sheet ?? null })
