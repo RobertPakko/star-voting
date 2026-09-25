@@ -2758,16 +2758,31 @@ somewhere to put the text. The column itself predates that by a long way:
 `candidates.description` and both ballots' rendering of it were written first,
 and nothing had ever been able to fill it in.
 
-**Whether the field is on screen depends on how many options are.** The create
-form lays out a dozen option rows at once, so a description under every one of
-them would bury the list the creator is trying to read; each row has a `+`
-beside it that opens one instead. `CollectOptions` — the box on a poll
-collecting its options, and the creator's own correction of a settled list — is
-one option at a time, so the field is simply there, costing two rows of a card
-with nothing else in it. The `+` was a control that had to be found and pressed
-before the most useful thing a suggestion can carry could be typed, in the one
-place where nothing was competing for the room. It has no open/closed state
-there at all: the string is the whole of it, and empty means no description.
+**Every screen has the same `+` and `−`, and what differs is only which way
+round a row starts.** `DescriptionToggle`, beside each option's `×`, shows the
+field or takes it away, on the create form and in `CollectOptions` — the box on
+a poll collecting its options, and the creator's own correction of a settled
+list — alike. The two screens used to disagree: the form had the toggle and
+`CollectOptions` drew the field on every row unconditionally, so the same
+control was a button in one place and simply absent in the other.
+
+Where a row starts is decided by what it is:
+
+- **A row of the create form starts closed.** The form lays out a dozen rows
+  at once, and a description under every one of them would bury the list the
+  creator is trying to read.
+- **A new option in `CollectOptions` starts open.** *Add option* there is one
+  option at a time, so the field costs two rows of a card with nothing else in
+  it, and making the most useful thing a suggestion can carry wait behind a
+  `+` is a press for nothing. The `−` is for whoever has nothing to say.
+- **An option opened by its pencil starts the way it is.** One with a
+  description shows it; one without shows only its name, as the create form
+  would, rather than an empty box asking to be filled in on a row somebody
+  opened to fix a typo.
+
+A field the `+` has just shown takes the cursor, because it was asked for; a
+field that arrives with its row does not, so *Add option* and the pencil still
+put the cursor in the name.
 
 The field it opens says what it is by its shape. It is indented under the
 option it belongs to, with an elbow drawn from the bottom of the name field
@@ -2791,9 +2806,10 @@ Four things hold it together:
   was in it rather than remembering it, so a poll can never carry a description
   its creator can no longer see. It is also why "no description" is `null`
   rather than an empty string there: the same value collapses the field and
-  means there is nothing to store. `CollectOptions` has no collapsed state to
-  represent, so its description is a plain string and empty is the whole of
-  "none".
+  means there is nothing to store. `CollectOptions` holds it the same way,
+  so taking a description away from an option already on the poll is a
+  correction like any other: it goes in on the press that ends the card, and
+  the option comes back without one.
 - **They belong to the ballot, and are folded away everywhere else.** Both
   ballots show one under the option's name, because that is where the detail is
   a voting aid. The results do not: a paragraph beside a bar of points is noise
