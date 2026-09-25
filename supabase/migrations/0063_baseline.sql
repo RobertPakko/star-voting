@@ -83,6 +83,9 @@ CREATE TABLE IF NOT EXISTS "public"."polls" (
     "winner_settled_at" timestamp with time zone,
     "kind" "text" DEFAULT 'option'::"text" NOT NULL,
     "schedule" "jsonb",
+    "options_edited_after_votes" boolean DEFAULT false NOT NULL,
+    "votes_after_reveal" boolean DEFAULT false NOT NULL,
+    "reopened_after_reveal" boolean DEFAULT false NOT NULL,
     CONSTRAINT "polls_kind_ck" CHECK (("kind" = ANY (ARRAY['option'::"text", 'time'::"text"]))),
     CONSTRAINT "polls_mode_ck" CHECK (("mode" = ANY (ARRAY['invite'::"text", 'open'::"text"]))),
     CONSTRAINT "polls_options_finalized_ck" CHECK ((("options_finalized_at" IS NULL) OR "solicit_options")),
@@ -132,6 +135,18 @@ COMMENT ON COLUMN "public"."polls"."kind" IS 'What the poll is choosing between.
 
 
 COMMENT ON COLUMN "public"."polls"."schedule" IS 'How a time poll''s grid is laid out: {timezone, window: {start, end}, desired_slots, granularity}. Only what cannot be recovered from the options -- the in-bounds days are exactly the dates the options start on, so the client derives those and the two can never disagree. Null on an option poll; required on a time poll.';
+
+
+
+COMMENT ON COLUMN "public"."polls"."options_edited_after_votes" IS 'The creator corrected this question''s option list while it already held ballots. A flag rather than a log: the banner it draws under the results says the tally rests on a list that moved, and which option moved is not something a secret ballot could be asked afterwards. Never cleared -- a poll cannot un-edit a list people have already scored.';
+
+
+
+COMMENT ON COLUMN "public"."polls"."votes_after_reveal" IS 'A ballot was cast or changed on this question after its results had been shown. Set by the trigger on ballots, off reopened_after_reveal below, so every door into that table raises it for free.';
+
+
+
+COMMENT ON COLUMN "public"."polls"."reopened_after_reveal" IS 'This question was reopened having already shown its tally, which is what makes the next vote a late one. Internal bookkeeping for the flag above: poll_results_revealed is computed from closed_at and turnout, so it goes false the moment the poll reopens and cannot answer "was it ever out" afterwards.';
 
 
 
@@ -821,6 +836,7 @@ CREATE OR REPLACE FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_
     AS $$
 declare
   v_poll polls;
+  v_voted boolean;
 begin
   select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
 
@@ -839,13 +855,18 @@ begin
     raise exception 'A time poll''s options are its windows; change its schedule instead';
   end if;
 
-  -- The trigger says this too, and would refuse the insert on its own. Saying
-  -- it here is what makes the message the one the creator can act on.
-  if exists (select 1 from ballots where poll_id = p_poll_id) then
-    raise exception 'Cannot change the options of a poll that already has votes';
-  end if;
+  select exists (select 1 from ballots where poll_id = p_poll_id) into v_voted;
 
+  -- The creator's own door, so it opens on a poll with votes in it exactly as
+  -- creator_edit_options does, says so to the guard, and leaves the same mark.
+  perform set_config('app.editing_options', p_poll_id::text, true);
   perform insert_option(v_poll, p_name, p_description);
+  perform set_config('app.editing_options', '', true);
+
+  if v_voted then
+    update polls set options_edited_after_votes = true
+    where id = p_poll_id and not options_edited_after_votes;
+  end if;
 end;
 $$;
 
@@ -853,7 +874,7 @@ $$;
 ALTER FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") IS 'Adds an option to the creator''s own poll while it still has no votes. The window is "no ballots" and nothing else; where the options came from does not enter into it.';
+COMMENT ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") IS 'Adds an option to the creator''s own poll, up until it closes. On a poll that already has ballots the addition is marked, and every ballot already cast scores the new option zero; where the options came from does not enter into it.';
 
 
 
@@ -863,6 +884,8 @@ CREATE OR REPLACE FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p
     AS $$
 declare
   v_poll polls;
+  v_added int;
+  v_voted boolean;
 begin
   select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
 
@@ -874,13 +897,18 @@ begin
     raise exception 'This poll has been closed';
   end if;
 
-  -- The trigger says this too, and would refuse the insert on its own. Saying
-  -- it here is what makes the message the one the creator can act on.
-  if exists (select 1 from ballots where poll_id = p_poll_id) then
-    raise exception 'Cannot change the options of a poll that already has votes';
+  select exists (select 1 from ballots where poll_id = p_poll_id) into v_voted;
+
+  perform set_config('app.editing_options', p_poll_id::text, true);
+  v_added := insert_options(v_poll, p_options);
+  perform set_config('app.editing_options', '', true);
+
+  if v_voted and v_added > 0 then
+    update polls set options_edited_after_votes = true
+    where id = p_poll_id and not options_edited_after_votes;
   end if;
 
-  return insert_options(v_poll, p_options);
+  return v_added;
 end;
 $$;
 
@@ -888,7 +916,7 @@ $$;
 ALTER FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") IS 'The creator''s correction to an option list that is already a ballot, applied in one go rather than one option per request. Allowed on a time poll, where the names come from a painted calendar; the singular creator_add_option is the typed-name path and still refuses one.';
+COMMENT ON FUNCTION "public"."creator_add_options"("p_poll_id" "uuid", "p_options" "jsonb") IS 'The creator''s correction to an option list that is already a ballot, applied in one go rather than one option per request, and marking the poll when it lands on one with votes in it. Allowed on a time poll, where the names come from a painted calendar; the singular creator_add_option is the typed-name path and still refuses one.';
 
 
 
@@ -899,6 +927,8 @@ CREATE OR REPLACE FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "
 declare
   v_poll polls;
   v_added int := 0;
+  v_removed int := 0;
+  v_voted boolean;
   v_left int;
 begin
   select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
@@ -914,15 +944,16 @@ begin
     raise exception 'This poll has been closed';
   end if;
 
-  -- The trigger says this too, and would refuse the write on its own. Saying
-  -- it here is what makes the message the one the creator can act on.
-  if exists (select 1 from ballots where poll_id = p_poll_id) then
-    raise exception 'Cannot change the options of a poll that already has votes';
-  end if;
+  -- Whether this edit is a late one, asked before it is made. What it changes
+  -- is not whether the edit is allowed -- it is, and the creator was shown
+  -- what it costs before they pressed anything -- but what the poll says about
+  -- itself afterwards.
+  select exists (select 1 from ballots where poll_id = p_poll_id) into v_voted;
 
-  -- Transaction-local, and cleared the moment the deletes are done: it lifts
-  -- the per-row floor off this poll for exactly as long as the list is
-  -- part-way between two states. See guard_options_frozen.
+  -- Transaction-local, and held across both halves of the edit: it names this
+  -- poll as the one whose list its own creator is correcting, which is what
+  -- lifts the per-row guard and the per-row floor off it for exactly as long
+  -- as the list is part-way between two states. See guard_options_frozen.
   perform set_config('app.editing_options', p_poll_id::text, true);
 
   -- Removals first, so an edit that swaps one option for another cannot trip
@@ -932,11 +963,13 @@ begin
   delete from candidates
   where poll_id = p_poll_id and id = any (coalesce(p_remove, '{}'::uuid[]));
 
-  perform set_config('app.editing_options', '', true);
+  get diagnostics v_removed = row_count;
 
   if p_options is not null and jsonb_array_length(p_options) > 0 then
     v_added := insert_options(v_poll, p_options);
   end if;
+
+  perform set_config('app.editing_options', '', true);
 
   -- The floor the trigger would have applied a row at a time, applied once to
   -- the list the creator actually asked for. A list still being collected has
@@ -949,6 +982,14 @@ begin
     end if;
   end if;
 
+  -- The card sends the whole list on every save, so most of what arrives here
+  -- is the list as it already stands: the mark is for an edit that actually
+  -- moved something.
+  if v_voted and (v_added > 0 or v_removed > 0) then
+    update polls set options_edited_after_votes = true
+    where id = p_poll_id and not options_edited_after_votes;
+  end if;
+
   return v_added;
 end;
 $$;
@@ -957,7 +998,7 @@ $$;
 ALTER FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "p_options" "jsonb", "p_remove" "uuid"[]) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "p_options" "jsonb", "p_remove" "uuid"[]) IS 'The creator''s correction to an option list, both halves of it -- the options to drop and the options to add -- in one transaction, answering how many were added. The two-option floor is applied to what the edit leaves behind rather than to the states it passes through, which is the whole reason it exists beside creator_add_options.';
+COMMENT ON FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "p_options" "jsonb", "p_remove" "uuid"[]) IS 'The creator''s correction to an option list, both halves of it -- the options to drop and the options to add -- in one transaction, answering how many were added. The two-option floor is applied to what the edit leaves behind rather than to the states it passes through, which is the whole reason it exists beside creator_add_options. An edit that moves something on a poll with ballots in it marks the poll, which is what the results banner is drawn from.';
 
 
 
@@ -972,6 +1013,45 @@ ALTER FUNCTION "public"."email_escape"("p_text" "text") OWNER TO "postgres";
 
 
 COMMENT ON FUNCTION "public"."email_escape"("p_text" "text") IS 'Text as it goes into an email body: the three characters that would otherwise be markup. Internal.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."fill_scores_for_new_option"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  -- An option added to a poll with ballots in it lands on ballots that were
+  -- cast without it, and *one score per option per ballot* is an invariant the
+  -- rest of the schema reads rather than checks: replace_scores counts the
+  -- rows it moved and refuses a ballot it could only half-rewrite,
+  -- poll_ballots publishes a grid, and the CSV is that grid. Left to
+  -- themselves those ballots would score the new option nothing at all, which
+  -- the tally already reads as zero (poll_tally left-joins scores) and the
+  -- other three read as a ballot that has come apart.
+  --
+  -- So the zero is written down. It is the same number the tally would have
+  -- inferred, and it keeps a voter's ability to change their vote: without a
+  -- row here, replace_scores would refuse every revision of an older ballot
+  -- for the rest of the poll's life.
+  --
+  -- On the far commoner path -- a poll being created, a list being collected
+  -- -- there are no ballots and this inserts nothing.
+  insert into scores (ballot_id, candidate_id, score)
+  select b.id, new.id, 0
+  from ballots b
+  where b.poll_id = new.poll_id
+  on conflict (ballot_id, candidate_id) do nothing;
+
+  return null;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."fill_scores_for_new_option"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fill_scores_for_new_option"() IS 'Scores an option added to a poll that already has ballots as zero on every one of them, so that "one score per option per ballot" holds through a late correction. Internal: a trigger on candidates.';
 
 
 
@@ -1151,7 +1231,14 @@ begin
     if tg_op = 'DELETE' then return old; else return new; end if;
   end if;
 
-  if exists (select 1 from ballots where poll_id = v_poll_id) then
+  -- A poll with votes in it is still not something that changes underneath
+  -- anybody by accident. What has changed is that there is now a door through
+  -- it: the creator's own correction says so in app.editing_options, marks the
+  -- poll, and is announced to every reader. Everything else -- a bare delete
+  -- through the candidates_delete policy, a suggestion arriving late -- meets
+  -- the rule exactly as it always did.
+  if exists (select 1 from ballots where poll_id = v_poll_id)
+     and coalesce(current_setting('app.editing_options', true), '') <> v_poll_id::text then
     raise exception 'Cannot change the options of a poll that already has votes';
   end if;
 
@@ -1186,7 +1273,7 @@ $$;
 ALTER FUNCTION "public"."guard_options_frozen"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."guard_options_frozen"() IS 'Holds an option list still from the first ballot on, and holds a live ballot to two options. The floor steps aside for a poll still collecting, whose floor is finalize_options, and for the poll named in app.editing_options, whose floor is creator_edit_options.';
+COMMENT ON FUNCTION "public"."guard_options_frozen"() IS 'Holds an option list still against every write but the creator''s own correction, and holds a live ballot to two options. Both step aside for the poll named in app.editing_options, whose floor and whose bookkeeping are creator_edit_options''; the floor also steps aside for a poll still collecting, whose checkpoint is finalize_options.';
 
 
 
@@ -1553,6 +1640,30 @@ ALTER FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer) OWNE
 
 
 COMMENT ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer) IS 'One page of the caller''s poll list, newest first, with the total on every row. The page is taken before the per-poll aggregates run, so the work is proportional to the rows returned rather than to everything the caller can see. An offset past the end returns the last page there is.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."mark_votes_after_reveal"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  -- Every way a vote is cast or changed passes through this table -- the two
+  -- submit paths insert a ballot, the two revise paths stamp revised_at on one
+  -- -- so the flag is raised here rather than in four functions that would
+  -- each have to remember to.
+  update polls set votes_after_reveal = true
+  where id = new.poll_id and reopened_after_reveal and not votes_after_reveal;
+
+  return null;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."mark_votes_after_reveal"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."mark_votes_after_reveal"() IS 'Marks a poll whose tally has been seen and whose votes have moved since. Internal: a trigger on ballots.';
 
 
 
@@ -3205,6 +3316,8 @@ declare
   v_voted int;
   v_closed boolean;
   v_mode text;
+  v_edited boolean;
+  v_late boolean;
   v_options jsonb;
   v_pool uuid[];
   v_head jsonb;
@@ -3212,7 +3325,10 @@ declare
 begin
   select count(*) into v_invited from invited_voters where poll_id = p_poll_id;
   select count(*) into v_voted from ballots where poll_id = p_poll_id;
-  select closed_at is not null, mode into v_closed, v_mode from polls where id = p_poll_id;
+
+  select closed_at is not null, mode, options_edited_after_votes, votes_after_reveal
+  into v_closed, v_mode, v_edited, v_late
+  from polls where id = p_poll_id;
 
   if v_voted = 0 then
     raise exception 'No votes were cast in this poll';
@@ -3269,7 +3385,13 @@ begin
     'voter_count', v_voted,
     'invited_count', v_invited,
     'mode', v_mode,
-    'closed_early', v_closed and v_voted < v_invited
+    'closed_early', v_closed and v_voted < v_invited,
+    -- The two caveats, travelling with the tally they are about. Everyone who
+    -- can read the result reads them, through whichever door they came in by:
+    -- get_poll_results and open_poll_results are two gates over this one
+    -- function.
+    'options_edited_after_votes', coalesce(v_edited, false),
+    'votes_after_reveal', coalesce(v_late, false)
   );
 end;
 $$;
@@ -3408,6 +3530,59 @@ COMMENT ON FUNCTION "public"."purge_old_polls"() IS 'Deletes every poll past its
 
 
 
+CREATE OR REPLACE FUNCTION "public"."reopen_poll"("p_poll_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+begin
+  select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
+
+  if not found then
+    raise exception 'Only the poll creator can reopen this poll';
+  end if;
+
+  if v_poll.closed_at is null then
+    raise exception 'This poll is not closed';
+  end if;
+
+  -- Which questions actually showed a tally, asked *before* the close is
+  -- lifted: poll_results_revealed is computed from closed_at and turnout, so a
+  -- moment from now it answers no for all of them. A question closed with
+  -- nothing in it revealed nothing and is not marked -- the votes it takes
+  -- from here are its first ones, not late ones.
+  update polls set reopened_after_reveal = true
+  where id in (
+    select q.id from poll_group_members(v_poll) q where poll_results_revealed(q.*)
+  );
+
+  -- One statement for the group, as close_poll is: the questions stopped at
+  -- the same moment and they start again at the same moment. The triggers on
+  -- closed_at do the rest -- settle_winner takes back a winner the poll no
+  -- longer has, notify_results_ready drops the notice row so a second finish
+  -- is announced like the first, and the whole group is broadcast to whoever
+  -- has it open.
+  --
+  -- What this cannot do is take an invite poll back off full turnout: a
+  -- question every invitee has answered is revealed whether or not it is
+  -- closed, so reopening one leaves its results where they are. That is the
+  -- same gate everything else in this schema reads, and the way to take more
+  -- votes on such a poll has always been a new one.
+  update polls set closed_at = null
+  where id in (select q.id from poll_group_members(v_poll) q)
+    and closed_at is not null;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."reopen_poll"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."reopen_poll"("p_poll_id" "uuid") IS 'Puts a closed poll back to taking votes, keeping every ballot in it, for every question at once. Marks the questions whose results were out, so that a vote cast or changed from here says so on the results.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."replace_scores"("p_ballot_id" "uuid", "p_poll_id" "uuid", "p_scores" "jsonb") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3470,34 +3645,6 @@ ALTER FUNCTION "public"."replace_scores"("p_ballot_id" "uuid", "p_poll_id" "uuid
 
 COMMENT ON FUNCTION "public"."replace_scores"("p_ballot_id" "uuid", "p_poll_id" "uuid", "p_scores" "jsonb") IS 'Overwrites every score on one ballot, in place. Internal: called from revise_ballot and open_poll_revise, which decide whose ballot it is and whether the poll will take a change.';
 
-
-
-CREATE OR REPLACE FUNCTION "public"."reset_poll"("p_poll_id" "uuid") RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-declare
-  v_poll polls;
-begin
-  select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
-
-  if not found then
-    raise exception 'Only the poll creator can reset this poll';
-  end if;
-
-  -- scores cascade from ballots (0001), so this clears the whole tally.
-  -- It also frees the per-poll unique names and voter keys that open-poll
-  -- ballots hold, so the same people can vote again under the same names.
-  delete from ballots
-  where poll_id in (select q.id from poll_group_members(v_poll) q);
-
-  update polls set closed_at = null
-  where id in (select q.id from poll_group_members(v_poll) q);
-end;
-$$;
-
-
-ALTER FUNCTION "public"."reset_poll"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."revise_ballot"("p_poll_id" "uuid", "p_scores" "jsonb") RETURNS "void"
@@ -3640,7 +3787,7 @@ begin
     return;
   end if;
 
-  v_link := 'https://choicelab.app/star-voting/#/polls/' || p_poll_id::text;
+  v_link := 'https://choicelab.app/star-voting/#/polls/' || short_poll_id(p_poll_id);
 
   perform net.http_post(
     url := 'https://api.resend.com/emails',
@@ -3825,6 +3972,23 @@ $$;
 
 
 ALTER FUNCTION "public"."settle_winner_for_poll"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."short_poll_id"("p_poll_id" "uuid") RETURNS "text"
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $_$
+      -- Sixteen bytes encode to 24 characters, well under the 76 at which
+      -- `encode` would start wrapping, so there is no newline to strip.
+      select rtrim(translate(encode(uuid_send($1), 'base64'), '+/', '-_'), '=')
+    $_$;
+
+
+ALTER FUNCTION "public"."short_poll_id"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."short_poll_id"("p_poll_id" "uuid") IS 'A poll id as it is spelled in a URL: the same sixteen bytes in base64url, 22 characters instead of 36. The app spells it the same way and reads both spellings, so older long links still resolve. Internal: used to build the link in send_poll_email.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."star_round"("p_poll_id" "uuid", "p_pool" "uuid"[]) RETURNS "jsonb"
@@ -4520,6 +4684,10 @@ CREATE OR REPLACE TRIGGER "ballots_broadcast_insert" AFTER INSERT ON "public"."b
 
 
 
+CREATE OR REPLACE TRIGGER "ballots_mark_late_votes" AFTER INSERT OR UPDATE ON "public"."ballots" FOR EACH ROW EXECUTE FUNCTION "public"."mark_votes_after_reveal"();
+
+
+
 CREATE OR REPLACE TRIGGER "ballots_notify_results_delete" AFTER DELETE ON "public"."ballots" REFERENCING OLD TABLE AS "old_rows" FOR EACH STATEMENT EXECUTE FUNCTION "public"."notify_results_for_emptied"();
 
 
@@ -4541,6 +4709,10 @@ CREATE OR REPLACE TRIGGER "candidates_broadcast_insert" AFTER INSERT ON "public"
 
 
 CREATE OR REPLACE TRIGGER "candidates_broadcast_update" AFTER UPDATE ON "public"."candidates" REFERENCING NEW TABLE AS "new_rows" FOR EACH STATEMENT EXECUTE FUNCTION "public"."broadcast_polls_touched"();
+
+
+
+CREATE OR REPLACE TRIGGER "candidates_fill_scores" AFTER INSERT ON "public"."candidates" FOR EACH ROW EXECUTE FUNCTION "public"."fill_scores_for_new_option"();
 
 
 
@@ -4992,6 +5164,10 @@ GRANT ALL ON FUNCTION "public"."creator_edit_options"("p_poll_id" "uuid", "p_opt
 
 
 
+REVOKE ALL ON FUNCTION "public"."fill_scores_for_new_option"() FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."finalize_options"("p_poll_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."finalize_options"("p_poll_id" "uuid") TO "authenticated";
 
@@ -5031,6 +5207,10 @@ GRANT ALL ON FUNCTION "public"."is_poll_creator"("p_poll_id" "uuid") TO "authent
 
 REVOKE ALL ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."mark_votes_after_reveal"() FROM PUBLIC;
 
 
 
@@ -5232,12 +5412,12 @@ REVOKE ALL ON FUNCTION "public"."purge_old_polls"() FROM PUBLIC;
 
 
 
+REVOKE ALL ON FUNCTION "public"."reopen_poll"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."reopen_poll"("p_poll_id" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."replace_scores"("p_ballot_id" "uuid", "p_poll_id" "uuid", "p_scores" "jsonb") FROM PUBLIC;
-
-
-
-REVOKE ALL ON FUNCTION "public"."reset_poll"("p_poll_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."reset_poll"("p_poll_id" "uuid") TO "authenticated";
 
 
 
