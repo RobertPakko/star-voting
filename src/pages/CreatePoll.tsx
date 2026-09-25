@@ -1176,9 +1176,6 @@ export function CreatePoll() {
                     variant="subtle"
                     color="red"
                     onClick={() => removeOption(questionIndex, option.key)}
-                    /* Two rows is the floor for a poll that ships its options with
-             it, and no floor at all for one that collects them. */
-                    disabled={!solicitOptions && question.options.length <= 2}
                     aria-label="Remove option"
                   >
                     &times;
