@@ -181,7 +181,10 @@ CREATE OR REPLACE FUNCTION "public"."announce"("p_topic" "text", "p_event" "text
     AS $$
 declare
   v_told text := coalesce(current_setting('app.announced', true), '');
-  v_key text := '|' || p_topic || '|';
+  -- The event is part of the key: a topic told that a poll changed has still
+  -- not been told that it has gone. `|` cannot appear in either half -- a
+  -- topic is a fixed prefix and a uuid, an event a fixed word.
+  v_key text := '|' || p_topic || '|' || p_event || '|';
 begin
   if position(v_key in v_told) > 0 then
     return;
@@ -200,7 +203,7 @@ $$;
 ALTER FUNCTION "public"."announce"("p_topic" "text", "p_event" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."announce"("p_topic" "text", "p_event" "text") IS 'Tells one topic that something moved, at most once per transaction. Every live-update message goes through here: the payload is empty and nothing reaches a listener before the commit, so a second message from the same transaction is a wasted round trip rather than news. Internal.';
+COMMENT ON FUNCTION "public"."announce"("p_topic" "text", "p_event" "text") IS 'Tells one topic that something happened, at most once per topic and event per transaction. Every live-update message goes through here: the payload is empty and nothing reaches a listener before the commit, so a second message from the same transaction is a wasted round trip rather than news. Internal.';
 
 
 
@@ -433,9 +436,17 @@ begin
     return old;
   end if;
 
-  -- The audience broadcast_poll_change() reaches, minus the poll's own topic
-  -- and read while it can still be read. `union` rather than `union all`: a
-  -- creator who invited themselves is one reader with one list.
+  -- Whoever has the poll itself open. Under an event of its own, because
+  -- `poll_changed` means "re-read" and a re-read of a poll that has gone is a
+  -- read that fails; `poll_deleted` is the answer rather than a prompt to go
+  -- and find one. A group goes out question by question through this same
+  -- trigger, and each question's page is watching its own topic, so each
+  -- one is told.
+  perform announce('poll:' || old.id::text, 'poll_deleted');
+
+  -- The audience broadcast_poll_change() reaches, read while it can still be
+  -- read. `union` rather than `union all`: a creator who invited themselves
+  -- is one reader with one list.
   --
   -- A group goes out as several polls through this same trigger, and each
   -- question reaches the same lists. They hear once: a list re-read after the
@@ -460,7 +471,7 @@ $$;
 ALTER FUNCTION "public"."broadcast_poll_gone"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."broadcast_poll_gone"() IS 'Tells the list of everyone who can see this poll that it is going, while its invitee list still exists to be read. Once per list per transaction, so a group of questions going out together is one message rather than one each. Internal: the BEFORE DELETE trigger on polls, never called by a client.';
+COMMENT ON FUNCTION "public"."broadcast_poll_gone"() IS 'Tells whoever has this poll open that it has gone (poll_deleted on its own topic), and the list of everyone who can see it that it is going, while its invitee list still exists to be read. Once per topic per transaction, so a group of questions going out together reaches each list once. Silent under the nightly purge. Internal: the BEFORE DELETE trigger on polls, never called by a client.';
 
 
 
@@ -1503,7 +1514,7 @@ $$;
 ALTER FUNCTION "public"."is_poll_creator"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer) RETURNS TABLE("id" "uuid", "title" "text", "description" "text", "created_by" "uuid", "created_by_email" "text", "created_at" timestamp with time zone, "closed_at" timestamp with time zone, "mode" "text", "show_voters" boolean, "show_ballots" boolean, "solicit_options" boolean, "options_finalized_at" timestamp with time zone, "invited_count" integer, "voted_count" integer, "option_count" integer, "confirmed_count" integer, "is_complete" boolean, "voted" boolean, "is_closed" boolean, "results_available" boolean, "soliciting" boolean, "group_id" "uuid", "question_position" integer, "question_title" "text", "question_count" integer, "winner_name" "text", "winner_settled" boolean, "total_count" integer)
+CREATE OR REPLACE FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer, "p_open_ids" "uuid"[] DEFAULT '{}'::"uuid"[]) RETURNS TABLE("id" "uuid", "title" "text", "description" "text", "created_by" "uuid", "created_by_email" "text", "created_at" timestamp with time zone, "closed_at" timestamp with time zone, "mode" "text", "show_voters" boolean, "show_ballots" boolean, "solicit_options" boolean, "options_finalized_at" timestamp with time zone, "invited_count" integer, "voted_count" integer, "option_count" integer, "confirmed_count" integer, "is_complete" boolean, "voted" boolean, "is_closed" boolean, "results_available" boolean, "soliciting" boolean, "group_id" "uuid", "question_position" integer, "question_title" "text", "question_count" integer, "winner_name" "text", "winner_settled" boolean, "total_count" integer)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -1528,7 +1539,27 @@ CREATE OR REPLACE FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" i
     -- call in this predicate is opaque to the planner unless it happens to
     -- inline, and the index 0036 added is only reachable while the
     -- comparison is written where the planner can see it.
-    select p.*, p as poll_row
+    --
+    -- The third way onto the list is an open poll this browser has opened
+    -- through its link, which the browser remembers and hands in as
+    -- `p_open_ids` (see src/lib/openedPolls.ts). Holding an open poll's id is
+    -- already the whole of the right to read it -- `open_poll_view` answers
+    -- to nothing else -- so listing one here shows the reader nothing they
+    -- could not have asked for. `mode = 'open'` is what keeps it at that: an
+    -- invite poll's id in the array lists nothing, however it was come by.
+    -- It is an `id = any(...)`, which the primary key serves, so the `OR`
+    -- stays a bitmap union rather than a scan.
+    --
+    -- `via_link` marks the rows that are here only for that reason, so the
+    -- columns below can withhold what a link does not carry.
+    select p.*, p as poll_row,
+      not (
+        p.created_by = auth.uid()
+        or exists (
+          select 1 from invited_voters iv
+          where iv.poll_id = p.id and iv.email = lower(auth.jwt() ->> 'email')
+        )
+      ) as via_link
     from polls p
     where (p.group_id is null or p.question_position = 1)
       and (
@@ -1537,6 +1568,7 @@ CREATE OR REPLACE FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" i
           select 1 from invited_voters iv
           where iv.poll_id = p.id and iv.email = lower(auth.jwt() ->> 'email')
         )
+        or (p.mode = 'open' and p.id = any(coalesce(p_open_ids, '{}')))
       )
   ), counted as (
     -- The one pass over everything the caller can see. It is the price of
@@ -1600,8 +1632,12 @@ CREATE OR REPLACE FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" i
     v.id,
     v.title,
     v.description,
-    v.created_by,
-    v.created_by_email,
+    -- Nobody reading an open poll through its link is told who made it:
+    -- `open_poll_view` does not return the address, and this list must not
+    -- become the way round that. The creator's account id goes with it,
+    -- since it names the same person to anybody who can match it up.
+    case when v.via_link then null else v.created_by end,
+    case when v.via_link then null else v.created_by_email end,
     v.created_at,
     v.closed_at,
     v.mode,
@@ -1636,10 +1672,10 @@ CREATE OR REPLACE FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" i
 $$;
 
 
-ALTER FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer, "p_open_ids" "uuid"[]) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer) IS 'One page of the caller''s poll list, newest first, with the total on every row. The page is taken before the per-poll aggregates run, so the work is proportional to the rows returned rather than to everything the caller can see. An offset past the end returns the last page there is.';
+COMMENT ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer, "p_open_ids" "uuid"[]) IS 'One page of the caller''s poll list, newest first, with the total on every row: the polls they made, the polls they are invited to, and any open poll named in p_open_ids -- the open polls this browser has opened through their links, which carry no creator. The page is taken before the per-poll aggregates run, so the work is proportional to the rows returned rather than to everything the caller can see. An offset past the end returns the last page there is.';
 
 
 
@@ -2440,6 +2476,12 @@ begin
       'show_ballots', v_poll.show_ballots,
       'solicit_options', v_poll.solicit_options,
       'closed_at', v_poll.closed_at,
+      -- When the poll was made, which the poll list needs to know where an
+      -- opened poll will fall before it reads: it is ordered newest first,
+      -- and the browser remembers the date beside the id (see
+      -- src/lib/openedPolls.ts). A date anybody holding the link could already
+      -- see the poll exist on, and fixed for its whole life.
+      'created_at', v_poll.created_at,
       -- Null on a poll that asks one question, which is what tells the page
       -- to render no question strip rather than a strip of one.
       'group_id', v_poll.group_id,
@@ -5205,8 +5247,8 @@ GRANT ALL ON FUNCTION "public"."is_poll_creator"("p_poll_id" "uuid") TO "authent
 
 
 
-REVOKE ALL ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer, "p_open_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer, "p_open_ids" "uuid"[]) TO "authenticated";
 
 
 
