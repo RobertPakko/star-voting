@@ -368,11 +368,14 @@ export function useLiveStream(
             // read is a wasted round trip, where a suppressed one is a page
             // left showing votes that have since been overtaken.
             //
-            // Affordable because every page subscribes to exactly one topic. A
-            // caller passing several would get one read per channel, and the
-            // ones landing while the first was in flight would each queue a
-            // trailing read behind it — an outright demand is one flag and
-            // cannot tell a genuine catch-up from a wave of channels arriving.
+            // Affordable because nearly every page subscribes to exactly one
+            // topic. A caller passing several gets one demand per channel:
+            // the first reads and the rest, landing while it is in flight,
+            // collapse into one trailing read behind it — an outright demand
+            // is one flag and cannot tell a genuine catch-up from a wave of
+            // channels arriving. The poll list's opened polls are that
+            // caller, up to ten topics, and pay those two reads when a page
+            // of them subscribes; see PollList.
             insist()
           } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
             subscribed = false

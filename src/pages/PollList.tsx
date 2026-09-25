@@ -17,7 +17,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { pruneHiddenPolls, setPollHidden, useHiddenPolls } from '../lib/hiddenPolls'
 import { openedPolls, pruneOpenedPolls } from '../lib/openedPolls'
-import { userTopic, useLiveStream } from '../lib/useLiveStream'
+import { pollTopic, userTopic, useLiveStream } from '../lib/useLiveStream'
+import type { LiveStatus } from '../lib/useLiveStream'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
@@ -150,11 +151,48 @@ export function PollList() {
   // change when the reader turns a page, so a page turn costs the one read it
   // genuinely needs and no re-subscription on top of it.
   //
-  // It carries every change to every poll on the list, invites included; see
-  // 0035_broadcast_polls_to_watchers.sql for the fan-out that makes it so.
+  // It carries every change to every poll the reader made or is invited to;
+  // see 0035_broadcast_polls_to_watchers.sql for the fan-out that makes it so.
   const topics = session?.user.id ? [userTopic(session.user.id)] : []
 
-  const { status: liveStatus, reread } = useLiveStream(topics, load)
+  const { status: userStatus, reread } = useLiveStream(topics, load)
+
+  // The one kind of card that topic says nothing about: an open poll that is
+  // here because this browser opened its link. Its creator is not the reader
+  // and it has no invite list, so nothing it does reaches `user:<id>`. Those
+  // cards are watched on their own topics instead — the ones on the page on
+  // screen, which is ten at the most and usually none.
+  //
+  // This is the circularity the paragraph above avoids, taken on knowingly
+  // and only where it has to be: the ids cannot be named until the page has
+  // been read, so a page that shows opened polls pays one more read when
+  // those topics subscribe. It is a stream of its own for that reason. Were
+  // these topics beside `user:<id>` in one list, every page turn that changed
+  // them would tear that channel down and rebuild it too; apart, the reader's
+  // own topic stays up for the life of the page and only these move.
+  //
+  // Its reads are not its own. What it does with a signal is ask the stream
+  // above, so every read the list makes still goes through the one funnel —
+  // a burst across both collapses into one read, as it would in one stream.
+  // Sorted so the same polls in a different order are the same topics, and
+  // resubscribe nothing.
+  const openedTopics = (polls ?? [])
+    .filter((poll) => poll.created_by === null)
+    .map((poll) => pollTopic(poll.id))
+    .sort()
+  const { status: openedStatus } = useLiveStream(openedTopics, reread)
+
+  // One notice for both: the page is live only while everything on it is.
+  // The second stream counts only while it has something to watch — with no
+  // topics it never reports, and a status left over from the last page's
+  // opened polls says nothing about this one.
+  const watchingOpened = openedTopics.length > 0
+  const liveStatus: LiveStatus =
+    userStatus === 'offline' || (watchingOpened && openedStatus === 'offline')
+      ? 'offline'
+      : userStatus === 'connecting' || (watchingOpened && openedStatus === 'connecting')
+        ? 'connecting'
+        : 'live'
 
   // Turning a page is the one change the socket will not bring: the topic
   // does not depend on which page is on screen, so nothing announces it. The
