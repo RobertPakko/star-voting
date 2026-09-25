@@ -3427,9 +3427,13 @@ saw their option on the list, and took the row for a saved option — which is
 exactly what a row that looks like every other row says — and left without
 pressing *Confirm options*. The row was a lie about where the option was. So
 what is typed now stays in the text field it was typed into, still editable,
-with a × to discard it. The card starts with one blank field, and **Add
-option**, beside the button that ends the card, opens another and puts the
-cursor in it. For a day the next field opened by itself the moment the last
+with a × to discard it and a rule under it like any row of the list. The card
+starts with **no** field: **Add option**, beside the button that ends the
+card, opens one and puts the cursor in it. A blank field sitting there on
+arrival left a creator who had only come to correct or strike an option
+wondering whether it would be added as it stood; with no field until one is
+asked for, the question does not come up. A list with nothing on it and
+nothing being typed says *Nothing suggested yet* until then. For a day the next field opened by itself the moment the last
 one was typed into, and a field appearing under your typing is a field you
 did not ask for; a button is somewhere to look for "one more", and sits beside
 the press that sends them all. A blank field is room, not an
@@ -3549,6 +3553,14 @@ an edit of one list cannot lift the floor off another in the same transaction.
 Since `0063` the same marker is what lifts the *has votes* refusal, and
 `creator_add_option` and `creator_add_options` set it too: one marker, one
 meaning — the creator's own correction, in flight, on this poll.
+
+**The card does not enforce the floor, and the cross never greys out.** It
+used to disable every row's remove once the draft would leave two, which made
+the crosses flick between enabled and disabled as a list crossed three — a
+rule shown on a control whose only job is to mark a row. The draft may strike
+as many rows as it likes; *Done* sends it, and `creator_edit_options` refuses
+a list below two with *A poll needs at least two options*, shown under the
+list with the draft still intact.
 
 A refusal now also leaves the poll exactly as it was. The two-request version
 deleted the rows before the additions were refused, so the card had to throw

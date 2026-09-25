@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import {
-  ActionIcon,
-  Button,
-  Card,
-  Divider,
-  Group,
-  Stack,
-  Text,
-  TextInput,
-  Tooltip,
-} from '@mantine/core'
+import { ActionIcon, Button, Card, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import { PencilSimpleIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
@@ -364,7 +354,7 @@ export function CollectOptions({
    * which is where somebody looking for "one more" looks. Drawn by the list,
    * below its fields, so the button can sit here and still act on them.
    */
-  function footer(addButton: ReactNode) {
+  function footer(addButton: ReactNode, ruled = false) {
     return (
       <>
         {error && (
@@ -373,10 +363,10 @@ export function CollectOptions({
           </Text>
         )}
 
-        {/* The line is what stops the fields and the buttons that end the
-            card reading as one block. The ballot rules its footer off the same
-            way, off the last option's divider. */}
-        {(confirm || done) && <Divider />}
+        {/* The line is what stops the list and the buttons that end the card
+            reading as one block. A list of options draws it already, under
+            its last row, as the ballot does; the calendar does not. */}
+        {ruled && (confirm || done) && <Divider />}
 
         {confirm ? (
           <Group justify="space-between" wrap="wrap" gap="sm" align="flex-end">
@@ -444,7 +434,7 @@ export function CollectOptions({
               draft={draft}
               onChanged={onChanged}
             />
-            {footer(null)}
+            {footer(null, true)}
           </>
         ) : (
           <OptionList
@@ -531,23 +521,9 @@ function OptionList({
    * option* to put beside its own button. Absent on the `ownSave` path,
    * where the list draws its own foot.
    */
-  footer?: (addButton: ReactNode) => ReactNode
+  footer?: (addButton: ReactNode, ruled: boolean) => ReactNode
   onChanged: () => void
 }) {
-  /**
-   * Whether this list is already a ballot, which is the creator's correction
-   * (`source.kind === 'creator'`) and nothing else.
-   *
-   * All it decides here is whether the two-option floor applies: a list still
-   * being collected has none, because `finalize_options` applies it when the
-   * list becomes a ballot. Which doors the save goes through is the same
-   * question asked one layer down, in `sendDraft`.
-   *
-   * What it no longer decides is *when* anything is saved. Every path drafts;
-   * see CollectOptions.
-   */
-  const correcting = source.kind === 'creator'
-
   /**
    * The options this reader is suggesting, as the fields they are typing them
    * into. There is no *Add* between typing an option and it being on the list:
@@ -556,13 +532,15 @@ function OptionList({
    * So what is typed stays a field until the press that ends the card puts it
    * in. See DraftHold.
    *
-   * One blank field to start with, and *Add option* beside the button that
-   * ends the card for each one after. It used to open the next field by
+   * None to start with, and *Add option* beside the button that ends the card
+   * for each one: a blank field sitting under the list on arrival left a
+   * reader who came to correct or strike an option wondering whether it would
+   * be added as it stood. It used to open the next field by
    * itself as soon as the last one was typed into, and a field appearing
    * under your typing is a field you did not ask for. A blank field is room,
    * not an option, and is never sent.
    */
-  const [drafts, setDrafts] = useState<Draft[]>(() => [blankDraft()])
+  const [drafts, setDrafts] = useState<Draft[]>([])
   /** What is wrong with each draft, by key, marked on the field it is about. */
   const [draftProblems, setDraftProblems] = useState<ReadonlyMap<string, Problem>>(new Map())
   /** The draft *Add option* just opened, which takes the cursor. */
@@ -615,15 +593,12 @@ function OptionList({
   const kept = staying + filled.length
   const full = kept >= MAX_OPTIONS
   const dirty = filled.length > 0 || dropping.size > 0 || changed.length > 0
-  // A list that is already a ballot cannot be pruned below what an election
-  // needs; a list still being collected can, because `finalize_options`
-  // applies the floor when it becomes a ballot. The trigger enforces both,
-  // and this only decides whether to offer the button. See
-  // 0028_creator_edits_options.sql.
-  // Counted against what the save would leave behind rather than against what
-  // is on the poll now, since three options with two of them struck through is
-  // a list already at the floor.
-  const atFloor = correcting && kept <= 2
+  // No two-option floor here. A list that is already a ballot cannot be saved
+  // below what an election needs, and `creator_edit_options` says so in its
+  // own words when the press that ends the card tries; a cross that went grey
+  // and came back as the list crossed two was a rule shown the wrong way
+  // round, on a control whose job is only to mark a row. See
+  // 0059_editing_options_in_one_go.sql.
 
   /**
    * Every name the list would hold if it were saved as it stands, apart from
@@ -816,7 +791,7 @@ function OptionList({
       setError(rpcError.message)
       return false
     }
-    setDrafts([blankDraft()])
+    setDrafts([])
     setDraftProblems(new Map())
     setDropping(new Set())
     setEditing(new Map())
@@ -927,26 +902,14 @@ function OptionList({
                           <PencilSimpleIcon size={16} aria-hidden />
                         </ActionIcon>
                       )}
-                      <Tooltip
-                        label="A poll needs at least two options"
-                        disabled={!atFloor}
-                        withArrow
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        aria-label={`Remove ${option.name}`}
+                        onClick={() => toggleDropping(option.id)}
                       >
-                        {/* The span is what a tooltip on a disabled button
-                            needs: a disabled control fires no pointer events of
-                            its own. */}
-                        <span>
-                          <ActionIcon
-                            variant="subtle"
-                            color="red"
-                            disabled={atFloor}
-                            aria-label={`Remove ${option.name}`}
-                            onClick={() => toggleDropping(option.id)}
-                          >
-                            &times;
-                          </ActionIcon>
-                        </span>
-                      </Tooltip>
+                        &times;
+                      </ActionIcon>
                     </Group>
                   ))}
               </Group>
@@ -956,11 +919,19 @@ function OptionList({
         )
       })}
 
+      {options.length === 0 && drafts.length === 0 && (
+        <Text size="sm" c="dimmed">
+          Nothing suggested yet.
+        </Text>
+      )}
+
       {/* What this reader is suggesting, as the fields they typed it into.
-          They stay fields until the press that ends the card puts them in. */}
+          They stay fields until the press that ends the card puts them in,
+          and each is ruled off like a row of the list, since that is where it
+          is going. */}
       {drafts.map((d, i) => (
-        <div key={d.key} className={`${listRow.row} ${i > 0 ? listRow.joining : ''}`}>
-          <div className={listRow.content}>
+        <div key={d.key} className={`${listRow.row} ${listRow.joining}`}>
+          <div className={`${listRow.content} ${listRow.stacked}`}>
             <Group gap="xs" align="flex-start" wrap="nowrap">
               <OptionFields
                 value={d}
@@ -982,6 +953,7 @@ function OptionList({
                 &times;
               </ActionIcon>
             </Group>
+            <Divider />
           </div>
         </div>
       ))}
@@ -1010,7 +982,9 @@ function OptionList({
           </Button>
         </Group>
       ) : (
-        footer?.(addButton)
+        // With no rows there is no last row to rule the foot off, so the foot
+        // draws its own line.
+        footer?.(addButton, options.length === 0 && drafts.length === 0)
       )}
     </Stack>
   )
