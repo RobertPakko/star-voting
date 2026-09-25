@@ -1,24 +1,51 @@
 /* The first column -- who cast each row -- stays put while the options scroll
    sideways under it, so a score on the far right can still be read against
-   the name it belongs to. A sticky cell has to paint its own background or the
-   scrolled columns show through it, and on a striped row that background is
-   the stripe laid over the page colour rather than the page colour alone. */
-.label {
-  position: sticky;
-  /* Pinned over the table's own outer border, which collapses into the
-     first column and would otherwise leave a sliver of scrolled cells
-     showing to its left. */
-  left: calc(-0.0625rem * var(--mantine-scale));
-  z-index: 1;
-  background-color: var(--mantine-color-body);
-  /* border-collapse drops the borders off a sticky cell as it scrolls, so
-     both edges are redrawn as shadows that travel with the cell. */
-  box-shadow:
-    inset calc(-0.0625rem * var(--mantine-scale)) 0 0 var(--table-border-color),
-    inset calc(0.0625rem * var(--mantine-scale)) 0 0 var(--table-border-color);
+   the name it belongs to.
+
+   A sticky cell keeps its borders only when the table does not collapse them:
+   under border-collapse a border belongs to the grid line rather than to a
+   cell, so it scrolls away from the cell and has to be painted back on, where
+   it lands on top of the real one at rest and reads as a line twice as thick.
+   So the grid is drawn with separate borders, each cell owning its bottom and
+   right edges, and the outer frame sits on the scroll container, which does
+   not move. */
+.frame {
+  border: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-3);
+
+  @mixin dark {
+    border-color: var(--mantine-color-dark-4);
+  }
 }
 
-tr[data-striped='odd']:nth-of-type(odd) > .label,
-tr[data-striped='even']:nth-of-type(even) > .label {
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table :is(th, td) {
+  /* One line per boundary: the right edge is Mantine's column border, and the
+     left one it would also draw is the right edge of the cell before. */
+  border-inline-start: none;
+  border-bottom: calc(0.0625rem * var(--mantine-scale)) solid var(--table-border-color);
+}
+
+/* The frame is the bottom edge. */
+.table tfoot tr:last-child > * {
+  border-bottom: none;
+}
+
+/* A sticky cell has to paint its own background or the scrolled columns show
+   through it, and on a striped row that background is the stripe laid over
+   the page colour rather than the page colour alone -- in the body only, which
+   is the only place Mantine stripes. */
+.label {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--mantine-color-body);
+}
+
+tbody > tr[data-striped='odd']:nth-of-type(odd) > .label,
+tbody > tr[data-striped='even']:nth-of-type(even) > .label {
   background-image: linear-gradient(var(--table-striped-color), var(--table-striped-color));
 }

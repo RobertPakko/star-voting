@@ -147,8 +147,16 @@ export function Ballots({
             </Tooltip>
           )}
         </Group>
-        <Table.ScrollContainer minWidth={120 + shown.options.length * 90}>
-          <Table striped withTableBorder withColumnBorders>
+        {/* The frame is drawn round the scroll area rather than the table (see
+            Ballots.module.css), so the strip Mantine keeps free under the
+            table for its scrollbar would sit inside the frame as an empty
+            row. */}
+        <Table.ScrollContainer
+          minWidth={120 + shown.options.length * 90}
+          className={classes.frame}
+          scrollAreaProps={{ offsetScrollbars: false }}
+        >
+          <Table striped withColumnBorders className={classes.table}>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th className={classes.label}>{named ? 'Voter' : 'Ballot'}</Table.Th>
