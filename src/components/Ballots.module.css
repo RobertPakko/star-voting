@@ -1,0 +1,24 @@
+/* The first column -- who cast each row -- stays put while the options scroll
+   sideways under it, so a score on the far right can still be read against
+   the name it belongs to. A sticky cell has to paint its own background or the
+   scrolled columns show through it, and on a striped row that background is
+   the stripe laid over the page colour rather than the page colour alone. */
+.label {
+  position: sticky;
+  /* Pinned over the table's own outer border, which collapses into the
+     first column and would otherwise leave a sliver of scrolled cells
+     showing to its left. */
+  left: calc(-0.0625rem * var(--mantine-scale));
+  z-index: 1;
+  background-color: var(--mantine-color-body);
+  /* border-collapse drops the borders off a sticky cell as it scrolls, so
+     both edges are redrawn as shadows that travel with the cell. */
+  box-shadow:
+    inset calc(-0.0625rem * var(--mantine-scale)) 0 0 var(--table-border-color),
+    inset calc(0.0625rem * var(--mantine-scale)) 0 0 var(--table-border-color);
+}
+
+tr[data-striped='odd']:nth-of-type(odd) > .label,
+tr[data-striped='even']:nth-of-type(even) > .label {
+  background-image: linear-gradient(var(--table-striped-color), var(--table-striped-color));
+}

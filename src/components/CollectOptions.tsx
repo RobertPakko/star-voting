@@ -940,22 +940,17 @@ function OptionList({
 
   return (
     <Stack gap="sm">
-      {options.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          Nothing suggested yet. Add the first one.
-        </Text>
-      ) : (
-        options.map((option) => {
-          const struck = dropping.has(option.id)
-          // The row as the save would leave it: a correction waiting on the
-          // press that ends the card is shown where the option is rather than
-          // as a second row somewhere else, because it is not a second option
-          // -- it is this one, as this reader now means it. A struck row is
-          // drawn the same way, since *Keep* gives that correction back.
-          const shown = edits.get(option.id) ?? option
+      {options.map((option) => {
+        const struck = dropping.has(option.id)
+        // The row as the save would leave it: a correction waiting on the
+        // press that ends the card is shown where the option is rather than
+        // as a second row somewhere else, because it is not a second option
+        // -- it is this one, as this reader now means it. A struck row is
+        // drawn the same way, since *Keep* gives that correction back.
+        const shown = edits.get(option.id) ?? option
 
-          return (
-            /* The row's own box, which is what opens and closes; see
+        return (
+          /* The row's own box, which is what opens and closes; see
                listRow.module.css. Two things travel in it — the option and the
                rule under it — so the box has to space them itself, having taken
                them out of the `Stack` that was doing it.
@@ -963,96 +958,93 @@ function OptionList({
                No leaving animation: a removal is a draft everywhere now, so a
                row never actually goes while this list is on screen. It is
                struck through where it stands and comes back with a press. */
-            <div
-              key={option.id}
-              className={`${listRow.row} ${arriving.has(option.id) ? listRow.joining : ''}`}
-            >
-              <div className={`${listRow.content} ${listRow.stacked}`}>
-                {editing?.key === option.id ? (
-                  <OptionEditor
-                    value={editing}
-                    problem={editProblem}
-                    busy={busy}
-                    onChange={setEditing}
-                    onCancel={() => setEditing(null)}
-                    onSave={() => saveEdit()}
-                  />
-                ) : (
-                  <Group justify="space-between" wrap="nowrap" gap="sm">
-                    <div style={{ minWidth: 0 }}>
-                      {/* Struck through rather than gone, while the removal is
+          <div
+            key={option.id}
+            className={`${listRow.row} ${arriving.has(option.id) ? listRow.joining : ''}`}
+          >
+            <div className={`${listRow.content} ${listRow.stacked}`}>
+              {editing?.key === option.id ? (
+                <OptionEditor
+                  value={editing}
+                  problem={editProblem}
+                  busy={busy}
+                  onChange={setEditing}
+                  onCancel={() => setEditing(null)}
+                  onSave={() => saveEdit()}
+                />
+              ) : (
+                <Group justify="space-between" wrap="nowrap" gap="sm">
+                  <div style={{ minWidth: 0 }}>
+                    {/* Struck through rather than gone, while the removal is
                           still a draft: the row is what the press acted on, and
                           showing it crossed out is what makes the press
                           takeable-back without a second list of what is missing.
                           Name and description together, because what is leaving
                           is the option rather than what it is called. */}
-                      <Text
-                        fw={500}
-                        c={struck ? 'dimmed' : undefined}
-                        td={struck ? 'line-through' : undefined}
+                    <Text
+                      fw={500}
+                      c={struck ? 'dimmed' : undefined}
+                      td={struck ? 'line-through' : undefined}
+                    >
+                      {shown.name}
+                    </Text>
+                    {shown.description && (
+                      <OptionDescription description={shown.description} struck={struck} />
+                    )}
+                  </div>
+                  {isCreator &&
+                    (struck ? (
+                      <Button
+                        variant="subtle"
+                        size="compact-xs"
+                        onClick={() => toggleDropping(option.id)}
                       >
-                        {shown.name}
-                      </Text>
-                      {shown.description && (
-                        <OptionDescription description={shown.description} struck={struck} />
-                      )}
-                    </div>
-                    {isCreator &&
-                      (struck ? (
-                        <Button
-                          variant="subtle"
-                          size="compact-xs"
-                          onClick={() => toggleDropping(option.id)}
-                        >
-                          Keep
-                        </Button>
-                      ) : (
-                        <Group gap={4} wrap="nowrap">
-                          {/* Beside the remove rather than instead of it: an
+                        Keep
+                      </Button>
+                    ) : (
+                      <Group gap={4} wrap="nowrap">
+                        {/* Beside the remove rather than instead of it: an
                               option that is wrong in a word is corrected, and
                               one that is wrong altogether goes. Fixing a typo
                               in a description used to mean typing the whole
                               description again under a new option. */}
-                          <ActionIcon
-                            variant="subtle"
-                            aria-label={`Edit ${shown.name}`}
-                            onClick={() =>
-                              openEditor(option.id, shown.name, shown.description ?? '')
-                            }
-                          >
-                            <PencilSimpleIcon size={16} aria-hidden />
-                          </ActionIcon>
-                          <Tooltip
-                            label="A poll needs at least two options"
-                            disabled={!atFloor}
-                            withArrow
-                          >
-                            {/* The span is what a tooltip on a disabled button
+                        <ActionIcon
+                          variant="subtle"
+                          aria-label={`Edit ${shown.name}`}
+                          onClick={() => openEditor(option.id, shown.name, shown.description ?? '')}
+                        >
+                          <PencilSimpleIcon size={16} aria-hidden />
+                        </ActionIcon>
+                        <Tooltip
+                          label="A poll needs at least two options"
+                          disabled={!atFloor}
+                          withArrow
+                        >
+                          {/* The span is what a tooltip on a disabled button
                             needs: a disabled control fires no pointer events of
                             its own, so the reason it is disabled would never be
                             readable without something around it that does. */}
-                            <span>
-                              <ActionIcon
-                                variant="subtle"
-                                color="red"
-                                disabled={atFloor}
-                                aria-label={`Remove ${shown.name}`}
-                                onClick={() => toggleDropping(option.id)}
-                              >
-                                &times;
-                              </ActionIcon>
-                            </span>
-                          </Tooltip>
-                        </Group>
-                      ))}
-                  </Group>
-                )}
-                <Divider />
-              </div>
+                          <span>
+                            <ActionIcon
+                              variant="subtle"
+                              color="red"
+                              disabled={atFloor}
+                              aria-label={`Remove ${shown.name}`}
+                              onClick={() => toggleDropping(option.id)}
+                            >
+                              &times;
+                            </ActionIcon>
+                          </span>
+                        </Tooltip>
+                      </Group>
+                    ))}
+                </Group>
+              )}
+              <Divider />
             </div>
-          )
-        })
-      )}
+          </div>
+        )
+      })}
 
       {/* What this reader is suggesting, as the fields they typed it into.
           They stay fields until the press that ends the card puts them in:
