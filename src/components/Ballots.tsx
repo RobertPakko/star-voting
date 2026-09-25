@@ -154,7 +154,10 @@ export function Ballots({
         <Table.ScrollContainer
           minWidth={120 + shown.options.length * 90}
           className={classes.frame}
-          scrollAreaProps={{ offsetScrollbars: false }}
+          scrollAreaProps={{
+            offsetScrollbars: false,
+            classNames: { scrollbar: classes.scrollbar },
+          }}
         >
           <Table striped withColumnBorders className={classes.table}>
             <Table.Thead>

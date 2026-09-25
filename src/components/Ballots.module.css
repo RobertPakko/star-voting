@@ -49,3 +49,12 @@ tbody > tr[data-striped='odd']:nth-of-type(odd) > .label,
 tbody > tr[data-striped='even']:nth-of-type(even) > .label {
   background-image: linear-gradient(var(--table-striped-color), var(--table-striped-color));
 }
+
+/* Mantine's scrollbar floats over the bottom of the grid (the gutter it would
+   reserve is turned off, see Ballots.tsx) and has no stacking order of its
+   own, so the sticky column, lifted to sit over the cells scrolling under it,
+   covered the bar's left end. One level above that column puts it back on
+   top along its whole length. */
+.scrollbar {
+  z-index: 2;
+}
