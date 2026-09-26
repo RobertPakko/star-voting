@@ -586,12 +586,13 @@ function OptionList({
    * and several rows may be open at once for the same reason several drafts
    * may be.
    *
-   * A correction travels as a removal and an addition -- there is no update
-   * door into `candidates`, and `creator_edit_options` applies its removals
-   * before its additions, so a row keeping its name through an edit does not
-   * collide with itself. The one visible cost is that the corrected option
-   * arrives at the end of the list, where an added option goes. A row opened
-   * and left as it was is not a correction and is not sent.
+   * A correction is an update in place, through `creator_edit_options`'s
+   * `p_correct`: the option keeps its id, so every score already given to it
+   * stays with it, and keeps its place on the list. It used to travel as a
+   * removal and an addition, and on a poll with votes in it the removal took
+   * those scores with it -- fixing a typo zeroed the option on every ballot.
+   * See 0071_correcting_an_option_keeps_its_scores.sql. A row opened and left
+   * as it was is not a correction and is not sent.
    */
   const [editing, setEditing] = useState<ReadonlyMap<string, OptionText>>(new Map())
   /** What is wrong with each open row, on the field it is wrong in. */
@@ -820,8 +821,8 @@ function OptionList({
     setBusy(true)
     const { error: rpcError } = await sendDraft(source, {
       added,
-      corrected: corrected.map(({ name, description }) => ({ name, description })),
-      removed: [...dropping, ...corrected.map((c) => c.key)],
+      corrected: corrected.map(({ key, name, description }) => ({ id: key, name, description })),
+      removed: [...dropping],
     })
     setBusy(false)
 
@@ -1055,32 +1056,31 @@ function without<V>(map: ReadonlyMap<string, V>, key: string): ReadonlyMap<strin
  * A whole draft, through the doors this reader actually has.
  *
  * The creator's correction to a list that is already a ballot is one request:
- * `creator_edit_options` takes both halves and applies the two-option floor to
- * where they land rather than to the states the edit passes through. A
- * correction needs no door of its own, there being no update into
- * `candidates` -- the removals go in before the additions and in the same
- * transaction, so an option corrected without being renamed is never two
- * options of that name. See 0059_editing_options_in_one_go.sql.
+ * `creator_edit_options` takes every part of it and applies the two-option
+ * floor to where they land rather than to the states the edit passes through.
+ * See 0059_editing_options_in_one_go.sql. A corrected row goes in as an update
+ * in place (`p_correct`) rather than a removal and an addition, so it keeps its
+ * id and with it every score already given to it; see
+ * 0071_correcting_an_option_keeps_its_scores.sql.
  *
  * A list still being **collected** is two doors rather than one, because two
  * different people are writing it and this is the one thing about the two
  * paths that really is different:
  *
  *  - **corrections and removals** are the creator's alone, which is what the
- *    list already offered only them, and go through the creator's own door.
- *    One transaction, for the reason above: a rename that was a delete and
- *    then an add could leave the option gone and not come back.
+ *    list already offered only them, and go through the creator's own door,
+ *    in one transaction.
  *  - **suggestions** are everybody's, and go through the suggestion endpoint
  *    every reader in the poll shares -- the creator included, which is the
  *    point. There is no way for the creator's additions to be built under
  *    rules nobody else's is.
  *
  * Corrections go first, and both reasons are load-bearing. The 500-option
- * ceiling cannot be met part-way through a swap. And a name a removal frees is
- * free by the time anything could want it: the duplicate check counts a struck
- * row under the name it would come *back* under, so striking a renamed row
- * releases the name it currently holds on the poll, and a suggestion in the
- * same press may be that name.
+ * ceiling cannot be met part-way through a swap. And a name a removal or a
+ * rename frees is free by the time anything could want it: the duplicate
+ * check counts a row under the name it is being corrected to (and a struck row
+ * under the name it would come *back* under), so a suggestion in the same
+ * press may take the name a correction let go of.
  *
  * The plural suggestion endpoints **skip** a name the list already holds
  * rather than refusing it, which is the one rule they add over the singular
@@ -1094,9 +1094,9 @@ function sendDraft(
   draft: {
     /** Options this reader typed, which are suggestions wherever they are. */
     added: { name: string; description: string }[]
-    /** Rows of the poll as they have been corrected; the creator's alone. */
-    corrected: { name: string; description: string }[]
-    /** And the ids they replace, along with the rows struck out outright. */
+    /** Rows of the poll as they have been corrected, by id; the creator's alone. */
+    corrected: { id: string; name: string; description: string }[]
+    /** The rows struck out. */
     removed: string[]
   },
 ) {
@@ -1104,16 +1104,18 @@ function sendDraft(
   // column holds for an option with no description.
   const named = (options: { name: string; description: string }[]) =>
     options.map((o) => ({ name: o.name, description: o.description || null }))
+  const corrected = draft.corrected.map((o) => ({ id: o.id, ...named([o])[0] }))
 
   if (source.kind === 'creator')
     return supabase.rpc('creator_edit_options', {
       p_poll_id: source.pollId,
-      p_options: named([...draft.corrected, ...draft.added]),
+      p_options: named(draft.added),
       p_remove: draft.removed,
+      p_correct: corrected,
     })
 
   return applyToCollecting(source, {
-    corrected: named(draft.corrected),
+    corrected,
     removed: draft.removed,
     added: named(draft.added),
   })
@@ -1123,7 +1125,7 @@ function sendDraft(
 async function applyToCollecting(
   source: Exclude<OptionsSource, { kind: 'creator' }>,
   draft: {
-    corrected: { name: string; description: string | null }[]
+    corrected: { id: string; name: string; description: string | null }[]
     removed: string[]
     added: { name: string; description: string | null }[]
   },
@@ -1131,8 +1133,8 @@ async function applyToCollecting(
   if (draft.corrected.length > 0 || draft.removed.length > 0) {
     const { error } = await supabase.rpc('creator_edit_options', {
       p_poll_id: source.pollId,
-      p_options: draft.corrected,
       p_remove: draft.removed,
+      p_correct: draft.corrected,
     })
     if (error) return { error }
   }

@@ -96,10 +96,11 @@ begin
   select id into v_pizza from candidates where poll_id = v_poll and name = 'Pizza';
   select id into v_sushi from candidates where poll_id = v_poll and name = 'Sushi';
 
-  -- Pizza is removed and added back under the same name, which is the
-  -- correction an update door into `candidates` would have been needed for
-  -- and is not: the removals go in before the additions and in the same
-  -- transaction, so the name is never briefly held twice.
+  -- Pizza is removed and added back under the same name. The browser no
+  -- longer corrects an option this way -- a correction is an update in place
+  -- now, so it keeps its scores; see 14_creator_edits_options -- but the
+  -- function still takes it: the removals go in before the additions and in
+  -- the same transaction, so the name is never briefly held twice.
   perform tests.assert_eq('the creator''s corrections and removals are one edit',
     creator_edit_options(v_poll,
       jsonb_build_array(jsonb_build_object('name', 'Pizza',
@@ -151,7 +152,7 @@ begin
     true);
   perform tests.assert_eq('while correcting the list is not',
     has_function_privilege('anon',
-      'public.creator_edit_options(uuid, jsonb, uuid[])', 'execute'),
+      'public.creator_edit_options(uuid, jsonb, uuid[], jsonb)', 'execute'),
     false);
 end $$;
 
