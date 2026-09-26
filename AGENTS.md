@@ -1763,16 +1763,30 @@ already on it. The duplicate check is unchanged and deliberately still counts
 struck rows: a name the list visibly holds is taken, and the answer to wanting
 it is to correct the option holding it.
 
-**A correction travels as a removal and an addition**, in the same
-`creator_edit_options` call as the rest of the draft. There is no update door
-into `candidates` — no UPDATE policy, and every write goes through a function
-— and adding one is a migration this did not need: removals are applied
-before additions in that one transaction, so an option corrected without being
-renamed never collides with itself. What it costs is `sort_order`: a corrected
-option comes back at the end of the list, where an added option goes. Worth
-knowing before reaching for it on a long list, and the reason the row shows the
-correction *in place* while it is still a draft — it is the same option, and
-only the save moves it.
+**A correction is an update in place**, sent as `p_correct` in the same
+`creator_edit_options` call as the rest of the draft: the option keeps its id,
+its place on the list, and every score already given to it. There is still no
+UPDATE grant or policy on `candidates`; the function is the door.
+
+It used to travel as a removal and an addition, on the reasoning that removals
+are applied first so an option corrected without being renamed never collides
+with itself, and the only cost was `sort_order`. That was wrong about the cost.
+On a poll with votes in it the removal cascades through
+`scores.candidate_id`, and the "new" option is scored zero on every ballot by
+`fill_scores_for_new_option` — so a creator fixing a typo in a description
+silently zeroed that option for everybody who had voted, and nothing on screen
+said so. `0071_correcting_an_option_keeps_its_scores.sql` added `p_correct`.
+
+Inside the one transaction the order is removals, corrections, additions, so a
+name freed by a removal can be taken by a correction and a name freed by a
+rename can be taken by an addition, which is what the card's duplicate check
+already assumes. The corrections go in as one `UPDATE` and the duplicate-name
+rule is checked afterwards, so two options can swap names in one edit. A time
+poll takes no corrections, for the reason `creator_add_option` refuses one. A
+correction that changes something on a poll with ballots still sets
+`options_edited_after_votes`: the scores are kept on purpose, but they were
+given under the old wording, and whoever reads the result should be told the
+list moved.
 
 **And the two suggestion paths now draft as well.** They used to send each
 edit as it was made — a correction, an addition, a removal, one request each —
