@@ -19,6 +19,7 @@ declare
   v_scores jsonb;
   v_extra uuid;
   v_pizza uuid;
+  v_sushi uuid;
   v_other uuid;
 begin
   v_creator := tests.sign_in('creator@example.com');
@@ -205,6 +206,71 @@ begin
   perform tests.assert_eq('with the scores of the option it dropped gone with it',
     (select count(*)::int from candidates where poll_id = v_poll and name = 'Pizza'), 0);
 
+  -- ------------------------------------------------------------------
+  -- A correction is not a swap: the option keeps its scores.
+  -- ------------------------------------------------------------------
+  --
+  -- The creator notices a typo in an option somebody has already scored and
+  -- fixes it. That used to go through as a removal and an addition, and the
+  -- removal took every score the option had been given with it, so fixing a
+  -- description zeroed the option on every ballot and nobody was told.
+
+  select id into v_sushi from candidates where poll_id = v_poll and name = 'Sushi';
+  update polls set options_edited_after_votes = false where id = v_poll;
+
+  perform tests.assert_eq('a correction adds nothing',
+    creator_edit_options(v_poll, '[]'::jsonb, '{}'::uuid[],
+      jsonb_build_array(jsonb_build_object('id', v_sushi, 'name', 'Sushi',
+                                           'description', 'the good place'))),
+    0);
+  perform tests.assert_eq('it lands on the option in place',
+    (select description from candidates where id = v_sushi), 'the good place');
+  perform tests.assert_eq('which keeps the score the ballot gave it',
+    (select score::int from scores where candidate_id = v_sushi), 3);
+  perform tests.assert_eq('and keeps its place on the list',
+    (select sort_order from candidates where id = v_sushi), 1);
+  perform tests.assert_eq('and a correction on a poll with votes is still marked',
+    (select options_edited_after_votes from polls where id = v_poll), true);
+
+  -- A rename keeps them too, and so does a swap of two names, which one row
+  -- at a time would refuse half-way through as a duplicate.
+  select id into v_extra from candidates where poll_id = v_poll and name = 'Curry';
+  perform creator_edit_options(v_poll, '[]'::jsonb, '{}'::uuid[],
+    jsonb_build_array(jsonb_build_object('id', v_sushi, 'name', 'Curry'),
+                      jsonb_build_object('id', v_extra, 'name', 'Sushi')));
+  perform tests.assert_eq('two options may swap their names in one edit',
+    (select string_agg(name, ',' order by sort_order) from candidates
+      where id in (v_sushi, v_extra)), 'Curry,Sushi');
+  perform tests.assert_eq('and the description goes when the correction leaves it out',
+    (select description from candidates where id = v_sushi), null::text);
+  perform tests.assert_eq('with every score still where it was',
+    (select count(*)::int from scores s
+      join ballots b on b.id = s.ballot_id where b.poll_id = v_poll), 3);
+
+  -- Under the same field rules as a new option.
+  perform tests.assert_raises('a correction may not take a name already on the list',
+    format('select creator_edit_options(%L, %L, %L, %L)', v_poll, '[]'::jsonb, '{}'::uuid[],
+           jsonb_build_array(jsonb_build_object('id', v_sushi, 'name', 'katsu'))),
+    'is already on the list');
+  perform tests.assert_raises('nor lose its name',
+    format('select creator_edit_options(%L, %L, %L, %L)', v_poll, '[]'::jsonb, '{}'::uuid[],
+           jsonb_build_array(jsonb_build_object('id', v_sushi, 'name', '  '))),
+    'Give the option a name');
+  perform tests.assert_raises('nor run long',
+    format('select creator_edit_options(%L, %L, %L, %L)', v_poll, '[]'::jsonb, '{}'::uuid[],
+           jsonb_build_array(jsonb_build_object('id', v_sushi, 'name', 'Curry',
+                                                'description', repeat('x', 901)))),
+    'too long');
+  perform tests.assert_eq('and a refused correction changes nothing',
+    (select name from candidates where id = v_sushi), 'Curry');
+
+  -- Nobody else's options, as with a removal.
+  select id into v_other from candidates where poll_id = v_other and name = 'Here';
+  perform creator_edit_options(v_poll, '[]'::jsonb, '{}'::uuid[],
+    jsonb_build_array(jsonb_build_object('id', v_other, 'name', 'Mine now')));
+  perform tests.assert_eq('an id from another poll is not corrected',
+    (select name from candidates where id = v_other), 'Here');
+
   perform close_poll(v_poll);
   perform tests.assert_raises('a closed poll is not corrected, it is duplicated',
     format('select creator_add_option(%L, %L)', v_poll, 'Ramen'),
@@ -248,7 +314,7 @@ begin
     false);
   perform tests.assert_eq('while an account can still correct its own poll',
     has_function_privilege('authenticated',
-      'public.creator_edit_options(uuid, jsonb, uuid[])', 'execute'),
+      'public.creator_edit_options(uuid, jsonb, uuid[], jsonb)', 'execute'),
     true);
 end $$;
 
