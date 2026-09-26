@@ -852,6 +852,7 @@ export function PollDetail({
         <QuestionSkeleton
           finished={finished}
           tallied={tallied}
+          collecting={status.soliciting}
           rows={opening?.option_count}
           nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
           strip={questionStrip}
@@ -1066,7 +1067,7 @@ function VoteForm({
   // BallotFrame, which is everything the two have in common.
   if (poll.kind === 'time' && poll.schedule) {
     return (
-      <Suspense fallback={<QuestionSkeleton rows={3} strip={questionStrip} />}>
+      <Suspense fallback={<QuestionSkeleton schedule={poll.schedule} strip={questionStrip} />}>
         <TimeBallotCard
           options={options}
           schedule={poll.schedule}

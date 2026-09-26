@@ -516,6 +516,7 @@ export function PublicPoll({
         // `open_poll_group` for what that list deliberately leaves out.
         <QuestionSkeleton
           finished={finished}
+          collecting={shell.soliciting}
           nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
           strip={questionStrip}
         />

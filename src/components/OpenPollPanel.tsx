@@ -402,7 +402,7 @@ function OpenBallot({
       <Suspense
         fallback={
           <QuestionSkeleton
-            rows={3}
+            schedule={poll.schedule}
             nameField={voterName && <VoterNameField name={voterName} />}
             strip={questionStrip}
           />
