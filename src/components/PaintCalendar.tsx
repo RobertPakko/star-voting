@@ -59,7 +59,8 @@ import type { DailyWindow, PollSchedule } from '../lib/types'
  *   it.
  * - **Which way a touch means the calendar and which way it means the answer**
  *   is `PAN_SIDEWAYS`, on the two time grids: sideways scrolls the days,
- *   downwards paints.
+ *   downwards paints -- except on a cell the poll is not asking about, which
+ *   has nothing to paint and scrolls either way (`outOfBoundsSlot`).
  * - **The range in the header fills everything on screen**, which is the one
  *   gesture here that is not the library's at all: its own label made clickable
  *   (`fillVisible`), so the answer to "all of September" is the word September.
@@ -146,7 +147,7 @@ const outOfBounds = {
 
 /**
  * The same on a time grid, where it also has to say which way it may be
- * swiped.
+ * swiped -- and the answer is **either way**.
  *
  * A greyed cell takes no gesture, and that is exactly why it needs this: the
  * library hands every slot a drag index whether or not the caller will paint
@@ -154,14 +155,25 @@ const outOfBounds = {
  * whole greyed morning is a patch the days will not scroll under. Refusing to
  * be painted and refusing to be swiped across are different refusals.
  *
+ * It gets the downward axis too, which a paintable cell keeps for its stroke.
+ * A cell that cannot be painted has no stroke to keep it for, so `pan-x`
+ * alone left a downward swipe on it doing nothing at all -- the one place on
+ * the page where a finger moved and nothing answered, between a page that
+ * scrolls and cells that paint. Handing it back makes a greyed day part of
+ * the page: a swipe that starts there scrolls, and one that starts on a day
+ * the poll asks about still paints. The browser settles which from the cell
+ * the finger lands on and holds it, so a stroke begun on an open cell that
+ * runs into a greyed one is still a stroke, and a scroll begun on a greyed
+ * one is still a scroll; a drag the library had opened under that scroll is
+ * ended without painting by `cancelled`, like any other.
+ *
  * Not shared with the month, whose out-of-bounds days go through `getDayProps`
  * and want no restriction at all: with the drag off there (see the view) a
- * greyed day is simply part of the page, and `pan-x` would make it the one
- * square on the month that will not scroll.
+ * greyed day is simply part of the page already.
  */
 const outOfBoundsSlot = {
   ...outOfBounds,
-  style: { ...outOfBounds.style, ...PAN_SIDEWAYS },
+  style: { ...outOfBounds.style, touchAction: 'pan-x pan-y pinch-zoom' },
 }
 
 /**

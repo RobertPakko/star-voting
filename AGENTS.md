@@ -1349,10 +1349,22 @@ that looks redundant and is not. The library stamps its drag index on every
 slot whether or not the caller will paint one, so a greyed cell is
 `touch-action: none` like any other and a greyed morning is a patch of the
 week the days will not scroll under. Refusing a gesture and refusing to be
-swiped across are different refusals. The month's own out-of-bounds days go
-through `getDayProps` and deliberately do *not* share it: with the drag off
-there, `pan-x` would make a greyed day the one square on the month that will
-not scroll.
+swiped across are different refusals.
+
+**And a greyed cell scrolls downwards as well** (`pan-x pan-y pinch-zoom`).
+A paintable cell keeps the downward axis because a stroke needs it; a greyed
+one has no stroke to keep it for, and with `pan-x` alone a downward swipe on
+it did nothing at all — the page above the calendar scrolled, the open days
+painted, and the greyed ones in between were the one place a finger moved and
+nothing answered. So a greyed day is now part of the page: a swipe that starts
+there scrolls it, and one that starts on a day the poll asks about still
+paints. The browser settles which from the cell the finger lands on and holds
+it for the gesture, so a stroke that runs from an open cell into a greyed one
+is still a stroke, and a scroll that starts on a greyed one is still a scroll;
+any drag the library had opened under that scroll is ended without painting
+by `cancelled`, below. The month's own out-of-bounds days go through
+`getDayProps` and deliberately do *not* share it: with the drag off there on
+touch, a greyed day already scrolls like the rest of the page.
 
 **And the drag the browser takes away has to be given an ending**
 (`cancelled`). Letting the browser claim a swipe means `pointercancel`, which
