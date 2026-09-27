@@ -330,7 +330,7 @@ function PollDeleted({ signedIn }: { signedIn: boolean }) {
     <Stack maw={720} mx="auto" gap="md" align="center">
       <Title order={3}>This poll has been deleted</Title>
       <Text c="dimmed" ta="center">
-        Its creator deleted it, along with every vote in it.
+        Polls are automatically deleted after six months, or a poll can be deleted by its creator.
       </Text>
       {signedIn && (
         <Button component={Link} to="/" variant="light">
