@@ -28,6 +28,10 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # The public half of the VAPID pair. Not a secret, but kept beside
+          # the other two so the build reads all three from one place; left
+          # unset, the app builds with push notifications switched off.
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
       # vite builds the app into dist/star-voting/ (see vite.config.ts); merge
       # in the root-level CNAME and redirect from site-root/.
       - run: cp -r site-root/. dist/

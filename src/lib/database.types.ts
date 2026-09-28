@@ -392,6 +392,7 @@ export type Database = {
       }
       email_escape: { Args: { p_text: string }; Returns: string }
       finalize_options: { Args: { p_poll_id: string }; Returns: undefined }
+      forget_push_subscription: { Args: { p_endpoint: string }; Returns: undefined }
       get_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
       get_poll_results: { Args: { p_poll_id: string }; Returns: Json }
       insert_option: {
@@ -462,6 +463,7 @@ export type Database = {
           winner_settled: boolean
         }[]
       }
+      my_notification_settings: { Args: { p_endpoint?: string }; Returns: Json }
       normalize_invite_emails: {
         Args: { p_emails: string[] }
         Returns: string[]
@@ -508,9 +510,17 @@ export type Database = {
         Args: { p_poll_id: string; p_voter_key: string }
         Returns: undefined
       }
+      open_poll_unwatch: {
+        Args: { p_endpoint: string; p_poll_id: string }
+        Returns: undefined
+      }
       open_poll_view: {
         Args: { p_poll_id: string; p_voter_key?: string }
         Returns: Json
+      }
+      open_poll_watch: {
+        Args: { p_auth: string; p_endpoint: string; p_p256dh: string; p_poll_id: string }
+        Returns: undefined
       }
       options_confirmed_by_everyone: {
         Args: { p_poll: Database['public']['Tables']['polls']['Row'] }
@@ -644,6 +654,10 @@ export type Database = {
         Args: { p_poll_id: string; p_scores: Json }
         Returns: undefined
       }
+      save_push_subscription: {
+        Args: { p_auth: string; p_endpoint: string; p_p256dh: string }
+        Returns: undefined
+      }
       send_poll_email: {
         Args: {
           p_body_html: string
@@ -666,6 +680,10 @@ export type Database = {
           p_email: string
           p_poll: Database['public']['Tables']['polls']['Row']
         }
+        Returns: undefined
+      }
+      set_notification_settings: {
+        Args: { p_email: boolean; p_push: boolean }
         Returns: undefined
       }
       settle_winner: { Args: { p_poll_id: string }; Returns: undefined }

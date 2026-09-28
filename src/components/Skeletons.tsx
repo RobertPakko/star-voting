@@ -872,3 +872,74 @@ export function FormSkeleton() {
     </Loading>
   )
 }
+
+/**
+ * The settings page, while its chunk and the account's settings are fetched:
+ * the heading, and the one card — its title and sentence, the two switches
+ * with a line under each, a rule, and the device row with its button.
+ */
+export function SettingsSkeleton() {
+  return (
+    <Loading>
+      <Stack maw={720} mx="auto" gap="md">
+        <Bar kind="title" width={112} />
+        <Card withBorder>
+          <Stack gap="md">
+            <Stack gap={4}>
+              <Bar kind="heading" width={120} />
+              <Stack gap={0}>
+                <Bar kind="line" width="100%" />
+                <Bar kind="line" width="40%" />
+              </Stack>
+            </Stack>
+            {[64, 148].map((w, i) => (
+              <Group key={i} gap="sm" wrap="nowrap" align="flex-start">
+                <Skeleton height={20} width={36} radius="xl" />
+                <Stack gap={0}>
+                  <Bar kind="line" width={w} />
+                  <Bar kind="note" width={240} />
+                </Stack>
+              </Group>
+            ))}
+            <Divider />
+            <Stack gap="xs">
+              <Bar kind="name" width={92} />
+              <Group justify="space-between" wrap="wrap" gap="sm">
+                <Bar kind="line" width={280} />
+                <Skeleton height={control} width={184} radius="md" />
+              </Group>
+            </Stack>
+          </Stack>
+        </Card>
+      </Stack>
+    </Loading>
+  )
+}
+
+/**
+ * The install guide, while its chunk is fetched: the heading, the paragraph
+ * under it, the card saying where this device stands, and the three-way
+ * choice of device the steps hang off. The steps themselves differ in length
+ * by device, so they are left out, as the About page's tab panels are.
+ */
+export function GuideSkeleton() {
+  return (
+    <Loading>
+      <Stack maw={720} mx="auto" gap="md">
+        <Bar kind="page" width={220} />
+        <Stack gap={0}>
+          {['100%', '100%', '64%'].map((w, i) => (
+            <Bar key={i} kind="name" width={w} />
+          ))}
+        </Stack>
+        <Card withBorder>
+          <Stack gap="xs">
+            <Bar kind="heading" width={112} />
+            <Bar kind="line" width="70%" />
+          </Stack>
+        </Card>
+        <Skeleton height={control} radius="md" />
+      </Stack>
+    </Loading>
+  )
+}

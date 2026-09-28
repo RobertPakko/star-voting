@@ -1,8 +1,9 @@
 /**
- * The service worker, which exists mostly so the app can be installed: an
- * installable web app has to control a scope, and this is the smallest thing
- * that does it honestly rather than an empty file registered to satisfy the
- * check.
+ * The service worker, which exists so the app can be installed and so it can
+ * be told about a poll while it is closed: an installable web app has to
+ * control a scope, and a push notification is delivered to a service worker
+ * rather than to a page. Both halves are below — the caching first, the push
+ * handlers at the end.
  *
  * What it does not try to be is an offline copy of the app. A poll lives in
  * Supabase; every page worth reading is a read against it, so a plane-mode
@@ -19,7 +20,7 @@
  * old, and activate throws them away.
  */
 
-const VERSION = 'v1'
+const VERSION = 'v2'
 const CACHE = `star-voting-${VERSION}`
 
 // This file is served from the app's own directory, so its own URL is the
@@ -156,3 +157,71 @@ async function asset(event) {
   event.waitUntil(fresh)
   return cached ?? fresh
 }
+
+/**
+ * A push, which is always a notification.
+ *
+ * Browsers insist on that — a push that shows nothing is counted against the
+ * site, and Safari revokes the permission after a few — and it is also all a
+ * push here is for: the database has already decided who hears about which
+ * moment, in the same functions that decide the emails, and written the words
+ * (see `push_message` in 0072_push_notifications.sql). The payload is a title,
+ * a sentence, and where the poll is.
+ *
+ * `tag` is the poll, so a second notification about the same poll replaces
+ * the first rather than stacking under it, and `renotify` makes the
+ * replacement still sound — "voting is open" followed by "the results are
+ * ready" is two pieces of news, not one updated.
+ */
+self.addEventListener('push', (event) => {
+  let message = {}
+  try {
+    message = event.data ? event.data.json() : {}
+  } catch {
+    // A payload that is not JSON is not one this app sent. It still has to
+    // show something, and the app's own name is the honest minimum.
+  }
+
+  const title = typeof message.title === 'string' && message.title ? message.title : 'STAR Voting'
+  // Only ever a place inside the app: a path is resolved against the scope and
+  // must start with the hash every route here lives in.
+  const path = typeof message.path === 'string' && message.path.startsWith('#') ? message.path : ''
+  const tag = typeof message.tag === 'string' && message.tag ? message.tag : undefined
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: typeof message.body === 'string' ? message.body : '',
+      icon: new URL('icon-192.png', SCOPE).href,
+      tag,
+      renotify: !!tag,
+      data: { url: new URL(path, SCOPE).href, path },
+    }),
+  )
+})
+
+/**
+ * A tap on a notification opens its poll.
+ *
+ * In the app window that is already open, when there is one, rather than a
+ * second copy of it: that window is told where to go and routes there itself,
+ * so nothing reloads and nothing it was holding is lost. See
+ * `useNotificationRoutes` in src/lib/push.ts for the other end. With no window
+ * open, one is opened on the poll's address.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const { url, path } = event.notification.data ?? {}
+
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const open = windows.find((client) => client.url.startsWith(SCOPE.href))
+      if (open) {
+        await open.focus()
+        if (path) open.postMessage({ type: 'open-path', path })
+        return
+      }
+      await self.clients.openWindow(url || SHELL)
+    })(),
+  )
+})

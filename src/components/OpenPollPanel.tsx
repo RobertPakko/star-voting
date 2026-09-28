@@ -1,6 +1,7 @@
-import { Suspense, useState, type ReactNode } from 'react'
+import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Button, Card, Group, Stack, Text } from '@mantine/core'
-import { openPollRpc } from '../lib/samplePoll'
+import { isSampleId, openPollRpc } from '../lib/samplePoll'
+import { forgetWatch } from '../lib/push'
 import { voterKeyFor } from '../lib/voterKey'
 import type { VoterName } from '../lib/voterName'
 import { BallotCard } from './BallotCard'
@@ -11,6 +12,7 @@ import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
 import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton } from './Skeletons'
 import { VoterNameField } from './VoterNameField'
+import { WatchPoll } from './WatchPoll'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
 /**
@@ -113,6 +115,22 @@ export function OpenPollPanel({
   // both discard the name on such a poll whatever the client sends.
   const needsName = view.poll.show_voters
 
+  // What a watch on this poll is filed under here: its group, so that every
+  // question of a poll says the same thing about it. See WatchPoll.
+  const watchKey = view.poll.group_id ?? pollId
+  // Only a voter holding the link watches. The creator is the one who opens
+  // and closes the poll, so there is nothing to tell them; and the About
+  // page's sample is a file, with nobody on the other end to send anything.
+  const canWatch = !isCreator && !isSampleId(pollId)
+  const finished = view.results_available || view.is_closed
+
+  // The database dropped the watch when it announced the results; the mirror
+  // of it in this browser goes too, so a poll that is reopened later does not
+  // claim a watch that no longer exists.
+  useEffect(() => {
+    if (finished) forgetWatch(watchKey)
+  }, [finished, watchKey])
+
   // Before anything else, because a poll still collecting its options has no
   // ballot to show and no result to show either. It carries the strip the
   // ballot carries, in the same place: a poll of several questions collects a
@@ -155,6 +173,13 @@ export function OpenPollPanel({
             to attach an order to. Knowing who has finished is the whole point
             of the stage. */}
         {view.confirmations && <Confirmations names={view.confirmations} />}
+
+        {/* Once this reader has said they are done: the next thing that
+            happens is the creator opening the poll, and there is no telling
+            when, which is what a notification is for. */}
+        {canWatch && view.confirmed && (
+          <WatchPoll pollId={pollId} watchKey={watchKey} stage="opening" />
+        )}
       </Stack>
     )
   }
@@ -220,6 +245,9 @@ export function OpenPollPanel({
           isCreator={isCreator}
           onRevised={onChanged}
           questionStrip={questionStrip}
+          watch={
+            canWatch ? <WatchPoll pollId={pollId} watchKey={watchKey} stage="results" /> : null
+          }
         />
       ) : (
         <OpenBallot
@@ -255,6 +283,7 @@ function Voted({
   isCreator,
   onRevised,
   questionStrip,
+  watch,
 }: {
   pollId: string
   view: OpenPollView
@@ -262,6 +291,12 @@ function Voted({
   /** A changed ballot went in: the page re-reads the poll. */
   onRevised: () => void
   questionStrip?: ReactNode
+  /**
+   * "Notify me when the results are ready", for a voter holding the link:
+   * this card is where they are left waiting, and an open poll's result only
+   * arrives when its creator gets round to closing it.
+   */
+  watch?: ReactNode
 }) {
   const [revising, setRevising] = useState(false)
   // A database that predates `your_scores` returns undefined, and a ballot
@@ -307,6 +342,7 @@ function Voted({
             )}
           </Group>
         </Stack>
+        {watch}
       </Stack>
     </Card>
   )

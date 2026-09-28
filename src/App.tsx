@@ -20,9 +20,16 @@ import { PollList } from './pages/PollList'
 import { PollDetail } from './pages/PollDetail'
 import { PublicPoll } from './pages/PublicPoll'
 import { NotFound } from './pages/NotFound'
-import { AboutSkeleton, FormSkeleton, PollPageSkeleton } from './components/Skeletons'
+import {
+  AboutSkeleton,
+  FormSkeleton,
+  GuideSkeleton,
+  PollPageSkeleton,
+  SettingsSkeleton,
+} from './components/Skeletons'
 import type { PollRead } from './lib/types'
 import { pollIdFromParam } from './lib/pollId'
+import { refreshAccountPush, useNotificationRoutes } from './lib/push'
 
 /**
  * The two routes nobody is on when the app first paints, fetched when they
@@ -45,6 +52,10 @@ import { pollIdFromParam } from './lib/pollId'
  */
 const CreatePoll = lazy(() => import('./pages/CreatePoll').then((m) => ({ default: m.CreatePoll })))
 const About = lazy(() => import('./pages/About').then((m) => ({ default: m.About })))
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
+const InstallGuide = lazy(() =>
+  import('./pages/InstallGuide').then((m) => ({ default: m.InstallGuide })),
+)
 
 function App() {
   const { session, loading } = useAuth()
@@ -58,6 +69,17 @@ function App() {
     const destination = takeDestination()
     if (destination) navigate(destination, { replace: true })
   }, [session, navigate])
+
+  // A tapped notification, arriving in a window that was already open.
+  useNotificationRoutes()
+
+  // A device bound to this account for push is re-saved whenever the app
+  // opens under it, which is what keeps a rotated endpoint from going quiet.
+  // Asks for nothing; see lib/push.ts.
+  const userId = session?.user.id
+  useEffect(() => {
+    if (userId) void refreshAccountPush(userId)
+  }, [userId])
 
   if (loading) {
     return (
@@ -88,6 +110,17 @@ function App() {
             </Suspense>
           }
         />
+        {/* How to install the app and turn notifications on. In front of the
+            gate for the same reason as About: the reader who most needs it
+            arrived on a share link and has no account. */}
+        <Route
+          path="app"
+          element={
+            <Suspense fallback={<GuideSkeleton />}>
+              <InstallGuide />
+            </Suspense>
+          }
+        />
 
         {session && (
           <>
@@ -97,6 +130,14 @@ function App() {
               element={
                 <Suspense fallback={<FormSkeleton />}>
                   <CreatePoll />
+                </Suspense>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <Suspense fallback={<SettingsSkeleton />}>
+                  <Settings />
                 </Suspense>
               }
             />
