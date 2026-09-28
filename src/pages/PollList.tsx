@@ -19,6 +19,7 @@ import { pruneHiddenPolls, setPollHidden, useHiddenPolls } from '../lib/hiddenPo
 import { openedCandidates, openedPolls, pruneOpenedPolls } from '../lib/openedPolls'
 import type { ListCursor } from '../lib/openedPolls'
 import { pollTopic, userTopic, useLiveStream } from '../lib/useLiveStream'
+import { AppBanner } from '../components/AppBanner'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
@@ -322,6 +323,8 @@ export function PollList() {
             </Button>
           </Group>
         </Group>
+
+        <AppBanner />
 
         {polls.length === 0 && (
           <Text c="dimmed" size="sm">

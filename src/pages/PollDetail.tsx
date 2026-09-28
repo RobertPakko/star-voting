@@ -24,6 +24,7 @@ import { OpenPollPanel } from '../components/OpenPollPanel'
 import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
+import { AppBanner } from '../components/AppBanner'
 import { RetentionNote } from '../components/RetentionNote'
 import { Ballots, Results, TimeBallotCard, YourBallot } from '../components/deferred'
 import {
@@ -990,30 +991,37 @@ function Waiting({
     onRevise((data as Record<string, number>) ?? {})
   }
 
+  // The banner under the card rather than in it: the card is about this
+  // ballot, and the banner is about the app. It is here because this is where
+  // a voter is left waiting on everybody else, which is the moment "we can
+  // tell you when they have" is worth a line. See AppBanner.
   return (
-    <Card withBorder>
-      <Stack gap="sm">
-        {questionStrip}
-        <Group justify="space-between" wrap="nowrap" gap="xs">
-          <Text fw={500}>Your vote is in.</Text>
-          <Badge {...countBadge}>
-            {status.voted_count}/{status.invited_count} voted
-          </Badge>
-        </Group>
-        <Progress value={pct} />
-        <Group justify="space-between" wrap="wrap" gap="sm">
-          <RevealNote reveal={{ kind: 'invite' }} canRevise grow />
-          <Button
-            variant="light"
-            onClick={handleRevise}
-            loading={loading}
-            style={{ marginLeft: 'auto' }}
-          >
-            Edit vote
-          </Button>
-        </Group>
-      </Stack>
-    </Card>
+    <Stack gap="md">
+      <Card withBorder>
+        <Stack gap="sm">
+          {questionStrip}
+          <Group justify="space-between" wrap="nowrap" gap="xs">
+            <Text fw={500}>Your vote is in.</Text>
+            <Badge {...countBadge}>
+              {status.voted_count}/{status.invited_count} voted
+            </Badge>
+          </Group>
+          <Progress value={pct} />
+          <Group justify="space-between" wrap="wrap" gap="sm">
+            <RevealNote reveal={{ kind: 'invite' }} canRevise grow />
+            <Button
+              variant="light"
+              onClick={handleRevise}
+              loading={loading}
+              style={{ marginLeft: 'auto' }}
+            >
+              Edit vote
+            </Button>
+          </Group>
+        </Stack>
+      </Card>
+      <AppBanner />
+    </Stack>
   )
 }
 

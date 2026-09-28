@@ -14,12 +14,13 @@ hash-based routing, deployed to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ```
-src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list and which open polls it has opened (openedPolls.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
+src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the three pieces of push notifications — AppBanner, DevicePush, WatchPoll — …)
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list and which open polls it has opened (openedPolls.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
+supabase/functions/   Edge Functions: send-push, the half of a push notification Postgres cannot do
 scripts/         squash.sh, which squashes the migrations and replays the above;
                  sample-poll.sh, which records the About page's sample poll
 test/            tally tests, run against a throwaway Postgres; build-db.sh, which builds one
@@ -250,6 +251,66 @@ sent per insert, so a poll created later still sends its invitations, while
 the other two are sent once, when the poll crosses the line — a poll that
 opened or finished before the key existed is never announced. Nothing is
 retried.
+
+An account can turn these off in **Settings** — `send_poll_email` asks
+`wants_email` before anything else — and the sign-in email is not one of them.
+The same three moments are also sent as push notifications; see the next step
+and [Push notifications](#push-notifications).
+
+### 5. Push notifications
+
+Optional. A build with no VAPID key has push switched off — no buttons, no
+banner, and a sentence where the Settings device control would be — and the
+database sends nothing while the two Vault secrets below are missing. Every
+step here is manual, because every one of them is a secret or a deployment:
+
+1. **Make a VAPID key pair** on your own machine:
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+   It prints a public key and a private key, both base64url. Keep the private
+   one out of the repo.
+2. **Make a shared secret** for the database to prove itself to the Edge
+   Function with, e.g. `openssl rand -hex 32`.
+3. **Edge Function secrets** — dashboard → **Edge Functions → Secrets**:
+   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a contact the
+   push services can reach, e.g. `mailto:you@example.com`), and
+   `PUSH_FUNCTION_SECRET` (step 2). `SUPABASE_URL` and
+   `SUPABASE_SERVICE_ROLE_KEY` are provided to every function already.
+4. **Vault** — in the **SQL Editor**, like the Resend key:
+   ```sql
+   select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/send-push', 'push_function_url');
+   select vault.create_secret('<the secret from step 2>', 'push_function_secret');
+   ```
+5. **Deploy the function.** Migrations reach the database through the
+   GitHub integration; the function goes through
+   [`functions.yml`](.github/workflows/functions.yml), which deploys it on
+   every push to `main` that touches `supabase/functions/`. Give it two
+   Actions secrets — `SUPABASE_ACCESS_TOKEN` (dashboard → **Account → Access
+   Tokens**) and `SUPABASE_PROJECT_REF` — and run it once by hand from the
+   Actions tab. Without them it warns and deploys nothing. To deploy by hand
+   instead:
+   ```bash
+   npx supabase functions deploy send-push --project-ref <project-ref> --no-verify-jwt
+   ```
+   **JWT verification must be off for this function** (`--no-verify-jwt`,
+   or **Edge Functions → send-push → Enforce JWT verification** in the
+   dashboard): the caller is the database, which holds no user's token, and
+   the function checks the shared secret instead.
+6. **The app's half** — Actions secret `VITE_VAPID_PUBLIC_KEY` (the public
+   key from step 1), and the same line in `.env` for a local build. The next
+   deploy turns the buttons on.
+
+To check it end to end, open the built site in two browsers: create an open
+poll in one, vote in the other and press **Notify me**, then close the poll
+from the first. `select status_code, content from net._http_response order by
+created desc limit 5;` shows what the function answered — `{"sent":1,…}` —
+and the function's own logs are under **Edge Functions → send-push → Logs**.
+
+**Rotating the VAPID keys** strands every subscription made under the old
+public key. A device bound to an account re-subscribes itself the next time
+the app opens there (`refreshAccountPush`); a watch on an open poll does not,
+and is dropped the first time its push service refuses it.
 
 ## Database migrations
 
@@ -500,6 +561,14 @@ can see:
   each function across the migrations in order, which is what a database built
   from them runs, and it goes through `import.meta.glob` rather than `node:fs`
   so that a test under `src/` is still held to the browser's typing.
+- `supabase/functions/send-push/webpush.test.ts`, over the encryption and
+  signing a push notification is made of. A payload a browser cannot decrypt
+  is dropped by the browser while the push service answers 201, so nothing
+  anywhere says a notification was lost; the test decrypts what the sender
+  encrypts with a second implementation of RFC 8291 written against
+  `node:crypto` rather than WebCrypto, and verifies the VAPID signature the
+  same way. It runs under vitest because the sender is pure WebCrypto, which
+  is the same API in Node as in the Edge Function's Deno.
 - `readLedger.test.ts`, over what a live page is owed a read for and what the
   read it has just made covers — see [Live updates](#live-updates). The rule is
   one sentence of ordering and the arithmetic under it is eight lines, and both
@@ -595,13 +664,17 @@ case whoever's own act was what did it; and which of the three readings
 holding an open poll's link, somebody outside an invite poll, and nobody at
 all — along with what the open reading refuses to carry and that a poll which
 does not exist is refused in the same words as one that is simply not yours.
+And the same half of push notifications: who each moment would be pushed to
+and whose browser is left out, the two settings that turn a channel off, the
+endpoints the database refuses, and that a watch on an open poll is filed
+against its first question and is gone once the results are out.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. The
 `poll_page` case above is the nearest thing and still not an exception to
 this: it drives the shim's stand-in session, so what it pins down is which
 branch that function takes for a given `auth.uid()`, not that Supabase's auth
 would put a real reader on that branch. Nor the
-sending of any email: `pg_net` and Vault do not exist in the throwaway
+sending of any email or push: `pg_net` and Vault do not exist in the throwaway
 database, so `send_poll_email` finds no mailer and returns without doing
 anything — the suite can say who *would* have been emailed and never that
 anybody was, exactly as it can for live updates. Nor the
@@ -2203,7 +2276,9 @@ for that, and they are the three files below.
   already, so a share link opens in the installed window rather than
   bouncing out to the browser.
 - **[`public/sw.js`](public/sw.js)** — a service worker, because the install
-  prompt is only offered for a page that has one. What it caches is the
+  prompt is only offered for a page that has one, and because a push
+  notification is delivered to one (see [Push
+  notifications](#push-notifications)). What it caches is the
   shell: the HTML, the hashed bundle and stylesheet, the icons. What it will
   not touch is anything off-origin, which is every read of a poll — a cached
   answer about a poll is a *wrong* answer, a closed poll drawn as still
@@ -2281,6 +2356,118 @@ theme menu rather than in a leading position, where a control that comes and
 goes would leave a visible gap. It is also absent from the sign-in screen,
 which has no header by design; a voter arriving on a share link sees it,
 which is the reader most likely to want it.
+
+## Push notifications
+
+A poll tells its people about three moments — being invited, voting opening,
+the results being ready — and for a long time it could only do that by email.
+Push is the same three moments on a second channel, and it closes the one gap
+email never could: **an open poll's voters gave no address**, so the only way
+they ever found out a result was to keep opening the link.
+[`0072_push_notifications.sql`](supabase/migrations/0072_push_notifications.sql)
+is the database half, [`supabase/functions/send-push`](supabase/functions/send-push)
+the sending half, [`src/lib/push.ts`](src/lib/push.ts) the browser's, and
+`push` / `notificationclick` at the foot of [`public/sw.js`](public/sw.js) the
+part that runs while the app is closed. Setup is [step 5](#5-push-notifications).
+
+**No new rules about who is told.** Every push goes to exactly the people the
+matching email goes to, decided by the same `poll_email_audience` and
+`poll_results_audience`, from inside the same `notify_poll_opened`,
+`notify_results_ready` and invitation trigger — so *nobody is told what they
+just did* holds on both channels by construction, and the once-only claim on
+`results_notices` covers both. The suite asks `poll_push_targets` who would be
+pushed, exactly as case 23 asks the audience functions who would be emailed.
+
+**Two doors, one subscription per browser.** A browser has one push endpoint
+whoever is using it, and it reaches the database one of two ways:
+
+- **Bound to an account** (`push_subscriptions`, through
+  `save_push_subscription`) — from **Settings**, or the install guide. It
+  hears every poll that account is in, for as long as the account wants push.
+  An endpoint belongs to one account at a time, and **signing out forgets it**
+  (`forgetAccountPush`, before the session goes): a shared browser left bound
+  is the next person's phone buzzing with the last person's polls.
+- **Watching one open poll** (`poll_push_watches`, through `open_poll_watch`)
+  — the **Notify me** button on the card a voter lands on after voting, or
+  after confirming the options on a poll still collecting them. No account,
+  and the creator does not get the button: they are the one who opens and
+  closes the poll.
+
+**A watch records nothing about who asked.** No voter key, no account, no
+name, and deliberately no timestamp: a watch made in the same second as a
+ballot would be the join between a ballot and a browser that the per-question
+`voter_key` exists to prevent. It is filed against the group's first
+question, like every notice, and **deleted when the results are announced** —
+or when the poll closes with nothing to announce. One-shot, because an
+endpoint left on the row of every open poll a browser ever answered would be a
+record of which polls that browser was in. The browser mirrors its watches in
+`localStorage` only so the button can say which way round it is; that mirror
+is dropped when the poll finishes.
+
+The one person a watch can leave out is the actor. A watch has no address for
+`poll_email_audience` to drop, so `poll_push_targets` drops the actor's own
+*browser* instead, where it is bound to their account — the creator pressing
+Close on the phone they are watching on.
+
+**Settings are an account's, and say which channels.** `notification_settings`
+holds an `email` and a `push` flag, and no row means both on, so nothing
+changed for anybody who never opens the page. `send_poll_email` asks
+`wants_email` before anything else, which covers all four letters in one
+place; an address with no account is always emailed, since the invitation is
+the only way it could hear of the poll. The sign-in email is not a
+notification and is never affected. Watches ignore the account settings — a
+watch is its own explicit ask.
+
+**The database decides, the function encrypts.** A push has to be encrypted to
+each browser's key (RFC 8291) and signed with the app's VAPID key (RFC 8292),
+and pgcrypto has neither ECDH nor ECDSA. So `send_push` hands the message and
+every target to the Edge Function in one `pg_net` request, and the function is
+deliberately dumb: check the shared secret, encrypt, send, and report the
+endpoints the push services answered 404 or 410 for to
+`forget_push_endpoints`, which only `service_role` may call. It reads no tables
+and makes no decisions. It is written against WebCrypto rather than the
+`web-push` package because that package is Node's `crypto` underneath, which
+is also what lets it be tested under vitest.
+
+**An endpoint is checked twice against the four push services** — Google's,
+Mozilla's, Apple's, Microsoft's — by `push_subscription_valid` on the way in
+and `isPushEndpoint` before the one `fetch`. The endpoint arrives from any
+browser holding a link, and unchecked it would make the function POST
+wherever somebody liked.
+
+**What a notification says.** `push_message` writes it: the poll's title as the
+title — a notification has a line of its own for it, unlike an email subject
+an inbox truncates — and one sentence for the moment. Its `tag` is the poll, so
+a second notification about the same poll replaces the first, and tapping it
+opens the poll: in the app window that is already open where there is one,
+routed without a reload (`useNotificationRoutes`), otherwise in a new one.
+
+**Asking is always a press.** A permission prompt nobody asked for is ignored
+or blocked, and Safari will not show one at all, so nothing in the app asks on
+its own. The places that can ask are Settings, the install guide, and Notify
+me; everywhere else the app only *says* it can notify — `AppBanner`, on the
+poll list and under the invite poll's *your vote is in*, closed for good with
+its ×. It says nothing where there is nothing to do: no key in the build, no
+push in the browser, a reader who already said no or already said yes.
+
+**iPhone and iPad need the app installed first.** Safari gives the push APIs
+only to a site added to the Home Screen and opened from there, so in a Safari
+tab `pushState` is `needs-install`, Notify me becomes the banner, and the
+banner's link is the guide. That guide is [`InstallGuide`](src/pages/InstallGuide.tsx)
+at `#/app`: public, opened on the reader's own kind of device with the other
+two beside it, and linked from the About page's list of features.
+
+What it does not do:
+
+- **Deliver while nobody is looking, on a computer.** Desktop browsers receive
+  pushes only while they are running. Phones do not have that limit.
+- **Follow a rotated endpoint on a watch.** Push services occasionally replace
+  a browser's endpoint without telling the site. An account's device is
+  re-saved every time the app opens under it (`refreshAccountPush`), so it
+  catches up; a watch has nobody to re-save it and is dropped the first time
+  the old endpoint is refused. There is no `pushsubscriptionchange` handler,
+  because the service worker holds no account to send the new one under.
+- **Retry.** Like the emails, a push is best-effort and sent once.
 
 ## Signing in
 

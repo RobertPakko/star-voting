@@ -1,4 +1,5 @@
-import { Anchor, AppShell, Button, Group, Text, Title } from '@mantine/core'
+import { ActionIcon, Anchor, AppShell, Button, Group, Text, Title, Tooltip } from '@mantine/core'
+import { GearIcon } from '@phosphor-icons/react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { InstallButton } from './InstallButton'
@@ -26,6 +27,7 @@ export function Layout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const onAbout = pathname === '/about'
+  const onSettings = pathname === '/settings'
 
   // Off the poll and back to the front door, rather than left standing where
   // the session used to admit them. A page that was rendering the account
@@ -77,6 +79,24 @@ export function Layout() {
               </Anchor>
             )}
             <InstallButton />
+            {/* An icon beside the theme menu, for the same width reason the
+                install button is one, and dropped on its own page the way the
+                About link is. Only with an account: the settings are an
+                account's, and a reader holding a link has none. */}
+            {session && !onSettings && (
+              <Tooltip label="Settings" withArrow>
+                <ActionIcon
+                  component={Link}
+                  to="/settings"
+                  variant="outline"
+                  color="gray"
+                  size="lg"
+                  aria-label="Settings"
+                >
+                  <GearIcon size={18} aria-hidden />
+                </ActionIcon>
+              </Tooltip>
+            )}
             <ThemeToggle />
             {/* One slot, two states. Signed out this is an offer rather than a
                 gate — voting on an open poll needs no account — but it has to

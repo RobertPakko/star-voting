@@ -247,6 +247,20 @@ const FEATURES: Entry[] = [
     body: <>No need to ever refresh; all updates are streamed to your browser in real-time.</>,
   },
   {
+    name: 'This site is an app',
+    body: (
+      <>
+        Install it on your phone or computer and get a notification when you're invited to a poll,
+        when voting opens, and when the results are ready — even for polls you answered without
+        signing in.{' '}
+        <Anchor component={Link} to="/app" inherit>
+          See how to install it
+        </Anchor>
+        .
+      </>
+    ),
+  },
+  {
     name: 'Robust poll management',
     body: (
       <>

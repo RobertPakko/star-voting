@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { AuthContext } from './auth'
 import { CODE_METHOD_MARKER, type SignInMethod } from './signInMethod'
+import { forgetAccountPush } from './push'
 
 /**
  * Where the sign-in email's link comes back to — and, on the code path, the
@@ -69,6 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    // First, while the session can still say whose device this is: a browser
+    // left bound to an account after it signs out is the next person's phone
+    // buzzing with the last person's polls. See lib/push.ts.
+    await forgetAccountPush()
     // Local scope, and errors swallowed. Both are about the same thing: the
     // person pressing this wants the session off *this* device, and a request
     // to revoke it server-side that fails -- an expired token, no network --
