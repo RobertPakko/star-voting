@@ -1,22 +1,21 @@
-import { Card, Divider, Stack, Switch, Text, Title } from '@mantine/core'
+import { Card, Stack, Switch, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useNotificationSettings, type NotificationSettings } from '../lib/notificationSettings'
-import { DevicePush } from '../components/DevicePush'
+import { PushSwitch } from '../components/PushSwitch'
 import { Reveal } from '../components/Reveal'
 import { SettingsSkeleton } from '../components/Skeletons'
 
 /**
  * The /settings route: how an account hears about its polls.
  *
- * Two switches and a device. A poll tells its people about three moments —
- * being invited, voting opening, the results being ready — and the switches
- * say which channels those arrive on: email, push, both, or neither. They are
- * the account's, and apply wherever it is signed in. Which devices push
- * reaches is a separate, per-device question, because a subscription belongs
- * to one browser on one device and only that browser can make one: so the
- * card under the switches is about the device in the reader's hand.
+ * Two switches. A poll tells its people about three moments — being
+ * invited, voting opening, the results being ready — and the switches say
+ * which channels those arrive on: email, push, both, or neither. Email is the
+ * account's alone. Push is the account's too, but a push subscription belongs
+ * to one browser on one device, so its switch also answers for the device in
+ * the reader's hand; see PushSwitch.
  *
  * Neither switch reaches the sign-in email, which is not a notification about
  * a poll and without which nobody could get back in to turn email on again.
@@ -74,24 +73,7 @@ export function Settings() {
               checked={settings.email}
               onChange={(event) => save({ ...settings, email: event.currentTarget.checked })}
             />
-            <Switch
-              label="Push notifications"
-              description="Sent to every device where you have turned them on."
-              checked={settings.push}
-              onChange={(event) => save({ ...settings, push: event.currentTarget.checked })}
-            />
-
-            <Divider />
-
-            <Stack gap="xs">
-              <Text fw={500}>This device</Text>
-              <DevicePush
-                userId={session.user.id}
-                bound={settings.thisDevice}
-                accountPush={settings.push}
-                onChange={(bound) => setSettings({ ...settings, thisDevice: bound })}
-              />
-            </Stack>
+            <PushSwitch userId={session.user.id} settings={settings} onChange={setSettings} />
           </Stack>
         </Card>
 

@@ -12,6 +12,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
+import { AppBanner } from '../components/AppBanner'
 import { useAuth } from '../lib/auth'
 import { rememberDestination } from '../lib/shareLink'
 import {
@@ -115,104 +116,112 @@ export function SignIn() {
 
   return (
     <Center h="100vh">
-      <Paper withBorder shadow="sm" p="xl" radius="md" w={360}>
-        <Stack align="center" gap="md">
-          <Title order={2}>STAR Voting</Title>
-          {sent === 'code' ? (
-            <>
-              <Text ta="center">
-                Enter the code sent to <strong>{email}</strong>
-              </Text>
-              <PinInput
-                length={CODE_LENGTH}
-                type="number"
-                // Sized to the card rather than to taste: eight boxes at the
-                // default size are wider than the 360px this sits in.
-                size="xs"
-                gap={6}
-                autoFocus
-                ariaLabel="Sign-in code"
-                value={code}
-                error={!!error}
-                disabled={verifying}
-                onChange={(value) => {
-                  setCode(value)
-                  setError(null)
-                }}
-                // A full set of boxes is the whole of the intent, and a phone
-                // filling them in from the notification should not then have
-                // to be told to go ahead. The button below is for a code that
-                // was wrong the first time — and for one shorter than the
-                // boxes built for it, which is the mismatch above.
-                onComplete={handleVerify}
-              />
-              {error && (
-                <Text c="red" size="sm" ta="center">
-                  {error}
+      <Stack gap="md" w={360} maw="100%">
+        <Paper withBorder shadow="sm" p="xl" radius="md" w="100%">
+          <Stack align="center" gap="md">
+            <Title order={2}>STAR Voting</Title>
+            {sent === 'code' ? (
+              <>
+                <Text ta="center">
+                  Enter the code sent to <strong>{email}</strong>
                 </Text>
-              )}
-              <Button
-                fullWidth
-                loading={verifying}
-                disabled={code.length < MIN_CODE_LENGTH}
-                onClick={() => handleVerify(code)}
-              >
-                Sign in
-              </Button>
-              <Anchor component="button" type="button" size="sm" onClick={startOver}>
-                Start over
-              </Anchor>
-            </>
-          ) : sent === 'link' ? (
-            <>
-              <Text ta="center">
-                Check <strong>{email}</strong> for a sign-in link. You can close this tab.
-              </Text>
-              {/* The way out of the case this whole choice exists for: the
+                <PinInput
+                  length={CODE_LENGTH}
+                  type="number"
+                  // Sized to the card rather than to taste: eight boxes at the
+                  // default size are wider than the 360px this sits in.
+                  size="xs"
+                  gap={6}
+                  autoFocus
+                  ariaLabel="Sign-in code"
+                  value={code}
+                  error={!!error}
+                  disabled={verifying}
+                  onChange={(value) => {
+                    setCode(value)
+                    setError(null)
+                  }}
+                  // A full set of boxes is the whole of the intent, and a phone
+                  // filling them in from the notification should not then have
+                  // to be told to go ahead. The button below is for a code that
+                  // was wrong the first time — and for one shorter than the
+                  // boxes built for it, which is the mismatch above.
+                  onComplete={handleVerify}
+                />
+                {error && (
+                  <Text c="red" size="sm" ta="center">
+                    {error}
+                  </Text>
+                )}
+                <Button
+                  fullWidth
+                  loading={verifying}
+                  disabled={code.length < MIN_CODE_LENGTH}
+                  onClick={() => handleVerify(code)}
+                >
+                  Sign in
+                </Button>
+                <Anchor component="button" type="button" size="sm" onClick={startOver}>
+                  Start over
+                </Anchor>
+              </>
+            ) : sent === 'link' ? (
+              <>
+                <Text ta="center">
+                  Check <strong>{email}</strong> for a sign-in link. You can close this tab.
+                </Text>
+                {/* The way out of the case this whole choice exists for: the
                   link arrived and signed them in somewhere that was not
                   here. Back to the form, with the code option a tap away. */}
-              <Anchor component="button" type="button" size="sm" onClick={startOver}>
-                Start over
-              </Anchor>
-            </>
-          ) : (
-            <>
-              <Text c="dimmed" ta="center">
-                Enter your email to sign in
-              </Text>
-              <TextInput
-                w="100%"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.currentTarget.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              />
-              <SegmentedControl
-                w="100%"
-                value={method}
-                onChange={(value) => setMethod(value as SignInMethod)}
-                data={[
-                  { value: 'link', label: 'Email a link' },
-                  { value: 'code', label: 'Email a code' },
-                ]}
-              />
-              {error && (
-                <Text c="red" size="sm">
-                  {error}
+                <Anchor component="button" type="button" size="sm" onClick={startOver}>
+                  Start over
+                </Anchor>
+              </>
+            ) : (
+              <>
+                <Text c="dimmed" ta="center">
+                  Enter your email to sign in
                 </Text>
-              )}
-              <Button fullWidth onClick={handleSubmit} loading={sending}>
-                {method === 'link' ? 'Send sign-in link' : 'Send sign-in code'}
-              </Button>
-              {/* Shown either way: someone who has just requested a link has a
+                <TextInput
+                  w="100%"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.currentTarget.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                />
+                <SegmentedControl
+                  w="100%"
+                  value={method}
+                  onChange={(value) => setMethod(value as SignInMethod)}
+                  data={[
+                    { value: 'link', label: 'Email a link' },
+                    { value: 'code', label: 'Email a code' },
+                  ]}
+                />
+                {error && (
+                  <Text c="red" size="sm">
+                    {error}
+                  </Text>
+                )}
+                <Button fullWidth onClick={handleSubmit} loading={sending}>
+                  {method === 'link' ? 'Send sign-in link' : 'Send sign-in code'}
+                </Button>
+                {/* Shown either way: someone who has just requested a link has a
               minute to spare, and may have no idea what STAR voting is. */}
-              <Anchor component={Link} to="/about" size="sm">
-                What is STAR voting?
-              </Anchor>
-            </>
-          )}
-        </Stack>
-      </Paper>
+                <Anchor component={Link} to="/about" size="sm">
+                  What is STAR voting?
+                </Anchor>
+              </>
+            )}
+          </Stack>
+        </Paper>
+        {/* The front door for anybody signed out, so the one place a first-time
+          reader hears the app can be installed. Only beside the form: while
+          an email is on its way, following a link off this card would throw
+          away the address the code belongs to — the same reason the About
+          link is only offered here. See AppBanner. */}
+        {sent === null && <AppBanner />}
+      </Stack>
     </Center>
   )
 }

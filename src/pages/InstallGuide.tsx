@@ -17,7 +17,7 @@ import { useAuth } from '../lib/auth'
 import { useInstallPrompt } from '../lib/installPrompt'
 import { useNotificationSettings } from '../lib/notificationSettings'
 import { devicePlatform, isInstalledApp, pushState, type DevicePlatform } from '../lib/push'
-import { DevicePush } from '../components/DevicePush'
+import { PushSwitch } from '../components/PushSwitch'
 
 /**
  * The /app route: how to install this site as an app, and how to get
@@ -131,11 +131,10 @@ function ThisDevice({ signedIn, userId }: { signedIn: boolean; userId: string | 
         </Group>
 
         {signedIn && userId ? (
-          <DevicePush
+          <PushSwitch
             userId={userId}
-            bound={settings ? settings.thisDevice : null}
-            accountPush={settings?.push ?? true}
-            onChange={(bound) => settings && setSettings({ ...settings, thisDevice: bound })}
+            settings={settings}
+            onChange={setSettings}
             guideLink={false}
           />
         ) : (
@@ -218,6 +217,11 @@ function IosSteps() {
         <List.Item>
           Open <strong>STAR Voting</strong> from your Home Screen. Notifications work in the app
           opened this way, not in a Safari tab.
+        </List.Item>
+        <List.Item>
+          If you have an account, sign in again inside the app — it does not share Safari&rsquo;s
+          sign-in. Choose <strong>Email a code</strong>: a sign-in link would open in Safari instead
+          of the app.
         </List.Item>
         <TurnOn />
       </Steps>

@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the three pieces of push notifications — AppBanner, DevicePush, WatchPoll — …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the three pieces of push notifications — AppBanner, PushSwitch, WatchPoll — …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list and which open polls it has opened (openedPolls.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -260,7 +260,7 @@ and [Push notifications](#push-notifications).
 ### 5. Push notifications
 
 Optional. A build with no VAPID key has push switched off — no buttons, no
-banner, and a sentence where the Settings device control would be — and the
+banner, and the Settings switch disabled with a sentence under it — and the
 database sends nothing while the two Vault secrets below are missing. Every
 step here is manual, because every one of them is a secret or a deployment:
 
@@ -282,21 +282,23 @@ step here is manual, because every one of them is a secret or a deployment:
    select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/send-push', 'push_function_url');
    select vault.create_secret('<the secret from step 2>', 'push_function_secret');
    ```
-5. **Deploy the function.** Migrations reach the database through the
-   GitHub integration; the function goes through
-   [`functions.yml`](.github/workflows/functions.yml), which deploys it on
-   every push to `main` that touches `supabase/functions/`. Give it two
-   Actions secrets — `SUPABASE_ACCESS_TOKEN` (dashboard → **Account → Access
-   Tokens**) and `SUPABASE_PROJECT_REF` — and run it once by hand from the
-   Actions tab. Without them it warns and deploys nothing. To deploy by hand
-   instead:
+5. **Deploy the function, by hand.** Migrations reach the database through
+   the GitHub integration; Edge Functions do not, and there is deliberately
+   no workflow for them. Deploying from CI would need a Supabase personal
+   access token in the repo's secrets, and that token reaches every project
+   on the account — too much to leave in GitHub for a function that rarely
+   changes. So after any change under `supabase/functions/`, deploy it from
+   a machine:
    ```bash
+   npx supabase login        # opens a browser; nothing to copy or store
    npx supabase functions deploy send-push --project-ref <project-ref> --no-verify-jwt
    ```
    **JWT verification must be off for this function** (`--no-verify-jwt`,
    or **Edge Functions → send-push → Enforce JWT verification** in the
    dashboard): the caller is the database, which holds no user's token, and
-   the function checks the shared secret instead.
+   the function checks the shared secret instead. Merging a change to the
+   function without deploying it leaves the old one running, and nothing
+   says so.
 6. **The app's half** — Actions secret `VITE_VAPID_PUBLIC_KEY` (the public
    key from step 1), and the same line in `.env` for a local build. The next
    deploy turns the buttons on.
@@ -2382,8 +2384,9 @@ pushed, exactly as case 23 asks the audience functions who would be emailed.
 whoever is using it, and it reaches the database one of two ways:
 
 - **Bound to an account** (`push_subscriptions`, through
-  `save_push_subscription`) — from **Settings**, or the install guide. It
-  hears every poll that account is in, for as long as the account wants push.
+  `save_push_subscription`) — by turning on the push switch in **Settings**,
+  or the same switch on the install guide. It hears every poll that account
+  is in, for as long as the account wants push.
   An endpoint belongs to one account at a time, and **signing out forgets it**
   (`forgetAccountPush`, before the session goes): a shared browser left bound
   is the next person's phone buzzing with the last person's polls.
@@ -2418,6 +2421,18 @@ the only way it could hear of the poll. The sign-in email is not a
 notification and is never affected. Watches ignore the account settings — a
 watch is its own explicit ask.
 
+**Push is one switch, and it answers for the device in the reader's hand**
+(`PushSwitch`). It was two for a while — an account-wide switch and a "this
+device" control with its own button under it — because a subscription can
+only be made by the browser it belongs to. Two controls for one question read
+as two questions, so they were folded together: the switch is on when the
+account's push is on *and* this device is bound; turning it on asks for
+permission, binds this device and turns the account's push on, which is also
+how a second device is added; turning it off turns the account's push off,
+which stops it everywhere. Devices stay bound through that, so turning it back
+on anywhere brings them all back. Where the device cannot take a push at all,
+the switch is disabled and the line under it says what to do.
+
 **The database decides, the function encrypts.** A push has to be encrypted to
 each browser's key (RFC 8291) and signed with the app's VAPID key (RFC 8292),
 and pgcrypto has neither ECDH nor ECDSA. So `send_push` hands the message and
@@ -2446,14 +2461,17 @@ routed without a reload (`useNotificationRoutes`), otherwise in a new one.
 or blocked, and Safari will not show one at all, so nothing in the app asks on
 its own. The places that can ask are Settings, the install guide, and Notify
 me; everywhere else the app only *says* it can notify — `AppBanner`, on the
-poll list and under the invite poll's *your vote is in*, closed for good with
-its ×. It says nothing where there is nothing to do: no key in the build, no
+poll list, on the sign-in screen that is the front door for anybody signed
+out, and under the invite poll's *your vote is in*, closed for good with its
+×. It says nothing where there is nothing to do: no key in the build, no
 push in the browser, a reader who already said no or already said yes.
 
 **iPhone and iPad need the app installed first.** Safari gives the push APIs
 only to a site added to the Home Screen and opened from there, so in a Safari
 tab `pushState` is `needs-install`, Notify me becomes the banner, and the
-banner's link is the guide. That guide is [`InstallGuide`](src/pages/InstallGuide.tsx)
+banner's link is the guide. The installed app also keeps its own storage, so
+a signed-in reader signs in again inside it — with a code, since a sign-in
+link opens Safari rather than the app; the guide says both. That guide is [`InstallGuide`](src/pages/InstallGuide.tsx)
 at `#/app`: public, opened on the reader's own kind of device with the other
 two beside it, and linked from the About page's list of features.
 
