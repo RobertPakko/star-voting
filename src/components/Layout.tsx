@@ -11,11 +11,12 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { GearIcon, SignOutIcon } from '@phosphor-icons/react'
+import { GearIcon, SignInIcon, SignOutIcon } from '@phosphor-icons/react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { InstallButton } from './InstallButton'
 import { NotificationSwitches } from './NotificationSwitches'
+import { LinkPushSwitch } from './PushSwitch'
 import { Reveal } from './Reveal'
 import { ThemeToggle } from './ThemeToggle'
 
@@ -95,7 +96,7 @@ export function Layout() {
                 height={32}
                 style={{ borderRadius: 8, display: 'block' }}
               />
-              <Title order={3} size="h4">
+              <Title order={3} size="h4" style={{ whiteSpace: 'nowrap' }}>
                 STAR Voting
               </Title>
             </Group>
@@ -121,16 +122,18 @@ export function Layout() {
                 them: two switches do not earn a page, and the reader is
                 usually in the middle of a poll. The /settings page still
                 exists, for the emails' footer to link to, and the gear stands
-                down there the way the About link does on About. Only with an
-                account: the settings are an account's, and a reader holding a
-                link has none.
+                down there the way the About link does on About. Signed out it
+                holds one switch, push for this browser, which is how a reader
+                holding a link turns on notifications for the open polls they
+                answer — the same place an account does it, so every banner
+                pointing at it can say the same thing.
 
                 No tooltip, here or on sign-out: a hover label under a button
                 that opens a menu lands on top of the menu it opened. The
                 aria-label still names it. The menu is as wide as its switches
                 and slid right to meet the page's edge (see menuShift), rather
                 than hanging off the gear towards the middle of the page. */}
-            {session && !onSettings && (
+            {!onSettings && (
               <Popover
                 position="bottom-end"
                 shadow="md"
@@ -151,7 +154,7 @@ export function Layout() {
                   </ActionIcon>
                 </Popover.Target>
                 <Popover.Dropdown maw={280}>
-                  <NotificationSwitches userId={session.user.id} />
+                  {session ? <NotificationSwitches userId={session.user.id} /> : <LinkPushSwitch />}
                 </Popover.Dropdown>
               </Popover>
             )}
@@ -165,7 +168,12 @@ export function Layout() {
                 app for good. Signed in it is an icon, like its neighbours:
                 with the settings gear beside it the row ran out of room on a
                 phone, and leaving is not what anybody came to do. Signed out
-                it keeps its words, because an offer has to say what it is. */}
+                it keeps its words, because an offer has to say what it is —
+                except on a phone, where the gear beside it (push for a reader
+                holding a link) left no room for them and the wordmark was
+                wrapping onto two lines. There it is the door-and-arrow icon,
+                the mirror of sign-out's, in the accent colour rather than
+                grey so it still reads as the one thing being offered. */}
             {session ? (
               <ActionIcon
                 variant="outline"
@@ -177,9 +185,21 @@ export function Layout() {
                 <SignOutIcon size={18} aria-hidden />
               </ActionIcon>
             ) : (
-              <Button component={Link} to="/" variant="outline" size="sm">
-                Sign in
-              </Button>
+              <>
+                <Button component={Link} to="/" variant="outline" size="sm" visibleFrom="xs">
+                  Sign in
+                </Button>
+                <ActionIcon
+                  component={Link}
+                  to="/"
+                  variant="outline"
+                  size="lg"
+                  aria-label="Sign in"
+                  hiddenFrom="xs"
+                >
+                  <SignInIcon size={18} aria-hidden />
+                </ActionIcon>
+              </>
             )}
           </Group>
         </Group>

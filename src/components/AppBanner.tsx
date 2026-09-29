@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert, Anchor } from '@mantine/core'
-import { BellRingingIcon } from '@phosphor-icons/react'
+import { BellRingingIcon, DownloadSimpleIcon } from '@phosphor-icons/react'
 import { appBannerDismissed, dismissAppBanner, isInstalledApp, pushState } from '../lib/push'
 
 /**
@@ -22,9 +22,18 @@ import { appBannerDismissed, dismissAppBanner, isInstalledApp, pushState } from 
  * browser with no push at all, a reader who has already said no — only the
  * browser's own settings can undo that, which the guide covers for anybody who
  * goes looking — and a reader who has already said yes.
+ *
+ * **Under a poll it says less** (`topic="install"`): only that the site
+ * installs, beside the banner there pointing at the push switch, which is the
+ * notification half said where it can be acted on. That wording does not
+ * depend on push at all — an installed app is worth having without it — so it
+ * is shown to anybody outside the installed app who has not closed it, and
+ * closing either wording closes both, since they are one suggestion.
  */
-export function AppBanner() {
-  const [shown, setShown] = useState(() => !appBannerDismissed() && worthSaying())
+export function AppBanner({ topic = 'notify' }: { topic?: 'notify' | 'install' }) {
+  const [shown, setShown] = useState(
+    () => !appBannerDismissed() && (topic === 'install' ? !isInstalledApp() : worthSaying()),
+  )
   if (!shown) return null
 
   // Inside the installed app, installing is done; what is left is the half of
@@ -34,7 +43,13 @@ export function AppBanner() {
   return (
     <Alert
       variant="light"
-      icon={<BellRingingIcon size={20} aria-hidden />}
+      icon={
+        topic === 'install' ? (
+          <DownloadSimpleIcon size={20} aria-hidden />
+        ) : (
+          <BellRingingIcon size={20} aria-hidden />
+        )
+      }
       withCloseButton
       closeButtonLabel="Dismiss for good"
       onClose={() => {
@@ -42,9 +57,11 @@ export function AppBanner() {
         setShown(false)
       }}
     >
-      {installed
-        ? 'Did you know this app can notify you when there are updates to your polls? '
-        : 'Did you know you can install this site as an app and receive notifications when there are updates to your polls? '}
+      {topic === 'install'
+        ? 'You can install this site as an app, so your polls are a tap away. '
+        : installed
+          ? 'Did you know this app can notify you when there are updates to your polls? '
+          : 'Did you know you can install this site as an app and receive notifications when there are updates to your polls? '}
       <Anchor component={Link} to="/app" inherit fw={500}>
         Learn how
       </Anchor>

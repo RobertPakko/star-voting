@@ -17,7 +17,7 @@ import { OpenPollPanel } from '../components/OpenPollPanel'
 import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
-import { NotifyHint } from '../components/WatchPoll'
+import { WhileYouWait } from '../components/NotifyHint'
 import { RetentionNote } from '../components/RetentionNote'
 import { Ballots, Results, TimeBallotCard, YourBallot } from '../components/deferred'
 import {
@@ -781,8 +781,8 @@ export function PollDetail({
               />
               {/* Once this reader has said they are done, the next thing that
                   happens is voting opening, whenever the rest have — the same
-                  moment an open poll's Notify me offers to tell them about. */}
-              {confirmation?.confirmed && <NotifyHint stage="opening" />}
+                  moment the push switch in the gear menu tells them about. */}
+              {confirmation?.confirmed && <WhileYouWait stage="opening" />}
             </>
           ) : status.results_available ? (
             /* The strip sits above the tally rather than inside it, which is
@@ -992,7 +992,7 @@ function Waiting({
   // The hint under the card rather than in it: the card is about this ballot,
   // and the hint is about the account. It is here because this is where a
   // voter is left waiting on everybody else, which is the moment "we can tell
-  // you when they have" is worth a line. See NotifyHint.
+  // you when they have" is worth a line. See WhileYouWait.
   return (
     <Stack gap="md">
       <Card withBorder>
@@ -1018,7 +1018,7 @@ function Waiting({
           </Group>
         </Stack>
       </Card>
-      <NotifyHint stage="results" />
+      <WhileYouWait stage="results" />
     </Stack>
   )
 }

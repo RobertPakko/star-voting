@@ -2,7 +2,16 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Anchor, Stack, Switch, Text } from '@mantine/core'
 import { supabase } from '../lib/supabase'
-import { enableAccountPush, PushRefused, pushState, rememberAccountPush } from '../lib/push'
+import {
+  disableLinkPush,
+  enableAccountPush,
+  enableLinkPush,
+  PushRefused,
+  pushState,
+  rememberAccountPush,
+  usePushHere,
+  type PushState,
+} from '../lib/push'
 import type { NotificationSettings } from '../lib/notificationSettings'
 
 /**
@@ -28,8 +37,8 @@ import type { NotificationSettings } from '../lib/notificationSettings'
  * gets none, so the menu stays two lines for everybody it works for.
  *
  * Drawn by NotificationSwitches, which is the one place an account turns
- * notifications on; a reader holding a link turns them on per poll instead,
- * with WatchPoll.
+ * notifications on. A reader holding a link gets LinkPushSwitch below, in the
+ * same menu.
  */
 export function PushSwitch({
   userId,
@@ -46,26 +55,7 @@ export function PushSwitch({
   // prompt is answered, which is inside the press below.
   const state = pushState()
   const capable = state === 'ask' || state === 'granted'
-
-  const guide = (
-    <>
-      {' '}
-      <Anchor component={Link} to="/app" inherit>
-        See how
-      </Anchor>
-    </>
-  )
-
-  const reason =
-    state === 'unconfigured' ? (
-      'Not available on this site yet.'
-    ) : state === 'needs-install' ? (
-      <>On iPhone and iPad, install the app first.{guide}</>
-    ) : state === 'unsupported' ? (
-      <>This browser can&rsquo;t receive notifications.{guide}</>
-    ) : state === 'denied' ? (
-      <>Blocked in this browser&rsquo;s settings.{guide}</>
-    ) : undefined
+  const reason = reasonFor(state)
 
   async function toggle(on: boolean) {
     setBusy(true)
@@ -110,4 +100,82 @@ export function PushSwitch({
       )}
     </Stack>
   )
+}
+
+/**
+ * Push for a reader with no account: the gear menu's one switch when nobody
+ * is signed in. There is no account to keep a setting on and no email to
+ * send, so this is the whole menu, and it answers for this browser only.
+ *
+ * On means every open poll answered here from now on is watched — the
+ * browser hears when it opens for voting and when its results are ready — and
+ * so is one already answered, the next time its page is open (OpenPollPanel
+ * files it). Off takes all of those watches back. What a watch carries is
+ * what Notify me's always did: an endpoint, and nothing saying who asked.
+ *
+ * Disabled with a reason, in the same words and for the same states as the
+ * account's switch above.
+ */
+export function LinkPushSwitch() {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const on = usePushHere(undefined)
+  const state = pushState()
+  const capable = state === 'ask' || state === 'granted'
+
+  async function toggle(next: boolean) {
+    setBusy(true)
+    setError(null)
+    try {
+      if (next) await enableLinkPush()
+      else await disableLinkPush()
+    } catch (caught) {
+      setError(
+        caught instanceof PushRefused || caught instanceof Error
+          ? caught.message
+          : 'Something went wrong.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Stack gap={4}>
+      <Switch
+        label="Push notifications"
+        description={reasonFor(state)}
+        checked={capable && on}
+        disabled={!capable || busy}
+        onChange={(event) => toggle(event.currentTarget.checked)}
+      />
+      {error && (
+        <Text size="sm" c="red">
+          {error}
+        </Text>
+      )}
+    </Stack>
+  )
+}
+
+/** Why a push switch cannot be turned on here, or nothing when it can. */
+function reasonFor(state: PushState) {
+  const guide = (
+    <>
+      {' '}
+      <Anchor component={Link} to="/app" inherit>
+        See how
+      </Anchor>
+    </>
+  )
+
+  return state === 'unconfigured' ? (
+    'Not available on this site yet.'
+  ) : state === 'needs-install' ? (
+    <>On iPhone and iPad, install the app first.{guide}</>
+  ) : state === 'unsupported' ? (
+    <>This browser can&rsquo;t receive notifications.{guide}</>
+  ) : state === 'denied' ? (
+    <>Blocked in this browser&rsquo;s settings.{guide}</>
+  ) : undefined
 }

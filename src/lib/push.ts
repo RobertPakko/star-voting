@@ -246,10 +246,11 @@ export function accountPushHere(userId: string): boolean {
 }
 
 /**
- * Everything drawn from the two mirrors above, told when either moves — so the
- * line under a poll that says where the push switch is goes away the moment
- * that switch is turned on, rather than on the next page load. A counter
- * rather than the answer, because the answer is per account and this is not.
+ * Everything drawn from the mirrors of the push switches, told when one moves
+ * — so the banner under a poll that says where the push switch is goes away
+ * the moment that switch is turned on, rather than on the next page load. A
+ * counter rather than the answer, because the answer is per account and this
+ * is not. See usePushHere.
  */
 let accountPushVersion = 0
 const accountPushListeners = new Set<() => void>()
@@ -264,16 +265,6 @@ function subscribeAccountPush(notify: () => void) {
   return () => {
     accountPushListeners.delete(notify)
   }
-}
-
-/** `accountPushHere`, kept current as the switches in the gear menu move. */
-export function useAccountPushHere(userId: string | undefined): boolean {
-  useSyncExternalStore(
-    subscribeAccountPush,
-    () => accountPushVersion,
-    () => 0,
-  )
-  return !!userId && accountPushHere(userId)
 }
 
 /** Turns notifications on for the signed-in account, on this device. */
@@ -347,36 +338,44 @@ export async function forgetAccountPush(): Promise<void> {
 /**
  * The polls this browser has asked to hear about, by the key the page knows
  * the poll by — its group, so that every question of a poll shows the same
- * answer. Only ever a mirror of the database, kept so a button can say which
- * way round it is without a request; the watch itself is what the database
+ * answer — each with the question the watch was filed through, which is what
+ * `open_poll_unwatch` needs to take it back (a group's id is not a poll's).
+ * Only ever a mirror of the database, kept so the page knows which polls are
+ * already watched without a request; the watch itself is what the database
  * holds, and it is deleted there when the results go out.
  */
 const WATCHED_KEY = 'star-voting:watched-polls'
 
-const NONE: ReadonlySet<string> = new Set()
+const NONE: ReadonlyMap<string, string | null> = new Map()
 let watched = readWatched()
 const watchers = new Set<() => void>()
 
-function readWatched(): ReadonlySet<string> {
+function readWatched(): ReadonlyMap<string, string | null> {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(WATCHED_KEY) ?? '[]')
-    if (!Array.isArray(parsed)) return NONE
-    const keys = parsed.filter((key): key is string => typeof key === 'string')
-    return keys.length > 0 ? new Set(keys) : NONE
+    const parsed: unknown = JSON.parse(localStorage.getItem(WATCHED_KEY) ?? '{}')
+    // An array is the mirror as an earlier build wrote it: keys and no poll
+    // ids. Those watches are still honoured; they just cannot be taken back
+    // from here, and go when their poll finishes like every other.
+    const entries: [string, string | null][] = Array.isArray(parsed)
+      ? parsed.filter((key): key is string => typeof key === 'string').map((key) => [key, null])
+      : parsed && typeof parsed === 'object'
+        ? Object.entries(parsed).map(([key, id]) => [key, typeof id === 'string' ? id : null])
+        : []
+    return entries.length > 0 ? new Map(entries) : NONE
   } catch {
     return NONE
   }
 }
 
-function setWatched(key: string, on: boolean) {
+function setWatched(key: string, pollId: string | null, on: boolean) {
   if (watched.has(key) === on) return
-  const next = new Set(watched)
-  if (on) next.add(key)
+  const next = new Map(watched)
+  if (on) next.set(key, pollId)
   else next.delete(key)
   watched = next.size > 0 ? next : NONE
   try {
     if (watched.size === 0) localStorage.removeItem(WATCHED_KEY)
-    else localStorage.setItem(WATCHED_KEY, JSON.stringify([...watched]))
+    else localStorage.setItem(WATCHED_KEY, JSON.stringify(Object.fromEntries(watched)))
   } catch {
     // Kept for this tab; see readAccount.
   }
@@ -392,45 +391,113 @@ function subscribeWatched(notify: () => void) {
 
 /** Whether this browser is watching the poll known by `key`, live. */
 export function useWatching(key: string): boolean {
-  const set = useSyncExternalStore(
+  const map = useSyncExternalStore(
     subscribeWatched,
     () => watched,
     () => NONE,
   )
-  return set.has(key)
+  return map.has(key)
 }
 
-/** Asks to hear when this open poll opens for voting and when it finishes. */
+/**
+ * Files a watch on this open poll: this browser hears when it opens for
+ * voting and when it finishes. Asks for nothing — it is only called once
+ * the reader has turned push on, so permission is already there.
+ */
 export async function watchPoll(pollId: string, key: string): Promise<void> {
-  const subscription = await subscribe()
+  const subscription = await currentSubscription()
+  if (!subscription) throw new Error('This browser has no push subscription.')
   const { error } = await supabase.rpc('open_poll_watch', {
     p_poll_id: pollId,
     ...keysOf(subscription),
   })
   if (error) throw new Error(error.message)
-  setWatched(key, true)
-}
-
-/** Takes that back. */
-export async function unwatchPoll(pollId: string, key: string): Promise<void> {
-  const subscription = await currentSubscription()
-  if (subscription) {
-    const { error } = await supabase.rpc('open_poll_unwatch', {
-      p_poll_id: pollId,
-      p_endpoint: subscription.endpoint,
-    })
-    if (error) throw new Error(error.message)
-  }
-  setWatched(key, false)
+  setWatched(key, pollId, true)
 }
 
 /**
  * Drops the mirror once a poll has nothing left to announce — the database
  * deleted the watch when it sent the results, and a reopened poll would
- * otherwise say "you will be notified" about a watch that no longer exists.
+ * otherwise be taken for one still watched and never watched again.
  */
 export function forgetWatch(key: string): void {
-  setWatched(key, false)
+  setWatched(key, null, false)
+}
+
+// ---------------------------------------------------------------------------
+// Push without an account
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether this browser, with nobody signed in, wants to hear about the open
+ * polls it answers. The gear menu's one switch for a reader holding a link;
+ * see LinkPushSwitch. It is a fact about the browser and lives only in it,
+ * since there is no account to keep it on, and what it does is file a watch
+ * on each open poll answered here (see OpenPollPanel) — the same watch, with
+ * nothing on it saying who asked, that Notify me used to file one press at a
+ * time.
+ */
+const LINK_PUSH_KEY = 'star-voting:push-link-polls'
+
+function linkPushOn(): boolean {
+  try {
+    return localStorage.getItem(LINK_PUSH_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeLinkPush(on: boolean) {
+  try {
+    if (on) localStorage.setItem(LINK_PUSH_KEY, '1')
+    else localStorage.removeItem(LINK_PUSH_KEY)
+  } catch {
+    // On for this tab only; the next page load asks again.
+  }
+  accountPushChanged()
+}
+
+/** Turns push on for a reader with no account: permission, then the flag. */
+export async function enableLinkPush(): Promise<void> {
+  await subscribe()
+  writeLinkPush(true)
+}
+
+/**
+ * Turns it off, and takes back every watch this browser filed — a switch that
+ * says off while polls go on buzzing would be a switch nobody could trust.
+ * Best-effort per poll: one that has closed or been deleted has no watch left
+ * to take back.
+ */
+export async function disableLinkPush(): Promise<void> {
+  writeLinkPush(false)
+  const subscription = await currentSubscription()
+  await Promise.all(
+    [...watched].map(async ([key, pollId]) => {
+      if (subscription && pollId) {
+        await supabase.rpc('open_poll_unwatch', {
+          p_poll_id: pollId,
+          p_endpoint: subscription.endpoint,
+        })
+      }
+      setWatched(key, null, false)
+    }),
+  )
+}
+
+/**
+ * Whether this device will be pushed to about the reader's polls: through the
+ * account when there is one, through the link switch when there is not. Live,
+ * so a banner telling the reader where the switch is goes away the moment
+ * they turn it on.
+ */
+export function usePushHere(userId: string | undefined): boolean {
+  useSyncExternalStore(
+    subscribeAccountPush,
+    () => accountPushVersion,
+    () => 0,
+  )
+  return userId ? accountPushHere(userId) : pushState() === 'granted' && linkPushOn()
 }
 
 // ---------------------------------------------------------------------------
