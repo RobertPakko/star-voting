@@ -24,7 +24,7 @@ import { OpenPollPanel } from '../components/OpenPollPanel'
 import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
-import { AppBanner } from '../components/AppBanner'
+import { NotifyHint } from '../components/WatchPoll'
 import { RetentionNote } from '../components/RetentionNote'
 import { Ballots, Results, TimeBallotCard, YourBallot } from '../components/deferred'
 import {
@@ -776,16 +776,22 @@ export function PollDetail({
           ) : status.soliciting ? (
             /* No ballot yet: the poll is a list everyone in it can add to, and
            the creator decides when it becomes a ballot. */
-            <CollectOptions
-              source={{ kind: 'poll', pollId: poll.id }}
-              options={options}
-              schedule={poll.kind === 'time' ? poll.schedule : null}
-              isCreator={isCreator}
-              questionStrip={questionStrip}
-              confirm={confirmation}
-              onChanged={reloadAll}
-              onConfirmed={advance}
-            />
+            <>
+              <CollectOptions
+                source={{ kind: 'poll', pollId: poll.id }}
+                options={options}
+                schedule={poll.kind === 'time' ? poll.schedule : null}
+                isCreator={isCreator}
+                questionStrip={questionStrip}
+                confirm={confirmation}
+                onChanged={reloadAll}
+                onConfirmed={advance}
+              />
+              {/* Once this reader has said they are done, the next thing that
+                  happens is voting opening, whenever the rest have — the same
+                  moment an open poll's Notify me offers to tell them about. */}
+              {confirmation?.confirmed && <NotifyHint stage="opening" />}
+            </>
           ) : status.results_available ? (
             /* The strip sits above the tally rather than inside it, which is
                the one place in this page it is not inside a card — because
@@ -991,10 +997,10 @@ function Waiting({
     onRevise((data as Record<string, number>) ?? {})
   }
 
-  // The banner under the card rather than in it: the card is about this
-  // ballot, and the banner is about the app. It is here because this is where
-  // a voter is left waiting on everybody else, which is the moment "we can
-  // tell you when they have" is worth a line. See AppBanner.
+  // The hint under the card rather than in it: the card is about this ballot,
+  // and the hint is about the account. It is here because this is where a
+  // voter is left waiting on everybody else, which is the moment "we can tell
+  // you when they have" is worth a line. See NotifyHint.
   return (
     <Stack gap="md">
       <Card withBorder>
@@ -1020,7 +1026,7 @@ function Waiting({
           </Group>
         </Stack>
       </Card>
-      <AppBanner />
+      <NotifyHint stage="results" />
     </Stack>
   )
 }

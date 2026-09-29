@@ -142,6 +142,11 @@ begin
     push_message(v_row, 'invite_options') ->> 'body',
     'You''ve been invited to add options to this poll.');
 
+  -- Every email says where to turn them off.
+  perform tests.assert_eq('every email links to the notification settings',
+    poll_email_html('Heading', 'Body', 'https://example.com/poll')
+      like '%https://choicelab.app/star-voting/#/settings%', true);
+
   -- ---------------------------------------------------------------------
   -- Watching an open poll through its link: no account, and one-shot.
   -- ---------------------------------------------------------------------
@@ -188,14 +193,67 @@ begin
     array(select endpoint from poll_push_watches where poll_id = v_open),
     array[c_anon]);
 
+  -- ---------------------------------------------------------------------
+  -- Following an open poll: a signed-in voter's account joins its audience.
+  -- ---------------------------------------------------------------------
+  perform open_poll_follow(v_group[2]);
+  perform tests.assert_eq('nobody signed in follows nothing',
+    (select count(*)::int from poll_follows where poll_id = v_open), 0);
+
+  perform tests.sign_in('creator@example.com');
+  perform open_poll_follow(v_open);
+  perform tests.assert_eq('the creator does not follow their own poll',
+    (select count(*)::int from poll_follows where poll_id = v_open), 0);
+
+  perform tests.sign_in('voter1@example.com');
+  perform open_poll_follow(v_poll);
+  perform tests.assert_eq('an invite poll cannot be followed',
+    (select count(*)::int from poll_follows where poll_id = v_poll), 0);
+
+  -- From the second question, and twice: one follow, on the first.
+  perform open_poll_follow(v_group[2]);
+  perform open_poll_follow(v_group[2]);
+  perform tests.assert_eq('a follow is filed against the group''s first question, once',
+    array(select user_id from poll_follows where poll_id = v_open), array[v_voter1]);
+
+  select * into v_row from polls where id = v_open;
+  perform tests.assert_eq('a follower is in the poll''s audience',
+    array(select * from poll_email_audience(v_row, false, null)),
+    array['voter1@example.com']);
+  perform tests.assert_eq('but not when it was their own doing',
+    array(select * from poll_email_audience(v_row, false, 'voter1@example.com')),
+    array[]::text[]);
+
+  -- voter1's phone went earlier; bind a device so there is something to push.
+  perform save_push_subscription(c_fcm, c_key, c_auth);
+  perform tests.assert_eq('so their devices are pushed to, beside the watchers',
+    array(select endpoint from poll_push_targets(v_row,
+      array(select * from poll_email_audience(v_row, false, null)), true, null)),
+    array[c_anon, c_fcm]);
+
+  perform set_notification_settings(true, false);
+  perform tests.assert_eq('unless their account has turned push off',
+    array(select endpoint from poll_push_targets(v_row,
+      array(select * from poll_email_audience(v_row, false, null)), true, null)),
+    array[c_anon]);
+  perform set_notification_settings(true, true);
+
   -- A ballot, and then the creator's Close: the results are announced, and
-  -- the watch has done its job.
+  -- the watch and the follow have done their job.
+  update auth._session set user_id = null, email = null where id;
   perform open_poll_submit(v_open, tests.open_scores(v_open, array[5, 2]), 'voter-key-1', 'Sam');
   perform tests.sign_in('creator@example.com');
   perform close_poll(v_open);
 
   perform tests.assert_eq('once the results are announced the watches are gone',
     (select count(*)::int from poll_push_watches where poll_id = v_open), 0);
+  perform tests.assert_eq('and so are the follows',
+    (select count(*)::int from poll_follows where poll_id = v_open), 0);
+
+  perform tests.sign_in('voter1@example.com');
+  perform open_poll_follow(v_open);
+  perform tests.assert_eq('and a closed poll takes no new follow',
+    (select count(*)::int from poll_follows where poll_id = v_open), 0);
 
   update auth._session set user_id = null, email = null where id;
   perform tests.assert_raises('and a closed poll takes no new ones',
@@ -249,6 +307,12 @@ begin
     has_table_privilege('authenticated', 'public.push_subscriptions', 'select'), false);
   perform tests.assert_eq('nor the watches',
     has_table_privilege('anon', 'public.poll_push_watches', 'select'), false);
+  perform tests.assert_eq('an account can follow an open poll',
+    has_function_privilege('authenticated', 'public.open_poll_follow(uuid)', 'execute'), true);
+  perform tests.assert_eq('but a link alone cannot',
+    has_function_privilege('anon', 'public.open_poll_follow(uuid)', 'execute'), false);
+  perform tests.assert_eq('nor the follows',
+    has_table_privilege('authenticated', 'public.poll_follows', 'select'), false);
   perform tests.assert_eq('nor anybody''s settings',
     has_table_privilege('authenticated', 'public.notification_settings', 'select'), false);
   perform tests.assert_eq('and the targets are internal',
