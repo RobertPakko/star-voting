@@ -13,11 +13,8 @@ import {
   Title,
 } from '@mantine/core'
 import { CheckIcon, DownloadSimpleIcon } from '@phosphor-icons/react'
-import { useAuth } from '../lib/auth'
 import { useInstallPrompt } from '../lib/installPrompt'
-import { useNotificationSettings } from '../lib/notificationSettings'
-import { devicePlatform, isInstalledApp, pushState, type DevicePlatform } from '../lib/push'
-import { PushSwitch } from '../components/PushSwitch'
+import { devicePlatform, isInstalledApp, type DevicePlatform } from '../lib/push'
 
 /**
  * The /app route: how to install this site as an app, and how to get
@@ -40,7 +37,6 @@ import { PushSwitch } from '../components/PushSwitch'
  * link and has no account, and watching an open poll needs none.
  */
 export function InstallGuide() {
-  const { session } = useAuth()
   const [platform, setPlatform] = useState<DevicePlatform>(devicePlatform)
 
   return (
@@ -53,7 +49,7 @@ export function InstallGuide() {
         voting opens, and when the results are ready.
       </Text>
 
-      <ThisDevice signedIn={!!session} userId={session?.user.id ?? null} />
+      <ThisDevice />
 
       <SegmentedControl
         fullWidth
@@ -81,10 +77,10 @@ export function InstallGuide() {
               Sign in, then turn notifications on for each device you want them on — from{' '}
               <Anchor component={Link} to="/settings" inherit>
                 Settings
-              </Anchor>{' '}
-              or from the top of this page. You&rsquo;ll hear when you&rsquo;re invited, when voting
-              opens, and when the results are ready. Settings is also where you choose whether these
-              come by email, as notifications, both, or neither.
+              </Anchor>
+              . You&rsquo;ll hear when you&rsquo;re invited, when voting opens, and when the results
+              are ready. Settings is also where you choose whether these come by email, as
+              notifications, both, or neither.
             </Text>
           </Stack>
         </Card>
@@ -104,55 +100,29 @@ export function InstallGuide() {
 }
 
 /**
- * Where the device in the reader's hand stands: installed or not, and
- * notifications on or not — with the button that turns them on, for a reader
- * who has come here to do exactly that.
+ * Whether the reader is already in the installed app, which is the one thing
+ * about this device the guide can tell them and the one thing they might not
+ * know. Turning notifications on is not here: it lives in Settings for an
+ * account and on the poll itself for a link, and a third place to do it was a
+ * third copy of the same control.
  */
-function ThisDevice({ signedIn, userId }: { signedIn: boolean; userId: string | null }) {
+function ThisDevice() {
   const installed = isInstalledApp()
-  const { settings, setSettings } = useNotificationSettings(userId)
-  const state = pushState()
 
   return (
     <Card withBorder>
-      <Stack gap="sm">
-        <Title order={4}>This device</Title>
-        <Group gap="xs" wrap="nowrap" align="flex-start">
-          {installed && (
-            <ThemeIcon size={20} radius="xl" color="green" variant="light">
-              <CheckIcon size={12} weight="bold" aria-hidden />
-            </ThemeIcon>
-          )}
-          <Text size="sm" c={installed ? undefined : 'dimmed'}>
-            {installed
-              ? 'You’re using the installed app.'
-              : 'You’re using STAR Voting in a browser. The steps below install it.'}
-          </Text>
-        </Group>
-
-        {signedIn && userId ? (
-          <PushSwitch
-            userId={userId}
-            settings={settings}
-            onChange={setSettings}
-            guideLink={false}
-          />
-        ) : (
-          <Text size="sm" c="dimmed">
-            {state === 'needs-install'
-              ? 'Notifications on an iPhone or iPad need the app installed first. '
-              : state === 'denied'
-                ? 'Notifications are blocked for this site in this browser; the steps below say how to allow them. '
-                : ''}
-            To hear about polls you&rsquo;re invited to,{' '}
-            <Anchor component={Link} to="/" inherit>
-              sign in
-            </Anchor>{' '}
-            and turn notifications on here. For a poll you opened from a link, press{' '}
-            <em>Notify me</em> on the poll after you vote.
-          </Text>
+      <Group gap="xs" wrap="nowrap" align="flex-start">
+        {installed && (
+          <ThemeIcon size={20} radius="xl" color="green" variant="light">
+            <CheckIcon size={12} weight="bold" aria-hidden />
+          </ThemeIcon>
         )}
-      </Stack>
+        <Text size="sm" c={installed ? undefined : 'dimmed'}>
+          {installed
+            ? 'You’re using the installed app.'
+            : 'You’re using STAR Voting in a browser. The steps below install it.'}
+        </Text>
+      </Group>
     </Card>
   )
 }

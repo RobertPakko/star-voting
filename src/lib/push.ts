@@ -369,25 +369,97 @@ export function forgetWatch(key: string): void {
 // Arriving from a notification
 // ---------------------------------------------------------------------------
 
+/** The note a tapped notification leaves behind; see `rememberOpen` in public/sw.js. */
+const OPEN_CACHE = 'star-voting-open'
+/** Older than this, a note is a tap nobody's app picked up, not one to act on now. */
+const OPEN_FRESH_MS = 2 * 60_000
+
 /**
- * Routes the app when a notification is tapped while it is already open.
+ * Takes the destination a tapped notification left, if there is a fresh one,
+ * and deletes it so it is acted on once.
  *
- * The service worker focuses the open window and posts it the poll's hash
- * rather than navigating it, so the app moves the way it moves for any link —
- * no reload, nothing lost. See `notificationclick` in public/sw.js.
+ * `caches.has` first, because `caches.open` would create the cache — an empty
+ * one in every browser that ever loaded the app, for a note most never get.
+ */
+async function takeNotificationPath(): Promise<string | null> {
+  if (typeof caches === 'undefined') return null
+  try {
+    if (!(await caches.has(OPEN_CACHE))) return null
+    const cache = await caches.open(OPEN_CACHE)
+    const key = new URL('__notification-open', new URL(import.meta.env.BASE_URL, location.origin))
+      .href
+    const response = await cache.match(key)
+    if (!response) return null
+    await cache.delete(key)
+    const note = (await response.json()) as { path?: unknown; at?: unknown }
+    if (typeof note.path !== 'string' || !note.path.startsWith('#/')) return null
+    if (typeof note.at !== 'number' || Date.now() - note.at > OPEN_FRESH_MS) return null
+    return note.path
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Takes the app to the poll a tapped notification is about.
+ *
+ * Three ways in, because each of the ways a tap can arrive fails somewhere:
+ *
+ * - **A message**, when the app was already open: the service worker focuses
+ *   the window and posts it the poll's hash, and the app moves the way it moves
+ *   for any link — no reload, nothing lost.
+ * - **On starting**, for an app the tap launched. The worker opens the poll's
+ *   own address, but an iPhone launching the installed app from a
+ *   notification opens its start page instead, so the note the worker left is
+ *   read here.
+ * - **On coming back to the foreground**, for an app that was suspended and
+ *   resumed without the message ever arriving.
+ *
+ * The note is deleted whichever way it is acted on, so the same tap cannot
+ * move the reader twice. See `notificationclick` in public/sw.js.
  */
 export function useNotificationRoutes(): void {
   const navigate = useNavigate()
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return
+    let alive = true
+
+    function go(path: string) {
+      // Already there — the launch that honoured the poll's address — needs no
+      // second entry in the history for the back button to walk through.
+      if (alive && window.location.hash !== path) navigate(path.slice(1))
+    }
+
+    async function check() {
+      const path = await takeNotificationPath()
+      if (path) go(path)
+    }
+
     function onMessage(event: MessageEvent) {
       const data = event.data as { type?: unknown; path?: unknown } | null
       if (data?.type !== 'open-path' || typeof data.path !== 'string') return
       if (!data.path.startsWith('#/')) return
-      navigate(data.path.slice(1))
+      // Taken as well, or coming back to the foreground a minute later would
+      // act on the same tap a second time.
+      void takeNotificationPath()
+      go(data.path)
     }
-    navigator.serviceWorker.addEventListener('message', onMessage)
-    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+
+    function onVisible() {
+      if (document.visibilityState === 'visible') void check()
+    }
+
+    void check()
+    document.addEventListener('visibilitychange', onVisible)
+    navigator.serviceWorker?.addEventListener('message', onMessage)
+    // Messages from a worker wait in a queue until the page says it is
+    // listening; saying so here rather than relying on the page having
+    // finished loading is what makes one sent at launch arrive.
+    navigator.serviceWorker?.startMessages()
+    return () => {
+      alive = false
+      document.removeEventListener('visibilitychange', onVisible)
+      navigator.serviceWorker?.removeEventListener('message', onMessage)
+    }
   }, [navigate])
 }
 

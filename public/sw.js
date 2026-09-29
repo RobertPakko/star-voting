@@ -20,7 +20,7 @@
  * old, and activate throws them away.
  */
 
-const VERSION = 'v2'
+const VERSION = 'v3'
 const CACHE = `star-voting-${VERSION}`
 
 // This file is served from the app's own directory, so its own URL is the
@@ -58,7 +58,11 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))),
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE && key !== OPEN_CACHE)
+            .map((key) => caches.delete(key)),
+        ),
       )
       .then(() => self.clients.claim()),
   )
@@ -200,13 +204,47 @@ self.addEventListener('push', (event) => {
 })
 
 /**
+ * Where a tapped notification was asking to go, left where the app can find
+ * it: a cache of its own (kept out of the version sweep in `activate`), under
+ * one fixed key, read and deleted by `useNotificationRoutes` in
+ * src/lib/push.ts.
+ *
+ * It exists because neither way of telling the app directly is reliable.
+ * `openWindow(url)` is supposed to open the poll's address, and an iPhone
+ * launching the installed app from a notification opens its start page
+ * instead. A window found by `matchAll` is supposed to take a `postMessage`,
+ * and a suspended one can resume without it. Both are still tried; this is
+ * what the app falls back on when it starts or comes back to the foreground,
+ * so the tap lands on the poll however it was delivered. It is stamped, and
+ * the app ignores one more than a couple of minutes old, so a note nobody
+ * picked up cannot move somebody days later.
+ */
+const OPEN_CACHE = 'star-voting-open'
+const OPEN_KEY = new URL('__notification-open', SCOPE).href
+
+async function rememberOpen(path) {
+  try {
+    const cache = await caches.open(OPEN_CACHE)
+    await cache.put(
+      OPEN_KEY,
+      new Response(JSON.stringify({ path, at: Date.now() }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  } catch {
+    // Storage refused: the message and the address are still tried below.
+  }
+}
+
+/**
  * A tap on a notification opens its poll.
  *
  * In the app window that is already open, when there is one, rather than a
  * second copy of it: that window is told where to go and routes there itself,
- * so nothing reloads and nothing it was holding is lost. See
- * `useNotificationRoutes` in src/lib/push.ts for the other end. With no window
- * open, one is opened on the poll's address.
+ * so nothing reloads and nothing it was holding is lost. With no window open,
+ * one is opened on the poll's address. Either way the destination is written
+ * down first (`rememberOpen`), because either way can arrive at the wrong
+ * page; see above.
  */
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
@@ -214,10 +252,19 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     (async () => {
+      // First, so the note is there before any window could look for it. A
+      // cache write is a few milliseconds, well inside the time a click
+      // leaves for opening a window.
+      if (path) await rememberOpen(path)
+
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       const open = windows.find((client) => client.url.startsWith(SCOPE.href))
       if (open) {
-        await open.focus()
+        try {
+          await open.focus()
+        } catch {
+          // Not allowed to take focus; the note is waiting for when it does.
+        }
         if (path) open.postMessage({ type: 'open-path', path })
         return
       }

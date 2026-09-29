@@ -2385,8 +2385,8 @@ whoever is using it, and it reaches the database one of two ways:
 
 - **Bound to an account** (`push_subscriptions`, through
   `save_push_subscription`) — by turning on the push switch in **Settings**,
-  or the same switch on the install guide. It hears every poll that account
-  is in, for as long as the account wants push.
+  which is the one place an account does it. It hears every poll that
+  account is in, for as long as the account wants push.
   An endpoint belongs to one account at a time, and **signing out forgets it**
   (`forgetAccountPush`, before the session goes): a shared browser left bound
   is the next person's phone buzzing with the last person's polls.
@@ -2457,10 +2457,24 @@ a second notification about the same poll replaces the first, and tapping it
 opens the poll: in the app window that is already open where there is one,
 routed without a reload (`useNotificationRoutes`), otherwise in a new one.
 
+**The tap leaves a note, because neither way of saying where to go is
+reliable on its own.** An iPhone launching the installed app from a
+notification opens the start page whatever address `openWindow` asked for,
+and a window found asleep in the background can resume without the message
+it was posted. So `notificationclick` first writes the poll's hash into a
+cache of its own (`star-voting-open`, spared by the version sweep), and the
+app reads and deletes it when it starts and whenever it comes back to the
+foreground, as well as acting on the message. The note is stamped and ignored
+after two minutes, so a tap nobody's app picked up cannot move somebody days
+later, and it is deleted whichever way it is acted on, so one tap moves the
+reader once.
+
 **Asking is always a press.** A permission prompt nobody asked for is ignored
 or blocked, and Safari will not show one at all, so nothing in the app asks on
-its own. The places that can ask are Settings, the install guide, and Notify
-me; everywhere else the app only *says* it can notify — `AppBanner`, on the
+its own. The places that can ask are Settings, for an account, and Notify me,
+for a poll answered through a link — the install guide used to carry the
+Settings switch as well, and a third copy of one control was one too many;
+everywhere else the app only *says* it can notify — `AppBanner`, on the
 poll list, on the sign-in screen that is the front door for anybody signed
 out, and under the invite poll's *your vote is in*, closed for good with its
 ×. It says nothing where there is nothing to do: no key in the build, no
@@ -2469,11 +2483,13 @@ push in the browser, a reader who already said no or already said yes.
 **iPhone and iPad need the app installed first.** Safari gives the push APIs
 only to a site added to the Home Screen and opened from there, so in a Safari
 tab `pushState` is `needs-install`, Notify me becomes the banner, and the
-banner's link is the guide. The installed app also keeps its own storage, so
-a signed-in reader signs in again inside it — with a code, since a sign-in
-link opens Safari rather than the app; the guide says both. That guide is [`InstallGuide`](src/pages/InstallGuide.tsx)
-at `#/app`: public, opened on the reader's own kind of device with the other
-two beside it, and linked from the About page's list of features.
+banner's link is the guide — which says how to install and where to turn
+notifications on afterwards, but does not do it. The installed app also keeps
+its own storage, so a signed-in reader signs in again inside it — with a code,
+since a sign-in link opens Safari rather than the app; the guide says both.
+That guide is [`InstallGuide`](src/pages/InstallGuide.tsx) at `#/app`: public,
+opened on the reader's own kind of device with the other two beside it, and
+linked from the About page's list of features.
 
 What it does not do:
 

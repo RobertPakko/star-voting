@@ -24,20 +24,18 @@ import type { NotificationSettings } from '../lib/notificationSettings'
  * installed app, a browser that said no, a browser with no push — the switch
  * is off and disabled, and the line under it says what to do instead.
  *
- * Drawn on the settings page and at the top of the install guide, which are
- * the two places anybody goes to turn notifications on.
+ * Drawn on the settings page, which is the one place an account turns
+ * notifications on; a reader holding a link turns them on per poll instead,
+ * with WatchPoll.
  */
 export function PushSwitch({
   userId,
   settings,
   onChange,
-  guideLink = true,
 }: {
   userId: string
   settings: NotificationSettings | null
   onChange: (next: NotificationSettings) => void
-  /** Whether to point at the install guide, which is pointless on the guide. */
-  guideLink?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,7 +44,7 @@ export function PushSwitch({
   const state = pushState()
   const capable = state === 'ask' || state === 'granted'
 
-  const guide = guideLink ? (
+  const guide = (
     <>
       {' '}
       <Anchor component={Link} to="/app" inherit>
@@ -54,7 +52,7 @@ export function PushSwitch({
       </Anchor>
       .
     </>
-  ) : null
+  )
 
   const description =
     state === 'unconfigured' ? (
