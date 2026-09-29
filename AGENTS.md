@@ -220,7 +220,7 @@ The senders themselves are in
 `0043_the_emails_a_poll_sends.sql`,
 which is also where the letterhead they share was first written down (its
 footer, with the link to the notification settings, is
-[`0074_settings_link_and_open_poll_follows.sql`](supabase/migrations/0074_settings_link_and_open_poll_follows.sql));
+[`0073_settings_link_and_open_poll_follows.sql`](supabase/migrations/0073_settings_link_and_open_poll_follows.sql));
 the triggers
 that call them are in the squashed baseline under
 [`supabase/migrations/`](supabase/migrations). Who hears which of them, and
@@ -481,7 +481,7 @@ Not once per file — once. The integration records the number in front of a
 migration's name, and a number in `supabase_migrations.schema_migrations` is a
 number that will never be applied again, whatever file is wearing it now.
 
-**A migration replaced before it ships does not give its number back.**
+**A migration replaced after it ships does not give its number back.**
 `0056_schedule_day_windows.sql` reached `main`, was applied, and put `0056` in
 that table. The next commit deleted it and added `0056_schedule_options.sql` —
 a different migration at the same number — which the integration skipped as
@@ -498,9 +498,23 @@ a database that disagreed with all three. What surfaced it was a person trying
 to make a poll: `suggest_options` did not exist on the live project, and
 `create_poll` still carried the refusal that migration lifted.
 
-So: **renumber, even when the file you are replacing has never left your
-branch** — you cannot know it has not been applied, and the cost of a spare
-number is nothing. When a remote does fall behind, the fix is a *new* migration
+So: **a number is spent the moment it reaches `main`**, because that is the
+moment the integration applies it — and from then on, renumber rather than
+replace, even if you believe the run failed; the table is the only authority
+on whether it happened, and the cost of a spare number is nothing. **Before
+then it is still yours.** The live project only ever applies what lands on
+`main`, so a migration that exists only on a feature branch can be rewritten,
+renamed or dropped and its number reused by whatever replaces it — `0073` was
+drafted as one migration, rewritten as another and renumbered, and went back
+to `0073` before it merged, which cost nothing. (Supabase *preview* branches,
+where enabled, apply a pull request's migrations to a throwaway database of
+their own; that is not the live project's history and is discarded with the
+branch.) What makes 0056 the cautionary tale is that its first file had
+already merged. If you are not sure whether a number has reached `main`,
+`git log origin/main -- supabase/migrations/<file>` says, and
+`supabase migration list` says whether the remote has recorded it.
+
+When a remote does fall behind, the fix is a *new* migration
 at a fresh number that re-asserts the definitions out of the baseline;
 [`0058_schedule_options_again.sql`](supabase/migrations/0058_schedule_options_again.sql)
 is the worked example, and *Trying one out, and taking it back* above is how

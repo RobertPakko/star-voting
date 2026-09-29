@@ -37,8 +37,7 @@
 -- The letterhead, with a way out
 -- ---------------------------------------------------------------------------
 
--- Verbatim but for the footer. (0073 was this and a notice of a poll being
--- reopened, withdrawn before it merged; its number is left unused.)
+-- Verbatim but for the footer.
 create or replace function public.poll_email_html(p_heading text, p_body_html text, p_link text)
 returns text
     language sql immutable
