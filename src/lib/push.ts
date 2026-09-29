@@ -208,6 +208,16 @@ function writeAccount(userId: string | null) {
   }
 }
 
+/**
+ * Whether this device has been bound to this account and may still be pushed
+ * to — the local mirror, so answering costs no request. It does not know
+ * whether the account has since turned push off; that is a decision made on
+ * the settings page, and a reader who made it is not one to nudge back there.
+ */
+export function accountPushHere(userId: string): boolean {
+  return pushState() === 'granted' && readAccount() === userId
+}
+
 /** Turns notifications on for the signed-in account, on this device. */
 export async function enableAccountPush(userId: string): Promise<void> {
   const subscription = await subscribe()

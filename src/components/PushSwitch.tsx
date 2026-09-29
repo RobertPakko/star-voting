@@ -25,8 +25,9 @@ import type { NotificationSettings } from '../lib/notificationSettings'
  * is off and disabled, and the line under it says what to do instead.
  *
  * Drawn on the settings page, which is the one place an account turns
- * notifications on; a reader holding a link turns them on per poll instead,
- * with WatchPoll.
+ * notifications on — an invite poll's *Notify me* is a way here rather than a
+ * second copy of this (NotifyInSettings); a reader holding a link turns them
+ * on per poll instead, with WatchPoll.
  */
 export function PushSwitch({
   userId,

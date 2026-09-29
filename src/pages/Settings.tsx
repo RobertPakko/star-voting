@@ -1,4 +1,6 @@
-import { Card, Stack, Switch, Text, Title } from '@mantine/core'
+import { Link, useLocation } from 'react-router-dom'
+import { Anchor, Card, Stack, Switch, Text, Title } from '@mantine/core'
+import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -23,9 +25,16 @@ import { SettingsSkeleton } from '../components/Skeletons'
  * The switches save as they are flipped, the way a phone's settings do: there
  * is nothing else on the page to be saved alongside them, and a Save button
  * under two switches is a button people forget to press.
+ *
+ * A poll's *Notify me* lands here too (see NotifyInSettings), and says which
+ * poll it came from, so the page offers the way back to it: the reader came to
+ * flip one switch and has a poll to get back to.
  */
 export function Settings() {
   const { session } = useAuth()
+  const location = useLocation()
+  const from = (location.state as { from?: unknown } | null)?.from
+  const backTo = typeof from === 'string' && from.startsWith('/polls/') ? from : null
   const userId = session?.user.id ?? null
   const { settings, setSettings, error } = useNotificationSettings(userId)
 
@@ -55,6 +64,12 @@ export function Settings() {
   return (
     <Reveal>
       <Stack maw={720} mx="auto" gap="md">
+        {backTo && (
+          <Anchor component={Link} to={backTo} size="sm" style={{ alignSelf: 'flex-start' }}>
+            <ArrowLeftIcon size={14} aria-hidden style={{ verticalAlign: '-2px' }} /> Back to the
+            poll
+          </Anchor>
+        )}
         <Title order={2}>Settings</Title>
 
         <Card withBorder>

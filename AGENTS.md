@@ -197,7 +197,7 @@ npm run dev
 
 ### 4. Emails
 
-The app sends four, and every one of them goes through
+The app sends five, and every one of them goes through
 [Resend](https://resend.com) from inside Postgres, calling Resend's HTTP API
 directly with `pg_net`:
 
@@ -210,11 +210,17 @@ directly with `pg_net`:
   collecting, from `notify_poll_opened`;
 - **the results**, when a poll finishes, from `notify_results_ready` — see
   [Telling people the results are
-  ready](#telling-people-the-results-are-ready).
+  ready](#telling-people-the-results-are-ready);
+- **the poll has reopened**, when its creator puts a closed poll back to
+  taking votes, from `notify_poll_reopened` — see [Reopening a closed
+  poll](#reopening-a-closed-poll).
 
 The senders themselves are in
 `0043_the_emails_a_poll_sends.sql`,
-which is also where the letterhead they share is written down; the triggers
+which is also where the letterhead they share was first written down (its
+footer, with the link to the notification settings, is
+[`0073_settings_link_and_reopen_notice.sql`](supabase/migrations/0073_settings_link_and_reopen_notice.sql),
+as is the reopen letter); the triggers
 that call them are in the squashed baseline under
 [`supabase/migrations/`](supabase/migrations). Who hears which of them, and
 who is deliberately told nothing, is [What a poll writes to
@@ -248,14 +254,18 @@ never block or fail the thing that triggered them.
 
 One asymmetry is worth knowing before the key is in place: an invitation is
 sent per insert, so a poll created later still sends its invitations, while
-the other two are sent once, when the poll crosses the line — a poll that
-opened or finished before the key existed is never announced. Nothing is
-retried.
+the others are sent once, when the poll crosses the line — a poll that
+opened, finished or reopened before the key existed is never announced.
+Nothing is retried.
 
 An account can turn these off in **Settings** — `send_poll_email` asks
 `wants_email` before anything else — and the sign-in email is not one of them.
-The same three moments are also sent as push notifications; see the next step
-and [Push notifications](#push-notifications).
+Every one of them says so: the letterhead's footer links to `#/settings`,
+because the moment somebody wants that switch is the moment they are reading
+a letter they did not want. A reader who is not signed in is sent through the
+sign-in screen and brought back there, like any other link into the app.
+The same moments are also sent as push notifications; see the next step and
+[Push notifications](#push-notifications).
 
 ### 5. Push notifications
 
@@ -2363,7 +2373,10 @@ which is the reader most likely to want it.
 
 A poll tells its people about three moments — being invited, voting opening,
 the results being ready — and for a long time it could only do that by email.
-Push is the same three moments on a second channel, and it closes the one gap
+Push is the same three moments on a second channel — four, counting a poll
+being reopened, which both channels announce and the settings page does not
+mention because it is rare and about a poll the reader already hears about —
+and it closes the one gap
 email never could: **an open poll's voters gave no address**, so the only way
 they ever found out a result was to keep opening the link.
 [`0072_push_notifications.sql`](supabase/migrations/0072_push_notifications.sql)
@@ -2415,7 +2428,7 @@ Close on the phone they are watching on.
 **Settings are an account's, and say which channels.** `notification_settings`
 holds an `email` and a `push` flag, and no row means both on, so nothing
 changed for anybody who never opens the page. `send_poll_email` asks
-`wants_email` before anything else, which covers all four letters in one
+`wants_email` before anything else, which covers all five letters in one
 place; an address with no account is always emailed, since the invitation is
 the only way it could hear of the poll. The sign-in email is not a
 notification and is never affected. Watches ignore the account settings — a
@@ -2475,10 +2488,25 @@ its own. The places that can ask are Settings, for an account, and Notify me,
 for a poll answered through a link — the install guide used to carry the
 Settings switch as well, and a third copy of one control was one too many;
 everywhere else the app only *says* it can notify — `AppBanner`, on the
-poll list, on the sign-in screen that is the front door for anybody signed
-out, and under the invite poll's *your vote is in*, closed for good with its
-×. It says nothing where there is nothing to do: no key in the build, no
-push in the browser, a reader who already said no or already said yes.
+poll list and on the sign-in screen that is the front door for anybody signed
+out, closed for good with its ×. It says nothing where there is nothing to
+do: no key in the build, no push in the browser, a reader who already said no
+or already said yes.
+
+**An invite poll has a Notify me too, and it is a way to Settings rather than
+a third copy of the switch** (`NotifyInSettings`, beside `WatchPoll`). It sits
+where an open poll's does — under *your vote is in*, and under the card after
+confirming the options — because those are the two moments a reader is left
+waiting on everybody else. But there is nothing for it to file: an invite
+poll already tells everybody on its list, and what a reader who is not being
+pushed is missing is push on this device, which is one switch that belongs
+to the account. So it navigates to `#/settings`, carrying the poll's path in
+the route state so the page can offer the way back. It stands aside where
+this device is already bound to the account (`accountPushHere`, from the local
+mirror, so it costs no request), and turns into the banner where the device
+needs the app installed first. An *open* poll keeps `WatchPoll` whoever is
+signed in: an account's settings cannot reach a poll it is not invited to,
+and an open poll has no invite list.
 
 **iPhone and iPad need the app installed first.** Safari gives the push APIs
 only to a site added to the Home Screen and opened from there, so in a Safari
@@ -4041,6 +4069,17 @@ that column were written to reconcile rather than to assume.
 - `broadcast_poll_updated` wakes every page holding the poll, which re-reads
   and puts the results back under their gate.
 
+And one thing that is not a trigger, because it is an act rather than a
+reconciliation: `reopen_poll` calls `notify_poll_reopened`, which tells the
+invitees — everybody but the creator, whose button it was — by email and by
+push that the poll is taking votes again (or options, if it was closed while
+collecting them). They were told when it finished; a result that then
+disappears behind the gate with nothing said is a page that looks broken. It
+follows `poll_email_audience` and both channel settings like every other
+notice, and an open poll tells nobody: it has no invite list, and its watches
+went when it closed. Its push shares the poll's `tag`, so on a phone it
+replaces the *results are ready* it retracts.
+
 **The one state it cannot undo is full turnout.** `poll_gate_open` reveals an
 invite poll whose every invitee has voted, closed or not — see [Who can
 vote](#who-can-vote) — so clearing `closed_at` on such a poll leaves its
@@ -4855,6 +4894,10 @@ is the four letters and the two rules that decide them.
   group's audience once: opening is a single statement over every question in
   the group, and finishing is one notice row filed against the first. Nothing
   in a group announces itself per question.
+
+- **A reopened poll writes to everybody but its creator.** Only the creator
+  can reopen one, so `notify_poll_reopened` is `poll_email_audience` with the
+  creator left out, the same shape as the creator's own Open poll button.
 
 - **An open poll writes nothing at all**, and needs no special case to. It has
   no invite list, so there is nobody to invite; it never opens itself, so its

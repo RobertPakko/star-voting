@@ -141,6 +141,20 @@ begin
   perform tests.assert_eq('and to one still collecting, for options',
     push_message(v_row, 'invite_options') ->> 'body',
     'You''ve been invited to add options to this poll.');
+  perform tests.assert_eq('a reopened poll says it is taking votes again',
+    push_message(v_row, 'reopened_vote') ->> 'body',
+    'This poll has been reopened and is taking votes again.');
+  perform tests.assert_eq('or options, when it was closed while collecting them',
+    push_message(v_row, 'reopened_options') ->> 'body',
+    'This poll has been reopened and is collecting options again.');
+
+  -- Every email says where to turn them off.
+  perform tests.assert_eq('every email links to the notification settings',
+    poll_email_html('Heading', 'Body', 'https://example.com/poll')
+      like '%https://choicelab.app/star-voting/#/settings%', true);
+  perform tests.assert_eq('and the notice of a reopen is as internal as the rest',
+    has_function_privilege('authenticated', 'public.notify_poll_reopened(uuid)', 'execute'),
+    false);
 
   -- ---------------------------------------------------------------------
   -- Watching an open poll through its link: no account, and one-shot.
