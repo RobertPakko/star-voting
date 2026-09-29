@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActionIcon,
   Anchor,
   AppShell,
   Button,
   Group,
+  Modal,
   Popover,
+  Stack,
   Text,
   Title,
-  Tooltip,
 } from '@mantine/core'
 import { GearIcon, SignOutIcon } from '@phosphor-icons/react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -45,6 +46,23 @@ export function Layout() {
   // it rather than leaving it open over the page it went to.
   const [menuOpen, setMenuOpen] = useState(false)
   useEffect(() => setMenuOpen(false), [pathname])
+  // How far the menu is slid right from under the gear, so that its right edge
+  // sits on the page's own right gutter rather than on the gear's. Measured on
+  // opening, because what stands to the gear's right — the theme menu and
+  // sign-out — is the header's business and could change.
+  const controls = useRef<HTMLDivElement>(null)
+  const gear = useRef<HTMLButtonElement>(null)
+  const [menuShift, setMenuShift] = useState(0)
+  function toggleMenu() {
+    const edge = controls.current?.getBoundingClientRect().right
+    const own = gear.current?.getBoundingClientRect().right
+    if (edge !== undefined && own !== undefined) setMenuShift(Math.max(0, edge - own))
+    setMenuOpen((open) => !open)
+  }
+  // Signing out asks first. It is an icon now, and an icon a thumb can brush
+  // on the way to the theme menu is not one that should end a session on its
+  // own: on a phone, getting back in means a trip to the inbox.
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false)
 
   // Off the poll and back to the front door, rather than left standing where
   // the session used to admit them. A page that was rendering the account
@@ -52,6 +70,7 @@ export function Layout() {
   // does: the route re-reads on a live signal, not on the session changing.
   // Leaving the address is what makes signing out look like signing out.
   async function handleSignOut() {
+    setConfirmingSignOut(false)
     await signOut()
     navigate('/', { replace: true })
   }
@@ -81,7 +100,7 @@ export function Layout() {
               </Title>
             </Group>
           </Link>
-          <Group gap="sm" wrap="nowrap">
+          <Group gap="sm" wrap="nowrap" ref={controls}>
             {session && (
               <Text size="sm" c="dimmed" visibleFrom="sm" truncate maw={240}>
                 {session.user.email}
@@ -104,30 +123,34 @@ export function Layout() {
                 exists, for the emails' footer to link to, and the gear stands
                 down there the way the About link does on About. Only with an
                 account: the settings are an account's, and a reader holding a
-                link has none. */}
+                link has none.
+
+                No tooltip, here or on sign-out: a hover label under a button
+                that opens a menu lands on top of the menu it opened. The
+                aria-label still names it. The menu is as wide as its switches
+                and slid right to meet the page's edge (see menuShift), rather
+                than hanging off the gear towards the middle of the page. */}
             {session && !onSettings && (
               <Popover
                 position="bottom-end"
-                withArrow
                 shadow="md"
-                width={260}
+                offset={{ mainAxis: 8, crossAxis: menuShift }}
                 opened={menuOpen}
                 onChange={setMenuOpen}
               >
                 <Popover.Target>
-                  <Tooltip label="Notifications" withArrow>
-                    <ActionIcon
-                      variant="outline"
-                      color="gray"
-                      size="lg"
-                      aria-label="Notification settings"
-                      onClick={() => setMenuOpen((open) => !open)}
-                    >
-                      <GearIcon size={18} aria-hidden />
-                    </ActionIcon>
-                  </Tooltip>
+                  <ActionIcon
+                    ref={gear}
+                    variant="outline"
+                    color="gray"
+                    size="lg"
+                    aria-label="Notification settings"
+                    onClick={toggleMenu}
+                  >
+                    <GearIcon size={18} aria-hidden />
+                  </ActionIcon>
                 </Popover.Target>
-                <Popover.Dropdown>
+                <Popover.Dropdown maw={280}>
                   <NotificationSwitches userId={session.user.id} />
                 </Popover.Dropdown>
               </Popover>
@@ -144,17 +167,15 @@ export function Layout() {
                 phone, and leaving is not what anybody came to do. Signed out
                 it keeps its words, because an offer has to say what it is. */}
             {session ? (
-              <Tooltip label="Sign out" withArrow>
-                <ActionIcon
-                  variant="outline"
-                  color="gray"
-                  size="lg"
-                  aria-label="Sign out"
-                  onClick={handleSignOut}
-                >
-                  <SignOutIcon size={18} aria-hidden />
-                </ActionIcon>
-              </Tooltip>
+              <ActionIcon
+                variant="outline"
+                color="gray"
+                size="lg"
+                aria-label="Sign out"
+                onClick={() => setConfirmingSignOut(true)}
+              >
+                <SignOutIcon size={18} aria-hidden />
+              </ActionIcon>
             ) : (
               <Button component={Link} to="/" variant="outline" size="sm">
                 Sign in
@@ -163,6 +184,31 @@ export function Layout() {
           </Group>
         </Group>
       </AppShell.Header>
+      <Modal
+        opened={confirmingSignOut}
+        onClose={() => setConfirmingSignOut(false)}
+        title={<Text fw={600}>Sign out?</Text>}
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            {session?.user.email ? (
+              <>
+                You are signed in as <strong>{session.user.email}</strong>. To sign back in you will
+                need a new link or code from your inbox.
+              </>
+            ) : (
+              'To sign back in you will need a new link or code from your inbox.'
+            )}
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setConfirmingSignOut(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleSignOut()}>Sign out</Button>
+          </Group>
+        </Stack>
+      </Modal>
       <AppShell.Main>
         {/* Each page fades in as it opens. Keyed by which page it is rather
             than by the address, which is the whole of the care needed here:

@@ -206,6 +206,7 @@ function writeAccount(userId: string | null) {
     // The binding still holds in the database; it just will not be refreshed
     // or forgotten from here, which is the same bargain voterKey.ts strikes.
   }
+  accountPushChanged()
 }
 
 /**
@@ -223,6 +224,7 @@ export function rememberAccountPush(on: boolean): void {
   } catch {
     // The poll page then says less than it could; nothing is sent differently.
   }
+  accountPushChanged()
 }
 
 function accountPushOff(): boolean {
@@ -241,6 +243,37 @@ function accountPushOff(): boolean {
  */
 export function accountPushHere(userId: string): boolean {
   return pushState() === 'granted' && readAccount() === userId && !accountPushOff()
+}
+
+/**
+ * Everything drawn from the two mirrors above, told when either moves — so the
+ * line under a poll that says where the push switch is goes away the moment
+ * that switch is turned on, rather than on the next page load. A counter
+ * rather than the answer, because the answer is per account and this is not.
+ */
+let accountPushVersion = 0
+const accountPushListeners = new Set<() => void>()
+
+function accountPushChanged() {
+  accountPushVersion += 1
+  for (const notify of accountPushListeners) notify()
+}
+
+function subscribeAccountPush(notify: () => void) {
+  accountPushListeners.add(notify)
+  return () => {
+    accountPushListeners.delete(notify)
+  }
+}
+
+/** `accountPushHere`, kept current as the switches in the gear menu move. */
+export function useAccountPushHere(userId: string | undefined): boolean {
+  useSyncExternalStore(
+    subscribeAccountPush,
+    () => accountPushVersion,
+    () => 0,
+  )
+  return !!userId && accountPushHere(userId)
 }
 
 /** Turns notifications on for the signed-in account, on this device. */
@@ -518,5 +551,27 @@ export function dismissAppBanner(): void {
     localStorage.setItem(BANNER_KEY, '1')
   } catch {
     // Closed for this page, then; it comes back on the next.
+  }
+}
+
+/**
+ * The same, for the banner under a poll that says where the push switch is
+ * (`NotifyHint`): closed for good in this browser, like the one above.
+ */
+const NOTIFY_HINT_KEY = 'star-voting:notify-hint-dismissed'
+
+export function notifyHintDismissed(): boolean {
+  try {
+    return localStorage.getItem(NOTIFY_HINT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function dismissNotifyHint(): void {
+  try {
+    localStorage.setItem(NOTIFY_HINT_KEY, '1')
+  } catch {
+    // Closed for this page only; it comes back on the next.
   }
 }

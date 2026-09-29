@@ -2,17 +2,18 @@ import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Button, Card, Group, Stack, Text } from '@mantine/core'
 import { useAuth } from '../lib/auth'
 import { isSampleId, openPollRpc } from '../lib/samplePoll'
-import { forgetWatch } from '../lib/push'
+import { canAskForPush, forgetWatch } from '../lib/push'
 import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
 import type { VoterName } from '../lib/voterName'
 import { BallotCard } from './BallotCard'
 import type { BallotScore } from './BallotFrame'
 import { CollectOptions, Confirmations } from './CollectOptions'
-import { Ballots, Results, TimeBallotCard } from './deferred'
+import { AppBanner } from './AppBanner'
+import { Ballots, Results, TimeBallotCard, YourBallot } from './deferred'
 import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
-import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton } from './Skeletons'
+import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton, YourBallotSkeleton } from './Skeletons'
 import { VoterNameField } from './VoterNameField'
 import { NotifyHint, WatchPoll } from './WatchPoll'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
@@ -134,15 +135,20 @@ export function OpenPollPanel({
   const { session } = useAuth()
   const signedIn = !!session
 
-  // What stands under the card a reader is left waiting on: the per-poll
-  // Notify me for a link, and for an account where to find its switches.
-  function notify(stage: 'opening' | 'results') {
+  // What a reader left waiting on the rest of the poll is offered, in two
+  // halves. The button is the per-poll Notify me, for a link, and goes beside
+  // whatever else the card lets this reader do. The banner goes under the
+  // card: for an account, where its push switch is; for a link on a device
+  // that cannot be asked, the install banner, since installing is the answer
+  // there.
+  function watchButton(stage: 'opening' | 'results') {
+    if (!canWatch || signedIn) return null
+    return <WatchPoll pollId={pollId} watchKey={watchKey} stage={stage} />
+  }
+  function watchBanner(stage: 'opening' | 'results') {
     if (!canWatch) return null
-    return signedIn ? (
-      <NotifyHint stage={stage} />
-    ) : (
-      <WatchPoll pollId={pollId} watchKey={watchKey} stage={stage} />
-    )
+    if (signedIn) return <NotifyHint stage={stage} />
+    return canAskForPush() ? null : <AppBanner />
   }
 
   // The database dropped the watch when it announced the results; the mirror
@@ -199,7 +205,10 @@ export function OpenPollPanel({
             happens is the creator opening the poll, and there is no telling
             when, which is what a notification is for. One watch or follow
             covers the poll's opening and its results alike. */}
-        {view.confirmed && notify('opening')}
+        {view.confirmed && !signedIn && canWatch && canAskForPush() && (
+          <Group justify="flex-end">{watchButton('opening')}</Group>
+        )}
+        {view.confirmed && watchBanner('opening')}
       </Stack>
     )
   }
@@ -233,6 +242,19 @@ export function OpenPollPanel({
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}
+        {/* This reader's own ballot, where the poll withholds everybody's —
+            the open side of what YourBallot does for an invite poll, standing
+            in the same place. Nothing is asked for: open_poll_view already
+            hands `your_scores` back at every stage, found by the account that
+            cast it or by this browser's key, so this is the ballot the reader
+            could have opened behind Edit vote an hour ago, shown one stage
+            later. A poll that publishes its ballots is already showing it, on
+            the grid below with everybody else's. */}
+        {!view.poll.show_ballots && view.voted && view.your_scores && (
+          <Suspense fallback={<YourBallotSkeleton rows={view.options.length || undefined} />}>
+            <YourBallot pollId={pollId} options={view.options} scores={view.your_scores} />
+          </Suspense>
+        )}
         {view.poll.show_ballots && (
           <Suspense fallback={<BallotsSkeleton rows={view.voted_count || undefined} />}>
             <Ballots
@@ -265,7 +287,8 @@ export function OpenPollPanel({
           isCreator={isCreator}
           onRevised={onChanged}
           questionStrip={questionStrip}
-          watch={notify('results')}
+          watch={watchButton('results')}
+          banner={watchBanner('results')}
         />
       ) : (
         <OpenBallot
@@ -305,6 +328,7 @@ function Voted({
   onRevised,
   questionStrip,
   watch,
+  banner,
 }: {
   pollId: string
   view: OpenPollView
@@ -315,9 +339,12 @@ function Voted({
   /**
    * "Notify me when the results are ready", for a voter holding the link:
    * this card is where they are left waiting, and an open poll's result only
-   * arrives when its creator gets round to closing it.
+   * arrives when its creator gets round to closing it. Drawn beside Edit
+   * vote: both are things this reader can do about their vote.
    */
   watch?: ReactNode
+  /** What stands under the card: see `watchBanner` above. */
+  banner?: ReactNode
 }) {
   const { session } = useAuth()
   // The scores the ballot being changed opens with, or null when nobody is
@@ -374,28 +401,30 @@ function Voted({
   }
 
   return (
-    <Card withBorder>
-      <Stack gap="sm">
-        {questionStrip}
-        <Stack gap={2}>
-          <Text fw={500}>Your vote is in</Text>
-          <Group justify="space-between" wrap="wrap" gap="sm">
-            <RevealNote reveal={{ kind: 'open', isCreator }} canRevise={!!scores} />
-            {scores && (
-              <Button
-                variant="light"
-                loading={fetching}
-                onClick={() => void edit()}
-                style={{ marginLeft: 'auto' }}
-              >
-                Edit vote
-              </Button>
-            )}
-          </Group>
+    <Stack gap="md">
+      <Card withBorder>
+        <Stack gap="sm">
+          {questionStrip}
+          <Stack gap={2}>
+            <Text fw={500}>Your vote is in</Text>
+            <Group justify="space-between" wrap="wrap" gap="sm">
+              <RevealNote reveal={{ kind: 'open', isCreator }} canRevise={!!scores} />
+              {(watch || scores) && (
+                <Group gap="sm" wrap="wrap" justify="flex-end" style={{ marginLeft: 'auto' }}>
+                  {watch}
+                  {scores && (
+                    <Button variant="light" loading={fetching} onClick={() => void edit()}>
+                      Edit vote
+                    </Button>
+                  )}
+                </Group>
+              )}
+            </Group>
+          </Stack>
         </Stack>
-        {watch}
-      </Stack>
-    </Card>
+      </Card>
+      {banner}
+    </Stack>
   )
 }
 

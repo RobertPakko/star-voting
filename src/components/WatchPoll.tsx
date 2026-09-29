@@ -1,13 +1,16 @@
 import { useState } from 'react'
-import { Button, Group, Stack, Text } from '@mantine/core'
-import { BellIcon, GearIcon } from '@phosphor-icons/react'
+import { Alert, Button } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
+import { BellIcon, BellRingingIcon, BellSlashIcon, GearIcon } from '@phosphor-icons/react'
 import { useAuth } from '../lib/auth'
 import {
-  accountPushHere,
   canAskForPush,
+  dismissNotifyHint,
+  notifyHintDismissed,
   pushState,
   PushRefused,
   unwatchPoll,
+  useAccountPushHere,
   useWatching,
   watchPoll,
 } from '../lib/push'
@@ -31,9 +34,19 @@ function nextMoment(stage: Stage): string {
  * — and the browser hears when the poll opens for voting and when its
  * results are ready. Then the watch is gone.
  *
+ * **A button and nothing else**, so that it can stand beside *Edit vote* on
+ * the card a voter comes back to: two things this reader can do about their
+ * vote, in one row. It is a toggle and says so on both sides — *Notify me*
+ * with a bell, and once pressed *Turn off notifications* with the bell struck
+ * through — because the second state used to be a quiet grey word under a
+ * sentence, and read as a label rather than as the way back. A refusal is
+ * said in a toast, since a line of red wedged into that row would push the
+ * buttons apart.
+ *
  * Where this browser cannot be asked — an iPhone in a Safari tab, most
- * commonly — the banner stands in for it, because the answer there is "install
- * the app first", which is what the banner's guide says.
+ * commonly — it draws nothing, and the caller puts the banner under the card
+ * instead (`canAskForPush`), because the answer there is "install the app
+ * first", which is what the banner's guide says.
  */
 export function WatchPoll({
   pollId,
@@ -48,54 +61,45 @@ export function WatchPoll({
 }) {
   const watching = useWatching(watchKey)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  if (!canAskForPush()) return <AppBanner />
+  if (!canAskForPush()) return null
 
   const next = nextMoment(stage)
 
   async function toggle() {
     setBusy(true)
-    setError(null)
     try {
       if (watching) await unwatchPoll(pollId, watchKey)
       else await watchPoll(pollId, watchKey)
     } catch (caught) {
-      setError(
-        caught instanceof PushRefused || caught instanceof Error
-          ? caught.message
-          : 'Something went wrong.',
-      )
+      notifications.show({
+        color: 'red',
+        message:
+          caught instanceof PushRefused || caught instanceof Error
+            ? caught.message
+            : 'Something went wrong.',
+      })
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <Stack gap={4}>
-      <Group justify="space-between" wrap="wrap" gap="sm">
-        {watching && (
-          <Text size="sm" c="dimmed" style={{ flex: '1 1 14rem' }}>
-            This device will get a notification when {next}.
-          </Text>
-        )}
-        <Button
-          variant={watching ? 'subtle' : 'light'}
-          color={watching ? 'gray' : undefined}
-          leftSection={watching ? undefined : <BellIcon size={16} aria-hidden />}
-          loading={busy}
-          onClick={toggle}
-          style={{ marginLeft: 'auto' }}
-        >
-          {watching ? 'Stop notifications' : `Notify me when ${next}`}
-        </Button>
-      </Group>
-      {error && (
-        <Text size="sm" c="red">
-          {error}
-        </Text>
-      )}
-    </Stack>
+    <Button
+      variant={watching ? 'default' : 'light'}
+      leftSection={
+        watching ? <BellSlashIcon size={16} aria-hidden /> : <BellIcon size={16} aria-hidden />
+      }
+      loading={busy}
+      onClick={toggle}
+      title={
+        watching
+          ? `This device will get a notification when ${next}.`
+          : `Get a notification on this device when ${next}.`
+      }
+    >
+      {watching ? 'Turn off notifications' : 'Notify me'}
+    </Button>
   )
 }
 
@@ -111,27 +115,44 @@ export function WatchPoll({
  * channels their account allows, and the switches for those are
  * in the gear menu in the header. So the one thing this can usefully say is
  * where that menu is, and it says it only to a reader whose device is not
- * being pushed to yet: once push is on here there is nothing to say, and a
- * line confirming it on every poll would be clutter on a question most people
- * answer once.
+ * being pushed to yet: once push is on here there is nothing to say, and it
+ * goes the moment the switch is turned on (`useAccountPushHere`), rather than
+ * on the next page load.
+ *
+ * **A banner under the card rather than a line inside it**, in the shape of
+ * AppBanner: the card is about this ballot, and this is about the account.
+ * Closing it is for good, in this browser, for the reason AppBanner's is — a
+ * reader who has decided against push on purpose should not be asked on every
+ * poll they vote in.
  *
  * Where the device needs the app installed first — an iPhone in a Safari tab —
- * the banner stands in for it, as it does for WatchPoll; where the browser has
+ * AppBanner stands in for it, as it does for WatchPoll; where the browser has
  * said no or has no push at all, or the build has none, it draws nothing.
  */
 export function NotifyHint({ stage }: { stage: Stage }) {
   const { session } = useAuth()
   const userId = session?.user.id
+  const pushHere = useAccountPushHere(userId)
+  const [dismissed, setDismissed] = useState(notifyHintDismissed)
 
   if (!userId) return null
   if (pushState() === 'needs-install') return <AppBanner />
-  if (!canAskForPush() || accountPushHere(userId)) return null
+  if (!canAskForPush() || pushHere || dismissed) return null
 
   return (
-    <Text size="sm" c="dimmed">
-      To be notified when {nextMoment(stage)}, turn notifications on from the{' '}
+    <Alert
+      variant="light"
+      icon={<BellRingingIcon size={20} aria-hidden />}
+      withCloseButton
+      closeButtonLabel="Dismiss for good"
+      onClose={() => {
+        dismissNotifyHint()
+        setDismissed(true)
+      }}
+    >
+      To be notified when {nextMoment(stage)}, turn on push notifications from the{' '}
       <GearIcon size={14} role="img" aria-label="gear" style={{ verticalAlign: '-2px' }} /> menu at
       the top of the page.
-    </Text>
+    </Alert>
   )
 }
