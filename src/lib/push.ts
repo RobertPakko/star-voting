@@ -623,7 +623,7 @@ export function dismissAppBanner(): void {
 
 /**
  * The same, for the banner under a poll that says where the push switch is
- * (`NotifyHint`): closed for good in this browser, like the one above.
+ * (`Banners`): closed for good in this browser, like the one above.
  */
 const NOTIFY_HINT_KEY = 'star-voting:notify-hint-dismissed'
 

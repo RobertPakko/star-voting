@@ -11,7 +11,7 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { GearIcon, SignInIcon, SignOutIcon } from '@phosphor-icons/react'
+import { GearIcon, SignOutIcon } from '@phosphor-icons/react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { InstallButton } from './InstallButton'
@@ -96,7 +96,7 @@ export function Layout() {
                 height={32}
                 style={{ borderRadius: 8, display: 'block' }}
               />
-              <Title order={3} size="h4" style={{ whiteSpace: 'nowrap' }}>
+              <Title order={3} size="h4">
                 STAR Voting
               </Title>
             </Group>
@@ -168,12 +168,9 @@ export function Layout() {
                 app for good. Signed in it is an icon, like its neighbours:
                 with the settings gear beside it the row ran out of room on a
                 phone, and leaving is not what anybody came to do. Signed out
-                it keeps its words, because an offer has to say what it is —
-                except on a phone, where the gear beside it (push for a reader
-                holding a link) left no room for them and the wordmark was
-                wrapping onto two lines. There it is the door-and-arrow icon,
-                the mirror of sign-out's, in the accent colour rather than
-                grey so it still reads as the one thing being offered. */}
+                it keeps its words, because an offer has to say what it is — on
+                a phone too, where that costs the wordmark a second line: being
+                asked to sign in is worth more than the title fitting on one. */}
             {session ? (
               <ActionIcon
                 variant="outline"
@@ -185,21 +182,9 @@ export function Layout() {
                 <SignOutIcon size={18} aria-hidden />
               </ActionIcon>
             ) : (
-              <>
-                <Button component={Link} to="/" variant="outline" size="sm" visibleFrom="xs">
-                  Sign in
-                </Button>
-                <ActionIcon
-                  component={Link}
-                  to="/"
-                  variant="outline"
-                  size="lg"
-                  aria-label="Sign in"
-                  hiddenFrom="xs"
-                >
-                  <SignInIcon size={18} aria-hidden />
-                </ActionIcon>
-              </>
+              <Button component={Link} to="/" variant="outline" size="sm">
+                Sign in
+              </Button>
             )}
           </Group>
         </Group>

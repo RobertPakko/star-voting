@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, NotifyHint — …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list, which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -2555,11 +2555,10 @@ its own. The one place that can ask is the gear menu, signed in or not — the i
 guide used to carry the Settings switch as well, and polls answered through a
 link had a Notify me of their own, and more copies of one control were more
 places to look;
-everywhere else the app only *says* it can notify — `AppBanner`, on the
-poll list and on the sign-in screen that is the front door for anybody signed
-out, closed for good with its ×. It says nothing where there is nothing to
-do: no key in the build, no push in the browser, a reader who already said no
-or already said yes.
+everywhere else the app only *says* it can notify — the push banner in
+`Banners`, below. It says nothing where there is nothing to do: no key in the
+build, no push in the browser, a reader who already said no or already said
+yes.
 
 **iPhone and iPad need the app installed first.** Safari gives the push APIs
 only to a site added to the Home Screen and opened from there, so in a Safari
@@ -2638,21 +2637,32 @@ switch with no reason is the one thing in it that would leave somebody stuck.
 Following the link closes the menu (`Layout` closes it on any change of
 route).
 
-**Under the card a reader is left waiting on, they are told where the gear
-is, and that the site installs** (`WhileYouWait`, in `NotifyHint.tsx`) — the
-same two banners for every reader, signed in or holding a link, on invite
-polls and open polls alike: under *your vote is in*, and under the card after
-confirming the options, because those are the two moments a reader is left
-waiting on everybody else. The push banner says nothing once this device is
-set up (`usePushHere`, from local mirrors — the account's binding and setting,
-or the link switch — so it costs no request, and it is live, so it goes the
-moment the switch is flipped) and nothing where the browser cannot be asked.
-The install banner is `AppBanner` with install-only wording, shown to anybody
-outside the installed app, since it does not depend on push. Both close for
-good with their ×; closing the install banner here also closes it on the poll
-list, since they are one suggestion.
+**Two banners, in three places** (`Banners.tsx`): one saying where the push
+switch is, one saying the site installs as an app. They appear together on
+the poll list, under the card after confirming the options, and under *your
+vote is in* — the moments a reader is waiting on everybody else — the same for
+every reader, signed in or holding a link, on invite polls and open polls
+alike. Not on the sign-in screen, where they used to be: the one thing that
+page should ask of a reader is to sign in.
 
-That install banner used to be shown under the card only where the browser
+They are one shape (`Banner`), so they cannot drift apart: the sentence, a
+*Learn more* button onto the install guide, and *Don't show again*. **The ×
+closes it for now** — gone from this page, back the next time — and **Don't
+show again closes it for good** in this browser. A reader who has not made up
+their mind wants the first; one who has wants the second, and a single ×
+meaning "forever" made the undecided close it without reading.
+
+- **The push banner** goes the moment push is on here (`usePushHere`, from
+  local mirrors — the account's binding and setting, or the link switch — so
+  it costs no request, and live, so flipping the switch takes it away). It
+  shows where the browser can be asked, and on an iPhone in a Safari tab too,
+  where the gear's switch is disabled with a line saying to install first;
+  nothing where the browser said no or has no push.
+- **The install banner** says nothing about notifications — the banner beside
+  it does — and shows to anybody outside the installed app, since it does not
+  depend on push.
+
+The install banner used to be shown under the card only where the browser
 could not be asked for push — it stood in for Notify me on an iPhone — so on
 any desktop browser, incognito included, a voter never saw it.
 

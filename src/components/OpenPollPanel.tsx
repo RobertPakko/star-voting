@@ -14,7 +14,7 @@ import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
 import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton, YourBallotSkeleton } from './Skeletons'
 import { VoterNameField } from './VoterNameField'
-import { WhileYouWait } from './NotifyHint'
+import { Banners } from './Banners'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
 /**
@@ -137,7 +137,7 @@ export function OpenPollPanel({
   // What stands under the card a reader is left waiting on: where the push
   // switch is and that the site installs, the same for an account and a link.
   function waiting(stage: 'opening' | 'results') {
-    return canWatch ? <WhileYouWait stage={stage} /> : null
+    return canWatch ? <Banners moment={stage} /> : null
   }
 
   // A signed-out reader who has turned push on from the gear menu gets a

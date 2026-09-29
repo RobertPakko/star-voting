@@ -12,7 +12,6 @@ import {
   TextInput,
   Title,
 } from '@mantine/core'
-import { AppBanner } from '../components/AppBanner'
 import { useAuth } from '../lib/auth'
 import { rememberDestination } from '../lib/shareLink'
 import {
@@ -215,12 +214,6 @@ export function SignIn() {
             )}
           </Stack>
         </Paper>
-        {/* The front door for anybody signed out, so the one place a first-time
-          reader hears the app can be installed. Only beside the form: while
-          an email is on its way, following a link off this card would throw
-          away the address the code belongs to — the same reason the About
-          link is only offered here. See AppBanner. */}
-        {sent === null && <AppBanner />}
       </Stack>
     </Center>
   )

@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { pruneHiddenPolls, setPollHidden, useHiddenPolls } from '../lib/hiddenPolls'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
-import { AppBanner } from '../components/AppBanner'
+import { Banners } from '../components/Banners'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
@@ -244,7 +244,7 @@ export function PollList() {
           </Group>
         </Group>
 
-        <AppBanner />
+        <Banners />
 
         {polls.length === 0 && (
           <Text c="dimmed" size="sm">
