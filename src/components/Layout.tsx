@@ -1,5 +1,5 @@
 import { ActionIcon, Anchor, AppShell, Button, Group, Text, Title, Tooltip } from '@mantine/core'
-import { GearIcon } from '@phosphor-icons/react'
+import { GearIcon, SignOutIcon } from '@phosphor-icons/react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { InstallButton } from './InstallButton'
@@ -104,12 +104,22 @@ export function Layout() {
                 shared device, which is the case this app actually has: a link
                 pasted into a family thread is opened on somebody else's phone,
                 and without this the first account to sign in there owns the
-                app for good. Subtle rather than outlined, because leaving is
-                not what anybody came to do. */}
+                app for good. Signed in it is an icon, like its neighbours:
+                with the settings gear beside it the row ran out of room on a
+                phone, and leaving is not what anybody came to do. Signed out
+                it keeps its words, because an offer has to say what it is. */}
             {session ? (
-              <Button variant="outline" color="gray" size="sm" onClick={handleSignOut}>
-                Sign out
-              </Button>
+              <Tooltip label="Sign out" withArrow>
+                <ActionIcon
+                  variant="outline"
+                  color="gray"
+                  size="lg"
+                  aria-label="Sign out"
+                  onClick={handleSignOut}
+                >
+                  <SignOutIcon size={18} aria-hidden />
+                </ActionIcon>
+              </Tooltip>
             ) : (
               <Button component={Link} to="/" variant="outline" size="sm">
                 Sign in
