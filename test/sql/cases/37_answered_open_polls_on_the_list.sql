@@ -178,10 +178,10 @@ begin
   -- Recreated rather than replaced, since the argument list changed, and a
   -- function created fresh is executable by PUBLIC until somebody says not.
   perform tests.assert_eq('the list is not callable without an account',
-    has_function_privilege('anon', 'public.list_polls(integer, integer)', 'execute'),
+    has_function_privilege('anon', 'public.list_polls(integer, integer, boolean)', 'execute'),
     false);
   perform tests.assert_eq('and is with one',
-    has_function_privilege('authenticated', 'public.list_polls(integer, integer)', 'execute'),
+    has_function_privilege('authenticated', 'public.list_polls(integer, integer, boolean)', 'execute'),
     true);
   perform tests.assert_eq('and takes no ids from the browser any more',
     (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace

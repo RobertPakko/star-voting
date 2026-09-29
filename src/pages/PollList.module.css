@@ -40,7 +40,7 @@
  * So the anchor is the heading, and its own ::after covers the card. The whole
  * card is still one thing to click and still one thing to tab to — the padding
  * included, which is most of the right-hand side of a card whose title is
- * short — while the hide control beside it is a sibling rather than something
+ * short — while the control beside it is a sibling rather than something
  * nested inside a link. Nothing about the row a reader sees has changed.
  *
  * The two rules above are why this is `position: relative` on the card rather
@@ -72,23 +72,13 @@
    of it. It would win on paint order alone — it is the later sibling — but a
    click target that depends on the order two rules happen to be written in is
    a click target one refactor from going through the link instead. */
-.hide {
+.action {
   position: relative;
   z-index: 1;
 }
 
-/* A poll that is hidden, while hidden polls are being looked at.
- *
- * Faded rather than marked with a word: this state is temporary by
- * construction — nothing draws it unless *Show hidden* is pressed — and the
- * reader already knows what they asked to see. What the fade is really for is
- * the other direction: hiding a poll from the revealed list dims the card
- * under the press instead of removing it, which is the only feedback a control
- * has when the thing it acts on is supposed to stay on screen.
- *
- * It stays comfortably readable. A hidden poll is still the reader's poll, and
- * they are looking at it on purpose.
- */
-.hidden {
+/* A poll on its way off this list, between the press and the read that no
+ * longer carries it. */
+.leaving {
   opacity: 0.55;
 }

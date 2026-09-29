@@ -375,8 +375,21 @@ export interface PollListItem extends Omit<Poll, 'created_by' | 'created_by_emai
    * to put it. It is what the pager counts pages from — and the reason a page
    * of the list is one request rather than one for the rows and one for the
    * count.
+   *
+   * Counts the list being read: the polls not removed, or — read with
+   * `p_removed` — the ones that are.
    */
   total_count: number
+  /**
+   * How many polls the reader has removed from their list, whichever of the
+   * two views this row is from. It is what decides whether the button into
+   * the removed view is drawn. On every row for the reason `total_count` is,
+   * and so missing when a read has no rows; `removed_poll_count()` answers
+   * then.
+   *
+   * Optional because a browser can be a deploy ahead of the database.
+   */
+  removed_count?: number
 }
 
 export interface Invitee {

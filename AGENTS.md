@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch, WatchPoll — …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list, which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -679,7 +679,11 @@ that the total is of the list rather than the page, and that asking past the
 end lands on the last page there is — and that the list carries an open poll
 the reader's account has voted in or confirmed, in any question of it, and no
 other, without naming who made it, and that every change to such a poll reaches
-that reader's list — a confirmation taken back included;
+that reader's list — a confirmation taken back included; that a poll removed
+from a list leaves the pages it was on rather than a gap in them, is listed
+instead in the removed view, is removed whole by any of its questions, can only
+be removed from one's own list, and takes its account out of the audience of
+every email and push about it until it is restored;
 everything about the results-ready
 announcement except the sending — whether a poll has a result at all, who
 would be told and who is deliberately not, and that the notice is made exactly
@@ -4999,6 +5003,12 @@ is the four letters and the two rules that decide them.
   `0049_nobody_is_told_what_they_just_did.sql`,
   which is where the rule stopped being about the creator.
 
+- **Nobody is told about a poll they removed from their list.** The audience
+  leaves out every account with a row in `removed_polls` for the poll, whatever
+  it was in the poll as — see [Removing a poll from your
+  list](#removing-a-poll-from-your-list). Invitations are the exception, and
+  cannot be reached any other way than by being invited again.
+
 - **The rule is one function, and the caller supplies the answer.**
   `poll_email_audience(poll, include_creator, actor)` is every invitee plus the
   creator, deduplicated and lowercased, minus the creator when the flag says
@@ -5099,62 +5109,107 @@ the reason it always was — there is no `pg_net` in the throwaway
 database — so the suite can say
 who *would* have been written to and never that anybody was.
 
-### Hiding a poll from your list
+### Removing a poll from your list
 
 A poll history only grows. A poll cannot be left and an invite cannot be
 declined — being in a poll is what lets you read its result months later — so
 `list_polls` answers with every poll a reader has ever been in, and the only
-thing that has ever taken one off that list is the six-month sweep below.
-**Hiding is the reader's own housekeeping over that list, and it is the whole
-of what it is**: the poll is unchanged, still theirs, still readable at its own
-address, still counted by everything that counts polls.
+thing that takes one off that list on its own is the six-month sweep below.
+**Removing is the reader's own housekeeping over that list**: the poll goes off
+their list and they stop being told about it, and nothing else happens. It is
+still theirs, still readable at its own address, still answerable, still
+counted in its turnout, and nobody else — its creator included — learns
+anything. [`0077_removing_a_poll_from_your_list.sql`](supabase/migrations/0077_removing_a_poll_from_your_list.sql)
+is all of it on the database's side and
+[`src/lib/removedPolls.ts`](src/lib/removedPolls.ts) on the browser's.
 
-Each card carries an eye at its bottom right, alongside the badges; pressing it
-takes the poll off the list. When anything is hidden, a **Show hidden**
-button appears beside **New poll** and puts them back on screen, dimmed, with
-the eye open — press it again, or bring the last one back, and it is gone.
+Each card carries a cross at its bottom right, alongside the badges, whose
+tooltip says what it costs: *Remove from your list and stop notifications about
+it*. When anything is removed, a **Removed (n)** button appears beside **New
+poll** and swaps the list for the removed polls, each with a **Restore** — and
+a line above them saying these polls send no emails or notifications. Restore
+the last one and the page goes back to the list.
 
-**Nothing about it reaches the database, and nothing should.** There is no
-column and no table: hiding a poll changes nothing about the poll, tells its
-creator nothing, and grants and withholds nothing. It is a fact about one
-screen in one browser, and the one kind of state that must never be mistaken
-for having left a poll — which is exactly the mistake a column on a shared row
-invites the next person to make. So it goes where the ballot order, the
-remembered name and the sign-in choice already live: `localStorage`, under
-`star-voting:hidden-polls`, in [`src/lib/hiddenPolls.ts`](src/lib/hiddenPolls.ts).
-Per browser rather than per account, on the same terms and with the same
-consequence — hide a poll on your laptop and it is still on the list on your
-phone. The alternative is a table, and a table is a disclosure.
+**It used to be *hiding*, and it lived in the browser.** An eye on each card,
+ids in `localStorage` under `star-voting:hidden-polls`, and no row anywhere, on
+the argument that hiding is a fact about a screen and a table is a disclosure.
+Two things were wrong with it, and both came from where it lived:
 
-What is stored is a set of poll ids, so nothing in it can go stale in a way
-that matters: a poll renamed, voted in or closed is the same id. A hidden poll
-that has since been deleted leaves an id matching nothing, which draws nothing
-and costs a few bytes; all it can do is leave the button on screen with nothing
-behind it. The list is paged in the database, so a hidden id missing from the
-page on screen is nearly always a hidden poll on another page;
-`pruneHiddenPolls` therefore sweeps only on a read whose page *is* the whole
-list, which is the one read that can tell a deleted poll from an absent one.
+- **The page was taken before anything was hidden.** `list_polls` paged over
+  every poll and the browser filtered afterwards, so hiding the ten polls on
+  page one left an empty page with a pager under it still offering more. The
+  database could not page around what it had not been told.
+- **The list is the account's and hiding was the browser's.** Since
+  [`0075`](#open-polls-you-have-answered) the list is the same on every device,
+  and a poll hidden on the laptop was back on the phone.
 
-**The button carries no count**, and that is the same fact stated as a
-decision: the only number it could show is how many ids are in storage, an id
-outlives the poll it names, and a number that sometimes promises more than
-pressing it delivers sends the reader looking for a poll that is not there.
+And the table is not a disclosure, which was the argument for keeping it out:
+`removed_polls` has row-level security on, no policies and no grants, and the
+only things that read it are `list_polls`, the three functions that write and
+count it, and `poll_email_audience`. Nobody can find out who has removed a
+poll.
 
-**The page still asks for ten polls and the pager still counts every poll.**
-Hiding four leaves six cards on that page rather than pulling four up from the
-next one, and a poll stays on the page it was on. Closing the pages up would
-mean a poll's place on the list moving because of something done to a different
-poll, and page two holding different rows for the same reader on two devices.
-A page with nothing left on it says so — *Every poll on this page is hidden* —
-rather than looking like a list that has lost its polls.
+**It stops the notifications, because that is what a reader taking a poll off
+their list wants**, and it is also what makes *remove* the right word rather
+than *hide*: hiding something you are still being emailed about is a list that
+disagrees with your inbox. `poll_email_audience` — the one function every email
+and every push about a poll opening or finishing takes its audience from; see
+[What a poll writes to people](#what-a-poll-writes-to-people) — leaves out
+every account that has removed the poll, whichever way it was in it: invitee,
+creator, or an account that answered an open poll through its link. Restoring
+puts it back. **Invitations do not ask**, and cannot need to: a poll cannot be
+removed before its reader is in it, so the only way to reach that case is to be
+taken off an invite list and put back on, and a re-invitation is news.
 
-Two smaller decisions worth keeping. **Whether hidden polls are being looked at
-is not remembered**: hiding survives a reload, peeking does not, because a
-reader who tidied their list and came back to it untidied would have to tidy it
-again. And **the card is no longer the anchor**: a control inside a link is
+**What it is not is leaving.** An invitee who removed a poll is still on its
+invite list and can still vote in it; a creator who removed their own still
+manages it from its page. Leaving would be a statement *to* the poll — a roster
+changing, a turnout's denominator moving — and this is a statement about one's
+own list, which is why nothing about it is visible to anybody else.
+
+**The page closes up.** `list_polls(p_limit, p_offset, p_removed)` splits the
+reader's polls into removed and not *before* the total and the page are taken,
+so a page is always full of the list it is a page of, and the pager counts
+exactly what it can show. That does mean removing a poll pulls the next one up
+from page two, which is the trade the browser-side version was written to
+avoid, and it was the wrong way round: a poll's place on a list moving because
+something before it went is how every list with a delete in it behaves, and a
+page that goes blank while the pager says there is more is how none of them do.
+`p_removed` defaults to false, so a browser still on the previous build calls
+it with two arguments and gets the list without the removed polls.
+
+**The button carries a count**, which the browser-side one could not: an id in
+storage outlived the poll it named, so its number could promise more than
+pressing it showed. `removed_count` is counted by the database from the polls
+still on the reader's list, and rides on every row the way `total_count` does
+— which leaves the list with nothing on it, whose reader most needs the way
+back, with no row to carry it. So that read, and only that one, asks
+`removed_poll_count()` as well.
+
+**A group is removed whole.** The list shows a poll of several questions as its
+first question, and a removal is filed against that row (`poll_list_row`)
+whichever question it was handed, so a caller cannot put half a poll away.
+
+**Both directions announce themselves on the reader's `user:<id>` topic**, so
+the list on every device follows, and the poll's own topic hears nothing —
+nothing about the poll changed. A deleted poll takes its rows with it by
+cascade, so nothing here outlives what it names.
+
+**The browser's old ids are handed over once.** A reader who hid polls before
+this shipped comes back to them removed rather than on their list again:
+`migrateHiddenPolls` sends whatever is under the old key as one `remove_polls`
+and deletes the key once that has gone in. Ids that are not on the signed-in
+account's list are skipped rather than refused. That does turn off
+notifications the reader never asked to turn off, for polls they only hid; the
+alternative was a list they had tidied coming back untidied, and the new
+tooltip and the line above the removed list both say what removing means.
+
+Two smaller decisions worth keeping. **Which of the two lists is on screen is
+not remembered**: a look at what has been put away is a thing you do and then
+stop doing. And **the card is not the anchor**: a control inside a link is
 invalid HTML and presses both, so the heading is the link and its `::after`
 covers the card. The whole card is still one thing to click and one thing to
-tab to, with the eye beside it as the second stop.
+tab to, with the cross beside it as the second stop.
 
 ### Open polls you have answered
 
@@ -5163,7 +5218,7 @@ answered with the polls you made and the polls you were invited to, and an
 open poll has no invite list. So a poll you had voted in three times was
 reachable only by the link it arrived by, wherever that link had got to. Now
 **an open poll your account has voted in or confirmed is on your list**, among
-the rest, by date, counted by the pager and hidden by the same eye — on every
+the rest, by date, counted by the pager and removed by the same cross — on every
 device you sign in on.
 
 **The database knows, because the ballot says so.** Since

@@ -229,6 +229,29 @@ export type Database = {
         }
         Relationships: []
       }
+      removed_polls: {
+        Row: {
+          poll_id: string
+          user_id: string
+        }
+        Insert: {
+          poll_id: string
+          user_id: string
+        }
+        Update: {
+          poll_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'removed_polls_poll_id_fkey'
+            columns: ['poll_id']
+            isOneToOne: false
+            referencedRelation: 'polls'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       results_notices: {
         Row: {
           poll_id: string
@@ -437,7 +460,7 @@ export type Database = {
       is_invited_to_poll: { Args: { p_poll_id: string }; Returns: boolean }
       is_poll_creator: { Args: { p_poll_id: string }; Returns: boolean }
       list_polls: {
-        Args: { p_limit: number; p_offset: number }
+        Args: { p_limit: number; p_offset: number; p_removed?: boolean }
         Returns: {
           closed_at: string
           confirmed_count: number
@@ -456,6 +479,7 @@ export type Database = {
           question_count: number
           question_position: number
           question_title: string
+          removed_count: number
           results_available: boolean
           show_ballots: boolean
           show_voters: boolean
@@ -602,6 +626,7 @@ export type Database = {
         }[]
       }
       poll_is_first_question: { Args: { p_poll_id: string }; Returns: boolean }
+      poll_list_row: { Args: { p_poll_id: string }; Returns: string }
       poll_page: {
         Args: { p_poll_id: string; p_voter_key?: string }
         Returns: Json
@@ -651,11 +676,14 @@ export type Database = {
         }[]
       }
       purge_old_polls: { Args: never; Returns: number }
+      remove_polls: { Args: { p_poll_ids: string[] }; Returns: number }
+      removed_poll_count: { Args: never; Returns: number }
       replace_scores: {
         Args: { p_ballot_id: string; p_poll_id: string; p_scores: Json }
         Returns: undefined
       }
       reopen_poll: { Args: { p_poll_id: string }; Returns: undefined }
+      restore_polls: { Args: { p_poll_ids: string[] }; Returns: number }
       revise_ballot: {
         Args: { p_poll_id: string; p_scores: Json }
         Returns: undefined
