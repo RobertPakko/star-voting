@@ -93,8 +93,9 @@ export function Settings() {
         </Card>
 
         <Text size="sm" c="dimmed">
-          Polls you answer through a link without signing in are not affected by these settings. To
-          hear about one of those, press <em>Notify me</em> on the poll after you vote.
+          Open polls you vote in while signed in follow these settings too. Polls you answer through
+          a link without signing in are not affected by them: to hear about one of those, press{' '}
+          <em>Notify me</em> on the poll after you vote.
         </Text>
       </Stack>
     </Reveal>

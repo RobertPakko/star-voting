@@ -209,13 +209,38 @@ function writeAccount(userId: string | null) {
 }
 
 /**
- * Whether this device has been bound to this account and may still be pushed
- * to — the local mirror, so answering costs no request. It does not know
- * whether the account has since turned push off; that is a decision made on
- * the settings page, and a reader who made it is not one to nudge back there.
+ * Whether the account's push is off, as last seen by this browser: written by
+ * the settings page whenever it reads or changes the setting. Only a mirror —
+ * the database decides what is sent — kept so a poll page can say whether
+ * this device will be notified without a request of its own.
+ */
+const ACCOUNT_OFF_KEY = 'star-voting:push-account-off'
+
+export function rememberAccountPush(on: boolean): void {
+  try {
+    if (on) localStorage.removeItem(ACCOUNT_OFF_KEY)
+    else localStorage.setItem(ACCOUNT_OFF_KEY, '1')
+  } catch {
+    // The poll page then says less than it could; nothing is sent differently.
+  }
+}
+
+function accountPushOff(): boolean {
+  try {
+    return localStorage.getItem(ACCOUNT_OFF_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether this device is bound to this account and the account wants push —
+ * both from local mirrors, so answering costs no request. Another device
+ * turning push off is only seen here once this one opens the settings page;
+ * until then the sender, which asks the database, is still right.
  */
 export function accountPushHere(userId: string): boolean {
-  return pushState() === 'granted' && readAccount() === userId
+  return pushState() === 'granted' && readAccount() === userId && !accountPushOff()
 }
 
 /** Turns notifications on for the signed-in account, on this device. */
@@ -373,6 +398,34 @@ export async function unwatchPoll(pollId: string, key: string): Promise<void> {
  */
 export function forgetWatch(key: string): void {
   setWatched(key, false)
+}
+
+// ---------------------------------------------------------------------------
+// Following an open poll, for an account
+// ---------------------------------------------------------------------------
+
+/** The groups this tab has already followed, so a page re-rendering asks once. */
+const followed = new Set<string>()
+
+/**
+ * Has the signed-in account hear about this open poll as an invitee would —
+ * voting opening, the results being ready — on whichever of its channels its
+ * settings allow. Called when the account votes or confirms the options, and
+ * when a page finds it already has; it asks for no permission and prompts
+ * nobody, and the database quietly ignores it where there is nothing to
+ * follow. Best-effort: a failure means one poll this account hears nothing
+ * about, which is where every open poll was before this existed.
+ *
+ * Remembered for the tab rather than in storage: a follow is let go when the
+ * poll finishes, and a reopened poll should be followed again on the next
+ * visit rather than skipped because this browser once did.
+ */
+export function followPoll(pollId: string, key: string): void {
+  if (followed.has(key)) return
+  followed.add(key)
+  void supabase.rpc('open_poll_follow', { p_poll_id: pollId }).then(({ error }) => {
+    if (error) followed.delete(key)
+  })
 }
 
 // ---------------------------------------------------------------------------

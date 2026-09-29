@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { currentSubscription } from './push'
+import { currentSubscription, rememberAccountPush } from './push'
 
 /**
  * An account's notification settings, and whether the browser asking is one
@@ -35,6 +35,7 @@ export function useNotificationSettings(userId: string | null) {
     }
     const answer = data as { email?: boolean; push?: boolean; this_device?: boolean } | null
     setError(null)
+    rememberAccountPush(answer?.push ?? true)
     setSettings({
       email: answer?.email ?? true,
       push: answer?.push ?? true,

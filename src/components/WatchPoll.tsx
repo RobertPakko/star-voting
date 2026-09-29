@@ -101,20 +101,22 @@ export function WatchPoll({
 }
 
 /**
- * "Notify me" on an invite poll, for the account reading it.
+ * "Notify me" for a signed-in reader, on an invite poll or an open one.
  *
- * The same button WatchPoll draws, in the same places — under the card a voter
- * lands on after voting, and after confirming the options — but it files
- * nothing. An invite poll already tells everybody on its list about every
- * moment, by email and by push, as their account's settings say; what a
- * reader here is missing is only push being on for this device, and that is
- * one switch that belongs to the account rather than to this poll. So the
- * button takes them to it, with the way back to this poll on the page.
+ * The same button WatchPoll draws, in the same places — under the card a
+ * voter lands on after voting, and after confirming the options — but it files
+ * nothing. A signed-in reader already hears about every poll they are in, by
+ * email and by push, as their account's settings say: an invite poll through
+ * its list, an open poll through the follow their browser files when they
+ * answer it (`followPoll`). What they can be missing is push on this device,
+ * and that is one switch that belongs to the account rather than to this
+ * poll. So the button takes them to it, with the way back to this poll on the
+ * page.
  *
- * Where there is nothing the switch could do — an iPhone outside the
- * installed app — the banner stands in for it, as it does for WatchPoll; and
- * where this device is already bound to the account, or the browser has said
- * no, or the build has no push at all, it draws nothing.
+ * Where this device is already set up it says so instead, in a line; where
+ * there is nothing the switch could do — an iPhone outside the installed app —
+ * the banner stands in for it, as it does for WatchPoll; and where the browser
+ * has said no, or the build has no push at all, it draws nothing.
  */
 export function NotifyInSettings({ stage }: { stage: Stage }) {
   const { session } = useAuth()
@@ -124,7 +126,15 @@ export function NotifyInSettings({ stage }: { stage: Stage }) {
 
   if (!userId) return null
   if (pushState() === 'needs-install') return <AppBanner />
-  if (!canAskForPush() || accountPushHere(userId)) return null
+  if (!canAskForPush()) return null
+
+  if (accountPushHere(userId)) {
+    return (
+      <Text size="sm" c="dimmed">
+        This device will get a notification when {nextMoment(stage)}.
+      </Text>
+    )
+  }
 
   return (
     <Group justify="flex-end">

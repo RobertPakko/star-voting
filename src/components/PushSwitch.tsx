@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Anchor, Stack, Switch, Text } from '@mantine/core'
 import { supabase } from '../lib/supabase'
-import { enableAccountPush, PushRefused, pushState } from '../lib/push'
+import { enableAccountPush, PushRefused, pushState, rememberAccountPush } from '../lib/push'
 import type { NotificationSettings } from '../lib/notificationSettings'
 
 /**
@@ -83,6 +83,7 @@ export function PushSwitch({
         })
         if (saveError) throw new Error(saveError.message)
       }
+      rememberAccountPush(on)
       onChange({ ...settings, push: on, thisDevice: on ? true : settings.thisDevice })
     } catch (caught) {
       setError(

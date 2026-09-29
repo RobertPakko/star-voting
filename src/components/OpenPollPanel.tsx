@@ -1,7 +1,8 @@
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Button, Card, Group, Stack, Text } from '@mantine/core'
 import { isSampleId, openPollRpc } from '../lib/samplePoll'
-import { forgetWatch } from '../lib/push'
+import { useAuth } from '../lib/auth'
+import { followPoll, forgetWatch } from '../lib/push'
 import { voterKeyFor } from '../lib/voterKey'
 import type { VoterName } from '../lib/voterName'
 import { BallotCard } from './BallotCard'
@@ -12,7 +13,7 @@ import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
 import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton } from './Skeletons'
 import { VoterNameField } from './VoterNameField'
-import { WatchPoll } from './WatchPoll'
+import { NotifyInSettings, WatchPoll } from './WatchPoll'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
 /**
@@ -124,6 +125,44 @@ export function OpenPollPanel({
   const canWatch = !isCreator && !isSampleId(pollId)
   const finished = view.results_available || view.is_closed
 
+  // A signed-in voter does not watch, they follow: their account joins the
+  // poll's audience and hears about it on whichever channels its settings
+  // allow, on every device it is bound to, with nothing to press. Filed when
+  // they answer — see `answered` below — and here as well for a page that
+  // finds they already have, which covers a vote cast before this existed
+  // and the reader who went to Settings and came back.
+  const { session } = useAuth()
+  const signedIn = !!session
+  const follows = canWatch && signedIn
+  // Per account as well as per poll, so signing in as somebody else in the
+  // same tab follows again rather than being taken for the last person.
+  const followKey = `${session?.user.id}:${watchKey}`
+  const hasAnswered = view.voted || !!view.confirmed
+  useEffect(() => {
+    if (follows && hasAnswered && !finished) followPoll(pollId, followKey)
+  }, [follows, hasAnswered, finished, pollId, followKey])
+
+  // Wraps what the page does after a first ballot or a confirmation, so the
+  // follow goes out even when the page moves straight on to the next question
+  // and never draws this one as answered.
+  function answered(then: () => void) {
+    return () => {
+      if (follows) followPoll(pollId, followKey)
+      then()
+    }
+  }
+
+  // What stands under the card a reader is left waiting on: the per-poll
+  // Notify me for a link, the way to the account's settings for an account.
+  function notify(stage: 'opening' | 'results') {
+    if (!canWatch) return null
+    return signedIn ? (
+      <NotifyInSettings stage={stage} />
+    ) : (
+      <WatchPoll pollId={pollId} watchKey={watchKey} stage={stage} />
+    )
+  }
+
   // The database dropped the watch when it announced the results; the mirror
   // of it in this browser goes too, so a poll that is reopened later does not
   // claim a watch that no longer exists.
@@ -164,7 +203,7 @@ export function OpenPollPanel({
                 }
           }
           onChanged={onChanged}
-          onConfirmed={onFirstConfirm ?? onChanged}
+          onConfirmed={answered(onFirstConfirm ?? onChanged)}
         />
 
         {/* Who is done, on a poll that names them. No embargo, unlike the
@@ -176,10 +215,9 @@ export function OpenPollPanel({
 
         {/* Once this reader has said they are done: the next thing that
             happens is the creator opening the poll, and there is no telling
-            when, which is what a notification is for. */}
-        {canWatch && view.confirmed && (
-          <WatchPoll pollId={pollId} watchKey={watchKey} stage="opening" />
-        )}
+            when, which is what a notification is for. One watch or follow
+            covers the poll's opening and its results alike. */}
+        {view.confirmed && notify('opening')}
       </Stack>
     )
   }
@@ -245,9 +283,7 @@ export function OpenPollPanel({
           isCreator={isCreator}
           onRevised={onChanged}
           questionStrip={questionStrip}
-          watch={
-            canWatch ? <WatchPoll pollId={pollId} watchKey={watchKey} stage="results" /> : null
-          }
+          watch={notify('results')}
         />
       ) : (
         <OpenBallot
@@ -256,7 +292,7 @@ export function OpenPollPanel({
           options={view.options}
           voterName={needsName ? voterName : undefined}
           isCreator={isCreator}
-          onVoted={onFirstVote ?? onChanged}
+          onVoted={answered(onFirstVote ?? onChanged)}
           questionStrip={questionStrip}
         />
       )}
