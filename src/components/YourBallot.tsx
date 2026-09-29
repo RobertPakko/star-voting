@@ -33,16 +33,19 @@ const STARS = 5
  * and no new grant: it is the same function *Edit vote* fills the ballot back
  * in from, asked one stage later.
  *
- * The invite side is the whole of what it serves, because that is the side
- * with an account to ask under. A ballot cast through a share link is
- * identified by a `voter_key` minted per question, and an open poll already
- * hands this browser its own scores back inside `open_poll_view` -- so what
- * that page should do with them is a separate question from this one, and is
- * not answered here.
+ * **Both kinds of poll, two ways of getting the scores.** An invite poll's are
+ * read here, through `poll_ballot_scores`. An open poll's arrive already in
+ * hand: `open_poll_view` returns `your_scores` at every stage, found by the
+ * account that cast the ballot when the reader is signed in and by this
+ * browser's `voter_key` otherwise -- so on a finished open poll the reader gets
+ * their ballot back on any device they voted from signed in, and on the one
+ * browser they voted from signed out. The page hands those in as `scores`, and
+ * nothing is read.
  */
 export function YourBallot({
   pollId,
   options,
+  scores: given,
 }: {
   pollId: string
   /**
@@ -54,7 +57,20 @@ export function YourBallot({
    * rather than in the order the score round ranked them.
    */
   options: PollOption[]
+  /**
+   * The ballot, where the page already holds it -- an open poll's
+   * `your_scores`. Absent, it is read for the signed-in account.
+   */
+  scores?: Record<string, number>
 }) {
+  return given ? (
+    <BallotRows options={options} scores={given} />
+  ) : (
+    <ReadBallot pollId={pollId} options={options} />
+  )
+}
+
+function ReadBallot({ pollId, options }: { pollId: string; options: PollOption[] }) {
   // Read every time the card is drawn, like the tally above it and the sheet
   // it stands in place of. A closed poll can be opened again, take a changed
   // vote and be closed again without telling anybody holding a copy of this,
@@ -97,6 +113,16 @@ export function YourBallot({
 
   if (!scores) return <YourBallotSkeleton rows={options.length || undefined} />
 
+  return <BallotRows options={options} scores={scores} />
+}
+
+function BallotRows({
+  options,
+  scores,
+}: {
+  options: PollOption[]
+  scores: Record<string, number>
+}) {
   // Faded in over the shape that was standing in for it, as the tally and the
   // sheet are; see Reveal.
   return (

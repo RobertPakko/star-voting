@@ -83,9 +83,10 @@ export function InstallGuide() {
           <Stack gap={4}>
             <Text fw={700}>Polls you answer through a link</Text>
             <Text size="sm">
-              No account needed. After you vote, or after you confirm the options on a poll that is
-              still collecting them, press <em>Notify me</em>. That device hears when voting opens
-              and when the results are ready, and nothing after that.
+              No account needed. Turn push notifications on from the same gear menu, and every open
+              poll you answer in that browser — by voting, or by confirming the options on a poll
+              still collecting them — tells that device when voting opens and when the results are
+              ready, and nothing after that.
             </Text>
           </Stack>
         </Card>
@@ -97,9 +98,9 @@ export function InstallGuide() {
 /**
  * Whether the reader is already in the installed app, which is the one thing
  * about this device the guide can tell them and the one thing they might not
- * know. Turning notifications on is not here: it lives in Settings for an
- * account and on the poll itself for a link, and a third place to do it was a
- * third copy of the same control.
+ * know. Turning notifications on is not here: it lives in the gear menu, for
+ * an account and a link alike, and a second place to do it was a
+ * second copy of the same control.
  */
 function ThisDevice() {
   const installed = isInstalledApp()
@@ -147,8 +148,7 @@ function Trouble({ children }: { children: ReactNode }) {
 function TurnOn() {
   return (
     <List.Item>
-      Turn notifications on — from the gear menu at the top of the page if you&rsquo;re signed in,
-      or with <em>Notify me</em> on a poll you answered through a link — and choose{' '}
+      Turn push notifications on from the gear menu at the top of the page, and choose{' '}
       <strong>Allow</strong> when your device asks.
     </List.Item>
   )
