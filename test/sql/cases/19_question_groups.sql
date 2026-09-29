@@ -235,6 +235,10 @@ begin
     ],
     array[]::text[], 'Lunch', 'open');
 
+  -- Strangers behind the link, nobody signed in: each voter below is the key
+  -- of the browser they vote from. A signed-in reader is 39's.
+  perform tests.sign_out();
+
   -- Holding one question's link reaches the rest of the poll; that is what
   -- makes the next question reachable from a link to the first. Every
   -- question is a poll row of its own, so its link is its own id and the
@@ -247,8 +251,9 @@ begin
   perform tests.assert_eq('with what it asks',
     v_group -> 1 ->> 'question_title', 'What time?');
 
-  -- Nothing here says who answered what. The keys are minted per question so
-  -- that one browser's ballots cannot be joined, and this must not undo it.
+  -- Nothing here says who answered what, to a reader who is signed out. The
+  -- keys are minted per question so that one browser's ballots cannot be
+  -- joined, and this must not undo it.
   perform tests.assert_eq('and says nothing about who has answered',
     v_group -> 0 ? 'voted', false);
 

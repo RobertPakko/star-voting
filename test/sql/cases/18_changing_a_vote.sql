@@ -261,6 +261,9 @@ begin
   select id into v_pizza from candidates where poll_id = v_open and name = 'Alien';
   select id into v_sushi from candidates where poll_id = v_open and name = 'Aliens';
 
+  -- Nobody signed in, so the key is all there is. A signed-in voter's ballot
+  -- is also reached by their account; see 39.
+  perform tests.sign_out();
   perform open_poll_submit(v_open, jsonb_build_array(
     jsonb_build_object('candidate_id', v_pizza, 'score', 5),
     jsonb_build_object('candidate_id', v_sushi, 'score', 1)), 'key-a', 'Ada');

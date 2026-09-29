@@ -16,9 +16,7 @@ import { EyeIcon, EyeSlashIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { pruneHiddenPolls, setPollHidden, useHiddenPolls } from '../lib/hiddenPolls'
-import { openedCandidates, openedPolls, pruneOpenedPolls } from '../lib/openedPolls'
-import type { ListCursor } from '../lib/openedPolls'
-import { pollTopic, userTopic, useLiveStream } from '../lib/useLiveStream'
+import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { AppBanner } from '../components/AppBanner'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
@@ -72,57 +70,20 @@ export function PollList() {
   // The page most recently *asked* for, which is how turning a page tells
   // itself apart from the first read. 0 until the first read lands.
   const fetched = useRef(0)
-  // Where each page ended when it was last read: its last row's sort key. It
-  // is what says which opened polls can be on the page after it, before that
-  // page is read; see `candidatesFor`.
-  const ends = useRef(new Map<number, ListCursor>())
-
-  // The opened polls that can be on a page, from what this browser knows
-  // before reading it — the dates it stored beside each id, and where the
-  // page before ended. Exact for page one; for a later page, as good as that
-  // page's last read, and nothing at all for a page reached by jumping past
-  // one never read. The check in `load` covers every way this can be short.
-  const candidatesFor = useCallback((target: number) => {
-    const after = target === 1 ? null : ends.current.get(target - 1)
-    if (after === undefined) return []
-    return openedCandidates(after, PAGE_SIZE).sort()
-  }, [])
-
-  // The opened polls being watched: the candidates for the page being read,
-  // plus any the check below found on it that the candidates missed. Only
-  // replaced when the page changes and otherwise only grown, so a read never
-  // takes a topic away from the page it is on.
-  const [watched, setWatched] = useState<string[]>(() => candidatesFor(1))
-  const watchedRef = useRef(watched)
-  watchedRef.current = watched
-
   // One round trip for a page of polls, their status, and the total. This
   // used to be a select plus one poll_status RPC per poll; which is also what
   // makes it cheap enough to re-read whenever anything on it moves.
   //
-  // Open polls somebody else made are on it too, where this browser has opened
-  // their links: the browser remembers which, and hands the ids in for the
-  // database to list among the rest. See lib/openedPolls.ts.
+  // Open polls somebody else made are on it too, where this account has voted
+  // in or confirmed them through their links: the database knows which, from
+  // the account on those ballots, so nothing is handed in and the list is the
+  // same on every device. See 0075_answered_open_polls_on_the_list.sql.
   const load = useCallback(async () => {
     const asked = chosen.current
-    const page = { p_limit: PAGE_SIZE, p_offset: (asked - 1) * PAGE_SIZE }
-    const opened = openedPolls()
-    // Sent only when there are some, so a reader who has never opened
-    // anybody's link makes exactly the call they always did.
-    let withOpened = opened.length > 0
-    let { data, error: rpcError } = await supabase.rpc(
-      'list_polls',
-      withOpened ? { ...page, p_open_ids: [...opened] } : page,
-    )
-    // PGRST202 is PostgREST finding no function with those arguments, which
-    // is this build talking to a database that has not had
-    // 0065_opened_polls_on_the_list.sql yet — the app deploys on push and the
-    // migrations apply on merge. The list without the opened polls is a
-    // working list; no list at all is not.
-    if (rpcError?.code === 'PGRST202' && withOpened) {
-      withOpened = false
-      ;({ data, error: rpcError } = await supabase.rpc('list_polls', page))
-    }
+    const { data, error: rpcError } = await supabase.rpc('list_polls', {
+      p_limit: PAGE_SIZE,
+      p_offset: (asked - 1) * PAGE_SIZE,
+    })
     if (rpcError) {
       // A refresh that fails keeps the list already on screen; only a first
       // read that fails leaves nothing to show.
@@ -136,22 +97,6 @@ export function PollList() {
     setError(null)
     const rows = (data as PollListItem[]) ?? []
     setPolls(rows)
-    // Where this page ends, for the page after it.
-    const last = rows[rows.length - 1]
-    if (last) ends.current.set(asked, { created_at: last.created_at, id: last.id })
-    // The check. An opened poll on this page that was not being watched when
-    // the read was made is a card whose changes nobody is hearing about, and
-    // whose next vote could already have gone by unannounced — the candidates
-    // were a guess, and the list can have shifted under the page since. So
-    // it is watched from now on, and the stream reads once more when its
-    // topic joins, which is the read that covers it. On nearly every load
-    // there is nothing here and this read was the only one.
-    const unwatched = rows
-      .filter((row) => row.created_by === null && !watchedRef.current.includes(row.id))
-      .map((row) => row.id)
-    if (unwatched.length > 0) {
-      setWatched((was) => [...new Set([...was, ...unwatched])].sort())
-    }
     // No rows means no total to read off one, and that can only be an empty
     // list: the database clamps a page request past the end onto the last
     // page there is, so a page that comes back empty is a list with nothing
@@ -162,15 +107,7 @@ export function PollList() {
     // poll that has since been deleted from a hidden poll on another page, so
     // it is the one read allowed to sweep the stored ids; see
     // pruneHiddenPolls, which is doing nothing at all on most reads.
-    //
-    // The opened polls are swept on the same read and the same terms. Both
-    // sweeps wait for a read that asked about them, since a list read without
-    // them leaves them out whether they still exist or not — and a hidden
-    // poll can be one of them.
-    if (count <= PAGE_SIZE && (withOpened || opened.length === 0)) {
-      pruneHiddenPolls(rows.map((row) => row.id))
-      pruneOpenedPolls(rows.map((row) => row.id))
-    }
+    if (count <= PAGE_SIZE) pruneHiddenPolls(rows.map((row) => row.id))
     // The page these rows are actually of, which is not always the page that
     // was asked for — the database clamps a request past the end. Recording
     // the clamped one is what stops the effect below from reading again the
@@ -191,42 +128,25 @@ export function PollList() {
   // change when the reader turns a page, so a page turn costs the one read it
   // genuinely needs and no re-subscription on top of it.
   //
-  // It carries every change to every poll the reader made or is invited to;
-  // see 0035_broadcast_polls_to_watchers.sql for the fan-out that makes it so.
-  //
-  // The one kind of card it says nothing about is an open poll that is here
-  // because this browser opened its link: its creator is not the reader and
-  // it has no invite list, so nothing it does reaches `user:<id>`. Those are
-  // watched on their own topics, the ones on the page in front of the reader
-  // — ten at most, and none on a page without one.
-  //
-  // And watched *before* the page is read, for the reason the reader's own
-  // topic is: a topic joined after the read that drew the page leaves a gap
-  // in which a vote goes unannounced. The page is not known until it is
-  // read, but which opened polls can be on it is: the list is newest first,
-  // and the browser stored each one's creation date beside its id. See
-  // `candidatesFor`, and the check in `load` for when that is wrong.
-  const topics = session?.user.id ? [userTopic(session.user.id), ...watched.map(pollTopic)] : []
-  const topicKey = topics.join(' ')
+  // It carries every change to every poll on the reader's list: the polls
+  // they made, the polls they are invited to, and the open polls their account
+  // has answered through a link. See 0035_broadcast_polls_to_watchers.sql for
+  // the fan-out that makes it so, and 0075_answered_open_polls_on_the_list.sql
+  // for the third of those. There used to be a topic per open poll on the page
+  // as well, because an open poll's voters were nobody the database could
+  // tell; now that their ballots carry their account, they are.
+  const topic = session?.user.id ? userTopic(session.user.id) : null
 
-  const { status: liveStatus, reread } = useLiveStream(topics, load)
+  const { status: liveStatus, reread } = useLiveStream(topic, load)
 
   // Turning a page is the one change the socket will not bring: the topic
   // does not depend on which page is on screen, so nothing announces it. The
   // first read is deliberately left to the subscription — see useLiveStream
   // — which is why this waits for one to have landed before it fires.
-  //
-  // Unless the page brought different topics with it: the stream resubscribes
-  // then, and reads once they have joined, which is this read — asking here
-  // as well would be a second one, made before the new topics could cover it.
-  const readKey = useRef(topicKey)
   useEffect(() => {
-    const moved = readKey.current !== topicKey
-    readKey.current = topicKey
-    if (moved) return
     if (fetched.current === 0 || fetched.current === page) return
     reread()
-  }, [page, topicKey, reread])
+  }, [page, reread])
 
   // Clamped rather than reset: a poll deleted from page three should leave
   // the reader on page three, or on the last page there is if that was it.
@@ -368,9 +288,9 @@ export function PollList() {
                       compact
                       title={poll.title}
                       description={poll.description}
-                      // Null on an open poll that is here because its link was
-                      // opened in this browser, which is told no more about
-                      // who made it than the link's own page is.
+                      // Null on an open poll that is here because this account
+                      // answered it through its link, which is told no more
+                      // about who made it than the link's own page is.
                       createdBy={
                         poll.created_by === session?.user.id ? 'you' : poll.created_by_email
                       }
@@ -446,7 +366,6 @@ export function PollList() {
               value={current}
               onChange={(next) => {
                 setPage(next)
-                setWatched(candidatesFor(next))
                 // The list is taller than a phone; landing halfway down the
                 // new page reads as nothing having happened.
                 window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })

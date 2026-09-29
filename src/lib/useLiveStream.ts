@@ -88,7 +88,7 @@ export interface LiveStream {
 const noop = () => {}
 
 /**
- * Re-read `onChange` whenever the database says one of `topics` moved.
+ * Re-read `onChange` whenever the database says `topic` moved.
  *
  * **Streaming, not polling.** Pages used to re-read themselves every few
  * seconds. They now hold a websocket and re-read when told to; the telling
@@ -132,7 +132,17 @@ const noop = () => {}
  * Returns what to tell the reader and how to ask; see `LiveStream`.
  */
 export function useLiveStream(
-  topics: readonly string[],
+  /**
+   * The one topic this page is told on — `poll:<id>` for a poll, `user:<id>`
+   * for the reader's list — or null for a page with nothing to watch.
+   *
+   * One, not several. The poll list used to hold a topic per open poll on the
+   * page as well as the reader's own, because the database had no way to
+   * reach an open poll's voters; since their ballots carry their account it
+   * reaches them on `user:<id>` like everybody else, and every page here is
+   * told everything it needs on one topic.
+   */
+  topic: string | null,
   /**
    * Re-read whatever this page shows. Returning `false` means the read did
    * not work and is worth trying again shortly; anything else, including
@@ -160,7 +170,7 @@ export function useLiveStream(
   const reread = useCallback(() => demand.current(), [])
 
   // Held in a ref so a caller passing a fresh closure every render resubscribes
-  // nothing: the channels belong to the poll being watched, not to the identity
+  // nothing: the channel belongs to the poll being watched, not to the identity
   // of the function watching it.
   const onChangeRef = useRef(onChange)
   const onGoneRef = useRef(onGone)
@@ -168,12 +178,6 @@ export function useLiveStream(
     onChangeRef.current = onChange
     onGoneRef.current = onGone
   })
-
-  // `topics` is a fresh array on every render, so the effect depends on its
-  // contents rather than its identity. A space is a safe separator because
-  // every topic is a fixed prefix and a uuid or hex token, so two different
-  // lists cannot collapse into the same key.
-  const key = topics.join(' ')
 
   useEffect(() => {
     // Nothing to watch. The About page's sample is the one poll this is ever
@@ -185,7 +189,7 @@ export function useLiveStream(
     // queue behind and nothing that could ever be waiting in it, but the
     // sample takes a ballot, and a card that asked for a re-read and got
     // silence would sit there as though the press had missed.
-    if (key === '') {
+    if (topic === null) {
       demand.current = () => {
         void onChangeRef.current()
       }
@@ -194,8 +198,11 @@ export function useLiveStream(
       }
     }
 
+    // Narrowed for the closures below, which TypeScript will not carry the
+    // check above into.
+    const watching: string = topic
     let cancelled = false
-    let channels: RealtimeChannel[] = []
+    let channel: RealtimeChannel | null = null
     let settle: number | undefined
     let grace: number | undefined
     // Whether a read is in flight. Reads are chained rather than run in
@@ -214,15 +221,12 @@ export function useLiveStream(
     // The throttle is measured between read starts, so a slow read does not
     // add another delay before the trailing read.
     let lastReadAt: number | undefined
-    // Whether every channel is currently carrying messages, and which of them
-    // are. A page is live only while all of its topics are: one that has
-    // dropped is a set of polls whose changes nobody is hearing about.
+    // Whether the channel is currently carrying messages.
     let subscribed = false
-    const joined = new Set<RealtimeChannel>()
-    // Whether the channels were let go on purpose, because the tab went
-    // behind something. Closing them reports itself back through the same
-    // callback a channel that broke would, and a tab put away deliberately
-    // must not come back to a warning about it.
+    // Whether the channel was let go on purpose, because the tab went behind
+    // something. Closing it reports itself back through the same callback a
+    // channel that broke would, and a tab put away deliberately must not come
+    // back to a warning about it.
     let paused = false
     // Reads that have failed in a row. Cleared by the first one that works,
     // so a page that is fine apart from one dropped request forgets about it.
@@ -350,76 +354,57 @@ export function useLiveStream(
     function open() {
       armGrace()
       armFirstRead()
-      channels = key.split(' ').map((topic) => {
-        const channel = supabase.channel(topic)
-        // Every event on the topic, because a poll change and an invite
-        // arrive under different names and both mean the same thing here:
-        // ask again.
-        channel.on('broadcast', { event: '*' }, (message) => {
-          if (cancelled || paused) return
-          // The one message that is not a prompt to re-read; see `onGone`.
-          if (message.event === 'poll_deleted' && onGoneRef.current) {
-            onGoneRef.current(topic)
-            return
-          }
-          ledger.signalled()
-          // Forgiven for the reason `insist` forgives them: a run of failed
-          // reads minutes ago should not stop this page answering a poll that
-          // has just moved.
-          failures = 0
-          schedule()
-        })
-        channel.subscribe((state) => {
-          if (cancelled || paused) return
-          if (state === 'SUBSCRIBED') {
-            joined.add(channel)
-            // Not until the last of them. A read now would not cover a channel
-            // still joining — anything it missed while it joined is exactly
-            // what the read on subscribing is for — so every channel but the
-            // last would cost a read the last one then has to repeat. Waiting
-            // is what lets a page of several topics open on one read, as a
-            // page of one always has. A channel rejoining alone is the whole
-            // wave by itself, and reads at once.
-            if (joined.size < channels.length) return
-            window.clearTimeout(grace)
-            grace = undefined
-            // The subscription arrived in time, so the floor is not needed:
-            // the read below is the one this page was waiting for.
-            window.clearTimeout(first)
-            first = undefined
-            subscribed = true
-            setStatus('live')
-            // Both the first read and the catch-up after a reconnect. Every
-            // SUBSCRIBED reads, unconditionally: Realtime replays nothing
-            // sent while the socket was down, so there is no signal to count
-            // and nothing a finished read could be said to cover. A redundant
-            // read is a wasted round trip, where a suppressed one is a page
-            // left showing votes that have since been overtaken.
-            //
-            // One demand per wave rather than per channel, because of the
-            // wait above: a page of several topics — the poll list, with the
-            // open polls this browser has opened — reads once when the last
-            // of them joins, not once for each.
-            insist()
-          } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
-            joined.delete(channel)
-            subscribed = false
-            armGrace()
-          }
-        })
-        return channel
+      const opened = supabase.channel(watching)
+      channel = opened
+      // Every event on the topic, because a poll change and an invite arrive
+      // under different names and both mean the same thing here: ask again.
+      opened.on('broadcast', { event: '*' }, (message) => {
+        if (cancelled || paused) return
+        // The one message that is not a prompt to re-read; see `onGone`.
+        if (message.event === 'poll_deleted' && onGoneRef.current) {
+          onGoneRef.current(watching)
+          return
+        }
+        ledger.signalled()
+        // Forgiven for the reason `insist` forgives them: a run of failed
+        // reads minutes ago should not stop this page answering a poll that
+        // has just moved.
+        failures = 0
+        schedule()
+      })
+      opened.subscribe((state) => {
+        if (cancelled || paused) return
+        if (state === 'SUBSCRIBED') {
+          window.clearTimeout(grace)
+          grace = undefined
+          // The subscription arrived in time, so the floor is not needed:
+          // the read below is the one this page was waiting for.
+          window.clearTimeout(first)
+          first = undefined
+          subscribed = true
+          setStatus('live')
+          // Both the first read and the catch-up after a reconnect. Every
+          // SUBSCRIBED reads, unconditionally: Realtime replays nothing sent
+          // while the socket was down, so there is no signal to count and
+          // nothing a finished read could be said to cover. A redundant read
+          // is a wasted round trip, where a suppressed one is a page left
+          // showing votes that have since been overtaken.
+          insist()
+        } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
+          subscribed = false
+          armGrace()
+        }
       })
     }
 
     function close() {
-      for (const channel of channels) supabase.removeChannel(channel)
-      channels = []
-      joined.clear()
+      if (channel) supabase.removeChannel(channel)
+      channel = null
     }
 
     function onVisibilityChange() {
       if (document.hidden) {
-        // Set before closing, not after: letting the channels go reports
+        // Set before closing, not after: letting the channel go reports
         // itself back as `CLOSED`, which is indistinguishable from one that
         // broke and would otherwise start the clock on a warning that fires
         // while nobody is even looking.
@@ -437,7 +422,7 @@ export function useLiveStream(
         setStatus('connecting')
         return
       }
-      if (channels.length === 0) {
+      if (channel === null) {
         paused = false
         open()
       }
@@ -461,7 +446,7 @@ export function useLiveStream(
       close()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [key])
+  }, [topic])
 
   // `reread` never changes identity, so this is one object for as long as the
   // status holds still: a page holding it in a dependency list is watching the

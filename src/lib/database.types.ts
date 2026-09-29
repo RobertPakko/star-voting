@@ -19,6 +19,7 @@ export type Database = {
     Tables: {
       ballots: {
         Row: {
+          account_id: string | null
           id: string
           poll_id: string
           revised_at: string | null
@@ -28,6 +29,7 @@ export type Database = {
           voter_name: string | null
         }
         Insert: {
+          account_id?: string | null
           id?: string
           poll_id: string
           revised_at?: string | null
@@ -37,6 +39,7 @@ export type Database = {
           voter_name?: string | null
         }
         Update: {
+          account_id?: string | null
           id?: string
           poll_id?: string
           revised_at?: string | null
@@ -115,6 +118,7 @@ export type Database = {
       }
       option_confirmations: {
         Row: {
+          account_id: string | null
           confirmed_at: string
           id: string
           poll_id: string
@@ -123,6 +127,7 @@ export type Database = {
           voter_name: string | null
         }
         Insert: {
+          account_id?: string | null
           confirmed_at?: string
           id?: string
           poll_id: string
@@ -131,6 +136,7 @@ export type Database = {
           voter_name?: string | null
         }
         Update: {
+          account_id?: string | null
           confirmed_at?: string
           id?: string
           poll_id?: string
@@ -431,7 +437,7 @@ export type Database = {
       is_invited_to_poll: { Args: { p_poll_id: string }; Returns: boolean }
       is_poll_creator: { Args: { p_poll_id: string }; Returns: boolean }
       list_polls: {
-        Args: { p_limit: number; p_offset: number; p_open_ids?: string[] }
+        Args: { p_limit: number; p_offset: number }
         Returns: {
           closed_at: string
           confirmed_count: number
@@ -482,7 +488,6 @@ export type Database = {
         Args: { p_poll_id: string; p_voter_key: string; p_voter_name?: string }
         Returns: undefined
       }
-      open_poll_follow: { Args: { p_poll_id: string }; Returns: undefined }
       open_poll_group: { Args: { p_poll_id: string }; Returns: Json }
       open_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
       open_poll_results: { Args: { p_poll_id: string }; Returns: Json }

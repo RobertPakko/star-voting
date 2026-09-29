@@ -28,12 +28,15 @@ import { badgeColor } from '../lib/badgeColors'
  * **Marks are shown only where they are honest, and the two ways in are honest
  * about different things.** On an invite poll the server knows what this
  * account has answered and finished adding to, and `poll_group` says so.
- * On an open poll it does not and must not — a share-link ballot is identified
- * by a key minted per question so one browser's ballots cannot be joined, and
- * `open_poll_group` returns no such flag on purpose. That is a rule about *the
- * server*, not about the reader: the browser already knows which questions it
- * has answered and is the one place entitled to, so there the flag comes out
- * of `lib/questionMarks.ts` and reaches the server no more than the remembered
+ * On an open poll it knows the same for a reader who is signed in, whose
+ * share-link ballots carry their account, and `open_poll_group` says so on
+ * every device. For a reader who is signed out it does not and must not — a
+ * ballot cast with nobody signed in is identified by a key minted per question
+ * so one browser's ballots cannot be joined, and `open_poll_group` returns no
+ * flag for them on purpose. That is a rule about *the server*, not about the
+ * reader: the browser already knows which questions it has answered and is
+ * the one place entitled to, so there the flag comes out of
+ * `lib/questionMarks.ts` and reaches the server no more than the remembered
  * voter name does.
  *
  * This component asks for none of that. It takes a boolean per question and

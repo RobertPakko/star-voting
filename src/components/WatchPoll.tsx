@@ -107,8 +107,8 @@ export function WatchPoll({
  *
  * It files nothing and offers no button. A signed-in reader already hears
  * about every poll they are in — an invite poll through its list, an open poll
- * through the follow their browser files when they answer it (`followPoll`) —
- * on whichever channels their account allows, and the switches for those are
+ * through the account their ballot or confirmation carries — on whichever
+ * channels their account allows, and the switches for those are
  * in the gear menu in the header. So the one thing this can usefully say is
  * where that menu is, and it says it only to a reader whose device is not
  * being pushed to yet: once push is on here there is nothing to say, and a

@@ -19,7 +19,9 @@ import type { OpenPollView, PollRead, PollStatus } from './types'
  * establishes whether the address even leads to an open poll, so minting here
  * would leave a key behind for every invite poll an account opens, none of
  * which could ever be used. A browser that has voted is already holding its
- * key; one that is not has not voted. See `heldVoterKeyFor`.
+ * key; one that is not has not voted from here — though a signed-in reader
+ * may have voted from another device, which the server finds by their account
+ * without a key. See `heldVoterKeyFor`.
  */
 export async function readPollPage(
   pollId: string,
@@ -61,13 +63,15 @@ export async function readPollPage(
  *    counts `invited_voters` and gets nothing, so `is_complete` — which needs
  *    `invited > 0` — is false and stays false however many people vote.
  *  - **`voted` and `confirmed` are false**, and not because they are unknown.
- *    They are `poll_status`' questions about the *account*, and an open poll
- *    records neither against one: `open_poll_submit` inserts a ballot with
- *    `voter_id` null and `open_poll_confirm_options` stores no voter at all,
- *    both keyed by the browser's `voter_key` instead. So `poll_status` returns
- *    false here for a creator who has voted in their own open poll, and so
- *    does this. What that browser has done is in `OpenPollView.voted` and
- *    `.confirmed`, which is where the page reads it.
+ *    They are `poll_status`' questions about the account *as an invitee*, and
+ *    an open poll has none: `open_poll_submit` inserts a ballot with
+ *    `voter_id` null and `open_poll_confirm_options` stores no `voter_id`
+ *    either. A signed-in voter's account goes in `account_id`, which
+ *    `poll_status` does not read. So `poll_status` returns false here for a
+ *    creator who has voted in their own open poll, and so does this. What
+ *    this reader has done through the link — by their account or this
+ *    browser's key — is in `OpenPollView.voted` and `.confirmed`, which is
+ *    where the page reads it.
  *
  * And `expires_at` is the one field the view genuinely does not carry, which
  * is why it is asked for rather than derived: it is `created_at` plus the

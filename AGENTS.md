@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch, WatchPoll — …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list and which open polls it has opened (openedPolls.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list, which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -677,9 +677,9 @@ open poll — and that a page of the poll list is a page of the same list every
 time: that two pages partition it with nothing on both and nothing on neither,
 that the total is of the list rather than the page, and that asking past the
 end lands on the last page there is — and that the list carries an open poll
-whose id the browser hands it, and no other kind, without naming who made it,
-and that the link's own view spells the poll's creation date exactly as the
-list does;
+the reader's account has voted in or confirmed, in any question of it, and no
+other, without naming who made it, and that every change to such a poll reaches
+that reader's list — a confirmation taken back included;
 everything about the results-ready
 announcement except the sending — whether a poll has a result at all, who
 would be told and who is deliberately not, and that the notice is made exactly
@@ -696,9 +696,13 @@ does not exist is refused in the same words as one that is simply not yours.
 And the same half of push notifications: who each moment would be pushed to
 and whose browser is left out, the two settings that turn a channel off, the
 endpoints the database refuses, that a watch on an open poll is filed
-against its first question and is gone once the results are out, and that a
-signed-in voter's follow puts their account in an open poll's audience on the
-same terms.
+against its first question and is gone once the results are out, and that an
+account that has answered an open poll signed in is in its audience on the
+same terms as an invitee. And which share-link ballot and confirmation are a
+reader's: the account's on any device when they are signed in, the browser
+key's when they are not, never another account's through a shared browser's
+key, never claimed after the fact, and never an address on anything a read
+hands back.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. The
 `poll_page` case above is the nearest thing and still not an exception to
@@ -753,9 +757,10 @@ not the socket, that decides what comes back.
 
 There are two: `poll:<id>`, for every page watching one poll, whichever side
 of it they are on; and `user:<id>`, for one person's poll list — every change
-to every poll they made or are invited to, invites included. (The open polls
-a browser adds to that list are watched on their own `poll:<id>` topics as
-well, in the same stream; see [Open polls you have opened](#open-polls-you-have-opened).)
+to every poll on it: the polls they made, the polls they are invited to, invites
+included, and the open polls their account has answered through a link (see
+[Open polls you have answered](#open-polls-you-have-answered)). Every page
+watches exactly one of them.
 
 **The list watches its reader, not its rows, and that is what keeps it to one
 request.** It used to subscribe to one topic per poll on the page: a set it
@@ -893,10 +898,11 @@ Four of the status fields are its own and all four are answered as constants,
 because that is what `poll_status` answers on an open poll: there is no invite
 list, so `invited_count` is 0, `is_complete` needs `invited > 0` and can never
 be true, and `invited` is false. And `voted` and `confirmed` are false *however
-much that account has done through the link* — they ask about the account, and
-`open_poll_submit` writes a ballot with `voter_id` null while
-`open_poll_confirm_options` stores no voter at all, both keyed by the browser's
-`voter_key`. What that browser has done is in the view, which is where the page
+much that account has done through the link* — they ask about the account as an
+invitee, and `open_poll_submit` and `open_poll_confirm_options` both leave
+`voter_id` null, keying what they write by the browser's `voter_key` and, when
+somebody is signed in, by `account_id`, which `poll_status` does not read. What
+this reader has done through the link is in the view, which is where the page
 reads it.
 
 The one field the view genuinely does not carry is `expires_at`, and it is
@@ -2453,7 +2459,8 @@ whoever is using it, and it reaches the database one of two ways:
   after confirming the options on a poll still collecting them. No account,
   and the creator does not get the button: they are the one who opens and
   closes the poll. Only a reader who is **not signed in** gets it; one who
-  is follows the poll instead (below), and one press covers the poll's
+  is is in the poll's audience through the account on their ballot instead
+  (below), and one press covers the poll's
   opening and its results alike, since a watch is filed once for the whole
   group and lasts until the results go out.
 
@@ -2570,26 +2577,34 @@ A watch is the right shape for somebody holding a link and nothing else, and
 the wrong one for somebody signed in: their account already says which
 channels it hears on, on every device it is bound to, and an open poll they
 voted in was the one kind of poll that setting could not reach. So **an
-account that answers an open poll follows it** (`poll_follows`, through
-`open_poll_follow`), and a follower is simply part of the poll's audience —
-`poll_email_audience` includes them, so they are emailed and pushed about the
-poll opening and its results exactly as an invitee is, by the same functions,
-under the same two settings, minus whoever acted. There is nothing to press:
-`OpenPollPanel` files the follow when the account votes or confirms the
-options (`followPoll`), and again from any page that finds it already has —
-which covers a vote cast before this existed. The creator never follows their
-own poll; they are the one who opens and closes it.
+account that answers an open poll is part of its audience**, simply because
+its ballot or its confirmation says so: since
+[`0074`](supabase/migrations/0074_open_ballots_follow_the_account.sql) a
+share-link ballot cast signed in carries the account, and `poll_email_audience`
+reads those accounts through `poll_answering_accounts` — every question of the
+group, so answering question 3 is being in the poll. They are emailed and
+pushed about the poll opening and its results exactly as an invitee is, by the
+same functions, under the same two settings, minus whoever acted. There is
+nothing to press and nothing for the browser to file. The creator's own ballot
+puts nobody new in the audience: the creator is in it already, and is left out
+of the moments that were their own doing by the rule every poll uses.
 
-**What it records is that an account is in an open poll, and not which ballot
-is theirs.** A follow carries no voter key and no timestamp, and it is filed in
-a request of its own rather than inside the ballot's transaction, so there is
-nothing on the row to join a ballot to. That is no more than a watch from a
-browser bound to the same account already disclosed through
-`push_subscriptions.endpoint`. It is one-shot like a watch: filed against the
-group's first question, and deleted when the results are announced or the poll
-closes with nothing to announce — so no account carries a list of every open
-poll it ever answered, and a reopened poll is followed again when its reader
-next opens it (`followPoll` remembers per tab, not in storage).
+**It was a separate record for a day, and that is worth knowing.**
+`0073_settings_link_and_open_poll_follows.sql` added `poll_follows`: a row the
+browser filed in a request of its own when a signed-in reader answered,
+carrying nothing that joined it to the ballot, and deleted once the results
+went out so that no account kept a list of the open polls it had answered.
+`0074` was written alongside it and put the account on the ballot itself, for
+the reasons in [An open ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account) — and once the
+ballot carries the account, the follow records nothing the ballot does not,
+and was the weaker copy: filed by the browser as a best effort, so a failed
+request was a voter nobody told. [`0076_one_way_into_an_open_poll.sql`](supabase/migrations/0076_one_way_into_an_open_poll.sql)
+dropped it and pointed the audience at the ballots. The one behaviour that
+moved: a follower was forgotten once the results went out, and an account that
+answered is now told again if the poll is reopened and finishes a second time,
+as an invitee always was — its ballot is still there, which is the reason an
+invitee is.
 
 **The switches are a menu, not a page.** `NotificationSwitches` is two
 switches — *Email notifications* and *Push notifications* — with no line under
@@ -2614,8 +2629,8 @@ route).
 gear is** (`NotifyHint`, beside `WatchPoll`), on invite polls and open polls
 alike: under *your vote is in*, and under the card after confirming the
 options, because those are the two moments a reader is left waiting on
-everybody else. There is nothing for it to file — the list or the follow
-already puts them in the audience — so what a reader who is not being pushed
+everybody else. There is nothing for it to file — the invite list or the
+account on their ballot already puts them in the audience — so what a reader who is not being pushed
 is missing is push on this device, which is the switch in that menu. It is a
 line of text, not a button, and it says nothing once this device is set up
 (`accountPushHere`, from two local mirrors — the device's binding and the
@@ -3227,7 +3242,7 @@ explanations intact.
 |  | **Invited people** | **Anyone with the link** |
 | --- | --- | --- |
 | Access | Email addresses on the invite list | An unguessable link — the poll's id |
-| Voter signs in | Yes, magic link | No |
+| Voter signs in | Yes, magic link | No — but may, and then their ballot follows them between devices |
 | Results unlock | When everyone invited has voted, or when the creator closes the poll | Only when the creator closes the poll |
 | One vote each | Enforced — one ballot per account | **Not** enforced |
 
@@ -3237,6 +3252,72 @@ data. The app stores a random key in `localStorage` (see `src/lib/voterKey.ts`)
 to stop accidental double-submits, but that is a convenience, not a guard. Open
 polls are for picking a movie; invite polls are for anything where the outcome
 matters.
+
+### An open ballot cast signed in follows the account
+
+A share-link ballot used to be identified by that browser's key and nothing
+else, so it was a fact about a browser: vote on the laptop, open the link on the
+phone, and the phone found a blank ballot, a question strip with nothing ticked,
+and no way to change the vote already cast. A reader who is signed in has
+something better to go on than a browser, so
+[`0074_open_ballots_follow_the_account.sql`](supabase/migrations/0074_open_ballots_follow_the_account.sql)
+records the account on what they cast through the link — `ballots.account_id`,
+and `option_confirmations.account_id` one stage earlier — and every `open_poll_*`
+door finds a reader's ballot by it. The phone is told the vote is in, is handed
+the ballot to change, ticks the questions the laptop answered, and has the poll
+on its list — see [Open polls you have answered](#open-polls-you-have-answered).
+
+**Who "you" are on an open poll**, said once in `open_ballot_of` and
+`open_confirmation_of` and asked by every function that needs it:
+
+- **Signed in:** the ballot carrying your account; failing that, the ballot this
+  browser's key cast while nobody was signed in, which is still yours because
+  this browser cast it. A key another *account* voted with reaches nothing — the
+  next person signed in on a shared browser casts their own ballot, and it goes
+  in without the key, since a key cannot be on two ballots in one question.
+- **Signed out:** the ballot this browser's key cast, as it always was —
+  including one cast signed in, so the laptop that voted still says so after
+  signing out.
+
+**Nothing is claimed after the fact.** A ballot cast signed out stays unlinked
+when its voter signs in, even when they change it there. A ballot carries an
+account if and only if it was cast by one, which is a rule a voter can predict.
+
+**A new column rather than `voter_id`**, because `voter_id` means *an invitee's
+ballot* all over the schema: the rosters and the published sheet join it to
+`auth.users` for an email address, `ballots_select_own` grants on it, and
+`poll_status` answers an open poll's `voted` as false because an open ballot
+never carries one — which `statusFromOpenView` relies on. `account_id` is read
+by the open-poll functions and `poll_group` and by nothing else, so no address
+can reach a roster or a sheet through it; a check constraint says a row carries
+one or the other.
+
+**The strip's ticks come from the server where it can answer them.**
+`open_poll_group` carries `voted` and `confirmed` per question for a reader who
+is signed in, and `poll_group` counts the account's link ballots too, for the
+creator's own page. Signed out it carries neither, for the reason it never did —
+see [A poll can ask more than one question](#a-poll-can-ask-more-than-one-question)
+— and the browser's own record stands in. `useQuestionMarks` in
+[`src/lib/questionMarks.ts`](src/lib/questionMarks.ts) draws a mark where either
+says so, and lets each read of a single question correct both, since a
+confirmation can be taken back after the group was read.
+
+**Edit vote reads the ballot again when signed in.** Signed out, the scores the
+page already holds are the only copy anything could have changed. Signed in,
+another device may have changed them since, and a changed vote announces
+nothing (see [Changing your vote](#changing-your-vote-until-the-results-are-out)),
+so opening the copy in hand could hand the voter an old ballot to overwrite a
+newer one with. That press asks first, as an invite ballot's always has.
+
+**What it costs.** An open poll that hides its respondents used to be the
+stronger of the two anonymity guarantees. That is now true of a ballot cast
+signed out and not of one cast signed in — see [Whether ballots are
+published](#whether-ballots-are-published).
+
+`39_an_open_ballot_follows_the_account` covers all of the above, and cases that
+stand in several strangers behind their own keys now `tests.sign_out()` first,
+since one signed-in session is one account and one account has one ballot per
+question. So does `scripts/sample-poll.sql`, for its nine voters.
 
 Results stay hidden until they unlock in both modes, so nobody ever votes
 knowing how it is going.
@@ -3528,7 +3609,12 @@ stores a name — `open_poll_submit` discards one whatever the client sends. An
 invite poll always stores the voter's account id, because that is how it
 enforces one ballot each; hiding is a policy applied over data that still
 exists, and anyone with direct database access could undo it. The stronger
-guarantee needs an open poll.
+guarantee needs an open poll **voted in signed out**: a ballot cast through the
+link while signed in carries the account too, so that it can follow its voter
+to another device (see [An open ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account)), and is then in
+the database with an account on it exactly as an invite ballot is. Nothing reads
+it out to anybody — no function returns `account_id` — but it is there.
 
 ### Where the options come from
 
@@ -4116,9 +4202,12 @@ rather than a rejected one.
 
 Reading your own ballot back is two different cheap things rather than one
 uniform one. An open poll's arrives inside `open_poll_view` as `your_scores`,
-reached with the same `voter_key` that had to be held to cast it, so the panel
-already has it and changing a vote costs no request until there is a changed
-vote to send. An invite poll's comes from `poll_ballot_scores()`, asked for
+reached with the same `voter_key` that had to be held to cast it — or, for a
+reader signed in, with the account that cast it — so the panel already has it
+and, signed out, changing a vote costs no request until there is a changed vote
+to send. Signed in, *Edit vote* reads it again first, because another device
+may have changed it since; see [An open ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account). An invite poll's comes from `poll_ballot_scores()`, asked for
 only when somebody presses the button, because almost nobody does and a poll
 page should still cost what it always did to open. `authenticated` has no read
 of `scores` anywhere, which is why that is a function at all.
@@ -4127,9 +4216,10 @@ of `scores` anywhere, which is why that is a function at all.
 was a dedupe token: holding it proved nothing except that this browser had
 voted, and `src/lib/voterKey.ts` says as much. It is now also what hands a
 ballot back, so on a shared browser the next person sees the previous one's
-scores filled in where they used to see "your vote is in". The key is
-per-poll, in that browser's `localStorage`, and never leaves it; open polls
-already promise less than invite polls do, and this is inside what they
+scores filled in where they used to see "your vote is in" — unless that next
+person is signed in, when a key another account voted with hands back nothing.
+The key is per-poll, in that browser's `localStorage`, and never leaves it; open
+polls already promise less than invite polls do, and this is inside what they
 promise rather than a new hole in it.
 
 ### Reopening a closed poll
@@ -4456,8 +4546,12 @@ to each other; see `src/lib/voterKey.ts`. The continuity a voter actually
 notices is the name, and that lives in the browser instead
 (`src/lib/voterName.ts`): typed once, offered back on the next question,
 never linked on the server. `open_poll_group` accordingly returns the sibling
-ids and **no "answered" flag**; `poll_group` does return one, because an
-invite ballot carries an account and nothing has to be linked to find it.
+ids and **no "answered" flag to a reader who is signed out**; `poll_group` does
+return one, because an invite ballot carries an account and nothing has to be
+linked to find it. So does `open_poll_group` for a reader who is signed in, for
+the same reason: their link ballots carry their account, which has already
+joined them — see [An open ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account).
 
 **The tick a voter is owed comes from the browser, for the same reason the
 name does.** That rule about `open_poll_group` is a rule about *the server*,
@@ -4476,6 +4570,13 @@ sent anywhere, and load-bearing for nothing. Being wrong about it colours a
 badge. It cannot let anybody vote twice, read a sealed result, or reach a poll
 they hold no link to; the server decides all three from the key it is shown,
 on every call.
+
+That record is **the fallback now, not the answer**, for anybody signed in:
+their ticks come from the server with the group, on whichever device they
+answered, and the browser's record fills in only the questions this browser
+answered signed out. A browser's record could only ever speak for that browser,
+which is exactly what made a question answered on the laptop read as
+outstanding on the phone.
 
 **It holds two marks now, and they are the same mark one stage apart.** The
 strip marks the question a reader has finished with, and while the poll is
@@ -4976,13 +5077,14 @@ is the four letters and the two rules that decide them.
   the group, and finishing is one notice row filed against the first. Nothing
   in a group announces itself per question.
 
-- **An open poll writes only to the accounts following it**, and needs no
+- **An open poll writes only to the accounts that answered it**, and needs no
   special case to. It has no invite list, so there is nobody to invite; it
   never opens itself, so its opening is always its creator's own doing; and it
   only ever ends by being closed, by the one person who would have been told.
-  What is left is the signed-in voters who follow it — see [Open polls you
+  What is left is the voters who answered it signed in — see [Open polls you
   answered while signed in](#open-polls-you-answered-while-signed-in) — who
-  are in `poll_email_audience` beside the invitees an invite poll would have.
+  are in `poll_email_audience`, through the account on their ballots, beside
+  the invitees an invite poll would have.
 
 `test/sql/cases/23_who_the_emails_go_to.sql` covers both decisions and neither
 send: which invitation each address is owed at each stage and that the creator
@@ -5054,126 +5156,81 @@ invalid HTML and presses both, so the heading is the link and its `::after`
 covers the card. The whole card is still one thing to click and one thing to
 tab to, with the eye beside it as the second stop.
 
-### Open polls you have opened
+### Open polls you have answered
 
 An open poll made by somebody else used to be on nobody's list: `list_polls`
 answered with the polls you made and the polls you were invited to, and an
 open poll has no invite list. So a poll you had voted in three times was
 reachable only by the link it arrived by, wherever that link had got to. Now
-**an open poll this browser has opened is on the list**, among the rest, by
-date, counted by the pager and hidden by the same eye.
+**an open poll your account has voted in or confirmed is on your list**, among
+the rest, by date, counted by the pager and hidden by the same eye — on every
+device you sign in on.
 
-**The browser remembers, and the database lists.** `src/lib/openedPolls.ts`
-keeps the ids, each with its poll's creation date — newest-opened first, a
-hundred at most — and `PublicPoll` adds one
-every time it arrives at an open poll, signed in or not. `PollList` hands them
-to `list_polls` as `p_open_ids`
-([`0065_opened_polls_on_the_list.sql`](supabase/migrations/0065_opened_polls_on_the_list.sql)),
-which adds any **open** poll named there to what the reader can see. Reading
-each one in the browser instead would have been a request per poll and a
-second list with no place in the first one's order or its pages; handing them
-in keeps the list one request, one order and one pager.
+**The database knows, because the ballot says so.** Since
+[`0074`](supabase/migrations/0074_open_ballots_follow_the_account.sql) a
+ballot or a confirmation cast through a link while signed in carries the
+account (see [An open ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account)), and
+[`0075_answered_open_polls_on_the_list.sql`](supabase/migrations/0075_answered_open_polls_on_the_list.sql)
+has `list_polls` read it: an open poll is on the list when the account has a
+row in any question of it. The row is the group's first question whichever
+question was answered, like every group on the list.
 
-**Nothing is recorded on the server, and that is why it is in the browser.**
-A ballot cast through a link is keyed per question so that one browser's
-ballots cannot be joined; a row saying *this account opened that poll* would
-be that join, made about every open poll anybody signed in has looked at. So
-it is per browser, which is the trade [hiding a
-poll](#hiding-a-poll-from-your-list) already makes, with the same consequence — opened on the phone is not on the
-laptop's list, and a poll opened before signing in is on the list of whoever
-signs in afterwards in that browser.
+**It used to be the browser's, and that is what was given up.** From `0065`
+until `0075` the browser remembered every open poll it had opened
+(`src/lib/openedPolls.ts`, now gone) and handed the ids in as `p_open_ids`,
+on the grounds that a row saying *this account opened that poll* would be a
+join the per-question voter key exists to prevent. It made the list a fact
+about a browser — opened on the phone was not on the laptop's list — and it
+is the account on the ballot that removes the objection: once the voter has
+chosen to answer signed in, the database already holds the join, for a reason
+they asked for, and listing the poll tells it nothing new. What still is not
+recorded is *opening* one, so **a poll you only opened, or answered signed
+out, is not on the list**. That is the whole of the trade, and it is the
+right way round: the polls worth coming back to are the ones you took part
+in, and the ones you did not are a link in a chat.
 
-**The list tells nobody more than the link does.** Holding an open poll's id
-is the whole of the right to read it, so listing one discloses nothing
-`open_poll_view` would not. Two things keep it there: `mode = 'open'` is part
-of the test, so an invite poll's id in the array lists nothing however it was
-come by; and a row that is on the list only because its id was handed in
-carries a null `created_by` and `created_by_email`, so the card has no
-*Created by* line — the same silence as the link's own page, for [the same
-reason](#the-polls-high-level-details). `37_opened_polls_on_the_list` holds
-both.
+**The list tells nobody more than the link does.** Answering a poll through
+its link already meant holding the link, so listing it discloses nothing
+`open_poll_view` would not. A row that is on the list only because it was
+answered carries a null `created_by` and `created_by_email`, so the card has
+no *Created by* line — the same silence as the link's own page, for [the same
+reason](#the-polls-high-level-details). `37_answered_open_polls_on_the_list`
+holds that, and that a ballot cast signed out lists nothing.
 
-**Recorded by the first question.** A poll of several questions is one row on
-the list and that row is question 1, so the browser records question 1's id
-whichever question the link opened. That is also what makes pruning honest:
-on a read that is the whole list, a remembered id matching no row is a poll
-that has been deleted, and `pruneOpenedPolls` drops it on exactly the terms
-`pruneHiddenPolls` uses — and only when the read was made with the ids, since
-one without them says nothing about whether they exist.
+**`p_open_ids` is gone, and an older build still gets a list.** A different
+argument list is a different function, so `list_polls` was dropped and
+recreated with its grant restated. A browser still on the previous build
+calls it with the ids, gets `PGRST202`, and asks again without them — which
+it has always done — so it draws the new list rather than none.
 
-**The new argument is optional, and the call is made without it when there is
-nothing to send.** A different argument list is a different function, so the
-old `list_polls` was dropped and recreated with its grant restated. A browser
-still on the previous build calls it with two arguments and gets the list it
-always did; a browser on this build talking to a database that has not had
-the migration gets `PGRST202`, and `PollList` asks again without the ids
-rather than showing no list at all.
+**The cards are live on the reader's own topic, and nothing else.** The list
+listens on `user:<id>` (see [Live updates](#live-updates)). For as long as the
+database could not tell an open poll's voters from anybody else, that topic
+said nothing about the open polls on the list, so the page watched a
+`poll:<id>` per such poll as well — and because a topic joined after the read
+leaves a gap, it had to work out which could be on a page *before* reading it,
+from creation dates the browser stored beside each id, and check the guess
+after every read. All of that is gone. `broadcast_poll_change` and
+`broadcast_poll_gone` now tell the `user:<id>` of every account with a ballot
+or a confirmation in the poll's group (`poll_answering_accounts`), beside its
+creator and its invitees, so a vote in any question of an open poll you
+answered reaches your list on the one topic it was already watching. And
+`broadcast_polls_emptied` tells the accounts whose own rows are leaving, which
+is how a confirmation taken back — the only reason the poll was on that list —
+takes it off every screen showing the list, though by then that account is no
+longer anybody `broadcast_poll_change` can find.
 
-**The cards are live, on their own topics, and the list still opens on one
-read.** The list listens on `user:<id>` (see [Live updates](#live-updates)),
-which fans out to a poll's creator and invitees, and the reader of an open
-poll is neither — so the list also watches `poll:<id>` for the opened polls on
-the page in front of the reader. Ten at the most, and none on a page without
-one.
+That left every page in the app watching exactly one topic, so
+`useLiveStream` takes one again: the machinery for reading once when the last
+of several channels had joined, and for a page turn that changed the topic
+set, went with the page that needed it.
 
-The difficulty is the order. A topic joined *after* the read that drew the
-page leaves a gap, a vote committed between that read and the join is never
-announced, and the card sits stale until something else moves it. The poll
-page never has this, because its topic is in its URL and it subscribes before
-it reads. The list does not know which opened polls are on a page until it
-has read the page — but it can work it out beforehand, because **the list is
-ordered newest first and the browser knows when each opened poll was made**:
-
-- **Page one** holds the ten newest rows of the whole list. An opened poll on
-  it has fewer than ten rows ahead of it, so fewer than ten *opened* polls
-  ahead of it — it is among the ten newest opened polls. That is exact, and it
-  is ten topics at most whatever else the reader is in.
-- **A later page** starts after the last row of the page before, so its opened
-  polls are among the ten newest opened polls older than that row.
-  `PollList` keeps each page's last row from its last read (`ends`) for this.
-
-`openedCandidates` in `src/lib/openedPolls.ts` is that rule, and the dates it
-needs come from the page that opened each poll:
-[`0067_open_poll_view_says_when.sql`](supabase/migrations/0067_open_poll_view_says_when.sql)
-adds `created_at` to `open_poll_view`, and `PublicPoll` stores it beside the id.
-It is a date anybody holding the link could already see the poll exist on;
-the page still draws no expiry. The two sides compare dates as text, which
-only works if both are Postgres's own JSON spelling of the same column —
-`37_opened_polls_on_the_list` holds them to each other.
-
-**And the guess is checked on every read.** A later page's boundary can have
-moved since it was recorded — a poll created or deleted shifts every page
-after it — and a page reached by jumping past one never read has no boundary
-at all. So after each read, `load` looks for an opened poll on the page that
-was not being watched, and when there is one it adds that topic; the stream
-reads once more when it has joined, which is the read that covers it. The
-watched set is only ever grown by that, and only replaced when the page
-changes, so a read never takes a topic away from the page it is on. On nearly
-every load the check finds nothing and the first read was the only one.
-
-Two changes to `useLiveStream` hold this up. **A stream reads when the last
-of its channels joins, not once per channel**: it used to insist on a read for
-every `SUBSCRIBED`, on the grounds that every page held one topic, and a page
-of eleven would have read once and then trailed a second read behind it. A
-channel that drops and rejoins alone is a wave of one and reads at once, as
-before, and the page reports itself live only while every channel is
-carrying. And **a page turn that changes the topics does not ask for a read
-of its own**: the stream resubscribes and reads when the new topics have
-joined, and a second read made before they could cover anything would be
-wasted.
-
-What it costs:
-
-- **No wasted reads of its own.** Only the page's opened polls are watched,
-  so one on another page wakes nobody; the wasted reads the list does make
-  are `user:<id>`'s, as they always were.
-- **A resubscription when the page's opened polls change.** Turning onto a
-  page whose candidates differ rebuilds the stream — `user:<id>` included,
-  since a changed topic list rebuilds every channel — and reads once when it
-  has, in place of the read the page turn would have made anyway.
-
-A deleted opened poll comes off the list at once: its own topic says
-`poll_deleted`, which the list reads like any other signal.
+**What it costs:** a poll with many signed-in voters writes a message per
+voter's list on every change, as a poll with many invitees always has; see
+*Some reads are wasted* in [Live updates](#live-updates). The fan-out to
+sockets is unchanged — each of those voters' lists was the only place they
+would have heard it.
 
 ### Polls are deleted after six months
 
@@ -5254,8 +5311,9 @@ and why it is the same date on the last day as on the first.
 The public voting page carries no date, and `open_poll_view` no expiry: it
 answers to a link rather than to an account, and it is read once by someone
 who came to vote. It does carry `created_at`, since
-`0067_open_poll_view_says_when.sql`, for the poll list rather than the page —
-see [Open polls you have opened](#open-polls-you-have-opened). The policy is on the [About](src/pages/About.tsx)
+`0067_open_poll_view_says_when.sql`, which the poll list used to need and
+nothing now reads — see [Open polls you have
+answered](#open-polls-you-have-answered). The policy is on the [About](src/pages/About.tsx)
 page, which is public, and on the poll page its creator uses.
 
 ### The QR code

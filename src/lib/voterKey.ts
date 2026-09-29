@@ -11,8 +11,16 @@
  * Handing the ballot back is what makes this a secret rather than only a
  * label. `open_poll_view` returns that ballot's scores to whoever presents the
  * key, so on a shared browser the next person sees the previous one's ballot
- * filled in. It stays in that one browser's `localStorage` and is never sent
- * anywhere but the poll's own RPCs.
+ * filled in — unless they are signed in, when a key another account voted
+ * with reaches nothing. It stays in that one browser's `localStorage` and is
+ * never sent anywhere but the poll's own RPCs.
+ *
+ * **It is the whole of a voter's identity only while they are signed out.** A
+ * ballot cast signed in carries the account as well (`ballots.account_id`),
+ * and every open-poll function finds it by either — so the phone reaches the
+ * ballot the laptop cast, holding a key of its own that never cast anything.
+ * The key is still sent, and still goes on the ballot, so that the browser
+ * that cast it reaches it signed out too.
  *
  * **Scoped per poll** rather than one id per browser, so it cannot be used to
  * link the same person's votes across polls — nor, since a question of a
@@ -41,7 +49,9 @@ function storageKeyFor(pollId: string): string {
  * which kind of poll the address leads to, so minting on the way in would
  * leave a key behind for every invite poll an account ever opened. A browser
  * that has voted is holding its key already, and one that is not holding a key
- * has not voted — the same answer a freshly minted key would have produced.
+ * has not voted — the same answer a freshly minted key would have produced. A
+ * signed-in reader who voted on another device is found by their account,
+ * with or without a key.
  */
 export function heldVoterKeyFor(pollId: string): string | null {
   const storageKey = storageKeyFor(pollId)

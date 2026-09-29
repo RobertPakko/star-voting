@@ -194,30 +194,31 @@ begin
     array[c_anon]);
 
   -- ---------------------------------------------------------------------
-  -- Following an open poll: a signed-in voter's account joins its audience.
+  -- Answering an open poll signed in: the account joins its audience.
+  --
+  -- There is nothing to file for it. The ballot carries the account (0074),
+  -- and the audience reads the ballots (0076), so a signed-in voter is in
+  -- the poll the way an invitee is in theirs.
   -- ---------------------------------------------------------------------
-  perform open_poll_follow(v_group[2]);
-  perform tests.assert_eq('nobody signed in follows nothing',
-    (select count(*)::int from poll_follows where poll_id = v_open), 0);
+  select * into v_row from polls where id = v_open;
 
-  perform tests.sign_in('creator@example.com');
-  perform open_poll_follow(v_open);
-  perform tests.assert_eq('the creator does not follow their own poll',
-    (select count(*)::int from poll_follows where poll_id = v_open), 0);
+  -- Signed out: a browser key and no account, so nobody to add.
+  perform open_poll_submit(v_group[2], tests.open_scores(v_group[2], array[1, 1]),
+                           'stranger-snack', 'Stranger');
+  perform tests.assert_eq('a ballot cast signed out adds nobody to the audience',
+    array(select * from poll_email_audience(v_row, false, null)), array[]::text[]);
 
   perform tests.sign_in('voter1@example.com');
-  perform open_poll_follow(v_poll);
-  perform tests.assert_eq('an invite poll cannot be followed',
-    (select count(*)::int from poll_follows where poll_id = v_poll), 0);
+  perform tests.assert_raises('an invite poll is not answered through a link',
+    format('select open_poll_submit(%L, %s, %L, %L)', v_poll,
+           quote_literal(tests.open_scores(v_poll, array[1, 1])) || '::jsonb', 'k', 'X'),
+    'Poll not found');
 
-  -- From the second question, and twice: one follow, on the first.
-  perform open_poll_follow(v_group[2]);
-  perform open_poll_follow(v_group[2]);
-  perform tests.assert_eq('a follow is filed against the group''s first question, once',
-    array(select user_id from poll_follows where poll_id = v_open), array[v_voter1]);
-
-  select * into v_row from polls where id = v_open;
-  perform tests.assert_eq('a follower is in the poll''s audience',
+  -- From the second question: the audience is taken for the group, whose
+  -- notices are all filed against the first.
+  perform open_poll_submit(v_group[2], tests.open_scores(v_group[2], array[5, 0]),
+                           'voter1-snack', 'Vee');
+  perform tests.assert_eq('an account that answered any question is in the poll''s audience',
     array(select * from poll_email_audience(v_row, false, null)),
     array['voter1@example.com']);
   perform tests.assert_eq('but not when it was their own doing',
@@ -239,7 +240,7 @@ begin
   perform set_notification_settings(true, true);
 
   -- A ballot, and then the creator's Close: the results are announced, and
-  -- the watch and the follow have done their job.
+  -- the watch has done its job.
   update auth._session set user_id = null, email = null where id;
   perform open_poll_submit(v_open, tests.open_scores(v_open, array[5, 2]), 'voter-key-1', 'Sam');
   perform tests.sign_in('creator@example.com');
@@ -247,13 +248,11 @@ begin
 
   perform tests.assert_eq('once the results are announced the watches are gone',
     (select count(*)::int from poll_push_watches where poll_id = v_open), 0);
-  perform tests.assert_eq('and so are the follows',
-    (select count(*)::int from poll_follows where poll_id = v_open), 0);
-
-  perform tests.sign_in('voter1@example.com');
-  perform open_poll_follow(v_open);
-  perform tests.assert_eq('and a closed poll takes no new follow',
-    (select count(*)::int from poll_follows where poll_id = v_open), 0);
+  -- An account's ballot stays, so a poll reopened and finished again tells
+  -- them again, exactly as it tells an invitee.
+  perform tests.assert_eq('while the account that answered is still in the poll',
+    array(select * from poll_email_audience(v_row, false, null)),
+    array['voter1@example.com']);
 
   update auth._session set user_id = null, email = null where id;
   perform tests.assert_raises('and a closed poll takes no new ones',
@@ -307,12 +306,8 @@ begin
     has_table_privilege('authenticated', 'public.push_subscriptions', 'select'), false);
   perform tests.assert_eq('nor the watches',
     has_table_privilege('anon', 'public.poll_push_watches', 'select'), false);
-  perform tests.assert_eq('an account can follow an open poll',
-    has_function_privilege('authenticated', 'public.open_poll_follow(uuid)', 'execute'), true);
-  perform tests.assert_eq('but a link alone cannot',
-    has_function_privilege('anon', 'public.open_poll_follow(uuid)', 'execute'), false);
-  perform tests.assert_eq('nor the follows',
-    has_table_privilege('authenticated', 'public.poll_follows', 'select'), false);
+  perform tests.assert_null('there are no follows to file: the ballot is the record',
+    to_regclass('public.poll_follows'));
   perform tests.assert_eq('nor anybody''s settings',
     has_table_privilege('authenticated', 'public.notification_settings', 'select'), false);
   perform tests.assert_eq('and the targets are internal',
