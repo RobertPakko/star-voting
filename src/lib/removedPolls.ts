@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
 /**
@@ -62,4 +63,42 @@ export async function migrateHiddenPolls(): Promise<void> {
   } catch {
     // Storage that refuses a delete refused the write too; nothing to undo.
   }
+}
+
+/**
+ * Whether the signed-in reader has removed this poll from their list, for the
+ * card they land on after voting or confirming: somebody who removed a poll
+ * and then took part in it anyway is not going to hear how it ends, and that
+ * card is where to say so. `null` until the database has answered, and false
+ * with nobody signed in or no poll to ask about, without asking.
+ *
+ * The setter is handed back so a restore made from that card can say so at
+ * once, rather than waiting for a read nothing would prompt: the answer is
+ * read once per card, not kept live.
+ */
+export function usePollRemoved(
+  pollId: string | undefined,
+  userId: string | undefined,
+): [boolean | null, (removed: boolean) => void] {
+  const asked = pollId && userId ? `${userId}:${pollId}` : null
+  const [answer, setAnswer] = useState<{ asked: string; removed: boolean } | null>(null)
+
+  useEffect(() => {
+    if (!asked || !pollId) return
+    let live = true
+    supabase.rpc('poll_is_removed', { p_poll_id: pollId }).then(({ data, error }) => {
+      // A database older than the function answers with an error, which is
+      // the same as nothing removed: nothing can have been.
+      if (live) setAnswer({ asked, removed: !error && data === true })
+    })
+    return () => {
+      live = false
+    }
+  }, [asked, pollId])
+
+  const removed = !asked ? false : answer?.asked === asked ? answer.removed : null
+  const set = (next: boolean) => {
+    if (asked) setAnswer({ asked, removed: next })
+  }
+  return [removed, set]
 }

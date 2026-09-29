@@ -626,6 +626,7 @@ export type Database = {
         }[]
       }
       poll_is_first_question: { Args: { p_poll_id: string }; Returns: boolean }
+      poll_is_removed: { Args: { p_poll_id: string }; Returns: boolean }
       poll_list_row: { Args: { p_poll_id: string }; Returns: string }
       poll_page: {
         Args: { p_poll_id: string; p_voter_key?: string }

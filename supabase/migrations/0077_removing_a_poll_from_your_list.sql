@@ -37,7 +37,9 @@
 -- what separates this from leaving, which the app still does not have and
 -- which would be a statement *to* the poll rather than about one's own list.
 --
--- **Undoable, from the list.** list_polls takes p_removed and answers with the
+-- **Undoable, from the list or from the poll.** poll_is_removed tells the
+-- card a reader lands on after answering a removed poll to say so, with a way
+-- to put it back. list_polls takes p_removed and answers with the
 -- removed polls instead, so the list has a second view to restore them from,
 -- and both views carry removed_count so the button into the second one knows
 -- whether to be drawn.
@@ -184,6 +186,32 @@ revoke all on function public.restore_polls(uuid[]) from public;
 grant all on function public.restore_polls(uuid[]) to authenticated;
 
 comment on function public.restore_polls(uuid[]) is 'Puts removed polls back on the caller''s list, and the caller back in their notifications. Returns how many came back.';
+
+-- ---------------------------------------------------------------------------
+-- Whether the reader removed this one
+-- ---------------------------------------------------------------------------
+
+-- Asked by the card a reader lands on after voting or confirming, which is
+-- where somebody who removed a poll and then took part in it anyway finds out
+-- that they will not hear how it ends -- and can put it back. The caller's own
+-- rows and nobody else's, so it says nothing about anybody else.
+create function public.poll_is_removed(p_poll_id uuid)
+returns boolean
+    language sql stable security definer
+    set search_path to 'public'
+    as $$
+  select exists (
+    select 1 from removed_polls r
+    where r.user_id = auth.uid()
+      and r.poll_id = poll_list_row(p_poll_id)
+  );
+$$;
+
+alter function public.poll_is_removed(uuid) owner to "postgres";
+revoke all on function public.poll_is_removed(uuid) from public;
+grant all on function public.poll_is_removed(uuid) to authenticated;
+
+comment on function public.poll_is_removed(uuid) is 'Whether the caller has removed this poll (any question of it) from their list. False for anybody not signed in.';
 
 -- ---------------------------------------------------------------------------
 -- Nobody is told about a poll they removed

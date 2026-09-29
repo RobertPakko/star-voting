@@ -102,6 +102,8 @@ begin
 
   perform tests.assert_eq('a group is removed by its second question',
     remove_polls(array[v_questions[2]]), 1);
+  perform tests.assert_eq('and every question of it says it is removed',
+    poll_is_removed(v_questions[1]) and poll_is_removed(v_questions[2]), true);
   perform tests.assert_eq('and it is the group''s row that comes off the list',
     (select count(*)::int from list_polls(20, 0) where id = v_questions[1]), 0);
   perform tests.assert_eq('and the group''s row that is in the removed view',
@@ -150,7 +152,11 @@ begin
     (select array_agg(a order by a) from poll_email_audience(v_row, true, null) a),
     array['creator@example.com', 'other@example.com', 'reader@example.com']);
 
+  perform tests.assert_eq('a poll on the list is not removed',
+    poll_is_removed(v_invite), false);
   perform remove_polls(array[v_invite, v_open]);
+  perform tests.assert_eq('and says so once it is',
+    poll_is_removed(v_invite), true);
 
   -- The audience is what the push goes to as well as the email: push_poll is
   -- handed these addresses, so leaving one out here is leaving it out of both.
@@ -177,6 +183,8 @@ begin
 
   -- The creator removing their own poll stops their own letters, too.
   perform tests.sign_in('creator@example.com');
+  perform tests.assert_eq('one account''s removal is not another''s',
+    poll_is_removed(v_invite), false);
   perform remove_polls(array[v_invite]);
   select * into v_row from polls where id = v_invite;
   perform tests.assert_eq('a creator who removed their own poll is not told about it',
@@ -214,6 +222,10 @@ begin
     has_function_privilege('anon', 'public.restore_polls(uuid[])', 'execute'), false);
   perform tests.assert_eq('the count likewise',
     has_function_privilege('anon', 'public.removed_poll_count()', 'execute'), false);
+  perform tests.assert_eq('whether a poll is removed is asked by an account',
+    has_function_privilege('authenticated', 'public.poll_is_removed(uuid)', 'execute'), true);
+  perform tests.assert_eq('and not by a link',
+    has_function_privilege('anon', 'public.poll_is_removed(uuid)', 'execute'), false);
   perform tests.assert_eq('the list row lookup is internal',
     has_function_privilege('authenticated', 'public.poll_list_row(uuid)', 'execute'), false);
 end $$;

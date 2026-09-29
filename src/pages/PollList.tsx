@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { migrateHiddenPolls, removePolls, restorePolls } from '../lib/removedPolls'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
-import { AppBanner } from '../components/AppBanner'
+import { Banners } from '../components/Banners'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
@@ -261,10 +261,9 @@ export function PollList() {
             {/* The way between the two lists. Into the removed one only when
                 there is something in it, because that is the only state in
                 which it has anything to say — a reader who has never removed a
-                poll never meets a mode they might be in. It carries the count,
-                which it can now: the database counts the polls still on the
-                reader's list to be restored, so the number is what pressing it
-                shows.
+                poll never meets a mode they might be in. No count on it: the
+                list it opens is the count, and a number in a button label
+                reads as clutter.
 
                 Left of New poll, which stays where it has always been. This is
                 about the list already there; that one leaves it. */}
@@ -275,7 +274,7 @@ export function PollList() {
             ) : (
               removedCount > 0 && (
                 <Button variant="default" onClick={() => showList(true)}>
-                  Removed ({removedCount})
+                  Show removed
                 </Button>
               )
             )}
@@ -285,7 +284,7 @@ export function PollList() {
           </Group>
         </Group>
 
-        {!viewingRemoved && <AppBanner />}
+        {!viewingRemoved && <Banners />}
 
         {/* What removing did, said where the reader is looking at its result:
             the one consequence of it that is not on screen is the silence. */}

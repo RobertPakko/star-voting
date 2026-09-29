@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch, WatchPoll — …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -317,8 +317,8 @@ step here is manual, because every one of them is a secret or a deployment:
    deploy turns the buttons on.
 
 To check it end to end, open the built site in two browsers: create an open
-poll in one, vote in the other and press **Notify me**, then close the poll
-from the first. `select status_code, content from net._http_response order by
+poll in one, turn push on from the gear menu in the other (signed out) and
+vote, then close the poll from the first. `select status_code, content from net._http_response order by
 created desc limit 5;` shows what the function answered — `{"sent":1,…}` —
 and the function's own logs are under **Edge Functions → send-push → Logs**.
 
@@ -682,8 +682,9 @@ other, without naming who made it, and that every change to such a poll reaches
 that reader's list — a confirmation taken back included; that a poll removed
 from a list leaves the pages it was on rather than a gap in them, is listed
 instead in the removed view, is removed whole by any of its questions, can only
-be removed from one's own list, and takes its account out of the audience of
-every email and push about it until it is restored;
+be removed from one's own list, says so to that account and to nobody else,
+and takes its account out of the audience of every email and push about it
+until it is restored;
 everything about the results-ready
 announcement except the sending — whether a poll has a result at all, who
 would be told and who is deliberately not, and that the notice is made exactly
@@ -2459,14 +2460,26 @@ whoever is using it, and it reaches the database one of two ways:
   (`forgetAccountPush`, before the session goes): a shared browser left bound
   is the next person's phone buzzing with the last person's polls.
 - **Watching one open poll** (`poll_push_watches`, through `open_poll_watch`)
-  — the **Notify me** button on the card a voter lands on after voting, or
-  after confirming the options on a poll still collecting them. No account,
-  and the creator does not get the button: they are the one who opens and
-  closes the poll. Only a reader who is **not signed in** gets it; one who
-  is is in the poll's audience through the account on their ballot instead
-  (below), and one press covers the poll's
-  opening and its results alike, since a watch is filed once for the whole
-  group and lasts until the results go out.
+  — for a reader who is **not signed in**, filed by the page on every open
+  poll they vote in or confirm the options of, once they have turned push on
+  from the same gear menu (`LinkPushSwitch`). Signed out, that menu holds
+  that one switch; it is a flag in this browser's `localStorage`, since there
+  is no account to keep it on, and the page files a watch wherever it finds
+  an answered poll that is not watched yet — at the vote, or for a poll
+  answered before the switch went on, the next time it is opened. Turning it
+  off takes back every watch this browser filed (`disableLinkPush`), which is
+  why the mirror keeps the poll id each was filed through. The creator's own
+  poll files none: they are the one who opens and closes it. A signed-in
+  reader files none either: they are in the poll's audience through the
+  account on their ballot (below). One watch covers the poll's opening and its
+  results alike, since it is filed once for the whole group and lasts until
+  the results go out.
+
+  This was a **Notify me** button per poll until it was folded into the gear:
+  two places to turn on one thing, depending on whether you had signed in,
+  meant two different banners pointing at them. What it cost is per-poll
+  choice — a reader holding a link now hears about every open poll they
+  answer, or none.
 
 **A watch records nothing about who asked.** No voter key, no account, no
 name, and deliberately no timestamp: a watch made in the same second as a
@@ -2476,8 +2489,8 @@ question, like every notice, and **deleted when the results are announced** —
 or when the poll closes with nothing to announce. One-shot, because an
 endpoint left on the row of every open poll a browser ever answered would be a
 record of which polls that browser was in. The browser mirrors its watches in
-`localStorage` only so the button can say which way round it is; that mirror
-is dropped when the poll finishes.
+`localStorage` only so it knows which polls are already watched and can take
+them back; that mirror is dropped when the poll finishes.
 
 The one person a watch can leave out is the actor. A watch has no address for
 `poll_email_audience` to drop, so `poll_push_targets` drops the actor's own
@@ -2543,19 +2556,19 @@ reader once.
 
 **Asking is always a press.** A permission prompt nobody asked for is ignored
 or blocked, and Safari will not show one at all, so nothing in the app asks on
-its own. The places that can ask are the gear menu, for an account, and Notify me,
-for a poll answered through a link — the install guide used to carry the
-Settings switch as well, and a third copy of one control was one too many;
-everywhere else the app only *says* it can notify — `AppBanner`, on the
-poll list and on the sign-in screen that is the front door for anybody signed
-out, closed for good with its ×. It says nothing where there is nothing to
-do: no key in the build, no push in the browser, a reader who already said no
-or already said yes.
+its own. The one place that can ask is the gear menu, signed in or not — the install
+guide used to carry the Settings switch as well, and polls answered through a
+link had a Notify me of their own, and more copies of one control were more
+places to look;
+everywhere else the app only *says* it can notify — the push banner in
+`Banners`, below. It says nothing where there is nothing to do: no key in the
+build, no push in the browser, a reader who already said no or already said
+yes.
 
 **iPhone and iPad need the app installed first.** Safari gives the push APIs
 only to a site added to the Home Screen and opened from there, so in a Safari
-tab `pushState` is `needs-install`, Notify me becomes the banner, and the
-banner's link is the guide — which says how to install and where to turn
+tab `pushState` is `needs-install`, the push switch is disabled with a line
+saying so, and the banner's link is the guide — which says how to install and where to turn
 notifications on afterwards, but does not do it. The installed app also keeps
 its own storage, so a signed-in reader signs in again inside it — with a code,
 since a sign-in link opens Safari rather than the app; the guide says both.
@@ -2629,18 +2642,40 @@ switch with no reason is the one thing in it that would leave somebody stuck.
 Following the link closes the menu (`Layout` closes it on any change of
 route).
 
-**Where a signed-in reader would have seen Notify me, they are told where the
-gear is** (`NotifyHint`, beside `WatchPoll`), on invite polls and open polls
-alike: under *your vote is in*, and under the card after confirming the
-options, because those are the two moments a reader is left waiting on
-everybody else. There is nothing for it to file — the invite list or the
-account on their ballot already puts them in the audience — so what a reader who is not being pushed
-is missing is push on this device, which is the switch in that menu. It is a
-line of text, not a button, and it says nothing once this device is set up
-(`accountPushHere`, from two local mirrors — the device's binding and the
-account's push setting as the switches last saw it — so it costs no request):
-most people turn notifications on once, and a line on every poll confirming it
-was clutter. Where the device needs the app installed first it is the banner.
+**Two banners, in three places** (`Banners.tsx`): one saying where the push
+switch is, one saying the site installs as an app. They appear together on
+the poll list, under the card after confirming the options, and under *your
+vote is in* — the moments a reader is waiting on everybody else — the same for
+every reader, signed in or holding a link, on invite polls and open polls
+alike. Not on the sign-in screen, where they used to be: the one thing that
+page should ask of a reader is to sign in.
+
+They are one shape (`Banner`), so they cannot drift apart: the sentence, a
+*Learn more* button onto the install guide, and *Don't show again*. **The ×
+closes it for now** — gone from this page, back the next time — and **Don't
+show again closes it for good** in this browser. A reader who has not made up
+their mind wants the first; one who has wants the second, and a single ×
+meaning "forever" made the undecided close it without reading.
+
+- **The push banner** goes the moment push is on here (`usePushHere`, from
+  local mirrors — the account's binding and setting, or the link switch — so
+  it costs no request, and live, so flipping the switch takes it away). It
+  shows where the browser can be asked, and on an iPhone in a Safari tab too,
+  where the gear's switch is disabled with a line saying to install first;
+  nothing where the browser said no or has no push.
+- **The install banner** says nothing about notifications — the banner beside
+  it does — and shows to anybody outside the installed app, since it does not
+  depend on push.
+- **Under a poll a signed-in reader removed from their list**, a third comes
+  first and the push banner stands down: the poll will not notify them
+  whatever the switch says, so it says that, with a way to put the poll back.
+  It is not a `Banner` — it has no *Learn more* and no *Don't show again*,
+  because it is a fact about this poll rather than advice to be done with. See
+  [Removing a poll from your list](#removing-a-poll-from-your-list).
+
+The install banner used to be shown under the card only where the browser
+could not be asked for push — it stood in for Notify me on an iPhone — so on
+any desktop browser, incognito included, a voter never saw it.
 
 ## Signing in
 
@@ -5125,10 +5160,22 @@ is all of it on the database's side and
 
 Each card carries a cross at its bottom right, alongside the badges, whose
 tooltip says what it costs: *Remove from your list and stop notifications about
-it*. When anything is removed, a **Removed (n)** button appears beside **New
+it*. When anything is removed, a **Show removed** button appears beside **New
 poll** and swaps the list for the removed polls, each with a **Restore** — and
 a line above them saying these polls send no emails or notifications. Restore
 the last one and the page goes back to the list.
+
+**Answering a removed poll does not bring it back, and the poll says so.** A
+reader can remove a poll and still vote in it or confirm its options, and then
+they would wait for a result nobody is going to tell them about. So the card
+they land on — *your vote is in*, or the one after confirming the options —
+asks `poll_is_removed` and, where it is, puts a banner above the others
+(`Banners`, with the poll's id): the poll is off your list and you won't hear
+about it, with **Add back to your list** beside it. The push banner stands down
+while it is there, since turning push on would not reach a poll the account has
+asked to hear nothing about. Voting does not restore it by itself because
+removal was the reader's own choice, and taking part is not obviously a change
+of mind — a creator removes their own open poll and still votes in it.
 
 **It used to be *hiding*, and it lived in the browser.** An eye on each card,
 ids in `localStorage` under `star-voting:hidden-polls`, and no row anywhere, on
@@ -5145,8 +5192,9 @@ Two things were wrong with it, and both came from where it lived:
 
 And the table is not a disclosure, which was the argument for keeping it out:
 `removed_polls` has row-level security on, no policies and no grants, and the
-only things that read it are `list_polls`, the three functions that write and
-count it, and `poll_email_audience`. Nobody can find out who has removed a
+only things that read it are `list_polls`, the functions that write and count
+it, `poll_is_removed` (the caller's own rows only), and
+`poll_email_audience`. Nobody can find out who has removed a
 poll.
 
 **It stops the notifications, because that is what a reader taking a poll off
@@ -5178,13 +5226,13 @@ page that goes blank while the pager says there is more is how none of them do.
 `p_removed` defaults to false, so a browser still on the previous build calls
 it with two arguments and gets the list without the removed polls.
 
-**The button carries a count**, which the browser-side one could not: an id in
-storage outlived the poll it named, so its number could promise more than
-pressing it showed. `removed_count` is counted by the database from the polls
-still on the reader's list, and rides on every row the way `total_count` does
-— which leaves the list with nothing on it, whose reader most needs the way
-back, with no row to carry it. So that read, and only that one, asks
-`removed_poll_count()` as well.
+**The button carries no count.** It could — `removed_count` is counted by the
+database from the polls still on the reader's list — but a number in a button
+label reads as clutter, and the list it opens is the count. What the count is
+for is whether the button is drawn at all. It rides on every row the way
+`total_count` does, which leaves the list with nothing on it, whose reader
+most needs the way back, with no row to carry it; so that read, and only that
+one, asks `removed_poll_count()` as well.
 
 **A group is removed whole.** The list shows a poll of several questions as its
 first question, and a removal is filed against that row (`poll_list_row`)

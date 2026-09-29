@@ -2,19 +2,19 @@ import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Button, Card, Group, Stack, Text } from '@mantine/core'
 import { useAuth } from '../lib/auth'
 import { isSampleId, openPollRpc } from '../lib/samplePoll'
-import { forgetWatch } from '../lib/push'
+import { forgetWatch, usePushHere, useWatching, watchPoll } from '../lib/push'
 import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
 import type { VoterName } from '../lib/voterName'
 import { BallotCard } from './BallotCard'
 import type { BallotScore } from './BallotFrame'
 import { CollectOptions, Confirmations } from './CollectOptions'
-import { Ballots, Results, TimeBallotCard } from './deferred'
+import { Ballots, Results, TimeBallotCard, YourBallot } from './deferred'
 import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
-import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton } from './Skeletons'
+import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton, YourBallotSkeleton } from './Skeletons'
 import { VoterNameField } from './VoterNameField'
-import { NotifyHint, WatchPoll } from './WatchPoll'
+import { Banners } from './Banners'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
 /**
@@ -118,7 +118,7 @@ export function OpenPollPanel({
   const needsName = view.poll.show_voters
 
   // What a watch on this poll is filed under here: its group, so that every
-  // question of a poll says the same thing about it. See WatchPoll.
+  // question of a poll says the same thing about it. See lib/push.ts.
   const watchKey = view.poll.group_id ?? pollId
   // Only a voter holding the link watches. The creator is the one who opens
   // and closes the poll, so there is nothing to tell them; and the About
@@ -134,16 +134,26 @@ export function OpenPollPanel({
   const { session } = useAuth()
   const signedIn = !!session
 
-  // What stands under the card a reader is left waiting on: the per-poll
-  // Notify me for a link, and for an account where to find its switches.
-  function notify(stage: 'opening' | 'results') {
-    if (!canWatch) return null
-    return signedIn ? (
-      <NotifyHint stage={stage} />
-    ) : (
-      <WatchPoll pollId={pollId} watchKey={watchKey} stage={stage} />
-    )
+  // What stands under the card a reader is left waiting on: where the push
+  // switch is and that the site installs, the same for an account and a link.
+  function waiting(stage: 'opening' | 'results') {
+    return canWatch ? <Banners moment={stage} pollId={pollId} /> : null
   }
+
+  // A signed-out reader who has turned push on from the gear menu gets a
+  // watch on every open poll they have answered here, filed the first time
+  // this page sees one that is not watched yet — which is the moment they
+  // vote or confirm, and for a poll answered before the switch went on, the
+  // next time it is opened. Nothing to press on the poll itself; the switch is
+  // the ask. A failure is let go: the page says nothing about watches, and the
+  // next visit tries again.
+  const pushHere = usePushHere(undefined)
+  const watching = useWatching(watchKey)
+  const answered = view.soliciting ? !!view.confirmed : view.voted
+  useEffect(() => {
+    if (!canWatch || signedIn || !pushHere || finished || !answered || watching) return
+    watchPoll(pollId, watchKey).catch(() => {})
+  }, [canWatch, signedIn, pushHere, finished, answered, watching, pollId, watchKey])
 
   // The database dropped the watch when it announced the results; the mirror
   // of it in this browser goes too, so a poll that is reopened later does not
@@ -199,7 +209,7 @@ export function OpenPollPanel({
             happens is the creator opening the poll, and there is no telling
             when, which is what a notification is for. One watch or follow
             covers the poll's opening and its results alike. */}
-        {view.confirmed && notify('opening')}
+        {view.confirmed && waiting('opening')}
       </Stack>
     )
   }
@@ -233,6 +243,19 @@ export function OpenPollPanel({
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}
         {participation}
+        {/* This reader's own ballot, where the poll withholds everybody's —
+            the open side of what YourBallot does for an invite poll, standing
+            in the same place. Nothing is asked for: open_poll_view already
+            hands `your_scores` back at every stage, found by the account that
+            cast it or by this browser's key, so this is the ballot the reader
+            could have opened behind Edit vote an hour ago, shown one stage
+            later. A poll that publishes its ballots is already showing it, on
+            the grid below with everybody else's. */}
+        {!view.poll.show_ballots && view.voted && view.your_scores && (
+          <Suspense fallback={<YourBallotSkeleton rows={view.options.length || undefined} />}>
+            <YourBallot pollId={pollId} options={view.options} scores={view.your_scores} />
+          </Suspense>
+        )}
         {view.poll.show_ballots && (
           <Suspense fallback={<BallotsSkeleton rows={view.voted_count || undefined} />}>
             <Ballots
@@ -265,7 +288,7 @@ export function OpenPollPanel({
           isCreator={isCreator}
           onRevised={onChanged}
           questionStrip={questionStrip}
-          watch={notify('results')}
+          banner={waiting('results')}
         />
       ) : (
         <OpenBallot
@@ -304,7 +327,7 @@ function Voted({
   isCreator,
   onRevised,
   questionStrip,
-  watch,
+  banner,
 }: {
   pollId: string
   view: OpenPollView
@@ -312,12 +335,8 @@ function Voted({
   /** A changed ballot went in: the page re-reads the poll. */
   onRevised: () => void
   questionStrip?: ReactNode
-  /**
-   * "Notify me when the results are ready", for a voter holding the link:
-   * this card is where they are left waiting, and an open poll's result only
-   * arrives when its creator gets round to closing it.
-   */
-  watch?: ReactNode
+  /** What stands under the card: see `waiting` above. */
+  banner?: ReactNode
 }) {
   const { session } = useAuth()
   // The scores the ballot being changed opens with, or null when nobody is
@@ -374,28 +393,30 @@ function Voted({
   }
 
   return (
-    <Card withBorder>
-      <Stack gap="sm">
-        {questionStrip}
-        <Stack gap={2}>
-          <Text fw={500}>Your vote is in</Text>
-          <Group justify="space-between" wrap="wrap" gap="sm">
-            <RevealNote reveal={{ kind: 'open', isCreator }} canRevise={!!scores} />
-            {scores && (
-              <Button
-                variant="light"
-                loading={fetching}
-                onClick={() => void edit()}
-                style={{ marginLeft: 'auto' }}
-              >
-                Edit vote
-              </Button>
-            )}
-          </Group>
+    <Stack gap="md">
+      <Card withBorder>
+        <Stack gap="sm">
+          {questionStrip}
+          <Stack gap={2}>
+            <Text fw={500}>Your vote is in</Text>
+            <Group justify="space-between" wrap="wrap" gap="sm">
+              <RevealNote reveal={{ kind: 'open', isCreator }} canRevise={!!scores} />
+              {scores && (
+                <Button
+                  variant="light"
+                  loading={fetching}
+                  onClick={() => void edit()}
+                  style={{ marginLeft: 'auto' }}
+                >
+                  Edit vote
+                </Button>
+              )}
+            </Group>
+          </Stack>
         </Stack>
-        {watch}
-      </Stack>
-    </Card>
+      </Card>
+      {banner}
+    </Stack>
   )
 }
 
