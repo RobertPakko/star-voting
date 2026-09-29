@@ -2388,6 +2388,34 @@ goes would leave a visible gap. It is also absent from the sign-in screen,
 which has no header by design; a voter arriving on a share link sees it,
 which is the reader most likely to want it.
 
+## Link previews
+
+Paste a poll's link into Signal, Messenger or an SMS app and the app draws a
+card under it from the Open Graph tags in [`index.html`](index.html): the
+title, a sentence about STAR, and `logo.png`. Messenger and Facebook fetch the
+page from their own servers; Signal and iMessage fetch it from the sender's
+phone. Either way it is a plain HTTP fetch that runs no JavaScript.
+
+**Every poll link gets the same card, and that is the hash routing, not a
+choice.** A link is `…/star-voting/#/polls/<id>`, and the part after `#` never
+leaves the browser: it is not in the request a crawler makes, so GitHub Pages
+serves the one `index.html` whatever poll the link names. Nothing static can
+tell two polls apart. A card per poll needs something that runs on the
+request and can see the id, which means the id moving out of the fragment
+into the path, and a server answering that path.
+
+**There is deliberately no `og:url`.** It declares the page's canonical
+address, and Facebook both groups shares under it and, in places, links the
+card to it. Here that would be the app root with the fragment gone, so a
+poll link would open on the poll list.
+
+The image is the square logo with a `summary` card, which the chat apps draw
+as a small thumbnail beside the text. It is opaque on purpose: several
+clients composite a transparent image onto black. A crawler caches what it
+fetched, Facebook's for weeks; after changing any of this,
+[Facebook's Sharing Debugger](https://developers.facebook.com/tools/debug/)
+is how to make it read the page again.
+
 ## Push notifications
 
 A poll tells its people about three moments — being invited, voting opening,
