@@ -3,7 +3,7 @@
 --
 -- An open poll somebody else made is on your list when your account has a
 -- ballot or a confirmation in any question of it -- cast through the link
--- while signed in, which is what records the account (0073). Nothing the
+-- while signed in, which is what records the account (0074). Nothing the
 -- browser remembers enters into it any more. The rules under test: that is
 -- the only way an open poll gets on, answering signed out does not count, a
 -- group is one row whichever question was answered, and a row that is here

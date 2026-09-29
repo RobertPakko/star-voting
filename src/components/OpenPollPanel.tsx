@@ -14,7 +14,7 @@ import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
 import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton } from './Skeletons'
 import { VoterNameField } from './VoterNameField'
-import { WatchPoll } from './WatchPoll'
+import { NotifyHint, WatchPoll } from './WatchPoll'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
 /**
@@ -126,6 +126,25 @@ export function OpenPollPanel({
   const canWatch = !isCreator && !isSampleId(pollId)
   const finished = view.results_available || view.is_closed
 
+  // A signed-in voter does not watch: their ballot or confirmation carries
+  // their account, and an account that has answered an open poll is part of
+  // its audience (see poll_answering_accounts), so it hears about the poll on
+  // whichever channels its settings allow, on every device it is bound to,
+  // with nothing to press and nothing for this page to file.
+  const { session } = useAuth()
+  const signedIn = !!session
+
+  // What stands under the card a reader is left waiting on: the per-poll
+  // Notify me for a link, and for an account where to find its switches.
+  function notify(stage: 'opening' | 'results') {
+    if (!canWatch) return null
+    return signedIn ? (
+      <NotifyHint stage={stage} />
+    ) : (
+      <WatchPoll pollId={pollId} watchKey={watchKey} stage={stage} />
+    )
+  }
+
   // The database dropped the watch when it announced the results; the mirror
   // of it in this browser goes too, so a poll that is reopened later does not
   // claim a watch that no longer exists.
@@ -178,10 +197,9 @@ export function OpenPollPanel({
 
         {/* Once this reader has said they are done: the next thing that
             happens is the creator opening the poll, and there is no telling
-            when, which is what a notification is for. */}
-        {canWatch && view.confirmed && (
-          <WatchPoll pollId={pollId} watchKey={watchKey} stage="opening" />
-        )}
+            when, which is what a notification is for. One watch or follow
+            covers the poll's opening and its results alike. */}
+        {view.confirmed && notify('opening')}
       </Stack>
     )
   }
@@ -247,9 +265,7 @@ export function OpenPollPanel({
           isCreator={isCreator}
           onRevised={onChanged}
           questionStrip={questionStrip}
-          watch={
-            canWatch ? <WatchPoll pollId={pollId} watchKey={watchKey} stage="results" /> : null
-          }
+          watch={notify('results')}
         />
       ) : (
         <OpenBallot

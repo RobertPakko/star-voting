@@ -1,8 +1,20 @@
-import { ActionIcon, Anchor, AppShell, Button, Group, Text, Title, Tooltip } from '@mantine/core'
+import { useEffect, useState } from 'react'
+import {
+  ActionIcon,
+  Anchor,
+  AppShell,
+  Button,
+  Group,
+  Popover,
+  Text,
+  Title,
+  Tooltip,
+} from '@mantine/core'
 import { GearIcon, SignOutIcon } from '@phosphor-icons/react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { InstallButton } from './InstallButton'
+import { NotificationSwitches } from './NotificationSwitches'
 import { Reveal } from './Reveal'
 import { ThemeToggle } from './ThemeToggle'
 
@@ -28,6 +40,11 @@ export function Layout() {
   const navigate = useNavigate()
   const onAbout = pathname === '/about'
   const onSettings = pathname === '/settings'
+  // The notification menu, held here so that following its one link — to the
+  // install guide, from under a push switch that cannot be turned on — closes
+  // it rather than leaving it open over the page it went to.
+  const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => setMenuOpen(false), [pathname])
 
   // Off the poll and back to the front door, rather than left standing where
   // the session used to admit them. A page that was rendering the account
@@ -80,22 +97,40 @@ export function Layout() {
             )}
             <InstallButton />
             {/* An icon beside the theme menu, for the same width reason the
-                install button is one, and dropped on its own page the way the
-                About link is. Only with an account: the settings are an
-                account's, and a reader holding a link has none. */}
+                install button is one. It opens the two notification switches
+                where they are rather than taking the reader to a page for
+                them: two switches do not earn a page, and the reader is
+                usually in the middle of a poll. The /settings page still
+                exists, for the emails' footer to link to, and the gear stands
+                down there the way the About link does on About. Only with an
+                account: the settings are an account's, and a reader holding a
+                link has none. */}
             {session && !onSettings && (
-              <Tooltip label="Settings" withArrow>
-                <ActionIcon
-                  component={Link}
-                  to="/settings"
-                  variant="outline"
-                  color="gray"
-                  size="lg"
-                  aria-label="Settings"
-                >
-                  <GearIcon size={18} aria-hidden />
-                </ActionIcon>
-              </Tooltip>
+              <Popover
+                position="bottom-end"
+                withArrow
+                shadow="md"
+                width={260}
+                opened={menuOpen}
+                onChange={setMenuOpen}
+              >
+                <Popover.Target>
+                  <Tooltip label="Notifications" withArrow>
+                    <ActionIcon
+                      variant="outline"
+                      color="gray"
+                      size="lg"
+                      aria-label="Notification settings"
+                      onClick={() => setMenuOpen((open) => !open)}
+                    >
+                      <GearIcon size={18} aria-hidden />
+                    </ActionIcon>
+                  </Tooltip>
+                </Popover.Target>
+                <Popover.Dropdown>
+                  <NotificationSwitches userId={session.user.id} />
+                </Popover.Dropdown>
+              </Popover>
             )}
             <ThemeToggle />
             {/* One slot, two states. Signed out this is an offer rather than a

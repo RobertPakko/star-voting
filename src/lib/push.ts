@@ -208,6 +208,41 @@ function writeAccount(userId: string | null) {
   }
 }
 
+/**
+ * Whether the account's push is off, as last seen by this browser: written by
+ * the settings page whenever it reads or changes the setting. Only a mirror —
+ * the database decides what is sent — kept so a poll page can say whether
+ * this device will be notified without a request of its own.
+ */
+const ACCOUNT_OFF_KEY = 'star-voting:push-account-off'
+
+export function rememberAccountPush(on: boolean): void {
+  try {
+    if (on) localStorage.removeItem(ACCOUNT_OFF_KEY)
+    else localStorage.setItem(ACCOUNT_OFF_KEY, '1')
+  } catch {
+    // The poll page then says less than it could; nothing is sent differently.
+  }
+}
+
+function accountPushOff(): boolean {
+  try {
+    return localStorage.getItem(ACCOUNT_OFF_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether this device is bound to this account and the account wants push —
+ * both from local mirrors, so answering costs no request. Another device
+ * turning push off is only seen here once this one opens the settings page;
+ * until then the sender, which asks the database, is still right.
+ */
+export function accountPushHere(userId: string): boolean {
+  return pushState() === 'granted' && readAccount() === userId && !accountPushOff()
+}
+
 /** Turns notifications on for the signed-in account, on this device. */
 export async function enableAccountPush(userId: string): Promise<void> {
   const subscription = await subscribe()

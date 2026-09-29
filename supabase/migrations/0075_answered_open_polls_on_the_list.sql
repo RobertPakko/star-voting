@@ -9,7 +9,7 @@
 -- database could tell: the page had to watch one `poll:<id>` topic per such
 -- poll, and work out which could be on a page before it had read the page.
 --
--- 0073 put the account on every ballot and confirmation cast through a link
+-- 0074 put the account on every ballot and confirmation cast through a link
 -- while signed in. That is exactly the fact the list was missing, so the list
 -- now reads it: **an open poll is on your list when your account has voted in
 -- or confirmed any question of it**, on every device you sign in on, and
@@ -18,7 +18,7 @@
 -- **What that gives up, plainly.** An open poll you only opened, and one you
 -- answered while signed out, is no longer listed. Recording "this account
 -- opened that poll" on the server is the one join AGENTS.md has always
--- refused; recording that it *answered* the poll was already done by 0073, for
+-- refused; recording that it *answered* the poll was already done by 0074, for
 -- a reason the voter asked for, so listing it tells the database nothing new.
 --
 -- **And the list is told, like every other list.** broadcast_poll_change and
@@ -36,7 +36,7 @@
 -- asks again without them (PollList has always done that), so it gets the new
 -- list rather than no list.
 
--- Every lookup below goes by account first. 0073's unique indexes lead with
+-- Every lookup below goes by account first. 0074's unique indexes lead with
 -- poll_id, which serves "this reader's ballot in this question" and not
 -- "every question this reader answered".
 create index if not exists idx_ballots_account_id
@@ -104,7 +104,7 @@ begin
   -- And the same trick for the poll list, which holds no poll id at all until
   -- it has read one: everyone whose list this poll is on. Its creator, its
   -- invitees, and -- on an open poll -- every account that has answered it
-  -- through the link, which is the third way onto the list since 0074.
+  -- through the link, which is the third way onto the list since 0075.
   -- `union` rather than `union all`: a creator who invited themselves, or
   -- voted in their own open poll, is one reader with one list.
   for v_user in
@@ -246,7 +246,7 @@ returns table(
     -- The open polls this account has answered through their links, by the
     -- id of the row the list carries for them: a group's first question,
     -- whichever question was answered. Read off the account's own rows by
-    -- the account indexes 0074 adds, so it costs what this reader has done
+    -- the account indexes 0075 adds, so it costs what this reader has done
     -- rather than what everybody has.
     select distinct coalesce(head.id, q.id) as id
     from (
@@ -269,7 +269,7 @@ returns table(
     --
     -- The third way onto the list is an open poll this account has answered
     -- through its link. Answering it is already a right to read it, and the
-    -- account on the ballot is already recorded (0073), so listing it shows
+    -- account on the ballot is already recorded (0074), so listing it shows
     -- the reader nothing they could not ask for and tells the database
     -- nothing it does not know.
     --

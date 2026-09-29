@@ -77,7 +77,7 @@ export function PollList() {
   // Open polls somebody else made are on it too, where this account has voted
   // in or confirmed them through their links: the database knows which, from
   // the account on those ballots, so nothing is handed in and the list is the
-  // same on every device. See 0074_answered_open_polls_on_the_list.sql.
+  // same on every device. See 0075_answered_open_polls_on_the_list.sql.
   const load = useCallback(async () => {
     const asked = chosen.current
     const { data, error: rpcError } = await supabase.rpc('list_polls', {
@@ -131,7 +131,7 @@ export function PollList() {
   // It carries every change to every poll on the reader's list: the polls
   // they made, the polls they are invited to, and the open polls their account
   // has answered through a link. See 0035_broadcast_polls_to_watchers.sql for
-  // the fan-out that makes it so, and 0074_answered_open_polls_on_the_list.sql
+  // the fan-out that makes it so, and 0075_answered_open_polls_on_the_list.sql
   // for the third of those. There used to be a topic per open poll on the page
   // as well, because an open poll's voters were nobody the database could
   // tell; now that their ballots carry their account, they are.

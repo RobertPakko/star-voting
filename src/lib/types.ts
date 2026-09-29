@@ -351,7 +351,7 @@ export interface PollListItem extends Omit<Poll, 'created_by' | 'created_by_emai
    * Who made the poll — null on an open poll that is on the list only because
    * this account answered it through its link, for the reason `OpenPollView`
    * carries no creator: a link goes wherever it is forwarded, and the list
-   * must not be the way round that. See 0074_answered_open_polls_on_the_list.sql.
+   * must not be the way round that. See 0075_answered_open_polls_on_the_list.sql.
    */
   created_by: string | null
   created_by_email: string | null
@@ -415,7 +415,7 @@ export interface OpenPollView {
     /**
      * When the poll was made. Nothing in the browser reads it now: it was
      * how the poll list worked out which remembered open polls could be on a
-     * page, and the list stopped depending on the browser for those in 0074.
+     * page, and the list stopped depending on the browser for those in 0075.
      * Undefined against a database whose open_poll_view predates it, and on
      * the About page's sample, which is a recording from before it.
      */

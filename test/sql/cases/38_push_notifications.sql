@@ -142,6 +142,11 @@ begin
     push_message(v_row, 'invite_options') ->> 'body',
     'You''ve been invited to add options to this poll.');
 
+  -- Every email says where to turn them off.
+  perform tests.assert_eq('every email links to the notification settings',
+    poll_email_html('Heading', 'Body', 'https://example.com/poll')
+      like '%https://choicelab.app/star-voting/#/settings%', true);
+
   -- ---------------------------------------------------------------------
   -- Watching an open poll through its link: no account, and one-shot.
   -- ---------------------------------------------------------------------
@@ -188,14 +193,66 @@ begin
     array(select endpoint from poll_push_watches where poll_id = v_open),
     array[c_anon]);
 
+  -- ---------------------------------------------------------------------
+  -- Answering an open poll signed in: the account joins its audience.
+  --
+  -- There is nothing to file for it. The ballot carries the account (0074),
+  -- and the audience reads the ballots (0076), so a signed-in voter is in
+  -- the poll the way an invitee is in theirs.
+  -- ---------------------------------------------------------------------
+  select * into v_row from polls where id = v_open;
+
+  -- Signed out: a browser key and no account, so nobody to add.
+  perform open_poll_submit(v_group[2], tests.open_scores(v_group[2], array[1, 1]),
+                           'stranger-snack', 'Stranger');
+  perform tests.assert_eq('a ballot cast signed out adds nobody to the audience',
+    array(select * from poll_email_audience(v_row, false, null)), array[]::text[]);
+
+  perform tests.sign_in('voter1@example.com');
+  perform tests.assert_raises('an invite poll is not answered through a link',
+    format('select open_poll_submit(%L, %s, %L, %L)', v_poll,
+           quote_literal(tests.open_scores(v_poll, array[1, 1])) || '::jsonb', 'k', 'X'),
+    'Poll not found');
+
+  -- From the second question: the audience is taken for the group, whose
+  -- notices are all filed against the first.
+  perform open_poll_submit(v_group[2], tests.open_scores(v_group[2], array[5, 0]),
+                           'voter1-snack', 'Vee');
+  perform tests.assert_eq('an account that answered any question is in the poll''s audience',
+    array(select * from poll_email_audience(v_row, false, null)),
+    array['voter1@example.com']);
+  perform tests.assert_eq('but not when it was their own doing',
+    array(select * from poll_email_audience(v_row, false, 'voter1@example.com')),
+    array[]::text[]);
+
+  -- voter1's phone went earlier; bind a device so there is something to push.
+  perform save_push_subscription(c_fcm, c_key, c_auth);
+  perform tests.assert_eq('so their devices are pushed to, beside the watchers',
+    array(select endpoint from poll_push_targets(v_row,
+      array(select * from poll_email_audience(v_row, false, null)), true, null)),
+    array[c_anon, c_fcm]);
+
+  perform set_notification_settings(true, false);
+  perform tests.assert_eq('unless their account has turned push off',
+    array(select endpoint from poll_push_targets(v_row,
+      array(select * from poll_email_audience(v_row, false, null)), true, null)),
+    array[c_anon]);
+  perform set_notification_settings(true, true);
+
   -- A ballot, and then the creator's Close: the results are announced, and
   -- the watch has done its job.
+  update auth._session set user_id = null, email = null where id;
   perform open_poll_submit(v_open, tests.open_scores(v_open, array[5, 2]), 'voter-key-1', 'Sam');
   perform tests.sign_in('creator@example.com');
   perform close_poll(v_open);
 
   perform tests.assert_eq('once the results are announced the watches are gone',
     (select count(*)::int from poll_push_watches where poll_id = v_open), 0);
+  -- An account's ballot stays, so a poll reopened and finished again tells
+  -- them again, exactly as it tells an invitee.
+  perform tests.assert_eq('while the account that answered is still in the poll',
+    array(select * from poll_email_audience(v_row, false, null)),
+    array['voter1@example.com']);
 
   update auth._session set user_id = null, email = null where id;
   perform tests.assert_raises('and a closed poll takes no new ones',
@@ -249,6 +306,8 @@ begin
     has_table_privilege('authenticated', 'public.push_subscriptions', 'select'), false);
   perform tests.assert_eq('nor the watches',
     has_table_privilege('anon', 'public.poll_push_watches', 'select'), false);
+  perform tests.assert_null('there are no follows to file: the ballot is the record',
+    to_regclass('public.poll_follows'));
   perform tests.assert_eq('nor anybody''s settings',
     has_table_privilege('authenticated', 'public.notification_settings', 'select'), false);
   perform tests.assert_eq('and the targets are internal',

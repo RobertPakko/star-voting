@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the three pieces of push notifications — AppBanner, PushSwitch, WatchPoll — …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch, WatchPoll — …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list, which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -212,9 +212,16 @@ directly with `pg_net`:
   [Telling people the results are
   ready](#telling-people-the-results-are-ready).
 
+The last two go to an open poll's signed-in voters as well as to an invite
+poll's list — see [Open polls you answered while signed
+in](#open-polls-you-answered-while-signed-in).
+
 The senders themselves are in
 `0043_the_emails_a_poll_sends.sql`,
-which is also where the letterhead they share is written down; the triggers
+which is also where the letterhead they share was first written down (its
+footer, with the link to the notification settings, is
+[`0073_settings_link_and_open_poll_follows.sql`](supabase/migrations/0073_settings_link_and_open_poll_follows.sql));
+the triggers
 that call them are in the squashed baseline under
 [`supabase/migrations/`](supabase/migrations). Who hears which of them, and
 who is deliberately told nothing, is [What a poll writes to
@@ -248,19 +255,25 @@ never block or fail the thing that triggered them.
 
 One asymmetry is worth knowing before the key is in place: an invitation is
 sent per insert, so a poll created later still sends its invitations, while
-the other two are sent once, when the poll crosses the line — a poll that
-opened or finished before the key existed is never announced. Nothing is
-retried.
+the others are sent once, when the poll crosses the line — a poll that
+opened or finished before the key existed is never announced.
+Nothing is retried.
 
-An account can turn these off in **Settings** — `send_poll_email` asks
+An account can turn these off from the gear menu in the header — `send_poll_email` asks
 `wants_email` before anything else — and the sign-in email is not one of them.
-The same three moments are also sent as push notifications; see the next step
-and [Push notifications](#push-notifications).
+Every one of them says so: the letterhead's footer links to `#/settings`,
+because the moment somebody wants that switch is the moment they are reading
+a letter they did not want. That page holds the same two switches as the gear
+menu, and the footer is the only thing that links to it — a link cannot open a
+menu. A reader who is not signed in is sent through the sign-in screen and
+brought back there, like any other link into the app.
+The same moments are also sent as push notifications; see the next step and
+[Push notifications](#push-notifications).
 
 ### 5. Push notifications
 
 Optional. A build with no VAPID key has push switched off — no buttons, no
-banner, and the Settings switch disabled with a sentence under it — and the
+banner, and the push switch disabled — and the
 database sends nothing while the two Vault secrets below are missing. Every
 step here is manual, because every one of them is a secret or a deployment:
 
@@ -470,7 +483,7 @@ Not once per file — once. The integration records the number in front of a
 migration's name, and a number in `supabase_migrations.schema_migrations` is a
 number that will never be applied again, whatever file is wearing it now.
 
-**A migration replaced before it ships does not give its number back.**
+**A migration replaced after it ships does not give its number back.**
 `0056_schedule_day_windows.sql` reached `main`, was applied, and put `0056` in
 that table. The next commit deleted it and added `0056_schedule_options.sql` —
 a different migration at the same number — which the integration skipped as
@@ -487,9 +500,23 @@ a database that disagreed with all three. What surfaced it was a person trying
 to make a poll: `suggest_options` did not exist on the live project, and
 `create_poll` still carried the refusal that migration lifted.
 
-So: **renumber, even when the file you are replacing has never left your
-branch** — you cannot know it has not been applied, and the cost of a spare
-number is nothing. When a remote does fall behind, the fix is a *new* migration
+So: **a number is spent the moment it reaches `main`**, because that is the
+moment the integration applies it — and from then on, renumber rather than
+replace, even if you believe the run failed; the table is the only authority
+on whether it happened, and the cost of a spare number is nothing. **Before
+then it is still yours.** The live project only ever applies what lands on
+`main`, so a migration that exists only on a feature branch can be rewritten,
+renamed or dropped and its number reused by whatever replaces it — `0073` was
+drafted as one migration, rewritten as another and renumbered, and went back
+to `0073` before it merged, which cost nothing. (Supabase *preview* branches,
+where enabled, apply a pull request's migrations to a throwaway database of
+their own; that is not the live project's history and is discarded with the
+branch.) What makes 0056 the cautionary tale is that its first file had
+already merged. If you are not sure whether a number has reached `main`,
+`git log origin/main -- supabase/migrations/<file>` says, and
+`supabase migration list` says whether the remote has recorded it.
+
+When a remote does fall behind, the fix is a *new* migration
 at a fresh number that re-asserts the definitions out of the baseline;
 [`0058_schedule_options_again.sql`](supabase/migrations/0058_schedule_options_again.sql)
 is the worked example, and *Trying one out, and taking it back* above is how
@@ -668,12 +695,14 @@ all — along with what the open reading refuses to carry and that a poll which
 does not exist is refused in the same words as one that is simply not yours.
 And the same half of push notifications: who each moment would be pushed to
 and whose browser is left out, the two settings that turn a channel off, the
-endpoints the database refuses, and that a watch on an open poll is filed
-against its first question and is gone once the results are out. And which
-share-link ballot and confirmation are a reader's: the account's on any device
-when they are signed in, the browser key's when they are not, never another
-account's through a shared browser's key, never claimed after the fact, and
-never an address on anything a read hands back.
+endpoints the database refuses, that a watch on an open poll is filed
+against its first question and is gone once the results are out, and that an
+account that has answered an open poll signed in is in its audience on the
+same terms as an invitee. And which share-link ballot and confirmation are a
+reader's: the account's on any device when they are signed in, the browser
+key's when they are not, never another account's through a shared browser's
+key, never claimed after the fact, and never an address on anything a read
+hands back.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. The
 `poll_page` case above is the nearest thing and still not an exception to
@@ -2414,12 +2443,13 @@ just did* holds on both channels by construction, and the once-only claim on
 `results_notices` covers both. The suite asks `poll_push_targets` who would be
 pushed, exactly as case 23 asks the audience functions who would be emailed.
 
-**Two doors, one subscription per browser.** A browser has one push endpoint
+**Two doors, one subscription per browser** — and a third way into a poll's
+audience that is not a subscription at all. A browser has one push endpoint
 whoever is using it, and it reaches the database one of two ways:
 
 - **Bound to an account** (`push_subscriptions`, through
-  `save_push_subscription`) — by turning on the push switch in **Settings**,
-  which is the one place an account does it. It hears every poll that
+  `save_push_subscription`) — by turning on the push switch in the header's
+  gear menu, which is the one place an account does it. It hears every poll that
   account is in, for as long as the account wants push.
   An endpoint belongs to one account at a time, and **signing out forgets it**
   (`forgetAccountPush`, before the session goes): a shared browser left bound
@@ -2428,7 +2458,11 @@ whoever is using it, and it reaches the database one of two ways:
   — the **Notify me** button on the card a voter lands on after voting, or
   after confirming the options on a poll still collecting them. No account,
   and the creator does not get the button: they are the one who opens and
-  closes the poll.
+  closes the poll. Only a reader who is **not signed in** gets it; one who
+  is is in the poll's audience through the account on their ballot instead
+  (below), and one press covers the poll's
+  opening and its results alike, since a watch is filed once for the whole
+  group and lasts until the results go out.
 
 **A watch records nothing about who asked.** No voter key, no account, no
 name, and deliberately no timestamp: a watch made in the same second as a
@@ -2448,7 +2482,7 @@ Close on the phone they are watching on.
 
 **Settings are an account's, and say which channels.** `notification_settings`
 holds an `email` and a `push` flag, and no row means both on, so nothing
-changed for anybody who never opens the page. `send_poll_email` asks
+changed for anybody who never opens the menu. `send_poll_email` asks
 `wants_email` before anything else, which covers all four letters in one
 place; an address with no account is always emailed, since the invitation is
 the only way it could hear of the poll. The sign-in email is not a
@@ -2465,7 +2499,7 @@ permission, binds this device and turns the account's push on, which is also
 how a second device is added; turning it off turns the account's push off,
 which stops it everywhere. Devices stay bound through that, so turning it back
 on anywhere brings them all back. Where the device cannot take a push at all,
-the switch is disabled and the line under it says what to do.
+the switch is disabled and the line under it says why.
 
 **The database decides, the function encrypts.** A push has to be encrypted to
 each browser's key (RFC 8291) and signed with the app's VAPID key (RFC 8292),
@@ -2505,14 +2539,14 @@ reader once.
 
 **Asking is always a press.** A permission prompt nobody asked for is ignored
 or blocked, and Safari will not show one at all, so nothing in the app asks on
-its own. The places that can ask are Settings, for an account, and Notify me,
+its own. The places that can ask are the gear menu, for an account, and Notify me,
 for a poll answered through a link — the install guide used to carry the
 Settings switch as well, and a third copy of one control was one too many;
 everywhere else the app only *says* it can notify — `AppBanner`, on the
-poll list, on the sign-in screen that is the front door for anybody signed
-out, and under the invite poll's *your vote is in*, closed for good with its
-×. It says nothing where there is nothing to do: no key in the build, no
-push in the browser, a reader who already said no or already said yes.
+poll list and on the sign-in screen that is the front door for anybody signed
+out, closed for good with its ×. It says nothing where there is nothing to
+do: no key in the build, no push in the browser, a reader who already said no
+or already said yes.
 
 **iPhone and iPad need the app installed first.** Safari gives the push APIs
 only to a site added to the Home Screen and opened from there, so in a Safari
@@ -2536,6 +2570,73 @@ What it does not do:
   the old endpoint is refused. There is no `pushsubscriptionchange` handler,
   because the service worker holds no account to send the new one under.
 - **Retry.** Like the emails, a push is best-effort and sent once.
+
+### Open polls you answered while signed in
+
+A watch is the right shape for somebody holding a link and nothing else, and
+the wrong one for somebody signed in: their account already says which
+channels it hears on, on every device it is bound to, and an open poll they
+voted in was the one kind of poll that setting could not reach. So **an
+account that answers an open poll is part of its audience**, simply because
+its ballot or its confirmation says so: since
+[`0074`](supabase/migrations/0074_open_ballots_follow_the_account.sql) a
+share-link ballot cast signed in carries the account, and `poll_email_audience`
+reads those accounts through `poll_answering_accounts` — every question of the
+group, so answering question 3 is being in the poll. They are emailed and
+pushed about the poll opening and its results exactly as an invitee is, by the
+same functions, under the same two settings, minus whoever acted. There is
+nothing to press and nothing for the browser to file. The creator's own ballot
+puts nobody new in the audience: the creator is in it already, and is left out
+of the moments that were their own doing by the rule every poll uses.
+
+**It was a separate record for a day, and that is worth knowing.**
+`0073_settings_link_and_open_poll_follows.sql` added `poll_follows`: a row the
+browser filed in a request of its own when a signed-in reader answered,
+carrying nothing that joined it to the ballot, and deleted once the results
+went out so that no account kept a list of the open polls it had answered.
+`0074` was written alongside it and put the account on the ballot itself, for
+the reasons in [An open ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account) — and once the
+ballot carries the account, the follow records nothing the ballot does not,
+and was the weaker copy: filed by the browser as a best effort, so a failed
+request was a voter nobody told. [`0076_one_way_into_an_open_poll.sql`](supabase/migrations/0076_one_way_into_an_open_poll.sql)
+dropped it and pointed the audience at the ballots. The one behaviour that
+moved: a follower was forgotten once the results went out, and an account that
+answered is now told again if the poll is reopened and finishes a second time,
+as an invitee always was — its ballot is still there, which is the reason an
+invitee is.
+
+**The switches are a menu, not a page.** `NotificationSwitches` is two
+switches — *Email notifications* and *Push notifications* — with no line under
+either, drawn in a popover off the gear in the header (`Layout`). It used to
+be a Settings page, which was a lot of page for two switches and took the
+reader off the poll they were in the middle of; the popover opens where they
+are, and reads the account's settings only when it is opened. The `/settings`
+route is still there with the same component on it, for the one caller that
+cannot open a menu: the footer of every email. Nothing inside the app links to
+it, and the gear stands down on it the way the About link does on About.
+
+A push switch that cannot be turned on — an iPhone outside the installed app,
+a browser that said no, a browser with no push — is disabled with one short
+line under it saying which, and *See how* linking to the install guide. That
+is the only line either switch ever carries: a switch that works needs no
+words, so the menu is two lines for everybody it works for, and a greyed-out
+switch with no reason is the one thing in it that would leave somebody stuck.
+Following the link closes the menu (`Layout` closes it on any change of
+route).
+
+**Where a signed-in reader would have seen Notify me, they are told where the
+gear is** (`NotifyHint`, beside `WatchPoll`), on invite polls and open polls
+alike: under *your vote is in*, and under the card after confirming the
+options, because those are the two moments a reader is left waiting on
+everybody else. There is nothing for it to file — the invite list or the
+account on their ballot already puts them in the audience — so what a reader who is not being pushed
+is missing is push on this device, which is the switch in that menu. It is a
+line of text, not a button, and it says nothing once this device is set up
+(`accountPushHere`, from two local mirrors — the device's binding and the
+account's push setting as the switches last saw it — so it costs no request):
+most people turn notifications on once, and a line on every poll confirming it
+was clutter. Where the device needs the app installed first it is the banner.
 
 ## Signing in
 
@@ -3159,7 +3260,7 @@ else, so it was a fact about a browser: vote on the laptop, open the link on the
 phone, and the phone found a blank ballot, a question strip with nothing ticked,
 and no way to change the vote already cast. A reader who is signed in has
 something better to go on than a browser, so
-[`0073_open_ballots_follow_the_account.sql`](supabase/migrations/0073_open_ballots_follow_the_account.sql)
+[`0074_open_ballots_follow_the_account.sql`](supabase/migrations/0074_open_ballots_follow_the_account.sql)
 records the account on what they cast through the link — `ballots.account_id`,
 and `option_confirmations.account_id` one stage earlier — and every `open_poll_*`
 door finds a reader's ballot by it. The phone is told the vote is in, is handed
@@ -4976,11 +5077,14 @@ is the four letters and the two rules that decide them.
   the group, and finishing is one notice row filed against the first. Nothing
   in a group announces itself per question.
 
-- **An open poll writes nothing at all**, and needs no special case to. It has
-  no invite list, so there is nobody to invite; it never opens itself, so its
-  opening is always its creator's own doing; and it only ever ends by being
-  closed, by the one person who would have been told. Every audience it has
-  is empty.
+- **An open poll writes only to the accounts that answered it**, and needs no
+  special case to. It has no invite list, so there is nobody to invite; it
+  never opens itself, so its opening is always its creator's own doing; and it
+  only ever ends by being closed, by the one person who would have been told.
+  What is left is the voters who answered it signed in — see [Open polls you
+  answered while signed in](#open-polls-you-answered-while-signed-in) — who
+  are in `poll_email_audience`, through the account on their ballots, beside
+  the invitees an invite poll would have.
 
 `test/sql/cases/23_who_the_emails_go_to.sql` covers both decisions and neither
 send: which invitation each address is owed at each stage and that the creator
@@ -5063,17 +5167,17 @@ the rest, by date, counted by the pager and hidden by the same eye — on every
 device you sign in on.
 
 **The database knows, because the ballot says so.** Since
-[`0073`](supabase/migrations/0073_open_ballots_follow_the_account.sql) a
+[`0074`](supabase/migrations/0074_open_ballots_follow_the_account.sql) a
 ballot or a confirmation cast through a link while signed in carries the
 account (see [An open ballot cast signed in follows the
 account](#an-open-ballot-cast-signed-in-follows-the-account)), and
-[`0074_answered_open_polls_on_the_list.sql`](supabase/migrations/0074_answered_open_polls_on_the_list.sql)
+[`0075_answered_open_polls_on_the_list.sql`](supabase/migrations/0075_answered_open_polls_on_the_list.sql)
 has `list_polls` read it: an open poll is on the list when the account has a
 row in any question of it. The row is the group's first question whichever
 question was answered, like every group on the list.
 
 **It used to be the browser's, and that is what was given up.** From `0065`
-until `0074` the browser remembered every open poll it had opened
+until `0075` the browser remembered every open poll it had opened
 (`src/lib/openedPolls.ts`, now gone) and handed the ids in as `p_open_ids`,
 on the grounds that a row saying *this account opened that poll* would be a
 join the per-question voter key exists to prevent. It made the list a fact
