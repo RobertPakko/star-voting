@@ -291,7 +291,7 @@ function PollPage() {
   // The sample watches nothing: it is answered out of a file in this browser,
   // so there is no topic and `PublicPoll` reads it for itself.
   const { status: liveStatus, reread } = useLiveStream(
-    pollId && !sample ? [pollTopic(pollId)] : [],
+    pollId && !sample ? pollTopic(pollId) : null,
     onSignal,
     onGone,
   )

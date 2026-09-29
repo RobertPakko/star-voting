@@ -349,9 +349,9 @@ export interface UnreadableRead {
 export interface PollListItem extends Omit<Poll, 'created_by' | 'created_by_email'>, PollStatus {
   /**
    * Who made the poll — null on an open poll that is on the list only because
-   * this browser has opened its link, for the reason `OpenPollView` carries no
-   * creator: a link goes wherever it is forwarded, and the list must not be
-   * the way round that. See lib/openedPolls.ts.
+   * this account answered it through its link, for the reason `OpenPollView`
+   * carries no creator: a link goes wherever it is forwarded, and the list
+   * must not be the way round that. See 0074_answered_open_polls_on_the_list.sql.
    */
   created_by: string | null
   created_by_email: string | null
@@ -413,8 +413,9 @@ export interface OpenPollView {
     solicit_options: boolean
     closed_at: string | null
     /**
-     * When the poll was made. The poll list uses it to know which opened
-     * polls can be on a page before reading it; see lib/openedPolls.ts.
+     * When the poll was made. Nothing in the browser reads it now: it was
+     * how the poll list worked out which remembered open polls could be on a
+     * page, and the list stopped depending on the browser for those in 0074.
      * Undefined against a database whose open_poll_view predates it, and on
      * the About page's sample, which is a recording from before it.
      */
