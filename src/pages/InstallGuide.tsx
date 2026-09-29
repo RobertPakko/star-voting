@@ -1,7 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import {
-  Anchor,
   Button,
   Card,
   Group,
@@ -74,13 +72,10 @@ export function InstallGuide() {
           <Stack gap={4}>
             <Text fw={700}>Polls you&rsquo;re invited to</Text>
             <Text size="sm">
-              Sign in, then turn notifications on for each device you want them on — from{' '}
-              <Anchor component={Link} to="/settings" inherit>
-                Settings
-              </Anchor>
-              . You&rsquo;ll hear when you&rsquo;re invited, when voting opens, and when the results
-              are ready. Settings is also where you choose whether these come by email, as
-              notifications, both, or neither.
+              Sign in, then turn push notifications on for each device you want them on — from the
+              gear menu at the top of the page. You&rsquo;ll hear when you&rsquo;re invited, when
+              voting opens, and when the results are ready. The same menu is where you choose
+              whether these come by email, as notifications, both, or neither.
             </Text>
           </Stack>
         </Card>
@@ -152,12 +147,9 @@ function Trouble({ children }: { children: ReactNode }) {
 function TurnOn() {
   return (
     <List.Item>
-      Turn notifications on — from{' '}
-      <Anchor component={Link} to="/settings" inherit>
-        Settings
-      </Anchor>{' '}
-      (the gear at the top) if you&rsquo;re signed in, or with <em>Notify me</em> on a poll you
-      answered through a link — and choose <strong>Allow</strong> when your device asks.
+      Turn notifications on — from the gear menu at the top of the page if you&rsquo;re signed in,
+      or with <em>Notify me</em> on a poll you answered through a link — and choose{' '}
+      <strong>Allow</strong> when your device asks.
     </List.Item>
   )
 }

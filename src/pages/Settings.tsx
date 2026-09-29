@@ -1,102 +1,31 @@
-import { Link, useLocation } from 'react-router-dom'
-import { Anchor, Card, Stack, Switch, Text, Title } from '@mantine/core'
-import { ArrowLeftIcon } from '@phosphor-icons/react'
-import { notifications } from '@mantine/notifications'
-import { supabase } from '../lib/supabase'
+import { Card, Stack, Title } from '@mantine/core'
 import { useAuth } from '../lib/auth'
-import { useNotificationSettings, type NotificationSettings } from '../lib/notificationSettings'
-import { PushSwitch } from '../components/PushSwitch'
+import { NotificationSwitches } from '../components/NotificationSwitches'
 import { Reveal } from '../components/Reveal'
 import { SettingsSkeleton } from '../components/Skeletons'
 
 /**
- * The /settings route: how an account hears about its polls.
+ * The /settings route: the two notification switches on a page of their own.
  *
- * Two switches. A poll tells its people about three moments — being
- * invited, voting opening, the results being ready — and the switches say
- * which channels those arrive on: email, push, both, or neither. Email is the
- * account's alone. Push is the account's too, but a push subscription belongs
- * to one browser on one device, so its switch also answers for the device in
- * the reader's hand; see PushSwitch.
- *
- * Neither switch reaches the sign-in email, which is not a notification about
- * a poll and without which nobody could get back in to turn email on again.
- *
- * The switches save as they are flipped, the way a phone's settings do: there
- * is nothing else on the page to be saved alongside them, and a Save button
- * under two switches is a button people forget to press.
- *
- * A poll's *Notify me* lands here too (see NotifyInSettings), and says which
- * poll it came from, so the page offers the way back to it: the reader came to
- * flip one switch and has a poll to get back to.
+ * Nothing in the app links here. Inside the app the same switches are one
+ * press away in the header's gear menu, which is lighter than a page and does
+ * not take the reader off the poll they were reading. What needs an address is
+ * the footer of every email — *change your notification settings* — because a
+ * link cannot open a menu, and a reader who is not signed in is taken through
+ * the sign-in screen and brought back here.
  */
 export function Settings() {
   const { session } = useAuth()
-  const location = useLocation()
-  const from = (location.state as { from?: unknown } | null)?.from
-  const backTo = typeof from === 'string' && from.startsWith('/polls/') ? from : null
-  const userId = session?.user.id ?? null
-  const { settings, setSettings, error } = useNotificationSettings(userId)
 
-  if (error) {
-    return (
-      <Text c="red" ta="center">
-        {error}
-      </Text>
-    )
-  }
-
-  if (!session || !settings) return <SettingsSkeleton />
-
-  async function save(next: NotificationSettings) {
-    const previous = settings
-    setSettings(next)
-    const { error: saveError } = await supabase.rpc('set_notification_settings', {
-      p_email: next.email,
-      p_push: next.push,
-    })
-    if (saveError) {
-      setSettings(previous)
-      notifications.show({ message: saveError.message, color: 'red' })
-    }
-  }
+  if (!session) return <SettingsSkeleton />
 
   return (
     <Reveal>
       <Stack maw={720} mx="auto" gap="md">
-        {backTo && (
-          <Anchor component={Link} to={backTo} size="sm" style={{ alignSelf: 'flex-start' }}>
-            <ArrowLeftIcon size={14} aria-hidden style={{ verticalAlign: '-2px' }} /> Back to the
-            poll
-          </Anchor>
-        )}
-        <Title order={2}>Settings</Title>
-
+        <Title order={2}>Notifications</Title>
         <Card withBorder>
-          <Stack gap="md">
-            <Stack gap={4}>
-              <Title order={4}>Notifications</Title>
-              <Text size="sm" c="dimmed">
-                You&rsquo;re told when you&rsquo;re invited to a poll, when a poll you&rsquo;re in
-                opens for voting, and when its results are ready. Choose how.
-              </Text>
-            </Stack>
-
-            <Switch
-              label="Email"
-              description={`Sent to ${session.user.email}. Sign-in emails are always sent.`}
-              checked={settings.email}
-              onChange={(event) => save({ ...settings, email: event.currentTarget.checked })}
-            />
-            <PushSwitch userId={session.user.id} settings={settings} onChange={setSettings} />
-          </Stack>
+          <NotificationSwitches userId={session.user.id} />
         </Card>
-
-        <Text size="sm" c="dimmed">
-          Open polls you vote in while signed in follow these settings too. Polls you answer through
-          a link without signing in are not affected by them: to hear about one of those, press{' '}
-          <em>Notify me</em> on the poll after you vote.
-        </Text>
       </Stack>
     </Reveal>
   )

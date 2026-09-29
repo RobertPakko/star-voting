@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
 import { Button, Group, Stack, Text } from '@mantine/core'
-import { BellIcon } from '@phosphor-icons/react'
+import { BellIcon, GearIcon } from '@phosphor-icons/react'
 import { useAuth } from '../lib/auth'
 import {
   accountPushHere,
@@ -101,50 +100,38 @@ export function WatchPoll({
 }
 
 /**
- * "Notify me" for a signed-in reader, on an invite poll or an open one.
+ * What a signed-in reader is told where a reader holding a link would see
+ * Notify me: under the card a voter lands on after voting, and after
+ * confirming the options. Those are the two moments somebody is left waiting
+ * on everybody else.
  *
- * The same button WatchPoll draws, in the same places — under the card a
- * voter lands on after voting, and after confirming the options — but it files
- * nothing. A signed-in reader already hears about every poll they are in, by
- * email and by push, as their account's settings say: an invite poll through
- * its list, an open poll through the follow their browser files when they
- * answer it (`followPoll`). What they can be missing is push on this device,
- * and that is one switch that belongs to the account rather than to this
- * poll. So the button takes them to it, with the way back to this poll on the
- * page.
+ * It files nothing and offers no button. A signed-in reader already hears
+ * about every poll they are in — an invite poll through its list, an open poll
+ * through the follow their browser files when they answer it (`followPoll`) —
+ * on whichever channels their account allows, and the switches for those are
+ * in the gear menu in the header. So the one thing this can usefully say is
+ * where that menu is, and it says it only to a reader whose device is not
+ * being pushed to yet: once push is on here there is nothing to say, and a
+ * line confirming it on every poll would be clutter on a question most people
+ * answer once.
  *
- * Where this device is already set up it says so instead, in a line; where
- * there is nothing the switch could do — an iPhone outside the installed app —
- * the banner stands in for it, as it does for WatchPoll; and where the browser
- * has said no, or the build has no push at all, it draws nothing.
+ * Where the device needs the app installed first — an iPhone in a Safari tab —
+ * the banner stands in for it, as it does for WatchPoll; where the browser has
+ * said no or has no push at all, or the build has none, it draws nothing.
  */
-export function NotifyInSettings({ stage }: { stage: Stage }) {
+export function NotifyHint({ stage }: { stage: Stage }) {
   const { session } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
   const userId = session?.user.id
 
   if (!userId) return null
   if (pushState() === 'needs-install') return <AppBanner />
-  if (!canAskForPush()) return null
-
-  if (accountPushHere(userId)) {
-    return (
-      <Text size="sm" c="dimmed">
-        This device will get a notification when {nextMoment(stage)}.
-      </Text>
-    )
-  }
+  if (!canAskForPush() || accountPushHere(userId)) return null
 
   return (
-    <Group justify="flex-end">
-      <Button
-        variant="light"
-        leftSection={<BellIcon size={16} aria-hidden />}
-        onClick={() => navigate('/settings', { state: { from: location.pathname } })}
-      >
-        Notify me when {nextMoment(stage)}
-      </Button>
-    </Group>
+    <Text size="sm" c="dimmed">
+      To be notified when {nextMoment(stage)}, turn notifications on from the{' '}
+      <GearIcon size={14} role="img" aria-label="gear" style={{ verticalAlign: '-2px' }} /> menu at
+      the top of the page.
+    </Text>
   )
 }

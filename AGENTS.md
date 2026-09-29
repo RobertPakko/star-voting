@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the three pieces of push notifications — AppBanner, PushSwitch, WatchPoll — …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch, WatchPoll — …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, which polls this browser keeps off its list and which open polls it has opened (openedPolls.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -259,19 +259,21 @@ the others are sent once, when the poll crosses the line — a poll that
 opened or finished before the key existed is never announced.
 Nothing is retried.
 
-An account can turn these off in **Settings** — `send_poll_email` asks
+An account can turn these off from the gear menu in the header — `send_poll_email` asks
 `wants_email` before anything else — and the sign-in email is not one of them.
 Every one of them says so: the letterhead's footer links to `#/settings`,
 because the moment somebody wants that switch is the moment they are reading
-a letter they did not want. A reader who is not signed in is sent through the
-sign-in screen and brought back there, like any other link into the app.
+a letter they did not want. That page holds the same two switches as the gear
+menu, and the footer is the only thing that links to it — a link cannot open a
+menu. A reader who is not signed in is sent through the sign-in screen and
+brought back there, like any other link into the app.
 The same moments are also sent as push notifications; see the next step and
 [Push notifications](#push-notifications).
 
 ### 5. Push notifications
 
 Optional. A build with no VAPID key has push switched off — no buttons, no
-banner, and the Settings switch disabled with a sentence under it — and the
+banner, and the push switch disabled — and the
 database sends nothing while the two Vault secrets below are missing. Every
 step here is manual, because every one of them is a secret or a deployment:
 
@@ -2412,8 +2414,8 @@ audience that is not a subscription at all. A browser has one push endpoint
 whoever is using it, and it reaches the database one of two ways:
 
 - **Bound to an account** (`push_subscriptions`, through
-  `save_push_subscription`) — by turning on the push switch in **Settings**,
-  which is the one place an account does it. It hears every poll that
+  `save_push_subscription`) — by turning on the push switch in the header's
+  gear menu, which is the one place an account does it. It hears every poll that
   account is in, for as long as the account wants push.
   An endpoint belongs to one account at a time, and **signing out forgets it**
   (`forgetAccountPush`, before the session goes): a shared browser left bound
@@ -2445,7 +2447,7 @@ Close on the phone they are watching on.
 
 **Settings are an account's, and say which channels.** `notification_settings`
 holds an `email` and a `push` flag, and no row means both on, so nothing
-changed for anybody who never opens the page. `send_poll_email` asks
+changed for anybody who never opens the menu. `send_poll_email` asks
 `wants_email` before anything else, which covers all four letters in one
 place; an address with no account is always emailed, since the invitation is
 the only way it could hear of the poll. The sign-in email is not a
@@ -2502,7 +2504,7 @@ reader once.
 
 **Asking is always a press.** A permission prompt nobody asked for is ignored
 or blocked, and Safari will not show one at all, so nothing in the app asks on
-its own. The places that can ask are Settings, for an account, and Notify me,
+its own. The places that can ask are the gear menu, for an account, and Notify me,
 for a poll answered through a link — the install guide used to carry the
 Settings switch as well, and a third copy of one control was one too many;
 everywhere else the app only *says* it can notify — `AppBanner`, on the
@@ -2561,19 +2563,34 @@ closes with nothing to announce — so no account carries a list of every open
 poll it ever answered, and a reopened poll is followed again when its reader
 next opens it (`followPoll` remembers per tab, not in storage).
 
-**Where a signed-in reader would have seen Notify me, they see the way to
-Settings** (`NotifyInSettings`, beside `WatchPoll`), on invite polls and open
-polls alike: under *your vote is in*, and under the card after confirming the
+**The switches are a menu, not a page.** `NotificationSwitches` is two
+switches — *Email notifications* and *Push notifications* — with no line under
+either, drawn in a popover off the gear in the header (`Layout`). It used to
+be a Settings page, which was a lot of page for two switches and took the
+reader off the poll they were in the middle of; the popover opens where they
+are, and reads the account's settings only when it is opened. The `/settings`
+route is still there with the same component on it, for the one caller that
+cannot open a menu: the footer of every email. Nothing inside the app links to
+it, and the gear stands down on it the way the About link does on About.
+
+A push switch that cannot be turned on — an iPhone outside the installed app,
+a browser that said no — is simply disabled, without the sentence it used to
+carry saying why. That is the menu being kept to two lines; the explaining is
+done by `AppBanner` and the install guide, which is where the reader is sent
+in those cases anyway.
+
+**Where a signed-in reader would have seen Notify me, they are told where the
+gear is** (`NotifyHint`, beside `WatchPoll`), on invite polls and open polls
+alike: under *your vote is in*, and under the card after confirming the
 options, because those are the two moments a reader is left waiting on
 everybody else. There is nothing for it to file — the list or the follow
 already puts them in the audience — so what a reader who is not being pushed
-is missing is push on this device, which is one switch that belongs to the
-account. The button navigates to `#/settings` carrying the poll's path in the
-route state, so the page can offer the way back. Where this device is already
-set up it is a line saying so instead (`accountPushHere`, from two local
-mirrors — the device's binding and the account's push setting as the settings
-page last saw it — so it costs no request), and where the device needs the
-app installed first it is the banner.
+is missing is push on this device, which is the switch in that menu. It is a
+line of text, not a button, and it says nothing once this device is set up
+(`accountPushHere`, from two local mirrors — the device's binding and the
+account's push setting as the switches last saw it — so it costs no request):
+most people turn notifications on once, and a line on every poll confirming it
+was clutter. Where the device needs the app installed first it is the banner.
 
 ## Signing in
 

@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Anchor, Stack, Switch, Text } from '@mantine/core'
+import { Stack, Switch, Text } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { enableAccountPush, PushRefused, pushState, rememberAccountPush } from '../lib/push'
 import type { NotificationSettings } from '../lib/notificationSettings'
@@ -22,12 +21,13 @@ import type { NotificationSettings } from '../lib/notificationSettings'
  *
  * Where this device cannot receive a push at all — an iPhone outside the
  * installed app, a browser that said no, a browser with no push — the switch
- * is off and disabled, and the line under it says what to do instead.
+ * is off and disabled. It carries no line explaining which: it lives in a
+ * menu of two switches that is meant to be read at a glance, and the install
+ * guide and the banner are where that explaining is done.
  *
- * Drawn on the settings page, which is the one place an account turns
- * notifications on — an invite poll's *Notify me* is a way here rather than a
- * second copy of this (NotifyInSettings); a reader holding a link turns them
- * on per poll instead, with WatchPoll.
+ * Drawn by NotificationSwitches, which is the one place an account turns
+ * notifications on; a reader holding a link turns them on per poll instead,
+ * with WatchPoll.
  */
 export function PushSwitch({
   userId,
@@ -35,7 +35,7 @@ export function PushSwitch({
   onChange,
 }: {
   userId: string
-  settings: NotificationSettings | null
+  settings: NotificationSettings
   onChange: (next: NotificationSettings) => void
 }) {
   const [busy, setBusy] = useState(false)
@@ -45,31 +45,7 @@ export function PushSwitch({
   const state = pushState()
   const capable = state === 'ask' || state === 'granted'
 
-  const guide = (
-    <>
-      {' '}
-      <Anchor component={Link} to="/app" inherit>
-        See how
-      </Anchor>
-      .
-    </>
-  )
-
-  const description =
-    state === 'unconfigured' ? (
-      'Push notifications are not available on this site yet.'
-    ) : state === 'needs-install' ? (
-      <>On an iPhone or iPad, notifications work once the app is on your Home Screen.{guide}</>
-    ) : state === 'unsupported' ? (
-      <>This browser cannot receive notifications.{guide}</>
-    ) : state === 'denied' ? (
-      <>Notifications are blocked for this site in your browser&rsquo;s settings.{guide}</>
-    ) : (
-      'Sent to each device where you turn this on.'
-    )
-
   async function toggle(on: boolean) {
-    if (!settings) return
     setBusy(true)
     setError(null)
     try {
@@ -100,9 +76,8 @@ export function PushSwitch({
     <Stack gap={4}>
       <Switch
         label="Push notifications"
-        description={description}
-        checked={capable && !!settings?.push && !!settings.thisDevice}
-        disabled={!capable || !settings || busy}
+        checked={capable && settings.push && settings.thisDevice}
+        disabled={!capable || busy}
         onChange={(event) => toggle(event.currentTarget.checked)}
       />
       {error && (

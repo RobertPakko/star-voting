@@ -6,9 +6,10 @@ import { currentSubscription, rememberAccountPush } from './push'
  * An account's notification settings, and whether the browser asking is one
  * of its devices — one read, `my_notification_settings`, for both.
  *
- * Shared by the settings page and the install guide, which both draw the
- * "this device" control and would otherwise each ask the same thing their own
- * way.
+ * Read by NotificationSwitches, which the header's gear menu and the
+ * /settings page both draw. It also refreshes the local mirror of the
+ * account's push setting that a poll page reads to decide whether to point at
+ * that menu (`accountPushHere`).
  */
 export type NotificationSettings = {
   email: boolean

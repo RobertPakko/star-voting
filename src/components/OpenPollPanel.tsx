@@ -13,7 +13,7 @@ import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
 import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton } from './Skeletons'
 import { VoterNameField } from './VoterNameField'
-import { NotifyInSettings, WatchPoll } from './WatchPoll'
+import { NotifyHint, WatchPoll } from './WatchPoll'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
 /**
@@ -153,11 +153,11 @@ export function OpenPollPanel({
   }
 
   // What stands under the card a reader is left waiting on: the per-poll
-  // Notify me for a link, the way to the account's settings for an account.
+  // Notify me for a link, and for an account where to find its switches.
   function notify(stage: 'opening' | 'results') {
     if (!canWatch) return null
     return signedIn ? (
-      <NotifyInSettings stage={stage} />
+      <NotifyHint stage={stage} />
     ) : (
       <WatchPoll pollId={pollId} watchKey={watchKey} stage={stage} />
     )

@@ -874,42 +874,42 @@ export function FormSkeleton() {
 }
 
 /**
+ * The two notification switches while the account's settings are read: a
+ * switch and its label, twice. Drawn in the header's menu and on the settings
+ * page alike, since both hold the same two switches.
+ */
+export function SwitchesSkeleton() {
+  return (
+    <Loading>
+      <SwitchRows />
+    </Loading>
+  )
+}
+
+function SwitchRows() {
+  return (
+    <Stack gap="sm">
+      {[128, 124].map((w, i) => (
+        <Group key={i} gap="sm" wrap="nowrap">
+          <Skeleton height={20} width={36} radius="xl" />
+          <Bar kind="line" width={w} />
+        </Group>
+      ))}
+    </Stack>
+  )
+}
+
+/**
  * The settings page, while its chunk and the account's settings are fetched:
- * the heading, and the one card — its title and sentence, the two switches
- * with a line under each, a rule, and the device row with its button.
+ * the heading, and the card holding the two switches.
  */
 export function SettingsSkeleton() {
   return (
     <Loading>
       <Stack maw={720} mx="auto" gap="md">
-        <Bar kind="title" width={112} />
+        <Bar kind="title" width={160} />
         <Card withBorder>
-          <Stack gap="md">
-            <Stack gap={4}>
-              <Bar kind="heading" width={120} />
-              <Stack gap={0}>
-                <Bar kind="line" width="100%" />
-                <Bar kind="line" width="40%" />
-              </Stack>
-            </Stack>
-            {[64, 148].map((w, i) => (
-              <Group key={i} gap="sm" wrap="nowrap" align="flex-start">
-                <Skeleton height={20} width={36} radius="xl" />
-                <Stack gap={0}>
-                  <Bar kind="line" width={w} />
-                  <Bar kind="note" width={240} />
-                </Stack>
-              </Group>
-            ))}
-            <Divider />
-            <Stack gap="xs">
-              <Bar kind="name" width={92} />
-              <Group justify="space-between" wrap="wrap" gap="sm">
-                <Bar kind="line" width={280} />
-                <Skeleton height={control} width={184} radius="md" />
-              </Group>
-            </Stack>
-          </Stack>
+          <SwitchRows />
         </Card>
       </Stack>
     </Loading>
