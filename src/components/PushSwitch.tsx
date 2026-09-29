@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Stack, Switch, Text } from '@mantine/core'
+import { Link } from 'react-router-dom'
+import { Anchor, Stack, Switch, Text } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { enableAccountPush, PushRefused, pushState, rememberAccountPush } from '../lib/push'
 import type { NotificationSettings } from '../lib/notificationSettings'
@@ -21,9 +22,10 @@ import type { NotificationSettings } from '../lib/notificationSettings'
  *
  * Where this device cannot receive a push at all — an iPhone outside the
  * installed app, a browser that said no, a browser with no push — the switch
- * is off and disabled. It carries no line explaining which: it lives in a
- * menu of two switches that is meant to be read at a glance, and the install
- * guide and the banner are where that explaining is done.
+ * is off and disabled, and that is the one case it carries a line under it:
+ * which of those it is, and the way to the install guide, which says what to
+ * do about each. A switch that is on or can be turned on needs no words, and
+ * gets none, so the menu stays two lines for everybody it works for.
  *
  * Drawn by NotificationSwitches, which is the one place an account turns
  * notifications on; a reader holding a link turns them on per poll instead,
@@ -44,6 +46,26 @@ export function PushSwitch({
   // prompt is answered, which is inside the press below.
   const state = pushState()
   const capable = state === 'ask' || state === 'granted'
+
+  const guide = (
+    <>
+      {' '}
+      <Anchor component={Link} to="/app" inherit>
+        See how
+      </Anchor>
+    </>
+  )
+
+  const reason =
+    state === 'unconfigured' ? (
+      'Not available on this site yet.'
+    ) : state === 'needs-install' ? (
+      <>On iPhone and iPad, install the app first.{guide}</>
+    ) : state === 'unsupported' ? (
+      <>This browser can&rsquo;t receive notifications.{guide}</>
+    ) : state === 'denied' ? (
+      <>Blocked in this browser&rsquo;s settings.{guide}</>
+    ) : undefined
 
   async function toggle(on: boolean) {
     setBusy(true)
@@ -76,6 +98,7 @@ export function PushSwitch({
     <Stack gap={4}>
       <Switch
         label="Push notifications"
+        description={reason}
         checked={capable && settings.push && settings.thisDevice}
         disabled={!capable || busy}
         onChange={(event) => toggle(event.currentTarget.checked)}

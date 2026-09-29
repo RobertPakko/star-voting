@@ -2464,7 +2464,7 @@ permission, binds this device and turns the account's push on, which is also
 how a second device is added; turning it off turns the account's push off,
 which stops it everywhere. Devices stay bound through that, so turning it back
 on anywhere brings them all back. Where the device cannot take a push at all,
-the switch is disabled and the line under it says what to do.
+the switch is disabled and the line under it says why.
 
 **The database decides, the function encrypts.** A push has to be encrypted to
 each browser's key (RFC 8291) and signed with the app's VAPID key (RFC 8292),
@@ -2574,10 +2574,13 @@ cannot open a menu: the footer of every email. Nothing inside the app links to
 it, and the gear stands down on it the way the About link does on About.
 
 A push switch that cannot be turned on — an iPhone outside the installed app,
-a browser that said no — is simply disabled, without the sentence it used to
-carry saying why. That is the menu being kept to two lines; the explaining is
-done by `AppBanner` and the install guide, which is where the reader is sent
-in those cases anyway.
+a browser that said no, a browser with no push — is disabled with one short
+line under it saying which, and *See how* linking to the install guide. That
+is the only line either switch ever carries: a switch that works needs no
+words, so the menu is two lines for everybody it works for, and a greyed-out
+switch with no reason is the one thing in it that would leave somebody stuck.
+Following the link closes the menu (`Layout` closes it on any change of
+route).
 
 **Where a signed-in reader would have seen Notify me, they are told where the
 gear is** (`NotifyHint`, beside `WatchPoll`), on invite polls and open polls

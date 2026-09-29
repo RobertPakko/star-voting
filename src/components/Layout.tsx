@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   ActionIcon,
   Anchor,
@@ -39,6 +40,11 @@ export function Layout() {
   const navigate = useNavigate()
   const onAbout = pathname === '/about'
   const onSettings = pathname === '/settings'
+  // The notification menu, held here so that following its one link — to the
+  // install guide, from under a push switch that cannot be turned on — closes
+  // it rather than leaving it open over the page it went to.
+  const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => setMenuOpen(false), [pathname])
 
   // Off the poll and back to the front door, rather than left standing where
   // the session used to admit them. A page that was rendering the account
@@ -100,7 +106,14 @@ export function Layout() {
                 account: the settings are an account's, and a reader holding a
                 link has none. */}
             {session && !onSettings && (
-              <Popover position="bottom-end" withArrow shadow="md" width={240}>
+              <Popover
+                position="bottom-end"
+                withArrow
+                shadow="md"
+                width={260}
+                opened={menuOpen}
+                onChange={setMenuOpen}
+              >
                 <Popover.Target>
                   <Tooltip label="Notifications" withArrow>
                     <ActionIcon
@@ -108,6 +121,7 @@ export function Layout() {
                       color="gray"
                       size="lg"
                       aria-label="Notification settings"
+                      onClick={() => setMenuOpen((open) => !open)}
                     >
                       <GearIcon size={18} aria-hidden />
                     </ActionIcon>
