@@ -74,6 +74,15 @@ begin
   return v_id;
 end $$;
 
+-- Nobody signed in: a stranger holding a share link. A ballot cast through the
+-- link while somebody is signed in carries their account, and one account has
+-- one ballot per question, so a case standing in several anonymous voters
+-- behind their own keys signs out first.
+create or replace function tests.sign_out()
+returns void language sql as $$
+  update auth._session set user_id = null, email = null where id;
+$$;
+
 -- Creates a poll and casts every ballot in it.
 --
 -- p_ballots is one row per voter and one column per option, in the same order

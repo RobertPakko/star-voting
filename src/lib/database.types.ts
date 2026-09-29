@@ -19,6 +19,7 @@ export type Database = {
     Tables: {
       ballots: {
         Row: {
+          account_id: string | null
           id: string
           poll_id: string
           revised_at: string | null
@@ -28,6 +29,7 @@ export type Database = {
           voter_name: string | null
         }
         Insert: {
+          account_id?: string | null
           id?: string
           poll_id: string
           revised_at?: string | null
@@ -37,6 +39,7 @@ export type Database = {
           voter_name?: string | null
         }
         Update: {
+          account_id?: string | null
           id?: string
           poll_id?: string
           revised_at?: string | null
@@ -115,6 +118,7 @@ export type Database = {
       }
       option_confirmations: {
         Row: {
+          account_id: string | null
           confirmed_at: string
           id: string
           poll_id: string
@@ -123,6 +127,7 @@ export type Database = {
           voter_name: string | null
         }
         Insert: {
+          account_id?: string | null
           confirmed_at?: string
           id?: string
           poll_id: string
@@ -131,6 +136,7 @@ export type Database = {
           voter_name?: string | null
         }
         Update: {
+          account_id?: string | null
           confirmed_at?: string
           id?: string
           poll_id?: string

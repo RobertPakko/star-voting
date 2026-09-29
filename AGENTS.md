@@ -669,7 +669,11 @@ does not exist is refused in the same words as one that is simply not yours.
 And the same half of push notifications: who each moment would be pushed to
 and whose browser is left out, the two settings that turn a channel off, the
 endpoints the database refuses, and that a watch on an open poll is filed
-against its first question and is gone once the results are out.
+against its first question and is gone once the results are out. And which
+share-link ballot and confirmation are a reader's: the account's on any device
+when they are signed in, the browser key's when they are not, never another
+account's through a shared browser's key, never claimed after the fact, and
+never an address on anything a read hands back.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. The
 `poll_page` case above is the nearest thing and still not an exception to
@@ -864,10 +868,11 @@ Four of the status fields are its own and all four are answered as constants,
 because that is what `poll_status` answers on an open poll: there is no invite
 list, so `invited_count` is 0, `is_complete` needs `invited > 0` and can never
 be true, and `invited` is false. And `voted` and `confirmed` are false *however
-much that account has done through the link* — they ask about the account, and
-`open_poll_submit` writes a ballot with `voter_id` null while
-`open_poll_confirm_options` stores no voter at all, both keyed by the browser's
-`voter_key`. What that browser has done is in the view, which is where the page
+much that account has done through the link* — they ask about the account as an
+invitee, and `open_poll_submit` and `open_poll_confirm_options` both leave
+`voter_id` null, keying what they write by the browser's `voter_key` and, when
+somebody is signed in, by `account_id`, which `poll_status` does not read. What
+this reader has done through the link is in the view, which is where the page
 reads it.
 
 The one field the view genuinely does not carry is `expires_at`, and it is
@@ -3135,7 +3140,7 @@ explanations intact.
 |  | **Invited people** | **Anyone with the link** |
 | --- | --- | --- |
 | Access | Email addresses on the invite list | An unguessable link — the poll's id |
-| Voter signs in | Yes, magic link | No |
+| Voter signs in | Yes, magic link | No — but may, and then their ballot follows them between devices |
 | Results unlock | When everyone invited has voted, or when the creator closes the poll | Only when the creator closes the poll |
 | One vote each | Enforced — one ballot per account | **Not** enforced |
 
@@ -3145,6 +3150,71 @@ data. The app stores a random key in `localStorage` (see `src/lib/voterKey.ts`)
 to stop accidental double-submits, but that is a convenience, not a guard. Open
 polls are for picking a movie; invite polls are for anything where the outcome
 matters.
+
+### An open ballot cast signed in follows the account
+
+A share-link ballot used to be identified by that browser's key and nothing
+else, so it was a fact about a browser: vote on the laptop, open the link on the
+phone, and the phone found a blank ballot, a question strip with nothing ticked,
+and no way to change the vote already cast. A reader who is signed in has
+something better to go on than a browser, so
+[`0073_open_ballots_follow_the_account.sql`](supabase/migrations/0073_open_ballots_follow_the_account.sql)
+records the account on what they cast through the link — `ballots.account_id`,
+and `option_confirmations.account_id` one stage earlier — and every `open_poll_*`
+door finds a reader's ballot by it. The phone is told the vote is in, is handed
+the ballot to change, and ticks the questions the laptop answered.
+
+**Who "you" are on an open poll**, said once in `open_ballot_of` and
+`open_confirmation_of` and asked by every function that needs it:
+
+- **Signed in:** the ballot carrying your account; failing that, the ballot this
+  browser's key cast while nobody was signed in, which is still yours because
+  this browser cast it. A key another *account* voted with reaches nothing — the
+  next person signed in on a shared browser casts their own ballot, and it goes
+  in without the key, since a key cannot be on two ballots in one question.
+- **Signed out:** the ballot this browser's key cast, as it always was —
+  including one cast signed in, so the laptop that voted still says so after
+  signing out.
+
+**Nothing is claimed after the fact.** A ballot cast signed out stays unlinked
+when its voter signs in, even when they change it there. A ballot carries an
+account if and only if it was cast by one, which is a rule a voter can predict.
+
+**A new column rather than `voter_id`**, because `voter_id` means *an invitee's
+ballot* all over the schema: the rosters and the published sheet join it to
+`auth.users` for an email address, `ballots_select_own` grants on it, and
+`poll_status` answers an open poll's `voted` as false because an open ballot
+never carries one — which `statusFromOpenView` relies on. `account_id` is read
+by the open-poll functions and `poll_group` and by nothing else, so no address
+can reach a roster or a sheet through it; a check constraint says a row carries
+one or the other.
+
+**The strip's ticks come from the server where it can answer them.**
+`open_poll_group` carries `voted` and `confirmed` per question for a reader who
+is signed in, and `poll_group` counts the account's link ballots too, for the
+creator's own page. Signed out it carries neither, for the reason it never did —
+see [A poll can ask more than one question](#a-poll-can-ask-more-than-one-question)
+— and the browser's own record stands in. `useQuestionMarks` in
+[`src/lib/questionMarks.ts`](src/lib/questionMarks.ts) draws a mark where either
+says so, and lets each read of a single question correct both, since a
+confirmation can be taken back after the group was read.
+
+**Edit vote reads the ballot again when signed in.** Signed out, the scores the
+page already holds are the only copy anything could have changed. Signed in,
+another device may have changed them since, and a changed vote announces
+nothing (see [Changing your vote](#changing-your-vote-until-the-results-are-out)),
+so opening the copy in hand could hand the voter an old ballot to overwrite a
+newer one with. That press asks first, as an invite ballot's always has.
+
+**What it costs.** An open poll that hides its respondents used to be the
+stronger of the two anonymity guarantees. That is now true of a ballot cast
+signed out and not of one cast signed in — see [Whether ballots are
+published](#whether-ballots-are-published).
+
+`39_an_open_ballot_follows_the_account` covers all of the above, and cases that
+stand in several strangers behind their own keys now `tests.sign_out()` first,
+since one signed-in session is one account and one account has one ballot per
+question. So does `scripts/sample-poll.sql`, for its nine voters.
 
 Results stay hidden until they unlock in both modes, so nobody ever votes
 knowing how it is going.
@@ -3436,7 +3506,12 @@ stores a name — `open_poll_submit` discards one whatever the client sends. An
 invite poll always stores the voter's account id, because that is how it
 enforces one ballot each; hiding is a policy applied over data that still
 exists, and anyone with direct database access could undo it. The stronger
-guarantee needs an open poll.
+guarantee needs an open poll **voted in signed out**: a ballot cast through the
+link while signed in carries the account too, so that it can follow its voter
+to another device (see [An open ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account)), and is then in
+the database with an account on it exactly as an invite ballot is. Nothing reads
+it out to anybody — no function returns `account_id` — but it is there.
 
 ### Where the options come from
 
@@ -4024,9 +4099,12 @@ rather than a rejected one.
 
 Reading your own ballot back is two different cheap things rather than one
 uniform one. An open poll's arrives inside `open_poll_view` as `your_scores`,
-reached with the same `voter_key` that had to be held to cast it, so the panel
-already has it and changing a vote costs no request until there is a changed
-vote to send. An invite poll's comes from `poll_ballot_scores()`, asked for
+reached with the same `voter_key` that had to be held to cast it — or, for a
+reader signed in, with the account that cast it — so the panel already has it
+and, signed out, changing a vote costs no request until there is a changed vote
+to send. Signed in, *Edit vote* reads it again first, because another device
+may have changed it since; see [An open ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account). An invite poll's comes from `poll_ballot_scores()`, asked for
 only when somebody presses the button, because almost nobody does and a poll
 page should still cost what it always did to open. `authenticated` has no read
 of `scores` anywhere, which is why that is a function at all.
@@ -4035,9 +4113,10 @@ of `scores` anywhere, which is why that is a function at all.
 was a dedupe token: holding it proved nothing except that this browser had
 voted, and `src/lib/voterKey.ts` says as much. It is now also what hands a
 ballot back, so on a shared browser the next person sees the previous one's
-scores filled in where they used to see "your vote is in". The key is
-per-poll, in that browser's `localStorage`, and never leaves it; open polls
-already promise less than invite polls do, and this is inside what they
+scores filled in where they used to see "your vote is in" — unless that next
+person is signed in, when a key another account voted with hands back nothing.
+The key is per-poll, in that browser's `localStorage`, and never leaves it; open
+polls already promise less than invite polls do, and this is inside what they
 promise rather than a new hole in it.
 
 ### Reopening a closed poll
@@ -4364,8 +4443,12 @@ to each other; see `src/lib/voterKey.ts`. The continuity a voter actually
 notices is the name, and that lives in the browser instead
 (`src/lib/voterName.ts`): typed once, offered back on the next question,
 never linked on the server. `open_poll_group` accordingly returns the sibling
-ids and **no "answered" flag**; `poll_group` does return one, because an
-invite ballot carries an account and nothing has to be linked to find it.
+ids and **no "answered" flag to a reader who is signed out**; `poll_group` does
+return one, because an invite ballot carries an account and nothing has to be
+linked to find it. So does `open_poll_group` for a reader who is signed in, for
+the same reason: their link ballots carry their account, which has already
+joined them — see [An open ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account).
 
 **The tick a voter is owed comes from the browser, for the same reason the
 name does.** That rule about `open_poll_group` is a rule about *the server*,
@@ -4384,6 +4467,13 @@ sent anywhere, and load-bearing for nothing. Being wrong about it colours a
 badge. It cannot let anybody vote twice, read a sealed result, or reach a poll
 they hold no link to; the server decides all three from the key it is shown,
 on every call.
+
+That record is **the fallback now, not the answer**, for anybody signed in:
+their ticks come from the server with the group, on whichever device they
+answered, and the browser's record fills in only the questions this browser
+answered signed out. A browser's record could only ever speak for that browser,
+which is exactly what made a question answered on the laptop read as
+outstanding on the phone.
 
 **It holds two marks now, and they are the same mark one stage apart.** The
 strip marks the question a reader has finished with, and while the poll is

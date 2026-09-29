@@ -6,14 +6,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import type { LiveStatus } from '../lib/useLiveStream'
 import { voterKeyFor } from '../lib/voterKey'
-import {
-  answeredQuestions,
-  confirmedQuestions,
-  forgetAnswered,
-  forgetConfirmed,
-  rememberAnswered,
-  rememberConfirmed,
-} from '../lib/questionMarks'
+import { rememberAnswered, rememberConfirmed, useQuestionMarks } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
 import { BallotCard } from '../components/BallotCard'
 import type { BallotScore } from '../components/BallotFrame'
@@ -125,14 +118,18 @@ export function PollDetail({
   const [results, setResults] = useState<PollResults | null>(null)
   const [ballots, setBallots] = useState<BallotSheet | null>(null)
   const [invitees, setInvitees] = useState<Invitee[] | null>(null)
-  // Which questions this browser has answered, and which it has finished
-  // adding options to, for the strip's marks on an *open* poll. `poll_group`
-  // answers both for an invite poll and can answer neither for an open one —
-  // it matches ballots and confirmations on `voter_id`, and a share-link
-  // ballot carries no account — so the creator's own page had the same
-  // unmarked strip the public route did. See lib/questionMarks.ts.
-  const [answered, setAnswered] = useState<ReadonlySet<string>>(answeredQuestions)
-  const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(confirmedQuestions)
+  // Which questions this reader has answered, and which they have finished
+  // adding options to, for the strip's marks on an *open* poll. The creator
+  // votes in their own open poll through the link like everybody else, so
+  // `poll_group` answers from the account a ballot cast signed in carries, on
+  // any device, and this browser answers for one it cast signed out. See
+  // lib/questionMarks.ts.
+  const {
+    answered,
+    confirmed,
+    fromGroup: marksFromGroup,
+    fromView: marksFromView,
+  } = useQuestionMarks()
   // Which question everything above describes. One page serves every question
   // of a poll and its parameter is what changes between them, so for as long
   // as a read is in flight "the poll this page holds" and "the poll this page
@@ -205,22 +202,14 @@ export function PollDetail({
   // The public reading of this same question is at this same address and marks
   // the same entries, so a question answered — or finished with — either way
   // is marked both ways without either page knowing about the other. Erased as
-  // well as written: a confirmation can be taken back, and a creator can clear
-  // a poll's votes, so a read that comes back "no" is what stops a stale mark
-  // outliving what it stood for.
+  // well as written: a confirmation can be taken back, so a read that comes
+  // back "no" is what stops a stale mark outliving what it stood for.
   //
   // Done by every read rather than only by the one that opens the page, which
   // is what lets the narrow read carry a confirmation going in: a reader who
   // confirms the last list they owe stays on it, and the strip above them has
   // to say so.
-  const markFromView = useCallback((questionId: string, openView: OpenPollView) => {
-    if (openView.voted) rememberAnswered(questionId)
-    else forgetAnswered(questionId)
-    if (openView.confirmed) rememberConfirmed(questionId)
-    else forgetConfirmed(questionId)
-    setAnswered(answeredQuestions())
-    setConfirmed(confirmedQuestions())
-  }, [])
+  const markFromView = marksFromView
 
   // What every read of the whole poll does with what it came back with,
   // wherever it came from: the route's read, or one of this page's own.
@@ -236,9 +225,12 @@ export function PollDetail({
       retention.current = page.status.expires_at
 
       // An open poll read by its own creator: the panel they manage it through
-      // is the one everybody else votes in, and it wants this.
+      // is the one everybody else votes in, and it wants this. The group's
+      // marks first and this question's view after them, which is the newer
+      // word on the question it describes.
       if (page.view) {
         setView(page.view)
+        marksFromGroup(page.questions)
         markFromView(page.poll.id, page.view)
       }
 
@@ -246,7 +238,7 @@ export function PollDetail({
       setLoadedFor(page.poll.id)
       setLoading(false)
     },
-    [markFromView],
+    [marksFromGroup, markFromView],
   )
 
   // The route's read, drawn at once rather than waiting to be asked for. Every

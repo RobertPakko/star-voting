@@ -127,11 +127,13 @@ export interface Poll {
  * One question of a multi-question poll, as the question strip renders it.
  *
  * Two shapes for the two ways into a poll, and the difference is not
- * cosmetic. An invited voter is an account, so the server can say which
- * questions they have answered; a voter behind a link is a `voter_key`
- * minted separately for every question precisely so those ballots cannot be
- * joined, and `open_poll_group` will not undo that to fill in a tick. The
- * browser knows its own answers either way.
+ * cosmetic. An invited voter is an account, so the server can always say
+ * which questions they have answered. A voter behind a link is an account only
+ * while they are signed in, and then the server says so too; signed out they
+ * are a `voter_key` minted separately for every question precisely so those
+ * ballots cannot be joined, and `open_poll_group` will not undo that to fill
+ * in a tick. The browser knows its own answers either way; see
+ * lib/questionMarks.ts.
  */
 export interface GroupQuestion {
   id: string
@@ -160,6 +162,15 @@ export interface OpenGroupQuestion {
   id: string
   question_position: number
   question_title: string
+  /**
+   * Whether the signed-in reader's account has voted in this question through
+   * the link, on any device. Absent for a reader who is signed out, whose
+   * ballots only this browser can answer for, and against a database older
+   * than the column that carries the account.
+   */
+  voted?: boolean
+  /** The same for having confirmed its options; see `GroupQuestion.confirmed`. */
+  confirmed?: boolean
 }
 
 // Backed by the "candidates" table in Postgres; kept as-is there to

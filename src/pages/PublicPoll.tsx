@@ -5,14 +5,7 @@ import { isSampleId, openPollRpc, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 import { readPollPage } from '../lib/pollPage'
 import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
-import {
-  answeredQuestions,
-  confirmedQuestions,
-  forgetAnswered,
-  forgetConfirmed,
-  rememberAnswered,
-  rememberConfirmed,
-} from '../lib/questionMarks'
+import { rememberAnswered, rememberConfirmed, useQuestionMarks } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
 import { rememberOpenedPoll } from '../lib/openedPolls'
 import type { LiveStatus } from '../lib/useLiveStream'
@@ -102,15 +95,18 @@ export function PublicPoll({
     ballots: BallotSheet | null
   } | null>(null)
   const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
-  // Which questions of this poll this browser has answered, and which it has
-  // finished adding options to, for the strip's marks. They have to be read
-  // into state rather than off storage at render time because storage is what
-  // changes when a ballot or a confirmation goes in and React is not watching
-  // it; `load` below refreshes both on the same read that learns it landed.
-  // See lib/questionMarks.ts for why the browser is the only party that can
-  // answer either on an open poll.
-  const [answered, setAnswered] = useState<ReadonlySet<string>>(answeredQuestions)
-  const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(confirmedQuestions)
+  // Which questions of this poll this reader has answered, and which they have
+  // finished adding options to, for the strip's marks: the account's answer
+  // from the group read where they are signed in, on whichever device they
+  // answered, and this browser's own for anything it cast signed out. `load`
+  // below refreshes both on the same read that learns a ballot landed. See
+  // lib/questionMarks.ts.
+  const {
+    answered,
+    confirmed,
+    fromGroup: marksFromGroup,
+    fromView: marksFromView,
+  } = useQuestionMarks()
   const [failed, setFailed] = useState<{ pollId: string; message: string } | null>(null)
   // Which question a read has come back for, so a refresh that fails can be
   // told apart from a first read that did — and told apart per question, since
@@ -164,6 +160,7 @@ export function PublicPoll({
         // the strip it already knows it does not have.
         covered.current = [of, ...strip.map((question) => question.id)]
         setQuestions(strip)
+        marksFromGroup(strip)
         // This browser has opened the poll, so the poll list carries it from
         // now on — by its first question, which is the row the list has for
         // it, whichever question the link opened. Once per arrival, since the
@@ -177,18 +174,11 @@ export function PublicPoll({
       }
       loadedFor.current = of
       setRead({ pollId: of, view: openView, results: tally ?? null, ballots: sheet ?? null })
-      // Erased rather than only written: a creator who clears the poll's votes
-      // leaves this browser holding a record of a ballot that no longer exists,
-      // a confirmation can be taken back on the card that gave it, and a read
-      // that comes back "no" is what says so.
-      if (openView.voted) rememberAnswered(of)
-      else forgetAnswered(of)
-      if (openView.confirmed) rememberConfirmed(of)
-      else forgetConfirmed(of)
-      setAnswered(answeredQuestions())
-      setConfirmed(confirmedQuestions())
+      // After the group, since this read of one question is the newer word on
+      // it: a confirmation taken back since the group was read comes off here.
+      marksFromView(of, openView)
     },
-    [],
+    [marksFromGroup, marksFromView],
   )
 
   // The route's read, drawn at once rather than waiting to be asked for. See

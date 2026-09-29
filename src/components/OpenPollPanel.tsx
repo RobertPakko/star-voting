@@ -1,7 +1,9 @@
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Button, Card, Group, Stack, Text } from '@mantine/core'
+import { useAuth } from '../lib/auth'
 import { isSampleId, openPollRpc } from '../lib/samplePoll'
 import { forgetWatch } from '../lib/push'
+import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
 import type { VoterName } from '../lib/voterName'
 import { BallotCard } from './BallotCard'
@@ -270,10 +272,13 @@ export function OpenPollPanel({
  * The card someone who has voted through the link comes back to, and the
  * ballot behind it when they want it changed.
  *
- * Everything it needs is already here: `open_poll_view` hands this browser
- * its own scores back alongside the poll, reached with the same voter_key
- * that had to be held to cast them, so changing a vote costs no request until
- * there is a changed vote to send. This is only ever rendered while the
+ * Everything it needs is already here: `open_poll_view` hands this reader
+ * their own scores back alongside the poll, reached with the voter_key that
+ * cast them or, signed in, the account that did — so the ballot cast on the
+ * laptop is the one the phone comes back to. Signed out, changing a vote costs
+ * no request until there is a changed vote to send; signed in, pressing Edit
+ * vote reads the ballot again first, since another device may have changed
+ * it. This is only ever rendered while the
  * results are still sealed — the branch above returns before it otherwise —
  * which is the same window `open_poll_revise` will accept a change in.
  */
@@ -298,26 +303,55 @@ function Voted({
    */
   watch?: ReactNode
 }) {
-  const [revising, setRevising] = useState(false)
+  const { session } = useAuth()
+  // The scores the ballot being changed opens with, or null when nobody is
+  // changing it.
+  const [revising, setRevising] = useState<Record<string, number> | null>(null)
+  const [fetching, setFetching] = useState(false)
   // A database that predates `your_scores` returns undefined, and a ballot
   // that cannot be handed back is a ballot that cannot be changed. Better to
   // offer nothing than a button that opens an empty ballot and silently
   // zeroes what somebody scored.
   const scores = view.your_scores
 
-  if (revising && scores) {
+  // Signed out, the scores in hand are the ones to open with: only this
+  // browser's key reaches this ballot, so nothing can have changed it that
+  // this page did not. Signed in, the ballot is the account's and another
+  // device may have changed it since this page last read — and a change
+  // announces nothing (see "Changing your vote" in AGENTS.md), so opening the
+  // copy in hand could hand the voter an old ballot to overwrite a newer one
+  // with. So that press asks first, the way an invite ballot's Edit vote
+  // always has, and falls back to what is in hand if the read fails.
+  const edit = async () => {
+    if (!scores) return
+    if (!session) {
+      setRevising(scores)
+      return
+    }
+    setFetching(true)
+    const { data, error } = await openPollRpc('open_poll_view', {
+      p_poll_id: pollId,
+      p_voter_key: voterKeyFor(pollId),
+    })
+    setFetching(false)
+    const fresh =
+      !error && data ? parseAnswer(openPollViewSchema, 'open_poll_view', data).value : null
+    setRevising(fresh?.your_scores ?? scores)
+  }
+
+  if (revising) {
     return (
       <OpenBallot
         pollId={pollId}
         poll={view.poll}
         options={view.options}
-        initial={scores}
+        initial={revising}
         isCreator={isCreator}
         onVoted={() => {
-          setRevising(false)
+          setRevising(null)
           onRevised()
         }}
-        onCancel={() => setRevising(false)}
+        onCancel={() => setRevising(null)}
         questionStrip={questionStrip}
       />
     )
@@ -334,7 +368,8 @@ function Voted({
             {scores && (
               <Button
                 variant="light"
-                onClick={() => setRevising(true)}
+                loading={fetching}
+                onClick={() => void edit()}
                 style={{ marginLeft: 'auto' }}
               >
                 Edit vote

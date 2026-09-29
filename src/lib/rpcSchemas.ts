@@ -108,6 +108,8 @@ const openGroupQuestion = z.object({
   id: z.string(),
   question_position: z.number(),
   question_title: z.string(),
+  voted: z.boolean().optional(),
+  confirmed: z.boolean().optional(),
 })
 
 /** `poll_group`, which the duplicate form reads to copy a whole group. */

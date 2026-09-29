@@ -247,6 +247,10 @@ begin
   into v_names
   from jsonb_array_elements(v_poll -> 'voters') with ordinality as t(v, ord);
 
+  -- Strangers holding the link, nobody signed in. Signed in, every ballot
+  -- would carry the one account and it would have one ballot per question.
+  perform tests.sign_out();
+
   for q in 0 .. jsonb_array_length(v_poll -> 'questions') - 1 loop
     v_question := v_poll -> 'questions' -> q;
     v_name := p_prefix || '-' || (v_question ->> 'slug');
@@ -293,6 +297,10 @@ declare
   v_name text;
   v_entry jsonb;
 begin
+  -- Read as the page's reader is: a stranger holding the link, signed out.
+  -- Signed in, the group would carry that account's marks.
+  perform tests.sign_out();
+
   for v_poll in
     select p.* from polls p
     join sample.link l on l.poll_id = p.id

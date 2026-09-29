@@ -290,6 +290,9 @@ begin
     format('select open_poll_confirm_options(%L, %L)', v_open, 'key-1'),
     'Enter your name');
 
+  -- Strangers behind the link from here on, each identified by the key of
+  -- the browser they confirm from; see 39 for a reader who is signed in.
+  perform tests.sign_out();
   perform open_poll_confirm_options(v_open, 'key-1', 'Ana');
 
   v_view := open_poll_view(v_open, 'key-1');
@@ -307,6 +310,7 @@ begin
   perform tests.sign_in('creator@example.com');
   perform tests.assert_eq('an open poll counts its confirmations, not its invitees',
     (select confirmed_count from list_polls(10, 0) where id = v_open), 1);
+  perform tests.sign_out();
   perform tests.assert_eq('another browser sees the roster and not its own mark',
     (open_poll_view(v_open, 'key-2') ->> 'confirmed')::boolean, false);
 
@@ -337,6 +341,7 @@ begin
   v_hidden := create_poll('Anonymous night', null, array['Dune', 'Arrival'],
                           array[]::text[], 'open', false, false, null, true);
 
+  perform tests.sign_out();
   perform open_poll_confirm_options(v_hidden, 'key-1', 'Ana');
 
   v_view := open_poll_view(v_hidden, 'key-1');
@@ -360,6 +365,7 @@ begin
 
   -- ---- an invite poll that hides respondents names nobody either -----------
 
+  perform tests.sign_in('creator@example.com');
   v_hidden := create_poll('Quiet lunch', null, array['Pizza', 'Sushi'],
                           array['voter1@example.com', 'voter2@example.com'],
                           'invite', false, false, null, true);

@@ -40,7 +40,10 @@ begin
 
   perform open_poll_suggest_options(v_poll, jsonb_build_array(
     jsonb_build_object('name', 'Dune'), jsonb_build_object('name', 'Arrival')));
+  -- Ada, a stranger holding the link.
+  perform tests.sign_out();
   perform open_poll_confirm_options(v_poll, 'voter-key-1', 'Ada');
+  perform tests.sign_in('creator@example.com');
 
   select * into v_status from poll_status(v_poll);
   v_view := open_poll_view(v_poll, 'creator-key');
@@ -77,7 +80,9 @@ begin
   select jsonb_agg(jsonb_build_object('candidate_id', id, 'score', 4))
   into v_scores from candidates where poll_id = v_poll;
   -- Cast by the creator's own browser, through the link, exactly as the page
-  -- does it.
+  -- does it. Signed in, so the ballot carries their account -- in the column
+  -- the open-poll functions read, and not in the voter_id poll_status reads,
+  -- which is why its `voted` stays false below.
   perform open_poll_submit(v_poll, v_scores, 'creator-key', 'Creator');
 
   select * into v_status from poll_status(v_poll);
