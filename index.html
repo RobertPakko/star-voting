@@ -10,6 +10,26 @@
       content="Make a poll, share it, and get an easy and accurate result using STAR voting."
     />
 
+    <!-- The card a chat app draws under a pasted link. Every poll link gets
+         this same card: its poll is in the #fragment, which is never sent to
+         the server, so the crawler fetching the link is served this file
+         whatever poll it points at. See "Link previews" in AGENTS.md, which
+         also says why there is deliberately no og:url. The image address is
+         absolute because crawlers do not reliably resolve a relative one. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ChoiceLab" />
+    <meta property="og:title" content="STAR Voting" />
+    <meta
+      property="og:description"
+      content="Score every option from 0 to 5 stars. The two highest scorers go to a runoff, and the one more voters prefer wins."
+    />
+    <meta property="og:image" content="https://choicelab.app/star-voting/logo.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="A white star on a purple-to-blue square" />
+    <meta name="twitter:card" content="summary" />
+
     <!-- Installing the app: the manifest is what Android and desktop Chrome
          read, and the two apple- tags below are what iOS reads instead, since
          Safari only picked up `display` and the manifest's icons in 16.4 and
