@@ -36,6 +36,7 @@ export function PollHeading({
   turnout,
   state,
   compact = false,
+  tagsClassName,
 }: {
   title: string
   description: string | null
@@ -65,6 +66,8 @@ export function PollHeading({
     inGroup?: boolean
   }
   compact?: boolean
+  /** Handed to the row of badges, for a list card keeping room for its control. */
+  tagsClassName?: string
 }) {
   return (
     <Stack gap="xs">
@@ -124,7 +127,13 @@ export function PollHeading({
         )}
       </Stack>
 
-      <PollTags mode={mode} showVoters={showVoters} showBallots={showBallots} turnout={turnout} />
+      <PollTags
+        mode={mode}
+        showVoters={showVoters}
+        showBallots={showBallots}
+        turnout={turnout}
+        className={tagsClassName}
+      />
     </Stack>
   )
 }

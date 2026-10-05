@@ -40,10 +40,13 @@ export function PollTags({
   showVoters,
   showBallots,
   turnout,
+  className,
 }: {
   mode: PollMode
   showVoters: boolean
   showBallots: boolean
+  /** For a caller that has to keep room at the end of the row; see PollList. */
+  className?: string
   /**
    * The numbers behind the count badge. Left off entirely; rather than
    * passed as zero; where the poll withholds participation from this
@@ -58,7 +61,7 @@ export function PollTags({
   const changes = useChangeCount(label)
 
   return (
-    <Group gap="xs">
+    <Group gap="xs" className={className}>
       <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
         {mode === 'open' ? 'Open link' : 'Invite only'}
       </Badge>
