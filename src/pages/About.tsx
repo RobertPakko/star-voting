@@ -251,10 +251,9 @@ const FEATURES: Entry[] = [
     body: (
       <>
         Install it on your phone or computer and get a notification when you're invited to a poll,
-        when voting opens, and when the results are ready — even for polls you answered without
-        signing in.{' '}
+        when voting opens, and when the results are ready.{' '}
         <Anchor component={Link} to="/app" inherit>
-          See how to install it
+          Learn more
         </Anchor>
         .
       </>

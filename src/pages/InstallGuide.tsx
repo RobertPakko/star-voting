@@ -42,9 +42,8 @@ export function InstallGuide() {
       <Title order={1}>Install the app</Title>
 
       <Text>
-        STAR Voting works in any browser, but installed as an app it opens from your home screen
-        like any other, and it can send you a notification when you&rsquo;re invited to a poll, when
-        voting opens, and when the results are ready.
+        STAR Voting works in any browser, but when installed as an app it can open from your home
+        screen and more easily send you notifications.
       </Text>
 
       <ThisDevice />
@@ -63,34 +62,6 @@ export function InstallGuide() {
       {platform === 'ios' && <IosSteps />}
       {platform === 'android' && <AndroidSteps />}
       {platform === 'desktop' && <DesktopSteps />}
-
-      <Title order={3} mt="md">
-        What you&rsquo;ll be notified about
-      </Title>
-      <Stack gap="sm">
-        <Card withBorder>
-          <Stack gap={4}>
-            <Text fw={700}>Polls you&rsquo;re invited to</Text>
-            <Text size="sm">
-              Sign in, then turn push notifications on for each device you want them on — from the
-              gear menu at the top of the page. You&rsquo;ll hear when you&rsquo;re invited, when
-              voting opens, and when the results are ready. The same menu is where you choose
-              whether these come by email, as notifications, both, or neither.
-            </Text>
-          </Stack>
-        </Card>
-        <Card withBorder>
-          <Stack gap={4}>
-            <Text fw={700}>Polls you answer through a link</Text>
-            <Text size="sm">
-              No account needed. Turn push notifications on from the same gear menu, and every open
-              poll you answer in that browser — by voting, or by confirming the options on a poll
-              still collecting them — tells that device when voting opens and when the results are
-              ready, and nothing after that.
-            </Text>
-          </Stack>
-        </Card>
-      </Stack>
     </Stack>
   )
 }

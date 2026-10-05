@@ -129,9 +129,9 @@ function PushBanner({ moment }: { moment?: 'opening' | 'results' }) {
       forgotten={notifyHintDismissed}
       forget={dismissNotifyHint}
     >
-      To be notified {when}, turn on push notifications from the{' '}
-      <GearIcon size={14} role="img" aria-label="gear" style={{ verticalAlign: '-2px' }} /> menu at
-      the top of the page.
+      Turn on push notifications from the{' '}
+      <GearIcon size={14} role="img" aria-label="gear" style={{ verticalAlign: '-2px' }} /> menu to
+      be notified {when}.
     </Banner>
   )
 }
@@ -150,7 +150,7 @@ function InstallBanner() {
       forgotten={appBannerDismissed}
       forget={dismissAppBanner}
     >
-      You can install this site as an app, so your polls are a tap away.
+      You can install this site as an app for easier access and better notifications.
     </Banner>
   )
 }
