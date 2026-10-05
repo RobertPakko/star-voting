@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Group, Tooltip } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import {
@@ -601,6 +601,24 @@ export function PaintCalendar({
   }
 
   const inView = visibleRange(date, showing)
+
+  // The week grid's day headings, greyed where the poll is not asking about
+  // that day -- the column under it already is, but a heading drawn exactly
+  // like its neighbours read as a day that could be filled, and a press on it
+  // does nothing (see `fillDay`). The library takes no props per heading, so
+  // they are found by the one thing each carries that names its date: the
+  // accessible name LABELS gives it. Scoped to this calendar by `calendarId`,
+  // so two calendars on one page cannot grey each other's days.
+  const calendarId = useId()
+  const greyedHeadings =
+    showing === 'week'
+      ? daysBetween(inView.from, inView.to)
+          .filter((day) => !asks(day))
+          .map(
+            (day) =>
+              `[data-paint-calendar="${calendarId}"] [aria-label="${LABELS.weekday} ${day}"]`,
+          )
+      : []
   // Whether the calendar has been navigated off the poll entirely. Worth
   // asking now that a month view exists: the arrows move a month at a time,
   // and a poll asking about three days in September is one press away from a
@@ -819,6 +837,8 @@ export function PaintCalendar({
           // never doubles as a day click.
           onEventClick={erase}
           getDayProps={(day) => (asks(day) ? {} : outOfBounds)}
+          // No red weekends here either; see the week grid.
+          weekendDays={[]}
           firstDayOfWeek={1}
           withOutsideDays={false}
           renderEventBody={eventBody}
@@ -852,31 +872,45 @@ export function PaintCalendar({
           // this is the view somebody has zoomed into to be precise.
         />
       ) : (
-        <WeekView
-          date={date}
-          withHeader={false}
-          {...grid}
-          style={weekStyle}
-          events={events}
-          onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
-          // The day's own column heading, which with the header off is the
-          // only thing left in this view that changes the date -- so it is a
-          // callback with one caller and one meaning rather than a guess about
-          // which control fired. Its accessible name says so too; see LABELS.
-          onDateChange={fillDay}
-          labels={LABELS}
-          // The time column: pinned so that scrolling a narrow week sideways
-          // does not take the hours with it (STICKY_TIMES), and lined up with
-          // the rows it names (`hoursColumn`).
-          styles={{
-            ...STICKY_TIMES,
-            weekViewSlotLabels: { ...STICKY_TIMES.weekViewSlotLabels, ...timeColumn },
-          }}
-          withWeekNumber={false}
-          // Monday first, pinned rather than inherited, because `visibleRange`
-          // works out which week is on screen and the two have to agree.
-          firstDayOfWeek={1}
-        />
+        <>
+          {greyedHeadings.length > 0 && (
+            <style>{`${greyedHeadings.join(',\n')} {
+              color: var(--mantine-color-dimmed);
+              background: var(--mantine-color-gray-light);
+              cursor: not-allowed;
+            }`}</style>
+          )}
+          <WeekView
+            date={date}
+            withHeader={false}
+            {...grid}
+            style={weekStyle}
+            events={events}
+            onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
+            // The day's own column heading, which with the header off is the
+            // only thing left in this view that changes the date -- so it is a
+            // callback with one caller and one meaning rather than a guess about
+            // which control fired. Its accessible name says so too; see LABELS.
+            onDateChange={fillDay}
+            labels={LABELS}
+            // The time column: pinned so that scrolling a narrow week sideways
+            // does not take the hours with it (STICKY_TIMES), and lined up with
+            // the rows it names (`hoursColumn`).
+            styles={{
+              ...STICKY_TIMES,
+              weekViewSlotLabels: { ...STICKY_TIMES.weekViewSlotLabels, ...timeColumn },
+            }}
+            withWeekNumber={false}
+            data-paint-calendar={calendarId}
+            // Saturday and Sunday drawn like any other day: the library colours
+            // a weekend heading red, which on a poll reads as a warning about
+            // those days rather than as a fact about the week.
+            weekendDays={[]}
+            // Monday first, pinned rather than inherited, because `visibleRange`
+            // works out which week is on screen and the two have to agree.
+            firstDayOfWeek={1}
+          />
+        </>
       )}
     </>
   )

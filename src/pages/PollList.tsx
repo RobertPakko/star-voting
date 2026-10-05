@@ -326,60 +326,58 @@ export function PollList() {
                 withBorder
                 className={`${classes.card} ${moving ? classes.leaving : ''}`}
               >
-                {/* The heading and the control, on one row, the control at the
-                  bottom of it — which on every card is alongside the badges,
-                  the last thing the row is made of. Placed in the flow rather
-                  than pinned to the corner: the badges wrap on a phone, and a
-                  button floating over the end of a wrapped row is a button
-                  sitting on top of what the card was trying to say. */}
-                <Group align="flex-end" wrap="nowrap" gap="xs">
-                  {/* The same heading the poll's own page carries, at card size;
+                {/* The heading takes the whole width of the card, so the state
+                  badge beside the title sits in the corner like on every other
+                  screen. The control is pinned to the bottom right, which is
+                  the end of the row of badges, and that row keeps room for it
+                  (`reserve`) — so however the badges wrap on a phone, none of
+                  them ends up underneath it. */}
+                {/* The same heading the poll's own page carries, at card size;
                     see PollHeading. */}
-                  <Link to={pollPath(poll.id)} className={classes.link}>
-                    <PollHeading
-                      compact
-                      title={poll.title}
-                      description={poll.description}
-                      // Null on an open poll that is here because this account
-                      // answered it through its link, which is told no more
-                      // about who made it than the link's own page is.
-                      createdBy={
-                        poll.created_by === session?.user.id ? 'you' : poll.created_by_email
-                      }
-                      mode={poll.mode}
-                      showVoters={poll.show_voters}
-                      showBallots={poll.show_ballots}
-                      turnout={{
-                        soliciting: poll.soliciting,
-                        mode: poll.mode,
-                        votedCount: poll.voted_count,
-                        invitedCount: poll.invited_count,
-                        confirmedCount: poll.confirmed_count,
-                        optionCount: poll.option_count,
-                        questionCount: poll.question_count,
-                      }}
-                      state={{
-                        soliciting: poll.soliciting,
-                        resultsAvailable: poll.results_available,
-                        closed: poll.is_closed,
-                        // `undefined` rather than null where the database has not
-                        // settled an answer — including a database old enough not to
-                        // carry the columns at all — because null is a real answer
-                        // here and means a poll that elected nobody.
-                        //
-                        // A group's row on this list *is* its first question, so this
-                        // is that question's winner rather than the poll's. The badge
-                        // withholds it on `inGroup`, in one place for all three
-                        // screens, rather than leaving three callers to remember.
-                        winner: poll.winner_settled
-                          ? winnerLabel(poll.winner_name ?? null)
-                          : undefined,
-                        inGroup: poll.question_count > 1,
-                      }}
-                    />
-                  </Link>
+                <Link to={pollPath(poll.id)} className={classes.link}>
+                  <PollHeading
+                    compact
+                    tagsClassName={viewingRemoved ? classes.reserveWide : classes.reserve}
+                    title={poll.title}
+                    description={poll.description}
+                    // Null on an open poll that is here because this account
+                    // answered it through its link, which is told no more
+                    // about who made it than the link's own page is.
+                    createdBy={poll.created_by === session?.user.id ? 'you' : poll.created_by_email}
+                    mode={poll.mode}
+                    showVoters={poll.show_voters}
+                    showBallots={poll.show_ballots}
+                    turnout={{
+                      soliciting: poll.soliciting,
+                      mode: poll.mode,
+                      votedCount: poll.voted_count,
+                      invitedCount: poll.invited_count,
+                      confirmedCount: poll.confirmed_count,
+                      optionCount: poll.option_count,
+                      questionCount: poll.question_count,
+                    }}
+                    state={{
+                      soliciting: poll.soliciting,
+                      resultsAvailable: poll.results_available,
+                      closed: poll.is_closed,
+                      // `undefined` rather than null where the database has not
+                      // settled an answer — including a database old enough not to
+                      // carry the columns at all — because null is a real answer
+                      // here and means a poll that elected nobody.
+                      //
+                      // A group's row on this list *is* its first question, so this
+                      // is that question's winner rather than the poll's. The badge
+                      // withholds it on `inGroup`, in one place for all three
+                      // screens, rather than leaving three callers to remember.
+                      winner: poll.winner_settled
+                        ? winnerLabel(poll.winner_name ?? null)
+                        : undefined,
+                      inGroup: poll.question_count > 1,
+                    }}
+                  />
+                </Link>
 
-                  {/* Remove on the list, Restore on the removed list: one
+                {/* Remove on the list, Restore on the removed list: one
                     control, whichever way round the card is. The tooltip says
                     what removing costs, because the silence is the part of it
                     nobody would guess from a cross — and nothing here deletes,
@@ -387,37 +385,36 @@ export function PollList() {
                     somebody else's poll had better not look like it might. The
                     label names the poll, because a screen reader hearing ten of
                     these needs to know which one it is on. */}
-                  {viewingRemoved ? (
-                    <Button
-                      variant="default"
-                      size="xs"
+                {viewingRemoved ? (
+                  <Button
+                    variant="default"
+                    size="xs"
+                    className={classes.action}
+                    loading={moving}
+                    aria-label={`Restore ${poll.title} to your list`}
+                    onClick={() => void move(poll.id, false)}
+                  >
+                    Restore
+                  </Button>
+                ) : (
+                  <Tooltip
+                    label="Remove from your list and stop notifications about it"
+                    withArrow
+                    multiline
+                    w={220}
+                  >
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
                       className={classes.action}
                       loading={moving}
-                      aria-label={`Restore ${poll.title} to your list`}
-                      onClick={() => void move(poll.id, false)}
+                      aria-label={`Remove ${poll.title} from your list`}
+                      onClick={() => void move(poll.id, true)}
                     >
-                      Restore
-                    </Button>
-                  ) : (
-                    <Tooltip
-                      label="Remove from your list and stop notifications about it"
-                      withArrow
-                      multiline
-                      w={220}
-                    >
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        className={classes.action}
-                        loading={moving}
-                        aria-label={`Remove ${poll.title} from your list`}
-                        onClick={() => void move(poll.id, true)}
-                      >
-                        <XIcon size={18} aria-hidden />
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
-                </Group>
+                      <XIcon size={18} aria-hidden />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
               </Card>
             )
           })}
