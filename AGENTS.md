@@ -5160,10 +5160,14 @@ is all of it on the database's side and
 
 Each card carries a cross at its bottom right, alongside the badges, whose
 tooltip says what it costs: *Remove from your list and stop notifications about
-it*. When anything is removed, a **Show removed** button appears beside **New
-poll** and swaps the list for the removed polls, each with a **Restore** — and
-a line above them saying these polls send no emails or notifications. Restore
-the last one and the page goes back to the list.
+it*. **Removed polls** in the header's gear menu opens the poll list's own
+address with `?removed` on it, which swaps the list for the removed polls, each
+with a **Restore** — and a line above them saying these polls send no emails or
+notifications. It is in the menu rather than on the page because it is not
+something the reader wants in front of them all the time; the page keeps only
+**Back to your polls**. The list is keyed on the query, so each list starts
+from its own skeleton. Restoring the last one leaves the reader on an empty
+view saying so, with the way back beside it.
 
 **Answering a removed poll does not bring it back, and the poll says so.** A
 reader can remove a poll and still vote in it or confirm its options, and then

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
   Button,
@@ -40,7 +40,20 @@ import { pollPath } from '../lib/pollId'
  */
 const PAGE_SIZE = 10
 
+/**
+ * The poll list, or the removed polls — which of the two is the address's
+ * `?removed`, so the gear menu can link to it. Keyed on it, so the other list
+ * starts from the skeleton with its own state instead of the first list's
+ * cards standing under the second one's heading.
+ */
 export function PollList() {
+  const [params] = useSearchParams()
+  const removed = params.has('removed')
+  return <PollListView key={String(removed)} viewingRemoved={removed} />
+}
+
+function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
+  const navigate = useNavigate()
   const { session } = useAuth()
   // Asked here rather than in CSS because the scroll below is asked for from
   // JavaScript, which the global rule in index.css cannot reach.
@@ -48,12 +61,12 @@ export function PollList() {
   const [polls, setPolls] = useState<PollListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
-  // Which of the two lists is on screen: the reader's polls, or the ones they
-  // have removed from it. Both are read from `list_polls`, which pages each of
-  // them separately, so a page is always full of the list it is a page of —
-  // see lib/removedPolls.ts. Deliberately not remembered: a look at what has
-  // been put away is a thing you do and then stop doing.
-  const [viewingRemoved, setViewingRemoved] = useState(false)
+  // Which of the two lists is on screen is the address's, and arrives as a
+  // prop: the reader's polls, or the ones they have removed from it. Both are
+  // read from `list_polls`, which pages each of them separately, so a page is
+  // always full of the list it is a page of — see lib/removedPolls.ts.
+  // Deliberately not remembered: a look at what has been put away is a thing
+  // you do and then stop doing.
   const removedView = useRef(viewingRemoved)
   removedView.current = viewingRemoved
   // How many polls are in the other list, which is whether the way into it is
@@ -187,15 +200,6 @@ export function PollList() {
     })
   }
 
-  // The skeleton while the other list is read, rather than this list's cards
-  // under the other list's heading, carrying the other list's buttons.
-  const showList = (removed: boolean) => {
-    setActionError(null)
-    setPolls(null)
-    setViewingRemoved(removed)
-    setPage(1)
-  }
-
   // Clamped rather than reset: a poll deleted from page three should leave
   // the reader on page three, or on the last page there is if that was it.
   // Derived at render from the same total the database clamps its own offset
@@ -212,17 +216,6 @@ export function PollList() {
   useEffect(() => {
     if (page > pageCount) setPage(pageCount)
   }, [page, pageCount])
-
-  // Nothing removed, nothing to look at: restoring the last removed poll
-  // takes the reader back to the list it went to, rather than leaving them on
-  // an empty view with no way out but a button to the list they came from.
-  useEffect(() => {
-    // Asked of the read rather than the flag: `polls` still holds the other
-    // list for the moment between switching and the read landing.
-    if (viewingRemoved && fetched.current?.startsWith('true:') && polls?.length === 0) {
-      showList(false)
-    }
-  }, [viewingRemoved, polls])
 
   // The winner of a finished poll arrives on the row that draws the card.
   //
@@ -258,25 +251,13 @@ export function PollList() {
         <Group justify="space-between">
           <Title order={2}>{viewingRemoved ? 'Removed polls' : 'Your polls'}</Title>
           <Group gap="xs">
-            {/* The way between the two lists. Into the removed one only when
-                there is something in it, because that is the only state in
-                which it has anything to say — a reader who has never removed a
-                poll never meets a mode they might be in. No count on it: the
-                list it opens is the count, and a number in a button label
-                reads as clutter.
-
-                Left of New poll, which stays where it has always been. This is
-                about the list already there; that one leaves it. */}
-            {viewingRemoved ? (
-              <Button variant="default" onClick={() => showList(false)}>
+            {/* The way into the removed polls is in the gear menu, which is
+                quieter than a button that is on this page for good; only the
+                way back lives here, because it is only needed here. */}
+            {viewingRemoved && (
+              <Button variant="default" onClick={() => navigate('/')}>
                 Back to your polls
               </Button>
-            ) : (
-              removedCount > 0 && (
-                <Button variant="default" onClick={() => showList(true)}>
-                  Show removed
-                </Button>
-              )
             )}
             <Button component={Link} to="/polls/new">
               New poll
@@ -304,8 +285,13 @@ export function PollList() {
         {/* An empty list, and the sentence says which kind: one with nothing
             in it, or one whose every poll was removed, which is a different
             thing and would otherwise read as the app losing the reader's polls
-            in front of them. The way back is the sentence's other half, one
-            row up. */}
+            in front of them. The way back is the sentence's other half, in
+            the gear menu. */}
+        {viewingRemoved && polls.length === 0 && (
+          <Text c="dimmed" size="sm">
+            No removed polls.
+          </Text>
+        )}
         {!viewingRemoved && polls.length === 0 && (
           <Text c="dimmed" size="sm">
             {removedCount > 0

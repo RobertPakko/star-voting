@@ -4,6 +4,7 @@ import {
   Anchor,
   AppShell,
   Button,
+  Divider,
   Group,
   Modal,
   Popover,
@@ -11,7 +12,7 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { GearIcon, SignOutIcon } from '@phosphor-icons/react'
+import { ArchiveIcon, DownloadSimpleIcon, GearIcon, SignOutIcon } from '@phosphor-icons/react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { InstallButton } from './InstallButton'
@@ -38,15 +39,16 @@ import { ThemeToggle } from './ThemeToggle'
  */
 export function Layout() {
   const { session, signOut } = useAuth()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const navigate = useNavigate()
   const onAbout = pathname === '/about'
   const onSettings = pathname === '/settings'
-  // The notification menu, held here so that following its one link — to the
-  // install guide, from under a push switch that cannot be turned on — closes
-  // it rather than leaving it open over the page it went to.
+  // The gear menu, held here so that following any of its links — the install
+  // guide, the removed polls — closes it rather than leaving it open over the
+  // page it went to. The search is watched as well as the path, since the
+  // removed polls are the poll list's own address with a query on it.
   const [menuOpen, setMenuOpen] = useState(false)
-  useEffect(() => setMenuOpen(false), [pathname])
+  useEffect(() => setMenuOpen(false), [pathname, search])
   // How far the menu is slid right from under the gear, so that its right edge
   // sits on the page's own right gutter rather than on the gear's. Measured on
   // opening, because what stands to the gear's right — the theme menu and
@@ -154,7 +156,39 @@ export function Layout() {
                   </ActionIcon>
                 </Popover.Target>
                 <Popover.Dropdown maw={280}>
-                  {session ? <NotificationSwitches userId={session.user.id} /> : <LinkPushSwitch />}
+                  <Stack gap="sm">
+                    {session ? (
+                      <NotificationSwitches userId={session.user.id} />
+                    ) : (
+                      <LinkPushSwitch />
+                    )}
+                    <Divider />
+                    {/* Pages rather than switches, so they sit under the
+                        switches and apart from them. Both are links: the menu
+                        closes on any change of address. */}
+                    <Button
+                      component={Link}
+                      to="/app"
+                      variant="subtle"
+                      color="gray"
+                      justify="flex-start"
+                      leftSection={<DownloadSimpleIcon size={18} aria-hidden />}
+                    >
+                      Install as an app
+                    </Button>
+                    {session && (
+                      <Button
+                        component={Link}
+                        to="/?removed"
+                        variant="subtle"
+                        color="gray"
+                        justify="flex-start"
+                        leftSection={<ArchiveIcon size={18} aria-hidden />}
+                      >
+                        Removed polls
+                      </Button>
+                    )}
+                  </Stack>
                 </Popover.Dropdown>
               </Popover>
             )}
