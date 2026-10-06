@@ -39,13 +39,13 @@ export function Banners({ moment, pollId }: { moment?: 'opening' | 'results'; po
   const [removed, setRemoved] = usePollRemoved(pollId, session?.user.id)
 
   return (
-    <Stack gap="md">
+    <>
       {removed && pollId && <RemovedBanner pollId={pollId} onRestored={() => setRemoved(false)} />}
       {/* Held back until the answer is in, rather than drawn and then taken
           away a moment later. */}
       {removed === false && <PushBanner moment={moment} />}
       <InstallBanner />
-    </Stack>
+    </>
   )
 }
 
