@@ -17,6 +17,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { InstallButton } from './InstallButton'
 import { NotificationSwitches } from './NotificationSwitches'
+import { isInstalledApp } from '../lib/push'
 import { LinkPushSwitch } from './PushSwitch'
 import { Reveal } from './Reveal'
 import { ThemeToggle } from './ThemeToggle'
@@ -166,16 +167,18 @@ export function Layout() {
                     {/* Pages rather than switches, so they sit under the
                         switches and apart from them. Both are links: the menu
                         closes on any change of address. */}
-                    <Button
-                      component={Link}
-                      to="/app"
-                      variant="subtle"
-                      color="gray"
-                      justify="flex-start"
-                      leftSection={<DownloadSimpleIcon size={18} aria-hidden />}
-                    >
-                      Install as an app
-                    </Button>
+                    {!isInstalledApp() && (
+                      <Button
+                        component={Link}
+                        to="/app"
+                        variant="subtle"
+                        color="gray"
+                        justify="flex-start"
+                        leftSection={<DownloadSimpleIcon size={18} aria-hidden />}
+                      >
+                        Install as an app
+                      </Button>
+                    )}
                     {session && (
                       <Button
                         component={Link}
