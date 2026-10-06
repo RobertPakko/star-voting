@@ -267,15 +267,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
 
         {!viewingRemoved && <Banners />}
 
-        {/* What removing did, said where the reader is looking at its result:
-            the one consequence of it that is not on screen is the silence. */}
-        {viewingRemoved && (
-          <Text c="dimmed" size="sm">
-            You won&rsquo;t get emails or notifications about these polls. You can still open them,
-            and restoring one puts it back on your list.
-          </Text>
-        )}
-
         {actionError && (
           <Text c="red" size="sm">
             {actionError}
