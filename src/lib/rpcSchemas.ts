@@ -80,7 +80,8 @@ const poll = z.object({
   title: z.string(),
   description: z.string().nullable(),
   created_by: z.string(),
-  created_by_email: z.string(),
+  // Null for a poll made without an account; see AGENTS.md.
+  created_by_email: z.string().nullable(),
   created_at: z.string(),
   closed_at: z.string().nullable(),
   mode: pollMode,

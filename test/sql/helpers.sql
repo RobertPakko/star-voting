@@ -70,7 +70,21 @@ begin
     v_id := gen_random_uuid();
     insert into auth.users (id, email) values (v_id, p_email);
   end if;
-  update auth._session set user_id = v_id, email = p_email where id;
+  update auth._session set user_id = v_id, email = p_email, is_anonymous = false where id;
+  return v_id;
+end $$;
+
+-- Signed in without an account: Supabase's anonymous sign-in, which is a real
+-- auth.users row with no address. A fresh account each call, as each call to
+-- signInAnonymously() is, unless an existing one is named to sign back in as.
+create or replace function tests.sign_in_anonymously(p_id uuid default null)
+returns uuid language plpgsql as $$
+declare
+  v_id uuid := coalesce(p_id, gen_random_uuid());
+begin
+  insert into auth.users (id, email, is_anonymous) values (v_id, null, true)
+  on conflict (id) do nothing;
+  update auth._session set user_id = v_id, email = null, is_anonymous = true where id;
   return v_id;
 end $$;
 
@@ -80,7 +94,7 @@ end $$;
 -- behind their own keys signs out first.
 create or replace function tests.sign_out()
 returns void language sql as $$
-  update auth._session set user_id = null, email = null where id;
+  update auth._session set user_id = null, email = null, is_anonymous = false where id;
 $$;
 
 -- Creates a poll and casts every ballot in it.

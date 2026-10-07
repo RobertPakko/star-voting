@@ -74,7 +74,8 @@ export interface Poll {
   title: string
   description: string | null
   created_by: string
-  created_by_email: string
+  /** Null for a poll made without an account, which has no address to record. */
+  created_by_email: string | null
   created_at: string
   closed_at: string | null
   mode: PollMode

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
   Alert,
+  Anchor,
   Button,
   Card,
   Checkbox,
@@ -459,7 +460,7 @@ function validate(form: {
 }
 
 export function CreatePoll() {
-  const { session } = useAuth()
+  const { session, anonymous } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   // Written short by `CreatorControls` like every other poll id in a URL,
@@ -489,7 +490,12 @@ export function CreatePoll() {
   // when a duplicate replaces the whole list, and when the open tab is the
   // one being removed.
   const [openKey, setOpenKey] = useState<string | null>(null)
-  const [mode, setMode] = useState<PollMode>('invite')
+  // Without an account a poll can only be open: an invite poll emails every
+  // address on its list, and the database will not let an account with no
+  // address of its own do that (0079). So that reader starts on the one
+  // they can make, and the other is shown and disabled rather than missing,
+  // with the reason under it.
+  const [mode, setMode] = useState<PollMode>(anonymous ? 'open' : 'invite')
   const [showVoters, setShowVoters] = useState(false)
   const [showBallots, setShowBallots] = useState(false)
   const [solicitOptions, setSolicitOptions] = useState(false)
@@ -1284,10 +1290,18 @@ export function CreatePoll() {
               value={mode}
               onChange={(v) => setMode(v as PollMode)}
               data={[
-                { value: 'invite', label: 'Invited people' },
+                { value: 'invite', label: 'Invited people', disabled: anonymous },
                 { value: 'open', label: 'Anyone with the link' },
               ]}
             />
+            {anonymous && (
+              <Text size="sm" c="dimmed">
+                <Anchor component={Link} to="/sign-in" state={{ from: '/polls/new' }}>
+                  Sign in
+                </Anchor>{' '}
+                to invite people by email.
+              </Text>
+            )}
             {isOpen ? (
               <Alert color="yellow" title="Unauthenticated">
                 <Stack gap={4}>

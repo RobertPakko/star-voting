@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { AuthContext } from './auth'
 import { CODE_METHOD_MARKER, type SignInMethod } from './signInMethod'
 import { forgetAccountPush } from './push'
+import { beginCarryOver, finishCarryOver } from './carryOver'
 
 /**
  * Where the sign-in email's link comes back to — and, on the code path, the
@@ -49,7 +50,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.subscription.unsubscribe()
   }, [])
 
+  const anonymous = !!session?.user.is_anonymous
+  const accountId = session && !anonymous ? session.user.id : null
+
+  // An account's session has arrived, which may be the end of a sign-in that
+  // started from a session made without one. Whatever that session made is
+  // handed over here, in whichever tab sees the account first; a browser with
+  // no ticket asks nothing. See lib/carryOver.ts.
+  useEffect(() => {
+    if (accountId) void finishCarryOver()
+  }, [accountId])
+
+  async function continueWithoutAccount() {
+    const { error } = await supabase.auth.signInAnonymously()
+    if (error) throw error
+  }
+
   async function signInWithEmail(email: string, method: SignInMethod) {
+    if (anonymous) await beginCarryOver()
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectFor(method) },
@@ -84,7 +102,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, loading, signInWithEmail, verifySignInCode, signOut }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        loading,
+        anonymous,
+        continueWithoutAccount,
+        signInWithEmail,
+        verifySignInCode,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

@@ -58,17 +58,22 @@ const InstallGuide = lazy(() =>
 )
 
 function App() {
-  const { session, loading } = useAuth()
+  const { session, anonymous, loading } = useAuth()
   const navigate = useNavigate()
 
   // The magic-link redirect lands on the app root with no hash, so an
   // invitee who followed a share link would otherwise be dumped on the poll
   // list after signing in. SignIn stashes where they were headed.
+  //
+  // Only an account's session takes it. A session made without an account is
+  // not the end of a sign-in, and the place stashed is usually one only an
+  // account can open — an invite poll — so it is left for the sign-in that
+  // follows rather than spent on a page that would turn the reader away.
   useEffect(() => {
-    if (!session) return
+    if (!session || anonymous) return
     const destination = takeDestination()
     if (destination) navigate(destination, { replace: true })
-  }, [session, navigate])
+  }, [session, anonymous, navigate])
 
   // A tapped notification, arriving in a window that was already open.
   useNotificationRoutes()
@@ -122,6 +127,10 @@ function App() {
           }
         />
 
+        {/* A session made without an account has a poll list and makes
+            polls exactly as an account does; see "Polls made without an
+            account" in AGENTS.md. What it lacks is an address, which is
+            what the create form and the header ask it about. */}
         {session && (
           <>
             <Route index element={<PollList />} />
@@ -133,14 +142,26 @@ function App() {
                 </Suspense>
               }
             />
+            {/* The email settings belong to an account, and the one thing
+                that links here is the footer of an email -- which was sent to
+                an account, not to whoever is signed in here without one. */}
             <Route
               path="settings"
               element={
-                <Suspense fallback={<SettingsSkeleton />}>
-                  <Settings />
-                </Suspense>
+                anonymous ? (
+                  <Navigate to="/sign-in" replace state={{ from: '/settings' }} />
+                ) : (
+                  <Suspense fallback={<SettingsSkeleton />}>
+                    <Settings />
+                  </Suspense>
+                )
               }
             />
+            {/* An account has no sign-in screen to be on. This is where a
+                code redeemed on that screen leaves the reader, the moment the
+                session it mints takes the route away, and the destination
+                effect above moves them on from here. */}
+            {!anonymous && <Route path="sign-in" element={<Navigate to="/" replace />} />}
             {/* Anything else, for a reader who has an account: a mistyped
                 address used to render the shell with an empty body. Signed
                 out this is unreachable, and deliberately -- the catch-all
@@ -152,8 +173,12 @@ function App() {
       </Route>
 
       {/* Its own full-page card, with no shell around it: there is nothing
-          to sign out of and nowhere else to go. */}
+          to sign out of and nowhere else to go. Signed out it is every address
+          the routes above do not claim; signed in without an account it has
+          an address of its own, which the header's Sign in links to, because
+          that reader's `/` is their poll list. */}
       {!session && <Route path="*" element={<SignIn />} />}
+      {anonymous && <Route path="sign-in" element={<SignIn />} />}
     </Routes>
   )
 }
@@ -190,7 +215,7 @@ function App() {
  * got back Postgres complaining that it is not a uuid. See `isSampleId`.
  */
 function PollPage() {
-  const { session } = useAuth()
+  const { session, anonymous } = useAuth()
   const { pollId: param } = useParams<{ pollId: string }>()
   // The address is spelled short and the app is spelled canonical; this is
   // one of the three places the two meet. See lib/pollId.ts.
@@ -267,10 +292,11 @@ function PollPage() {
     // instead of a dead end. Stashed here rather than in an effect watching
     // the answer, so it is written before anything can navigate away from
     // the address being written down.
-    if (page.kind === 'unreadable' && !session) rememberDestination(location.pathname)
+    if (page.kind === 'unreadable' && (!session || anonymous))
+      rememberDestination(location.pathname)
     setFailed(null)
     setRead({ pollId, page })
-  }, [pollId, session, location.pathname])
+  }, [pollId, session, anonymous, location.pathname])
 
   const onSignal = useCallback(() => {
     const ask = pageSignal.current
@@ -339,8 +365,12 @@ function PollPage() {
   if (!covering) return <PollPageSkeleton />
 
   // The sign-in screen is deliberately outside the app shell, which is what
-  // the redirect is for: the catch-all route below renders it bare.
+  // the redirect is for: the catch-all route below renders it bare. A session
+  // made without an account is offered it too, at its own address: it has no
+  // email, so no invite poll will ever admit it, and this one may well be
+  // addressed to the account it has not signed in to yet.
   if (refused && !session) return <Navigate to="/" replace />
+  if (refused && anonymous) return <Navigate to="/sign-in" replace />
 
   // An open poll to somebody outside it, and — to a signed-in reader who has
   // been refused — the card that says a link is not a link.

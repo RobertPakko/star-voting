@@ -32,14 +32,20 @@ import { ThemeToggle } from './ThemeToggle'
  *
  * Only the right-hand group changes with the session. The wordmark links
  * to `/` either way; the poll list signed in, the sign-in screen signed
- * out; which is where a wordmark in the top-left is expected to go.
+ * out; which is where a wordmark in the top-left is expected to go. A
+ * session made without an account has a poll list, so its wordmark goes
+ * there too, and its corner says Sign in rather than offering a sign-out
+ * that would strand every poll it made.
  *
  * The About link is dropped while About is what's on screen: a link to the
  * page you are already reading is a dead end that still asks to be read,
  * and its absence is the plainest way to say you have arrived.
  */
 export function Layout() {
-  const { session, signOut } = useAuth()
+  const { session, anonymous, signOut } = useAuth()
+  // Signed in to an account, as opposed to signed in without one: the email
+  // shown, the email switch in the gear, and signing out are an account's.
+  const account = session && !anonymous ? session : null
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
   const onAbout = pathname === '/about'
@@ -105,9 +111,9 @@ export function Layout() {
             </Group>
           </Link>
           <Group gap="sm" wrap="nowrap" ref={controls}>
-            {session && (
+            {account && (
               <Text size="sm" c="dimmed" visibleFrom="sm" truncate maw={240}>
-                {session.user.email}
+                {account.user.email}
               </Text>
             )}
             {/* A plain link rather than a button: it's navigation, not an
@@ -158,8 +164,12 @@ export function Layout() {
                 </Popover.Target>
                 <Popover.Dropdown maw={280}>
                   <Stack gap="sm">
-                    {session ? (
-                      <NotificationSwitches userId={session.user.id} />
+                    {/* Without an account there is no address to email and
+                        no address for an account's push to be sent by (the
+                        database picks a poll's devices by email), so that
+                        reader gets the link's switch, as signed out. */}
+                    {account ? (
+                      <NotificationSwitches userId={account.user.id} />
                     ) : (
                       <LinkPushSwitch />
                     )}
@@ -208,7 +218,7 @@ export function Layout() {
                 it keeps its words, because an offer has to say what it is — on
                 a phone too, where that costs the wordmark a second line: being
                 asked to sign in is worth more than the title fitting on one. */}
-            {session ? (
+            {account ? (
               <ActionIcon
                 variant="outline"
                 color="gray"
@@ -219,7 +229,16 @@ export function Layout() {
                 <SignOutIcon size={18} aria-hidden />
               </ActionIcon>
             ) : (
-              <Button component={Link} to="/" variant="outline" size="sm">
+              // Without an account the sign-in screen has an address of its
+              // own, since `/` is that reader's poll list; it is told where
+              // they were, to bring them back there.
+              <Button
+                component={Link}
+                to={anonymous ? '/sign-in' : '/'}
+                state={anonymous ? { from: pathname + search } : undefined}
+                variant="outline"
+                size="sm"
+              >
                 Sign in
               </Button>
             )}
