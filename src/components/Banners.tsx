@@ -110,8 +110,10 @@ function RemovedBanner({ pollId, onRestored }: { pollId: string; onRestored: () 
  * said no, has no push at all, or the build has none.
  */
 function PushBanner({ moment }: { moment?: 'opening' | 'results' }) {
-  const { session } = useAuth()
-  const pushHere = usePushHere(session?.user.id)
+  const { session, anonymous } = useAuth()
+  // Without an account, push here is the link's switch, as signed out; see
+  // the gear menu in Layout.
+  const pushHere = usePushHere(anonymous ? undefined : session?.user.id)
   const state = pushState()
   const relevant = state === 'ask' || state === 'granted' || state === 'needs-install'
   const when =

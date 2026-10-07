@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Anchor,
   Button,
@@ -39,6 +39,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * nothing about the reader's inbox, its browser, or whether this app is
  * installed can come between them and it.
  *
+ * Signed out, the form also offers a way past it: **Continue without an
+ * account**, which signs in anonymously and lands on a poll list of one's own,
+ * for somebody who wants to run an open poll without giving an address. A
+ * reader who took it reaches this card again from the header's Sign in, at
+ * `/sign-in`, and is told that what they made comes with them — see
+ * lib/carryOver.ts.
+ *
  * The About link is offered on the form and nowhere else. Somebody waiting on
  * an email has a minute to spare and may well not know what STAR voting is,
  * but this card is not a route and following a link away from it would throw
@@ -46,8 +53,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * will not send another for a minute.
  */
 export function SignIn() {
-  const { signInWithEmail, verifySignInCode } = useAuth()
+  const { anonymous, signInWithEmail, verifySignInCode, continueWithoutAccount } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
+  // Where a reader signed in without an account came here from, which is
+  // where to put them back once they have one. Their own address is the sign-in
+  // screen's, and nobody wants to land on that.
+  const from = (location.state as { from?: string } | null)?.from
+  const [continuing, setContinuing] = useState(false)
   const [email, setEmail] = useState('')
   const [method, setMethod] = useState<SignInMethod>(rememberedSignInMethod)
   const [sending, setSending] = useState(false)
@@ -73,7 +86,8 @@ export function SignIn() {
       // this; a code goes nowhere and keeps the route it was asked from, but
       // the hand-off on the other side is the same one either way, so this
       // is not worth making conditional.
-      rememberDestination(location.pathname)
+      if (!anonymous) rememberDestination(location.pathname)
+      else if (from) rememberDestination(from)
       rememberSignInMethod(method)
       await signInWithEmail(trimmed, method)
       // The address the email actually went to, which is the one to name on
@@ -104,6 +118,21 @@ export function SignIn() {
       setError('That code did not work. Check it, or start over for a new one.')
     } finally {
       setVerifying(false)
+    }
+  }
+
+  async function handleContinue() {
+    setError(null)
+    setContinuing(true)
+    try {
+      await continueWithoutAccount()
+      // Home rather than wherever the catch-all left them: this card stands in
+      // for every address a signed-out reader has no route to, and the list
+      // is where a session without an account starts.
+      navigate('/', { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not continue without an account.')
+      setContinuing(false)
     }
   }
 
@@ -181,6 +210,11 @@ export function SignIn() {
                 <Text c="dimmed" ta="center">
                   Enter your email to sign in
                 </Text>
+                {anonymous && (
+                  <Text size="sm" ta="center">
+                    The polls you made without an account will move to the account you sign in to.
+                  </Text>
+                )}
                 <TextInput
                   w="100%"
                   placeholder="you@example.com"
@@ -205,6 +239,28 @@ export function SignIn() {
                 <Button fullWidth onClick={handleSubmit} loading={sending}>
                   {method === 'link' ? 'Send sign-in link' : 'Send sign-in code'}
                 </Button>
+                {/* The way past the form, for a reader who wants to run an
+                    open poll and give no address; or, for one who already
+                    took it, the way back to what they were doing. */}
+                {anonymous ? (
+                  <Anchor component={Link} to={from ?? '/'} size="sm">
+                    {from && from !== '/' ? 'Go back' : 'Back to your polls'}
+                  </Anchor>
+                ) : (
+                  <Stack gap={4} align="center" w="100%">
+                    <Button
+                      fullWidth
+                      variant="default"
+                      onClick={handleContinue}
+                      loading={continuing}
+                    >
+                      Continue without an account
+                    </Button>
+                    <Text size="xs" c="dimmed" ta="center">
+                      Make polls anyone with the link can vote in. Sign in later to keep them.
+                    </Text>
+                  </Stack>
+                )}
                 {/* Shown either way: someone who has just requested a link has a
               minute to spare, and may have no idea what STAR voting is. */}
                 <Anchor component={Link} to="/about" size="sm">

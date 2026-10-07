@@ -131,8 +131,12 @@ export function OpenPollPanel({
   // its audience (see poll_answering_accounts), so it hears about the poll on
   // whichever channels its settings allow, on every device it is bound to,
   // with nothing to press and nothing for this page to file.
-  const { session } = useAuth()
-  const signedIn = !!session
+  //
+  // Signed in without an account is signed out for this purpose: the account
+  // has no address, and a poll's audience is made of addresses, so its ballot
+  // puts it in no audience and the watch is the only way it hears.
+  const { session, anonymous } = useAuth()
+  const signedIn = !!session && !anonymous
 
   // What stands under the card a reader is left waiting on: where the push
   // switch is and that the site installs, the same for an account and a link.

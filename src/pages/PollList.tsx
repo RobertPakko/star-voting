@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
+  Alert,
+  Anchor,
   Button,
   Card,
   Group,
@@ -54,7 +56,7 @@ export function PollList() {
 
 function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   const navigate = useNavigate()
-  const { session } = useAuth()
+  const { session, anonymous } = useAuth()
   // Asked here rather than in CSS because the scroll below is asked for from
   // JavaScript, which the global rule in index.css cannot reach.
   const reducedMotion = useReducedMotion()
@@ -265,6 +267,23 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
           </Group>
         </Group>
 
+        {/* The one thing a list made without an account most needs saying:
+            it lives in this browser's session, and nothing else knows it is
+            theirs. Clearing the site's data, or another device, is a list
+            nobody can get back. Signing in is how it stops being that. */}
+        {anonymous && !viewingRemoved && (
+          <Alert color="yellow" variant="light">
+            <Text size="sm">
+              You're using STAR Voting without an account, so these polls are only reachable from
+              this browser.{' '}
+              <Anchor component={Link} to="/sign-in" state={{ from: '/' }}>
+                Sign in
+              </Anchor>{' '}
+              to keep them on your account and see them on other devices.
+            </Text>
+          </Alert>
+        )}
+
         {!viewingRemoved && <Banners />}
 
         {actionError && (
@@ -287,7 +306,9 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
           <Text c="dimmed" size="sm">
             {removedCount > 0
               ? 'Every poll you\u2019re in has been removed from your list.'
-              : 'No polls yet. Create one, wait for an invite, or open a poll\u2019s link.'}
+              : anonymous
+                ? 'No polls yet. Create one, or open a poll\u2019s link.'
+                : 'No polls yet. Create one, wait for an invite, or open a poll\u2019s link.'}
           </Text>
         )}
 

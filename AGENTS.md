@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -175,6 +175,16 @@ Repo **Settings → Pages** should show the domain once DNS resolves, with
    itself and shrugs if it cannot, so a project where it was unavailable ends
    up with the purge defined and never running — see [Polls are deleted after
    six months](#polls-are-deleted-after-six-months).
+7. Under **Authentication → Sign In / Providers**, turn on **Allow anonymous
+   sign-ins**. It is what **Continue without an account** on the sign-in
+   screen calls; with it off that button fails with Supabase's own message
+   and nothing else changes. Two settings beside it are worth a look, since
+   an anonymous account costs nobody an inbox: the rate limit on anonymous
+   sign-ins under **Authentication → Rate Limits** (per IP address), and
+   **CAPTCHA protection** under **Authentication → Attack Protection**. Leave
+   CAPTCHA off for now: once it is on, Supabase demands a token on *every*
+   sign-in, email included, and the sign-in screen has no widget to get one
+   from. See [Polls made without an account](#polls-made-without-an-account).
 
 ### 2. Local development
 
@@ -707,7 +717,12 @@ same terms as an invitee. And which share-link ballot and confirmation are a
 reader's: the account's on any device when they are signed in, the browser
 key's when they are not, never another account's through a shared browser's
 key, never claimed after the fact, and never an address on anything a read
-hands back.
+hands back. And what an account made without signing in may do: run an open
+poll as its creator with no address recorded for it, make no invite poll by
+either create path, make twenty polls a day and no more, read no invite poll
+through its empty email claim, put a blank address on no invite list — and
+hand what it made to the account it signs in to, once, by a ticket only it
+could take out, without the move counting as a late vote.
 
 Not covered: RLS policies and the `auth.jwt()`-gated access rules. The
 `poll_page` case above is the nearest thing and still not an exception to
@@ -2680,8 +2695,11 @@ any desktop browser, incognito included, a voter never saw it.
 ## Signing in
 
 Email, and nothing else: no passwords, no providers, no account to create
-before there is one. What arrives in the inbox is one of two things, and the
-reader picks which on the sign-in screen before it is sent.
+before there is one — or no account at all, for a reader who only wants to
+run an open poll; see [Polls made without an
+account](#polls-made-without-an-account). What arrives in the inbox is one of
+two things, and the reader picks which on the sign-in screen before it is
+sent.
 
 - **A link.** One tap and they are signed in. The default, and the easier of
   the two whenever it works.
@@ -2862,6 +2880,96 @@ to the `or` for every origin the app is served from.
 template whose branch never matches is not an error anywhere — it sends a
 link to a reader who asked for a code, and the code screen they are looking
 at has nothing to type into it.
+
+### Polls made without an account
+
+**Continue without an account**, on the sign-in screen, is Supabase's
+anonymous sign-in: a real session, a real `auth.users` row, and no email
+address. The reader lands on a poll list of their own and can make open polls
+and run them — close, reopen, edit the options, delete — exactly as an account
+does, because every one of those rules is written as `created_by =
+auth.uid()` and an anonymous account has a `uid`. Nothing about the creator's
+side of a poll had to learn a new case. What it is not is signed in to an
+*account*, and the app says so in the places that differ: the header's corner
+says **Sign in** rather than offering a sign-out (`/sign-in` is the sign-in
+screen at an address of its own, since this reader's `/` is their list), the
+poll list carries a line saying the polls live in this browser, and the create
+form offers invite polls disabled, with the reason under them. `anonymous` in
+`useAuth` is how a component asks.
+
+**Signing in brings the polls along.** Signing in replaces the anonymous
+session, and the account may well exist already, so nothing follows by itself.
+Before the sign-in email goes out, the browser takes out a ticket while it can
+still prove it is the anonymous account (`begin_account_carry_over`), and the
+first tab to see the account's session hands it back
+(`finish_account_carry_over`): the polls it made, the ballots and
+confirmations it cast through links — except in a poll the account had
+already answered, where the account's own ballot stands and the anonymous one
+stays where it was — and its removed polls. The ticket is random, held only in
+this browser's `localStorage`, spent once, and good for a day. A sign-in link
+opened in a different browser cannot redeem it; the polls then stay with the
+anonymous session here until this browser signs in too. See
+[`lib/carryOver.ts`](src/lib/carryOver.ts).
+
+**Losing the session is losing the polls**, and that is the trade: there is no
+address to send a way back to. Clearing the site's data, a private window
+closing, or another device is a list nobody can reach, and polls nobody can
+close — they still run, and are purged at six months like any other. The line
+on the poll list exists to say this before it happens.
+
+#### What an anonymous session can reach
+
+Supabase's advice when turning this on is to review every policy, because an
+anonymous session holds the `authenticated` role like anybody signed in. This
+is that review, done for 0079. The question at every door is what a reader
+with a `uid` and **an empty email claim** — `"email": ""`, which is what an
+anonymous token carries — can do that one with no session could not.
+
+- **Tables.** `polls`, `candidates` and `ballots` are read by `created_by =
+  auth.uid()`, by the invite list, or by `voter_id`; an anonymous account
+  reaches its own polls and nothing else. `invited_voters` is read where
+  `email` matches the claim — which an empty claim would match against an
+  empty address, and a creator can insert into that table directly through
+  its grant and policy, past the checks the create paths make. 0079 deletes
+  any blank row and puts the address rule on the table (`invited_voters_email_ck`),
+  so it holds whichever way a row arrives. Every other table is RLS-on with no
+  policies and no grants, and the new `account_carry_overs` is the same.
+- **Functions granted to `authenticated`.** Every one that reads or writes a
+  poll decides through the same two tests — creator by `uid`, invitee by the
+  email claim — so the empty claim makes an anonymous account the creator of
+  its own polls and an invitee of none. `poll_page` hands it `unreadable` for
+  an invite poll, which the route turns into the sign-in screen with the poll
+  remembered, since the invitation may well be the account's. Settings, push
+  subscriptions and removed polls are keyed by `uid` and harmless.
+- **The one hole: email.** An invite poll writes to every address on its
+  list, from this app's domain, through its Resend key, and an anonymous
+  account costs nobody an inbox — so letting one make an invite poll would make
+  this app a way to send mail to anyone. `guard_anonymous_polls`, a trigger on
+  `polls`, refuses one by every path that makes a poll; `guard_invitee_changes`
+  already refused an invite list on an open poll. The same trigger caps an
+  anonymous account at twenty polls a day, a group counting once. That bounds
+  one session, not a script minting sessions: Supabase's rate limit and CAPTCHA
+  are what bound those (setup step 7).
+- **An address nobody has.** `polls.created_by_email` was `NOT NULL`, filled
+  from the claim — an empty string for an anonymous creator, which the email
+  audience would then have tried to write to. It is null now.
+- **Push.** A poll's devices are chosen by address (`poll_push_targets`), so an
+  anonymous account's own binding would reach nothing; it uses the link's
+  switch and files watches, as a reader who is signed out does. A watch
+  ignores account settings, so removing a poll from an anonymous list does not
+  silence a watch already filed on it — the one place the removed-poll banner
+  promises a little more than it delivers there.
+- **Unchanged, and noted.** `anon` and `authenticated` hold `TRUNCATE`,
+  `TRIGGER`, `REFERENCES` and `MAINTAIN` on every table, from Supabase's
+  default privileges. None of them is reachable through the Data API, which
+  only ever issues reads, writes and function calls, so none is reachable by
+  anybody holding the public key, anonymous or not.
+
+`mark_votes_after_reveal` was narrowed in the same migration: it treated any
+update to a ballot as a vote, and moving a ballot to the account its voter
+signed in to is an update that is not one.
+
+`41_polls_without_an_account` covers all of the above that the suite can see.
 
 ## Behaviour worth preserving
 

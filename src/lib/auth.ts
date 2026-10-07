@@ -16,10 +16,29 @@ export interface AuthContextValue {
   session: Session | null
   loading: boolean
   /**
+   * Whether the session is one made without an account — Supabase's
+   * anonymous sign-in. It is a real session with a real user id, so it has a
+   * poll list and can make and run open polls, but it has no email address:
+   * it is never written to, cannot make an invite poll, and is not the
+   * account reading that an invite poll's list is checked against. Where the
+   * app means "has an account", it means a session that is not this.
+   */
+  anonymous: boolean
+  /**
+   * Starts a session without an account, for somebody who wants to make a
+   * poll without giving an address. See "Polls made without an account" in
+   * AGENTS.md.
+   */
+  continueWithoutAccount: () => Promise<void>
+  /**
    * Sends the sign-in email. `method` decides which of the two goes out —
    * see lib/signInMethod.ts — and is carried to the mailer by the redirect
    * address, because it is the only part of the request the email template
    * can read.
+   *
+   * From a session made without an account, it first takes out the ticket
+   * that carries what that session made over to the account — see
+   * lib/carryOver.ts.
    */
   signInWithEmail: (email: string, method: SignInMethod) => Promise<void>
   /**

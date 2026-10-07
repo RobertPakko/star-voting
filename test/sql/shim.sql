@@ -58,7 +58,10 @@ end $$;
 
 create table if not exists auth.users (
   id uuid primary key,
-  email text
+  email text,
+  -- Supabase's own column: an account made by anonymous sign-in, which has
+  -- no email until it is linked to one.
+  is_anonymous boolean not null default false
 );
 
 -- Who is "signed in" right now. Supabase derives this from the request's JWT;
@@ -67,7 +70,8 @@ create table if not exists auth.users (
 create table if not exists auth._session (
   id boolean primary key default true,
   user_id uuid,
-  email text
+  email text,
+  is_anonymous boolean not null default false
 );
 insert into auth._session (id, user_id, email)
 values (true, null, null)
@@ -80,9 +84,12 @@ create or replace function auth.uid() returns uuid
 create or replace function auth.jwt() returns jsonb
   language sql stable
   as $$
+    -- An anonymous session's token is what Supabase mints for one: an empty
+    -- email claim, not a missing one, and the flag that says why.
     select case
+             when is_anonymous then jsonb_build_object('email', '', 'is_anonymous', true)
              when email is null then '{}'::jsonb
-             else jsonb_build_object('email', email)
+             else jsonb_build_object('email', email, 'is_anonymous', false)
            end
     from auth._session where id
   $$;
