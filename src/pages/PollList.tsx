@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
   Alert,
-  Anchor,
   Button,
   Card,
   Group,
@@ -275,11 +274,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
           <Alert color="yellow" variant="light">
             <Text size="sm">
               You're using STAR Voting without an account, so these polls are only reachable from
-              this browser.{' '}
-              <Anchor component={Link} to="/sign-in" state={{ from: '/' }}>
-                Sign in
-              </Anchor>{' '}
-              to keep them on your account and see them on other devices.
+              this browser. Sign in to keep them on your account and see them on other devices.
             </Text>
           </Alert>
         )}

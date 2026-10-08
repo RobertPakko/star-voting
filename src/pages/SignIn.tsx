@@ -256,9 +256,6 @@ export function SignIn() {
                     >
                       Continue without an account
                     </Button>
-                    <Text size="xs" c="dimmed" ta="center">
-                      Make polls anyone with the link can vote in. Sign in later to keep them.
-                    </Text>
                   </Stack>
                 )}
                 {/* Shown either way: someone who has just requested a link has a
