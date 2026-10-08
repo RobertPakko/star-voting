@@ -1,0 +1,40 @@
+/* The two sides of a round's card: the round itself, in the page's flow, and
+ * its tie-break laid over it, waiting off the right-hand edge.
+ *
+ * Only the round is in the flow, so the card is always the round's height,
+ * open or closed (see RoundCard). */
+.slider {
+  position: relative;
+  overflow: hidden;
+}
+
+/* The card's own padding, moved inside each side so the tie-break covers the
+ * card edge to edge rather than leaving the scores showing in a margin
+ * around it. */
+.side {
+  padding: var(--mantine-spacing-sm);
+}
+
+.back {
+  position: absolute;
+  /* Exactly over the round, and no taller: a longer tie-break scrolls here
+     rather than stretching the card. */
+  inset: 0;
+  overflow-y: auto;
+  /* The card's own background, since this panel is laid over the round
+     rather than replacing it. */
+  background-color: var(--mantine-color-body);
+  /* Parked past the right-hand edge by the shadow's reach as well as its own
+     width, so the shadow is clipped along with it rather than lying inside
+     the card as a grey strip down the edge. */
+  transform: translateX(calc(100% + 16px));
+  transition: transform var(--motion-base) var(--motion-ease);
+  /* A shadow on the leading edge, so the panel reads as sliding over the
+     round. At rest, open or closed, it falls outside the card and is clipped
+     away, so it only shows while the panel is moving. */
+  box-shadow: -8px 0 16px -8px rgb(0 0 0 / 0.2);
+}
+
+.back[data-open] {
+  transform: translateX(0);
+}

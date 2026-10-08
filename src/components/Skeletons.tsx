@@ -9,7 +9,7 @@ import {
   Stack,
   VisuallyHidden,
 } from '@mantine/core'
-import { RESULTS_ROWS_MAX } from '../lib/resultsRows'
+import { RESULTS_ROWS_MAX, SCORING_ROWS_MAX } from '../lib/resultsRows'
 import { isDaily, toMinutes } from '../lib/schedule'
 import type { PollSchedule } from '../lib/types'
 
@@ -335,8 +335,8 @@ function BannerShape() {
 }
 
 /**
- * A finished question's tally: the banner naming the winner, the score round,
- * and the automatic runoff that settled it. What `Results` draws, down to the
+ * A finished question's tally: the banner naming the winner, the scoring
+ * round, and the runoff that settled it. What `Results` draws, down to the
  * order and the gaps, minus the two parts of it that are conditional.
  *
  * **All three cards, because a tally has all three.** The runoff used to be
@@ -351,26 +351,28 @@ function BannerShape() {
  * standing. So a card that always arrives now has a shape that always waits
  * for it, rather than a page that grew by a third after the wait was over.
  *
- * The one left out is genuinely conditional and stays that way: the
- * tie-breaks, which most polls do not have. The full ranking's button is drawn
+ * The one left out is genuinely conditional and stays that way: the button
+ * over a round that opens its tie-break, which most polls do not have. It sits
+ * in the heading's row and is no taller than the heading, so leaving it out
+ * moves nothing. The full ranking's button is drawn
  * wherever the option count is known, since it is drawn from three options up
  * (see FullRanking) and so is certain given the count; with no count there is
  * nothing to decide it from.
  */
 function TallyShape({ options }: { options?: number }) {
-  // The same ceiling the score round itself draws to, so a schedule poll's
+  // The same ceiling the scoring round itself draws to, so a schedule poll's
   // hundred windows do not put up a page of bars for a card that arrives
-  // twenty rows long. A shape taller than the thing it is waiting for is the
+  // ten rows long. A shape taller than the thing it is waiting for is the
   // lie this file's own note warns about, and at that length it is the whole
   // page rather than a row of it. See resultsRows.ts.
-  const rows = Math.min(options ?? 5, RESULTS_ROWS_MAX)
+  const rows = Math.min(options ?? 5, SCORING_ROWS_MAX)
 
   return (
     <Stack gap="md">
       <BannerShape />
 
       <Stack gap={2}>
-        <Bar kind="heading" width={112} />
+        <Bar kind="heading" width={68} />
         <Card withBorder p="sm">
           <Stack gap="xs">
             {Array.from({ length: rows }, (_, i) => (
@@ -384,26 +386,34 @@ function TallyShape({ options }: { options?: number }) {
                 <Skeleton height={8} radius="md" />
               </div>
             ))}
-            {/* Past the ceiling the score round says how many it left out,
+            {/* Past the ceiling the scoring round says how many it left out,
                 which is certain from the count alone. */}
-            {options !== undefined && options > RESULTS_ROWS_MAX && <Bar kind="line" width="75%" />}
+            {options !== undefined && options > SCORING_ROWS_MAX && <Bar kind="line" width="75%" />}
           </Stack>
         </Card>
       </Stack>
 
-      {/* The runoff: the two finalists with what each was preferred by, and
-          the line counting the ballots that split them evenly. Three lines
-          and no more — the sentences under them explain a runoff that tied,
-          which is the rare ending rather than the ordinary one. */}
+      {/* The runoff: the half pie, each finalist under its own end of it with
+          what it was preferred by, and the line counting the ballots that
+          split them evenly. The tie-break a level runoff needed is behind a
+          button, so it never adds to the card's height. See RunoffChart. */}
       <Stack gap={2}>
-        <Bar kind="heading" width={192} />
+        <Bar kind="heading" width={60} />
         <Card withBorder p="sm">
-          <Stack gap="xs">
-            {/* The finalists are named, so those two are a proportion; the
-                line under them is the same sentence on every poll. */}
-            <Bar kind="line" width="48%" />
-            <Bar kind="line" width="44%" />
-            <Bar kind="line" width={216} />
+          <Stack gap="xs" align="center">
+            {/* The arc: the chart's width, and half of it tall. */}
+            <Skeleton height={120} width={240} style={{ borderRadius: '120px 120px 0 0' }} />
+            <Group justify="space-between" align="flex-start" wrap="nowrap" w="100%" maw={360}>
+              <Stack gap={0} align="flex-start">
+                <Bar kind="line" width={96} />
+                <Bar kind="line" width={112} />
+              </Stack>
+              <Stack gap={0} align="flex-end">
+                <Bar kind="line" width={96} />
+                <Bar kind="line" width={112} />
+              </Stack>
+            </Group>
+            <Bar kind="line" width={232} />
           </Stack>
         </Card>
       </Stack>
@@ -685,8 +695,8 @@ function TableRowShape({ width }: { width?: string }) {
  * page holds the option list long before it holds the ballot scored against
  * it.
  *
- * Capped at the score round's ceiling, which is the one place this shape is
- * deliberately *shorter* than what arrives: the card itself draws every option,
+ * Capped at the results page's ceiling for a long list, which is the one place
+ * this shape is deliberately *shorter* than what arrives: the card itself draws every option,
  * because a reader who came to see what they scored came to see all of it, and
  * a time poll's hundred windows would otherwise be a page of bars waiting on a
  * card. Short is the safe direction -- the page grows into it rather than

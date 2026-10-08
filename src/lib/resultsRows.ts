@@ -11,7 +11,9 @@
  * into a document nobody scrolls to the end of, and the winner card at the
  * top is the part almost every reader came for.
  *
- * So both stop at twenty rows and say what they left out. Twenty is a screen
+ * So both stop and say what they left out: the scoring round at ten (see
+ * `SCORING_ROWS_MAX` below), and the lists inside a tie-break at twenty, which
+ * is also the cap on every other long list on the page. Twenty is a screen
  * and a bit on a phone: long enough that the shape of the field is still
  * legible -- where the scores fall away, how far ahead the winner was -- and
  * short enough that the runoff card underneath is reachable by scrolling
@@ -30,6 +32,24 @@
  * be bytes; the length that was the problem is the page's.
  */
 export const RESULTS_ROWS_MAX = 20
+
+/**
+ * The scoring round's own, shorter ceiling: the ten highest.
+ *
+ * Every reader of a result scrolls past the scoring round to get to the
+ * runoff, so it gets a lower cap than the lists inside a tie-break, which are
+ * folded away behind a button and only read by somebody who opened them. Ten
+ * still shows where the scores drop off behind the leaders, and on most
+ * polls it is every option there is.
+ *
+ * It cannot leave out a finalist: `poll_tally` orders by total and lifts a
+ * tie-break winner above the options it tied with, so the two finalists are
+ * always the first two rows.
+ *
+ * Browser-only on purpose, so changing it is a deploy rather than a
+ * migration.
+ */
+export const SCORING_ROWS_MAX = 10
 
 /**
  * The first `max` of a list, and how many that leaves unsaid.

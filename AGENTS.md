@@ -2178,11 +2178,13 @@ last one has been left. Anything that would only be pleasant is not in.
 The scale is three durations and one curve, declared on `:root` in
 `src/index.css`: `--motion-fast` (120ms) for feedback on a press,
 `--motion-base` (200ms) for something arriving or leaving, `--motion-slow`
-(500ms) for the results bars, which are the one thing meant to be watched
-rather than merely not-jarring. Durations are picked from those and never
-written by hand, so a dozen small animations read as one app rather than as a
-dozen opinions. The single exception is `main.tsx`, where Mantine's transition
-durations reach it as numbers rather than as CSS, and which says so.
+(500ms) for the results bars and the runoff's half pie, which are the things
+meant to be watched rather than merely not-jarring. Durations are picked from
+those and never written by hand, so a dozen small animations read as one app
+rather than as a dozen opinions. The two exceptions are `main.tsx`, where
+Mantine's transition durations reach it as numbers rather than as CSS, and the
+runoff chart in `Results.tsx`, which animates from JavaScript and takes its
+500ms the same way; both say so.
 
 A reader who has asked their system for less motion gets none of it, said in
 three places because there are three kinds of motion to say it about: one rule
@@ -5642,10 +5644,10 @@ Two consequences, which the modal states rather than hides:
   option scoring too low to reach the first runoff enters the ladder below
   options it would have beaten. Only first place is what STAR itself produces.
 
-#### The page stops at twenty rows
+#### The page stops at ten rows, or twenty
 
 Two of the lists on a results page have no natural ceiling, and a schedule
-poll reaches both. The score round is a row per option, and an option there is
+poll reaches both. The scoring round is a row per option, and an option there is
 a half-hour window: a working week of them is over a hundred rows, and
 `MAX_OPTIONS` allows five hundred. A head-to-head tie-break is a row per
 *pair* in the tied group, which is quadratic, and windows tie at the top score
@@ -5654,13 +5656,21 @@ working. Either one buries the runoff card, the full-ranking button and the
 published ballots under a document nobody scrolls to the end of, in front of
 a reader who came for the name in the green card at the top.
 
-So both stop at [`RESULTS_ROWS_MAX`](src/lib/resultsRows.ts) rows and say what
-they left out: the score round, the per-option totals and the pair list inside
-a head-to-head step, the five-star step's list, and the names in the sentence
-saying who tied (`NameList`'s `max`, which counts the rest as "and 28 others"
-rather than naming them). `capRows` makes the cut and `count` words the
-remainder; `TallyShape` draws to the same ceiling, so the shape standing in
-for a long tally is not four screens taller than the tally.
+So both stop and say what they left out. **The scoring round stops at ten**
+([`SCORING_ROWS_MAX`](src/lib/resultsRows.ts)): every reader scrolls past it
+to reach the runoff, and ten still shows where the scores drop off behind the
+leaders. It cannot lose a finalist, because `poll_tally` orders by total and
+lifts a tie-break winner above the options it tied with, so the finalists are
+always the first two rows. It is a browser-only number on purpose, so changing
+it is a deploy rather than a migration. **The tie-break's lists stop at twenty**
+([`RESULTS_ROWS_MAX`](src/lib/resultsRows.ts)): the per-option totals and the
+pair list inside a head-to-head step, the five-star step's list, and the names
+in the sentence saying who tied (`NameList`'s `max`, which counts the rest as
+"and 28 others" rather than naming them). Those are folded away behind a button
+(see *Each round carries its own tie-break* below), so they get the longer
+cap. `capRows` makes the cut and `count` words the remainder; `TallyShape`
+draws the scoring round to the same ten, so the shape standing in for a long
+tally is not four screens taller than the tally.
 
 **Nothing is hidden by it.** The whole field in placed order is behind the
 button underneath, and any poll long enough to be cut short has that button --
@@ -5679,6 +5689,45 @@ It also ends an animation that had grown into a wait. The score bars are
 staggered 40ms apart (`Results.module.css`), which is a reading of the ranking
 over ten options and five and a half seconds of bars still arriving over a
 hundred and thirty-seven.
+
+#### Each round carries its own tie-break
+
+The page has two rounds, **Scoring** and **Runoff**, and each is a heading over
+one card ([`RoundCard`](src/components/RoundCard.tsx)). The tie-break a round
+needed is not on the page until somebody asks for it: a **Show tie-break**
+button sits at the right of that round's heading, and pressing it slides a
+panel holding the tie-break across the round's card. The scoring round's
+panel holds the ties broken to fill the runoff. The runoff's holds how a level
+runoff was settled: the higher scoring total, then five-star votes, numbered and
+marked *Decisive* or *Still tied*, the same shape as the scoring round's.
+**The card never changes height**: it stays the round's height and a longer
+tie-break scrolls inside the panel, because a card growing to fit pushed the
+rest of the page down at the press of a button about one card.
+
+The tie-break used to be a card of its own between the two rounds, always
+open, and on a wide tie it was the longest thing on the page. It is the
+working behind a result rather than the result, so it now belongs to the round
+it settled and stays closed until asked for. It slides *over* the round
+rather than opening *under* it because it is a second reading of the same
+round, not more page. The hidden side is `inert`, so a keyboard cannot tab into a panel that is
+off the card and a screen reader does not read both sides.
+
+**The runoff is drawn as half a pie** (`RunoffChart`, on `@mantine/charts`):
+one finalist's voters from the left and the other's from the right, with each
+name written under its own end of the arc. **Two slices at most**: voters who
+scored both finalists the same took neither side and do not decide the runoff,
+so they are counted in a line under the chart rather than drawn in it. The one
+exception is a runoff nobody took a side in, which is drawn as a single grey
+slice of voters who scored them equally, since an empty space would not be a
+truthful picture of it. A runoff only ever compares two options, and the top of the arc
+is the halfway mark, so who won is visible before any number is read. It is a
+full pie whose centre sits on the bottom edge of a box half its height, so the
+half that is never drawn takes no room. It sweeps in, as the scoring bars grow,
+except under reduced motion: the chart animates from JavaScript, so the
+stylesheet rule in `index.css` cannot reach it and the component asks
+`useReducedMotion` itself. The chart's stylesheet is imported in `Results.tsx`
+rather than `main.tsx`, so it is split off with the results chunk and a reader
+filling in a ballot never fetches it.
 
 ### Tie-breaks
 
@@ -5703,7 +5752,7 @@ So `star_round` sends the pairs themselves (`steps[].matchups`: the two
 options, the voters who preferred each, and the voters who scored them the
 same), and `Results.tsx` renders a two-option tie as the single comparison it
 is — "3 voters preferred each, 2 scored them equally", the words the runoff
-below already uses for the same arithmetic, with the word *matchup* gone. A
+uses for the same arithmetic, with the word *matchup* gone. A
 group of three or more keeps the per-option totals, because there the totals
 are the point (the rule is asking which option beat the most others), and
 lists the pairs beneath them. The totals are derived from those same pair
