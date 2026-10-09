@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Box, Group, SegmentedControl, Stack, Text } from '@mantine/core'
+import { Box, Divider, Group, SegmentedControl, Stack, Text } from '@mantine/core'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { BallotFrame, type BallotScore } from './BallotFrame'
 import { PaintCalendar } from './PaintCalendar'
@@ -226,6 +226,7 @@ export function TimeBallotCard({
           Mark the calendar with your availability. 5 is the highest preference while 0 is the
           lowest.
         </Text>
+        <Divider />
         <Group gap="sm" wrap="wrap" align="center" justify="space-between">
           <Group gap={6} wrap="wrap" justify="space-between">
             <Text size="xs" c="dimmed">
@@ -282,6 +283,7 @@ export function TimeBallotCard({
           // asks about.
           confine
         />
+        <Divider />
       </Stack>
     </BallotFrame>
   )

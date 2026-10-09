@@ -747,7 +747,7 @@ export function PaintCalendar({
         // page: this row is what a view change scrolls back into view, and
         // `scrollIntoView` measures the viewport rather than what is painted
         // over it. See `showView`.
-        style={{ scrollMarginTop: 'var(--app-shell-header-offset, 0px)' }}
+        style={{ scrollMarginTop: 'var(--app-shell-header-offset, 0px)', marginBottom: 0 }}
       >
         <div className={ScheduleHeader.classes.navigationGroup}>
           <ScheduleHeader.Previous
