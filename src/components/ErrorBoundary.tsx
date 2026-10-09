@@ -55,7 +55,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
       <Center h="100vh" p="md">
         <Paper withBorder shadow="sm" p="xl" radius="md" w={360}>
           <Stack align="center" gap="md">
-            <Title order={3}>Something went wrong</Title>
+            <Title order={1} size="h3">
+              Something went wrong
+            </Title>
             <Text c="dimmed" ta="center" size="sm">
               Refreshing the page usually clears it. If it keeps happening after a refresh, the
               problem is at our end rather than yours.

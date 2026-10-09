@@ -364,7 +364,7 @@ export function CollectOptions({
               </Button>
             </Group>
             {error && (
-              <Text c="red" size="sm">
+              <Text role="alert" c="red" size="sm">
                 {error}
               </Text>
             )}
@@ -384,7 +384,7 @@ export function CollectOptions({
     return (
       <>
         {error && (
-          <Text c="red" size="sm">
+          <Text role="alert" c="red" size="sm">
             {error}
           </Text>
         )}
@@ -1019,7 +1019,7 @@ function OptionList({
       )}
 
       {error && (
-        <Text c="red" size="sm">
+        <Text role="alert" c="red" size="sm">
           {error}
         </Text>
       )}
@@ -1336,7 +1336,7 @@ function TimeList({
         onDraftChange={noteDraft}
       />
       {error && (
-        <Text c="red" size="sm">
+        <Text role="alert" c="red" size="sm">
           {error}
         </Text>
       )}

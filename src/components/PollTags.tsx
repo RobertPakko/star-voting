@@ -3,6 +3,7 @@ import { Badge, Group } from '@mantine/core'
 import { badgeColor, countBadge } from '../lib/badgeColors'
 import type { PollMode } from '../lib/types'
 import classes from './PollTags.module.css'
+import { announce } from '../lib/announce'
 
 /**
  * A poll's high-level details, in the same shape on every screen that shows
@@ -41,6 +42,7 @@ export function PollTags({
   showBallots,
   turnout,
   className,
+  announceChanges = false,
 }: {
   mode: PollMode
   showVoters: boolean
@@ -54,11 +56,22 @@ export function PollTags({
    * badge at all.
    */
   turnout?: Turnout
+  /**
+   * Say a change of count to a screen reader, as the highlight says it to
+   * everybody else. The poll's own page only: a list of ten polls announcing
+   * each other's votes would be noise. See lib/announce.ts.
+   */
+  announceChanges?: boolean
 }) {
   // The badge's own words, worked out before the badge so that whether they
   // have changed is a question that can be asked at all.
   const label = turnout ? turnoutLabel(turnout) : null
   const changes = useChangeCount(label)
+
+  // Spoken with "of" for the slash, which a screen reader reads out as a
+  // word. A count arriving where there was none is the page finishing its
+  // read, not a change, and says nothing.
+  useStateAnnouncement(announceChanges && label ? label.replace(/^(\d+)\/(\d+)/, '$1 of $2') : null)
 
   return (
     <Group gap="xs" className={className}>
@@ -244,6 +257,7 @@ export function PollStateBadge({
   closed,
   winner,
   inGroup = false,
+  announceChanges = false,
 }: {
   soliciting: boolean
   resultsAvailable: boolean
@@ -266,7 +280,15 @@ export function PollStateBadge({
    * to withhold.
    */
   inGroup?: boolean
+  /** As on `PollTags`: say where the poll has got to when that moves. */
+  announceChanges?: boolean
 }) {
+  useStateAnnouncement(
+    announceChanges
+      ? stateSentence({ soliciting, resultsAvailable, closed, winner, inGroup })
+      : null,
+  )
+
   if (soliciting) {
     return (
       <Badge color={badgeColor.collectingOptions} variant="light" style={{ flexShrink: 0 }}>
@@ -341,4 +363,46 @@ export function PollStateBadge({
       In progress
     </Badge>
   )
+}
+
+/**
+ * Where a poll has got to, as a sentence a screen reader can say when it
+ * moves: the badge's state, in words that make sense heard on their own.
+ */
+function stateSentence({
+  soliciting,
+  resultsAvailable,
+  closed,
+  winner,
+  inGroup,
+}: {
+  soliciting: boolean
+  resultsAvailable: boolean
+  closed: boolean
+  winner?: string | null
+  inGroup: boolean
+}): string {
+  if (soliciting) return 'The poll is collecting options'
+  if (resultsAvailable) {
+    if (!inGroup && winner) return `The results are in: ${winner} won`
+    if (!inGroup && winner === null) return 'The results are in: a tie, with no winner'
+    return 'The results are in'
+  }
+  if (closed) return 'The poll has closed'
+  return 'The poll is open for voting'
+}
+
+/**
+ * Announces a sentence each time it changes, and not the first time: the
+ * state a page opens in is read with the page. Nor from or to nothing, which
+ * is a page still reading or a badge it no longer draws.
+ */
+function useStateAnnouncement(sentence: string | null) {
+  const previous = useRef(sentence)
+  useEffect(() => {
+    if (sentence === previous.current) return
+    const was = previous.current
+    previous.current = sentence
+    if (was !== null && sentence !== null) announce(sentence)
+  }, [sentence])
 }

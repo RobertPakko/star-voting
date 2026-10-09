@@ -13,6 +13,7 @@ import {
 import { CheckIcon, DownloadSimpleIcon } from '@phosphor-icons/react'
 import { useInstallPrompt } from '../lib/installPrompt'
 import { devicePlatform, isInstalledApp, type DevicePlatform } from '../lib/push'
+import { usePageTitle } from '../lib/pageTitle'
 
 /**
  * The /app route: how to install this site as an app, and how to get
@@ -35,6 +36,7 @@ import { devicePlatform, isInstalledApp, type DevicePlatform } from '../lib/push
  * link and has no account, and watching an open poll needs none.
  */
 export function InstallGuide() {
+  usePageTitle('Install the app')
   const [platform, setPlatform] = useState<DevicePlatform>(devicePlatform)
 
   return (

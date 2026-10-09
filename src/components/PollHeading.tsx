@@ -2,6 +2,8 @@ import { Group, Stack, Text, Title } from '@mantine/core'
 import { PollStateBadge, PollTags } from './PollTags'
 import type { Turnout } from './PollTags'
 import type { PollMode } from '../lib/types'
+import { usePageTitle } from '../lib/pageTitle'
+import { PollTitleText } from './PollTitleText'
 
 /**
  * A poll's heading, in one shape wherever a poll is read: the card on the
@@ -69,6 +71,10 @@ export function PollHeading({
   /** Handed to the row of badges, for a list card keeping room for its control. */
   tagsClassName?: string
 }) {
+  // The poll's own page is named after the poll; a card on the list is one of
+  // ten and names nothing. See usePageTitle.
+  usePageTitle(compact ? null : title)
+
   return (
     <Stack gap="xs">
       {/* The title and the badge share one row, sixty/forty, and neither may
@@ -95,11 +101,15 @@ export function PollHeading({
               c="var(--mantine-color-text)"
               style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}
             >
-              {title}
+              <PollTitleText landing={false}>{title}</PollTitleText>
             </Text>
           ) : (
-            <Title order={2} style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}>
-              {title}
+            <Title
+              order={1}
+              size="h2"
+              style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}
+            >
+              <PollTitleText landing>{title}</PollTitleText>
             </Title>
           )}
           {/* The forty is the badge's own ceiling rather than a box around it;
@@ -111,6 +121,7 @@ export function PollHeading({
             closed={state.closed}
             winner={state.winner}
             inGroup={state.inGroup}
+            announceChanges={!compact}
           />
         </Group>
 
@@ -133,6 +144,7 @@ export function PollHeading({
         showBallots={showBallots}
         turnout={turnout}
         className={tagsClassName}
+        announceChanges={!compact}
       />
     </Stack>
   )

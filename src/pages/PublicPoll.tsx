@@ -26,6 +26,7 @@ import type {
   PollResults,
   UnreadableRead,
 } from '../lib/types'
+import { usePageTitle } from '../lib/pageTitle'
 
 /**
  * An open poll as somebody outside it sees it: not signed in, and possibly
@@ -303,10 +304,16 @@ export function PublicPoll({
     if (sample) void load()
   }, [sample, load])
 
+  // A link that leads nowhere says so in the tab as well; a poll that does
+  // exist is named by its heading. See usePageTitle.
+  usePageTitle(!pollId || error ? 'Poll not found' : null)
+
   if (!pollId || error) {
     return (
       <Stack maw={720} mx="auto" gap="md" align="center">
-        <Title order={3}>Poll not found</Title>
+        <Title order={1} size="h3">
+          Poll not found
+        </Title>
         <Text c="dimmed" ta="center">
           This link may be mistyped, or the poll may have been deleted.
         </Text>

@@ -220,7 +220,7 @@ export function Respondents({
         )}
 
         {error && (
-          <Text c="red" size="sm">
+          <Text role="alert" c="red" size="sm">
             {error}
           </Text>
         )}

@@ -15,9 +15,9 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
-public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the Announcer whose live regions a screen reader is told things through, the PollTitleText that travels from the list to a poll, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll title that travels from its card to its page (viewTransition.ts), shared types
+public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 supabase/functions/   Edge Functions: send-push, the half of a push notification Postgres cannot do
@@ -25,12 +25,15 @@ scripts/         squash.sh, which squashes the migrations and replays the above;
                  sample-poll.sh, which records the About page's sample poll
 test/            tally tests, run against a throwaway Postgres; build-db.sh, which builds one
                  (the one piece of election logic that is not SQL is tested beside it, in src/lib/schedule.test.ts)
+e2e/             the browser suite: the built app in Chromium, checked with axe (see Tests);
+                 screenshots.capture.ts, which takes the manifest's screenshots
 ```
 
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
 `npm run lint` (oxlint), `npm run fmt` (oxfmt; `npm run fmt:check` reports
-without writing), `npm run preview`, `npm test` and `npm run test:unit` (see
-[Tests](#tests)).
+without writing), `npm run preview`, `npm test`, `npm run test:unit` and
+`npm run test:e2e` (see [Tests](#tests)), and `npm run screenshots` (see
+[What the manifest says](#what-the-manifest-says)).
 
 The formatter is configured in `.oxfmtrc.json` to the style the code was
 already written in — no semicolons, single quotes, a hundred columns — and
@@ -565,6 +568,9 @@ covers the typecheck and the bundle together. It takes no Supabase secrets —
 nothing is being run, only compiled, and a pull request from a fork could not
 see them anyway.
 
+And a third, `browser`, which is the only one that runs the app; see [The
+browser suite](#the-browser-suite) below.
+
 ```bash
 npm run test:unit     # vitest, over four files and nothing else
 ```
@@ -632,6 +638,61 @@ Postgres.app cluster the bootstrap superuser is named after you instead. So
 `service_role`, as a superuser: the SECURITY DEFINER functions run as it and
 read tables the shim itself owns, so an ordinary role only moves the failure
 somewhere less legible.
+
+### The browser suite
+
+```bash
+npm run test:e2e      # Playwright, desktop and phone, axe on every page it opens
+```
+
+The SQL cases say the tally is right and `test:unit` says the calendar
+arithmetic is; neither had ever opened the app. `e2e/` does, in Chromium,
+against the **built** app under `vite preview` — the build is what ships, and
+the lazy chunks, the base path and the stale-build listener exist only there.
+Every test runs twice, at a desktop size and at a phone's, because the layouts
+differ where it matters: the header wraps, the calendar scrolls sideways, the
+intro is the portrait cut.
+
+**It needs no database, and that is a choice about what it can reach.** The
+Supabase address it is built with is a closed port, and `e2e/fixtures.ts`
+fails any test whose page so much as asks it something — or logs an error, or
+throws. What a reader can do with no backend is: sign in (as far as the
+screen), read About and the install guide, watch the intro, and walk the About
+page's sample poll, which is answered from a file (see [The About page and its
+sample poll](#the-about-page-and-its-sample-poll)). That last one is most of
+the app — `PublicPoll`, both ballots, the question strip, auto-advance,
+changing a vote, the results, the tie-break panel, the full ranking — so
+voting itself is covered end to end. **What is not:** anything behind an
+account or a write — the poll list, the create form, `PollDetail`, the
+creator's controls, the share button on a real poll. Reaching those needs a
+real Supabase, which means `supabase start` and Docker; GitHub's runners have
+Docker, so that is a job that can be added, but it was not built along with
+this one.
+
+**Accessibility is checked on every page it opens**, in both colour schemes,
+with axe at WCAG 2.1 A and AA plus axe's best-practice rules, and any finding
+at any impact fails the test (`expectAccessible`). Interactive states get their
+own check where they draw something new: the settings menu open, the full
+ranking's dialog, a tie-break slid over its round, the card after voting. What
+axe cannot see is anything it cannot reach — the pages above that need an
+account — and anything that is about behaviour rather than markup, such as
+whether an announcement is said at the right moment, which the tests assert
+directly by reading the live region (see [Accessibility](#accessibility)).
+
+Locally it needs the Chromium that matches the pinned `@playwright/test`:
+`npx playwright install chromium` once, or point `PLAYWRIGHT_BROWSERS_PATH` at
+one already installed. `playwright-core` is pinned beside it on purpose:
+`@axe-core/playwright` takes it as a peer, and left alone npm installs the
+newest one for it, whose `Page` type is not the runner's and does not
+typecheck. A failure leaves a trace under `test-results/`, which
+`npx playwright show-trace` opens on the page as it was at each step; CI
+uploads them as an artifact.
+
+The e2e files are typechecked by `tsc -b` like everything else
+(`tsconfig.e2e.json`), which is not a formality: a misspelt option in
+`test.use` is an object literal with one key too many, and without the check
+it is silently ignored — the intro's tests once waited out the whole film
+because `reducedMotion` had been set where Playwright does not read it.
 
 ### How a case is written
 
@@ -2175,6 +2236,76 @@ The error it will meet most often is the one
 for it has already been spent.
 
 
+## Accessibility
+
+Held to WCAG 2.1 AA, and checked by axe on every page the browser suite opens
+(see [The browser suite](#the-browser-suite)). The first time that ran it
+found something on every page, nearly all of it in one of the four places
+below — which is why each is now decided in one place rather than at the call
+sites, where it had drifted.
+
+**Contrast is the theme's job.** Three of Mantine's defaults fall under 4.5:1
+for ordinary text, and each is fixed once, in `main.tsx`:
+
+- **Filled colours are shade 8** in both schemes (`primaryShade`), where the
+  light scheme drew shade 6: white on `blue.6` is 3.55:1. `autoContrast`, with
+  the threshold set where black and white give equal contrast, then picks the
+  better of the two for the text on any filled colour — so a filled orange
+  badge is now black on orange rather than white at 2.6. The cost is that
+  filled things are a step darker in the light scheme than they were. Where a
+  filled colour carries no text there is nothing to fix, and the score round's
+  also-ran bars keep the grey they had (`--muted-bar` in Results.module.css).
+- **Dimmed text** — every caption and secondary line in the app — is a grey of
+  its own in each scheme (`cssVariablesResolver`), the lightest that clears
+  4.5 on every surface dimmed text is put on, the calendar's greyed day
+  headings included.
+- **Light badges and subtle buttons** take their colour's shade 9 as text, on
+  shade 1 and, under the pointer, shade 2 — which for most of the palette is
+  short of 4.5. Each is shade 9 taken towards black just far enough to clear
+  it on the hover shade, so it is still recognisably its colour.
+
+And one that is not about colour values: **a link set into a sentence is
+underlined** (`.mantine-Anchor-root[data-inherit]` in index.css). In the dark
+scheme the link blue is 1.5:1 against the text around it, and colour alone is
+not allowed to be what marks it.
+
+**One `h1` per page, and no skipped levels.** The page's own title is the
+`h1` — a poll's title, *Your polls*, *New poll* — drawn at the `h2` size it
+always was, and the headings over cards are `h2`s at the `h4` size. The
+wordmark in the header is no longer a heading at all: it was an `h3` that
+began every page's outline before the page did. The two screens drawn outside
+the app shell, the sign-in card and the intro, are each a `<main>` of their
+own, since the shell is what provides one everywhere else.
+
+**Every page names its tab** (`usePageTitle`): the poll's own title on a poll,
+a word or two elsewhere, and nothing after it — the favicon already says which
+site this is, and a tab is too narrow to spend on it. A poll's title is set by
+`PollHeading` alone, so the two readings of a poll cannot name it differently.
+
+**What changes without a page load is said aloud** (`announce`, and the two
+live regions `Announcer` mounts at the root). A screen reader is told nothing
+when a single-page app moves, and this one moves a great deal on its own:
+
+- a change of page announces the new page's title, which is what a reader
+  would have heard had it loaded;
+- moving between the questions of a poll announces *Question 2 of 3: …*,
+  which matters most when answering one carries the voter on by itself;
+- on a poll's own page, its state and its count are announced when they move
+  — *The results are in: Taco bar won*, *4 of 6 votes* — but not on arrival,
+  and not on the poll list, where ten polls announcing each other would be
+  noise;
+- a copied link, a poll removed from or restored to the list.
+
+Two kinds of news already announced themselves and were left alone: a toast
+(Mantine's are `role="alert"`), and the connection notice, which is an
+`Alert`. Every red error line is `role="alert"` too, and a create form refused
+on submit moves focus to the first field that is wrong, which is how a screen
+reader finds out anything was.
+
+**The question strip says in words what its colours say**: each question
+carries a hidden *(answered)* or *(not answered)*, and the open one is
+`aria-current`.
+
 ## Motion
 
 Nothing in the app moved at all until it was given a scale to move on. The
@@ -2265,6 +2396,40 @@ trouble](#a-poll-can-ask-more-than-one-question) to keep a crossing between two
 of them mounted so the heading and the strip do not blink. Keying the route's
 fade on `pathname` would have thrown all of that away and re-mounted the poll
 on every step through it, which is why `Layout` keys on `pageKey()` instead.
+
+### The one view transition
+
+Opening a poll from the list carries its title from the card to the top of
+the poll's page, with the View Transitions API
+([`lib/viewTransition.ts`](src/lib/viewTransition.ts)). It passes the rule at
+the top of this section on the question it answers — *is this the poll I
+tapped?*, asked of a page that has just replaced ten cards that look alike —
+and it is the only one: everything else still arrives the way it did, the
+page through `Reveal`. The root's own cross-fade is turned off in index.css,
+because a cross-fade on top of `Reveal` is the same entrance twice.
+
+Three things it took:
+
+- **It is driven by hand.** React Router's `viewTransition` works only under a
+  data router, and `HashRouter` commits every navigation inside
+  `startTransition`, so the usual trick — `flushSync` the navigation inside
+  the transition's callback — does nothing. The callback returns a promise
+  instead, and the page being opened resolves it from a layout effect the
+  moment its title is in the DOM (`useTransitionArrival`), with a timeout
+  behind it so a page that never draws one cannot freeze the screen.
+- **The page has a title to land on before it has read the poll.** The card
+  hands its title over in the navigation's state, and the skeleton draws it
+  for real (`PollPageSkeleton`'s `title`) — which also means the poll is named,
+  on screen and in the tab, from the press rather than from the read. A title
+  is frozen at creation, so this is never a guess.
+- **It is the words that travel, not the heading** (`PollTitleText`). The
+  heading is as wide as its share of the row and the words are not, so moving
+  the box would scale a short title by the space around it. An inline-block
+  around the words scales by exactly the difference in font size, and stays
+  one box when a long title wraps, which a view transition needs.
+
+Skipped where there is no `startViewTransition` and for a reader who has asked
+for less motion; both get the navigation they always had.
 
 
 ## A deploy takes the old build with it
@@ -2373,6 +2538,38 @@ carry a content hash in their names, so a new build simply asks for files the
 old cache does not have, and the page itself is fetched network-first because
 it is the one file whose name never changes and it is what names the current
 bundle.
+
+### What the manifest says
+
+Past the minimum an install needs, four things, each for something a reader
+would notice:
+
+- **`id`** fixes the app's identity, so that a later change to `start_url`
+  makes the same app open somewhere else rather than a second app. It is
+  `/star-voting/`, which is exactly what the identity already was (the
+  resolved start URL), so nothing installed before it was added became a
+  different app.
+- **`shortcuts`** — *New poll* and *Your polls* — on a long press of the icon.
+  *Your polls* is `#/` rather than the start URL, for the reason below.
+- **`launch_handler`**, `focus-existing`: opening the installed app while it is
+  already open brings that window forward rather than opening a second one,
+  with its own session and its own socket. A shortcut or a captured link still
+  has to go somewhere, so the launch is also handed to the page, which routes
+  there itself (`useLaunchRoutes` in [`lib/launch.ts`](src/lib/launch.ts)) —
+  except a launch with no route in it, which is the icon: tapping the icon
+  means *show me the app*, and throwing away the poll somebody had open to
+  land them on their list is the one thing a native app never does. Chromium
+  reads all of this; Safari reads none of it. It does not affect a tapped
+  notification, which the service worker routes; see [Push
+  notifications](#push-notifications).
+- **`screenshots`**, which turn Chromium's install prompt from a line of text
+  into a sheet with pictures in it — the narrow ones on a phone, the wide ones
+  on a desktop, and each kind is shown only where there is at least one of it.
+  They are of the About page's sample poll and are made by
+  `npm run screenshots` ([`e2e/screenshots.capture.ts`](e2e/screenshots.capture.ts)),
+  so they can be taken again whenever the pages they show change shape. The
+  sizes in the manifest are checked against the files by the browser suite: a
+  screenshot whose declared size is wrong is silently left out.
 
 ### The icons
 
@@ -2668,6 +2865,24 @@ since a sign-in link opens Safari rather than the app; the guide says both.
 That guide is [`InstallGuide`](src/pages/InstallGuide.tsx) at `#/app`: public,
 opened on the reader's own kind of device with the other two beside it, and
 linked from the About page's list of features.
+
+**The installed app's icon carries a count** of the polls with news the reader
+has not opened. It is counted rather than kept: a notification's tag is its
+poll, so the notifications still showing are one per such poll, and the
+service worker sets the badge to however many there are whenever that changes
+— a push arriving, one tapped or swiped away (`updateBadge` in
+`public/sw.js`). The page supplies the other half of *unread*: opening a poll
+is reading it, so its page closes its own notifications and the badge counts
+again ([`lib/badge.ts`](src/lib/badge.ts)) — any question of the poll, since
+the notifications are filed against the first, and again whenever the page
+comes back to the foreground. A count held in storage beside the
+notifications would be a second answer to one question, and the two would
+drift the first time either was missed. It was proposed as *polls waiting on
+your vote*; that is a question only the database can answer, and a badge that
+is set only while the app is open and is wrong the moment a vote is cast on
+another device is worse than this one. Chromium on the desktop and an
+installed iPhone app show it; Android draws its own dot for notifications and
+ignores the number; elsewhere it does nothing.
 
 What it does not do:
 
@@ -4702,12 +4917,27 @@ in front of you at the moment you are deciding, not the one you scrolled past
 on the way to the button.
 
 The **share link** sits in the same block (`src/components/ShareLink.tsx`),
-with **Copy** and a **QR code** beside it. Handing the poll out is something
+with **Share** and a **QR code** beside it. Handing the poll out is something
 the creator does to the poll, not something a voter needs while scoring
 options, and keeping it here means it is never withheld — the link has to go
 out before anyone, the creator included, has voted. Open polls also offer it on
 the thank-you card once you have voted, where passing it on is a reasonable
 thing to want.
+
+**Share opens the device's share sheet** — where Messages and the group chat
+already are — and was a Copy button until the share sheet was everywhere that
+matters ([`lib/share.ts`](src/lib/share.ts)). What it sends is one string: a
+sentence saying what the link is for at the stage the poll is at (*Vote in
+“Movie night”*, *Help choose the options for …*, *See the results of …*), a
+blank line, and the link. The link travels inside the text rather than as the
+share's `url`, because given both, every app joins them its own way and the
+same press arrives looking different depending on where it went; the chat
+apps still find the link in the text and draw its card. Where there is no
+share sheet — Firefox on the desktop — the button says **Copy** and copies the
+bare link, since a *Share* that silently copies is a button that did
+something other than it said, and a pasted link is wanted on its own. The
+intro's *Share this intro* goes through the same helper, under *Check out STAR
+Voting!*.
 
 **The label and the caption span the row, not the box.** They were the text
 field's own `label` and `description` once, which put them inside a field
@@ -4715,7 +4945,7 @@ sharing a no-wrap row with two buttons: the field is the part of that row that
 gives, so on a phone it was squeezed to a few words wide and the caption — a
 full sentence — unspooled down the column. Nothing in the caption was ever
 only about the box, either. *Anyone with this link can vote without signing
-in* is as true of the link **Copy** lifts and of the one the QR code carries;
+in* is as true of the link **Share** sends and of the one the QR code carries;
 the three are one control for handing the poll out, and the sentence is about
 the link rather than about the widget it happens to be printed in. So an
 `Input.Wrapper` holds the whole row, the label still reaches the box through

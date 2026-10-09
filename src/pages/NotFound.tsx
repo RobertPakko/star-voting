@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Button, Stack, Text, Title } from '@mantine/core'
+import { usePageTitle } from '../lib/pageTitle'
 
 /**
  * The catch-all: an address this app has no page for.
@@ -18,9 +19,12 @@ import { Button, Stack, Text, Title } from '@mantine/core'
  * somewhere else to go from here, and the header is how you get there.
  */
 export function NotFound() {
+  usePageTitle('Page not found')
   return (
     <Stack maw={720} mx="auto" gap="md" align="center">
-      <Title order={3}>Page not found</Title>
+      <Title order={1} size="h3">
+        Page not found
+      </Title>
       <Text c="dimmed" ta="center">
         This poll may have been deleted.
       </Text>

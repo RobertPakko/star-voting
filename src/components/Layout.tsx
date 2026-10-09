@@ -9,7 +9,6 @@ import {
   Popover,
   Stack,
   Text,
-  Title,
 } from '@mantine/core'
 import {
   ArchiveIcon,
@@ -116,9 +115,17 @@ export function Layout() {
                 height={32}
                 style={{ borderRadius: 8, display: 'block' }}
               />
-              <Title order={3} size="h4">
+              {/* Drawn as a heading and not one: the wordmark is the same on
+                  every page, so as a heading it was the one a screen reader's
+                  outline began with everywhere, ahead of the page's own. */}
+              <Text
+                component="span"
+                fw={700}
+                fz="var(--mantine-h4-font-size)"
+                lh="var(--mantine-h4-line-height)"
+              >
                 STAR Voting
-              </Title>
+              </Text>
             </Group>
           </Link>
           <Group gap="sm" wrap="nowrap" ref={controls}>

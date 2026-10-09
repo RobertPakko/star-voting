@@ -7,6 +7,8 @@ import { LandscapeFilm } from '../components/intro/Landscape'
 import { PortraitFilm } from '../components/intro/Portrait'
 import { COL, CUES, FILMS, p01, tween, TOTAL, type FilmShape } from '../components/intro/motion'
 import { useAuth } from '../lib/auth'
+import { shareLink } from '../lib/share'
+import { announce } from '../lib/announce'
 
 /**
  * The intro: a twenty-two-second film of a poll being made, voted in and
@@ -33,7 +35,9 @@ export function Intro() {
   const ended = T.value >= TOTAL
 
   return (
-    <div
+    // The page's main landmark, since it sits outside the app shell that
+    // provides one everywhere else.
+    <main
       style={{
         position: 'fixed',
         inset: 0,
@@ -89,7 +93,7 @@ export function Intro() {
           {ended ? 'Watch again' : 'Skip'}
         </UnstyledButton>
       )}
-    </div>
+    </main>
   )
 }
 
@@ -136,27 +140,17 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
   }
 
   async function share() {
-    const url = `${window.location.origin}${window.location.pathname}#/intro`
-    const data = {
-      title: 'STAR Voting',
-      text: 'A short look at how STAR Voting helps a group decide.',
-      url,
-    }
     // The phone's own share sheet where there is one, since that is where the
-    // people this is going to are; a copied link everywhere else.
-    if (navigator.share && (!navigator.canShare || navigator.canShare(data))) {
-      try {
-        await navigator.share(data)
-        return
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url)
+    // people this is going to are; a copied link everywhere else. See
+    // lib/share.ts for why the link rides inside the text.
+    const outcome = await shareLink({
+      title: 'STAR Voting',
+      text: 'Check out STAR Voting!',
+      url: `${window.location.origin}${window.location.pathname}#/intro`,
+    })
+    if (outcome === 'copied') {
       setCopied(true)
-    } catch {
-      // Nothing left to try; the address bar still has the link in it.
+      announce('Link copied')
     }
   }
 
@@ -228,7 +222,7 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
     </Button>,
   ]
   const failed = error && (
-    <Text size="sm" c="red" ta="center">
+    <Text role="alert" size="sm" c="red" ta="center">
       {error}
     </Text>
   )

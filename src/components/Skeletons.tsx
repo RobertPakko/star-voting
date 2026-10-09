@@ -7,11 +7,14 @@ import {
   SimpleGrid,
   Skeleton,
   Stack,
+  Title,
   VisuallyHidden,
 } from '@mantine/core'
 import { RESULTS_ROWS_MAX, SCORING_ROWS_MAX } from '../lib/resultsRows'
 import { isDaily, toMinutes } from '../lib/schedule'
 import type { PollSchedule } from '../lib/types'
+import { usePageTitle } from '../lib/pageTitle'
+import { PollTitleText } from './PollTitleText'
 
 /**
  * The shapes each page draws while it is waiting for its first read.
@@ -75,9 +78,9 @@ function Loading({ children }: { children: ReactNode }) {
 const text = {
   /** `Title order={1}`: the About page's heading. */
   page: { line: 44, bar: 34 },
-  /** `Title order={2}`: a poll's own title, and the heading over the list. */
+  /** `Title size="h2"`: a poll's own title, and the heading over the list. */
   title: { line: 35, bar: 28 },
-  /** `Title order={4}`: the heading over a card. */
+  /** `Title size="h4"`: the heading over a card. */
   heading: { line: 26, bar: 20 },
   /** `Text size="lg"`: the banner naming a winner. */
   banner: { line: 29, bar: 22 },
@@ -151,13 +154,23 @@ const BALLOT_ROWS_MAX = 10
  * The description is left out on purpose — it is optional and most polls have
  * none. The creator line is always drawn because every heading names who
  * created the poll.
+ *
+ * **A title already known is drawn for real.** A poll opened from its card on
+ * the list carries its title with it (`PollPage` reads it off the navigation),
+ * and a title cannot change, so there is nothing to guess: the poll's name is
+ * on screen, and in the tab, from the press rather than from the read. It is
+ * also where the title the reader pressed lands; see lib/viewTransition.ts.
  */
-function PollHeadingShape({ compact = false }: { compact?: boolean }) {
+function PollHeadingShape({ compact = false, title }: { compact?: boolean; title?: string }) {
   return (
     <Stack gap="xs">
       <Stack gap={2}>
         <Group align="flex-start" gap="sm" wrap="nowrap">
-          <Bar kind={compact ? 'name' : 'title'} width="70%" grow />
+          {title ? (
+            <KnownTitle title={title} />
+          ) : (
+            <Bar kind={compact ? 'name' : 'title'} width="70%" grow />
+          )}
           <Skeleton
             height={badge}
             width={compact ? 88 : 104}
@@ -427,11 +440,11 @@ function TallyShape({ options }: { options?: number }) {
 }
 
 /** The heading over a poll and the card answering it: every poll page. */
-export function PollPageSkeleton({ rows = 5 }: { rows?: number }) {
+export function PollPageSkeleton({ rows = 5, title }: { rows?: number; title?: string }) {
   return (
     <Loading>
       <Stack maw={720} mx="auto" gap="md">
-        <PollHeadingShape />
+        <PollHeadingShape title={title} />
         <Card withBorder>
           <BallotShape rows={rows} />
         </Card>
@@ -951,5 +964,18 @@ export function GuideSkeleton() {
         <Skeleton height={control} radius="md" />
       </Stack>
     </Loading>
+  )
+}
+
+/**
+ * A poll's title, known before the poll is read: drawn exactly as
+ * `PollHeading` draws it, so nothing moves when the heading takes over.
+ */
+function KnownTitle({ title }: { title: string }) {
+  usePageTitle(title)
+  return (
+    <Title order={1} size="h2" style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}>
+      <PollTitleText landing>{title}</PollTitleText>
+    </Title>
   )
 }

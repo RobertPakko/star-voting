@@ -20,7 +20,7 @@
  * old, and activate throws them away.
  */
 
-const VERSION = 'v3'
+const VERSION = 'v4'
 const CACHE = `star-voting-${VERSION}`
 
 // This file is served from the app's own directory, so its own URL is the
@@ -193,14 +193,52 @@ self.addEventListener('push', (event) => {
   const tag = typeof message.tag === 'string' && message.tag ? message.tag : undefined
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body: typeof message.body === 'string' ? message.body : '',
-      icon: new URL('icon-192.png', SCOPE).href,
-      tag,
-      renotify: !!tag,
-      data: { url: new URL(path, SCOPE).href, path },
-    }),
+    self.registration
+      .showNotification(title, {
+        body: typeof message.body === 'string' ? message.body : '',
+        icon: new URL('icon-192.png', SCOPE).href,
+        tag,
+        renotify: !!tag,
+        data: { url: new URL(path, SCOPE).href, path },
+      })
+      .then(updateBadge),
   )
+})
+
+/**
+ * The number on the installed app's icon: how many polls have news the reader
+ * has not looked at yet.
+ *
+ * It is counted rather than kept. A notification's tag is its poll, so the
+ * notifications still showing are exactly one per poll with something unread,
+ * and the badge is however many of those there are — after a push lands, after
+ * one is tapped or swiped away, and when the app opens a poll and closes that
+ * poll's own (see `clearPollNotifications` in src/lib/badge.ts). A count kept
+ * in storage beside them would be a second answer to the same question, and
+ * the two would drift the first time one of them was missed.
+ *
+ * Where the badge has no API — Firefox, Safari outside an installed app — this
+ * does nothing. Where notifications cannot be listed, a dot is the honest
+ * minimum: there is news, and how much is not known.
+ */
+async function updateBadge() {
+  if (!('setAppBadge' in self.navigator)) return
+  try {
+    const showing = await self.registration.getNotifications()
+    if (showing.length > 0) await self.navigator.setAppBadge(showing.length)
+    else await self.navigator.clearAppBadge()
+  } catch {
+    try {
+      await self.navigator.setAppBadge()
+    } catch {
+      // Not allowed to badge: nothing else to try.
+    }
+  }
+}
+
+/** Swiped away unread: one fewer poll with news on the badge. */
+self.addEventListener('notificationclose', (event) => {
+  event.waitUntil(updateBadge())
 })
 
 /**
@@ -250,6 +288,10 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const { url, path } = event.notification.data ?? {}
 
+  // A tapped notification is a read one, and closing it from here does not
+  // fire `notificationclose`, so the badge is counted again — beside the
+  // opening rather than ahead of it, which has the tap's own clock to beat.
+  event.waitUntil(updateBadge())
   event.waitUntil(
     (async () => {
       // First, so the note is there before any window could look for it. A

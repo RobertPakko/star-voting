@@ -508,7 +508,7 @@ export function PollDetail({
 
   if (error || !poll || !status) {
     return (
-      <Text c="red" ta="center">
+      <Text role="alert" c="red" ta="center">
         {error ?? 'Poll not found.'}
       </Text>
     )
@@ -874,7 +874,9 @@ export function PollDetail({
           is refused on the other. */}
       {!isOpen && invitees && (
         <Stack gap={2}>
-          <Title order={4}>Voters</Title>
+          <Title order={2} size="h4">
+            Voters
+          </Title>
           <Respondents
             pollId={poll.id}
             isCreator={isCreator}

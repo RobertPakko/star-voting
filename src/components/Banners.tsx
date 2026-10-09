@@ -84,7 +84,7 @@ function RemovedBanner({ pollId, onRestored }: { pollId: string; onRestored: () 
           it.
         </Text>
         {error && (
-          <Text size="sm" c="red">
+          <Text role="alert" size="sm" c="red">
             {error}
           </Text>
         )}
