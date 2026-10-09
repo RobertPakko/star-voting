@@ -93,7 +93,11 @@ export function FullRanking({
 
   return (
     <>
+      {/* A rule with a button in it, which is not a separator: a separator's
+          content is presentational, so the button inside it was a control a
+          screen reader could reach and could not name. */}
       <Divider
+        role="presentation"
         label={
           <Button variant="subtle" size="compact-sm" onClick={modal.open}>
             See the full ranking
@@ -116,7 +120,7 @@ export function FullRanking({
           </Text>
 
           {error && (
-            <Text c="red" size="sm">
+            <Text role="alert" c="red" size="sm">
               {error}
             </Text>
           )}

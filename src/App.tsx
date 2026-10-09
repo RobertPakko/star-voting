@@ -30,6 +30,9 @@ import {
 import type { PollRead } from './lib/types'
 import { pollIdFromParam } from './lib/pollId'
 import { refreshAccountPush, useNotificationRoutes } from './lib/push'
+import { useLaunchRoutes } from './lib/launch'
+import { useClearPollNotifications } from './lib/badge'
+import { usePageTitle } from './lib/pageTitle'
 
 /**
  * The two routes nobody is on when the app first paints, fetched when they
@@ -78,6 +81,9 @@ function App() {
 
   // A tapped notification, arriving in a window that was already open.
   useNotificationRoutes()
+  // The installed app opened again while it was open: its icon, a shortcut,
+  // a captured link. See lib/launch.ts.
+  useLaunchRoutes()
 
   // A device bound to this account for push is re-saved whenever the app
   // opens under it, which is what keeps a rotated endpoint from going quiet.
@@ -361,6 +367,14 @@ function PollPage() {
 
   const refused = covering?.kind === 'unreadable'
 
+  // Opening a poll is reading its news: its notifications go from the tray
+  // and from the count on the installed app's icon. Every question of the
+  // group, since the notifications are filed against the first. Not for a
+  // poll this reader may not see, which they have no notification about.
+  useClearPollNotifications(
+    pollId && !sample && covering && !refused ? [pollId, ...questionsCovered(covering)] : [],
+  )
+
   // The sample, ahead of everything else: it is served from a file rather
   // than from the database, so the public reading is the only reading it has
   // — for a signed-in account as much as for a stranger's browser, since it
@@ -375,7 +389,7 @@ function PollPage() {
 
   if (error) {
     return (
-      <Text c="red" ta="center">
+      <Text role="alert" c="red" ta="center">
         {error}
       </Text>
     )
@@ -384,7 +398,7 @@ function PollPage() {
   // Nothing decided yet. The shape of the page that is coming, which is what
   // both readings draw while they load, so waiting here rather than inside
   // one of them looks like nothing at all.
-  if (!covering) return <PollPageSkeleton />
+  if (!covering) return <PollPageSkeleton title={carriedTitle(location.state)} />
 
   // The sign-in screen is deliberately outside the app shell, which is what
   // the redirect is for: the catch-all route below renders it bare. A session
@@ -411,6 +425,17 @@ function PollPage() {
 }
 
 /**
+ * The title a poll's card on the list hands its page on the way in, so the
+ * page can name the poll before it has read it. A title cannot change after
+ * the poll is made, so this is never a guess; anything that is not a string is
+ * an address arrived at some other way, and the page waits for its read.
+ */
+function carriedTitle(state: unknown): string | undefined {
+  const title = (state as { title?: unknown } | null)?.title
+  return typeof title === 'string' && title ? title : undefined
+}
+
+/**
  * A poll that was deleted while somebody had it open.
  *
  * The same two things `NotFound` says — what happened, and that the reader is
@@ -419,9 +444,12 @@ function PollPage() {
  * a reader who has one.
  */
 function PollDeleted({ signedIn }: { signedIn: boolean }) {
+  usePageTitle('Poll deleted')
   return (
     <Stack maw={720} mx="auto" gap="md" align="center">
-      <Title order={3}>This poll has been deleted</Title>
+      <Title order={1} size="h3">
+        This poll has been deleted
+      </Title>
       <Text c="dimmed" ta="center">
         Polls are automatically deleted after six months, or a poll can be deleted by its creator.
       </Text>

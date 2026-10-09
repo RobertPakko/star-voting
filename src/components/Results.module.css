@@ -16,6 +16,19 @@
  * instead of a number written into the JSX; the doubled class is what makes
  * it certainly beat Mantine's own rule for the same property.
  */
+/* The bars of the options that did not reach the runoff, in the grey they
+ * were drawn in before filled colours moved to shade 8 (see the theme in
+ * main.tsx). That move was for text on a filled colour, and a bar carries no
+ * text: at shade 8 the also-rans were nearly black, and louder than the two
+ * finalists they are there to sit behind. */
+.bar {
+  --muted-bar: var(--mantine-color-gray-6);
+
+  @mixin dark {
+    --muted-bar: var(--mantine-color-gray-8);
+  }
+}
+
 .bar .section {
   transition: width var(--motion-slow) var(--motion-ease);
   transition-delay: calc(var(--row) * 40ms);

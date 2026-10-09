@@ -186,13 +186,20 @@ export function CreatorControls({
 
   return (
     <Stack gap={2}>
-      <Title order={4}>Manage poll</Title>
+      <Title order={2} size="h4">
+        Manage poll
+      </Title>
       <Card withBorder>
         <Stack gap="xs">
-          <ShareLink poll={poll} />
+          <ShareLink
+            poll={poll}
+            stage={
+              status.results_available ? 'finished' : status.soliciting ? 'collecting' : 'voting'
+            }
+          />
 
           {error && (
-            <Text c="red" size="sm">
+            <Text role="alert" c="red" size="sm">
               {error}
             </Text>
           )}

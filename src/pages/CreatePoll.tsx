@@ -63,6 +63,8 @@ import type {
   PollOption,
   PollSchedule,
 } from '../lib/types'
+import { usePageTitle } from '../lib/pageTitle'
+import { announce } from '../lib/announce'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -460,6 +462,7 @@ function validate(form: {
 }
 
 export function CreatePoll() {
+  usePageTitle('New poll')
   const { session, anonymous } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -922,6 +925,19 @@ export function CreatePoll() {
         const firstBad = questions.findIndex((_, index) => questionHasError(errors, index))
         if (firstBad >= 0) setOpenKey(questions[firstBad].key)
       }
+      // And the reader is taken to the first field that is wrong, which is
+      // also how a screen reader finds out anything was: focus lands on the
+      // field, and the field is read with its error. Two frames, so the
+      // errors — and the tab just switched to — are on the page first. The
+      // few messages that are not on a field (a grid with nothing painted on
+      // it) are said instead.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const first = document.querySelector<HTMLElement>('main [aria-invalid="true"]')
+          if (first) first.focus()
+          else announce('Some of the form needs fixing before the poll can be made')
+        }),
+      )
       return
     }
 
@@ -1246,12 +1262,12 @@ export function CreatePoll() {
 
   return (
     <Stack maw={720} mx="auto" gap="md">
-      <Title order={2} ta="center">
+      <Title order={1} size="h2" ta="center">
         {duplicateOf ? 'Duplicate poll' : 'New poll'}
       </Title>
 
       <Stack gap={2}>
-        <Title order={4} id="poll-title-label">
+        <Title order={2} size="h4" id="poll-title-label">
           Title
           <span aria-hidden="true" style={{ color: 'var(--mantine-color-red-6)' }}>
             {' *'}
@@ -1268,7 +1284,7 @@ export function CreatePoll() {
       </Stack>
 
       <Stack gap={2}>
-        <Title order={4} id="poll-title-description">
+        <Title order={2} size="h4" id="poll-title-description">
           Description
         </Title>
         <Textarea
@@ -1283,7 +1299,9 @@ export function CreatePoll() {
       </Stack>
 
       <Stack gap={2}>
-        <Title order={4}>Voters</Title>
+        <Title order={2} size="h4">
+          Voters
+        </Title>
         <Card withBorder p="sm">
           <Stack gap="xs">
             <SegmentedControl
@@ -1339,7 +1357,9 @@ export function CreatePoll() {
       </Stack>
 
       <Stack gap={2}>
-        <Title order={4}>Configuration</Title>
+        <Title order={2} size="h4">
+          Configuration
+        </Title>
         <Card withBorder p="sm">
           <Stack gap="sm">
             <Switch
@@ -1375,7 +1395,9 @@ export function CreatePoll() {
       </Stack>
 
       <Stack gap={2}>
-        <Title order={4}>{sectionTitle}</Title>
+        <Title order={2} size="h4">
+          {sectionTitle}
+        </Title>
         <Card withBorder p="sm">
           {/* Last, because it is the only part of the form whose shape depends on
           the answers above it: a poll collecting its options can be created
@@ -1460,7 +1482,7 @@ export function CreatePoll() {
       </Stack>
 
       {error && (
-        <Text c="red" size="sm">
+        <Text role="alert" c="red" size="sm">
           {error}
         </Text>
       )}

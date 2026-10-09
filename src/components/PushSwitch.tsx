@@ -94,7 +94,7 @@ export function PushSwitch({
         onChange={(event) => toggle(event.currentTarget.checked)}
       />
       {error && (
-        <Text size="sm" c="red">
+        <Text role="alert" size="sm" c="red">
           {error}
         </Text>
       )}
@@ -150,7 +150,7 @@ export function LinkPushSwitch() {
         onChange={(event) => toggle(event.currentTarget.checked)}
       />
       {error && (
-        <Text size="sm" c="red">
+        <Text role="alert" size="sm" c="red">
           {error}
         </Text>
       )}

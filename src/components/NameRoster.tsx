@@ -17,7 +17,9 @@ export function NameRoster({
 }) {
   return (
     <Stack gap={2}>
-      <Title order={4}>{title}</Title>
+      <Title order={2} size="h4">
+        {title}
+      </Title>
       <Card withBorder>
         {names.length === 0 ? (
           <Text size="sm" c="dimmed">

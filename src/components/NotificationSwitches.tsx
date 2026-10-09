@@ -30,7 +30,7 @@ export function NotificationSwitches({ userId }: { userId: string }) {
 
   if (error) {
     return (
-      <Text size="sm" c="red">
+      <Text role="alert" size="sm" c="red">
         {error}
       </Text>
     )

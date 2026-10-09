@@ -130,7 +130,9 @@ function BallotRows({
   return (
     <Reveal>
       <Stack gap={2}>
-        <Title order={4}>Your ballot</Title>
+        <Title order={2} size="h4">
+          Your ballot
+        </Title>
         <Card withBorder p="sm">
           <Stack gap="xs">
             {options.map((option) => {

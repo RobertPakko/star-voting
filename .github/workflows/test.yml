@@ -69,3 +69,30 @@ jobs:
       # what is being asked here is whether the app compiles, and a pull
       # request from a fork could not see them anyway.
       - run: npm run build
+
+  # The browser half: the built app driven in Chromium, at desktop and phone
+  # sizes, with axe checking every page it opens. It needs no database — it
+  # walks the About page's sample poll, which is answered from a file — so it
+  # takes no secrets and no service container. See "Tests" in AGENTS.md.
+  browser:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # The Chromium this version of Playwright was built against, with the
+      # system libraries it needs; nothing else.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      # A trace of every failure, which opens in `npx playwright show-trace`
+      # and shows the page at each step.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

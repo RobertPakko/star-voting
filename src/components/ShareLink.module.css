@@ -1,4 +1,5 @@
-/* The Copy button, saying whether it worked.
+/* The Share button, saying whether it worked when what it did was copy (on a
+ * browser with no share sheet; see lib/share.ts).
  *
  * Copying is the one action in this app that produces no evidence of itself:
  * the clipboard is somewhere else, nothing on the page changes, and the whole
@@ -9,7 +10,7 @@
  * So the tick arrives — the mark the reader is actually looking for — and the
  * colour walks to green rather than cutting to it.
  *
- * **The width is fixed to the wider of the two states.** Copy is a
+ * **The width is fixed to the wider of the states.** It sits in a
  * no-wrap row with a text box flexing beside it, so a button that grows by a
  * word and an icon shoves the link along under the reader's eye at the moment
  * they are checking what they copied. Holding the box at the size it will

@@ -99,7 +99,7 @@ export function Ballots({
 
   if (error) {
     return (
-      <Text c="red" size="sm">
+      <Text role="alert" c="red" size="sm">
         {error}
       </Text>
     )
@@ -133,7 +133,9 @@ export function Ballots({
             on a sheet with no ballots on it, which is a file with nothing in
             it. See lib/ballotCsv.ts. */}
         <Group justify="space-between" wrap="nowrap" align="center" gap="xs">
-          <Title order={4}>Ballots</Title>
+          <Title order={2} size="h4">
+            Ballots
+          </Title>
           {shown.ballots.length > 0 && (
             <Tooltip label="Download these ballots as a CSV" withArrow>
               <ActionIcon
@@ -159,6 +161,10 @@ export function Ballots({
           scrollAreaProps={{
             offsetScrollbars: false,
             classNames: { scrollbar: classes.scrollbar },
+            // A grid wider than a phone scrolls sideways, and a region that
+            // scrolls has to be reachable from the keyboard to be scrolled
+            // without a pointer: it takes focus, and the arrow keys move it.
+            viewportProps: { tabIndex: 0, role: 'region', 'aria-label': 'Ballots' },
           }}
         >
           <Table striped withColumnBorders className={classes.table}>

@@ -12,7 +12,9 @@
     "types": "supabase gen types typescript --linked --schema public > src/lib/database.types.ts",
     "preview": "vite preview",
     "test": "bash test/run.sh",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "screenshots": "playwright test -c playwright.screenshots.config.ts"
   },
   "dependencies": {
     "@mantine/charts": "^9.5.2",
@@ -32,12 +34,15 @@
     "zod": "^4.5.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.56.1",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.75.0",
+    "playwright-core": "1.56.1",
     "postcss": "^8.5.26",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",

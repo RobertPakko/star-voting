@@ -154,7 +154,7 @@ export function Results({
 
   if (error) {
     return (
-      <Text c="red" size="sm">
+      <Text role="alert" c="red" size="sm">
         {error}
       </Text>
     )
@@ -248,9 +248,13 @@ export function Results({
                     {o.total_score} pts (avg {o.average_score})
                   </Text>
                 </Group>
+                {/* Hidden from a screen reader, which has the points in words on
+                    the line above and would otherwise hear an unnamed
+                    progress bar at 85.71428571428571%. */}
                 <Progress
+                  aria-hidden
                   value={grown ? (o.total_score / maxScore) * 100 : 0}
-                  color={shown.finalists.includes(o.id) ? 'blue' : 'gray'}
+                  color={shown.finalists.includes(o.id) ? 'blue' : 'var(--muted-bar)'}
                   classNames={{ root: classes.bar, section: classes.section }}
                   // Its place in the tally, which is what the bars are
                   // staggered along; see Results.module.css.
@@ -513,7 +517,10 @@ function RunoffChart({ a, b, runoff }: { a: string; b: string; runoff: Runoff })
   return (
     <Stack gap="xs" align="center">
       {data.length > 0 && (
-        <Box aria-hidden>
+        // Inert as well as hidden: the chart draws a focusable surface, and a
+        // hidden thing the keyboard can still land on is a stop that
+        // announces nothing.
+        <Box aria-hidden inert>
           <PieChart
             data={data}
             size={CHART_SIZE}

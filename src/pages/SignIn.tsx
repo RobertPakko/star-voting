@@ -21,6 +21,7 @@ import {
   rememberSignInMethod,
   type SignInMethod,
 } from '../lib/signInMethod'
+import { usePageTitle } from '../lib/pageTitle'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -53,6 +54,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * will not send another for a minute.
  */
 export function SignIn() {
+  usePageTitle('Sign in')
   const { anonymous, signInWithEmail, verifySignInCode, continueWithoutAccount } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
@@ -145,11 +147,14 @@ export function SignIn() {
   }
 
   return (
-    <Center h="100vh">
+    // The main landmark, since this card is drawn outside the app shell.
+    <Center component="main" h="100vh">
       <Stack gap="md" w={360} maw="100%">
         <Paper withBorder shadow="sm" p="xl" radius="md" w="100%">
           <Stack align="center" gap="md">
-            <Title order={2}>STAR Voting</Title>
+            <Title order={1} size="h2">
+              STAR Voting
+            </Title>
             {sent === 'code' ? (
               <>
                 <Text ta="center">
@@ -179,7 +184,7 @@ export function SignIn() {
                   onComplete={handleVerify}
                 />
                 {error && (
-                  <Text c="red" size="sm" ta="center">
+                  <Text role="alert" c="red" size="sm" ta="center">
                     {error}
                   </Text>
                 )}
@@ -234,7 +239,7 @@ export function SignIn() {
                   ]}
                 />
                 {error && (
-                  <Text c="red" size="sm">
+                  <Text role="alert" c="red" size="sm">
                     {error}
                   </Text>
                 )}

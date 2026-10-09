@@ -28,6 +28,9 @@ import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import classes from './PollList.module.css'
 import { pollPath } from '../lib/pollId'
+import { navigateWithTransition } from '../lib/viewTransition'
+import { usePageTitle } from '../lib/pageTitle'
+import { announce } from '../lib/announce'
 
 /**
  * How many polls a page of the list holds.
@@ -51,6 +54,7 @@ const PAGE_SIZE = 10
 export function PollList() {
   const [params] = useSearchParams()
   const removed = params.has('removed')
+  usePageTitle(removed ? 'Removed polls' : 'Your polls')
   return <PollListView key={String(removed)} viewingRemoved={removed} />
 }
 
@@ -195,7 +199,12 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     setPending((was) => new Set(was).add(id))
     const failed = await (remove ? removePolls([id]) : restorePolls([id]))
     if (failed) setActionError(failed)
-    else reread()
+    else {
+      reread()
+      // The card goes, and focus with it; this is the only trace of the press
+      // a screen reader would otherwise be left with.
+      announce(remove ? 'Removed from your list' : 'Restored to your list')
+    }
     setPending((was) => {
       const next = new Set(was)
       next.delete(id)
@@ -236,7 +245,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
 
   if (error) {
     return (
-      <Text c="red" ta="center">
+      <Text role="alert" c="red" ta="center">
         {error}
       </Text>
     )
@@ -252,7 +261,9 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
         <LiveConnectionNotice status={liveStatus} />
 
         <Group justify="space-between">
-          <Title order={2}>{viewingRemoved ? 'Removed polls' : 'Your polls'}</Title>
+          <Title order={1} size="h2">
+            {viewingRemoved ? 'Removed polls' : 'Your polls'}
+          </Title>
           <Group gap="xs">
             {/* The way into the removed polls is in the gear menu, which is
                 quieter than a button that is on this page for good; only the
@@ -284,7 +295,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
         {!viewingRemoved && <Banners />}
 
         {actionError && (
-          <Text c="red" size="sm">
+          <Text role="alert" c="red" size="sm">
             {actionError}
           </Text>
         )}
@@ -329,7 +340,33 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                   them ends up underneath it. */}
                 {/* The same heading the poll's own page carries, at card size;
                     see PollHeading. */}
-                <Link to={pollPath(poll.id)} className={classes.link}>
+                {/* The title carried along in the navigation, so the page it
+                    opens has the poll's name from the press; and the press
+                    moves that title to the top of the page, where a browser
+                    can. A click that asks for a new tab or window is left to
+                    the browser. See lib/viewTransition.ts. */}
+                <Link
+                  to={pollPath(poll.id)}
+                  state={{ title: poll.title }}
+                  className={classes.link}
+                  onClick={(event) => {
+                    if (
+                      event.button !== 0 ||
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey
+                    )
+                      return
+                    event.preventDefault()
+                    navigateWithTransition(
+                      navigate,
+                      pollPath(poll.id),
+                      { state: { title: poll.title } },
+                      event.currentTarget.querySelector<HTMLElement>('[data-poll-title]'),
+                    )
+                  }}
+                >
                   <PollHeading
                     compact
                     tagsClassName={viewingRemoved ? classes.reserveWide : classes.reserve}

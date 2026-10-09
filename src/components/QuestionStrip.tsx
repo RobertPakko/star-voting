@@ -1,6 +1,17 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Anchor, Badge, Group, Stack, Text } from '@mantine/core'
+import { Anchor, Badge, Group, Stack, Text, VisuallyHidden } from '@mantine/core'
 import { badgeColor } from '../lib/badgeColors'
+import { announce } from '../lib/announce'
+
+/**
+ * The question last announced, by the poll it belongs to (its first
+ * question's key) and its own. Held here rather than in the component because
+ * the strip is re-mounted on a crossing — the card it sits in is replaced —
+ * and a ref would forget which question it had been showing at exactly the
+ * moment that is the news.
+ */
+let lastShown: { poll: string; question: string } | null = null
 
 /**
  * Where you are in a poll that asks more than one question, and how to reach
@@ -63,9 +74,24 @@ export function QuestionStrip({
   /** Where a question lives, by its `key`. */
   hrefFor: (key: string) => string
 }) {
+  const index = questions.findIndex((q) => q.key === current)
+  const here = index >= 0 ? questions[index] : null
+  const pollKey = questions[0]?.key ?? ''
+
+  // Moving between the questions of a poll keeps the page and its title, so a
+  // screen reader hears nothing of it — least of all when answering one
+  // carries the voter on to the next by itself. Said here, once per crossing,
+  // and not on arriving at the poll, whose title has just been said.
+  const total = questions.length
+  const heading = here ? `Question ${index + 1} of ${total}: ${here.title}` : null
+  useEffect(() => {
+    if (!heading || total < 2) return
+    if (lastShown?.poll === pollKey && lastShown.question !== current) announce(heading)
+    lastShown = { poll: pollKey, question: current }
+  }, [heading, pollKey, current, total])
+
   if (questions.length < 2) return null
 
-  const index = questions.findIndex((q) => q.key === current)
   const previous = index > 0 ? questions[index - 1] : null
   const next = index >= 0 && index < questions.length - 1 ? questions[index + 1] : null
 
@@ -110,9 +136,17 @@ export function QuestionStrip({
               : question.answered
                 ? badgeColor.done
                 : badgeColor.outstanding
+          // The hue in words, for a reader who cannot see it.
+          const said =
+            question.answered === undefined
+              ? null
+              : question.answered
+                ? ' (answered)'
+                : ' (not answered)'
           return isCurrent ? (
-            <Badge key={question.key} variant="filled" color={color} maw={220}>
+            <Badge key={question.key} variant="filled" color={color} maw={220} aria-current="step">
               {question.title}
+              {said && <VisuallyHidden>{said}</VisuallyHidden>}
             </Badge>
           ) : (
             <Anchor
@@ -123,6 +157,7 @@ export function QuestionStrip({
             >
               <Badge variant="light" color={color} maw={220} style={{ cursor: 'pointer' }}>
                 {question.title}
+                {said && <VisuallyHidden>{said}</VisuallyHidden>}
               </Badge>
             </Anchor>
           )

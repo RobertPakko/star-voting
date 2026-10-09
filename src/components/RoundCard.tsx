@@ -58,7 +58,9 @@ export function RoundCard({
   return (
     <Stack gap={2}>
       <Group justify="space-between" align="flex-end" wrap="nowrap" gap="xs">
-        <Title order={4}>{title}</Title>
+        <Title order={2} size="h4">
+          {title}
+        </Title>
         {tieBreak && (
           <Button
             variant="subtle"

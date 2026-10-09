@@ -1,4 +1,5 @@
 {
+  "id": "/star-voting/",
   "name": "STAR Voting",
   "short_name": "STAR Voting",
   "description": "Make a poll, share it, and get an easy and accurate result using STAR voting.",
@@ -26,6 +27,60 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": ["focus-existing", "auto"]
+  },
+  "shortcuts": [
+    {
+      "name": "New poll",
+      "short_name": "New poll",
+      "description": "Make a new poll",
+      "url": "./#/polls/new"
+    },
+    {
+      "name": "Your polls",
+      "short_name": "Your polls",
+      "description": "The polls you have made or been invited to",
+      "url": "./#/"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/phone-ballot.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Rating the options of a poll from 0 to 5 stars"
+    },
+    {
+      "src": "screenshots/phone-calendar.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Marking the times you are free on a poll that finds a time"
+    },
+    {
+      "src": "screenshots/phone-results.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "The winner, the scoring round and the automatic runoff"
+    },
+    {
+      "src": "screenshots/desktop-ballot.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Rating the options of a poll from 0 to 5 stars"
+    },
+    {
+      "src": "screenshots/desktop-results.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "The winner, the scoring round and the automatic runoff"
     }
   ]
 }

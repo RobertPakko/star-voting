@@ -1,0 +1,12 @@
+/* One box hugging the words, which is what the transition takes a picture of.
+ * Inline-block rather than inline: an inline element broken across two lines
+ * is two boxes, and a view transition refuses an element it cannot picture as
+ * one. A long title still wraps, inside the one box. */
+.text {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.landing {
+  view-transition-name: poll-title;
+}

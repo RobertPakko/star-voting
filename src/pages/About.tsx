@@ -18,6 +18,7 @@ import { ArrowRightIcon, ChartBarIcon, PlusIcon, StarIcon } from '@phosphor-icon
 import { useAuth } from '../lib/auth'
 import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 import { pollPath } from '../lib/pollId'
+import { usePageTitle } from '../lib/pageTitle'
 
 /**
  * The /about route: what STAR voting is and why this site uses it. Public,
@@ -36,6 +37,7 @@ import { pollPath } from '../lib/pollId'
  * own footnotes, numbered from 1; see `Footnotes`.
  */
 export function About() {
+  usePageTitle('About STAR')
   const [tab, setTab] = useState<string | null>('procedure')
 
   return (
@@ -155,7 +157,7 @@ const BENEFIT_NOTES: ReactNode[] = [
 function Footnotes({ notes }: { notes: ReactNode[] }) {
   return (
     <Stack gap="sm" mt="md">
-      <Title order={3} size="h5">
+      <Title order={2} size="h5">
         Footnotes
       </Title>
       <List type="ordered" spacing="xs" size="sm" withPadding c="dimmed">
@@ -517,7 +519,7 @@ function Sample({
             </Button>
           )}
           {error && (
-            <Text size="sm" c="red">
+            <Text role="alert" size="sm" c="red">
               {error}
             </Text>
           )}

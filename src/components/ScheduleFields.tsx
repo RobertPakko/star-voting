@@ -345,7 +345,7 @@ export function ScheduleFields({
           fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
         />
         {error && (
-          <Text size="sm" c="red" fw={500}>
+          <Text role="alert" size="sm" c="red" fw={500}>
             {error}
           </Text>
         )}

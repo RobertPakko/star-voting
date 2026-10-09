@@ -59,3 +59,39 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* A link inside a sentence is underlined, and not only on hover.
+ *
+ * Colour alone does not mark it, which is a rule rather than a preference: in
+ * the dark scheme Mantine's link blue sits at 1.5:1 against the text around
+ * it, where 3:1 is the floor for telling the two apart without an underline.
+ * `inherit` is the prop an Anchor takes when it is set into running text, so
+ * it is exactly the set of links this is about; a link standing on its own is
+ * already marked by standing on its own.
+ */
+.mantine-Anchor-root[data-inherit] {
+  text-decoration: underline;
+}
+
+/* The one view transition the app makes: a poll's title travelling from its
+ * card on the list to the top of its page (see lib/viewTransition.ts).
+ *
+ * The page itself is not cross-faded. It already fades in as it opens, through
+ * `Reveal`, and a cross-fade on top of that is the same entrance twice; so the
+ * root's two pictures are swapped at once and only the title moves. On the
+ * app's own scale and curve, like everything else that moves.
+ *
+ * Not under the reduced-motion rule above, which cannot reach these
+ * pseudo-elements: a reader who asked for less motion never starts a
+ * transition at all. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-group(poll-title),
+::view-transition-old(poll-title),
+::view-transition-new(poll-title) {
+  animation-duration: var(--motion-base);
+  animation-timing-function: var(--motion-ease);
+}
