@@ -230,11 +230,7 @@ const FEATURES: Entry[] = [
     ),
   },
   {
-    name: 'Configurable balance of privacy and transparency',
-    body: <>Keep either voters or votes hidden for privacy or published for transparency.</>,
-  },
-  {
-    name: 'Clearly explained procedure',
+    name: 'Clear procedures',
     body: (
       <>
         Voters won't be left wondering why one option was picked over another. Every step and every
@@ -247,33 +243,11 @@ const FEATURES: Entry[] = [
     body: <>No need to ever refresh; all updates are streamed to your browser in real-time.</>,
   },
   {
-    name: 'This site is an app',
+    name: 'Flexible configuration',
     body: (
       <>
-        Install it on your phone or computer and get a notification when you're invited to a poll,
-        when voting opens, and when the results are ready.{' '}
-        <Anchor component={Link} to="/app" inherit>
-          Learn more
-        </Anchor>
-        .
-      </>
-    ),
-  },
-  {
-    name: 'Robust poll management',
-    body: (
-      <>
-        Multi-question support, share with a QR code, add descriptions to options, solicit options
-        from voters, and more. This site is designed to be a full-featured poll management system.
-      </>
-    ),
-  },
-  {
-    name: 'Full results ranking',
-    body: (
-      <>
-        If any options become unavailable after the poll closes, you can see their full ranking to
-        pick a new winner without re-running the poll.
+        Build polls with multiple questions, solicit options from voters, find a time with
+        schedule-based polls, choose whether voters / ballots are visible, and more.
       </>
     ),
   },
@@ -288,12 +262,12 @@ const FEATURES: Entry[] = [
     ),
   },
   {
-    name: 'Free and open-source',
+    name: 'Open-source code',
     body: (
       <>
-        This site is free to use and not monetized. It does not contain ads, trackers, or any other
-        monetization scheme. It is a free and{' '}
-        <Ext href="https://github.com/RobertPakko/star-voting">open-source</Ext> project.
+        This site is an <Ext href="https://github.com/RobertPakko/star-voting">open-source</Ext>{' '}
+        project. It is free to use and it does not contain ads, trackers, or any other monetization
+        scheme.
       </>
     ),
   },
@@ -301,13 +275,13 @@ const FEATURES: Entry[] = [
 
 const PROPERTIES: Entry[] = [
   {
-    name: 'Polarization-resistant',
+    name: 'Non-polarizing',
     body: (
       <>
         <Ext href="https://en.wikipedia.org/wiki/First-past-the-post_voting">Plurality voting</Ext>{' '}
         incentivizes two party systems. Multiple similar options can split the vote and lead to an
-        election result that is out of alignment with the will of the electorate. STAR voting
-        resists polarization since many options can be rated highly.
+        election result that is out of alignment with the will of the electorate. STAR voting is
+        non-polarizing because many options can be rated highly.
       </>
     ),
   },
