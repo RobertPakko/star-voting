@@ -793,18 +793,24 @@ export function PollDetail({
                tally still loading, or a read of it that failed, must not take
                the way out of the question with it. Everything else about it
                is unchanged: the same list, in the same order, marking the
-               same questions. */
-            <>
+               same questions.
+
+               In a stack of its own, spaced as the page is, so that what
+               stands after the strip is this question's and nothing more:
+               that is what slides in on a crossing (see QuestionStrip), and
+               the voters, the ballots and the creator's controls below are
+               the page's. */
+            <Stack gap="md">
               {questionStrip}
               <Suspense fallback={<ResultsSkeleton options={optionList.length || undefined} />}>
                 <Results source={{ kind: 'poll', pollId: poll.id }} initial={results} />
               </Suspense>
-            </>
+            </Stack>
           ) : status.is_closed ? (
-            <>
+            <Stack gap="md">
               {questionStrip}
               <NoResultsNotice inGroup={!!poll.group_id} />
-            </>
+            </Stack>
           ) : status.voted ? (
             /* You have voted and the results are still sealed, which is exactly
            the window a vote can be changed in — this branch is only reached

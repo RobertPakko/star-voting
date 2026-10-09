@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import classes from './Reveal.module.css'
 
 /**
@@ -43,6 +43,28 @@ import classes from './Reveal.module.css'
  * A reader who has asked for less motion gets none of this; the rule is in
  * index.css, over the whole app rather than repeated here.
  */
-export function Reveal({ children }: { children: ReactNode }) {
-  return <div className={classes.reveal}>{children}</div>
+export function Reveal({
+  children,
+  enter = true,
+  rise = true,
+}: {
+  children: ReactNode
+  /**
+   * Whether to play the entrance at all, read once, when it mounts — so it
+   * can be turned off for an arrival that has an entrance of its own (a
+   * poll's title flying in; see lib/titleFlight.ts) without a later render
+   * starting one halfway through the page's life.
+   */
+  enter?: boolean
+  /**
+   * Whether it rises as it fades. Off where something is already standing
+   * exactly where the content is arriving — the title a flight left over the
+   * page — and a rise would show as the real thing sliding under its copy.
+   */
+  rise?: boolean
+}) {
+  const [entering] = useState(enter)
+  return (
+    <div className={entering ? (rise ? classes.reveal : classes.fade) : undefined}>{children}</div>
+  )
 }

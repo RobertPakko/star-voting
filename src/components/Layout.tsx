@@ -27,6 +27,7 @@ import { NotificationSwitches } from './NotificationSwitches'
 import { isInstalledApp } from '../lib/push'
 import { LinkPushSwitch } from './PushSwitch'
 import { Reveal } from './Reveal'
+import { peekFlight } from '../lib/titleFlight'
 import { ThemeToggle } from './ThemeToggle'
 
 /**
@@ -278,15 +279,25 @@ export function Layout() {
           </Group>
         </Stack>
       </Modal>
-      <AppShell.Main>
+      {/* Clipped sideways, because a question slides in from beside the one
+          it replaced (see QuestionStrip) and a block sliding in from past the
+          right-hand edge would otherwise widen the page for as long as it
+          takes. `clip` rather than `hidden`, which would make this a scroll
+          container and quietly break everything sticky inside it. */}
+      <AppShell.Main style={{ overflowX: 'clip' }}>
         {/* Each page fades in as it opens. Keyed by which page it is rather
             than by the address, which is the whole of the care needed here:
             walking between the questions of a poll changes the address
             without changing the page, and the app goes to real trouble to
             keep that crossing mounted so the heading and the strip do not
             blink — see PollPage. A key off `pathname` would have thrown that
-            away and re-mounted the poll on every step through it. */}
-        <Reveal key={pageKey(pathname)}>
+            away and re-mounted the poll on every step through it.
+
+            Except a page a poll's title is flying onto, between a list card
+            and a poll's page in either direction: the flight is that page's
+            entrance, and the page arrives under it in its own time. See
+            lib/titleFlight.ts. */}
+        <Reveal key={pageKey(pathname)} enter={!peekFlight('poll') && !peekFlight('list')}>
           <Outlet />
         </Reveal>
       </AppShell.Main>

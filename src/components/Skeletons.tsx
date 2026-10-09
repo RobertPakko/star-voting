@@ -159,7 +159,7 @@ const BALLOT_ROWS_MAX = 10
  * the list carries its title with it (`PollPage` reads it off the navigation),
  * and a title cannot change, so there is nothing to guess: the poll's name is
  * on screen, and in the tab, from the press rather than from the read. It is
- * also where the title the reader pressed lands; see lib/viewTransition.ts.
+ * also where the title the reader pressed lands; see lib/titleFlight.ts.
  */
 function PollHeadingShape({ compact = false, title }: { compact?: boolean; title?: string }) {
   return (
@@ -544,12 +544,15 @@ export function QuestionSkeleton({
   // four. Where it is not, this is still the one card both endings share, and
   // `ResultsSkeleton`'s first shape is this one, so the wait continues rather
   // than starting over. A finished question asks for no name.
+  // In a stack of its own, as the pages draw the strip over a finished
+  // question, so that only the question's half stands after the strip and
+  // slides in on a crossing; see QuestionStrip.
   if (finished) {
     return (
-      <>
+      <Stack gap="md">
         {strip}
         <Loading>{tallied ? <TallyShape options={rows} /> : <BannerShape />}</Loading>
-      </>
+      </Stack>
     )
   }
 

@@ -13,6 +13,9 @@ import type { Page } from '@playwright/test'
 /** Scores every option on the ballot on screen, highest first. */
 async function scoreAll(page: Page) {
   const groups = page.getByRole('radiogroup', { name: /^Score for / })
+  // `count()` does not wait, and the sample's answer arrives a moment after
+  // the page does; the first row being there is what says the ballot is.
+  await expect(groups.first()).toBeVisible()
   const count = await groups.count()
   expect(count).toBeGreaterThan(1)
   for (let i = 0; i < count; i++) {

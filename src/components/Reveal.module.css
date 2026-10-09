@@ -28,3 +28,18 @@
     transform: none;
   }
 }
+
+/* The same entrance without the rise; see `rise` in Reveal.tsx. */
+.fade {
+  animation: fade var(--motion-base) var(--motion-ease) both;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

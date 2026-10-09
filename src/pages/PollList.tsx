@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
   Alert,
@@ -28,7 +28,8 @@ import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import classes from './PollList.module.css'
 import { pollPath } from '../lib/pollId'
-import { navigateWithTransition } from '../lib/viewTransition'
+import { fly, landFlight, launchFlight, peekFlight } from '../lib/titleFlight'
+import { readListSnapshot, writeListScroll, writeListSnapshot } from '../lib/listCache'
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
 
@@ -65,9 +66,19 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   // Asked here rather than in CSS because the scroll below is asked for from
   // JavaScript, which the global rule in index.css cannot reach.
   const reducedMotion = useReducedMotion()
-  const [polls, setPolls] = useState<PollListItem[] | null>(null)
+  const userId = session?.user.id
+  // A return to the list — its own back control on a poll, or the browser's
+  // back button — draws the list as it was left rather than starting over;
+  // see lib/listCache.ts. Taken once, on mount: this is how the page starts,
+  // not something it goes on consulting.
+  const navigationType = useNavigationType()
+  const [returning] = useState(() => (viewingRemoved ? null : peekFlight('list')))
+  const [kept] = useState(() =>
+    !viewingRemoved && (returning || navigationType === 'POP') ? readListSnapshot(userId) : null,
+  )
+  const [polls, setPolls] = useState<PollListItem[] | null>(kept?.polls ?? null)
   const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(kept?.page ?? 1)
   // Which of the two lists is on screen is the address's, and arrives as a
   // prop: the reader's polls, or the ones they have removed from it. Both are
   // read from `list_polls`, which pages each of them separately, so a page is
@@ -78,7 +89,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   removedView.current = viewingRemoved
   // How many polls are in the other list, which is whether the way into it is
   // drawn at all.
-  const [removedCount, setRemovedCount] = useState(0)
+  const [removedCount, setRemovedCount] = useState(kept?.removedCount ?? 0)
   // The polls a remove or restore is in flight for, so a card can say so
   // under the press, and whatever the last one said if it was refused.
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
@@ -86,18 +97,24 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   // How many polls there are in total, which only a read can tell us: it
   // arrives on every row (see PollListItem.total_count) because that is the
   // only place a set-returning function can put it.
-  const [total, setTotal] = useState(0)
-  // Whether a read has ever come back; see the note in PublicPoll.
-  const loaded = useRef(false)
+  const [total, setTotal] = useState(kept?.total ?? 0)
+  // Whether a read has ever come back; see the note in PublicPoll. Rows kept
+  // from the last visit count: they are on screen, and a refresh that fails
+  // should leave them there rather than replace them with an error.
+  const loaded = useRef(!!kept)
   // The page the rows on screen were read for. Kept in a ref so `load` never
   // changes identity — `useLiveStream` calls whatever it holds, and a fresh
   // function every render would be a fresh subscription every render.
   const chosen = useRef(page)
   chosen.current = page
+  // Whose list the rows are, for the snapshot `load` leaves behind; a ref for
+  // the reason `chosen` is one.
+  const owner = useRef(userId)
+  owner.current = userId
   // The list and page most recently *asked* for, which is how turning a page
   // or switching lists tells itself apart from the first read. Null until the
   // first read lands.
-  const fetched = useRef<string | null>(null)
+  const fetched = useRef<string | null>(kept ? `false:${kept.page}` : null)
   // One round trip for a page of polls, their status, and the total. This
   // used to be a select plus one poll_status RPC per poll; which is also what
   // makes it cheap enough to re-read whenever anything on it moves.
@@ -137,19 +154,68 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     // to carry it — and a list emptied by removing everything on it is the one
     // whose reader most needs the way back. So that read, and only that one,
     // asks. A database older than the count answers neither, which is none.
+    let removedTotal: number
     if (rows.length > 0) {
-      setRemovedCount(rows[0].removed_count ?? 0)
+      removedTotal = rows[0].removed_count ?? 0
     } else {
       const { data: counted } = await supabase.rpc('removed_poll_count')
-      setRemovedCount(typeof counted === 'number' ? counted : 0)
+      removedTotal = typeof counted === 'number' ? counted : 0
     }
+    setRemovedCount(removedTotal)
     // The page these rows are actually of, which is not always the page that
     // was asked for — the database clamps a request past the end. Recording
     // the clamped one is what stops the effect below from reading again the
     // moment `page` is brought down to match.
-    fetched.current = `${removed}:${Math.min(asked, Math.max(1, Math.ceil(count / PAGE_SIZE)))}`
+    const landed = Math.min(asked, Math.max(1, Math.ceil(count / PAGE_SIZE)))
+    fetched.current = `${removed}:${landed}`
+    // Left for the walk back from a poll; see lib/listCache.ts.
+    if (!removed && owner.current)
+      writeListSnapshot({
+        userId: owner.current,
+        polls: rows,
+        total: count,
+        removedCount: removedTotal,
+        page: landed,
+      })
     return true
   }, [])
+
+  // Back where the reader left it, and the title of the poll they were on
+  // flying back onto its card. Before the first paint, so the list is never
+  // seen at the top and then moved; and the scroll first, because the flight
+  // aims at where the card is on screen.
+  useLayoutEffect(() => {
+    if (!kept) return
+    window.scrollTo(0, kept.scrollY)
+    if (!returning) return
+    landFlight(returning)
+    const card = document.querySelector(`[data-poll-card="${CSS.escape(returning.id)}"]`)
+    const title = card?.querySelector<HTMLElement>('[data-poll-title]')
+    // Not on this page of the list any more — removed, or deleted, since the
+    // reader left — so there is nowhere for it to land and nothing flies.
+    if (!title) return
+    title.style.visibility = 'hidden'
+    const run = fly(returning, title)
+    let live = true
+    void run.arrived.then(() => {
+      if (!live) return
+      title.style.visibility = ''
+      void run.settle(title, 0)
+    })
+    return () => {
+      live = false
+      title.style.visibility = ''
+      run.cancel()
+    }
+  }, [kept, returning])
+
+  // How far down the list was, written as the reader leaves it: in a layout
+  // effect's cleanup, which runs while the list is still in the document and
+  // the page is still scrolled where the reader had it.
+  useLayoutEffect(() => {
+    if (viewingRemoved || !userId) return
+    return () => writeListScroll(userId, window.scrollY)
+  }, [viewingRemoved, userId])
 
   // Unlike a single poll, a list has no settled state to stop at: any poll on
   // it can take a vote, and a new invite can add a row. So it watches one
@@ -254,7 +320,10 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   if (!polls) return <PollListSkeleton />
 
   // Faded in over the shape that was standing in for it, rather than swapped
-  // for it between two frames; see Reveal.
+  // for it between two frames; see Reveal. Kept rows fade in too, under the
+  // title flying back onto its card: there was no shape before them, but
+  // there was a poll's page, and a list that appeared between two frames in
+  // its place would be the one swap on the way back.
   return (
     <Reveal>
       <Stack maw={720} mx="auto" gap="md">
@@ -329,6 +398,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             return (
               <Card
                 key={poll.id}
+                data-poll-card={poll.id}
                 withBorder
                 className={`${classes.card} ${moving ? classes.leaving : ''}`}
               >
@@ -342,12 +412,18 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                     see PollHeading. */}
                 {/* The title carried along in the navigation, so the page it
                     opens has the poll's name from the press; and the press
-                    moves that title to the top of the page, where a browser
-                    can. A click that asks for a new tab or window is left to
-                    the browser. See lib/viewTransition.ts. */}
+                    flies that title to the top of the page while the poll is
+                    read. A click that asks for a new tab or window is left to
+                    the browser. See lib/titleFlight.ts.
+
+                    `listId` is what puts a way back on the poll's page, and
+                    the card that way back lands on: a poll opened from the
+                    list returns to it, and one opened from anywhere else has
+                    nowhere to return to. Not from the removed polls, whose
+                    way back would land on a list they are not on. */}
                 <Link
                   to={pollPath(poll.id)}
-                  state={{ title: poll.title }}
+                  state={{ title: poll.title, listId: viewingRemoved ? undefined : poll.id }}
                   className={classes.link}
                   onClick={(event) => {
                     if (
@@ -358,11 +434,9 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                       event.altKey
                     )
                       return
-                    event.preventDefault()
-                    navigateWithTransition(
-                      navigate,
-                      pollPath(poll.id),
-                      { state: { title: poll.title } },
+                    launchFlight(
+                      'poll',
+                      poll.id,
                       event.currentTarget.querySelector<HTMLElement>('[data-poll-title]'),
                     )
                   }}

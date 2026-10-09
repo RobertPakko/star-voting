@@ -8,13 +8,13 @@ body {
   margin: 0;
 }
 
-/* The app's motion, in the three lengths it comes in.
+/* The app's motion, in the four lengths it comes in.
  *
  * Nothing in the app animated at all until these existed, and the risk in
  * adding a dozen small animations at once is that each one gets its own
  * opinion about how long it should take — which reads as a dozen unrelated
  * effects rather than as one app. So durations are picked from here and never
- * written by hand, and the scale is deliberately short: three values, named
+ * written by hand, and the scale is deliberately short: four values, named
  * for what they are for rather than for how long they are.
  *
  * `--motion-ease` is the same curve throughout: quick to leave, gentle to
@@ -31,6 +31,11 @@ body {
   /* Data resolving into a shape worth reading, which is only the results
      bars. Long enough to be watched on purpose; see Results.module.css. */
   --motion-slow: 500ms;
+  /* Something crossing the screen to a place of its own: a poll's title
+     flying between its card and its page, and a question sliding in beside
+     the one it replaced. Long enough to be followed with the eye, and for a
+     poll to be read behind it; see lib/titleFlight.ts. */
+  --motion-travel: 450ms;
   --motion-ease: cubic-bezier(0.2, 0, 0.2, 1);
 }
 
@@ -71,27 +76,4 @@ body {
  */
 .mantine-Anchor-root[data-inherit] {
   text-decoration: underline;
-}
-
-/* The one view transition the app makes: a poll's title travelling from its
- * card on the list to the top of its page (see lib/viewTransition.ts).
- *
- * The page itself is not cross-faded. It already fades in as it opens, through
- * `Reveal`, and a cross-fade on top of that is the same entrance twice; so the
- * root's two pictures are swapped at once and only the title moves. On the
- * app's own scale and curve, like everything else that moves.
- *
- * Not under the reduced-motion rule above, which cannot reach these
- * pseudo-elements: a reader who asked for less motion never starts a
- * transition at all. */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-}
-
-::view-transition-group(poll-title),
-::view-transition-old(poll-title),
-::view-transition-new(poll-title) {
-  animation-duration: var(--motion-base);
-  animation-timing-function: var(--motion-ease);
 }

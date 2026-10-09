@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { Button, Center, Loader, Stack, Text, Title } from '@mantine/core'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Box, Button, Center, Loader, Stack, Text, Title } from '@mantine/core'
 import {
   Link,
   Navigate,
@@ -33,6 +33,24 @@ import { refreshAccountPush, useNotificationRoutes } from './lib/push'
 import { useLaunchRoutes } from './lib/launch'
 import { useClearPollNotifications } from './lib/badge'
 import { usePageTitle } from './lib/pageTitle'
+import { fly, landFlight, peekFlight, type FlightRun } from './lib/titleFlight'
+import { motionMs } from './lib/motion'
+import { BackToList } from './components/BackToList'
+import { Reveal } from './components/Reveal'
+
+/**
+ * The least time a poll page's skeleton is on screen once it is up.
+ *
+ * A skeleton that is replaced a few frames after it appeared is not a wait
+ * the reader sees — it is a flicker, the page blinking between two shapes.
+ * So once the shape has been drawn, the poll waits behind it at least this
+ * long even when the read is already back: a moment's wait reads as the page
+ * loading, where a flash reads as the page breaking. A read that is back
+ * before the skeleton was ever drawn — which is the usual case for a poll
+ * opened from the list, whose title flight is long enough to cover it — is
+ * not held at all. See lib/titleFlight.ts.
+ */
+const SKELETON_MIN_MS = 400
 
 /**
  * The two routes nobody is on when the app first paints, fetched when they
@@ -265,6 +283,22 @@ function PollPage() {
   // would only be refused. See `onGone` in useLiveStream.
   const [gone, setGone] = useState<string | null>(null)
 
+  // Opened from the list, with the poll's title flying in from its card: the
+  // page starts blank under the title, is read while it flies, and arrives
+  // once it lands — whole, if the read is back by then, and as its skeleton
+  // if not. Taken once, on mount, like everything about how a page was
+  // arrived at. See lib/titleFlight.ts.
+  const [flight] = useState(() => (pollId ? peekFlight('poll', pollId) : null))
+  const [phase, setPhase] = useState<'flying' | 'landing' | 'still'>(flight ? 'flying' : 'still')
+  const flying = useRef<FlightRun | null>(null)
+  // When the skeleton went up, while it is up; see SKELETON_MIN_MS.
+  const skeletonSince = useRef<number | null>(null)
+  // The card this poll was opened from, which is whether the page offers a way
+  // back to the list and where on it that way lands. Held for as long as the
+  // route is — every question of the poll included — because walking between
+  // questions is a navigation of its own and does not carry the state along.
+  const [listId] = useState(() => listIdOf(location.state))
+
   const sample = !!pollId && isSampleId(pollId)
   // The read in hand, if it describes the address being rendered. A read of
   // any question of a poll describes every question of it, which is what
@@ -322,6 +356,11 @@ function PollPage() {
     // the address being written down.
     if (page.kind === 'unreadable' && (!session || anonymous))
       rememberDestination(location.pathname)
+    // Back behind a skeleton that has only just gone up: left there long
+    // enough not to flash; see SKELETON_MIN_MS.
+    const since = skeletonSince.current
+    const rest = since === null ? 0 : SKELETON_MIN_MS - (performance.now() - since)
+    if (rest > 0) await new Promise((resolve) => setTimeout(resolve, rest))
     setFailed(null)
     setRead({ pollId, page })
   }, [pollId, session, anonymous, location.pathname])
@@ -367,6 +406,55 @@ function PollPage() {
 
   const refused = covering?.kind === 'unreadable'
 
+  // The title's flight in. Before the first paint, so the page is never seen
+  // with the title already in place; and the page goes to its top first,
+  // because the list may have been scrolled and the flight aims at the place
+  // the title will be on screen.
+  useLayoutEffect(() => {
+    if (!flight) return
+    landFlight(flight)
+    window.scrollTo(0, 0)
+    const target = document.querySelector('[data-title-landing]')
+    if (!target) {
+      setPhase('still')
+      return
+    }
+    const run = fly(flight, target)
+    flying.current = run
+    let live = true
+    void run.arrived.then(() => {
+      if (live) setPhase('landing')
+    })
+    return () => {
+      live = false
+      run.cancel()
+      flying.current = null
+    }
+  }, [flight])
+
+  // Landed: whatever has arrived underneath — the poll, or its skeleton —
+  // fades in beneath the title, which then hands over to the real one.
+  useLayoutEffect(() => {
+    if (phase !== 'landing') return
+    let live = true
+    const done = flying.current
+      ? flying.current.settle(document.querySelector('[data-title-landing]'), motionMs('base'))
+      : Promise.resolve()
+    void done.then(() => {
+      if (live) setPhase('still')
+    })
+    return () => {
+      live = false
+    }
+  }, [phase])
+
+  // Whether the skeleton is what is on screen, which starts its clock.
+  const waiting = !sample && gone !== pollId && !error && !covering && phase !== 'flying'
+  useLayoutEffect(() => {
+    if (!waiting) skeletonSince.current = null
+    else skeletonSince.current ??= performance.now()
+  }, [waiting])
+
   // Opening a poll is reading its news: its notifications go from the tray
   // and from the count on the installed app's icon. Every question of the
   // group, since the notifications are filed against the first. Not for a
@@ -375,53 +463,89 @@ function PollPage() {
     pollId && !sample && covering && !refused ? [pollId, ...questionsCovered(covering)] : [],
   )
 
-  // The sample, ahead of everything else: it is served from a file rather
-  // than from the database, so the public reading is the only reading it has
-  // — for a signed-in account as much as for a stranger's browser, since it
-  // is nobody's poll and never was a row. It reads for itself, and a sample
-  // id `samplePollData.ts` holds nothing for is a mistyped sample link, which
-  // `PublicPoll` draws "poll not found" for.
-  if (sample) return <PublicPoll initial={null} live={liveStatus} watch={watch} reread={reread} />
+  // The way back to the list, on a poll opened from it; see BackToList.
+  const back =
+    listId && session ? (
+      <Box maw={720} mx="auto">
+        <BackToList listId={listId} />
+      </Box>
+    ) : null
 
-  // Ahead of whatever was on screen, ballot and all: a vote cast on it now
-  // would only be refused, with nothing to say why.
-  if (gone === pollId) return <PollDeleted signedIn={!!session} />
-
-  if (error) {
+  // In the air: the page is laid out — so the title has somewhere to aim for
+  // — and not shown. The skeleton is drawn because its title is drawn exactly
+  // where the poll's will be; nothing else of it is seen.
+  if (phase === 'flying')
     return (
-      <Text role="alert" c="red" ta="center">
-        {error}
-      </Text>
+      <div style={{ visibility: 'hidden' }}>
+        {back}
+        <PollPageSkeleton title={carriedTitle(location.state)} />
+      </div>
     )
-  }
 
-  // Nothing decided yet. The shape of the page that is coming, which is what
-  // both readings draw while they load, so waiting here rather than inside
-  // one of them looks like nothing at all.
-  if (!covering) return <PollPageSkeleton title={carriedTitle(location.state)} />
+  // Faded in where it has landed, without the rise every other page arrives
+  // with: the title is already standing in place over it, and a rise would
+  // show as the real one sliding up under its copy.
+  return (
+    <Reveal enter={phase === 'landing'} rise={false}>
+      {back}
+      {page()}
+    </Reveal>
+  )
 
-  // The sign-in screen is deliberately outside the app shell, which is what
-  // the redirect is for: the catch-all route below renders it bare. A session
-  // made without an account is offered it too, at its own address: it has no
-  // email, so no invite poll will ever admit it, and this one may well be
-  // addressed to the account it has not signed in to yet.
-  if (refused && !session) return <Navigate to="/" replace />
-  if (refused && anonymous) return <Navigate to="/sign-in" replace />
+  function page() {
+    // The sample, ahead of everything else: it is served from a file rather
+    // than from the database, so the public reading is the only reading it has
+    // — for a signed-in account as much as for a stranger's browser, since it
+    // is nobody's poll and never was a row. It reads for itself, and a sample
+    // id `samplePollData.ts` holds nothing for is a mistyped sample link, which
+    // `PublicPoll` draws "poll not found" for.
+    if (sample) return <PublicPoll initial={null} live={liveStatus} watch={watch} reread={reread} />
 
-  // An open poll to somebody outside it, and — to a signed-in reader who has
-  // been refused — the card that says a link is not a link.
-  if (covering.kind !== 'account')
+    // Ahead of whatever was on screen, ballot and all: a vote cast on it now
+    // would only be refused, with nothing to say why.
+    if (gone === pollId) return <PollDeleted signedIn={!!session} />
+
+    if (error) {
+      return (
+        <Text role="alert" c="red" ta="center">
+          {error}
+        </Text>
+      )
+    }
+
+    // Nothing decided yet. The shape of the page that is coming, which is what
+    // both readings draw while they load, so waiting here rather than inside
+    // one of them looks like nothing at all.
+    if (!covering) return <PollPageSkeleton title={carriedTitle(location.state)} />
+
+    // The sign-in screen is deliberately outside the app shell, which is what
+    // the redirect is for: the catch-all route below renders it bare. A session
+    // made without an account is offered it too, at its own address: it has no
+    // email, so no invite poll will ever admit it, and this one may well be
+    // addressed to the account it has not signed in to yet.
+    if (refused && !session) return <Navigate to="/" replace />
+    if (refused && anonymous) return <Navigate to="/sign-in" replace />
+
+    // An open poll to somebody outside it, and — to a signed-in reader who has
+    // been refused — the card that says a link is not a link.
+    if (covering.kind !== 'account')
+      return (
+        <PublicPoll
+          initial={exact ? covering : null}
+          live={liveStatus}
+          watch={watch}
+          reread={reread}
+        />
+      )
     return (
-      <PublicPoll
+      <PollDetail
         initial={exact ? covering : null}
         live={liveStatus}
         watch={watch}
         reread={reread}
       />
     )
-  return (
-    <PollDetail initial={exact ? covering : null} live={liveStatus} watch={watch} reread={reread} />
-  )
+  }
 }
 
 /**
@@ -433,6 +557,12 @@ function PollPage() {
 function carriedTitle(state: unknown): string | undefined {
   const title = (state as { title?: unknown } | null)?.title
   return typeof title === 'string' && title ? title : undefined
+}
+
+/** The list card a poll was opened from, if it was; see BackToList. */
+function listIdOf(state: unknown): string | undefined {
+  const id = (state as { listId?: unknown } | null)?.listId
+  return typeof id === 'string' && id ? id : undefined
 }
 
 /**
