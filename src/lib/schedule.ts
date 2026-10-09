@@ -116,15 +116,33 @@ export function toMinutes(timeOfDay: string): number {
  * is where a window running to the end of one finishes and which `00:00` would
  * read as the start of it.
  *
- * This is both the wall clock the grid is keyed by and the clock a person
- * reads, because those are now the same string: every time in this app is
- * twenty-four hour time. The create form's two selectors used to say `2:00pm`
- * while the calendar beside them said `14:00`, which is one poll described two
- * ways on one screen.
+ * This is the wall clock the grid is keyed by and every option is named in,
+ * whichever clock the reader prefers. What a person reads goes through
+ * `formatTimeOfDay`.
  */
 export function toTimeOfDay(minutes: number): string {
   const hours = Math.floor(minutes / 60)
   return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+}
+
+/**
+ * 870 as a person reads it: `14:30` on the 24-hour clock, `2:30pm` on the
+ * other. The one place the two clocks differ, so every time on a screen --
+ * the selects, the grid's hour column, a month chip, a result -- is written
+ * one way at once. The create form's selectors once said `2:00pm` while the
+ * calendar beside them said `14:00`, which is one poll described two ways on
+ * one screen; the choice is now the reader's, per browser (`lib/clock.ts`),
+ * and applies to all of them together.
+ *
+ * Midnight at the end of a day is `24:00` on the 24-hour clock and `12:00am`
+ * on the other, where it only ever appears as the end of a stretch and so
+ * cannot be read as the start of one.
+ */
+export function formatTimeOfDay(minutes: number, h24: boolean): string {
+  if (h24) return toTimeOfDay(minutes)
+  const hours = Math.floor(minutes / 60) % 24
+  const suffix = hours < 12 ? 'am' : 'pm'
+  return `${hours % 12 || 12}:${String(minutes % 60).padStart(2, '0')}${suffix}`
 }
 
 /** One cell of the grid, from the two halves of it. */
@@ -784,7 +802,8 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /**
- * An option's name, as a person reads it: `14:00, Tue Sep 1`.
+ * An option's name, as a person reads it: `2:00pm, Tue Sep 1`, or
+ * `14:00, Tue Sep 1` on the 24-hour clock (`formatTimeOfDay`).
  *
  * **It decides from the name alone, and takes no schedule.** That is the whole
  * point of it: formatting a time is presentation, and presentation is the
@@ -828,14 +847,14 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * saying "- 17:00" three hours after their own start is noise, and the length
  * is one fact about the poll rather than one fact per option.
  */
-export function formatWindow(name: string): string {
+export function formatWindow(name: string, h24: boolean): string {
   const parsed = parseWindowStart(name)
   // A name that is not a window is shown as it is. Better a stray label on a
   // results page than a crash on one.
   if (!parsed) return name
 
   const at = toMinutes(parsed.timeOfDay)
-  return at === 0 ? formatDay(parsed.day) : `${parsed.timeOfDay}, ${formatDay(parsed.day)}`
+  return at === 0 ? formatDay(parsed.day) : `${formatTimeOfDay(at, h24)}, ${formatDay(parsed.day)}`
 }
 
 /** The day part alone, for a column heading over a grid: `Fri Feb 20`. */
@@ -966,8 +985,8 @@ export function relabelResults<
       })[]
     }[]
   },
->(results: T): T {
-  const label = formatWindow
+>(results: T, h24: boolean): T {
+  const label = (name: string) => formatWindow(name, h24)
   return {
     ...results,
     options: results.options.map((option) => ({ ...option, name: label(option.name) })),
@@ -1004,15 +1023,15 @@ export function relabelRanking<
       })[]
     }[]
   },
->(ranking: T[]): T[] {
-  return ranking.map(relabelResults)
+>(ranking: T[], h24: boolean): T[] {
+  return ranking.map((place) => relabelResults(place, h24))
 }
 
 /** And for the published sheet, whose columns are the options. */
-export function relabelSheet<T extends { options: { name: string }[] }>(sheet: T): T {
+export function relabelSheet<T extends { options: { name: string }[] }>(sheet: T, h24: boolean): T {
   return {
     ...sheet,
-    options: sheet.options.map((option) => ({ ...option, name: formatWindow(option.name) })),
+    options: sheet.options.map((option) => ({ ...option, name: formatWindow(option.name, h24) })),
   }
 }
 
@@ -1031,6 +1050,9 @@ export function relabelSheet<T extends { options: { name: string }[] }>(sheet: T
  * return type and cannot be a `CREATE OR REPLACE` -- for the sake of one
  * label. `formatWindow` decides from the name.
  */
-export function winnerLabel(name: string | null | undefined): string | null | undefined {
-  return name ? formatWindow(name) : name
+export function winnerLabel(
+  name: string | null | undefined,
+  h24: boolean,
+): string | null | undefined {
+  return name ? formatWindow(name, h24) : name
 }

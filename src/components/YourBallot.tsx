@@ -3,6 +3,7 @@ import { Card, Group, Stack, Text, Title } from '@mantine/core'
 import { StarIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { formatWindow } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import { Reveal } from './Reveal'
 import { YourBallotSkeleton } from './Skeletons'
 import type { PollOption } from '../lib/types'
@@ -123,6 +124,7 @@ function BallotRows({
   options: PollOption[]
   scores: Record<string, number>
 }) {
+  const h24 = use24HourTime()
   // Faded in over the shape that was standing in for it, as the tally and the
   // sheet are; see Reveal.
   return (
@@ -136,7 +138,7 @@ function BallotRows({
               // every poll because it costs nothing to: an ordinary poll's
               // options are not window starts and come back exactly as they
               // went in. See relabelResults, which does this to the tally.
-              const name = formatWindow(option.name)
+              const name = formatWindow(option.name, h24)
 
               return (
                 <Group key={option.id} justify="space-between" wrap="nowrap" gap="sm">

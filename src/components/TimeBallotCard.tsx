@@ -14,9 +14,10 @@ import {
   paintingRuns,
   runBounds,
   scoresFromPainting,
-  toTimeOfDay,
+  formatTimeOfDay,
   type GranuleKey,
 } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import { offsetName } from '../lib/timezones'
 import type { PollOption, PollSchedule } from '../lib/types'
 
@@ -112,6 +113,7 @@ export function TimeBallotCard({
   onVoted: () => void
   onCancel?: () => void
 }) {
+  const h24 = use24HourTime()
   const windows = useMemo(() => options.map((option) => option.name), [options])
   const bounds = useMemo(() => boundsOf(windows, schedule), [windows, schedule])
   const days = useMemo(() => daysOf(bounds), [bounds])
@@ -194,7 +196,8 @@ export function TimeBallotCard({
   function buildEvents(view: ScheduleViewLevel): ScheduleEventData[] {
     return paintingRuns(painting, schedule).map((run) => ({
       id: `${run.day} ${run.from}`,
-      title: view !== 'month' ? '' : daily ? ratingTitle(run.value) : timeTitle(run.from, run.to),
+      title:
+        view !== 'month' ? '' : daily ? ratingTitle(run.value) : timeTitle(run.from, run.to, h24),
       ...runBounds(run),
       color: colorFor(run.value),
       display: view === 'month' ? 'default' : 'background',
@@ -285,8 +288,8 @@ export function TimeBallotCard({
 }
 
 /** `09:00–11:00`, which is what a month cell says about one marked stretch. */
-function timeTitle(from: number, to: number): string {
-  return `${toTimeOfDay(from)}–${toTimeOfDay(to)}`
+function timeTitle(from: number, to: number, h24: boolean): string {
+  return `${formatTimeOfDay(from, h24)}–${formatTimeOfDay(to, h24)}`
 }
 
 /** And what one says on a poll answered in whole days, which has no hours. */

@@ -1593,11 +1593,19 @@ shades still darken along it — so the ramp survives being seen by somebody who
 cannot tell the red end from the green one, and does not depend on that for its
 first reading.
 
-**Every time on screen is twenty-four hour time.** The grid was already drawn
-that way and the create form's two selectors said `2:00pm` beside it, which is
-one poll described two ways on one screen. `toTimeOfDay` is now both the string
-the grid is keyed by and the string a person reads, so there is one clock and
-no conversion between them.
+**Every time on screen is on one clock, and the reader picks which.**
+`2:30pm` by default, `14:30` with **24-hour time** on in the gear menu. The
+grid was once drawn in one and the create form's two selectors said the other
+beside it, which is one poll described two ways on one screen — so the choice
+applies to all of them together: the selects, the grid's hour column, the
+month chips, the results and the winner badge. `toTimeOfDay` is the string the
+grid is keyed by and every option is named in, and never changes;
+`formatTimeOfDay` is the one place the two clocks differ, and everything a
+person reads goes through it. The setting is **per browser**
+([`lib/clock.ts`](src/lib/clock.ts), `star-voting:24-hour-time` in
+`localStorage`) rather than on the account, for the reason the sign-in method
+is: it is a habit of whoever is holding the device, and it needs no migration
+and nothing read before the first time on a page can be drawn.
 
 `useBallotOrder` does not apply, and that is the one deliberate exception to
 the argument in [`ballotOrder.ts`](src/lib/ballotOrder.ts). It shuffles because
@@ -1654,7 +1662,8 @@ option poll whose option is *literally* named `2026-09-01T14:00:00-07:00` gets
 reformatted; it is still the same instant, more legibly, and it is not a poll
 anybody is going to write.
 
-**A window reads `14:00, Tue Sep 1`** — the time first, then the weekday, the
+**A window reads `2:00pm, Tue Sep 1`** (or `14:00, Tue Sep 1` on the 24-hour
+clock) — the time first, then the weekday, the
 month and the day. That is the order the answer is spoken in, and it is also
 the order that puts the part telling two neighbouring options apart at the
 front of the line: a ranked list of a Saturday's windows differs only in its

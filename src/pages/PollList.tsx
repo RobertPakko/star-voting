@@ -25,6 +25,7 @@ import { Reveal } from '../components/Reveal'
 import { PollListSkeleton } from '../components/Skeletons'
 import type { PollListItem } from '../lib/types'
 import { winnerLabel } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import classes from './PollList.module.css'
 import { pollPath } from '../lib/pollId'
 
@@ -54,6 +55,7 @@ export function PollList() {
 }
 
 function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
+  const h24 = use24HourTime()
   const navigate = useNavigate()
   const { session, anonymous } = useAuth()
   // Asked here rather than in CSS because the scroll below is asked for from
@@ -363,7 +365,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                       // withholds it on `inGroup`, in one place for all three
                       // screens, rather than leaving three callers to remember.
                       winner: poll.winner_settled
-                        ? winnerLabel(poll.winner_name ?? null)
+                        ? winnerLabel(poll.winner_name ?? null, h24)
                         : undefined,
                       inGroup: poll.question_count > 1,
                     }}

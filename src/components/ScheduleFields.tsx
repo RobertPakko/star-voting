@@ -17,10 +17,11 @@ import {
   paintingRuns,
   runBounds,
   todayIn,
-  toTimeOfDay,
+  formatTimeOfDay,
   type Bounds,
   type GranuleKey,
 } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import { offsetChoices, offsetDrift } from '../lib/timezones'
 import type { DailyWindow, PollSchedule } from '../lib/types'
 
@@ -132,6 +133,7 @@ export function ScheduleFields({
   /** Wrong with the schedule as a whole -- nothing painted, or too many windows. */
   error?: string
 }) {
+  const h24 = use24HourTime()
   const ordered = inOrder(days)
   const daily = isDaily(schedule)
   const [brush, setBrush] = useState(1)
@@ -248,7 +250,12 @@ export function ScheduleFields({
     for (const key of marked) asPainting[key] = 1
     return paintingRuns(asPainting, schedule).map((run) => ({
       id: `${run.day} ${run.from}`,
-      title: view !== 'month' ? '' : daily ? '' : `${toTimeOfDay(run.from)}–${toTimeOfDay(run.to)}`,
+      title:
+        view !== 'month'
+          ? ''
+          : daily
+            ? ''
+            : `${formatTimeOfDay(run.from, h24)}–${formatTimeOfDay(run.to, h24)}`,
       ...runBounds(run),
       color: 'teal.6',
       display: view === 'month' ? 'default' : 'background',

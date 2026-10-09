@@ -1,11 +1,13 @@
 import { Card, Stack, Title } from '@mantine/core'
 import { useAuth } from '../lib/auth'
+import { ClockSwitch } from '../components/ClockSwitch'
 import { NotificationSwitches } from '../components/NotificationSwitches'
 import { Reveal } from '../components/Reveal'
 import { SettingsSkeleton } from '../components/Skeletons'
 
 /**
- * The /settings route: the two notification switches on a page of their own.
+ * The /settings route: the two notification switches on a page of their own,
+ * and the 24-hour clock switch the gear menu carries beside them.
  *
  * Nothing in the app links here. Inside the app the same switches are one
  * press away in the header's gear menu, which is lighter than a page and does
@@ -25,6 +27,10 @@ export function Settings() {
         <Title order={2}>Notifications</Title>
         <Card withBorder>
           <NotificationSwitches userId={session.user.id} />
+        </Card>
+        <Title order={2}>Display</Title>
+        <Card withBorder>
+          <ClockSwitch />
         </Card>
       </Stack>
     </Reveal>

@@ -8,6 +8,7 @@ import { Reveal } from './Reveal'
 import { BallotsSkeleton } from './Skeletons'
 import classes from './Ballots.module.css'
 import { relabelSheet } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import type { BallotSheet } from '../lib/types'
 
 /**
@@ -54,6 +55,7 @@ export function Ballots({
    */
   initial?: BallotSheet | null
 }) {
+  const h24 = use24HourTime()
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
@@ -109,7 +111,7 @@ export function Ballots({
   // ISO timestamps and read as headings; see relabelSheet. Applied to every
   // poll, because an ordinary poll's options are not window starts and come
   // back exactly as they went in.
-  const shown = relabelSheet(sheet)
+  const shown = relabelSheet(sheet, h24)
   const named = shown.voters_named
   // Unscored options count as 0 everywhere else in the app; a ballot missing
   // a score would have to predate the "score every option" rule, but reading

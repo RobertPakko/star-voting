@@ -1,5 +1,6 @@
 import { Group, Select } from '@mantine/core'
-import { toTimeOfDay } from '../lib/schedule'
+import { formatTimeOfDay, toMinutes, toTimeOfDay } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import type { DailyWindow } from '../lib/types'
 
 /**
@@ -27,20 +28,23 @@ import type { DailyWindow } from '../lib/types'
  * down, and the painting changes only when somebody paints.
  */
 
-/** Times of day for the two ends, at half-hour steps. */
-function timesOfDay(from: number, to: number): { value: string; label: string }[] {
-  const all: { value: string; label: string }[] = []
-  for (let minutes = from; minutes <= to; minutes += 30) {
-    all.push({ value: toTimeOfDay(minutes), label: toTimeOfDay(minutes) })
-  }
+/** Times of day for the two ends, at half-hour steps, as the grid keys them. */
+function timesOfDay(from: number, to: number): string[] {
+  const all: string[] = []
+  for (let minutes = from; minutes <= to; minutes += 30) all.push(toTimeOfDay(minutes))
   return all
 }
 
-const STARTS = timesOfDay(0, 23 * 60 + 30)
+const START_VALUES = timesOfDay(0, 23 * 60 + 30)
 // Offered from half an hour after midnight so the list can never contain a
 // time at or before the earliest start; 24:00 is midnight at the end of the
 // day, which '00:00' would read as the start of it.
-const ENDS = [...timesOfDay(30, 23 * 60 + 30), { value: '24:00', label: '24:00' }]
+const END_VALUES = [...timesOfDay(30, 23 * 60 + 30), '24:00']
+
+/** The same values, written on whichever clock this browser reads; see `lib/clock.ts`. */
+function labelled(values: string[], h24: boolean): { value: string; label: string }[] {
+  return values.map((value) => ({ value, label: formatTimeOfDay(toMinutes(value), h24) }))
+}
 
 export function HoursFields({
   hours,
@@ -49,11 +53,14 @@ export function HoursFields({
   hours: DailyWindow
   onChange: (hours: DailyWindow) => void
 }) {
+  const h24 = use24HourTime()
+  const starts = labelled(START_VALUES, h24)
+  const ends = labelled(END_VALUES, h24)
   return (
     <Group grow align="flex-start" wrap="wrap">
       <Select
         label="Earliest start"
-        data={STARTS}
+        data={starts}
         value={hours.start}
         onChange={(v) =>
           v &&
@@ -63,9 +70,9 @@ export function HoursFields({
             // time after it: the pair is always a stretch of the day, and a
             // select that could be left saying 18:00 to 09:00 would be one
             // more state for every reader of it to work out.
-            end: ENDS.some((end) => end.value > v && end.value === hours.end)
+            end: ends.some((end) => end.value > v && end.value === hours.end)
               ? hours.end
-              : (ENDS.find((end) => end.value > v)?.value ?? hours.end),
+              : (ends.find((end) => end.value > v)?.value ?? hours.end),
           })
         }
         allowDeselect={false}
@@ -73,7 +80,7 @@ export function HoursFields({
       />
       <Select
         label="Latest end"
-        data={ENDS.filter((end) => end.value > hours.start)}
+        data={ends.filter((end) => end.value > hours.start)}
         value={hours.end}
         onChange={(v) => v && onChange({ ...hours, end: v })}
         allowDeselect={false}

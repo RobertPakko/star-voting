@@ -16,6 +16,7 @@ import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
 import { winnerLabel } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type {
   BallotSheet,
@@ -75,6 +76,7 @@ export function PublicPoll({
    */
   reread: () => void
 }) {
+  const h24 = use24HourTime()
   const { pollId: param } = useParams<{ pollId: string }>()
   // See lib/pollId.ts: the URL carries the short spelling, everything
   // below this line carries the canonical one.
@@ -445,7 +447,7 @@ export function PublicPoll({
           // this page has none. That made the badge wait on that card and
           // exist only because it did. `open_poll_view` carries the answer
           // now, so it arrives with the page and needs no account to ask for.
-          winner: shell.winner_settled ? winnerLabel(shell.winner_name ?? null) : undefined,
+          winner: shell.winner_settled ? winnerLabel(shell.winner_name ?? null, h24) : undefined,
           // Except on a poll of several questions, whose badge names none of
           // their winners. See PollStateBadge.
           inGroup: !!shell.poll.group_id,

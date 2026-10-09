@@ -12,6 +12,7 @@ import {
   describeOffset,
   enumerateWindows,
   formatDay,
+  formatTimeOfDay,
   formatWindow,
   fromDay,
   paintingRuns,
@@ -624,28 +625,32 @@ describe('what a window is called on screen', () => {
   test('reads as a time, in the poll offset and never the reader own', () => {
     // The time leads, which is the order the answer is spoken in and the order
     // that puts the part telling two adjacent options apart first.
-    expect(formatWindow('2026-09-01T14:00:00-07:00')).toBe('14:00, Tue Sep 1')
+    expect(formatWindow('2026-09-01T14:00:00-07:00', true)).toBe('14:00, Tue Sep 1')
+    expect(formatWindow('2026-09-01T14:00:00-07:00', false)).toBe('2:00pm, Tue Sep 1')
     // The same instant with a different offset on it is a different wall
     // clock, and this reads the offset the poll declared rather than converting
     // to the reader's -- which is the whole of one-timezone-per-poll.
-    expect(formatWindow('2026-09-05T09:30:00+01:00')).toBe('09:30, Sat Sep 5')
+    expect(formatWindow('2026-09-05T09:30:00+01:00', true)).toBe('09:30, Sat Sep 5')
+    expect(formatWindow('2026-09-05T09:30:00+01:00', false)).toBe('9:30am, Sat Sep 5')
   })
 
   test('a window that starts at midnight is a day and no time', () => {
     // Every option of a poll answered in whole days starts at 00:00, and sixty
     // rows carrying the same four useless digits is what this saves.
-    expect(formatWindow('2026-09-07T00:00:00-07:00')).toBe('Mon Sep 7')
+    expect(formatWindow('2026-09-07T00:00:00-07:00', true)).toBe('Mon Sep 7')
+    expect(formatWindow('2026-09-07T00:00:00-07:00', false)).toBe('Mon Sep 7')
   })
 
   test('and takes no schedule, which is what keeps it out of the database', () => {
     // A name is enough. Nothing above this has to be told which kind of poll
     // it is drawing, so list_polls, poll_status and the three cards that draw
     // a winner all stayed as they were.
-    expect(winnerLabel('2026-09-01T14:00:00-07:00')).toBe('14:00, Tue Sep 1')
+    expect(winnerLabel('2026-09-01T14:00:00-07:00', true)).toBe('14:00, Tue Sep 1')
+    expect(winnerLabel('2026-09-01T14:00:00-07:00', false)).toBe('2:00pm, Tue Sep 1')
     // null is "settled, and nobody won"; undefined is "not settled". Both are
     // answers rather than names, so neither is formatted.
-    expect(winnerLabel(null)).toBeNull()
-    expect(winnerLabel(undefined)).toBeUndefined()
+    expect(winnerLabel(null, false)).toBeNull()
+    expect(winnerLabel(undefined, false)).toBeUndefined()
   })
 
   test('every time in the app reads the same way round', () => {
@@ -656,14 +661,29 @@ describe('what a window is called on screen', () => {
     expect(toTimeOfDay(DAY_MINUTES)).toBe('24:00')
   })
 
+  test('a person reads it on the clock their browser asked for', () => {
+    // The 24-hour clock is the key itself.
+    expect(formatTimeOfDay(13 * 60 + 30, true)).toBe('13:30')
+    expect(formatTimeOfDay(DAY_MINUTES, true)).toBe('24:00')
+    // The other is the default, and has no zero-padded hour and no 0 or 12+.
+    expect(formatTimeOfDay(0, false)).toBe('12:00am')
+    expect(formatTimeOfDay(30, false)).toBe('12:30am')
+    expect(formatTimeOfDay(9 * 60, false)).toBe('9:00am')
+    expect(formatTimeOfDay(12 * 60, false)).toBe('12:00pm')
+    expect(formatTimeOfDay(13 * 60 + 30, false)).toBe('1:30pm')
+    expect(formatTimeOfDay(23 * 60 + 30, false)).toBe('11:30pm')
+    // Midnight at the end of a day, which only ever ends a stretch.
+    expect(formatTimeOfDay(DAY_MINUTES, false)).toBe('12:00am')
+  })
+
   test('a name that is not a window is shown as it is, not as a crash', () => {
     // Which is also what lets this be applied to every poll unconditionally:
     // an ordinary poll's options are not ISO instants, so they pass through.
-    expect(formatWindow('Pizza')).toBe('Pizza')
-    expect(formatWindow('2026-09-01')).toBe('2026-09-01')
+    expect(formatWindow('Pizza', false)).toBe('Pizza')
+    expect(formatWindow('2026-09-01', false)).toBe('2026-09-01')
     // No offset on it, so it is not a window start and not this app's to read.
-    expect(formatWindow('2026-09-01T14:00:00')).toBe('2026-09-01T14:00:00')
-    expect(winnerLabel('Pizza')).toBe('Pizza')
+    expect(formatWindow('2026-09-01T14:00:00', false)).toBe('2026-09-01T14:00:00')
+    expect(winnerLabel('Pizza', false)).toBe('Pizza')
   })
 })
 

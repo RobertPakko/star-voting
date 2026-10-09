@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
 import { relabelRanking } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
 import { NameList } from './NameList'
 import { RankingSkeleton } from './Skeletons'
@@ -47,6 +48,7 @@ export function FullRanking({
   results: PollResults
 }) {
   const [opened, modal] = useDisclosure(false)
+  const h24 = use24HourTime()
 
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
@@ -121,7 +123,7 @@ export function FullRanking({
 
           {!error && !ranking && <RankingSkeleton places={results.options.length} />}
 
-          {ranking && <Places ranking={relabelRanking(ranking)} results={results} />}
+          {ranking && <Places ranking={relabelRanking(ranking, h24)} results={results} />}
         </Stack>
       </Modal>
     </>

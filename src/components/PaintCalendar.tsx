@@ -19,6 +19,7 @@ import {
   boundsOnDay,
   daysOf,
   formatDay,
+  formatTimeOfDay,
   granuleKey,
   granulesBetween,
   isDaily,
@@ -27,6 +28,7 @@ import {
   type GranuleKey,
   type ScheduleDay,
 } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import type { DailyWindow, PollSchedule } from '../lib/types'
 
 /**
@@ -257,6 +259,13 @@ function hoursColumn(axis: DailyWindow, granularity: number) {
  * belongs to, and the rounded corner is clipped by `weekViewRoot`, which is
  * outside the scroll area and still hides what leaves it.
  */
+/**
+ * One hour label in the grid's time column. The library sets that column in
+ * capitals, which turns `9:00am` into `9:00AM` -- the one place in the app a
+ * time would read differently from the selects and chips beside it.
+ */
+const SLOT_LABEL: CSSProperties = { textTransform: 'none' }
+
 const STICKY_TIMES = {
   weekViewInner: { overflow: 'visible' },
   weekViewSlotLabels: {
@@ -378,6 +387,7 @@ export function PaintCalendar({
   // stays where the reader was.
   const [date, setDate] = useState(() => days[0] ?? dayjs().format('YYYY-MM-DD'))
   const [view, setView] = useState<ScheduleViewLevel>(daily ? 'month' : 'week')
+  const h24 = use24HourTime()
   const showing = daily ? 'month' : view
   const narrowLabels = useMediaQuery('(max-width: 560px)', false, {
     getInitialValueInEffect: false,
@@ -696,6 +706,9 @@ export function PaintCalendar({
     // as a time of day; a second before it is the same last row.
     endTime: axis.end === '24:00' ? '23:59:59' : `${axis.end}:00`,
     intervalMinutes: schedule.granularity,
+    // The hour column, on whichever clock this browser reads (`lib/clock.ts`).
+    // The library hands a callback `YYYY-MM-DD HH:mm:ss`.
+    slotLabelFormat: (slot: string) => formatTimeOfDay(toMinutes(slot.slice(11, 16)), h24),
     slotHeight: HOUR_HEIGHT,
     withAllDaySlots: false as const,
     withCurrentTimeIndicator: false as const,
@@ -861,6 +874,7 @@ export function PaintCalendar({
               borderTop: timeColumn.paddingTop
                 ? '1px solid var(--day-view-border-color)'
                 : undefined,
+              ...SLOT_LABEL,
             },
           }}
           withAllDaySlot={false}
@@ -899,6 +913,7 @@ export function PaintCalendar({
             styles={{
               ...STICKY_TIMES,
               weekViewSlotLabels: { ...STICKY_TIMES.weekViewSlotLabels, ...timeColumn },
+              weekViewSlotLabel: SLOT_LABEL,
             }}
             withWeekNumber={false}
             data-paint-calendar={calendarId}

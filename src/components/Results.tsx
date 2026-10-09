@@ -22,6 +22,7 @@ import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
 import { parseAnswer, pollResultsSchema } from '../lib/rpcSchemas'
 import { relabelResults } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import type {
   FiveStarStep,
   HeadToHeadStep,
@@ -67,6 +68,7 @@ export function Results({
    */
   initial?: PollResults | null
 }) {
+  const h24 = use24HourTime()
   // Flattened to primitives so the dependency list is complete without
   // depending on a fresh object identity every render.
   const kind = source.kind
@@ -162,7 +164,7 @@ export function Results({
   // window starts, so they come back exactly as they went in. Everything below
   // reads `name` and none of it knows or cares that the name it is reading was
   // an ISO timestamp a line ago. See relabelResults.
-  const shown = relabelResults(results)
+  const shown = relabelResults(results, h24)
   const nameById = new Map(shown.options.map((o) => [o.id, o.name]))
   const maxScore = Math.max(1, ...shown.options.map((o) => o.total_score))
   // The scoring round, as far down it as this page goes: the top ten. The

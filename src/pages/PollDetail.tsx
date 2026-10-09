@@ -34,6 +34,7 @@ import { Respondents } from '../components/Respondents'
 import { readPollPage, statusFromOpenView } from '../lib/pollPage'
 import { openPollViewSchema, parseAnswer, pollStatusSchema } from '../lib/rpcSchemas'
 import { winnerLabel } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type {
   AccountRead,
@@ -90,6 +91,7 @@ export function PollDetail({
    */
   reread: () => void
 }) {
+  const h24 = use24HourTime()
   const { pollId: param } = useParams<{ pollId: string }>()
   // See lib/pollId.ts: the URL carries the short spelling, everything
   // below this line carries the canonical one.
@@ -694,7 +696,7 @@ export function PollDetail({
           // `undefined` where the answer has not been settled — a database
           // older than the columns included — since null here means a poll
           // that elected nobody.
-          winner: status.winner_settled ? winnerLabel(status.winner_name ?? null) : undefined,
+          winner: status.winner_settled ? winnerLabel(status.winner_name ?? null, h24) : undefined,
           // The badge belongs to the poll, and a poll of several questions has
           // an answer per question rather than one to put beside its title.
           // The question in front of the reader names its own, in the green

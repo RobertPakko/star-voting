@@ -15,6 +15,7 @@ import {
 import { ArchiveIcon, DownloadSimpleIcon, GearIcon, SignOutIcon } from '@phosphor-icons/react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { ClockSwitch } from './ClockSwitch'
 import { InstallButton } from './InstallButton'
 import { NotificationSwitches } from './NotificationSwitches'
 import { isInstalledApp } from '../lib/push'
@@ -156,7 +157,7 @@ export function Layout() {
                     variant="outline"
                     color="gray"
                     size="lg"
-                    aria-label="Notification settings"
+                    aria-label="Settings"
                     onClick={toggleMenu}
                   >
                     <GearIcon size={18} aria-hidden />
@@ -173,6 +174,9 @@ export function Layout() {
                     ) : (
                       <LinkPushSwitch />
                     )}
+                    {/* This browser's, not the account's, so the same for
+                        every reader; see lib/clock.ts. */}
+                    <ClockSwitch />
                     <Divider />
                     {/* Pages rather than switches, so they sit under the
                         switches and apart from them. Both are links: the menu

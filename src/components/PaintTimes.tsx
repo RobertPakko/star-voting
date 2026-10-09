@@ -16,9 +16,10 @@ import {
   paintingRuns,
   runBounds,
   toMinutes,
-  toTimeOfDay,
+  formatTimeOfDay,
   type GranuleKey,
 } from '../lib/schedule'
+import { use24HourTime } from '../lib/clock'
 import { offsetName } from '../lib/timezones'
 import type { DailyWindow, PollOption, PollSchedule } from '../lib/types'
 
@@ -111,6 +112,7 @@ export function PaintTimes({
   /** The difference as it now stands, or null when there is none. */
   onDraftChange: (edit: PaintedEdit | null) => void
 }) {
+  const h24 = use24HourTime()
   const offered = useMemo(
     () =>
       boundsOf(
@@ -206,7 +208,7 @@ export function PaintTimes({
           ? ''
           : daily
             ? LABELS[run.value]
-            : `${toTimeOfDay(run.from)}–${toTimeOfDay(Math.min(run.to, DAY_MINUTES))}`,
+            : `${formatTimeOfDay(run.from, h24)}–${formatTimeOfDay(Math.min(run.to, DAY_MINUTES), h24)}`,
       ...runBounds(run),
       color: COLORS[run.value],
       display: view === 'month' ? 'default' : 'background',
