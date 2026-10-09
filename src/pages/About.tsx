@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Anchor,
   Button,
@@ -14,7 +14,7 @@ import {
   ThemeIcon,
   Title,
 } from '@mantine/core'
-import { ArrowRightIcon, ChartBarIcon, SignInIcon, StarIcon } from '@phosphor-icons/react'
+import { ArrowRightIcon, ChartBarIcon, PlusIcon, StarIcon } from '@phosphor-icons/react'
 import { useAuth } from '../lib/auth'
 import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 import { pollPath } from '../lib/pollId'
@@ -403,11 +403,35 @@ const PROPERTIES: Entry[] = [
  * their own tab (`Ext`), which is the distinction: those leave the app.
  */
 function Samples() {
-  // The third card is the only part of this page that depends on who is
-  // reading it. A signed-in account was still being told to sign in, on a
-  // button that took them to the poll list they already have — the one card
-  // on the page whose copy was wrong for half its readers.
-  const { session } = useAuth()
+  // The third card reads the same to everybody, because anybody can make a
+  // poll: a reader with no session is given one without an account on the
+  // press, as "Continue without an account" on the sign-in screen does, and
+  // taken to the create form. It used to send them to sign in first, which
+  // was a step the app no longer needs and the one card on the page that
+  // asked for an email address before showing anything.
+  //
+  // The form is only a route once there is a session, so the navigation waits
+  // for the session to arrive rather than following the sign-in's promise:
+  // `/polls/new` without one is matched as a poll whose id is "new".
+  const { session, continueWithoutAccount } = useAuth()
+  const navigate = useNavigate()
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (starting && session) navigate('/polls/new')
+  }, [starting, session, navigate])
+
+  async function tryIt() {
+    setError(null)
+    setStarting(true)
+    try {
+      await continueWithoutAccount()
+    } catch (e) {
+      setStarting(false)
+      setError(e instanceof Error ? e.message : 'Could not start a poll. Try again.')
+    }
+  }
 
   return (
     <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
@@ -428,16 +452,15 @@ function Samples() {
         action="Example result"
       />
       <Sample
-        to={session ? '/polls/new' : '/'}
-        icon={<SignInIcon size={22} aria-hidden />}
+        to="/polls/new"
+        onClick={session ? undefined : tryIt}
+        loading={starting}
+        error={error}
+        icon={<PlusIcon size={22} aria-hidden />}
         gradient="create"
         title="Try it yourself"
-        body={
-          session
-            ? 'Make a poll of your own and send it to your friends.'
-            : 'Sign in to try making and sending your own polls.'
-        }
-        action={session ? 'New poll' : 'Sign in'}
+        body="Make a poll of your own and send it to your friends."
+        action="New poll"
       />
     </SimpleGrid>
   )
@@ -450,6 +473,9 @@ function Samples() {
  */
 function Sample({
   to,
+  onClick,
+  loading,
+  error,
   icon,
   title,
   body,
@@ -457,6 +483,10 @@ function Sample({
   gradient,
 }: {
   to: string
+  /** In place of following `to`, for a press that has work to do first. */
+  onClick?: () => void
+  loading?: boolean
+  error?: string | null
   icon: ReactNode
   title: string
   body: string
@@ -486,17 +516,38 @@ function Sample({
             </Text>
           </Stack>
         </Stack>
-        <Button
-          component={Link}
-          to={to}
-          fullWidth
-          mt="xs"
-          variant="gradient"
-          gradient={gradientValue}
-          rightSection={<ArrowRightIcon size={16} aria-hidden />}
-        >
-          {action}
-        </Button>
+        <Stack gap={4}>
+          {onClick ? (
+            <Button
+              onClick={onClick}
+              loading={loading}
+              fullWidth
+              mt="xs"
+              variant="gradient"
+              gradient={gradientValue}
+              rightSection={<ArrowRightIcon size={16} aria-hidden />}
+            >
+              {action}
+            </Button>
+          ) : (
+            <Button
+              component={Link}
+              to={to}
+              fullWidth
+              mt="xs"
+              variant="gradient"
+              gradient={gradientValue}
+              rightSection={<ArrowRightIcon size={16} aria-hidden />}
+            >
+              {action}
+            </Button>
+          )}
+          {error && (
+            <Text size="sm" c="red">
+              {error}
+            </Text>
+          )}
+        </Stack>
       </Stack>
     </Card>
   )
