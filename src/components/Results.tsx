@@ -372,7 +372,7 @@ function RunoffTieBreak({
     <Stack gap="xs">
       <Text size="sm">
         <strong>{a}</strong> and <strong>{b}</strong> were each preferred by{' '}
-        {voters(runoff.prefers_a)}, so the runoff went to its tie-break.
+        {voters(runoff.prefers_a)}
       </Text>
 
       <Stack gap={2}>
@@ -506,7 +506,7 @@ function RunoffChart({ a, b, runoff }: { a: string; b: string; runoff: Runoff })
             startAngle={180}
             endAngle={0}
             accessibilityLayer={false}
-            style={{ height: CHART_SIZE / 2, minHeight: CHART_SIZE / 2 }}
+            style={{ height: CHART_SIZE / 2, minHeight: CHART_SIZE / 2, marginTop: 8 }}
             pieProps={{
               cy: '100%',
               isAnimationActive: !reducedMotion,
@@ -692,10 +692,6 @@ function HeadToHead({ step }: { step: HeadToHeadStep }) {
 
   return (
     <Stack gap={2} pl="md">
-      <Text size="sm" c="dimmed">
-        Each option meets each of the others one on one, and wins that matchup if more voters scored
-        it higher.
-      </Text>
       {totals.rows.map((r) => (
         <Text key={r.id} size="sm" c="dimmed">
           <strong>{r.name}</strong>: {r.value} of {step.results.length - 1} matchups won
@@ -777,7 +773,7 @@ function MatchupLine({ matchup }: { matchup: Matchup }) {
   if (equal) {
     return (
       <Text size="sm" c="dimmed">
-        <strong>{matchup.a_name}</strong> vs <strong>{matchup.b_name}</strong>: {voters(won)} each,
+        <strong>{matchup.a_name}</strong> vs <strong>{matchup.b_name}</strong>: {voters(won)} preferred each,
         so neither wins
       </Text>
     )
