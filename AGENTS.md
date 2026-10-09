@@ -5707,8 +5707,9 @@ needed is not on the page until somebody asks for it: a **Show tie-break**
 button sits at the right of that round's heading, and pressing it slides a
 panel holding the tie-break across the round's card. The scoring round's
 panel holds the ties broken to fill the runoff. The runoff's holds how a level
-runoff was settled: the higher scoring total, then five-star votes, numbered and
-marked *Decisive* or *Still tied*, the same shape as the scoring round's.
+runoff was settled: the higher scoring total, then five-star votes, named in
+the order they are tried and marked *Decisive* or *Still tied*, the same shape
+as the scoring round's.
 **The card never changes height**: it stays the round's height and a longer
 tie-break scrolls inside the panel, because a card growing to fit pushed the
 rest of the page down at the press of a button about one card.
@@ -5764,8 +5765,22 @@ is — "3 voters preferred each, 2 scored them equally", the words the runoff
 uses for the same arithmetic, with the word *matchup* gone. A
 group of three or more keeps the per-option totals, because there the totals
 are the point (the rule is asking which option beat the most others), and
-lists the pairs beneath them. The totals are derived from those same pair
-rows, so the two can't disagree.
+each total opens onto the matchups it counted — *Beat*, *Tied with*, *Lost
+to*, told from that option's side, wins first, closed until asked for. The
+totals are derived from those same pair rows, so the two can't disagree.
+
+**They used to be one list of every pair, under all the totals.** The right
+size and the wrong shape: a reader checking why an option "won 1 of 2" had to
+find its two pairs among everybody's and work out which way round each was
+written. Grouped under the option, every pair appears twice — once under each
+of its options — and the lines under a total are exactly what that total
+counted.
+
+**The rules are named in order, not numbered** — *First rule: Head-to-head
+preference*, *Second rule: Five-star votes*. A tie settled by its first rule
+showed a lone "1." over a list with nothing after it, which read as the rest
+of the list having gone missing; "First rule" says the same thing about order
+and is still true when it is the only rule there was any need to try.
 
 The counts ride along in the payload rather than being fetched when a reader
 expands something: they are a few integers over a poll whose results that

@@ -20,3 +20,30 @@
   transition: width var(--motion-slow) var(--motion-ease);
   transition-delay: calc(var(--row) * 40ms);
 }
+
+/* An option's line in a head-to-head tie-break, which opens onto its
+ * matchups. A button, but drawn as the line it was: the caret is what says it
+ * opens, and the hover is what says the whole line is the target rather than
+ * the caret alone. */
+.record {
+  display: block;
+  width: 100%;
+  padding: 2px 4px;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.record:hover {
+  background-color: var(--mantine-color-default-hover);
+}
+
+/* Down the line's first row of text rather than centred on a name that may
+ * wrap, and turned to point down once the matchups are showing. */
+.caret {
+  flex-shrink: 0;
+  margin-top: 5px;
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.caret[data-open] {
+  transform: rotate(90deg);
+}

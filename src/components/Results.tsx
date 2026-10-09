@@ -1,22 +1,24 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   ActionIcon,
   Badge,
   Box,
   Card,
+  Collapse,
   Divider,
   Group,
   Popover,
   Progress,
   Stack,
   Text,
+  UnstyledButton,
 } from '@mantine/core'
 import { PieChart } from '@mantine/charts'
 import { useReducedMotion } from '@mantine/hooks'
 // Here rather than in main.tsx, so the chart's stylesheet is split off with
 // this chunk and a reader filling in a ballot never fetches it. See deferred.ts.
 import '@mantine/charts/styles.css'
-import { InfoIcon, WarningIcon } from '@phosphor-icons/react'
+import { CaretRightIcon, InfoIcon, WarningIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
@@ -30,6 +32,7 @@ import type {
   PollResults,
   Runoff,
   Tiebreak,
+  TiebreakEntry,
 } from '../lib/types'
 import { CoinFlip, type Finalist } from './CoinFlip'
 import { FullRanking } from './FullRanking'
@@ -347,10 +350,10 @@ function ScoringTieBreaks({ tiebreaks }: { tiebreaks: Tiebreak[] }) {
  * How a level runoff was settled, laid over the runoff card when somebody
  * asks. See RoundCard.
  *
- * The same shape as the scoring round's tie-break on purpose: numbered rules,
- * each marked as having settled it or not, then a line saying what came of
- * it. The rules are the runoff's own: the higher scoring total, then
- * five-star votes. A runoff level on all three elects nobody, which the card
+ * The same shape as the scoring round's tie-break on purpose: the rules in
+ * the order they are tried, each marked as having settled it or not, then a
+ * line saying what came of it. The rules are the runoff's own: the higher
+ * scoring total, then five-star votes. A runoff level on all three elects nobody, which the card
  * at the top of the page already says.
  */
 function RunoffTieBreak({
@@ -419,12 +422,20 @@ function RunoffTieBreak({
   )
 }
 
-/** One rule a tie-break tried, numbered, and whether it settled the tie. */
+/**
+ * One rule a tie-break tried, by its place in the order, and whether it
+ * settled the tie.
+ *
+ * Named rather than numbered. A bare "1." over the only rule a tie needed
+ * read as the first item of a list whose other items had gone missing; "First
+ * rule" says the same thing about order and is still true when it is the only
+ * rule shown, since the later ones were never reached.
+ */
 function StepHeading({ n, label, decisive }: { n: number; label: string; decisive: boolean }) {
   return (
     <Group gap="xs">
       <Text size="sm" fw={600}>
-        {n}. {label}
+        {RULE_ORDINALS[n - 1] ?? `Rule ${n}`}: {label}
       </Text>
       <Badge size="xs" variant="light" color={decisive ? badgeColor.done : badgeColor.unsettled}>
         {decisive ? 'Decisive' : 'Still tied'}
@@ -432,6 +443,9 @@ function StepHeading({ n, label, decisive }: { n: number; label: string; decisiv
     </Group>
   )
 }
+
+/** Every tie-break has two rules at most: the score round's and the runoff's alike. */
+const RULE_ORDINALS = ['First rule', 'Second rule']
 
 const fiveStarVotes = (n: number) => `${n} ${n === 1 ? 'five-star vote' : 'five-star votes'}`
 
@@ -655,9 +669,9 @@ function tiedPair(results: PollResults, nameById: Map<string, string>): [Finalis
  * So a two-option tie is reported as the one comparison it actually is,
  * in the same words the runoff below uses for the same arithmetic, and the
  * word "matchup" does not appear at all. A larger group keeps the totals,
- * with three options they are the point, since the rule is asking which one
- * beat the most others; and shows the pairs they were counted from
- * underneath.
+ * since with three options they are the point -- the rule is asking which one
+ * beat the most others -- and each total opens onto the matchups it was
+ * counted from. See OptionMatchups.
  */
 function HeadToHead({ step }: { step: HeadToHeadStep }) {
   const { matchups } = step
@@ -681,31 +695,109 @@ function HeadToHead({ step }: { step: HeadToHeadStep }) {
     )
   }
 
-  // Both lists are cut short on a group large enough to need it, and the pair
-  // list is the one that needs it first: pairs grow as the square of the group,
-  // so a dozen options tied at the top score is sixty-six lines of working
-  // under a tie-break whose answer is the three lines above them. The
-  // denominator stays the whole group -- "3 of 29 matchups won" is the count
-  // the rule made its decision on, whether or not all 29 are listed.
+  // Cut short on a group large enough to need it. The denominator stays the
+  // whole group -- "won 3 of 29 matchups" is the count the rule made its
+  // decision on, whether or not all 29 options are listed.
   const totals = capRows(step.results)
-  const pairs = capRows(matchups)
 
   return (
-    <Stack gap={2} pl="md">
+    <Stack gap={2} pl="xs">
       {totals.rows.map((r) => (
-        <Text key={r.id} size="sm" c="dimmed">
-          <strong>{r.name}</strong>: {r.value} of {step.results.length - 1} matchups won
-        </Text>
+        <OptionMatchups
+          key={r.id}
+          option={r}
+          of={step.results.length - 1}
+          matchups={step.matchups}
+        />
       ))}
-      {totals.hidden > 0 && <Rest hidden={totals.hidden} what="option" />}
-      <Stack gap={2} mt={4}>
-        {pairs.rows.map((m) => (
-          <MatchupLine key={`${m.a}-${m.b}`} matchup={m} />
-        ))}
-        {pairs.hidden > 0 && <Rest hidden={pairs.hidden} what="pair" />}
-      </Stack>
+      {totals.hidden > 0 && <Rest hidden={totals.hidden} what="option" pl="md" />}
     </Stack>
   )
+}
+
+/**
+ * One option's line in a head-to-head tie-break -- how many of its matchups
+ * it won -- opening onto those matchups, told from its side.
+ *
+ * The matchups used to be one list under all the totals, every pair once,
+ * which is the right size and the wrong shape: a reader checking why an
+ * option "won 2 of 3" had to find its three pairs among everybody's, and
+ * work out which way round each one was written. Grouped under the option,
+ * the lines under a total are exactly the matchups that total counted, each
+ * one said from that option's side, wins first, so the count can be checked
+ * by reading down. Every pair therefore appears twice, once under each of
+ * its options, and is only ever read once: closed is the default.
+ */
+function OptionMatchups({
+  option,
+  of,
+  matchups,
+}: {
+  option: TiebreakEntry
+  of: number
+  matchups: Matchup[]
+}) {
+  const [open, setOpen] = useState(false)
+  const listId = useId()
+  const { rows, hidden } = capRows(
+    matchups
+      .filter((m) => m.a === option.id || m.b === option.id)
+      .map((m) => fromSideOf(option.id, m))
+      .sort((x, y) => OUTCOME_ORDER[x.outcome] - OUTCOME_ORDER[y.outcome]),
+  )
+
+  return (
+    <div>
+      <UnstyledButton
+        className={classes.record}
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls={listId}
+      >
+        <Group gap={6} wrap="nowrap" align="flex-start">
+          <CaretRightIcon
+            size={12}
+            aria-hidden
+            className={classes.caret}
+            data-open={open || undefined}
+          />
+          <Text size="sm" c="dimmed">
+            <strong>{option.name}</strong>: won {option.value} of {count(of, 'matchup')}
+          </Text>
+        </Group>
+      </UnstyledButton>
+      <Collapse expanded={open} id={listId}>
+        <Stack gap={2} pl={24} pb={4}>
+          {rows.map((m) => (
+            <Text key={m.opponent} size="sm" c="dimmed">
+              {OUTCOME_VERB[m.outcome]} <strong>{m.opponentName}</strong>:{' '}
+              {m.outcome === 'tied'
+                ? `${voters(m.mine)} preferred each`
+                : `preferred by ${voters(m.mine)} to ${m.theirs}`}
+            </Text>
+          ))}
+          {hidden > 0 && <Rest hidden={hidden} what="matchup" />}
+        </Stack>
+      </Collapse>
+    </div>
+  )
+}
+
+type Outcome = 'won' | 'tied' | 'lost'
+
+/** Wins first, so the count on the line above can be checked by reading down. */
+const OUTCOME_ORDER: Record<Outcome, number> = { won: 0, tied: 1, lost: 2 }
+const OUTCOME_VERB: Record<Outcome, string> = { won: 'Beat', tied: 'Tied with', lost: 'Lost to' }
+
+/** A matchup turned round, if need be, so that `id` is the side it is told from. */
+function fromSideOf(id: string, m: Matchup) {
+  const [mine, theirs, opponent, opponentName] =
+    m.a === id
+      ? [m.prefers_a, m.prefers_b, m.b, m.b_name]
+      : [m.prefers_b, m.prefers_a, m.a, m.a_name]
+  const outcome: Outcome = mine > theirs ? 'won' : mine < theirs ? 'lost' : 'tied'
+
+  return { mine, theirs, opponent, opponentName, outcome }
 }
 
 /**
@@ -759,30 +851,6 @@ function renderAdvancedNames(
       <NameList names={advanced} />
       {suffix}
     </>
-  )
-}
-
-/** One pair of the tied group, and which way its voters went. */
-function MatchupLine({ matchup }: { matchup: Matchup }) {
-  const equal = matchup.prefers_a === matchup.prefers_b
-  const [ahead, behind, won, lost] =
-    matchup.prefers_a >= matchup.prefers_b
-      ? [matchup.a_name, matchup.b_name, matchup.prefers_a, matchup.prefers_b]
-      : [matchup.b_name, matchup.a_name, matchup.prefers_b, matchup.prefers_a]
-
-  if (equal) {
-    return (
-      <Text size="sm" c="dimmed">
-        <strong>{matchup.a_name}</strong> vs <strong>{matchup.b_name}</strong>: {voters(won)} preferred each,
-        so neither wins
-      </Text>
-    )
-  }
-
-  return (
-    <Text size="sm" c="dimmed">
-      <strong>{ahead}</strong> vs <strong>{behind}</strong>: {voters(won)} to {lost}
-    </Text>
   )
 }
 
