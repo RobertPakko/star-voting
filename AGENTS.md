@@ -2479,10 +2479,14 @@ to press on a phone. They sit in the space under the closing wordmark that the
 opening tagline used (`FILMS[…].actions`), and are hidden rather than merely
 transparent until they rise in, so nobody tabs onto one they cannot see.
 
-**Make your own poll works signed out.** Signed out, `/polls/new` used to fall
-into `polls/:pollId` and ask the database for a poll called "new"; it is now
-the sign-in screen, which remembers the address for an emailed link and sends
-**Continue without an account** to the create form rather than the poll list.
+**Make your own poll works signed out, and asks nothing.** A reader with no
+session is given one without an account on the press — the same
+`continueWithoutAccount` the About page's *Try it yourself* and the sign-in
+screen's **Continue without an account** call — and taken to the create form
+once the session arrives, since `/polls/new` with no session is matched as a
+poll called "new". It used to send them to the sign-in screen first, which was
+a press on a button saying they did not want to sign in, on the one page made
+for people who have never heard of the app.
 
 **Share this intro** opens the device's share sheet where there is one and
 copies the link otherwise. Every intro link draws the same preview card as

@@ -1,11 +1,12 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { Button, Group, Stack, UnstyledButton, VisuallyHidden } from '@mantine/core'
+import { Button, Group, Stack, Text, UnstyledButton, VisuallyHidden } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
 import { BookOpenIcon, CheckIcon, PlusIcon, ShareNetworkIcon } from '@phosphor-icons/react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { LandscapeFilm } from '../components/intro/Landscape'
 import { PortraitFilm } from '../components/intro/Portrait'
 import { COL, CUES, FILMS, p01, tween, TOTAL, type FilmShape } from '../components/intro/motion'
+import { useAuth } from '../lib/auth'
 
 /**
  * The intro: a twenty-two-second film of a poll being made, voted in and
@@ -109,6 +110,31 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
     return () => clearTimeout(id)
   }, [copied])
 
+  // Make your own poll goes straight to the create form for everybody, as the
+  // About page's "Try it yourself" does: a reader with no session is given one
+  // without an account on the press rather than sent to the sign-in screen.
+  // The navigation waits for the session to arrive, because `/polls/new`
+  // without one is matched as a poll whose id is "new".
+  const { session, continueWithoutAccount } = useAuth()
+  const navigate = useNavigate()
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (starting && session) navigate('/polls/new')
+  }, [starting, session, navigate])
+
+  async function makePoll() {
+    setError(null)
+    setStarting(true)
+    try {
+      await continueWithoutAccount()
+    } catch (e) {
+      setStarting(false)
+      setError(e instanceof Error ? e.message : 'Could not start a poll. Try again.')
+    }
+  }
+
   async function share() {
     const url = `${window.location.origin}${window.location.pathname}#/intro`
     const data = {
@@ -164,17 +190,31 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
     >
       Learn more about STAR
     </Button>,
-    <Button
-      key="make"
-      size={size}
-      color={COL.blue}
-      component={Link}
-      to="/polls/new"
-      leftSection={<PlusIcon size={18} aria-hidden />}
-      style={rise(1)}
-    >
-      Make your own poll
-    </Button>,
+    session ? (
+      <Button
+        key="make"
+        size={size}
+        color={COL.blue}
+        component={Link}
+        to="/polls/new"
+        leftSection={<PlusIcon size={18} aria-hidden />}
+        style={rise(1)}
+      >
+        Make your own poll
+      </Button>
+    ) : (
+      <Button
+        key="make"
+        size={size}
+        color={COL.blue}
+        onClick={() => void makePoll()}
+        loading={starting}
+        leftSection={<PlusIcon size={18} aria-hidden />}
+        style={rise(1)}
+      >
+        Make your own poll
+      </Button>
+    ),
     <Button
       key="share"
       {...quiet}
@@ -187,15 +227,24 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
       {copied ? 'Link copied' : 'Share this intro'}
     </Button>,
   ]
+  const failed = error && (
+    <Text size="sm" c="red" ta="center">
+      {error}
+    </Text>
+  )
 
   return portrait ? (
     <Stack gap="sm" align="stretch" maw={320} mx="auto" style={style}>
       {buttons}
+      {failed}
     </Stack>
   ) : (
-    <Group gap="md" justify="center" style={style}>
-      {buttons}
-    </Group>
+    <Stack gap="xs" style={style}>
+      <Group gap="md" justify="center">
+        {buttons}
+      </Group>
+      {failed}
+    </Stack>
   )
 }
 
