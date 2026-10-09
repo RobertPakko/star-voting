@@ -27,7 +27,6 @@ import { NotificationSwitches } from './NotificationSwitches'
 import { isInstalledApp } from '../lib/push'
 import { LinkPushSwitch } from './PushSwitch'
 import { Reveal } from './Reveal'
-import { peekFlight } from '../lib/headingFlight'
 import { ThemeToggle } from './ThemeToggle'
 
 /**
@@ -293,11 +292,11 @@ export function Layout() {
             blink — see PollPage. A key off `pathname` would have thrown that
             away and re-mounted the poll on every step through it.
 
-            Except a page a poll's title is flying onto, between a list card
-            and a poll's page in either direction: the flight is that page's
-            entrance, and the page arrives under it in its own time. See
-            lib/headingFlight.ts. */}
-        <Reveal key={pageKey(pathname)} enter={!peekFlight('poll') && !peekFlight('list')}>
+            Except a page a poll's heading is flying onto, between a list
+            card and a poll's page in either direction: the flight is that
+            page's entrance, so the page stops this rise itself before the
+            first paint. See `stillEntrances` in lib/headingFlight.ts. */}
+        <Reveal key={pageKey(pathname)}>
           <Outlet />
         </Reveal>
       </AppShell.Main>

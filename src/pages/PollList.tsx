@@ -27,8 +27,18 @@ import type { PollListItem } from '../lib/types'
 import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import classes from './PollList.module.css'
-import { pollPath } from '../lib/pollId'
-import { fly, headingIn, landFlight, launchFlight, peekFlight } from '../lib/headingFlight'
+import { pollIdFromParam, pollPath } from '../lib/pollId'
+import {
+  departing,
+  fly,
+  headingIn,
+  landFlight,
+  launchFlight,
+  peekFlight,
+  returnFlight,
+  stillEntrances,
+  type Flight,
+} from '../lib/headingFlight'
 import { readListSnapshot, writeListScroll, writeListSnapshot } from '../lib/listCache'
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
@@ -67,15 +77,20 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   // JavaScript, which the global rule in index.css cannot reach.
   const reducedMotion = useReducedMotion()
   const userId = session?.user.id
-  // A return to the list — its own back control on a poll, or the browser's
+  // A return to the list — the way back on a poll's page, or the browser's
   // back button — draws the list as it was left rather than starting over;
   // see lib/listCache.ts. Taken once, on mount: this is how the page starts,
-  // not something it goes on consulting.
+  // not something it goes on consulting. Which kind of arrival it is can be
+  // told while rendering, though the heading flying back cannot always be:
+  // the browser's back button launches it as the poll's page goes, which is
+  // after this has rendered. See the landing below.
   const navigationType = useNavigationType()
-  const [returning] = useState(() => (viewingRemoved ? null : peekFlight('list')))
   const [kept] = useState(() =>
-    !viewingRemoved && (returning || navigationType === 'POP') ? readListSnapshot(userId) : null,
+    !viewingRemoved && (peekFlight('list')?.deliberate || navigationType === 'POP')
+      ? readListSnapshot(userId)
+      : null,
   )
+  const returning = useRef<Flight | null>(null)
   const [polls, setPolls] = useState<PollListItem[] | null>(kept?.polls ?? null)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(kept?.page ?? 1)
@@ -184,17 +199,23 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   // flying back onto its card. Before the first paint, so the list is never
   // seen at the top and then moved; and the scroll first, because the flight
   // aims at where the card is on screen.
+  //
+  // Looked for in a layout effect, which runs after the poll's page has gone
+  // and launched it, and before the first paint. Held in a ref once found,
+  // since finding it claims it.
   useLayoutEffect(() => {
     if (!kept) return
     window.scrollTo(0, kept.scrollY)
-    if (!returning) return
-    landFlight(returning)
-    const card = document.querySelector(`[data-poll-card="${CSS.escape(returning.id)}"]`)
+    const flight = (returning.current ??= returnFlight(navigationType))
+    if (!flight) return
+    landFlight(flight)
+    const card = document.querySelector(`[data-poll-card="${CSS.escape(flight.id)}"]`)
     const heading = card && headingIn(card, 'card')
     // Not on this page of the list any more — removed, or deleted, since the
     // reader left — so there is nowhere for it to land and nothing flies.
     if (!heading) return
-    const run = fly(returning, heading)
+    stillEntrances(heading)
+    const run = fly(flight, heading)
     let live = true
     void run.arrived.then(() => {
       if (live) void run.settle(heading, 0)
@@ -203,14 +224,24 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
       live = false
       run.cancel()
     }
-  }, [kept, returning])
+    // Once, on arrival; see above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  // How far down the list was, written as the reader leaves it: in a layout
-  // effect's cleanup, which runs while the list is still in the document and
-  // the page is still scrolled where the reader had it.
+  // Leaving, written while the list is still in the document — a layout
+  // effect's cleanup — and the page is still scrolled where the reader had
+  // it: how far down it was, and, where the address has moved on to a poll
+  // whose card is on screen, that card's heading taking off. The second is the
+  // browser's forward button; a press on the card launched its own flight
+  // before the address moved.
   useLayoutEffect(() => {
     if (viewingRemoved || !userId) return
-    return () => writeListScroll(userId, window.scrollY)
+    return () => {
+      writeListScroll(userId, window.scrollY)
+      const opening = pollOpening()
+      const card = opening && document.querySelector(`[data-poll-card="${CSS.escape(opening)}"]`)
+      if (opening && card) departing('poll', opening, headingIn(card, 'card'))
+    }
   }, [viewingRemoved, userId])
 
   // Unlike a single poll, a list has no settled state to stop at: any poll on
@@ -317,11 +348,14 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
 
   // Faded in over the shape that was standing in for it, rather than swapped
   // for it between two frames; see Reveal. Kept rows fade in too, under the
-  // title flying back onto its card: there was no shape before them, but
+  // heading flying back onto its card: there was no shape before them, but
   // there was a poll's page, and a list that appeared between two frames in
-  // its place would be the one swap on the way back.
+  // its place would be the one swap on the way back. Without the rise every
+  // other arrival has, though: the flight measures where its card is as the
+  // list mounts, and a list still rising then is a landing aimed a few pixels
+  // low — the heading came down, and then stepped up into place.
   return (
-    <Reveal>
+    <Reveal rise={!kept}>
       <Stack maw={720} mx="auto" gap="md">
         <LiveConnectionNotice status={liveStatus} />
 
@@ -449,20 +483,10 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                     opens draws it from the press; and the press flies it to
                     the top of the page while the poll is read. A click that
                     asks for a new tab or window is left to the browser. See
-                    lib/headingFlight.ts.
-
-                    `listId` is what puts a way back on the poll's page, and
-                    the card that way back lands on: a poll opened from the
-                    list returns to it, and one opened from anywhere else has
-                    nowhere to return to. Not from the removed polls, whose
-                    way back would land on a list they are not on. */}
+                    lib/headingFlight.ts. */}
                 <Link
                   to={pollPath(poll.id)}
-                  state={{
-                    title: poll.title,
-                    heading,
-                    listId: viewingRemoved ? undefined : poll.id,
-                  }}
+                  state={{ title: poll.title, heading }}
                   className={classes.link}
                   onClick={(event) => {
                     if (
@@ -544,4 +568,14 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
       </Stack>
     </Reveal>
   )
+}
+
+/**
+ * The poll the address has just moved on to, if it has moved on to one: what
+ * a list going away while the address names a poll is opening.
+ */
+function pollOpening(): string | null {
+  const match = /^#\/polls\/([^/?]+)/.exec(window.location.hash)
+  if (!match || match[1] === 'new') return null
+  return pollIdFromParam(match[1])
 }

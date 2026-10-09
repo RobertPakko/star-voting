@@ -51,9 +51,10 @@ export function Reveal({
   children: ReactNode
   /**
    * Whether to play the entrance at all, read once, when it mounts — so it
-   * can be turned off for an arrival that has an entrance of its own (a
-   * poll's title flying in; see lib/headingFlight.ts) without a later render
-   * starting one halfway through the page's life.
+   * can be turned off for an arrival that has an entrance of its own without
+   * a later render starting one halfway through the page's life. A page a
+   * heading is flying onto stops the rise itself, before the first paint; see
+   * `stillEntrances` in lib/headingFlight.ts.
    */
   enter?: boolean
   /**
@@ -65,6 +66,11 @@ export function Reveal({
 }) {
   const [entering] = useState(enter)
   return (
-    <div className={entering ? (rise ? classes.reveal : classes.fade) : undefined}>{children}</div>
+    <div
+      className={entering ? (rise ? classes.reveal : classes.fade) : undefined}
+      data-reveal={entering ? (rise ? 'rise' : 'fade') : undefined}
+    >
+      {children}
+    </div>
   )
 }

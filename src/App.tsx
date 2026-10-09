@@ -33,7 +33,16 @@ import { refreshAccountPush, useNotificationRoutes } from './lib/push'
 import { useLaunchRoutes } from './lib/launch'
 import { useClearPollNotifications } from './lib/badge'
 import { usePageTitle } from './lib/pageTitle'
-import { fly, headingIn, landFlight, peekFlight, type FlightRun } from './lib/headingFlight'
+import {
+  departing,
+  fly,
+  headingIn,
+  landFlight,
+  peekFlight,
+  stillEntrances,
+  type FlightRun,
+} from './lib/headingFlight'
+import { readListSnapshot } from './lib/listCache'
 import type { PollHeadingProps } from './components/PollHeading'
 import { motionMs } from './lib/motion'
 import { BackToList } from './components/BackToList'
@@ -284,21 +293,31 @@ function PollPage() {
   // would only be refused. See `onGone` in useLiveStream.
   const [gone, setGone] = useState<string | null>(null)
 
-  // Opened from the list, with the poll's title flying in from its card: the
-  // page starts blank under the title, is read while it flies, and arrives
+  // Opened from the list, with the poll's heading flying in from its card: the
+  // page starts blank under the heading, is read while it flies, and arrives
   // once it lands — whole, if the read is back by then, and as its skeleton
-  // if not. Taken once, on mount, like everything about how a page was
-  // arrived at. See lib/headingFlight.ts.
-  const [flight] = useState(() => (pollId ? peekFlight('poll', pollId) : null))
+  // if not. See lib/headingFlight.ts.
+  //
+  // Looked for twice. A press on a card launches its flight before the
+  // address moves, so it is there as this first renders; the browser's
+  // forward button launches one as the list goes, which is after this has
+  // rendered, so the mount's layout effect looks again — before the first
+  // paint, so the page is never seen arriving the ordinary way first.
+  const [flight, setFlight] = useState(() => (pollId ? peekFlight('poll', pollId) : null))
   const [phase, setPhase] = useState<'flying' | 'landing' | 'still'>(flight ? 'flying' : 'still')
   const flying = useRef<FlightRun | null>(null)
+  useLayoutEffect(() => {
+    if (flight || !pollId) return
+    const late = peekFlight('poll', pollId)
+    if (!late) return
+    setFlight(late)
+    setPhase('flying')
+    // Once, on arrival: a flight is how a page is arrived at, not something
+    // that happens to it later.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // When the skeleton went up, while it is up; see SKELETON_MIN_MS.
   const skeletonSince = useRef<number | null>(null)
-  // The card this poll was opened from, which is whether the page offers a way
-  // back to the list and where on it that way lands. Held for as long as the
-  // route is — every question of the poll included — because walking between
-  // questions is a navigation of its own and does not carry the state along.
-  const [listId] = useState(() => listIdOf(location.state))
 
   const sample = !!pollId && isSampleId(pollId)
   // The read in hand, if it describes the address being rendered. A read of
@@ -407,6 +426,27 @@ function PollPage() {
 
   const refused = covering?.kind === 'unreadable'
 
+  // This poll's card on the list, which is where the way back lands: the
+  // group's first question, which is the row the list draws for the whole
+  // poll, whichever question is open. Until the poll is read, the question
+  // being opened — which is that row whenever the poll was opened from it.
+  const listRow = (covering && firstQuestionOf(covering)) || pollId
+  const leaving = useRef({ listRow, userId: session?.user.id })
+  leaving.current = { listRow, userId: session?.user.id }
+
+  // Going back to the list some way other than the page's own control — the
+  // browser's back button, most of all — flies the heading back onto its card
+  // just the same, where the list will be drawn as it was left. Measured as
+  // the page goes, while the heading is still on it; see `departing`.
+  useLayoutEffect(() => {
+    const now = leaving
+    return () => {
+      const { listRow, userId } = now.current
+      if (listRow && onTheList() && readListSnapshot(userId))
+        departing('list', listRow, headingIn(document, 'page'))
+    }
+  }, [])
+
   // The title's flight in. Before the first paint, so the page is never seen
   // with the title already in place; and the page goes to its top first,
   // because the list may have been scrolled and the flight aims at the place
@@ -416,6 +456,7 @@ function PollPage() {
     landFlight(flight)
     window.scrollTo(0, 0)
     const target = headingIn(document, 'page')
+    if (target) stillEntrances(target)
     if (!target) {
       setPhase('still')
       return
@@ -464,13 +505,12 @@ function PollPage() {
     pollId && !sample && covering && !refused ? [pollId, ...questionsCovered(covering)] : [],
   )
 
-  // The way back to the list, on a poll opened from it; see BackToList.
-  const back =
-    listId && session ? (
-      <Box maw={720} mx="auto">
-        <BackToList listId={listId} />
-      </Box>
-    ) : null
+  // The way back to the list, for everybody who has one; see BackToList.
+  const back = session ? (
+    <Box maw={720} mx="auto">
+      <BackToList listId={listRow} />
+    </Box>
+  ) : null
 
   // In the air: the page is laid out — so the title has somewhere to aim for
   // — and not shown. The skeleton is drawn because its title is drawn exactly
@@ -585,10 +625,23 @@ function carriedHeading(state: unknown): PollHeadingProps | undefined {
     : undefined
 }
 
-/** The list card a poll was opened from, if it was; see BackToList. */
-function listIdOf(state: unknown): string | undefined {
-  const id = (state as { listId?: unknown } | null)?.listId
-  return typeof id === 'string' && id ? id : undefined
+/**
+ * The group's first question — the row the poll list draws for the whole poll
+ * — or nothing, for a poll that asks one question and is its own row.
+ */
+function firstQuestionOf(page: PollRead): string | undefined {
+  if (page.kind === 'unreadable' || page.questions.length === 0) return undefined
+  return page.questions.reduce((a, b) => (b.question_position < a.question_position ? b : a)).id
+}
+
+/**
+ * Whether the address has moved on to the poll list itself — not the removed
+ * polls, which are the same route with a query on it and have no card for a
+ * heading to land on.
+ */
+function onTheList(): boolean {
+  const path = window.location.hash.replace(/^#/, '')
+  return path === '' || path === '/'
 }
 
 /**

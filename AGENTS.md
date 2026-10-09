@@ -2407,7 +2407,8 @@ on every step through it, which is why `Layout` keys on `pageKey()` instead.
 
 Opening a poll from the list flies its heading from the card to the top of the
 poll's page ([`lib/headingFlight.ts`](src/lib/headingFlight.ts)), and the
-page's **Your polls** control flies it back down onto its card. Every part of
+page's **Your polls** control flies it back down onto its card — as do the
+browser's own back and forward buttons. Every part of
 the heading travels to its own counterpart: the title grows into the page's
 title, and the state badge, the description, who made it and the row of tags
 each move to where the page draws them. It passes the rule at the top of this
@@ -2458,10 +2459,14 @@ Five things it took:
 - **It is the words of the title that fly, not the title's box**
   (`PollTitleText`). The box is as wide as its share of the row and the words
   are not, so flying the box would scale a short title by the space around it.
-- **The page's own entrance stands down for it** (`Reveal`'s `enter`, in
-  `Layout`). The flight *is* the page's entrance, and what arrives under it
-  fades without the usual rise (`rise`), since the heading is already standing
-  in place over it and a rise would show the real one sliding under its copy.
+- **The page's own entrance stands down for it.** The flight *is* the page's
+  entrance, so the page it lands on stops `Layout`'s rise before the first
+  paint (`stillEntrances`, which finds it by `Reveal`'s `data-reveal`), and
+  what arrives under the heading fades without one (`Reveal`'s `rise`). Both
+  halves matter for the same reason: a page still rising when the flight
+  measures where to land is a landing aimed a few pixels low. The way back
+  onto the list did exactly that for a while — the list rose as it arrived,
+  and the heading came down, stopped, and stepped up into place.
 
 **And the page keeps room for a scrollbar it has not got yet**
 (`scrollbar-gutter: stable` on `html`, in index.css). The page the heading
@@ -2470,20 +2475,46 @@ scrollbars take up room the content shifted left by half of one at the moment
 of landing, and the title was seen to arrive and then step sideways. Every page
 that grew past the window while it loaded did the same, unremarked.
 
-**The way back is only on a poll opened from the list.** The card passes its
-id along (`listId`), and `PollPage` holds it for as long as it is mounted —
-every question of the poll included, since walking between them is a
-navigation that does not carry the state. A poll arrived at from a link was
-never on a list from the reader's side of it, and is offered none; the
-wordmark still goes to the list from anywhere. It goes *to* the list rather
-than back through history, because three questions walked are three entries
-between the reader and the list.
+**The way back is on every poll page of a reader who has a list**
+(`BackToList`). It was only on a poll opened from the list for a while, on the
+grounds that a poll reached from a link had never been on a list from the
+reader's side of it — true, and beside the point: the wordmark was the only
+other way to the list, and not everybody thinks to press a wordmark. Always
+being there also keeps the top of the page one shape, which the skeleton and
+the flight both depend on. It lands on the card of the group's first question,
+which is the row the list draws for the whole poll, and it goes *to* the list
+rather than back through history, because three questions walked are three
+entries between the reader and the list. It only flies where there is a list
+kept from earlier in the visit for it to land on (below).
+
+**The browser's buttons fly too, and are the harder half.** A press on a card
+or on the way back can measure the heading before the address moves. The back
+and forward buttons move the address first, and the page being left hears
+about it only as it is taken down. That is still early enough: a layout
+effect's cleanup runs while the old page is in the document, so it can measure
+its heading then (`departing`) — the poll's page when the address has moved on
+to the list, the list when it has moved on to a poll whose card is on screen.
+What it cannot do is reach the page being opened before it renders, because
+that page has rendered already by the time the old one is taken down; so both
+ends look for their flight in a layout effect on mount, before the first
+paint, as well as while rendering.
+
+Three things stop a departure from flying. A flight already on its way — the
+press launched it. A browser that drew its own transition for the step, as a
+swipe back on a phone does: it says so on the `popstate` it fires
+(`hasUAVisualTransition`), which a listener in `headingFlight.ts` hears ahead
+of the router, and two animations of one step is one too many. Browsers that
+do not report it get both on a swipe. And a heading scrolled out of sight,
+which would fly in from beyond the edge of the window. The list takes a
+returning flight only from its own way back or from the back button
+(`returnFlight`): the wordmark is somebody asking for the list as it is now,
+which is drawn fresh and has no card waiting.
 
 **The list comes back as it was left** ([`lib/listCache.ts`](src/lib/listCache.ts)):
 the same page of it, the same rows, scrolled where it was, so the heading has a
 card to land on at once. Every read of the list leaves a snapshot, and leaving
-the list records the scroll. Only a return draws from it — this control, or
-the browser's back button, which gets the list but not the flight. Arriving
+the list records the scroll. Only a return draws from it — the way back, or
+the browser's back button. Arriving
 any other way is somebody asking for the list as it is now. The list still
 subscribes and reads as it always has, so the kept rows are only ever on
 screen for the moment that takes. A card that is no longer there — removed,

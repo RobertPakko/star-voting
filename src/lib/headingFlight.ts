@@ -73,6 +73,12 @@ export type Flight = {
   /** Where each part was when it was pressed, in viewport pixels. */
   from: Partial<Record<Part, Origin>>
   at: number
+  /**
+   * Launched by a press that asked for this journey — a card, or the page's
+   * own way back — rather than noticed on the way out of a page; see
+   * `departing`.
+   */
+  deliberate: boolean
 }
 
 /**
@@ -88,9 +94,20 @@ let pending: Flight | null = null
  * Takes off from `from`, the heading the reader just pressed, if the reader
  * has not asked for less motion. The page being opened picks it up.
  */
-export function launchFlight(to: Flight['to'], id: string, from: Element | null) {
+export function launchFlight(
+  to: Flight['to'],
+  id: string,
+  from: Element | null,
+  deliberate = true,
+) {
   pending = null
   if (!from || prefersReducedMotion() || typeof from.animate !== 'function') return
+  // A heading scrolled out of sight has nowhere on screen to take off from,
+  // and a title arriving from beyond the edge of the window reads as
+  // something falling in rather than as the thing just pressed. The page
+  // arrives as it would have without one.
+  const title = partOf(from, 'title')?.getBoundingClientRect()
+  if (!title || title.bottom <= 0 || title.top >= window.innerHeight) return
   const origins: Flight['from'] = {}
   for (const part of PARTS) {
     const el = partOf(from, part)
@@ -98,7 +115,70 @@ export function launchFlight(to: Flight['to'], id: string, from: Element | null)
     const rect = el.getBoundingClientRect()
     origins[part] = { left: rect.left, top: rect.top, fontSize: fontSizeOf(el) }
   }
-  pending = { to, id, from: origins, at: performance.now() }
+  pending = { to, id, from: origins, at: performance.now(), deliberate }
+}
+
+/**
+ * A page is going because the address moved on its own — the browser's back
+ * or forward button, or a link that is not one of the app's flights — and
+ * where it is going is a page this heading could fly to. Launch the flight
+ * the page being opened will look for, unless one is already on its way (a
+ * press launched it before the address moved), or the browser has drawn a
+ * transition of its own for this step, as a swipe back on a phone does: two
+ * animations of one step is one too many.
+ *
+ * Called from a layout effect's cleanup, which runs while the page being left
+ * is still in the document and the heading can still be measured. It runs
+ * after the page being opened has rendered, which is why both ends look for
+ * their flight in a layout effect rather than while rendering.
+ */
+export function departing(to: Flight['to'], id: string, from: Element | null) {
+  if (peekFlight(to) || browserAnimated()) return
+  launchFlight(to, id, from, false)
+}
+
+/**
+ * The flight back onto the list, if the list should take it: one the page's
+ * own way back launched, or one the browser's back button did. A list reached
+ * any other way — the wordmark — is somebody asking for the list as it is
+ * now, and draws it fresh rather than as it was left (see lib/listCache.ts),
+ * so there is no card waiting where the heading would land.
+ */
+export function returnFlight(navigationType: string): Flight | null {
+  const flight = peekFlight('list')
+  return flight && (flight.deliberate || navigationType === 'POP') ? flight : null
+}
+
+/**
+ * The step the browser drew a transition for, if the last one was. A swipe
+ * back on a phone slides the page over by itself, and says so on the
+ * `popstate` it fires; this listens from the moment the app loads, ahead of
+ * the router's own listener, so the answer is in before any page is replaced.
+ */
+let uaAnimatedAt = -Infinity
+if (typeof window !== 'undefined')
+  window.addEventListener('popstate', (event) => {
+    if ((event as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition)
+      uaAnimatedAt = performance.now()
+  })
+
+function browserAnimated(): boolean {
+  return performance.now() - uaAnimatedAt < FRESH_MS
+}
+
+/**
+ * Stops the rise a page arrives with (`Reveal`), on every page wrapping
+ * `el`, where a flight is landing there instead. The page arrives by the
+ * flight; and a page still rising when the flight measures where to land is
+ * a landing aimed a few pixels low, which shows as the heading settling and
+ * then stepping up into place. The fades are left alone — a fade moves
+ * nothing.
+ */
+export function stillEntrances(el: Element) {
+  for (let box = el.closest('[data-reveal="rise"]'); box;) {
+    for (const animation of box.getAnimations()) animation.cancel()
+    box = box.parentElement?.closest('[data-reveal="rise"]') ?? null
+  }
 }
 
 /**
