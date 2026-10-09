@@ -52,7 +52,7 @@ export function Reveal({
   /**
    * Whether to play the entrance at all, read once, when it mounts — so it
    * can be turned off for an arrival that has an entrance of its own (a
-   * poll's title flying in; see lib/titleFlight.ts) without a later render
+   * poll's title flying in; see lib/headingFlight.ts) without a later render
    * starting one halfway through the page's life.
    */
   enter?: boolean

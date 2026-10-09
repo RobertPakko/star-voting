@@ -20,7 +20,7 @@ import { migrateHiddenPolls, removePolls, restorePolls } from '../lib/removedPol
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { Banners } from '../components/Banners'
 import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
-import { PollHeading } from '../components/PollHeading'
+import { PollHeading, type PollHeadingProps } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
 import { PollListSkeleton } from '../components/Skeletons'
 import type { PollListItem } from '../lib/types'
@@ -28,7 +28,7 @@ import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import classes from './PollList.module.css'
 import { pollPath } from '../lib/pollId'
-import { fly, landFlight, launchFlight, peekFlight } from '../lib/titleFlight'
+import { fly, headingIn, landFlight, launchFlight, peekFlight } from '../lib/headingFlight'
 import { readListSnapshot, writeListScroll, writeListSnapshot } from '../lib/listCache'
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
@@ -180,7 +180,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     return true
   }, [])
 
-  // Back where the reader left it, and the title of the poll they were on
+  // Back where the reader left it, and the heading of the poll they were on
   // flying back onto its card. Before the first paint, so the list is never
   // seen at the top and then moved; and the scroll first, because the flight
   // aims at where the card is on screen.
@@ -190,21 +190,17 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     if (!returning) return
     landFlight(returning)
     const card = document.querySelector(`[data-poll-card="${CSS.escape(returning.id)}"]`)
-    const title = card?.querySelector<HTMLElement>('[data-poll-title]')
+    const heading = card && headingIn(card, 'card')
     // Not on this page of the list any more — removed, or deleted, since the
     // reader left — so there is nowhere for it to land and nothing flies.
-    if (!title) return
-    title.style.visibility = 'hidden'
-    const run = fly(returning, title)
+    if (!heading) return
+    const run = fly(returning, heading)
     let live = true
     void run.arrived.then(() => {
-      if (!live) return
-      title.style.visibility = ''
-      void run.settle(title, 0)
+      if (live) void run.settle(heading, 0)
     })
     return () => {
       live = false
-      title.style.visibility = ''
       run.cancel()
     }
   }, [kept, returning])
@@ -395,6 +391,47 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             // is the only feedback a control has between being pressed and
             // the card it is on going away.
             const moving = pending.has(poll.id)
+            // The same heading the poll's own page carries, at card size; see
+            // PollHeading. Built once, because it is also handed to the page
+            // the card opens, which draws it before it has read the poll.
+            const heading: PollHeadingProps = {
+              title: poll.title,
+              description: poll.description,
+              // Null on an open poll that is here because this account
+              // answered it through its link, which is told no more about who
+              // made it than the link's own page is.
+              createdBy: poll.created_by === session?.user.id ? 'you' : poll.created_by_email,
+              mode: poll.mode,
+              showVoters: poll.show_voters,
+              showBallots: poll.show_ballots,
+              turnout: {
+                soliciting: poll.soliciting,
+                mode: poll.mode,
+                votedCount: poll.voted_count,
+                invitedCount: poll.invited_count,
+                confirmedCount: poll.confirmed_count,
+                optionCount: poll.option_count,
+                questionCount: poll.question_count,
+              },
+              state: {
+                soliciting: poll.soliciting,
+                resultsAvailable: poll.results_available,
+                closed: poll.is_closed,
+                // `undefined` rather than null where the database has not
+                // settled an answer — including a database old enough not to
+                // carry the columns at all — because null is a real answer
+                // here and means a poll that elected nobody.
+                //
+                // A group's row on this list *is* its first question, so this
+                // is that question's winner rather than the poll's. The badge
+                // withholds it on `inGroup`, in one place for all three
+                // screens, rather than leaving three callers to remember.
+                winner: poll.winner_settled
+                  ? winnerLabel(poll.winner_name ?? null, h24)
+                  : undefined,
+                inGroup: poll.question_count > 1,
+              },
+            }
             return (
               <Card
                 key={poll.id}
@@ -408,13 +445,11 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                   the end of the row of badges, and that row keeps room for it
                   (`reserve`) — so however the badges wrap on a phone, none of
                   them ends up underneath it. */}
-                {/* The same heading the poll's own page carries, at card size;
-                    see PollHeading. */}
-                {/* The title carried along in the navigation, so the page it
-                    opens has the poll's name from the press; and the press
-                    flies that title to the top of the page while the poll is
-                    read. A click that asks for a new tab or window is left to
-                    the browser. See lib/titleFlight.ts.
+                {/* The heading carried along in the navigation, so the page it
+                    opens draws it from the press; and the press flies it to
+                    the top of the page while the poll is read. A click that
+                    asks for a new tab or window is left to the browser. See
+                    lib/headingFlight.ts.
 
                     `listId` is what puts a way back on the poll's page, and
                     the card that way back lands on: a poll opened from the
@@ -423,7 +458,11 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                     way back would land on a list they are not on. */}
                 <Link
                   to={pollPath(poll.id)}
-                  state={{ title: poll.title, listId: viewingRemoved ? undefined : poll.id }}
+                  state={{
+                    title: poll.title,
+                    heading,
+                    listId: viewingRemoved ? undefined : poll.id,
+                  }}
                   className={classes.link}
                   onClick={(event) => {
                     if (
@@ -434,52 +473,13 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                       event.altKey
                     )
                       return
-                    launchFlight(
-                      'poll',
-                      poll.id,
-                      event.currentTarget.querySelector<HTMLElement>('[data-poll-title]'),
-                    )
+                    launchFlight('poll', poll.id, headingIn(event.currentTarget, 'card'))
                   }}
                 >
                   <PollHeading
                     compact
                     tagsClassName={viewingRemoved ? classes.reserveWide : classes.reserve}
-                    title={poll.title}
-                    description={poll.description}
-                    // Null on an open poll that is here because this account
-                    // answered it through its link, which is told no more
-                    // about who made it than the link's own page is.
-                    createdBy={poll.created_by === session?.user.id ? 'you' : poll.created_by_email}
-                    mode={poll.mode}
-                    showVoters={poll.show_voters}
-                    showBallots={poll.show_ballots}
-                    turnout={{
-                      soliciting: poll.soliciting,
-                      mode: poll.mode,
-                      votedCount: poll.voted_count,
-                      invitedCount: poll.invited_count,
-                      confirmedCount: poll.confirmed_count,
-                      optionCount: poll.option_count,
-                      questionCount: poll.question_count,
-                    }}
-                    state={{
-                      soliciting: poll.soliciting,
-                      resultsAvailable: poll.results_available,
-                      closed: poll.is_closed,
-                      // `undefined` rather than null where the database has not
-                      // settled an answer — including a database old enough not to
-                      // carry the columns at all — because null is a real answer
-                      // here and means a poll that elected nobody.
-                      //
-                      // A group's row on this list *is* its first question, so this
-                      // is that question's winner rather than the poll's. The badge
-                      // withholds it on `inGroup`, in one place for all three
-                      // screens, rather than leaving three callers to remember.
-                      winner: poll.winner_settled
-                        ? winnerLabel(poll.winner_name ?? null, h24)
-                        : undefined,
-                      inGroup: poll.question_count > 1,
-                    }}
+                    {...heading}
                   />
                 </Link>
 

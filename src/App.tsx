@@ -33,7 +33,8 @@ import { refreshAccountPush, useNotificationRoutes } from './lib/push'
 import { useLaunchRoutes } from './lib/launch'
 import { useClearPollNotifications } from './lib/badge'
 import { usePageTitle } from './lib/pageTitle'
-import { fly, landFlight, peekFlight, type FlightRun } from './lib/titleFlight'
+import { fly, headingIn, landFlight, peekFlight, type FlightRun } from './lib/headingFlight'
+import type { PollHeadingProps } from './components/PollHeading'
 import { motionMs } from './lib/motion'
 import { BackToList } from './components/BackToList'
 import { Reveal } from './components/Reveal'
@@ -48,7 +49,7 @@ import { Reveal } from './components/Reveal'
  * loading, where a flash reads as the page breaking. A read that is back
  * before the skeleton was ever drawn — which is the usual case for a poll
  * opened from the list, whose title flight is long enough to cover it — is
- * not held at all. See lib/titleFlight.ts.
+ * not held at all. See lib/headingFlight.ts.
  */
 const SKELETON_MIN_MS = 400
 
@@ -287,7 +288,7 @@ function PollPage() {
   // page starts blank under the title, is read while it flies, and arrives
   // once it lands — whole, if the read is back by then, and as its skeleton
   // if not. Taken once, on mount, like everything about how a page was
-  // arrived at. See lib/titleFlight.ts.
+  // arrived at. See lib/headingFlight.ts.
   const [flight] = useState(() => (pollId ? peekFlight('poll', pollId) : null))
   const [phase, setPhase] = useState<'flying' | 'landing' | 'still'>(flight ? 'flying' : 'still')
   const flying = useRef<FlightRun | null>(null)
@@ -414,7 +415,7 @@ function PollPage() {
     if (!flight) return
     landFlight(flight)
     window.scrollTo(0, 0)
-    const target = document.querySelector('[data-title-landing]')
+    const target = headingIn(document, 'page')
     if (!target) {
       setPhase('still')
       return
@@ -438,7 +439,7 @@ function PollPage() {
     if (phase !== 'landing') return
     let live = true
     const done = flying.current
-      ? flying.current.settle(document.querySelector('[data-title-landing]'), motionMs('base'))
+      ? flying.current.settle(headingIn(document, 'page'), motionMs('base'))
       : Promise.resolve()
     void done.then(() => {
       if (live) setPhase('still')
@@ -478,7 +479,10 @@ function PollPage() {
     return (
       <div style={{ visibility: 'hidden' }}>
         {back}
-        <PollPageSkeleton title={carriedTitle(location.state)} />
+        <PollPageSkeleton
+          title={carriedTitle(location.state)}
+          heading={carriedHeading(location.state)}
+        />
       </div>
     )
 
@@ -516,7 +520,13 @@ function PollPage() {
     // Nothing decided yet. The shape of the page that is coming, which is what
     // both readings draw while they load, so waiting here rather than inside
     // one of them looks like nothing at all.
-    if (!covering) return <PollPageSkeleton title={carriedTitle(location.state)} />
+    if (!covering)
+      return (
+        <PollPageSkeleton
+          title={carriedTitle(location.state)}
+          heading={carriedHeading(location.state)}
+        />
+      )
 
     // The sign-in screen is deliberately outside the app shell, which is what
     // the redirect is for: the catch-all route below renders it bare. A session
@@ -557,6 +567,22 @@ function PollPage() {
 function carriedTitle(state: unknown): string | undefined {
   const title = (state as { title?: unknown } | null)?.title
   return typeof title === 'string' && title ? title : undefined
+}
+
+/**
+ * The whole heading a poll's card on the list hands its page, so the page can
+ * draw it before it has read the poll — and so the card's heading has
+ * somewhere to fly to. See `PollPageSkeleton`. Checked for the two fields the
+ * heading cannot be drawn without, since a navigation's state outlives the
+ * build that wrote it: an address reopened from history after a deploy may
+ * carry an older shape, and then the page waits for its read as it would have
+ * anyway.
+ */
+function carriedHeading(state: unknown): PollHeadingProps | undefined {
+  const heading = (state as { heading?: Partial<PollHeadingProps> } | null)?.heading
+  return heading && typeof heading.title === 'string' && heading.state
+    ? (heading as PollHeadingProps)
+    : undefined
 }
 
 /** The list card a poll was opened from, if it was; see BackToList. */

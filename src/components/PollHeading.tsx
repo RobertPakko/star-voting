@@ -28,6 +28,13 @@ import { PollTitleText } from './PollTitleText'
  * nine others and a page title would shout; it is the same five things at
  * smaller sizes, not a different heading.
  */
+/**
+ * Everything a heading is drawn from — which is also what a list card hands
+ * the page it opens, so that page can draw its heading before it has read the
+ * poll. See `PollPageSkeleton`.
+ */
+export type PollHeadingProps = Parameters<typeof PollHeading>[0]
+
 export function PollHeading({
   title,
   description,
@@ -75,8 +82,10 @@ export function PollHeading({
   // ten and names nothing. See usePageTitle.
   usePageTitle(compact ? null : title)
 
+  // Marked for the flight between a card and its page, which moves each part
+  // to its own counterpart; see lib/headingFlight.ts.
   return (
-    <Stack gap="xs">
+    <Stack gap="xs" data-heading={compact ? 'card' : 'page'}>
       {/* The title and the badge share one row, sixty/forty, and neither may
           take the other's half. Both earlier attempts came apart on a phone:
           left free to give, the title wrapped a character at a time down the
@@ -91,7 +100,7 @@ export function PollHeading({
           a wrapped title is still readable and an elected option ellipsised to
           two letters is not an answer at all. */}
       <Stack gap={2}>
-        <Group align="flex-start" gap="sm" wrap="nowrap">
+        <Group align="flex-start" gap="sm" wrap="nowrap" data-heading-row>
           {/* `minWidth: 0` is what lets a flex item shrink below its longest
             word at all; without it a title with no spaces in it would push
             the row wider than the card. */}
@@ -101,7 +110,7 @@ export function PollHeading({
               c="var(--mantine-color-text)"
               style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}
             >
-              <PollTitleText landing={false}>{title}</PollTitleText>
+              <PollTitleText>{title}</PollTitleText>
             </Text>
           ) : (
             <Title
@@ -109,7 +118,7 @@ export function PollHeading({
               size="h2"
               style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}
             >
-              <PollTitleText landing>{title}</PollTitleText>
+              <PollTitleText>{title}</PollTitleText>
             </Title>
           )}
           {/* The forty is the badge's own ceiling rather than a box around it;
@@ -126,13 +135,13 @@ export function PollHeading({
         </Group>
 
         {description && (
-          <Text size={compact ? 'sm' : undefined} c="dimmed">
+          <Text size={compact ? 'sm' : undefined} c="dimmed" data-heading-part="description">
             {description}
           </Text>
         )}
 
         {createdBy && (
-          <Text size="xs" c="dimmed">
+          <Text size="xs" c="dimmed" data-heading-part="creator">
             {createdBy === 'you' ? 'Created by you' : `Created by ${createdBy}`}
           </Text>
         )}

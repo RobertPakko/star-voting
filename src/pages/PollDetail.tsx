@@ -878,7 +878,13 @@ export function PollDetail({
           said why nobody is named. Spelling the condition out here as well as
           in the database is how a card draws itself on one reading of it and
           is refused on the other. */}
-      {!isOpen && invitees && (
+      {/* Nothing below the question's half is drawn while that half is being
+          read for a crossing. It all sits under a block whose height is
+          unknown until the read lands — a ballot of some number of rows, a
+          tally or the notice a question nobody answered puts up — so drawn
+          now it would be pushed down the page a moment later, which reads as
+          the page coming apart at the moment it is being used. */}
+      {showing && !isOpen && invitees && (
         <Stack gap={2}>
           <Title order={2} size="h4">
             Voters
@@ -898,7 +904,7 @@ export function PollDetail({
           the panel is the whole of an open poll wherever it is read, this
           page included, and a second grid under it was a second answer to a
           question already answered. */}
-      {!isOpen && status.results_available && poll.show_ballots && (
+      {showing && !isOpen && status.results_available && poll.show_ballots && (
         <Suspense fallback={<BallotsSkeleton rows={status.voted_count || undefined} />}>
           <Ballots
             source={{ kind: 'poll', pollId: poll.id }}
@@ -920,14 +926,14 @@ export function PollDetail({
           a creator who did not invite themselves has no ballot to hand back
           and `poll_ballot_scores` says so rather than returning an empty one.
           See YourBallot. */}
-      {!isOpen && status.results_available && !poll.show_ballots && status.voted && (
+      {showing && !isOpen && status.results_available && !poll.show_ballots && status.voted && (
         <Suspense fallback={<YourBallotSkeleton rows={optionList.length || undefined} />}>
           <YourBallot pollId={poll.id} options={optionList} />
         </Suspense>
       )}
 
       {/* The share link is inside Manage poll now; see the note there. */}
-      {isCreator && (
+      {showing && isCreator && (
         <CreatorControls
           poll={poll}
           status={status}
@@ -942,7 +948,7 @@ export function PollDetail({
       {/* Last thing on the page, and the creator's alone: it is a date to
           act on, and Duplicate — the only act there is — is a button nobody
           else has. See RetentionNote. */}
-      {isCreator && <RetentionNote expiresAt={status.expires_at} />}
+      {showing && isCreator && <RetentionNote expiresAt={status.expires_at} />}
     </Stack>
   )
 }

@@ -15,6 +15,7 @@ import { isDaily, toMinutes } from '../lib/schedule'
 import type { PollSchedule } from '../lib/types'
 import { usePageTitle } from '../lib/pageTitle'
 import { PollTitleText } from './PollTitleText'
+import { PollHeading, type PollHeadingProps } from './PollHeading'
 
 /**
  * The shapes each page draws while it is waiting for its first read.
@@ -159,7 +160,10 @@ const BALLOT_ROWS_MAX = 10
  * the list carries its title with it (`PollPage` reads it off the navigation),
  * and a title cannot change, so there is nothing to guess: the poll's name is
  * on screen, and in the tab, from the press rather than from the read. It is
- * also where the title the reader pressed lands; see lib/titleFlight.ts.
+ * also where the title the reader pressed lands; see lib/headingFlight.ts.
+ *
+ * And where the card handed over the whole heading, the whole heading is
+ * drawn — see `PollPageSkeleton`.
  */
 function PollHeadingShape({ compact = false, title }: { compact?: boolean; title?: string }) {
   return (
@@ -440,11 +444,28 @@ function TallyShape({ options }: { options?: number }) {
 }
 
 /** The heading over a poll and the card answering it: every poll page. */
-export function PollPageSkeleton({ rows = 5, title }: { rows?: number; title?: string }) {
+export function PollPageSkeleton({
+  rows = 5,
+  title,
+  heading,
+}: {
+  rows?: number
+  title?: string
+  /**
+   * The heading the poll's card on the list was drawing when it was pressed,
+   * which the card hands over with the navigation. Drawn for real rather than
+   * as a shape: the title, the description, who made it and the three terms
+   * are frozen at creation and cannot be a guess, and the state and the count
+   * are what the live list was saying a moment ago — which the read replaces
+   * the moment it lands, in the rare case it has moved since. It is also what
+   * the card's heading flies onto; see lib/headingFlight.ts.
+   */
+  heading?: PollHeadingProps
+}) {
   return (
     <Loading>
       <Stack maw={720} mx="auto" gap="md">
-        <PollHeadingShape title={title} />
+        {heading ? <PollHeading {...heading} /> : <PollHeadingShape title={title} />}
         <Card withBorder>
           <BallotShape rows={rows} />
         </Card>
@@ -978,7 +999,7 @@ function KnownTitle({ title }: { title: string }) {
   usePageTitle(title)
   return (
     <Title order={1} size="h2" style={{ flex: '1 1 60%', minWidth: 0, wordBreak: 'break-word' }}>
-      <PollTitleText landing>{title}</PollTitleText>
+      <PollTitleText>{title}</PollTitleText>
     </Title>
   )
 }

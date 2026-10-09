@@ -7,8 +7,8 @@ import type { PollListItem } from './types'
  * subscription, a read, and the reader at the top of a list they had been
  * halfway down. So the list leaves itself here — the page it was on, its rows,
  * and how far it was scrolled — and a return to it draws from this at once,
- * where it was, with the title of the poll being left flying back onto its
- * card (lib/titleFlight.ts). The list still subscribes and reads exactly as it
+ * where it was, with the heading of the poll being left flying back onto its
+ * card (lib/headingFlight.ts). The list still subscribes and reads exactly as it
  * always has, and that read replaces these rows within moments; what is kept
  * here only has to be right for the first frame, and a list is a live page
  * anyway, so it is never trusted for longer than that.

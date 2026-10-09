@@ -15,8 +15,8 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the Announcer whose live regions a screen reader is told things through, the PollTitleText that flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll title that flies between its card and its page (titleFlight.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -2321,7 +2321,7 @@ The scale is four durations and one curve, declared on `:root` in
 (500ms) for the results bars and the runoff's half pie, which are the things
 meant to be watched rather than merely not-jarring, and `--motion-travel`
 (450ms) for something crossing the screen to a place of its own — a poll's
-title flying between its card and its page, and a question sliding in beside
+heading flying between its card and its page, and a question sliding in beside
 the one it replaced. Durations are picked from those and never written by
 hand, so a dozen small animations read as one app rather than as a dozen
 opinions. Animations started from JavaScript with `Element.animate` read the
@@ -2335,7 +2335,7 @@ A reader who has asked their system for less motion gets none of it, said in
 three places because there are three kinds of motion to say it about: one rule
 over the whole stylesheet in `index.css`, `respectReducedMotion` in the theme
 for Mantine's own components, and `prefersReducedMotion` (`lib/motion.ts`) or
-`useReducedMotion` wherever motion is asked for from JavaScript — the title's
+`useReducedMotion` wherever motion is asked for from JavaScript — the heading's
 flight, a question's slide, the poll list's smooth scroll — and is therefore
 out of CSS's reach.
 
@@ -2385,9 +2385,9 @@ appeared to reload itself every time it was used. The strip belongs to the poll
 rather than to the question, exactly as the heading above it does, and this
 page keeps both still across a crossing on purpose; an animation does not get
 an exemption from that because React happened to rebuild the DOM underneath it.
-So a crossing does not replay an entrance. What it does instead is the next
-section's last part: the question's half — and only that — slides in from the
-side it lies on.
+So a crossing does not replay an entrance. What it does instead is below, in
+[A question slides along a row](#a-question-slides-along-a-row): the question's
+half — and only that — slides out one side and in from the other.
 
 **A transition needs the browser to have *painted* the value it starts from.**
 The results bars are rendered at nothing and then at their real lengths, and
@@ -2403,50 +2403,72 @@ of them mounted so the heading and the strip do not blink. Keying the route's
 fade on `pathname` would have thrown all of that away and re-mounted the poll
 on every step through it, which is why `Layout` keys on `pageKey()` instead.
 
-### A poll's title flies between the list and its page
+### A poll's heading flies between the list and its page
 
-Opening a poll from the list flies its title from the card to the top of the
-poll's page ([`lib/titleFlight.ts`](src/lib/titleFlight.ts)), and the page's
-**Your polls** control flies it back down onto its card. It passes the rule at
-the top of this section on the question it answers — *is this the poll I
-tapped?*, asked of a page that has just replaced ten cards that look alike —
-and it is also how the page **waits**:
+Opening a poll from the list flies its heading from the card to the top of the
+poll's page ([`lib/headingFlight.ts`](src/lib/headingFlight.ts)), and the
+page's **Your polls** control flies it back down onto its card. Every part of
+the heading travels to its own counterpart: the title grows into the page's
+title, and the state badge, the description, who made it and the row of tags
+each move to where the page draws them. It passes the rule at the top of this
+section on the question it answers — *is this the poll I tapped?*, asked of a
+page that has just replaced ten cards that look alike — and it is also how the
+page **waits**:
 
-1. The press takes off: the card's title is measured and the navigation goes.
-2. The poll's page starts **blank**, with only the title in the air. It is laid
-   out, invisibly, so the title has somewhere to aim for, and the poll is read
-   underneath exactly as it always is — subscribe, then read.
-3. When the title lands, whatever has arrived fades in under it: the poll, if
-   the read is back, and **no skeleton is ever drawn**; its skeleton, if not.
+1. The press takes off: the card's heading is measured, part by part, and the
+   navigation goes.
+2. The poll's page starts **blank**, with only the heading in the air. It is
+   laid out, invisibly, so the heading has somewhere to aim for, and the poll
+   is read underneath exactly as it always is — subscribe, then read.
+3. When the heading lands, whatever has arrived fades in under it: the poll,
+   if the read is back, and **no skeleton is ever drawn**; its skeleton, if
+   not.
 4. A skeleton that has gone up stays up for at least `SKELETON_MIN_MS`
    (`App.tsx`), however soon the read lands after it, because a shape replaced
    a few frames after it appeared is a flicker rather than a wait. The read
    that comes back first is held, rather than the skeleton hurried away.
 
-Four things it took:
+Five things it took:
 
-- **It is a copy of the title, not a View Transition.** It was one, and that
-  could not do the second half of the job: a view transition freezes the page
-  while the new one is prepared and then animates between two *pictures*, so
-  nothing can load during it and nothing on the page answers a press. The
-  flight is a fixed-position copy of the title, styled like the title it is
-  flying to and placed where that title is, then animated backwards from
-  where it took off (FLIP) with `Element.animate` — which also says the moment
-  it lands. The page under it is live the whole time.
-- **The page has a title to land on before it has read the poll.** The card
-  hands its title over in the navigation's state, and the skeleton draws it
-  for real (`PollPageSkeleton`'s `title`), in the place the poll's heading
-  puts it. On landing the copy moves onto the real title if the two disagree —
-  a long title wrapping differently beside a different badge — and fades out
-  over it once what arrived has faded in.
-- **It is the words that fly, not the heading** (`PollTitleText`). The heading
-  is as wide as its share of the row and the words are not, so flying the box
-  would scale a short title by the space around it. An inline-block around the
-  words scales by exactly the difference in font size.
+- **It is copies, not a View Transition.** It was one, and that could not do
+  the second half of the job: a view transition freezes the page while the new
+  one is prepared and then animates between two *pictures*, so nothing can load
+  during it and nothing on the page answers a press. Each part flies as a
+  fixed-position copy of the part it is flying to, placed where that part is,
+  then animated backwards from where it took off (FLIP) with `Element.animate`
+  — which also says the moment it lands. The page under it is live the whole
+  time.
+- **The page has a heading to land on before it has read the poll.** The card
+  hands over everything its heading is drawn from in the navigation's state
+  (`heading`), and the skeleton draws a real `PollHeading` from it
+  (`PollPageSkeleton`'s `heading`). The title, the description, the creator and
+  the three terms are frozen at creation; the state and the count are what the
+  live list said a moment ago, and the read replaces them if they have moved.
+  So the poll is named, on screen and in the tab, from the press. On landing
+  each copy moves onto its real counterpart if the two disagree and fades out
+  over it once what arrived has faded in; a part the real page does not draw —
+  the creator, on a poll read through its link — fades where it landed.
+- **The parts are found by the marks `PollHeading` puts on them**
+  (`data-heading`, `data-heading-row`, `data-heading-part`), so the two ends
+  need only both be a `PollHeading` — compact on the card, full size on the
+  page. The card is narrower than the page and its description is a size
+  smaller, so a description can wrap differently at the two ends; the copy is
+  of the page's, scaled down at the start, and the lines either side of it can
+  brush past it mid-flight.
+- **It is the words of the title that fly, not the title's box**
+  (`PollTitleText`). The box is as wide as its share of the row and the words
+  are not, so flying the box would scale a short title by the space around it.
 - **The page's own entrance stands down for it** (`Reveal`'s `enter`, in
   `Layout`). The flight *is* the page's entrance, and what arrives under it
-  fades without the usual rise (`rise`), since the title is already standing
+  fades without the usual rise (`rise`), since the heading is already standing
   in place over it and a rise would show the real one sliding under its copy.
+
+**And the page keeps room for a scrollbar it has not got yet**
+(`scrollbar-gutter: stable` on `html`, in index.css). The page the heading
+flies over is short and the poll that lands under it is long, so where
+scrollbars take up room the content shifted left by half of one at the moment
+of landing, and the title was seen to arrive and then step sideways. Every page
+that grew past the window while it loaded did the same, unremarked.
 
 **The way back is only on a poll opened from the list.** The card passes its
 id along (`listId`), and `PollPage` holds it for as long as it is mounted —
@@ -2458,46 +2480,66 @@ than back through history, because three questions walked are three entries
 between the reader and the list.
 
 **The list comes back as it was left** ([`lib/listCache.ts`](src/lib/listCache.ts)):
-the same page of it, the same rows, scrolled where it was, so the title has a
+the same page of it, the same rows, scrolled where it was, so the heading has a
 card to land on at once. Every read of the list leaves a snapshot, and leaving
 the list records the scroll. Only a return draws from it — this control, or
 the browser's back button, which gets the list but not the flight. Arriving
 any other way is somebody asking for the list as it is now. The list still
 subscribes and reads as it always has, so the kept rows are only ever on
 screen for the moment that takes. A card that is no longer there — removed,
-deleted — leaves the title nowhere to land, and nothing flies.
+deleted — leaves the heading nowhere to land, and nothing flies.
 
 Skipped for a reader who has asked for less motion, and where there is no
 `Element.animate`; both get the navigation they always had, the skeleton
 included.
 
-### A question slides in from beside the last
+### A question slides along a row
 
-Walking between the questions of a poll slides the question's half of the page
-in from the side it lies on — from the right going forward, from the left going
-back — so the questions read as a row being walked along rather than as pages
-swapped in place. It is `QuestionStrip`'s, because the strip is what knows
-which question was open and which is opening, and because what slides is
-defined by it: **everything after the strip, which is the question's half and
-nothing else.** The strip itself is the poll's and stays exactly still, which
-is the rule above about a crossing not replaying anything over a strip that
-has not changed. Where the strip stands outside a card — over a finished
-question's tally — it and its tally are wrapped in a stack of their own, so
-that what follows it is still only the question.
+Walking between the questions of a poll slides the question being left out to
+one side and the question being opened in from the other — the next one from
+the right, the previous one from the left — across about a third of the width
+they are drawn in, so the questions read as a row being walked along rather
+than as pages swapped in place ([`lib/questionSlide.ts`](src/lib/questionSlide.ts)).
+`QuestionStrip` drives it, because the strip is what knows which question was
+open and which is opening, and because what slides is defined by it:
+**everything after the strip, which is the question's half and nothing else.**
+The strip itself is the poll's and stays exactly still, which is the rule above
+about a crossing not replaying anything over a strip that has not changed.
+Where the strip stands outside a card — over a finished question's tally — it
+and its tally are wrapped in a stack of their own, so that what follows it is
+still only the question.
 
-**One slide, however many times the question is redrawn.** A crossing usually
-puts up the question's skeleton and then the question, and each of those is a
-new strip with new things after it. Each joins the slide where it has got to,
-started with the time already gone as a negative delay, so the skeleton and the
-question that replaces it are one movement rather than two. The strip
-recognises a crossing by having left the same poll's other question moments
-earlier, which is also how it already decides what to announce.
+**The question being left is a copy.** React has taken it out of the page by
+the time the next one is drawn, so the strip copies what stands after it as it
+unmounts — a layout effect's cleanup, which runs while the page being left is
+still in the document — and the copy slides away over the page, clipped to the
+card it was in so that it leaves through the card's edge. Only an unmount
+copies: a strip that stays mounted across a crossing is cleaned up after what
+stood beside it may already have been replaced, and its question slides in
+without one going out.
+
+**One slide in, however many times the question is redrawn.** A crossing
+usually puts up the question's skeleton and then the question, and each of
+those is a new strip with new things after it. Each joins the slide where it
+has got to, started with the time already gone as a negative delay, so the
+skeleton and the question that replaces it are one movement rather than two.
 
 A card clips what slides into it. The tally under a finished question has no
 card around it, which is why `AppShell.Main` is `overflow-x: clip`: a block
-sliding in from past the right edge would otherwise widen the page while it
-did. `clip` rather than `hidden`, which would make it a scroll container and
+sliding in from past the right-hand edge would otherwise widen the page while
+it did. `clip` rather than `hidden`, which would make it a scroll container and
 break everything sticky inside it.
+
+**Nothing under the question is drawn while a crossing reads it.** On
+`PollDetail` the voters, the published ballots or the reader's own, the
+creator's controls and the retention line all wait for `showing`. They sit
+under a block whose height is not known until the read lands — a ballot of
+some number of rows, a tally, or the notice a question nobody answered puts up
+— and drawn during the wait they were pushed down the page a moment later. The
+stand-in for a finished question still cannot say which of the last two it is
+waiting for on a poll that was closed (see `tallied` on `QuestionSkeleton`): a
+question nobody reached before the close really does end in the notice, and
+nothing the page holds says whether anybody did.
 
 ## A deploy takes the old build with it
 

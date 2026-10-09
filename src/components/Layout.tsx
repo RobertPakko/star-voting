@@ -27,7 +27,7 @@ import { NotificationSwitches } from './NotificationSwitches'
 import { isInstalledApp } from '../lib/push'
 import { LinkPushSwitch } from './PushSwitch'
 import { Reveal } from './Reveal'
-import { peekFlight } from '../lib/titleFlight'
+import { peekFlight } from '../lib/headingFlight'
 import { ThemeToggle } from './ThemeToggle'
 
 /**
@@ -296,7 +296,7 @@ export function Layout() {
             Except a page a poll's title is flying onto, between a list card
             and a poll's page in either direction: the flight is that page's
             entrance, and the page arrives under it in its own time. See
-            lib/titleFlight.ts. */}
+            lib/headingFlight.ts. */}
         <Reveal key={pageKey(pathname)} enter={!peekFlight('poll') && !peekFlight('list')}>
           <Outlet />
         </Reveal>

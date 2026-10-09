@@ -1,7 +1,7 @@
 import { Button } from '@mantine/core'
 import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
-import { launchFlight } from '../lib/titleFlight'
+import { headingIn, launchFlight } from '../lib/headingFlight'
 
 /**
  * The way back to the list, on a poll that was opened from it.
@@ -11,10 +11,10 @@ import { launchFlight } from '../lib/titleFlight'
  * to take them back to one would be a control to somewhere they have not been.
  * The wordmark in the header still goes to the list from anywhere.
  *
- * Pressing it flies the poll's title back down onto its card, the opening
+ * Pressing it flies the poll's heading back down onto its card, the opening
  * flight in reverse, and the list is drawn as it was left — the same page,
  * scrolled to the same place — from what it kept on the way out. See
- * lib/titleFlight.ts and lib/listCache.ts.
+ * lib/headingFlight.ts and lib/listCache.ts.
  *
  * It goes *to* the list rather than *back* through the history: a reader who
  * has walked through three of a poll's questions has three entries between
@@ -33,7 +33,7 @@ export function BackToList({ listId }: { listId: string }) {
       onClick={(event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
           return
-        launchFlight('list', listId, document.querySelector<HTMLElement>('[data-title-landing]'))
+        launchFlight('list', listId, headingIn(document, 'page'))
       }}
     >
       Your polls

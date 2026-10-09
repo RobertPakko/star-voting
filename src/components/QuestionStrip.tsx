@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Anchor, Badge, Group, Stack, Text, VisuallyHidden } from '@mantine/core'
 import { badgeColor } from '../lib/badgeColors'
 import { announce } from '../lib/announce'
-import { motionEase, motionMs, prefersReducedMotion } from '../lib/motion'
+import { noteArrival, noteLeaving, slideAlong } from '../lib/questionSlide'
 
 /**
  * The question last announced, by the poll it belongs to (its first
@@ -13,46 +13,6 @@ import { motionEase, motionMs, prefersReducedMotion } from '../lib/motion'
  * moment that is the news.
  */
 let lastShown: { poll: string; question: string } | null = null
-
-/**
- * The question a strip was showing when it last left the screen, and when.
- * A strip mounting within moments of one leaving, on another question of the
- * same poll, is the same strip carried across a crossing rather than a reader
- * arriving; see `crossing`.
- */
-let lastLeft: { poll: string; question: string; at: number } | null = null
-const CARRIED_WITHIN_MS = 1000
-
-/**
- * The crossing in progress, if there is one: the question arriving, which
- * side it arrives from, and when it set off.
- *
- * **A crossing slides the question in from beside the one it replaced** —
- * from the right going forward through the poll, from the left going back —
- * so the questions of a poll read as a row the reader is moving along rather
- * than as pages swapped in place. What slides is everything standing after
- * the strip, which is the question's half of the page and only that: the
- * strip is the poll's, like the heading over it, and stays exactly where it
- * is (see QuestionSkeleton for why that matters). In a card that is the
- * ballot or the list or the card a voter comes back to; on a finished poll it
- * is the tally under the strip.
- *
- * **One slide, across however many cards stand in for the question.** A
- * crossing usually puts the question's skeleton up first and the question a
- * moment later, and each is a new strip with new things after it. Every one
- * of them joins the slide where it has got to — started with the time already
- * gone as a negative delay — so the reader sees one movement rather than the
- * skeleton sliding in and then the question sliding in over it.
- */
-let crossing: {
-  poll: string
-  to: string
-  side: 1 | -1
-  at: number
-  slid: WeakSet<Element>
-} | null = null
-/** How far a question slides in from, in pixels: a nudge, not a page. */
-const SLIDE_PX = 48
 
 /**
  * Where you are in a poll that asks more than one question, and how to reach
@@ -120,54 +80,32 @@ export function QuestionStrip({
   const pollKey = questions[0]?.key ?? ''
   const order = questions.map((q) => q.key).join(' ')
 
-  // Which way the poll was walked, worked out as this strip arrives on a
-  // question; see `crossing`.
+  // Walking between questions slides the question's half of the page along a
+  // row; see lib/questionSlide.ts. The strip is what knows which way the poll
+  // was walked, as it arrives on a question — from the question it was just
+  // showing, or from the strip that left a moment ago — and what the slide is
+  // drawn below.
   const root = useRef<HTMLDivElement>(null)
   const showing = useRef<string | null>(null)
   useLayoutEffect(() => {
-    const now = performance.now()
-    const before =
-      showing.current ??
-      (lastLeft?.poll === pollKey && now - lastLeft.at < CARRIED_WITHIN_MS
-        ? lastLeft.question
-        : null)
+    noteArrival(root.current, pollKey, current, order.split(' '), showing.current)
     showing.current = current
-    const keys = order.split(' ')
-    const from = before ? keys.indexOf(before) : -1
-    const to = keys.indexOf(current)
-    if (before !== current && from >= 0 && to >= 0)
-      crossing = {
-        poll: pollKey,
-        to: current,
-        side: to > from ? 1 : -1,
-        at: now,
-        slid: new WeakSet(),
-      }
-    return () => {
-      lastLeft = { poll: pollKey, question: current, at: performance.now() }
-    }
   }, [current, pollKey, order])
+
+  // Going, copied as it goes so the strip that replaces it can slide this
+  // question's half away. Only when it unmounts, which is while the page being
+  // left is still in the document; by the time a cleanup runs for an update,
+  // what stood after the strip may already have been replaced.
+  useLayoutEffect(() => {
+    const strip = root.current
+    return () => noteLeaving(strip)
+  }, [])
 
   // And what stands after it slides in, on every render while the crossing is
   // under way: a ballot replacing its skeleton, or a tally landing in place of
   // the shape that stood in for it, joins the movement where it has got to.
   useLayoutEffect(() => {
-    const c = crossing
-    if (!c || c.poll !== pollKey || c.to !== current || !root.current) return
-    const duration = motionMs('travel')
-    const elapsed = performance.now() - c.at
-    if (elapsed >= duration || prefersReducedMotion()) return
-    for (let el = root.current.nextElementSibling; el; el = el.nextElementSibling) {
-      if (c.slid.has(el)) continue
-      c.slid.add(el)
-      el.animate(
-        [
-          { transform: `translateX(${c.side * SLIDE_PX}px)`, opacity: 0 },
-          { transform: 'none', opacity: 1 },
-        ],
-        { duration, delay: -elapsed, easing: motionEase() },
-      )
-    }
+    slideAlong(root.current, pollKey, current)
   })
 
   // Moving between the questions of a poll keeps the page and its title, so a

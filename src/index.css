@@ -4,6 +4,20 @@ body,
   height: 100%;
 }
 
+/* Room for the scrollbar whether or not the page has one yet.
+ *
+ * Without it every page that grows past the window shifts sideways by half a
+ * scrollbar the moment it does, because the content is centred in whatever
+ * width is left. Mostly that passed unseen, as a page grew while it loaded.
+ * It stopped passing once a poll's heading flew onto a blank page: the page
+ * under the heading is short while it flies, the poll that lands under it is
+ * long, and the heading was seen to land and then step left. Where scrollbars
+ * float over the page — phones, and macOS by default — this reserves nothing.
+ */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
 }
@@ -34,7 +48,7 @@ body {
   /* Something crossing the screen to a place of its own: a poll's title
      flying between its card and its page, and a question sliding in beside
      the one it replaced. Long enough to be followed with the eye, and for a
-     poll to be read behind it; see lib/titleFlight.ts. */
+     poll to be read behind it; see lib/headingFlight.ts. */
   --motion-travel: 450ms;
   --motion-ease: cubic-bezier(0.2, 0, 0.2, 1);
 }
