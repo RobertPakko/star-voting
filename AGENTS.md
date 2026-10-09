@@ -14,8 +14,8 @@ hash-based routing, deployed to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ```
-src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — …)
+src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -2425,6 +2425,69 @@ goes would leave a visible gap. It is also absent from the sign-in screen,
 which has no header by design; a voter arriving on a share link sees it,
 which is the reader most likely to want it.
 
+## The intro
+
+`#/intro` is a twenty-two-second film of the app at work — a poll made, voted
+in and decided — that ends on three buttons: **Learn more about STAR**
+(`/about`), **Make your own poll** (`/polls/new`) and **Share this intro**. It
+is a link to hand somebody who has never heard of the method, so it is public
+and sits outside the app shell: the film draws the app's header itself, and a
+real one above it would be the header twice. [`pages/Intro.tsx`](src/pages/Intro.tsx)
+is the page; the film is under [`components/intro/`](src/components/intro).
+
+**It was designed elsewhere and ported**, from a motion-design tool whose
+export was a scene list driving one composition. What came across is the
+choreography, line for line; what did not is the tool's player — its
+timeline, export hooks and tweak panel. The cue times are `CUES` in
+`motion.ts`, and the five sections they mark are Opening, Create, Rate,
+Decide and Close.
+
+**Every frame is a function of one number**, `T`, the seconds since the film
+started. Nothing mounts or unmounts as it plays and nothing is animated by
+CSS, so the page's clock is a `requestAnimationFrame` loop adding to `T`, and
+**Skip** is `T = TOTAL`. That is also all reduced motion takes: a reader who
+has asked for less starts on the last frame, buttons and all, and is offered
+nothing to watch again. The clock caps a step at a tenth of a second, so a tab
+brought back from the background carries on rather than jumping to the end.
+
+**Two films, chosen by the window's shape.** A landscape cut at 1920×1080 —
+the steps down the left, the app in a browser window on the right — and a
+portrait cut at 1080×1920, with the steps as numbered dots across the top and
+the app at phone width with taps instead of a cursor. The page draws whichever
+is larger in the window, which is the portrait one exactly when the window is
+taller than wide, and scales it to fit; rotating a phone swaps the cut without
+restarting the clock.
+
+**The film is drawn, not rendered from the real components.** `AppScreens.tsx`
+is the header, the create form and the poll page as fixed drawings in the
+app's light colours, because the film has to play identically for everybody
+and the real components read the session, the database and the colour scheme.
+Nothing keeps them in step with `CreatePoll`, `BallotCard` or `Results`; if one
+of those changes shape enough to show, so should the drawing. The camera and
+the cursor find their marks by measuring `data-tg` elements in those drawings
+(`useTargets`), so moving something inside a drawing moves the camera with it.
+
+**It stays light in dark mode**, as a video would: it is a recording of the
+app, and the page takes the film's background so the letterboxing disappears.
+The buttons over it are chosen to look the same in both schemes — a filled
+button pinned to the film's blue, and `white` buttons with the film's border —
+since Mantine's other variants take their colours from the scheme.
+
+**The buttons are drawn at the page's size, over the film rather than inside
+it.** A button scaled down with a film drawn 1920 pixels wide would be too small
+to press on a phone. They sit in the space under the closing wordmark that the
+opening tagline used (`FILMS[…].actions`), and are hidden rather than merely
+transparent until they rise in, so nobody tabs onto one they cannot see.
+
+**Make your own poll works signed out.** Signed out, `/polls/new` used to fall
+into `polls/:pollId` and ask the database for a poll called "new"; it is now
+the sign-in screen, which remembers the address for an emailed link and sends
+**Continue without an account** to the create form rather than the poll list.
+
+**Share this intro** opens the device's share sheet where there is one and
+copies the link otherwise. Every intro link draws the same preview card as
+every other link — see [Link previews](#link-previews).
+
 ## Link previews
 
 Paste a poll's link into Signal, Messenger or an SMS app and the app draws a
@@ -2657,7 +2720,7 @@ reader off the poll they were in the middle of; the popover opens where they
 are, and reads the account's settings only when it is opened. The `/settings`
 route is still there with the same component on it, for the one caller that
 cannot open a menu: the footer of every email. Nothing inside the app links to
-it, and the gear stands down on it the way the About link does on About.
+it, and the gear stands down on it the way its About link does on About.
 
 A push switch that cannot be turned on — an iPhone outside the installed app,
 a browser that said no, a browser with no push — is disabled with one short

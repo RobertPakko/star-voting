@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ActionIcon,
-  Anchor,
   AppShell,
   Button,
   Divider,
@@ -12,7 +11,15 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { ArchiveIcon, DownloadSimpleIcon, GearIcon, SignOutIcon } from '@phosphor-icons/react'
+import {
+  ArchiveIcon,
+  BookOpenIcon,
+  DownloadSimpleIcon,
+  GearIcon,
+  PlayCircleIcon,
+  SignOutIcon,
+  type Icon,
+} from '@phosphor-icons/react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { ClockSwitch } from './ClockSwitch'
@@ -38,9 +45,13 @@ import { ThemeToggle } from './ThemeToggle'
  * there too, and its corner says Sign in rather than offering a sign-out
  * that would strand every poll it made.
  *
- * The About link is dropped while About is what's on screen: a link to the
- * page you are already reading is a dead end that still asks to be read,
- * and its absence is the plainest way to say you have arrived.
+ * The pages that are not polls — the removed polls, the install guide, About
+ * and the intro — are links in the gear menu rather than in the header. About
+ * was a link of its own up here once, and the row is one control shorter on a
+ * phone without it. Each is dropped from the menu while it is what's on
+ * screen: a link to the page you are already reading is a dead end that
+ * still asks to be read, and its absence is the plainest way to say you have
+ * arrived.
  */
 export function Layout() {
   const { session, anonymous, signOut } = useAuth()
@@ -49,7 +60,6 @@ export function Layout() {
   const account = session && !anonymous ? session : null
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
-  const onAbout = pathname === '/about'
   const onSettings = pathname === '/settings'
   // The gear menu, held here so that following any of its links — the install
   // guide, the removed polls — closes it rather than leaving it open over the
@@ -117,14 +127,6 @@ export function Layout() {
                 {account.user.email}
               </Text>
             )}
-            {/* A plain link rather than a button: it's navigation, not an
-                action, and the header has to hold the title without wrapping
-                at 375px wide. */}
-            {!onAbout && (
-              <Anchor component={Link} to="/about" size="sm" style={{ whiteSpace: 'nowrap' }}>
-                About
-              </Anchor>
-            )}
             <InstallButton />
             {/* An icon beside the theme menu, for the same width reason the
                 install button is one. It opens the two notification switches
@@ -132,7 +134,7 @@ export function Layout() {
                 them: two switches do not earn a page, and the reader is
                 usually in the middle of a poll. The /settings page still
                 exists, for the emails' footer to link to, and the gear stands
-                down there the way the About link does on About. Signed out it
+                down there the way its own About link does on About. Signed out it
                 holds one switch, push for this browser, which is how a reader
                 holding a link turns on notifications for the open polls they
                 answer — the same place an account does it, so every banner
@@ -179,32 +181,27 @@ export function Layout() {
                     <ClockSwitch />
                     <Divider />
                     {/* Pages rather than switches, so they sit under the
-                        switches and apart from them. Both are links: the menu
-                        closes on any change of address. */}
-                    {!isInstalledApp() && (
-                      <Button
-                        component={Link}
-                        to="/app"
-                        variant="subtle"
-                        color="gray"
-                        justify="flex-start"
-                        leftSection={<DownloadSimpleIcon size={18} aria-hidden />}
-                      >
-                        Install as an app
-                      </Button>
-                    )}
+                        switches and apart from them. All are links: the menu
+                        closes on any change of address, and each is two words. The reader's own
+                        things first, then the app's, then the method's. */}
                     {session && (
-                      <Button
-                        component={Link}
-                        to="/?removed"
-                        variant="subtle"
-                        color="gray"
-                        justify="flex-start"
-                        leftSection={<ArchiveIcon size={18} aria-hidden />}
-                      >
+                      <MenuLink to="/?removed" icon={ArchiveIcon}>
                         Removed polls
-                      </Button>
+                      </MenuLink>
                     )}
+                    {!isInstalledApp() && pathname !== '/app' && (
+                      <MenuLink to="/app" icon={DownloadSimpleIcon}>
+                        App installation
+                      </MenuLink>
+                    )}
+                    {pathname !== '/about' && (
+                      <MenuLink to="/about" icon={BookOpenIcon}>
+                        About STAR
+                      </MenuLink>
+                    )}
+                    <MenuLink to="/intro" icon={PlayCircleIcon}>
+                      View intro
+                    </MenuLink>
                   </Stack>
                 </Popover.Dropdown>
               </Popover>
@@ -287,6 +284,22 @@ export function Layout() {
         </Reveal>
       </AppShell.Main>
     </AppShell>
+  )
+}
+
+/** One of the gear menu's links to a page. */
+function MenuLink({ to, icon: Glyph, children }: { to: string; icon: Icon; children: ReactNode }) {
+  return (
+    <Button
+      component={Link}
+      to={to}
+      variant="subtle"
+      color="gray"
+      justify="flex-start"
+      leftSection={<Glyph size={18} aria-hidden />}
+    >
+      {children}
+    </Button>
   )
 }
 

@@ -56,6 +56,7 @@ const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m
 const InstallGuide = lazy(() =>
   import('./pages/InstallGuide').then((m) => ({ default: m.InstallGuide })),
 )
+const Intro = lazy(() => import('./pages/Intro').then((m) => ({ default: m.Intro })))
 
 function App() {
   const { session, anonymous, loading } = useAuth()
@@ -96,6 +97,21 @@ function App() {
 
   return (
     <Routes>
+      {/* The intro film, for everybody, and outside the shell: it draws the
+          app's header itself, and a real one above it would be the header
+          twice. Its wait is the film's background and nothing else -- there
+          is no page shape to stand in for a film. */}
+      <Route
+        path="intro"
+        element={
+          <Suspense
+            fallback={<div style={{ position: 'fixed', inset: 0, background: '#f8f9fa' }} />}
+          >
+            <Intro />
+          </Suspense>
+        }
+      />
+
       {/* Everything but the sign-in screen shares the app shell, so a
           signed-out voter and the poll's creator see the same header. */}
       <Route element={<Layout />}>
@@ -178,6 +194,12 @@ function App() {
           an address of its own, which the header's Sign in links to, because
           that reader's `/` is their poll list. */}
       {!session && <Route path="*" element={<SignIn />} />}
+      {/* Named, because otherwise it is a poll: signed out, `polls/:pollId`
+          above would take it and ask the database for a poll called "new".
+          The sign-in screen at this address sends the reader on to the create
+          form whichever way they get in -- see SignIn. The intro's "Make your
+          own poll" is what links here. */}
+      {!session && <Route path="polls/new" element={<SignIn />} />}
       {anonymous && <Route path="sign-in" element={<SignIn />} />}
     </Routes>
   )

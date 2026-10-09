@@ -128,8 +128,10 @@ export function SignIn() {
       await continueWithoutAccount()
       // Home rather than wherever the catch-all left them: this card stands in
       // for every address a signed-out reader has no route to, and the list
-      // is where a session without an account starts.
-      navigate('/', { replace: true })
+      // is where a session without an account starts. The one exception is
+      // the create form, which is where the intro's *Make your own poll*
+      // sends a reader, and a session without an account can make a poll.
+      navigate(location.pathname === '/polls/new' ? '/polls/new' : '/', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not continue without an account.')
       setContinuing(false)
