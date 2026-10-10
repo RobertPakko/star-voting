@@ -24,48 +24,18 @@ export const test = base.extend<{ page: Page }>({
 
 export { expect }
 
-const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']
-
-/**
- * What counts as a filled control. Mantine leaves `data-variant` off a
- * component drawn in its default variant, which for these three is `filled`,
- * so naming the attribute alone misses every plain `<Button>`. The calendar's
- * view switcher marks its current view the same way, in the primary colour.
- */
-const FILLED = [
-  '[data-variant="filled"]',
-  '.mantine-Button-root:not([data-variant])',
-  '.mantine-Badge-root:not([data-variant])',
-  '.mantine-ActionIcon-root:not([data-variant])',
-  '.mantine-ViewSelect-headerControl[data-active]',
-]
-
 /**
  * Runs axe over what is on screen and fails on anything it finds, at any
  * impact. Checked against the WCAG 2.1 A and AA rules, which is the bar the
  * app is held to, plus axe's best-practice set.
- *
- * One exception, and it is deliberate: **filled controls are left out of the
- * contrast check**. They keep Mantine's own colours — white text on shade 6 —
- * which is under 4.5:1 on several of them; see the theme in `main.tsx`. It is
- * a second pass rather than a rule switched off, so every other piece of text
- * on the page is still measured.
  */
 export async function expectAccessible(page: Page, label?: string) {
-  const rest = await new AxeBuilder({ page })
-    .withTags(TAGS)
-    .disableRules(['color-contrast'])
+  const { violations } = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'])
     .analyze()
-  // One `exclude` per selector: handed an array, axe reads it as a path into
-  // nested frames rather than as a list.
-  const contrast = await FILLED.reduce(
-    (axe, selector) => axe.exclude(selector),
-    new AxeBuilder({ page }).withRules(['color-contrast']),
-  ).analyze()
-  const violations = [...rest.violations, ...contrast.violations]
   const summary = violations.map(
     (v) =>
-      `${v.id} (${v.impact}): ${v.help}\n${v.nodes.map((n) => `  ${n.target.join(' ')}\n    ${n.failureSummary?.split('\n').at(-1) ?? ''}`).join('\n')}`,
+      `${v.id} (${v.impact}): ${v.help}\n${v.nodes.map((n) => `  ${n.target.join(' ')}`).join('\n')}`,
   )
   expect(summary, `accessibility violations${label ? ` on ${label}` : ''}`).toEqual([])
 }

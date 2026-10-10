@@ -2244,26 +2244,19 @@ found something on every page, nearly all of it in one of the four places
 below — which is why each is now decided in one place rather than at the call
 sites, where it had drifted.
 
-**Contrast is the theme's job, with one exemption.** Mantine's defaults fall
-under 4.5:1 for ordinary text in several places, and each is decided once, in
-`main.tsx`:
+**Contrast is the theme's job.** Three of Mantine's defaults fall under 4.5:1
+for ordinary text, and each is fixed once, in `main.tsx`:
 
-- **Filled controls keep Mantine's own look, and are exempt.** A filled button
-  or badge is shade 6 in the light scheme with white text, which is 3.55:1 on
-  blue and 2.6 on orange. They were moved to shade 8 with `autoContrast` once,
-  which passed, and put black text on half the coloured buttons in the app —
-  which read worse than the shortfall it fixed. So `expectAccessible` runs the
-  contrast rule as a pass of its own with filled controls excluded (`FILLED`
-  in `e2e/fixtures.ts`), and every other rule, and every other piece of text,
-  is checked as before. Mantine omits `data-variant` on a default variant, so
-  that list names plain `Button`, `Badge` and `ActionIcon` as well as
-  `[data-variant="filled"]`; a new kind of filled control that fails the check
-  belongs there, not in a theme change.
-- **Coloured text on the page's own background** — an outline or default
-  button's label, a link, `Text c="blue"` — is not exempt, and is the colour's
-  shade 8 (`cssVariablesResolver` overrides `--mantine-color-*-text`,
-  `-outline` and `--mantine-color-anchor`). Mantine would draw it in the
-  primary shade, 6, which is the shortfall above without the excuse.
+- **Filled colours are shade 8** in both schemes (`primaryShade`), where the
+  light scheme drew shade 6: white on `blue.6` is 3.55:1. Their text is always
+  white. Six colours are too light for white even at shade 8 — orange, green,
+  teal, cyan, lime and yellow — and their filled shade is darkened just far
+  enough to clear 4.5 (`FILLED_FOR_WHITE`). For a while `autoContrast` picked
+  black text for those instead, which passed and read badly: black on a
+  coloured button looks like a mistake. The cost is that filled things are a
+  step darker in the light scheme than Mantine's default. Where a
+  filled colour carries no text there is nothing to fix, and the score round's
+  also-ran bars keep the grey they had (`--muted-bar` in Results.module.css).
 - **Dimmed text** — every caption and secondary line in the app — is a grey of
   its own in each scheme (`cssVariablesResolver`), the lightest that clears
   4.5 on every surface dimmed text is put on, the calendar's greyed day
@@ -2816,7 +2809,7 @@ the cursor find their marks by measuring `data-tg` elements in those drawings
 **It stays light in dark mode**, as a video would: it is a recording of the
 app, and the page takes the film's background so the letterboxing disappears.
 The buttons over it are chosen to look the same in both schemes — a filled
-button pinned to the film's blue, and `white` buttons with the film's border —
+button in the app's own filled blue, and `white` buttons with the film's border —
 since Mantine's other variants take their colours from the scheme.
 
 **The buttons are drawn at the page's size, over the film rather than inside

@@ -191,7 +191,7 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
       <Button
         key="make"
         size={size}
-        color={COL.blue}
+        color="blue"
         component={Link}
         to="/polls/new"
         leftSection={<PlusIcon size={18} aria-hidden />}
@@ -203,7 +203,7 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
       <Button
         key="make"
         size={size}
-        color={COL.blue}
+        color="blue"
         onClick={() => void makePoll()}
         loading={starting}
         leftSection={<PlusIcon size={18} aria-hidden />}
