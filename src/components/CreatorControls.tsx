@@ -279,7 +279,8 @@ export function CreatorControls({
                 Cancel
               </Button>
               <Button
-                color="orange"
+                color="orange.4"
+                autoContrast
                 onClick={() => {
                   lateEditModal.close()
                   onEditOptions(true)
@@ -311,7 +312,7 @@ export function CreatorControls({
               <Button variant="default" onClick={openModal.close}>
                 Cancel
               </Button>
-              <Button color="orange" onClick={openPoll} loading={busy}>
+              <Button color="orange.4" autoContrast onClick={openPoll} loading={busy}>
                 Open poll
               </Button>
             </Group>
@@ -336,7 +337,7 @@ export function CreatorControls({
               <Button variant="default" onClick={closeModal.close}>
                 Cancel
               </Button>
-              <Button color="orange" onClick={closePoll} loading={busy}>
+              <Button color="orange.4" autoContrast onClick={closePoll} loading={busy}>
                 Close poll
               </Button>
             </Group>
@@ -358,7 +359,7 @@ export function CreatorControls({
               <Button variant="default" onClick={reopenModal.close}>
                 Cancel
               </Button>
-              <Button color="orange" onClick={reopenPoll} loading={busy}>
+              <Button color="orange.4" autoContrast onClick={reopenPoll} loading={busy}>
                 Reopen poll
               </Button>
             </Group>

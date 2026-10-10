@@ -46,15 +46,14 @@ const theme = createTheme({
   //  - A filled control is drawn in shade 8 in both schemes, where the light
   //    scheme used shade 6: white on `blue.6` is 3.55:1, on `blue.8` it is 5.
   //    That is also what puts the primary colour's links at 5:1 on white.
-  //  - `autoContrast` picks black or white text for a filled control from its
-  //    background. The threshold is where the two give the same contrast, so
-  //    whichever is picked is the better of them: a filled orange badge was
-  //    white text at 2.57:1 and is now black at 8.
+  //  - Its text is white. A few colours are too light for white even at
+  //    shade 8 (orange, green, yellow…), and where one of those is filled it is
+  //    drawn at a light shade of the same palette with `autoContrast`, which
+  //    gives it dark text: see QuestionStrip and CreatorControls. Black text
+  //    on a mid-tone button reads as a mistake; on a light one it does not.
   //  - The dimmed grey, and the text colour of the light badges, are in
   //    `cssVariablesResolver` below.
   primaryShade: { light: 8, dark: 8 },
-  autoContrast: true,
-  luminanceThreshold: 0.18,
   components: {
     // The label under a control, which is as close to instant as anything in
     // the app gets: it is answering a question the pointer is asking now.
