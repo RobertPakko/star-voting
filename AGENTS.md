@@ -2248,15 +2248,18 @@ sites, where it had drifted.
 for ordinary text, and each is fixed once, in `main.tsx`:
 
 - **Filled colours are shade 8** in both schemes (`primaryShade`), where the
-  light scheme drew shade 6: white on `blue.6` is 3.55:1. Their text is always
-  white. Six colours are too light for white even at shade 8 — orange, green,
-  teal, cyan, lime and yellow — and their filled shade is darkened just far
-  enough to clear 4.5 (`FILLED_FOR_WHITE`). For a while `autoContrast` picked
-  black text for those instead, which passed and read badly: black on a
-  coloured button looks like a mistake. The cost is that filled things are a
-  step darker in the light scheme than Mantine's default. Where a
-  filled colour carries no text there is nothing to fix, and the score round's
-  also-ran bars keep the grey they had (`--muted-bar` in Results.module.css).
+  light scheme drew shade 6: white on `blue.6` is 3.55:1, on `blue.8` it is 5.
+  Their text is white. Orange, green and yellow are too light for white at
+  any shade worth using, so where one of those is filled — the open question
+  in `QuestionStrip`, the orange confirm buttons in `CreatorControls` — it is
+  drawn at shade 4 of the same colour with `autoContrast`, which gives it dark
+  text at 11:1 or better. Black on a light tint reads as a choice; black on a
+  mid-tone, which is what a global `autoContrast` did for a while, reads as a
+  mistake. Every colour comes from Mantine's palette: an off-palette shade
+  was tried for these and taken back out. The cost of shade 8 is that filled
+  things are a step darker in the light scheme than Mantine's default. Where
+  a filled colour carries no text there is nothing to fix, and the score
+  round's also-ran bars keep the grey they had (`--muted-bar` in Results.module.css).
 - **Dimmed text** — every caption and secondary line in the app — is a grey of
   its own in each scheme (`cssVariablesResolver`), the lightest that clears
   4.5 on every surface dimmed text is put on, the calendar's greyed day

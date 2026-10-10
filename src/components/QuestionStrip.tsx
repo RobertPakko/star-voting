@@ -174,7 +174,17 @@ export function QuestionStrip({
                 ? ' (answered)'
                 : ' (not answered)'
           return isCurrent ? (
-            <Badge key={question.key} variant="filled" color={color} maw={220} aria-current="step">
+            // Shade 4 with dark text rather than the filled shade with white:
+            // orange and green are too light at any shade to carry white, and
+            // the strip's three colours should all be drawn the same way.
+            <Badge
+              key={question.key}
+              variant="filled"
+              color={`${color}.4`}
+              autoContrast
+              maw={220}
+              aria-current="step"
+            >
               {question.title}
               {said && <VisuallyHidden>{said}</VisuallyHidden>}
             </Badge>

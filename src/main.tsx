@@ -46,10 +46,11 @@ const theme = createTheme({
   //  - A filled control is drawn in shade 8 in both schemes, where the light
   //    scheme used shade 6: white on `blue.6` is 3.55:1, on `blue.8` it is 5.
   //    That is also what puts the primary colour's links at 5:1 on white.
-  //  - Its text is always white. Six colours are still too light for white at
-  //    shade 8, and those are made a little darker in `cssVariablesResolver`
-  //    rather than given black text: `autoContrast` did that for a while, and
-  //    black on a coloured button read worse than anything it fixed.
+  //  - Its text is white. A few colours are too light for white even at
+  //    shade 8 (orange, green, yellow…), and where one of those is filled it is
+  //    drawn at a light shade of the same palette with `autoContrast`, which
+  //    gives it dark text: see QuestionStrip and CreatorControls. Black text
+  //    on a mid-tone button reads as a mistake; on a light one it does not.
   //  - The dimmed grey, and the text colour of the light badges, are in
   //    `cssVariablesResolver` below.
   primaryShade: { light: 8, dark: 8 },
@@ -97,31 +98,9 @@ const theme = createTheme({
  * 4.6 on the hover shade, so it reads as the same colour as before, a step
  * deeper. The dark scheme's already pass and are left alone.
  */
-/**
- * **A filled control's background**, for the six colours whose shade 8 is too
- * light to carry white text: orange was 3.6:1, green 3.4, yellow 2.5. Each is
- * shade 8 darkened just far enough to clear 4.6, and its hover a step further,
- * so it is still plainly that colour. The rest of the palette clears 4.5 at
- * shade 8 already and is left alone.
- */
-const FILLED_FOR_WHITE = Object.fromEntries(
-  Object.entries({
-    orange: ['#c84d0a', '#b34509'],
-    green: ['#28863a', '#247834'],
-    teal: ['#08855f', '#077855'],
-    cyan: ['#0c8093', '#0a7485'],
-    lime: ['#4f810c', '#45720a'],
-    yellow: ['#aa6300', '#955700'],
-  }).flatMap(([c, [filled, hover]]) => [
-    [`--mantine-color-${c}-filled`, filled],
-    [`--mantine-color-${c}-filled-hover`, hover],
-  ]),
-)
-
 const resolveCssVariables = () => ({
   variables: {},
   light: {
-    ...FILLED_FOR_WHITE,
     '--mantine-color-dimmed': '#666d75',
     '--mantine-color-red-light-color': '#ad2424',
     '--mantine-color-violet-light-color': '#5939b8',
@@ -135,7 +114,6 @@ const resolveCssVariables = () => ({
     '--mantine-color-orange-light-color': '#ae3a0c',
   },
   dark: {
-    ...FILLED_FOR_WHITE,
     '--mantine-color-dimmed': '#a3a3a3',
   },
 })
