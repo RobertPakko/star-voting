@@ -166,10 +166,13 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
   }
   const size = portrait ? 'md' : 'lg'
   // White on the film's grey, with a border of the film's own colour, so the
-  // two quieter buttons look the same in either colour scheme.
+  // two quieter buttons look the same in either colour scheme. Their text is
+  // `blue.8` rather than the primary shade: it is text on white, not a filled
+  // control, so it is held to 4.5:1 like any other.
   const quiet = {
     variant: 'white' as const,
     size,
+    c: 'blue.8',
     bd: `1px solid ${COL.border}`,
   }
 

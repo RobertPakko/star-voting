@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
-import { createTheme, MantineProvider } from '@mantine/core'
+import { createTheme, MantineProvider, type MantineTheme } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import '@mantine/core/styles.css'
 import '@mantine/notifications/styles.css'
@@ -39,22 +39,16 @@ import App from './App.tsx'
  */
 const theme = createTheme({
   respectReducedMotion: true,
-  // **Colour contrast, which axe checks on every page in `e2e/`.** Three of
-  // Mantine's defaults fall short of the 4.5:1 WCAG asks of ordinary text, and
-  // each is fixed here once rather than at the call sites that use it:
+  // **Colour contrast, which axe checks on every page in `e2e/`.** Filled
+  // controls — a filled button, a filled badge — keep Mantine's own look:
+  // shade 6 in the light scheme, white text whatever the colour. That is short
+  // of 4.5:1 on several of them (white on `blue.6` is 3.55:1, on `orange.6`
+  // 2.6), and it is a choice rather than an oversight: the alternative was
+  // black text on coloured buttons, which read worse. So `expectAccessible`
+  // leaves filled controls out of its contrast check, and only them.
   //
-  //  - A filled control is drawn in shade 8 in both schemes, where the light
-  //    scheme used shade 6: white on `blue.6` is 3.55:1, on `blue.8` it is 5.
-  //    That is also what puts the primary colour's links at 5:1 on white.
-  //  - `autoContrast` picks black or white text for a filled control from its
-  //    background. The threshold is where the two give the same contrast, so
-  //    whichever is picked is the better of them: a filled orange badge was
-  //    white text at 2.57:1 and is now black at 8.
-  //  - The dimmed grey, and the text colour of the light badges, are in
-  //    `cssVariablesResolver` below.
-  primaryShade: { light: 8, dark: 8 },
-  autoContrast: true,
-  luminanceThreshold: 0.18,
+  // Everything else is still held to 4.5:1: the dimmed grey, the light badges'
+  // text and the link colour are in `cssVariablesResolver` below.
   components: {
     // The label under a control, which is as close to instant as anything in
     // the app gets: it is answering a question the pointer is asking now.
@@ -84,8 +78,15 @@ const theme = createTheme({
 })
 
 /**
- * The two colours Mantine draws from a variable rather than from the theme,
- * moved to where they pass 4.5:1.
+ * The colours Mantine draws from a variable rather than from the theme, moved
+ * to where they pass 4.5:1.
+ *
+ * **Coloured text on the page's own background** — an outline or default
+ * button's label, a link, `Text c="blue"` — is the colour's shade 8. Mantine
+ * draws it in the primary shade, which is 6 now that filled controls keep
+ * their defaults, and shade 6 is under 4.5:1 on white for most of the palette.
+ * The filled controls are the one exemption (see the theme); text that is not
+ * on one of them is not.
  *
  * **Dimmed text** is the app's secondary line — captions, counts, the
  * sentence beside a button — and Mantine's is 3.3:1 on white and 3.5:1 on a
@@ -99,9 +100,16 @@ const theme = createTheme({
  * 4.6 on the hover shade, so it reads as the same colour as before, a step
  * deeper. The dark scheme's already pass and are left alone.
  */
-const resolveCssVariables = () => ({
+const resolveCssVariables = (theme: MantineTheme) => ({
   variables: {},
   light: {
+    ...Object.fromEntries(
+      Object.keys(theme.colors).flatMap((c) => [
+        [`--mantine-color-${c}-text`, `var(--mantine-color-${c}-8)`],
+        [`--mantine-color-${c}-outline`, `var(--mantine-color-${c}-8)`],
+      ]),
+    ),
+    '--mantine-color-anchor': 'var(--mantine-color-blue-8)',
     '--mantine-color-dimmed': '#666d75',
     '--mantine-color-red-light-color': '#ad2424',
     '--mantine-color-violet-light-color': '#5939b8',
