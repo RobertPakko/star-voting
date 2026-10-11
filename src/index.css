@@ -91,3 +91,16 @@ body {
 .mantine-Anchor-root[data-inherit] {
   text-decoration: underline;
 }
+
+/* Every progress bar grows to its new length rather than jumping to it.
+ *
+ * Mantine's own is a tenth of a second, which is a jump with a smear on it.
+ * The one that moves while somebody watches is under *your vote is in*, where
+ * a vote landing elsewhere lengthens it — and a bar seen growing is a vote
+ * seen arriving, which is the moment that card exists to show. The results
+ * bars state their own transition, staggered, and win on specificity; see
+ * Results.module.css.
+ */
+.mantine-Progress-section {
+  transition: width var(--motion-slow) var(--motion-ease);
+}

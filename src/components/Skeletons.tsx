@@ -30,6 +30,14 @@ import { PollHeading, type PollHeadingProps } from './PollHeading'
  *    *does* always have — and a condition in the source is not the same thing
  *    as a case that happens; see AGENTS.md for the runoff card, which was left
  *    out for years on the strength of one.
+ *
+ *    **The one licensed guess is a neighbouring question.** Crossing to a
+ *    question of a poll that has finished, whether it ends in a tally is
+ *    often not knowable ahead — and holding out for certainty there drew one
+ *    empty card under the strip on every closed poll, which is less like the
+ *    page that comes than the guess is. The question being left is the guess:
+ *    one poll's questions are put to the same people at once and nearly
+ *    always end alike. See `tallied` on `QuestionSkeleton`.
  *  - **A shape only exists for a wait that exists.** A card that guesses at
  *    nothing is a card whose content the page already has, and once
  *    `poll_page` carried the roster that was true of `RosterSkeleton`, which
@@ -443,11 +451,104 @@ function TallyShape({ options }: { options?: number }) {
   )
 }
 
-/** The heading over a poll and the card answering it: every poll page. */
+/**
+ * The way between a poll's questions, before the poll has been read: the
+ * counter and the step links over a badge per question, and the rule under
+ * them that QuestionStrip draws. How many questions there are is known — the
+ * card on the list counts them — so that is the one thing this claims; what
+ * each is called waits for the read.
+ *
+ * A fragment, because the real strip is two siblings — the strip and its rule
+ * — spaced by whatever stack they stand in.
+ */
+function StripShape({ questions }: { questions: number }) {
+  return (
+    <>
+      <Stack gap="xs">
+        <Group justify="space-between" wrap="nowrap" gap="sm">
+          <Bar kind="line" width={92} />
+          <Bar kind="line" width={48} />
+        </Group>
+        <Group gap="xs">
+          {Array.from({ length: questions }, (_, i) => (
+            <Skeleton key={i} height={badge} width={[132, 112, 148, 120][i % 4]} radius="xl" />
+          ))}
+        </Group>
+      </Stack>
+      <Divider />
+    </>
+  )
+}
+
+/**
+ * The card a voter comes back to after answering an invite poll that is still
+ * taking votes: *your vote is in* beside the count, the progress bar under it,
+ * and the foot with *Edit vote*. See `Waiting` in PollDetail.
+ */
+function WaitingShape() {
+  return (
+    <Stack gap="sm">
+      <Group justify="space-between" wrap="nowrap" gap="xs">
+        <Bar kind="name" width={112} />
+        <Skeleton height={badge} width={72} radius="xl" style={{ flex: 'none' }} />
+      </Group>
+      {/* A Progress bar, at the height and radius Mantine draws one. */}
+      <Skeleton height={8} radius="md" />
+      <FooterShape buttons={[96]} />
+    </Stack>
+  )
+}
+
+/**
+ * Which of a poll page's endings a heading handed over from the list says is
+ * coming. The list row answers it from the same columns the page itself goes
+ * on, so this is reading rather than guessing:
+ *
+ *  - **collecting**: the poll is a list still being built.
+ *  - **tally**: results out on a question certain to have one. Results out
+ *    means this question took a ballot, which on a poll of one question is
+ *    the end of it; on a poll of several, the list's `results_available` is
+ *    asked of the whole group, so only the case `QuestionSkeleton` can be sure
+ *    of — out with nobody having closed it — is claimed.
+ *  - **ended**: finished in some other way, which is the one card both
+ *    endings share — see `BannerShape`.
+ *  - **waiting**: an invite poll this reader has already voted in.
+ *  - **ballot**: everything else, which is what this drew for every poll
+ *    before it was told anything — and what a finished poll used to flash on
+ *    its way open.
+ */
+function pageStage(
+  heading: PollHeadingProps | undefined,
+  voted: boolean,
+): 'collecting' | 'tally' | 'ended' | 'waiting' | 'ballot' {
+  if (!heading) return 'ballot'
+  const { state } = heading
+  const several = (heading.turnout?.questionCount ?? 1) > 1
+  if (state.soliciting) return 'collecting'
+  if (state.resultsAvailable && (!several || !state.closed)) return 'tally'
+  if (state.resultsAvailable || state.closed) return 'ended'
+  if (heading.mode === 'invite' && voted) return 'waiting'
+  return 'ballot'
+}
+
+/**
+ * The heading over a poll and what stands under it: every poll page.
+ *
+ * **Under the heading is the stage the poll is at, where that is known.** A
+ * poll opened from its card on the list arrives with the card's heading, and
+ * the heading says whether the poll is collecting its options, taking votes or
+ * finished, how many options it has and how many questions it asks — so the
+ * shape is the page that is coming rather than a ballot whatever the poll.
+ * A finished poll opened from the list used to put a card of stars up and then
+ * replace it with a tally, which is a skeleton promising the wrong page.
+ * Arrived at any other way — a link, a reload — nothing is known yet, and it
+ * is the ballot it always was.
+ */
 export function PollPageSkeleton({
-  rows = 5,
+  rows,
   title,
   heading,
+  voted = false,
 }: {
   rows?: number
   title?: string
@@ -461,14 +562,47 @@ export function PollPageSkeleton({
    * the card's heading flies onto; see lib/headingFlight.ts.
    */
   heading?: PollHeadingProps
+  /**
+   * Whether this reader has voted in it, as the card on the list knew it:
+   * the account as an invitee, which is the only reader an invite poll's
+   * *your vote is in* is for. See `pageStage`.
+   */
+  voted?: boolean
 }) {
+  const stage = pageStage(heading, voted)
+  const options = rows ?? heading?.turnout?.optionCount
+  const questions = heading?.turnout?.questionCount ?? 1
+  const strip = questions > 1 ? <StripShape questions={questions} /> : null
+
   return (
     <Loading>
       <Stack maw={720} mx="auto" gap="md">
         {heading ? <PollHeading {...heading} /> : <PollHeadingShape title={title} />}
-        <Card withBorder>
-          <BallotShape rows={rows} />
-        </Card>
+        {/* A finished poll stands its strip over the block rather than inside a
+            card, as the page does; see QuestionSkeleton. */}
+        {stage === 'tally' || stage === 'ended' ? (
+          <Stack gap="md">
+            {strip}
+            {stage === 'tally' ? <TallyShape options={options || undefined} /> : <BannerShape />}
+          </Stack>
+        ) : (
+          <Card withBorder>
+            <Stack gap="sm">
+              {strip}
+              {stage === 'waiting' ? (
+                <WaitingShape />
+              ) : (
+                // A list being collected can be empty, and is drawn so; a
+                // ballot never is, so a count of nothing there is a count
+                // nobody gave.
+                <BallotShape
+                  rows={stage === 'collecting' ? (options ?? 5) : options || 5}
+                  collecting={stage === 'collecting'}
+                />
+              )}
+            </Stack>
+          </Card>
+        )}
       </Stack>
     </Loading>
   )
@@ -525,22 +659,24 @@ export function QuestionSkeleton({
    */
   finished?: boolean
   /**
-   * Whether the question being opened is certain to have a tally under the
+   * Whether the question being opened is expected to have a tally under the
    * strip rather than the notice a question nobody answered puts up, which
    * decides how much of the block below is claimed.
    *
-   * The fact behind it is `results_available && !is_closed`, read off the
-   * question being *left*. It carries because results need every question in
-   * the group gated open, and `poll_gate_open` opens on one of two things: the
-   * poll was closed, or every invitee answered that question. Closing is one
-   * act over the whole group, so results out with no `closed_at` means every
-   * question was answered by everyone invited — including the one being
-   * opened, which therefore has a tally coming.
+   * Sometimes it is certain. `results_available && !is_closed`, read off the
+   * question being *left*, carries to every question: results need every
+   * question in the group gated open, and `poll_gate_open` opens on one of two
+   * things — the poll was closed, or every invitee answered that question.
+   * Closing is one act over the whole group, so results out with no
+   * `closed_at` means every question was answered by everyone invited,
+   * including the one being opened. And a question the page has read before
+   * says what it ended in.
    *
-   * A poll closed early is the case this is false for, and false honestly:
-   * closing settles the group at whatever it had. An open poll is always in
-   * that case, its questions having no invite list to have finished, which is
-   * why the share-link reading keeps the one card it always drew.
+   * Otherwise it is a guess, and the callers make it from the question being
+   * left: a poll closed early settles the group at whatever it had, and an
+   * open poll always ends that way, so a question nobody reached can end in
+   * the notice — but one poll's questions nearly always end alike, and a
+   * guess that misses draws the wrong shape for one read and no worse.
    */
   tallied?: boolean
   /**

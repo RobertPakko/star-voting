@@ -23,6 +23,7 @@ import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading, type PollHeadingProps } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
 import { PollListSkeleton } from '../components/Skeletons'
+import { PollCards, type ListPage } from '../components/PollCards'
 import type { PollListItem } from '../lib/types'
 import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
@@ -94,6 +95,10 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   const [polls, setPolls] = useState<PollListItem[] | null>(kept?.polls ?? null)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(kept?.page ?? 1)
+  // Which page of which list the rows on screen are, which is what the cards
+  // are keyed by; see PollCards. Not `page`, which moves as the reader presses
+  // and runs ahead of the rows until the read for it lands.
+  const [rowsOf, setRowsOf] = useState<ListPage>({ removed: false, page: kept?.page ?? 1 })
   // Which of the two lists is on screen is the address's, and arrives as a
   // prop: the reader's polls, or the ones they have removed from it. Both are
   // read from `list_polls`, which pages each of them separately, so a page is
@@ -108,6 +113,11 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   // The polls a remove or restore is in flight for, so a card can say so
   // under the press, and whatever the last one said if it was refused.
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
+  // How many reads of the list have been started, and — for each card whose
+  // removal or restore has gone in — how many had been when it did. A read
+  // started after that is the first that can be without it.
+  const readsStarted = useRef(0)
+  const movedBefore = useRef(new Map<string, number>())
   const [actionError, setActionError] = useState<string | null>(null)
   // How many polls there are in total, which only a read can tell us: it
   // arrives on every row (see PollListItem.total_count) because that is the
@@ -141,6 +151,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   const load = useCallback(async () => {
     const asked = chosen.current
     const removed = removedView.current
+    const started = ++readsStarted.current
     const { data, error: rpcError } = await supabase.rpc('list_polls', {
       p_limit: PAGE_SIZE,
       p_offset: (asked - 1) * PAGE_SIZE,
@@ -158,12 +169,32 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     // of leaving the reader looking at a dead end.
     setError(null)
     const rows = (data as PollListItem[]) ?? []
-    setPolls(rows)
     // No rows means no total to read off one, and that can only be an empty
     // list: the database clamps a page request past the end onto the last
     // page there is, so a page that comes back empty is a list with nothing
     // in it rather than a page number that overshot.
     const count = rows[0]?.total_count ?? 0
+    // The page these rows are actually of, which is not always the page that
+    // was asked for — the database clamps a request past the end. Recording
+    // the clamped one is what stops the effect below from reading again the
+    // moment `page` is brought down to match.
+    const landed = Math.min(asked, Math.max(1, Math.ceil(count / PAGE_SIZE)))
+    // The rows and the page they are of, in the same render: the cards are
+    // keyed by the page, and new rows drawn for one render under the old key
+    // would be read as the old page's cards all moving at once.
+    setPolls(rows)
+    setRowsOf({ removed, page: landed })
+    // A card that has gone stays dimmed until a read that started after it
+    // went has come back without it; see `move`.
+    const settled = [...movedBefore.current].filter(([, before]) => before < started)
+    if (settled.length) {
+      for (const [id] of settled) movedBefore.current.delete(id)
+      setPending((was) => {
+        const next = new Set(was)
+        for (const [id] of settled) next.delete(id)
+        return next
+      })
+    }
     setTotal(count)
     // The other list's size rides on every row, so an empty read has nowhere
     // to carry it — and a list emptied by removing everything on it is the one
@@ -177,11 +208,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
       removedTotal = typeof counted === 'number' ? counted : 0
     }
     setRemovedCount(removedTotal)
-    // The page these rows are actually of, which is not always the page that
-    // was asked for — the database clamps a request past the end. Recording
-    // the clamped one is what stops the effect below from reading again the
-    // moment `page` is brought down to match.
-    const landed = Math.min(asked, Math.max(1, Math.ceil(count / PAGE_SIZE)))
     fetched.current = `${removed}:${landed}`
     // Left for the walk back from a poll; see lib/listCache.ts.
     if (!removed && owner.current)
@@ -291,18 +317,25 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     setActionError(null)
     setPending((was) => new Set(was).add(id))
     const failed = await (remove ? removePolls([id]) : restorePolls([id]))
-    if (failed) setActionError(failed)
-    else {
-      reread()
-      // The card goes, and focus with it; this is the only trace of the press
-      // a screen reader would otherwise be left with.
-      announce(remove ? 'Removed from your list' : 'Restored to your list')
+    if (failed) {
+      setActionError(failed)
+      setPending((was) => {
+        const next = new Set(was)
+        next.delete(id)
+        return next
+      })
+      return
     }
-    setPending((was) => {
-      const next = new Set(was)
-      next.delete(id)
-      return next
-    })
+    // Still dimmed until the list has been read again without it, which is
+    // `load`'s to say: let go here, the card came back to full strength for
+    // as long as that read took and then vanished, and the copy that fades
+    // out where it stood was taken from a card that no longer looked like
+    // it was going.
+    movedBefore.current.set(id, readsStarted.current)
+    reread()
+    // The card goes, and focus with it; this is the only trace of the press
+    // a screen reader would otherwise be left with.
+    announce(remove ? 'Removed from your list' : 'Restored to your list')
   }
 
   // Clamped rather than reset: a poll deleted from page three should leave
@@ -419,7 +452,10 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
           </Text>
         )}
 
-        <Stack gap="md">
+        {/* Keyed by the page the rows are of, so a page turn is a new set of
+            cards and the old set can be pushed out as the new comes in; see
+            PollCards, which also closes the gap a removed poll leaves. */}
+        <PollCards key={`${rowsOf.removed}:${rowsOf.page}`} turn={rowsOf}>
           {polls.map((poll) => {
             // Dimmed under the press until the list re-reads without it, which
             // is the only feedback a control has between being pressed and
@@ -470,6 +506,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
               <Card
                 key={poll.id}
                 data-poll-card={poll.id}
+                data-leaving={moving || undefined}
                 withBorder
                 className={`${classes.card} ${moving ? classes.leaving : ''}`}
               >
@@ -486,7 +523,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                     lib/headingFlight.ts. */}
                 <Link
                   to={pollPath(poll.id)}
-                  state={{ title: poll.title, heading }}
+                  state={{ title: poll.title, heading, voted: poll.voted }}
                   className={classes.link}
                   onClick={(event) => {
                     if (
@@ -548,7 +585,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
               </Card>
             )
           })}
-        </Stack>
+        </PollCards>
 
         {/* Only once there is a second page to go to. */}
         {pageCount > 1 && (

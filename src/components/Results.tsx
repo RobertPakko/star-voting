@@ -55,6 +55,7 @@ export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
 export function Results({
   source,
   initial = null,
+  live = false,
 }: {
   source: ResultsSource
   /**
@@ -70,6 +71,12 @@ export function Results({
    * before.
    */
   initial?: PollResults | null
+  /**
+   * The results came out while this reader was watching the poll, rather than
+   * being out already when they opened it — the one moment a poll page is
+   * worth marking. See `landed` in Results.module.css.
+   */
+  live?: boolean
 }) {
   const h24 = use24HourTime()
   // Flattened to primitives so the dependency list is complete without
@@ -194,7 +201,11 @@ export function Results({
           entrance, being the same news. */}
         {shown.winner_id && (
           <Reveal>
-            <Card withBorder bg="var(--mantine-color-green-light)">
+            <Card
+              withBorder
+              bg="var(--mantine-color-green-light)"
+              className={live ? classes.landed : undefined}
+            >
               <Text fw={700} size="lg">
                 Winner: {nameById.get(shown.winner_id)}
               </Text>
@@ -203,7 +214,15 @@ export function Results({
         )}
         {!shown.winner_id && shown.finalists.length === 2 && (
           <Reveal>
-            <Card withBorder bg="var(--mantine-color-orange-light)">
+            <Card
+              withBorder
+              bg="var(--mantine-color-orange-light)"
+              className={live ? classes.landed : undefined}
+              // Its ring in its own colour; see `landed`.
+              style={
+                { '--landed-ring': 'var(--mantine-color-orange-filled)' } as React.CSSProperties
+              }
+            >
               <Group justify="space-between" align="center" gap="sm">
                 <Text fw={700} size="lg">
                   No winner

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge, Group } from '@mantine/core'
 import { badgeColor, countBadge } from '../lib/badgeColors'
 import type { PollMode } from '../lib/types'
@@ -66,7 +66,7 @@ export function PollTags({
   // The badge's own words, worked out before the badge so that whether they
   // have changed is a question that can be asked at all.
   const label = turnout ? turnoutLabel(turnout) : null
-  const changes = useChangeCount(label)
+  const { changes, was, settled } = useChangeCount(label)
 
   // Spoken with "of" for the slash, which a screen reader reads out as a
   // word. A count arriving where there was none is the page finishing its
@@ -101,7 +101,20 @@ export function PollTags({
           key={changes}
           className={changes > 0 ? classes.bumped : undefined}
         >
-          {label}
+          {/* And the words themselves roll, the old count leaving upwards as
+              the new one comes up from under it — an odometer, which is the
+              shape everybody already reads as a number going up. The badge's
+              label clips it, so nothing spills out of the pill. */}
+          {changes > 0 && was ? (
+            <span className={classes.roll}>
+              <span className={classes.rollOut} aria-hidden onAnimationEnd={settled}>
+                {was}
+              </span>
+              <span className={classes.rollIn}>{label}</span>
+            </span>
+          ) : (
+            label
+          )}
         </Badge>
       )}
     </Group>
@@ -122,18 +135,27 @@ export function PollTags({
  * poll admits it — and it costs nothing on the one screen where the reader
  * already knows, because the notification saying so is on screen at the same
  * moment saying the same thing.
+ *
+ * Hands back what the value was before the last change as well, which is
+ * what the badge rolls away as the new one rolls in, and `settled`, which
+ * lets it go once it has: left in the pill, invisible, it was still part of
+ * the badge's text, so copying "1 vote" gave "0 votes1 vote".
+ *
+ * Worked out while rendering rather than in an effect, so the frame the new
+ * words are first drawn in is already the first frame of the roll, rather
+ * than a frame of the new words standing still before they roll in again.
  */
-function useChangeCount(value: string | null): number {
-  const [changes, setChanges] = useState(0)
-  const previous = useRef(value)
-
-  useEffect(() => {
-    if (previous.current === value) return
-    previous.current = value
-    setChanges((n) => n + 1)
-  }, [value])
-
-  return changes
+function useChangeCount(value: string | null): {
+  changes: number
+  was: string | null
+  settled: () => void
+} {
+  const [state, setState] = useState<{ value: string | null; changes: number; was: string | null }>(
+    { value, changes: 0, was: null },
+  )
+  if (state.value !== value) setState({ value, changes: state.changes + 1, was: state.value })
+  const settled = useCallback(() => setState((held) => ({ ...held, was: null })), [])
+  return { changes: state.changes, was: state.was, settled }
 }
 
 /** What the count badge counts, which is not the same at every stage. */

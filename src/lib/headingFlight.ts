@@ -119,6 +119,48 @@ export function launchFlight(
 }
 
 /**
+ * Takes off for a poll that has just been made, from the create form, which
+ * has no heading to measure: what it has is the field the title was typed
+ * into, and the button that made the poll. The title flies from where its
+ * words sat in the field, grown into the page's title — the poll being given
+ * its name as it is opened — or, when the field has been scrolled out of
+ * sight, which on a long form it usually has, from the button that was
+ * pressed, so it is still seen coming from the thing the reader just did.
+ *
+ * Only the title flies. Everything else on the new page's heading is a
+ * reading of settings the form showed as controls rather than as a heading,
+ * and arrives with the page.
+ */
+export function launchTitleFlight(id: string, field: HTMLInputElement | null) {
+  pending = null
+  if (prefersReducedMotion()) return
+  const pressed = document.activeElement
+  const from = [field, pressed instanceof HTMLButtonElement ? pressed : null].find((el) => {
+    if (!el || typeof el.animate !== 'function') return false
+    const rect = el.getBoundingClientRect()
+    return rect.bottom > 0 && rect.top < window.innerHeight
+  })
+  if (!from) return
+  const rect = from.getBoundingClientRect()
+  const style = getComputedStyle(from)
+  const size = parseFloat(style.fontSize) || 16
+  // Where the words are inside the box, rather than the box: past the padding
+  // on the left, and centred on a line of the field's own text.
+  const left =
+    from === field
+      ? rect.left + parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth)
+      : rect.left + rect.width / 2 - size * 2
+  const top = rect.top + (rect.height - size * 1.3) / 2
+  pending = {
+    to: 'poll',
+    id,
+    from: { title: { left, top, fontSize: size } },
+    at: performance.now(),
+    deliberate: true,
+  }
+}
+
+/**
  * A page is going because the address moved on its own — the browser's back
  * or forward button, or a link that is not one of the app's flights — and
  * where it is going is a page this heading could fly to. Launch the flight

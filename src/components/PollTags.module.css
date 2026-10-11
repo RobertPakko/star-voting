@@ -48,3 +48,56 @@
     transform: scale(1);
   }
 }
+
+/* The count's own words rolling over, under the highlight above: the old
+ * count goes up and out of the pill as the new one comes up into it. Both
+ * stand in one box the width of the new words, the old ones laid over it, and
+ * the badge's label (overflow: hidden) is what clips them to the pill. Slow
+ * enough to be read as a number changing, which is the only point of it. */
+.roll {
+  position: relative;
+  display: inline-block;
+}
+
+.rollOut,
+.rollIn {
+  display: inline-block;
+  animation-duration: var(--motion-slow);
+  animation-timing-function: var(--motion-ease);
+  animation-fill-mode: both;
+}
+
+.rollOut {
+  position: absolute;
+  inset: 0 auto auto 0;
+  white-space: nowrap;
+  animation-name: roll-out;
+}
+
+.rollIn {
+  animation-name: roll-in;
+}
+
+@keyframes roll-out {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(-110%);
+    opacity: 0;
+  }
+}
+
+@keyframes roll-in {
+  from {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

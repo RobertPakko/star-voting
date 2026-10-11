@@ -48,6 +48,7 @@ export function OpenPollPanel({
   onFirstVote,
   onFirstConfirm,
   questionStrip,
+  resultsLive = false,
 }: {
   pollId: string
   view: OpenPollView
@@ -109,6 +110,8 @@ export function OpenPollPanel({
    * there is not, which is the tally.
    */
   questionStrip?: ReactNode
+  /** The results came out while the page was watching; see useResultsLanding. */
+  resultsLive?: boolean
 }) {
   // Whether this poll asks a name at all, which is the one rule both stages
   // apply: a share link has no account to name whoever is answering, so a
@@ -242,7 +245,7 @@ export function OpenPollPanel({
             reading places it the same way, for the same reason. */}
         {questionStrip}
         <Suspense fallback={<ResultsSkeleton options={view.options.length || undefined} />}>
-          <Results source={{ kind: 'open', pollId }} initial={results} />
+          <Results source={{ kind: 'open', pollId }} initial={results} live={resultsLive} />
         </Suspense>
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}

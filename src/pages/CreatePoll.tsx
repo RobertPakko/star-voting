@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
@@ -42,6 +42,8 @@ import {
 import { viewerOffsetOn } from '../lib/timezones'
 import { pollScheduleSchema } from '../lib/rpcSchemas'
 import { FormSkeleton } from '../components/Skeletons'
+import type { PollHeadingProps } from '../components/PollHeading'
+import { launchTitleFlight } from '../lib/headingFlight'
 import styles from './CreatePoll.module.css'
 import listRow from '../components/listRow.module.css'
 import {
@@ -473,6 +475,8 @@ export function CreatePoll() {
   const duplicateOf = fromParam && pollIdFromParam(fromParam)
 
   const [title, setTitle] = useState('')
+  // The title field, which a new poll's title flies from; see `handleSubmit`.
+  const titleField = useRef<HTMLInputElement>(null)
   const [description, setDescription] = useState('')
   // Always a list, whether or not the poll asks more than one question; see
   // QuestionDraft. The switch decides what is rendered and what is read, not
@@ -1045,7 +1049,37 @@ export function CreatePoll() {
     }
 
     notifications.show({ message: 'Poll created', color: 'green' })
-    navigate(pollPath(data as string))
+    // The new poll's heading, which is entirely known: it is what was just
+    // sent. Handed over the way a card on the list hands over its own, so the
+    // page draws it before it has read the poll — and so the title typed into
+    // the form has somewhere to fly to, from the field it was typed in to the
+    // top of the page it now names. See lib/headingFlight.ts.
+    const id = data as string
+    const heading: PollHeadingProps = {
+      title: title.trim(),
+      description: description.trim() || null,
+      createdBy: 'you',
+      mode,
+      showVoters,
+      showBallots,
+      turnout: {
+        soliciting: solicitOptions,
+        mode,
+        votedCount: 0,
+        invitedCount: isOpen ? 0 : allEmails.length,
+        confirmedCount: 0,
+        optionCount: only.options.length,
+        questionCount: cleaned.length,
+      },
+      state: {
+        soliciting: solicitOptions,
+        resultsAvailable: false,
+        closed: false,
+        inGroup: multiQuestion,
+      },
+    }
+    launchTitleFlight(id, titleField.current)
+    navigate(pollPath(id), { state: { title: heading.title, heading } })
   }
 
   /**
@@ -1274,6 +1308,7 @@ export function CreatePoll() {
           </span>
         </Title>
         <TextInput
+          ref={titleField}
           placeholder="A title for your poll"
           value={title}
           onChange={(e) => setTitle(e.currentTarget.value)}

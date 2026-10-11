@@ -15,8 +15,8 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -841,7 +841,9 @@ of it they are on; and `user:<id>`, for one person's poll list — every change
 to every poll on it: the polls they made, the polls they are invited to, invites
 included, and the open polls their account has answered through a link (see
 [Open polls you have answered](#open-polls-you-have-answered)). Every page
-watches exactly one of them.
+watches one of them — except a poll page, which watches its question and the
+questions either side of it; see *The next question is read before it is
+opened* below.
 
 **The list watches its reader, not its rows, and that is what keeps it to one
 request.** It used to subscribe to one topic per poll on the page: a set it
@@ -965,6 +967,42 @@ one state a reader cannot work out by looking, so
 [`LiveConnectionNotice`](src/components/LiveConnectionNotice.tsx) says it. There is
 deliberately no polling fallback — refreshing is the fallback, which is what
 the notice asks for.
+
+**The next question is read before it is opened.** On a poll of several
+questions the route (`PollPage`) holds the question on screen and the ones
+either side of it — Previous, Next, and usually the one a ballot carries the
+voter on to — each subscribed and read by the same rule as any page:
+subscribe, read on subscribing, read again on every signal. What a neighbour's
+reads bring back is `poll_page`, the read a poll is opened with, kept in
+`ahead` and handed to the page as `prefetched` the moment that question is
+opened; the page draws it in a layout effect, before the browser paints, so a
+step to a neighbour shows no skeleton at all. The skeleton is what a jump
+further along the strip still gets.
+
+**A crossing hands the subscription over rather than opening another.** Each
+question's topic is held by one `QuestionWatch` (in `App.tsx`), keyed by the
+question, so walking from question 2 to question 3 keeps 3's channel and
+changes only which of them is on screen — and opens 4's. That is the rule
+"subscribe, then read" kept across a crossing: question 3 needs no read on
+arrival, because its channel has been carrying its signals all along and every
+one of them was read. It is also the only way it could be done: the Supabase
+client shares one channel between everything asking for a topic, so two
+owners could not have held it anyway. Signals go where the question's role
+says at the moment each is read — the page's own narrow read while it is on
+screen, a `poll_page` into `ahead` while it is beside it — and two moments get
+a read of their own: a question opened with nothing held for it (its read
+ahead still out, or failed), and a question left after its signals went to
+the page rather than into what is held, so walking back is drawn from a
+current read. The question the poll was arrived at is held from the read that
+opened it, which is a `poll_page` like the rest, so stepping off it untouched
+costs nothing either. Each question's reads go through one funnel, so a
+read ahead still out when the reader arrives lands in order and is drawn when
+it does. A question let go takes its held read with it, since nothing keeps it
+current any more.
+
+The cost is a socket channel and a read per neighbour as a poll is opened, and
+one more each time the reader steps on; nothing is read for a neighbour whose
+held read is still current.
 
 **An open poll's tick asks one function, not two.** Its creator's page is the
 one screen that reads a poll both ways — as an account through `poll_status`,
@@ -2531,51 +2569,156 @@ included.
 
 ### A question slides along a row
 
-Walking between the questions of a poll slides the question being left out to
+Walking between the questions of a poll pushes the question being left out to
 one side and the question being opened in from the other — the next one from
-the right, the previous one from the left — across about a third of the width
-they are drawn in, so the questions read as a row being walked along rather
-than as pages swapped in place ([`lib/questionSlide.ts`](src/lib/questionSlide.ts)).
-`QuestionStrip` drives it, because the strip is what knows which question was
-open and which is opening, and because what slides is defined by it:
-**everything after the strip, which is the question's half and nothing else.**
-The strip itself is the poll's and stays exactly still, which is the rule above
-about a crossing not replaying anything over a strip that has not changed.
-Where the strip stands outside a card — over a finished question's tally — it
-and its tally are wrapped in a stack of their own, so that what follows it is
-still only the question.
+the right, the previous one from the left — so the questions read as a row
+being walked along rather than as pages swapped in place
+([`lib/questionSlide.ts`](src/lib/questionSlide.ts)). `QuestionStrip` drives
+it, because the strip is what knows which question was open and which is
+opening, and because what slides is defined by it: **everything after the
+strip and its rule, which is the question's half and nothing else.** The strip
+itself is the poll's and stays exactly still, which is the rule above about a
+crossing not replaying anything over a strip that has not changed — and so is
+the rule under it, which `QuestionStrip` draws itself and marks
+`data-question-rule` for the slide to step over. While each page drew that
+rule as one more thing after the strip, it slid with the question. Where the
+strip stands outside a card — over a finished question's tally — it and its
+tally are wrapped in a stack of their own, so that what follows it is still
+only the question.
+
+**It is a push the whole width of the box.** It used to move a third of the
+way, with both questions fading across each other in one place, which read as
+the content flickering rather than as anything moving: two things
+half-visible in the same spot is a crossfade whatever the transform says. Now
+the two travel together, edge to edge, each clipped to the box the question is
+drawn in — the card, or the column over a finished question — so one leaves
+through its edge as the other comes in through the opposite one. A card clips
+by itself; in a column each arriving piece carries a `clip-path` that is drawn
+back exactly as far as the piece is pushed forward, so the edge it enters
+through stands still. The copy leaving stays nearly opaque until late, and
+does fade at the end, because the question arriving may be shorter and a copy
+at full strength below it would sit over whatever the page draws there.
 
 **The question being left is a copy.** React has taken it out of the page by
 the time the next one is drawn, so the strip copies what stands after it as it
 unmounts — a layout effect's cleanup, which runs while the page being left is
 still in the document — and the copy slides away over the page, clipped to the
-card it was in so that it leaves through the card's edge. Only an unmount
-copies: a strip that stays mounted across a crossing is cleaned up after what
-stood beside it may already have been replaced, and its question slides in
-without one going out.
+box it was in. Only an unmount copies: a strip that stays mounted across a
+crossing is cleaned up after what stood beside it may already have been
+replaced, and its question slides in without one going out.
 
 **One slide in, however many times the question is redrawn.** A crossing
 usually puts up the question's skeleton and then the question, and each of
-those is a new strip with new things after it. Each joins the slide where it
-has got to, started with the time already gone as a negative delay, so the
-skeleton and the question that replaces it are one movement rather than two.
+those is a new strip with new things after it — and `Results` puts its banner
+and its rounds up when its own read lands, as siblings of the strip, without
+the strip rendering at all. So the strip joins whatever stands after it on
+every render, and for the length of the crossing a `MutationObserver` on the
+box joins anything added there without one. Every piece, and the copy leaving,
+is started from the one moment the crossing began on the animation timeline
+(`timelineNow`), so they move as one row whatever order they arrived in. They
+were placed by `performance.now()` once, which is not the clock animations run
+on, and a piece that joined late drifted from its neighbours.
 
-A card clips what slides into it. The tally under a finished question has no
-card around it, which is why `AppShell.Main` is `overflow-x: clip`: a block
-sliding in from past the right-hand edge would otherwise widen the page while
-it did. `clip` rather than `hidden`, which would make it a scroll container and
-break everything sticky inside it.
+The tally under a finished question has no card around it, which is also why
+`AppShell.Main` is `overflow-x: clip`: a block sliding in from past the
+right-hand edge would otherwise widen the page while it did. `clip` rather
+than `hidden`, which would make it a scroll container and break everything
+sticky inside it.
 
 **Nothing under the question is drawn while a crossing reads it.** On
 `PollDetail` the voters, the published ballots or the reader's own, the
 creator's controls and the retention line all wait for `showing`. They sit
 under a block whose height is not known until the read lands — a ballot of
 some number of rows, a tally, or the notice a question nobody answered puts up
-— and drawn during the wait they were pushed down the page a moment later. The
-stand-in for a finished question still cannot say which of the last two it is
-waiting for on a poll that was closed (see `tallied` on `QuestionSkeleton`): a
-question nobody reached before the close really does end in the notice, and
-nothing the page holds says whether anybody did.
+— and drawn during the wait they were pushed down the page a moment later.
+
+**What the stand-in claims is what the page knows about the question being
+opened, and a guess from its neighbour where it knows nothing.** It is mostly
+not seen: the questions either side of the one on screen are read ahead (see
+[Live updates](#live-updates)), so it is a jump further along the strip that
+waits. On an invite poll a good deal is known — the strip carries each
+question's option count, and results out with nobody having closed the poll
+means every question has a tally (see `tallied` on `QuestionSkeleton`).
+
+What is left is a poll that was closed, and every open poll, where a question
+nobody reached before the close really does end in the notice. That used to
+claim only the one card both
+endings share, which was certain and also nearly always wrong-looking: an
+empty card under the strip for the length of the read, on a page that then
+grew a tally four times its height. Now it takes the question being left as
+the guess — the tally if that one had a tally, and on the share-link reading
+its option count too — because one poll's questions are put to the same people
+at the same time and nearly always end alike. A miss costs a skeleton the
+wrong shape for one read, which is the only thing the certain version ever
+bought. Nothing is remembered per question to do better: it was, for a day,
+and it was a page of bookkeeping for a skeleton the read-ahead means hardly
+anybody sees.
+
+**A crossing is one read.** `PublicPoll` reads a question it is crossing to
+through `poll_page`, the read it opens a poll with, rather than
+`open_poll_view`: on a finished question the first carries the tally and the
+second does not, so the narrow read made a crossing two round trips — the
+view, and then the tally `Results` had to fetch for itself, drawn as a second
+skeleton of its own. `PollDetail` has always read a crossing whole. The
+narrow reads are for the question already on screen.
+
+### Smaller movements
+
+The rule at the top of this section — an animation has to answer a question
+the reader would otherwise have to work out — admits one exception, made on
+purpose: a movement that is only decoration may stay if it makes the app read
+as one made thing, and costs the reader nothing. The first of these is that
+kind; the rest answer a question as well.
+
+- **The open question's highlight crossfades** (`fadeMarks` in
+  [`questionSlide.ts`](src/lib/questionSlide.ts)). On a crossing the badge
+  being left loses its fill as the badge being opened gains it, over the
+  slide's own length. Decoration, said plainly: the strip already re-colours
+  the right badge and the slide already says which way the reader went. What
+  it buys is the strip changing with the rest of the crossing instead of in a
+  blink above a page that travels. It was a copy of the badge travelling along
+  the row for a while, and that was taken out: on a narrow screen the badges
+  wrap and stack, and the copy cut across them diagonally. A fade goes nowhere,
+  so it is the same whatever shape the row is in.
+- **A count rolls over** (`roll` in `PollTags.module.css`). When the count
+  badge's words change, the old ones go up and out of the pill as the new come
+  up into it, under the highlight that was already there. A number changing
+  between two frames is noticed only by somebody staring at it; one that rolls
+  is seen to change.
+- **Progress bars grow** (`.mantine-Progress-section` in `index.css`), at the
+  scale's slow step instead of Mantine's tenth of a second. The one that moves
+  while somebody watches is under *your vote is in*, where it is a vote seen
+  arriving.
+- **A card that replaces a card changes height smoothly**
+  ([`SmoothHeight`](src/components/SmoothHeight.tsx)), around the question's
+  half of both poll pages. It notices elements going in and out with a
+  `MutationObserver` rather than being told a stage, because most of those
+  swaps — Edit vote, Confirm options, the editor — are decided inside a card
+  where no prop on the wrapper could see them; and since a mutation is
+  delivered before the browser paints, the new height is never seen and then
+  taken back. The calendar opts out (`data-own-height`): it already holds the
+  page still across a change of view, and two corrections at once would fight.
+- **The poll list closes up and turns** ([`PollCards`](src/components/PollCards.tsx)).
+  Within a page, cards are measured at every commit and drawn from where they
+  were (FLIP), so a removed poll fades where it stood while the cards under it
+  slide up, and one that arrives fades in where it lands. A page turn pushes
+  the row along with the same push the questions use
+  ([`carousel.ts`](src/lib/carousel.ts)), its copy pinned to the document
+  because the list scrolls to its top as its page changes. The cards are keyed
+  by the page their rows are of — set in the same render as the rows, since new
+  rows drawn under the old key would read as every card moving at once.
+- **Results that come out while you watch land** (`landed` in
+  `Results.module.css`, decided by
+  [`useResultsLanding`](src/lib/resultsLanding.ts)). Opening a finished poll is
+  reading a result; watching one finish is being there when it is decided, so
+  the answer card settles up from a touch smaller and a ring of its own colour
+  spreads from it once. Quietly: the card is meant to look pleased rather than
+  triumphant.
+- **A new poll's title flies from the form** (`launchTitleFlight`). Creating a
+  poll hands its page the whole heading — it is exactly what was just sent —
+  and the title flies from the field it was typed into, or from the Create
+  button when the field has been scrolled away, to the top of the page it now
+  names.
 
 ## A deploy takes the old build with it
 
@@ -5358,6 +5501,16 @@ Advancing replaces the re-read rather than joining it. The page being left is
 left at once, and a read of the question being left would land after the next
 question had loaded.
 
+**And a read that lands late is dropped.** Not asking is not enough: the
+ballot's own broadcast comes back to the question it was cast in, and could
+start that question's read in the moment before the page moved on. When it
+landed it was drawn under the next question's address, which is how answering
+question 2 could leave question 3 saying *your vote is in*, a ballot nobody
+had cast. Both pages now check, once a read is back, that it is still about
+the question on screen (`onScreen`), and throw it away if not. The question
+left behind loses nothing by it: the route holds it ready for the walk back
+and reads it again for that (see [Live updates](#live-updates)).
+
 **A crossing between two questions replaces the question, not the poll.** A
 question is a poll of its own at an address of its own, so moving between two
 of them changes the route's *parameter* and not the route, and React keeps the
@@ -5892,7 +6045,10 @@ longer anybody `broadcast_poll_change` can find.
 That left every page in the app watching exactly one topic, so
 `useLiveStream` takes one again: the machinery for reading once when the last
 of several channels had joined, and for a page turn that changed the topic
-set, went with the page that needed it.
+set, went with the page that needed it. A poll page now holds up to three —
+its question and the two beside it, read ahead (see [Live
+updates](#live-updates)) — and does it as three `useLiveStream`s, one per
+`QuestionWatch`, rather than by teaching the hook several topics again.
 
 **What it costs:** a poll with many signed-in voters writes a message per
 voter's list on every change, as a poll with many invitees always has; see

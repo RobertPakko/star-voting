@@ -809,124 +809,129 @@ export function PaintCalendar({
         )}
       </ScheduleHeader>
 
-      {showing === 'month' ? (
-        <MonthView
-          date={date}
-          withHeader={false}
-          style={monthStyle}
-          events={events}
-          // A month has no hours in it, so a day is the smallest thing there
-          // is to say something about -- which makes the day itself the
-          // gesture rather than a shortcut for one.
-          onDayClick={fillDay}
-          // And on a finger it is the *only* gesture: a run of days is tapped
-          // out one at a time, or taken in one press by the range in the
-          // header.
-          //
-          // A month cannot make the bargain the two time grids make. There the
-          // axes mean different things -- across is which day, down is what
-          // time -- so `PAN_SIDEWAYS` can give one to the browser and keep the
-          // other. A drag across a month means neither: Monday the 5th to
-          // Friday the 16th sweeps down the weeks and across them at once, and
-          // it is one range, not two. There is no axis to hand over that does
-          // not cut the gesture in half.
-          //
-          // So on touch the drag goes and the scrolling comes back -- seven
-          // columns at the library's five-and-a-quarter-rem floor is wider than
-          // a phone, and while the days carry a drag slot they carry
-          // `touch-action: none` with it and will not move. The attribute is
-          // the drag's: turning the drag off is what lets the month scroll, and
-          // `onDayClick` is wired past it, so a tap still fills a day.
-          withDragSlotSelect={!touch}
-          onSlotDragEnd={(fromDay: string, toDay: string) => {
-            // As on the time grids, and for a cancel that was not a scroll:
-            // this drag is off on the devices that scroll one away. See
-            // `cancelled`.
-            if (!cancelled.current) fillDays(fromDay, toDay)
-          }}
-          // And a tap on what a day's tap put there takes it back; see
-          // `erase`. The chips sit in a layer of their own above the day
-          // buttons, so this is the only handler such a tap reaches -- it
-          // never doubles as a day click.
-          onEventClick={erase}
-          getDayProps={(day) => (asks(day) ? {} : outOfBounds)}
-          // No red weekends here either; see the week grid.
-          weekendDays={[]}
-          firstDayOfWeek={1}
-          withOutsideDays={false}
-          renderEventBody={eventBody}
-        />
-      ) : showing === 'day' ? (
-        <DayView
-          date={date}
-          withHeader={false}
-          {...grid}
-          style={dayStyle}
-          styles={{
-            // The hours, lined up with the rows; see `hoursColumn`.
-            dayViewSlotLabels: timeColumn,
-            // And the line back over the first of them, which this view --
-            // alone of the two -- takes away on the grounds that the first
-            // label sits at the top of the grid where the header has already
-            // drawn one. Pushed down onto its own hour it has a row under it
-            // to be the top of, and every label below it already has this.
-            dayViewSlotLabel: {
-              borderTop: timeColumn.paddingTop
-                ? '1px solid var(--day-view-border-color)'
-                : undefined,
-              ...SLOT_LABEL,
-            },
-          }}
-          withAllDaySlot={false}
-          events={events}
-          onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
-          // One day on screen and no heading over it, so there is nothing to
-          // fill it in a click. There is no need: a drag from the top of the
-          // column to the bottom is the same gesture and the same result, and
-          // this is the view somebody has zoomed into to be precise.
-        />
-      ) : (
-        <>
-          {greyedHeadings.length > 0 && (
-            <style>{`${greyedHeadings.join(',\n')} {
+      {/* The views are wildly different heights, and switching between them
+          already holds the page still (see `showView`), so the block the
+          question sits in leaves this one's height to it; see SmoothHeight. */}
+      <div data-own-height>
+        {showing === 'month' ? (
+          <MonthView
+            date={date}
+            withHeader={false}
+            style={monthStyle}
+            events={events}
+            // A month has no hours in it, so a day is the smallest thing there
+            // is to say something about -- which makes the day itself the
+            // gesture rather than a shortcut for one.
+            onDayClick={fillDay}
+            // And on a finger it is the *only* gesture: a run of days is tapped
+            // out one at a time, or taken in one press by the range in the
+            // header.
+            //
+            // A month cannot make the bargain the two time grids make. There the
+            // axes mean different things -- across is which day, down is what
+            // time -- so `PAN_SIDEWAYS` can give one to the browser and keep the
+            // other. A drag across a month means neither: Monday the 5th to
+            // Friday the 16th sweeps down the weeks and across them at once, and
+            // it is one range, not two. There is no axis to hand over that does
+            // not cut the gesture in half.
+            //
+            // So on touch the drag goes and the scrolling comes back -- seven
+            // columns at the library's five-and-a-quarter-rem floor is wider than
+            // a phone, and while the days carry a drag slot they carry
+            // `touch-action: none` with it and will not move. The attribute is
+            // the drag's: turning the drag off is what lets the month scroll, and
+            // `onDayClick` is wired past it, so a tap still fills a day.
+            withDragSlotSelect={!touch}
+            onSlotDragEnd={(fromDay: string, toDay: string) => {
+              // As on the time grids, and for a cancel that was not a scroll:
+              // this drag is off on the devices that scroll one away. See
+              // `cancelled`.
+              if (!cancelled.current) fillDays(fromDay, toDay)
+            }}
+            // And a tap on what a day's tap put there takes it back; see
+            // `erase`. The chips sit in a layer of their own above the day
+            // buttons, so this is the only handler such a tap reaches -- it
+            // never doubles as a day click.
+            onEventClick={erase}
+            getDayProps={(day) => (asks(day) ? {} : outOfBounds)}
+            // No red weekends here either; see the week grid.
+            weekendDays={[]}
+            firstDayOfWeek={1}
+            withOutsideDays={false}
+            renderEventBody={eventBody}
+          />
+        ) : showing === 'day' ? (
+          <DayView
+            date={date}
+            withHeader={false}
+            {...grid}
+            style={dayStyle}
+            styles={{
+              // The hours, lined up with the rows; see `hoursColumn`.
+              dayViewSlotLabels: timeColumn,
+              // And the line back over the first of them, which this view --
+              // alone of the two -- takes away on the grounds that the first
+              // label sits at the top of the grid where the header has already
+              // drawn one. Pushed down onto its own hour it has a row under it
+              // to be the top of, and every label below it already has this.
+              dayViewSlotLabel: {
+                borderTop: timeColumn.paddingTop
+                  ? '1px solid var(--day-view-border-color)'
+                  : undefined,
+                ...SLOT_LABEL,
+              },
+            }}
+            withAllDaySlot={false}
+            events={events}
+            onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
+            // One day on screen and no heading over it, so there is nothing to
+            // fill it in a click. There is no need: a drag from the top of the
+            // column to the bottom is the same gesture and the same result, and
+            // this is the view somebody has zoomed into to be precise.
+          />
+        ) : (
+          <>
+            {greyedHeadings.length > 0 && (
+              <style>{`${greyedHeadings.join(',\n')} {
               color: var(--mantine-color-dimmed);
               background: var(--mantine-color-gray-light);
               cursor: not-allowed;
             }`}</style>
-          )}
-          <WeekView
-            date={date}
-            withHeader={false}
-            {...grid}
-            style={weekStyle}
-            events={events}
-            onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
-            // The day's own column heading, which with the header off is the
-            // only thing left in this view that changes the date -- so it is a
-            // callback with one caller and one meaning rather than a guess about
-            // which control fired. Its accessible name says so too; see LABELS.
-            onDateChange={fillDay}
-            labels={LABELS}
-            // The time column: pinned so that scrolling a narrow week sideways
-            // does not take the hours with it (STICKY_TIMES), and lined up with
-            // the rows it names (`hoursColumn`).
-            styles={{
-              ...STICKY_TIMES,
-              weekViewSlotLabels: { ...STICKY_TIMES.weekViewSlotLabels, ...timeColumn },
-              weekViewSlotLabel: SLOT_LABEL,
-            }}
-            withWeekNumber={false}
-            data-paint-calendar={calendarId}
-            // Saturday and Sunday drawn like any other day: the library colours
-            // a weekend heading red, which on a poll reads as a warning about
-            // those days rather than as a fact about the week.
-            weekendDays={[]}
-            // Monday first, pinned rather than inherited, because `visibleRange`
-            // works out which week is on screen and the two have to agree.
-            firstDayOfWeek={1}
-          />
-        </>
-      )}
+            )}
+            <WeekView
+              date={date}
+              withHeader={false}
+              {...grid}
+              style={weekStyle}
+              events={events}
+              onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
+              // The day's own column heading, which with the header off is the
+              // only thing left in this view that changes the date -- so it is a
+              // callback with one caller and one meaning rather than a guess about
+              // which control fired. Its accessible name says so too; see LABELS.
+              onDateChange={fillDay}
+              labels={LABELS}
+              // The time column: pinned so that scrolling a narrow week sideways
+              // does not take the hours with it (STICKY_TIMES), and lined up with
+              // the rows it names (`hoursColumn`).
+              styles={{
+                ...STICKY_TIMES,
+                weekViewSlotLabels: { ...STICKY_TIMES.weekViewSlotLabels, ...timeColumn },
+                weekViewSlotLabel: SLOT_LABEL,
+              }}
+              withWeekNumber={false}
+              data-paint-calendar={calendarId}
+              // Saturday and Sunday drawn like any other day: the library colours
+              // a weekend heading red, which on a poll reads as a warning about
+              // those days rather than as a fact about the week.
+              weekendDays={[]}
+              // Monday first, pinned rather than inherited, because `visibleRange`
+              // works out which week is on screen and the two have to agree.
+              firstDayOfWeek={1}
+            />
+          </>
+        )}
+      </div>
     </>
   )
 }

@@ -1,6 +1,14 @@
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Badge, Button, Card, Divider, Group, Progress, Stack, Text, Title } from '@mantine/core'
+import { Badge, Button, Card, Group, Progress, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -17,6 +25,8 @@ import { OpenPollPanel } from '../components/OpenPollPanel'
 import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
+import { SmoothHeight } from '../components/SmoothHeight'
+import { useResultsLanding } from '../lib/resultsLanding'
 import { Banners } from '../components/Banners'
 import { RetentionNote } from '../components/RetentionNote'
 import { Ballots, Results, TimeBallotCard, YourBallot } from '../components/deferred'
@@ -37,6 +47,7 @@ import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type {
+  PollRead,
   AccountRead,
   BallotSheet,
   GroupQuestion,
@@ -68,6 +79,7 @@ export function PollDetail({
   live,
   watch,
   reread,
+  prefetched = null,
 }: {
   initial: AccountRead | null
   /** Whether the route's subscription is carrying, for the notice below. */
@@ -90,6 +102,13 @@ export function PollDetail({
    * that could not see each other. See `LiveStream.reread`.
    */
   reread: () => void
+  /**
+   * The question on screen, read ahead of time by `PollPage` while it was the
+   * one beside it — or read since, by the same subscription, if that read was
+   * still out when the reader got here. Drawn as it arrives; see where it is
+   * used below.
+   */
+  prefetched?: PollRead | null
 }) {
   const h24 = use24HourTime()
   const { pollId: param } = useParams<{ pollId: string }>()
@@ -189,6 +208,18 @@ export function PollDetail({
   // re-read after a vote must never come back with the answer from before.
   const handoff = useRef(initial)
 
+  // The question on screen now, as against the one a read was started for. A
+  // read is answered after the reader may have moved on — a vote's own echo
+  // starts a read of the question being answered, and the ballot carries the
+  // reader to the next one before it lands — and a read of the question left
+  // behind, drawn under the next one's address, put that question's "your
+  // vote is in" on a question nobody had voted in. So every read checks, once
+  // it is back, that it is still about the question on screen, and drops what
+  // it brought if not. Nothing is lost: the question left behind is read
+  // again by the route, which holds it ready for the walk back.
+  const onScreen = useRef(pollId)
+  onScreen.current = pollId
+
   // The date this poll is deleted on, from the read that opened the page.
   //
   // Held rather than re-read because nothing that happens in the poll moves
@@ -253,12 +284,41 @@ export function PollDetail({
   // the question in `readQuestion`, so the first signal takes the narrow path.
   // Not wasted — it closes the gap between the route's read and the
   // subscription being live, the one window a vote could land unheard in.
-  useEffect(() => {
+  //
+  // A layout effect, so the read is drawn before the browser paints anything.
+  // As a plain effect the page's first frame was its own generic skeleton —
+  // the shape of a poll taking votes, whatever the poll — painted in between
+  // the route's skeleton, which knows what stage the poll is at, and the poll
+  // itself: a finished poll opened from the list flashed a ballot on the way.
+  useLayoutEffect(() => {
     const given = handoff.current
     if (!given) return
     handoff.current = null
     apply(given)
   }, [apply])
+
+  // A question opened with its read already in hand — the one beside the
+  // question being left, which `PollPage` keeps subscribed and read — is drawn
+  // from that read, before the browser paints, so the crossing never shows a
+  // skeleton at all. Each read once per visit: what is handed down changes
+  // only when another read of this question lands, which is newer than
+  // anything this page has drawn of it — but walking away and back is a new
+  // visit, and the same read is drawn again, since the page has drawn another
+  // question in between. A read of the wrong kind is a poll that changed under
+  // the reader; it is read again the ordinary way.
+  // The read this page was opened with is already drawn, by the handoff above,
+  // and `PollPage` holds it for this question too — so it counts as adopted
+  // for this visit rather than being drawn a second time.
+  const adopted = useRef<{ pollId: string; read: PollRead } | null>(
+    initial && pollId ? { pollId, read: initial } : null,
+  )
+  useLayoutEffect(() => {
+    if (adopted.current && adopted.current.pollId !== pollId) adopted.current = null
+    if (!prefetched || !pollId || adopted.current?.read === prefetched) return
+    adopted.current = { pollId, read: prefetched }
+    if (prefetched.kind === 'account') apply(prefetched)
+    else reread()
+  }, [prefetched, pollId, apply, reread])
 
   const load = useCallback(async () => {
     if (!pollId) return true
@@ -274,6 +334,7 @@ export function PollDetail({
     // be a second round trip behind the first four because nothing before
     // them said the poll was open. See lib/pollPage.ts.
     const { page, error: readError } = await readPollPage(pollId)
+    if (onScreen.current !== pollId) return true
 
     // A poll that stopped being this account's to read while they were
     // looking at it — deleted, or their invitation withdrawn — comes back
@@ -351,6 +412,7 @@ export function PollDetail({
       // page settled — `poll_invitees` raises rather than answering empty.
       hasRoster ? supabase.rpc('poll_invitees', { p_poll_id: pollId }) : null,
     ])
+    if (onScreen.current !== pollId) return true
 
     // A refresh that fails changes nothing on screen: the page keeps the copy
     // it has and is asked again shortly. Replacing a poll that has been
@@ -497,6 +559,11 @@ export function PollDetail({
   // through. Same shape as the effect above and there for the same reason —
   // left set, it would put scores from a deleted ballot back on screen the
   // moment this reader voted again.
+  // Whether this question's results came out while the reader was looking at
+  // it, which the tally marks; see useResultsLanding. Of the question the
+  // state describes, which during a crossing is still the one being left.
+  const resultsLive = useResultsLanding(loadedFor ?? undefined, !!status?.results_available)
+
   const hasVoted = status?.voted === true
   useEffect(() => {
     if (!hasVoted) setRevising(null)
@@ -578,10 +645,7 @@ export function PollDetail({
   // happens. It is the same navigation in all of them, so a copy per branch
   // was a chance per branch to hand one of them a different list.
   const questionStrip = (
-    <>
-      <QuestionStrip questions={strip} current={pollId ?? poll.id} hrefFor={(id) => pollPath(id)} />
-      {strip.length > 1 && <Divider />}
-    </>
+    <QuestionStrip questions={strip} current={pollId ?? poll.id} hrefFor={(id) => pollPath(id)} />
   )
   // Whether the question being opened will ask for a name, which the stand-in
   // has to know because the box is the first thing in the card. The same
@@ -589,15 +653,19 @@ export function PollDetail({
   // still taking answers, from a reader who has not given this question one
   // yet. An invite poll asks for none — it has the account.
   const asksName = isOpen && poll.show_voters && marking && !done.browser.has(pollId ?? poll.id)
-  // And what the stand-in for a finished question has to know: that the
+  // And what the stand-in for a finished question has to know: whether the
   // question being opened has a tally under the strip rather than the notice
   // a question nobody answered puts up, and how many bars are in its score
-  // round. Both are about the question being opened rather than the one being
-  // left, and both are answerable from here — see QuestionSkeleton for why
-  // results out with the poll still unclosed means every question in it was
-  // answered by everyone invited, and `poll_group` for the option count the
-  // strip carries per question.
-  const tallied = status.results_available && !status.is_closed
+  // round. The bars are certain — `poll_group` carries an option count per
+  // question. Whether there is a tally is the question being left's answer:
+  // `status` is still its reading during a crossing. That is certain where the
+  // results are out with the poll unclosed, which means every question in it
+  // was answered by everyone invited (see QuestionSkeleton), and a guess
+  // otherwise — but questions of one poll were put to the same people at the
+  // same time and nearly always end alike, and a guess that misses costs a
+  // skeleton the wrong shape for one read. The neighbours are read ahead
+  // anyway (see `PollPage`), so this is for a jump further along the strip.
+  const tallied = status.results_available
   const opening = questions.find((question) => question.id === pollId)
 
   // The way on, taken rather than offered: a first ballot opens whichever
@@ -710,84 +778,90 @@ export function PollDetail({
           that answers it. Everything above belongs to the poll and is the
           same whichever question is open, so it stays on screen rather than
           blinking away and back at the moment the strip is being used to
-          navigate. */}
-      {showing ? (
-        <>
-          {/* The creator's correction to an option list that is already a ballot,
+          navigate.
+
+          Inside a block whose height moves rather than jumps when one card
+          gives way to another, which on one question is most of what happens
+          here; see SmoothHeight. */}
+      <SmoothHeight>
+        {showing ? (
+          <>
+            {/* The creator's correction to an option list that is already a ballot,
           in place of that ballot while it is open. It replaces the ballot
           rather than sitting beside it because they are two readings of one
           list. See 0028_creator_edits_options.sql for when this is allowed at
           all, and 0063 for the votes it may now be done over. */}
-          {editingOptions && editable ? (
-            <CollectOptions
-              source={{ kind: 'creator', pollId: poll.id }}
-              options={optionList}
-              // A time poll's options are its windows, so the correction is a
-              // painted calendar rather than a typed name -- which is also why
-              // `creator_add_options` allows a time poll where its singular
-              // sibling still refuses one. See CollectOptions.
-              schedule={poll.kind === 'time' ? poll.schedule : null}
-              isCreator
-              questionStrip={questionStrip}
-              // One press out, and it is the save: *Done* puts in whatever the
-              // editor is holding and only then closes it. See CollectOptions.
-              // The state of the poll being corrected, said where the
-              // correction is being made rather than only in the modal that
-              // led here: the creator may have opened this card several
-              // minutes ago, and the sentence that matters is the one in
-              // front of them while they type.
-              done={{
-                note:
-                  status.voted_count > 0
-                    ? 'Votes have already been cast. The results will say the options were edited after voting started.'
-                    : 'Nobody has voted yet, so options can still be updated.',
-                onDone: () => setEditingOptions(false),
-              }}
-              onChanged={reloadAll}
-            />
-          ) : /* Open polls are voted through the same anon RPCs the public route
+            {editingOptions && editable ? (
+              <CollectOptions
+                source={{ kind: 'creator', pollId: poll.id }}
+                options={optionList}
+                // A time poll's options are its windows, so the correction is a
+                // painted calendar rather than a typed name -- which is also why
+                // `creator_add_options` allows a time poll where its singular
+                // sibling still refuses one. See CollectOptions.
+                schedule={poll.kind === 'time' ? poll.schedule : null}
+                isCreator
+                questionStrip={questionStrip}
+                // One press out, and it is the save: *Done* puts in whatever the
+                // editor is holding and only then closes it. See CollectOptions.
+                // The state of the poll being corrected, said where the
+                // correction is being made rather than only in the modal that
+                // led here: the creator may have opened this card several
+                // minutes ago, and the sentence that matters is the one in
+                // front of them while they type.
+                done={{
+                  note:
+                    status.voted_count > 0
+                      ? 'Votes have already been cast. The results will say the options were edited after voting started.'
+                      : 'Nobody has voted yet, so options can still be updated.',
+                  onDone: () => setEditingOptions(false),
+                }}
+                onChanged={reloadAll}
+              />
+            ) : /* Open polls are voted through the same anon RPCs the public route
              uses, so the creator votes in their own poll exactly as everyone
              else does; one code path, one set of rules. */
-          isOpen ? (
-            view && (
-              // Keyed so a close or a reopen remounts it; see where refreshKey
-              // is declared. A live refresh only replaces the view prop, which
-              // leaves a half-filled ballot inside the panel alone.
-              <OpenPollPanel
-                key={refreshKey}
-                pollId={poll.id}
-                view={view}
-                results={results}
-                ballots={ballots}
-                isCreator={isCreator}
-                voterName={voterName}
-                onChanged={reload}
-                onFirstVote={advance}
-                onFirstConfirm={advance}
-                questionStrip={questionStrip}
-              />
-            )
-          ) : status.soliciting ? (
-            /* No ballot yet: the poll is a list everyone in it can add to, and
+            isOpen ? (
+              view && (
+                // Keyed so a close or a reopen remounts it; see where refreshKey
+                // is declared. A live refresh only replaces the view prop, which
+                // leaves a half-filled ballot inside the panel alone.
+                <OpenPollPanel
+                  key={refreshKey}
+                  pollId={poll.id}
+                  resultsLive={resultsLive}
+                  view={view}
+                  results={results}
+                  ballots={ballots}
+                  isCreator={isCreator}
+                  voterName={voterName}
+                  onChanged={reload}
+                  onFirstVote={advance}
+                  onFirstConfirm={advance}
+                  questionStrip={questionStrip}
+                />
+              )
+            ) : status.soliciting ? (
+              /* No ballot yet: the poll is a list everyone in it can add to, and
            the creator decides when it becomes a ballot. */
-            <>
-              <CollectOptions
-                source={{ kind: 'poll', pollId: poll.id }}
-                options={options}
-                schedule={poll.kind === 'time' ? poll.schedule : null}
-                isCreator={isCreator}
-                questionStrip={questionStrip}
-                confirm={confirmation}
-                onChanged={reloadAll}
-                onConfirmed={advance}
-              />
-              {/* Once this reader has said they are done, the next thing that
+              <>
+                <CollectOptions
+                  source={{ kind: 'poll', pollId: poll.id }}
+                  options={options}
+                  schedule={poll.kind === 'time' ? poll.schedule : null}
+                  isCreator={isCreator}
+                  questionStrip={questionStrip}
+                  confirm={confirmation}
+                  onChanged={reloadAll}
+                  onConfirmed={advance}
+                />
+                {/* Once this reader has said they are done, the next thing that
                   happens is voting opening, whenever the rest have — the same
                   moment the push switch in the gear menu tells them about. */}
-              {confirmation?.confirmed && <Banners moment="opening" pollId={poll.id} />}
-            </>
-          ) : status.results_available ? (
-            /* The strip sits above the tally rather than inside it, which is
+                {confirmation?.confirmed && <Banners moment="opening" pollId={poll.id} />}
+              </>
+            ) : status.results_available ? (
+              /* The strip sits above the tally rather than inside it, which is
                the one place in this page it is not inside a card — because
                here there is no one card for it to be inside, and because a
                tally still loading, or a read of it that failed, must not take
@@ -800,71 +874,76 @@ export function PollDetail({
                that is what slides in on a crossing (see QuestionStrip), and
                the voters, the ballots and the creator's controls below are
                the page's. */
-            <Stack gap="md">
-              {questionStrip}
-              <Suspense fallback={<ResultsSkeleton options={optionList.length || undefined} />}>
-                <Results source={{ kind: 'poll', pollId: poll.id }} initial={results} />
-              </Suspense>
-            </Stack>
-          ) : status.is_closed ? (
-            <Stack gap="md">
-              {questionStrip}
-              <NoResultsNotice inGroup={!!poll.group_id} />
-            </Stack>
-          ) : status.voted ? (
-            /* You have voted and the results are still sealed, which is exactly
+              <Stack gap="md">
+                {questionStrip}
+                <Suspense fallback={<ResultsSkeleton options={optionList.length || undefined} />}>
+                  <Results
+                    source={{ kind: 'poll', pollId: poll.id }}
+                    initial={results}
+                    live={resultsLive}
+                  />
+                </Suspense>
+              </Stack>
+            ) : status.is_closed ? (
+              <Stack gap="md">
+                {questionStrip}
+                <NoResultsNotice inGroup={!!poll.group_id} />
+              </Stack>
+            ) : status.voted ? (
+              /* You have voted and the results are still sealed, which is exactly
            the window a vote can be changed in — this branch is only reached
            when results_available and is_closed are both false, so the gate
            the database applies is the gate that decides what renders here.
            A ballot arriving from someone else while this is open takes the
            window away by moving the page on to the results, and the form
            goes with it. */
-            revising ? (
-              <VoteForm
-                poll={poll}
-                options={options}
-                initial={revising}
-                onVoted={() => {
-                  setRevising(null)
-                  reloadPage()
-                }}
-                onCancel={() => setRevising(null)}
-                questionStrip={questionStrip}
-              />
+              revising ? (
+                <VoteForm
+                  poll={poll}
+                  options={options}
+                  initial={revising}
+                  onVoted={() => {
+                    setRevising(null)
+                    reloadPage()
+                  }}
+                  onCancel={() => setRevising(null)}
+                  questionStrip={questionStrip}
+                />
+              ) : (
+                <Waiting
+                  status={status}
+                  pollId={poll.id}
+                  onRevise={setRevising}
+                  questionStrip={questionStrip}
+                />
+              )
             ) : (
-              <Waiting
-                status={status}
-                pollId={poll.id}
-                onRevise={setRevising}
-                questionStrip={questionStrip}
-              />
-            )
-          ) : (
-            /* Keyed like the open-poll panel, and for the same reason: a
+              /* Keyed like the open-poll panel, and for the same reason: a
            correction to the option list invalidates a half-filled ballot,
            and remounting is what discards it. */
-            <VoteForm
-              key={refreshKey}
-              poll={poll}
-              options={options}
-              onVoted={advance ?? reloadPage}
-              questionStrip={questionStrip}
-            />
-          )}
-        </>
-      ) : (
-        // The strip and the name box go in for real rather than as two more
-        // shapes: both are the poll's, like the heading above, and only
-        // happen to live inside the card being replaced. See QuestionSkeleton.
-        <QuestionSkeleton
-          finished={finished}
-          tallied={tallied}
-          collecting={status.soliciting}
-          rows={opening?.option_count}
-          nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
-          strip={questionStrip}
-        />
-      )}
+              <VoteForm
+                key={refreshKey}
+                poll={poll}
+                options={options}
+                onVoted={advance ?? reloadPage}
+                questionStrip={questionStrip}
+              />
+            )}
+          </>
+        ) : (
+          // The strip and the name box go in for real rather than as two more
+          // shapes: both are the poll's, like the heading above, and only
+          // happen to live inside the card being replaced. See QuestionSkeleton.
+          <QuestionSkeleton
+            finished={finished}
+            tallied={tallied}
+            collecting={status.soliciting}
+            rows={opening?.option_count}
+            nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
+            strip={questionStrip}
+          />
+        )}
+      </SmoothHeight>
 
       {/* Everyone in the poll, for as long as the poll shows them. One setting
           decides, and it is the setting that says so on the tag beside the

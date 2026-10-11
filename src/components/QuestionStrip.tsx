@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Anchor, Badge, Group, Stack, Text, VisuallyHidden } from '@mantine/core'
+import { Anchor, Badge, Divider, Group, Stack, Text, VisuallyHidden } from '@mantine/core'
 import { badgeColor } from '../lib/badgeColors'
 import { announce } from '../lib/announce'
-import { noteArrival, noteLeaving, slideAlong } from '../lib/questionSlide'
+import { noteArrival, noteLeaving, noteLooks, slideAlong } from '../lib/questionSlide'
 
 /**
  * The question last announced, by the poll it belongs to (its first
@@ -50,6 +50,13 @@ let lastShown: { poll: string; question: string } | null = null
  * the one place entitled to, so there the flag comes out of
  * `lib/questionMarks.ts` and reaches the server no more than the remembered
  * voter name does.
+ *
+ * **The rule under it is the strip's own**, drawn here rather than by each
+ * page beside it. It belongs to the poll's half of the page — it is the line
+ * the question's half is drawn below — so it has to hold still on a crossing
+ * exactly as the strip does; while every caller drew it as one more thing
+ * after the strip, it slid along with the question. It is marked
+ * `data-question-rule`, which is what lib/questionSlide.ts steps over.
  *
  * This component asks for none of that. It takes a boolean per question and
  * colours a badge with it; where the boolean came from is the page's business.
@@ -104,8 +111,11 @@ export function QuestionStrip({
   // And what stands after it slides in, on every render while the crossing is
   // under way: a ballot replacing its skeleton, or a tally landing in place of
   // the shape that stood in for it, joins the movement where it has got to.
+  // Then the badges are remembered as they now look, for the next crossing to
+  // fade the highlight from; see `fadeMarks`.
   useLayoutEffect(() => {
     slideAlong(root.current, pollKey, current)
+    noteLooks(root.current, pollKey, current)
   })
 
   // Moving between the questions of a poll keeps the page and its title, so a
@@ -126,83 +136,93 @@ export function QuestionStrip({
   const next = index >= 0 && index < questions.length - 1 ? questions[index + 1] : null
 
   return (
-    <Stack gap="xs" ref={root}>
-      <Group justify="space-between" wrap="nowrap" gap="sm" align="center">
-        {/* The counter, not the title: the title is the page heading right
+    <>
+      <Stack gap="xs" ref={root}>
+        <Group justify="space-between" wrap="nowrap" gap="sm" align="center">
+          {/* The counter, not the title: the title is the page heading right
             below this, and saying it twice would push the ballot down for
             nothing. */}
-        <Text size="sm" fw={500}>
-          {index >= 0
-            ? `Question ${index + 1} of ${questions.length}`
-            : `${questions.length} questions`}
-        </Text>
-        <Group gap="xs" wrap="nowrap">
-          {previous && (
-            <Anchor component={Link} to={hrefFor(previous.key)} size="sm">
-              ← Previous
-            </Anchor>
-          )}
-          {next && (
-            <Anchor component={Link} to={hrefFor(next.key)} size="sm">
-              Next →
-            </Anchor>
-          )}
+          <Text size="sm" fw={500}>
+            {index >= 0
+              ? `Question ${index + 1} of ${questions.length}`
+              : `${questions.length} questions`}
+          </Text>
+          <Group gap="xs" wrap="nowrap">
+            {previous && (
+              <Anchor component={Link} to={hrefFor(previous.key)} size="sm">
+                ← Previous
+              </Anchor>
+            )}
+            {next && (
+              <Anchor component={Link} to={hrefFor(next.key)} size="sm">
+                Next →
+              </Anchor>
+            )}
+          </Group>
         </Group>
-      </Group>
 
-      {/* Every question by name, so the poll can be taken in whole and any
+        {/* Every question by name, so the poll can be taken in whole and any
           part of it reached directly — a voter who wants to change one
           answer should not have to walk back through the others. */}
-      <Group gap="xs">
-        {questions.map((question) => {
-          const isCurrent = question.key === current
-          // Filled says which question is open; the hue says whether it has
-          // been answered, and says nothing where there is nothing left to
-          // say — which is the whole of the difference between a strip on a
-          // poll still taking votes and one on a poll that has finished.
-          const color =
-            question.answered === undefined
-              ? badgeColor.unmarked
-              : question.answered
-                ? badgeColor.done
-                : badgeColor.outstanding
-          // The hue in words, for a reader who cannot see it.
-          const said =
-            question.answered === undefined
-              ? null
-              : question.answered
-                ? ' (answered)'
-                : ' (not answered)'
-          return isCurrent ? (
-            // Shade 4 with dark text rather than the filled shade with white:
-            // orange and green are too light at any shade to carry white, and
-            // the strip's three colours should all be drawn the same way.
-            <Badge
-              key={question.key}
-              variant="filled"
-              color={`${color}.4`}
-              autoContrast
-              maw={220}
-              aria-current="step"
-            >
-              {question.title}
-              {said && <VisuallyHidden>{said}</VisuallyHidden>}
-            </Badge>
-          ) : (
-            <Anchor
-              key={question.key}
-              component={Link}
-              to={hrefFor(question.key)}
-              underline="never"
-            >
-              <Badge variant="light" color={color} maw={220} style={{ cursor: 'pointer' }}>
+        <Group gap="xs">
+          {questions.map((question) => {
+            const isCurrent = question.key === current
+            // Filled says which question is open; the hue says whether it has
+            // been answered, and says nothing where there is nothing left to
+            // say — which is the whole of the difference between a strip on a
+            // poll still taking votes and one on a poll that has finished.
+            const color =
+              question.answered === undefined
+                ? badgeColor.unmarked
+                : question.answered
+                  ? badgeColor.done
+                  : badgeColor.outstanding
+            // The hue in words, for a reader who cannot see it.
+            const said =
+              question.answered === undefined
+                ? null
+                : question.answered
+                  ? ' (answered)'
+                  : ' (not answered)'
+            return isCurrent ? (
+              // Shade 4 with dark text rather than the filled shade with white:
+              // orange and green are too light at any shade to carry white, and
+              // the strip's three colours should all be drawn the same way.
+              <Badge
+                key={question.key}
+                variant="filled"
+                color={`${color}.4`}
+                autoContrast
+                maw={220}
+                data-question-key={question.key}
+                aria-current="step"
+              >
                 {question.title}
                 {said && <VisuallyHidden>{said}</VisuallyHidden>}
               </Badge>
-            </Anchor>
-          )
-        })}
-      </Group>
-    </Stack>
+            ) : (
+              <Anchor
+                key={question.key}
+                component={Link}
+                to={hrefFor(question.key)}
+                underline="never"
+              >
+                <Badge
+                  variant="light"
+                  color={color}
+                  maw={220}
+                  data-question-key={question.key}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {question.title}
+                  {said && <VisuallyHidden>{said}</VisuallyHidden>}
+                </Badge>
+              </Anchor>
+            )
+          })}
+        </Group>
+      </Stack>
+      <Divider data-question-rule />
+    </>
   )
 }
