@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ActionIcon, Badge, Button, Card, Group, Stack, Text, TextInput } from '@mantine/core'
+import { UserPlusIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
@@ -213,7 +214,12 @@ export function Respondents({
               error={emailError}
               style={{ flex: 1 }}
             />
-            <Button variant="light" onClick={addInvitee} loading={busy}>
+            <Button
+              variant="light"
+              onClick={addInvitee}
+              loading={busy}
+              leftSection={<UserPlusIcon size={16} aria-hidden />}
+            >
               Add
             </Button>
           </Group>

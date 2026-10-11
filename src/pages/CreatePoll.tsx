@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { CopyIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
@@ -1261,6 +1262,7 @@ export function CreatePoll() {
               size="xs"
               onClick={() => addOption(questionIndex)}
               disabled={question.options.length >= MAX_OPTIONS}
+              leftSection={<PlusIcon size={14} aria-hidden />}
             >
               Add option
             </Button>
@@ -1272,6 +1274,7 @@ export function CreatePoll() {
               color="orange"
               onClick={() => removeQuestion(questionIndex)}
               w="fit-content"
+              leftSection={<TrashIcon size={14} aria-hidden />}
               /* Two questions is the floor: below it the poll asks one
                  question, which is what the switch above is for rather than
                  something to arrive at by removing the second. */
@@ -1523,7 +1526,13 @@ export function CreatePoll() {
       )}
 
       <Group justify="flex-end">
-        <Button onClick={handleSubmit} loading={submitting}>
+        <Button
+          onClick={handleSubmit}
+          loading={submitting}
+          leftSection={
+            duplicateOf ? <CopyIcon size={16} aria-hidden /> : <PlusIcon size={16} aria-hidden />
+          }
+        >
           {duplicateOf ? 'Create copy' : 'Create poll'}
         </Button>
       </Group>

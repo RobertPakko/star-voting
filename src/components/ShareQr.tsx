@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Button, Modal, Stack } from '@mantine/core'
+import { DownloadSimpleIcon, QrCodeIcon } from '@phosphor-icons/react'
 import { useDisclosure } from '@mantine/hooks'
 import { qrCodeFor, qrFileName, qrPath, qrPngDataUrl } from '../lib/qr'
 
@@ -30,7 +31,11 @@ export function ShareQr({ url, title }: { url: string; title: string }) {
 
   return (
     <>
-      <Button variant="light" onClick={modal.open}>
+      <Button
+        variant="light"
+        onClick={modal.open}
+        leftSection={<QrCodeIcon size={16} aria-hidden />}
+      >
         QR code
       </Button>
 
@@ -62,7 +67,11 @@ export function ShareQr({ url, title }: { url: string; title: string }) {
             </svg>
           </div>
 
-          <Button variant="light" onClick={download}>
+          <Button
+            variant="light"
+            onClick={download}
+            leftSection={<DownloadSimpleIcon size={16} aria-hidden />}
+          >
             Download PNG
           </Button>
         </Stack>

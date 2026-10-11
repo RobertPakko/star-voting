@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ActionIcon, Button, Card, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
-import { PencilSimpleIcon } from '@phosphor-icons/react'
+import {
+  ArrowCounterClockwiseIcon,
+  CheckIcon,
+  FloppyDiskIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+} from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { PaintTimes } from './PaintTimes'
@@ -357,6 +363,7 @@ export function CollectOptions({
               <Button
                 variant="light"
                 onClick={reopenList}
+                leftSection={<PencilSimpleIcon size={16} aria-hidden />}
                 loading={busy}
                 style={{ marginLeft: 'auto' }}
               >
@@ -411,7 +418,11 @@ export function CollectOptions({
             </Text>
             <Group gap="xs" wrap="nowrap" style={{ marginLeft: 'auto' }}>
               {addButton}
-              <Button onClick={confirmOptions} loading={busy}>
+              <Button
+                onClick={confirmOptions}
+                loading={busy}
+                leftSection={<CheckIcon size={16} aria-hidden />}
+              >
                 Confirm options
               </Button>
             </Group>
@@ -426,7 +437,11 @@ export function CollectOptions({
               )}
               <Group gap="xs" wrap="nowrap" style={{ marginLeft: 'auto' }}>
                 {addButton}
-                <Button onClick={finishEditing} loading={busy}>
+                <Button
+                  onClick={finishEditing}
+                  loading={busy}
+                  leftSection={<CheckIcon size={16} aria-hidden />}
+                >
                   Done
                 </Button>
               </Group>
@@ -865,7 +880,12 @@ function OptionList({
   })
 
   const addButton = (
-    <Button variant="light" onClick={addDraft} disabled={full || busy}>
+    <Button
+      variant="light"
+      onClick={addDraft}
+      disabled={full || busy}
+      leftSection={<PlusIcon size={16} aria-hidden />}
+    >
       Add option
     </Button>
   )
@@ -923,6 +943,7 @@ function OptionList({
                       variant="subtle"
                       size="compact-sm"
                       onClick={() => toggleDropping(option.id)}
+                      leftSection={<ArrowCounterClockwiseIcon size={14} aria-hidden />}
                     >
                       Keep
                     </Button>
@@ -1031,7 +1052,12 @@ function OptionList({
       {ownSave ? (
         <Group justify="flex-end" gap="xs">
           {addButton}
-          <Button onClick={saveOwn} loading={busy} disabled={!dirty}>
+          <Button
+            onClick={saveOwn}
+            loading={busy}
+            disabled={!dirty}
+            leftSection={<FloppyDiskIcon size={16} aria-hidden />}
+          >
             Save options
           </Button>
         </Group>

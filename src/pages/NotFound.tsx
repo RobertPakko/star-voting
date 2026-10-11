@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Button, Stack, Text, Title } from '@mantine/core'
+import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { usePageTitle } from '../lib/pageTitle'
 
 /**
@@ -28,7 +29,12 @@ export function NotFound() {
       <Text c="dimmed" ta="center">
         This poll may have been deleted.
       </Text>
-      <Button component={Link} to="/" variant="light">
+      <Button
+        component={Link}
+        to="/"
+        variant="light"
+        leftSection={<ArrowLeftIcon size={16} aria-hidden />}
+      >
         Back to your polls
       </Button>
     </Stack>

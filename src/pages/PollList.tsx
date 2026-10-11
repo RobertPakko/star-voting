@@ -13,7 +13,7 @@ import {
   Tooltip,
 } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
-import { XIcon } from '@phosphor-icons/react'
+import { ArrowCounterClockwiseIcon, ArrowLeftIcon, PlusIcon, XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { migrateHiddenPolls, removePolls, restorePolls } from '../lib/removedPolls'
@@ -401,11 +401,19 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                 quieter than a button that is on this page for good; only the
                 way back lives here, because it is only needed here. */}
             {viewingRemoved && (
-              <Button variant="default" onClick={() => navigate('/')}>
+              <Button
+                variant="default"
+                onClick={() => navigate('/')}
+                leftSection={<ArrowLeftIcon size={16} aria-hidden />}
+              >
                 Back to your polls
               </Button>
             )}
-            <Button component={Link} to="/polls/new">
+            <Button
+              component={Link}
+              to="/polls/new"
+              leftSection={<PlusIcon size={16} aria-hidden />}
+            >
               New poll
             </Button>
           </Group>
@@ -560,6 +568,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                     loading={moving}
                     aria-label={`Restore ${poll.title} to your list`}
                     onClick={() => void move(poll.id, false)}
+                    leftSection={<ArrowCounterClockwiseIcon size={14} aria-hidden />}
                   >
                     Restore
                   </Button>

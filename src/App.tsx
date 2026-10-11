@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Box, Button, Center, Loader, Stack, Text, Title } from '@mantine/core'
+import { ArrowLeftIcon } from '@phosphor-icons/react'
 import {
   Link,
   Navigate,
@@ -881,7 +882,12 @@ function PollDeleted({ signedIn }: { signedIn: boolean }) {
         Polls are automatically deleted after six months, or a poll can be deleted by its creator.
       </Text>
       {signedIn && (
-        <Button component={Link} to="/" variant="light">
+        <Button
+          component={Link}
+          to="/"
+          variant="light"
+          leftSection={<ArrowLeftIcon size={16} aria-hidden />}
+        >
           Back to your polls
         </Button>
       )}

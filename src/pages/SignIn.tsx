@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ArrowRightIcon, EnvelopeSimpleIcon, SignInIcon } from '@phosphor-icons/react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Anchor,
@@ -193,6 +194,7 @@ export function SignIn() {
                   loading={verifying}
                   disabled={code.length < MIN_CODE_LENGTH}
                   onClick={() => handleVerify(code)}
+                  leftSection={<SignInIcon size={16} aria-hidden />}
                 >
                   Sign in
                 </Button>
@@ -243,7 +245,12 @@ export function SignIn() {
                     {error}
                   </Text>
                 )}
-                <Button fullWidth onClick={handleSubmit} loading={sending}>
+                <Button
+                  fullWidth
+                  onClick={handleSubmit}
+                  loading={sending}
+                  leftSection={<EnvelopeSimpleIcon size={16} aria-hidden />}
+                >
                   {method === 'link' ? 'Send sign-in link' : 'Send sign-in code'}
                 </Button>
                 {/* The way past the form, for a reader who wants to run an
@@ -260,6 +267,7 @@ export function SignIn() {
                       variant="default"
                       onClick={handleContinue}
                       loading={continuing}
+                      rightSection={<ArrowRightIcon size={16} aria-hidden />}
                     >
                       Continue without an account
                     </Button>

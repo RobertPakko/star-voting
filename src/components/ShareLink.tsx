@@ -56,14 +56,20 @@ export function ShareLink({
       }
     >
       {/* Centred rather than bottom-aligned: with the label lifted out there
-          is nothing above the box for the buttons to hang level with. */}
-      <Group gap="xs" wrap="nowrap" align="center">
+          is nothing above the box for the buttons to hang level with.
+
+          The row wraps, and the box has a floor. Held to one line on a phone
+          it was the part that gave, squeezed until it showed `https://` and
+          nothing else; now, where the box and both buttons will not fit at
+          a readable width, the buttons drop under it and the box takes the
+          whole line. */}
+      <Group gap="xs" wrap="wrap" align="center">
         <Input
           id={fieldId}
           value={url}
           readOnly
           onFocus={(e) => e.currentTarget.select()}
-          style={{ flex: 1 }}
+          style={{ flex: '1 1 14rem', minWidth: '14rem' }}
         />
         <ShareButton title={poll.title} text={shareSentence(poll.title, stage)} url={url} />
         <ShareQr url={url} title={poll.title} />

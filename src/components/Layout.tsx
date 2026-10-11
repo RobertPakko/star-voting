@@ -16,6 +16,7 @@ import {
   DownloadSimpleIcon,
   GearIcon,
   PlayCircleIcon,
+  SignInIcon,
   SignOutIcon,
   type Icon,
 } from '@phosphor-icons/react'
@@ -245,6 +246,7 @@ export function Layout() {
                 to={anonymous ? '/sign-in' : '/'}
                 state={anonymous ? { from: pathname + search } : undefined}
                 variant="outline"
+                leftSection={<SignInIcon size={16} aria-hidden />}
                 size="sm"
               >
                 Sign in
@@ -274,7 +276,12 @@ export function Layout() {
             <Button variant="default" onClick={() => setConfirmingSignOut(false)}>
               Cancel
             </Button>
-            <Button onClick={() => void handleSignOut()}>Sign out</Button>
+            <Button
+              onClick={() => void handleSignOut()}
+              leftSection={<SignOutIcon size={16} aria-hidden />}
+            >
+              Sign out
+            </Button>
           </Group>
         </Stack>
       </Modal>

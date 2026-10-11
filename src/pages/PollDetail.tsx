@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Badge, Button, Card, Group, Progress, Stack, Text, Title } from '@mantine/core'
+import { PencilSimpleIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -1110,6 +1111,7 @@ function Waiting({
             <Button
               variant="light"
               onClick={handleRevise}
+              leftSection={<PencilSimpleIcon size={16} aria-hidden />}
               loading={loading}
               style={{ marginLeft: 'auto' }}
             >

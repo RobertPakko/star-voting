@@ -11,7 +11,7 @@
  * colour walks to green rather than cutting to it.
  *
  * **The width is fixed to the wider of the states.** It sits in a
- * no-wrap row with a text box flexing beside it, so a button that grows by a
+ * row with a text box flexing beside it, so a button that grows by a
  * word and an icon shoves the link along under the reader's eye at the moment
  * they are checking what they copied. Holding the box at the size it will
  * need is what makes the tick free to appear.

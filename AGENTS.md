@@ -85,9 +85,19 @@ Icons come from [`@phosphor-icons/react`](https://phosphoricons.com), imported
 by name: `<StarIcon size={20} weight="fill" />` rather than a `<path d="…">`
 nobody can read at a glance. Import from the package root — it is ESM and
 marked side-effect-free, so the bundler keeps only the icons actually named,
-and the seven the app uses cost about 5 kB gzipped against a library of
+and the few dozen the app uses cost a few kB gzipped against a library of
 several thousand. Mind the `Icon` suffix: the bare `Star`/`Sun` exports still
 exist in v2 but are deprecated in favour of `StarIcon`/`SunIcon`.
+
+**A button carries an icon** wherever one says something the word does not
+already — `leftSection`, 16px (14px on `xs` and compact buttons), always
+`aria-hidden` since the label is the name. The same act gets the same glyph
+everywhere: a pencil for *Edit*, a plus for adding, the counter-clockwise
+arrow for anything that puts something back (*Restore*, *Keep*, *Add back to
+your list*), a lock for closing and an open lock for reopening. The one
+deliberate exception is **Cancel** in a modal or beside a ballot's Submit: it
+is a way out rather than an act, and giving it an icon puts it on equal
+footing with the button that does something.
 
 The one `<svg>` left in `src/` is the QR code in `ShareQr.tsx`, which is a
 path generated from the share link rather than an icon. `public/favicon.svg`
@@ -5240,6 +5250,14 @@ the link rather than about the widget it happens to be printed in. So an
 `htmlFor` — hence the generated id, since this renders on the creator's page
 and inside the open-poll panel alike — and the sentence gets the width it was
 written for.
+
+**The box has a floor of 14rem, and the row wraps to keep it.** Moving the
+caption out was not the end of the squeeze: the box was still the part of a
+no-wrap row that gave, and beside **Share** and **QR code** on a phone it was
+a box showing `https://` and nothing else. It does not need the whole address
+— it is there to be selected, and to say which link this is — but it needs
+enough to be recognisably a link. So where the box and both buttons will not
+fit at that width, the buttons drop onto a line of their own under it.
 
 ### A poll can ask more than one question
 

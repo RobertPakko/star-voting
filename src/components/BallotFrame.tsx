@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Button, Card, Group, Stack, Text } from '@mantine/core'
+import { FloppyDiskIcon, PaperPlaneTiltIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { Reveal } from './Reveal'
 
@@ -136,7 +137,17 @@ export function BallotFrame({
                 Cancel
               </Button>
             )}
-            <Button onClick={handleSubmit} loading={submitting}>
+            <Button
+              onClick={handleSubmit}
+              loading={submitting}
+              leftSection={
+                revising ? (
+                  <FloppyDiskIcon size={16} aria-hidden />
+                ) : (
+                  <PaperPlaneTiltIcon size={16} aria-hidden />
+                )
+              }
+            >
               {revising ? 'Save changes' : 'Submit vote'}
             </Button>
           </Group>

@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, Group, Modal, Stack, Text, Title, Tooltip } from '@mantine/core'
+import {
+  CopyIcon,
+  LockIcon,
+  LockOpenIcon,
+  PencilSimpleIcon,
+  PlayIcon,
+  TrashIcon,
+} from '@phosphor-icons/react'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
@@ -225,6 +233,7 @@ export function CreatorControls({
                     color="orange"
                     disabled={!enoughToOpen}
                     onClick={openModal.open}
+                    leftSection={<PlayIcon size={16} aria-hidden />}
                   >
                     Open poll
                   </Button>
@@ -232,12 +241,22 @@ export function CreatorControls({
               </Tooltip>
             )}
             {canClose && (
-              <Button variant="light" color="orange" onClick={closeModal.open}>
+              <Button
+                variant="light"
+                color="orange"
+                onClick={closeModal.open}
+                leftSection={<LockIcon size={16} aria-hidden />}
+              >
                 Close poll
               </Button>
             )}
             {canReopen && (
-              <Button variant="light" color="orange" onClick={reopenModal.open}>
+              <Button
+                variant="light"
+                color="orange"
+                onClick={reopenModal.open}
+                leftSection={<LockOpenIcon size={16} aria-hidden />}
+              >
                 Reopen poll
               </Button>
             )}
@@ -245,6 +264,7 @@ export function CreatorControls({
               <Button
                 variant="light"
                 onClick={() => (lateEdit ? lateEditModal.open() : onEditOptions(true))}
+                leftSection={<PencilSimpleIcon size={16} aria-hidden />}
               >
                 Edit options
               </Button>
@@ -254,10 +274,17 @@ export function CreatorControls({
             <Button
               variant="light"
               onClick={() => navigate(`/polls/new?from=${shortPollId(pollId)}`)}
+              leftSection={<CopyIcon size={16} aria-hidden />}
             >
               Duplicate
             </Button>
-            <Button variant="subtle" color="red" onClick={deleteModal.open} ml="auto">
+            <Button
+              variant="subtle"
+              color="red"
+              onClick={deleteModal.open}
+              ml="auto"
+              leftSection={<TrashIcon size={16} aria-hidden />}
+            >
               Delete
             </Button>
           </Group>
@@ -281,6 +308,7 @@ export function CreatorControls({
               <Button
                 color="orange.4"
                 autoContrast
+                leftSection={<PencilSimpleIcon size={16} aria-hidden />}
                 onClick={() => {
                   lateEditModal.close()
                   onEditOptions(true)
@@ -312,7 +340,13 @@ export function CreatorControls({
               <Button variant="default" onClick={openModal.close}>
                 Cancel
               </Button>
-              <Button color="orange.4" autoContrast onClick={openPoll} loading={busy}>
+              <Button
+                color="orange.4"
+                autoContrast
+                onClick={openPoll}
+                loading={busy}
+                leftSection={<PlayIcon size={16} aria-hidden />}
+              >
                 Open poll
               </Button>
             </Group>
@@ -337,7 +371,13 @@ export function CreatorControls({
               <Button variant="default" onClick={closeModal.close}>
                 Cancel
               </Button>
-              <Button color="orange.4" autoContrast onClick={closePoll} loading={busy}>
+              <Button
+                color="orange.4"
+                autoContrast
+                onClick={closePoll}
+                loading={busy}
+                leftSection={<LockIcon size={16} aria-hidden />}
+              >
                 Close poll
               </Button>
             </Group>
@@ -359,7 +399,13 @@ export function CreatorControls({
               <Button variant="default" onClick={reopenModal.close}>
                 Cancel
               </Button>
-              <Button color="orange.4" autoContrast onClick={reopenPoll} loading={busy}>
+              <Button
+                color="orange.4"
+                autoContrast
+                onClick={reopenPoll}
+                loading={busy}
+                leftSection={<LockOpenIcon size={16} aria-hidden />}
+              >
                 Reopen poll
               </Button>
             </Group>
@@ -381,7 +427,12 @@ export function CreatorControls({
               <Button variant="default" onClick={deleteModal.close}>
                 Cancel
               </Button>
-              <Button color="red" onClick={deletePoll} loading={busy}>
+              <Button
+                color="red"
+                onClick={deletePoll}
+                loading={busy}
+                leftSection={<TrashIcon size={16} aria-hidden />}
+              >
                 Delete poll
               </Button>
             </Group>

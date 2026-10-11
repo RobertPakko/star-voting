@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Button, Card, Group, Stack, Text } from '@mantine/core'
+import { PencilSimpleIcon } from '@phosphor-icons/react'
 import { useAuth } from '../lib/auth'
 import { isSampleId, openPollRpc } from '../lib/samplePoll'
 import { forgetWatch, usePushHere, useWatching, watchPoll } from '../lib/push'
@@ -422,6 +423,7 @@ function Voted({
                   variant="light"
                   loading={fetching}
                   onClick={() => void edit()}
+                  leftSection={<PencilSimpleIcon size={16} aria-hidden />}
                   style={{ marginLeft: 'auto' }}
                 >
                   Edit vote

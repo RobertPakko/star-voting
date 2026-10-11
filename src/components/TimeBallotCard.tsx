@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { Box, Button, Divider, Group, Modal, SegmentedControl, Stack, Text } from '@mantine/core'
+import { EyeIcon, PaperPlaneTiltIcon } from '@phosphor-icons/react'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { BallotFrame, type BallotScore } from './BallotFrame'
 import { PaintCalendar } from './PaintCalendar'
@@ -7,9 +8,11 @@ import {
   axisFor,
   boundsOf,
   daysOf,
+  describeLength,
   describeOffset,
   formatDay,
   isDaily,
+  meetingMinutes,
   paintingFromScores,
   paintingRuns,
   runBounds,
@@ -284,7 +287,11 @@ export function TimeBallotCard({
               {days.length > 0 && ' · '}
             </Text>
             <Text size="xs" c="dimmed">
-              {`${formatDay(days[0])} to ${formatDay(days[days.length - 1])}`}
+              {/* The one place a voter is told how long the meeting is: every
+                  option is a window of that length, and a calendar of rated
+                  hours says nothing about it on its own. */}
+              {days.length > 0 &&
+                `${formatDay(days[0])} to ${formatDay(days[days.length - 1])} (${describeLength(meetingMinutes(schedule))} long)`}
             </Text>
           </Group>
           <SegmentedControl
@@ -353,6 +360,7 @@ export function TimeBallotCard({
           <Group justify="flex-end" gap="sm">
             <Button
               variant="default"
+              leftSection={<EyeIcon size={16} aria-hidden />}
               onClick={() => {
                 answer(false)
                 setReveal({ day: unseen[0] })
@@ -360,7 +368,12 @@ export function TimeBallotCard({
             >
               Show me
             </Button>
-            <Button onClick={() => answer(true)}>Submit anyway</Button>
+            <Button
+              onClick={() => answer(true)}
+              leftSection={<PaperPlaneTiltIcon size={16} aria-hidden />}
+            >
+              Submit anyway
+            </Button>
           </Group>
         </Stack>
       </Modal>

@@ -1,7 +1,15 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert, Button, Group, Stack, Text } from '@mantine/core'
-import { BellRingingIcon, BellSlashIcon, DownloadSimpleIcon, GearIcon } from '@phosphor-icons/react'
+import {
+  ArrowCounterClockwiseIcon,
+  BellRingingIcon,
+  BellSlashIcon,
+  DownloadSimpleIcon,
+  EyeSlashIcon,
+  GearIcon,
+  InfoIcon,
+} from '@phosphor-icons/react'
 import { useAuth } from '../lib/auth'
 import {
   appBannerDismissed,
@@ -89,7 +97,14 @@ function RemovedBanner({ pollId, onRestored }: { pollId: string; onRestored: () 
           </Text>
         )}
         <Group gap="xs">
-          <Button size="xs" variant="light" color="yellow" loading={busy} onClick={restore}>
+          <Button
+            size="xs"
+            variant="light"
+            color="yellow"
+            loading={busy}
+            onClick={restore}
+            leftSection={<ArrowCounterClockwiseIcon size={14} aria-hidden />}
+          >
             Add back to your list
           </Button>
         </Group>
@@ -194,13 +209,20 @@ function Banner({
       <Stack gap="xs">
         <Text size="sm">{children}</Text>
         <Group gap="xs">
-          <Button component={Link} to="/app" size="xs" variant="light">
+          <Button
+            component={Link}
+            to="/app"
+            size="xs"
+            variant="light"
+            leftSection={<InfoIcon size={14} aria-hidden />}
+          >
             Learn more
           </Button>
           <Button
             size="xs"
             variant="subtle"
             color="gray"
+            leftSection={<EyeSlashIcon size={14} aria-hidden />}
             onClick={() => {
               forget()
               setShown(false)

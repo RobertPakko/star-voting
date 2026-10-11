@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react'
 import { Button, Center, Paper, Stack, Text, Title } from '@mantine/core'
+import { ArrowClockwiseIcon } from '@phosphor-icons/react'
 
 /**
  * The last thing between a render that throws and a white page.
@@ -62,7 +63,12 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
               Refreshing the page usually clears it. If it keeps happening after a refresh, the
               problem is at our end rather than yours.
             </Text>
-            <Button onClick={() => window.location.reload()}>Refresh the page</Button>
+            <Button
+              onClick={() => window.location.reload()}
+              leftSection={<ArrowClockwiseIcon size={16} aria-hidden />}
+            >
+              Refresh the page
+            </Button>
           </Stack>
         </Paper>
       </Center>

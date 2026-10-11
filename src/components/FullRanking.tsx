@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Badge, Button, Divider, Group, Modal, Stack, Text } from '@mantine/core'
+import { ListNumbersIcon } from '@phosphor-icons/react'
 import { useDisclosure } from '@mantine/hooks'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
@@ -99,7 +100,12 @@ export function FullRanking({
       <Divider
         role="presentation"
         label={
-          <Button variant="subtle" size="compact-sm" onClick={modal.open}>
+          <Button
+            variant="subtle"
+            size="compact-sm"
+            onClick={modal.open}
+            leftSection={<ListNumbersIcon size={14} aria-hidden />}
+          >
             See the full ranking
           </Button>
         }
