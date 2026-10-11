@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { Box, Divider, Group, SegmentedControl, Stack, Text } from '@mantine/core'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { Box, Button, Divider, Group, Modal, SegmentedControl, Stack, Text } from '@mantine/core'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { BallotFrame, type BallotScore } from './BallotFrame'
 import { PaintCalendar } from './PaintCalendar'
@@ -16,7 +16,9 @@ import {
   scoresFromPainting,
   formatTimeOfDay,
   type GranuleKey,
+  type ScheduleDay,
 } from '../lib/schedule'
+import { NameList } from './NameList'
 import { use24HourTime } from '../lib/clock'
 import { offsetName } from '../lib/timezones'
 import type { PollOption, PollSchedule } from '../lib/types'
@@ -150,6 +152,53 @@ export function TimeBallotCard({
     })
   }
 
+  /**
+   * The poll's days this voter has had on screen.
+   *
+   * A poll can run across several weeks or months, the calendar opens on the
+   * first of them, and nothing about a week grid says there is a second week
+   * behind the arrow. A voter who paints the week they were shown and presses
+   * Submit has said "can't make it" to every day they never saw -- an untouched
+   * day is a 0 -- which is an answer they did not give. So the calendar
+   * reports each range it draws (`onShowRange`), and a submit with days
+   * still unseen asks first.
+   *
+   * "Seen" is the range on screen, not the columns a phone happens to have
+   * scrolled into view: it is a glance that is being asked about, not a
+   * reading.
+   */
+  const [seen, setSeen] = useState<ReadonlySet<ScheduleDay>>(() => new Set())
+  const showRange = useCallback(
+    (from: ScheduleDay, to: ScheduleDay) => {
+      setSeen((prev) => {
+        const added = days.filter((day) => day >= from && day <= to && !prev.has(day))
+        return added.length === 0 ? prev : new Set([...prev, ...added])
+      })
+    },
+    [days],
+  )
+  const unseen = days.filter((day) => !seen.has(day))
+
+  // The pending submit, held while the warning is up: answering it is what
+  // lets BallotFrame carry on or stand down. See `confirmSubmit`.
+  const [pending, setPending] = useState<((go: boolean) => void) | null>(null)
+  const [reveal, setReveal] = useState<{ day: ScheduleDay } | null>(null)
+
+  /**
+   * Only on a first ballot. A revision starts from the ballot already cast,
+   * every day of it filled in from the scores, so a day left untouched there
+   * is a day the voter answered last time rather than one they never saw.
+   */
+  function confirmSubmit(): Promise<boolean> {
+    if (initial !== undefined || unseen.length === 0) return Promise.resolve(true)
+    return new Promise((resolve) => setPending(() => resolve))
+  }
+
+  function answer(go: boolean) {
+    pending?.(go)
+    setPending(null)
+  }
+
   function collect(): BallotScore[] {
     return options.map((option) => ({
       candidate_id: option.id,
@@ -212,6 +261,7 @@ export function TimeBallotCard({
       questionStrip={questionStrip}
       note={note}
       beforeSubmit={beforeSubmit}
+      confirmSubmit={confirmSubmit}
       collect={collect}
       onSubmit={onSubmit}
       onVoted={onVoted}
@@ -282,9 +332,38 @@ export function TimeBallotCard({
           // stops. That is not true of the two screens that paint what a poll
           // asks about.
           confine
+          onShowRange={showRange}
+          reveal={reveal}
         />
         <Divider />
       </Stack>
+
+      <Modal
+        opened={pending !== null}
+        onClose={() => answer(false)}
+        title="You haven't looked at every day yet"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            This poll also asks about{' '}
+            <NameList max={6} names={unseen.map((day) => ({ id: day, name: formatDay(day) }))} />,
+            which you haven't looked at. Any time you leave unmarked counts as a 0.
+          </Text>
+          <Group justify="flex-end" gap="sm">
+            <Button
+              variant="default"
+              onClick={() => {
+                answer(false)
+                setReveal({ day: unseen[0] })
+              }}
+            >
+              Show me
+            </Button>
+            <Button onClick={() => answer(true)}>Submit anyway</Button>
+          </Group>
+        </Stack>
+      </Modal>
     </BallotFrame>
   )
 }

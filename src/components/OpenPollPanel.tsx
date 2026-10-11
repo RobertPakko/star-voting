@@ -245,7 +245,16 @@ export function OpenPollPanel({
             reading places it the same way, for the same reason. */}
         {questionStrip}
         <Suspense fallback={<ResultsSkeleton options={view.options.length || undefined} />}>
-          <Results source={{ kind: 'open', pollId }} initial={results} live={resultsLive} />
+          <Results
+            source={{ kind: 'open', pollId }}
+            meeting={
+              view.poll.kind === 'time' && view.poll.schedule
+                ? { title: view.poll.title, schedule: view.poll.schedule }
+                : null
+            }
+            initial={results}
+            live={resultsLive}
+          />
         </Suspense>
         {/* Gated in the database on the same terms as the results, so this
             condition only decides whether to ask. */}

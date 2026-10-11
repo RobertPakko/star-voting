@@ -1,7 +1,9 @@
-import { Button, Modal, Stack, Text } from '@mantine/core'
+import { Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { CoinVerticalIcon } from '@phosphor-icons/react'
 import { coinFlip } from '../lib/coinFlip'
+import type { MeetingEvent } from '../lib/calendarEvent'
+import { AddToCalendar } from './AddToCalendar'
 import classes from './CoinFlip.module.css'
 
 /** One of the two the runoff could not separate, named for the reader. */
@@ -35,16 +37,24 @@ export interface Finalist {
 export function CoinFlip({
   pollId,
   finalists,
+  eventFor,
 }: {
   /** What the flip is seeded on, with the two ids; see coinFlip. */
   pollId: string
   /** The two finalists, in whichever order the tally listed them. */
   finalists: [Finalist, Finalist]
+  /**
+   * On a time poll, the side the coin lands on as a calendar event. The coin
+   * still elects nobody (see above); this is the group having agreed to go
+   * with it, and wanting it in their diaries.
+   */
+  eventFor?: (id: string) => MeetingEvent | null
 }) {
   const [opened, modal] = useDisclosure(false)
 
   const winner = coinFlip(pollId, finalists[0].id, finalists[1].id)
   const [won, lost] = finalists[0].id === winner ? finalists : [finalists[1], finalists[0]]
+  const event = eventFor?.(won.id) ?? null
 
   return (
     <>
@@ -73,6 +83,11 @@ export function CoinFlip({
           <Text fw={700} size="lg" ta="center">
             {won.name} wins the toss.
           </Text>
+          {event && (
+            <Group justify="center">
+              <AddToCalendar event={event} />
+            </Group>
+          )}
         </Stack>
       </Modal>
     </>

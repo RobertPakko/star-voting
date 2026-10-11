@@ -301,6 +301,8 @@ export function PaintCalendar({
   dayInBounds,
   confine,
   earliest,
+  onShowRange,
+  reveal,
 }: {
   schedule: PollSchedule
   /** The cells that may be painted at all; everything else is drawn greyed. */
@@ -373,6 +375,19 @@ export function PaintCalendar({
    * anything on it.
    */
   earliest?: ScheduleDay
+  /**
+   * Told the first and last day on screen whenever they change, the first
+   * time included. The ballot keeps a tally of the poll's days a voter has
+   * had in front of them, so that it can say which they have not before the
+   * vote goes in; see TimeBallotCard.
+   */
+  onShowRange?: (from: ScheduleDay, to: ScheduleDay) => void
+  /**
+   * Bring this day on screen, at the current zoom. An object rather than a
+   * bare day so that asking for the same day twice -- after the reader has
+   * moved off it -- is still a change.
+   */
+  reveal?: { day: ScheduleDay } | null
 }) {
   const days = daysOf(bounds)
   const daily = isDaily(schedule)
@@ -611,6 +626,14 @@ export function PaintCalendar({
   }
 
   const inView = visibleRange(date, showing)
+
+  useEffect(() => {
+    onShowRange?.(inView.from, inView.to)
+  }, [onShowRange, inView.from, inView.to])
+
+  useEffect(() => {
+    if (reveal) setDate(reveal.day)
+  }, [reveal])
 
   // The week grid's day headings, greyed where the poll is not asking about
   // that day -- the column under it already is, but a heading drawn exactly

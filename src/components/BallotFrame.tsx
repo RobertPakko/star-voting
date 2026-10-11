@@ -31,6 +31,7 @@ export function BallotFrame({
   note,
   collect,
   beforeSubmit,
+  confirmSubmit,
   onSubmit,
   onVoted,
   onCancel,
@@ -78,6 +79,12 @@ export function BallotFrame({
    */
   beforeSubmit?: () => boolean
   /**
+   * And the ballot's own, asked after the caller's: a question for the voter
+   * rather than a rule, so it waits on their answer. Resolve false to leave
+   * them on the ballot with nothing sent.
+   */
+  confirmSubmit?: () => Promise<boolean>
+  /**
    * Send the scores. Throw to put the message on the ballot and leave the
    * voter where they are, with everything they scored still on screen.
    */
@@ -93,6 +100,7 @@ export function BallotFrame({
   async function handleSubmit() {
     setError(null)
     if (beforeSubmit && !beforeSubmit()) return
+    if (confirmSubmit && !(await confirmSubmit())) return
 
     setSubmitting(true)
     try {

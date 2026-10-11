@@ -879,6 +879,11 @@ export function PollDetail({
                 <Suspense fallback={<ResultsSkeleton options={optionList.length || undefined} />}>
                   <Results
                     source={{ kind: 'poll', pollId: poll.id }}
+                    meeting={
+                      poll.kind === 'time' && poll.schedule
+                        ? { title: poll.title, schedule: poll.schedule }
+                        : null
+                    }
                     initial={results}
                     live={resultsLive}
                   />

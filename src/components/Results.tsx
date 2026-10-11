@@ -23,17 +23,21 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
 import { parseAnswer, pollResultsSchema } from '../lib/rpcSchemas'
-import { relabelResults } from '../lib/schedule'
+import { meetingMinutes, relabelResults } from '../lib/schedule'
+import type { MeetingEvent } from '../lib/calendarEvent'
+import { shareLinkFor } from '../lib/shareLink'
 import { use24HourTime } from '../lib/clock'
 import type {
   FiveStarStep,
   HeadToHeadStep,
   Matchup,
   PollResults,
+  PollSchedule,
   Runoff,
   Tiebreak,
   TiebreakEntry,
 } from '../lib/types'
+import { AddToCalendar } from './AddToCalendar'
 import { CoinFlip, type Finalist } from './CoinFlip'
 import { FullRanking } from './FullRanking'
 import { NameList } from './NameList'
@@ -56,8 +60,15 @@ export function Results({
   source,
   initial = null,
   live = false,
+  meeting = null,
 }: {
   source: ResultsSource
+  /**
+   * What a time poll's result needs to become a calendar event: its title and
+   * its schedule, for the length. Null on every other poll, which is what
+   * keeps *Add to calendar* off a result that is not a time.
+   */
+  meeting?: { title: string; schedule: PollSchedule } | null
   /**
    * The tally the read that opened this page already brought, or null when it
    * brought none. `poll_page` carries it on exactly the polls whose page
@@ -184,6 +195,23 @@ export function Results({
   // what it names places from. See resultsRows.ts.
   const scoreRound = capRows(shown.options, SCORING_ROWS_MAX)
 
+  // The winning window as an event, from its *unrelabelled* name: that is the
+  // instant, offset and all, where the shown name is only how it reads. Asked
+  // of the elected option and of the coin's, which is why it takes an id.
+  const startById = new Map(results.options.map((o) => [o.id, o.name]))
+  const eventFor = (id: string): MeetingEvent | null => {
+    const start = startById.get(id)
+    if (!meeting || !start) return null
+    return {
+      title: meeting.title,
+      start,
+      minutes: meetingMinutes(meeting.schedule),
+      details: shareLinkFor({ id: key }),
+      uid: `${key}-${start}@choicelab.app`,
+    }
+  }
+  const winnerEvent = shown.winner_id ? eventFor(shown.winner_id) : null
+
   // Wrapped so the tally fades in over the shape that was standing in for it,
   // rather than replacing it between two frames. The winner card below has an
   // entrance of its own as well, and needs one: a poll watched as it finishes
@@ -206,9 +234,12 @@ export function Results({
               bg="var(--mantine-color-green-light)"
               className={live ? classes.landed : undefined}
             >
-              <Text fw={700} size="lg">
-                Winner: {nameById.get(shown.winner_id)}
-              </Text>
+              <Group justify="space-between" align="center" gap="sm">
+                <Text fw={700} size="lg">
+                  Winner: {nameById.get(shown.winner_id)}
+                </Text>
+                {winnerEvent && <AddToCalendar event={winnerEvent} />}
+              </Group>
             </Card>
           </Reveal>
         )}
@@ -227,7 +258,11 @@ export function Results({
                 <Text fw={700} size="lg">
                   No winner
                 </Text>
-                <CoinFlip pollId={key} finalists={tiedPair(shown, nameById)} />
+                <CoinFlip
+                  pollId={key}
+                  finalists={tiedPair(shown, nameById)}
+                  eventFor={meeting ? eventFor : undefined}
+                />
               </Group>
             </Card>
           </Reveal>
