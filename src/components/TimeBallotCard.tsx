@@ -347,8 +347,8 @@ export function TimeBallotCard({
         <Stack gap="md">
           <Text size="sm">
             This poll also asks about{' '}
-            <NameList max={6} names={unseen.map((day) => ({ id: day, name: formatDay(day) }))} />,
-            which you haven't looked at. Any time you leave unmarked counts as a 0.
+            <NameList max={3} names={unseen.map((day) => ({ id: day, name: formatDay(day) }))} />
+            which you haven't looked at.
           </Text>
           <Group justify="flex-end" gap="sm">
             <Button
