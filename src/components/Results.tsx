@@ -23,7 +23,7 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
 import { parseAnswer, pollResultsSchema } from '../lib/rpcSchemas'
-import { meetingMinutes, relabelResults } from '../lib/schedule'
+import { describeLength, meetingMinutes, relabelResults } from '../lib/schedule'
 import type { MeetingEvent } from '../lib/calendarEvent'
 import { shareLinkFor } from '../lib/shareLink'
 import { use24HourTime } from '../lib/clock'
@@ -237,6 +237,9 @@ export function Results({
               <Group justify="space-between" align="center" gap="sm">
                 <Text fw={700} size="lg">
                   Winner: {nameById.get(shown.winner_id)}
+                  {/* A time poll's length: every option is a window of it, and
+                      nothing else on the results says how long that is. */}
+                  {winnerEvent && ` (${describeLength(winnerEvent.minutes)})`}
                 </Text>
                 {winnerEvent && <AddToCalendar event={winnerEvent} />}
               </Group>

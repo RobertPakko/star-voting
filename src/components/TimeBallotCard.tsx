@@ -291,7 +291,7 @@ export function TimeBallotCard({
                   option is a window of that length, and a calendar of rated
                   hours says nothing about it on its own. */}
               {days.length > 0 &&
-                `${formatDay(days[0])} to ${formatDay(days[days.length - 1])} (${describeLength(meetingMinutes(schedule))} long)`}
+                `${formatDay(days[0])} to ${formatDay(days[days.length - 1])} (${describeLength(meetingMinutes(schedule))})`}
             </Text>
           </Group>
           <SegmentedControl

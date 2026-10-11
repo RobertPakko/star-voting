@@ -1,4 +1,5 @@
 import { Button, Group, Modal, Stack, Text } from '@mantine/core'
+import { describeLength } from '../lib/schedule'
 import { useDisclosure } from '@mantine/hooks'
 import { CoinVerticalIcon } from '@phosphor-icons/react'
 import { coinFlip } from '../lib/coinFlip'
@@ -81,7 +82,9 @@ export function CoinFlip({
           </div>
 
           <Text fw={700} size="lg" ta="center">
-            {won.name} wins the toss.
+            {won.name}
+            {/* A time poll's length, which the result says nowhere else. */}
+            {event && ` (${describeLength(event.minutes)})`} wins the toss.
           </Text>
           {event && (
             <Group justify="center">
