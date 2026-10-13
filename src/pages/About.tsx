@@ -52,17 +52,9 @@ export function About() {
       <Title order={1}>About</Title>
 
       <Text>
-        <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is a mechanism for
-        conducting elections and this website allows you to create and respond to polls using STAR
-        voting. Check out the samples to see it in action, read on to learn more about STAR, or sign
-        in to try it yourself.
+        STAR Voting is an application for making and responding to polls. Check out the samples to
+        see it in action, read on to learn about how its polls work, or sign in to try it yourself.
       </Text>
-      <Samples />
-
-      {/* The film, between the samples and the reference: a third way in for
-          somebody who would rather watch than click or read. A rule with a
-          button in it, as the full ranking's is; see FullRanking for why the
-          rule is presentational. */}
       <Divider
         role="presentation"
         label={
@@ -77,6 +69,7 @@ export function About() {
           </Button>
         }
       />
+      <Samples />
 
       <Tabs value={tab} onChange={setTab} keepMounted={false}>
         <Tabs.List grow>
@@ -88,9 +81,9 @@ export function About() {
         <Tabs.Panel value="procedure" pt="lg">
           <Stack gap="sm">
             <Text>
-              STAR voting is an acronym that stands for &ldquo;Score Then Automatic Runoff&rdquo;.
-              It combines <Ext href="https://en.wikipedia.org/wiki/Score_voting">score voting</Ext>{' '}
-              with{' '}
+              <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is an acronym
+              that stands for &ldquo;Score Then Automatic Runoff&rdquo;. It combines{' '}
+              <Ext href="https://en.wikipedia.org/wiki/Score_voting">score voting</Ext> with{' '}
               <Ext href="https://en.wikipedia.org/wiki/Instant-runoff_voting">
                 ranked choice voting
               </Ext>{' '}

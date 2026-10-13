@@ -228,9 +228,9 @@ export function Layout() {
                 app for good. Signed in it is an icon, like its neighbours:
                 with the settings gear beside it the row ran out of room on a
                 phone, and leaving is not what anybody came to do. Signed out
-                it keeps its words, because an offer has to say what it is — on
-                a phone too, where that costs the wordmark a second line: being
-                asked to sign in is worth more than the title fitting on one. */}
+                it is an icon too, for the same room, and like the sign-out
+                icon it carries its name in an aria-label: a link with only an
+                aria-hidden glyph in it has no name at all. */}
             {account ? (
               <ActionIcon
                 variant="outline"
@@ -248,6 +248,7 @@ export function Layout() {
                 state={anonymous ? { from: pathname + search } : undefined}
                 variant="outline"
                 size="lg"
+                aria-label="Sign in"
               >
                 <SignInIcon size={16} aria-hidden />
               </ActionIcon>
