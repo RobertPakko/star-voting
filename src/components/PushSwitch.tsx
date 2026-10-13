@@ -12,7 +12,7 @@ import {
   usePushHere,
   type PushState,
 } from '../lib/push'
-import type { NotificationSettings } from '../lib/notificationSettings'
+import { SWITCH_LABELS, type NotificationSettings } from '../lib/notificationSettings'
 
 /**
  * Push notifications for the signed-in account, as one switch.
@@ -87,7 +87,7 @@ export function PushSwitch({
   return (
     <Stack gap={4}>
       <Switch
-        label="Push notifications"
+        label={SWITCH_LABELS.push}
         description={reason}
         checked={capable && settings.push && settings.thisDevice}
         disabled={!capable || busy}
@@ -143,7 +143,7 @@ export function LinkPushSwitch() {
   return (
     <Stack gap={4}>
       <Switch
-        label="Push notifications"
+        label={SWITCH_LABELS.push}
         description={reasonFor(state)}
         checked={capable && on}
         disabled={!capable || busy}

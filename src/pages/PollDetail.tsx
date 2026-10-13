@@ -13,7 +13,6 @@ import { PencilSimpleIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import type { LiveStatus } from '../lib/useLiveStream'
 import { voterKeyFor } from '../lib/voterKey'
 import { rememberAnswered, rememberConfirmed, useQuestionMarks } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
@@ -21,7 +20,6 @@ import { BallotCard } from '../components/BallotCard'
 import type { BallotScore } from '../components/BallotFrame'
 import { CollectOptions } from '../components/CollectOptions'
 import { CreatorControls } from '../components/CreatorControls'
-import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
@@ -77,14 +75,11 @@ import type {
  */
 export function PollDetail({
   initial,
-  live,
   watch,
   reread,
   prefetched = null,
 }: {
   initial: AccountRead | null
-  /** Whether the route's subscription is carrying, for the notice below. */
-  live: LiveStatus
   /**
    * Registers what this page does with a signal. The route holds the
    * subscription — see `PollPage` — and calls this back in place of its own
@@ -721,8 +716,6 @@ export function PollDetail({
 
   return (
     <Stack maw={720} mx="auto" gap="md">
-      <LiveConnectionNotice status={live} />
-
       {/* The same heading a poll wears on the list it was opened from, down
           to who created it and the order the parts come in; see
           PollHeading. */}

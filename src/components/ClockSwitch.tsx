@@ -1,5 +1,6 @@
 import { Switch } from '@mantine/core'
 import { set24HourTime, use24HourTime } from '../lib/clock'
+import { SWITCH_LABELS } from '../lib/notificationSettings'
 
 /**
  * Whether times are written `14:30` or `2:30pm`, for this browser.
@@ -14,7 +15,7 @@ export function ClockSwitch() {
   const h24 = use24HourTime()
   return (
     <Switch
-      label="24-hour time"
+      label={SWITCH_LABELS.clock}
       checked={h24}
       onChange={(event) => set24HourTime(event.currentTarget.checked)}
     />

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Group, Stack, Text } from '@mantine/core'
-import { FloppyDiskIcon } from '@phosphor-icons/react'
+import { CheckIcon } from '@phosphor-icons/react'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { PaintCalendar } from './PaintCalendar'
 import { HoursFields } from './HoursFields'
@@ -275,7 +275,7 @@ export function PaintTimes({
             }
             loading={saving}
             disabled={nothing}
-            leftSection={<FloppyDiskIcon size={16} aria-hidden />}
+            leftSection={<CheckIcon size={16} aria-hidden />}
           >
             Save times
           </Button>

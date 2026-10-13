@@ -2,10 +2,9 @@
  *
  * This is the only thing on any of these pages that moves without the reader
  * having touched anything: a vote lands somewhere else, the socket says so,
- * and the badge quietly reads one higher than it did. `LiveConnectionNotice`
- * explains why there is no live indicator anywhere in the app — a page that
- * updates itself demonstrates that by updating itself — and this is the half
- * of that sentence the app was not keeping: a number that changes between two
+ * and the badge quietly reads one higher than it did. There is no live
+ * indicator anywhere in the app — a page that updates itself demonstrates
+ * that by updating itself — and this is the half of that sentence the app was not keeping: a number that changes between two
  * frames, in a row of five badges that did not, demonstrates nothing to
  * anybody who was not staring at it.
  *

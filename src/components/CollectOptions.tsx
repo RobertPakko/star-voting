@@ -4,7 +4,6 @@ import { ActionIcon, Button, Card, Divider, Group, Stack, Text, TextInput } from
 import {
   ArrowCounterClockwiseIcon,
   CheckIcon,
-  FloppyDiskIcon,
   PencilSimpleIcon,
   PlusIcon,
 } from '@phosphor-icons/react'
@@ -404,7 +403,7 @@ export function CollectOptions({
         {confirm ? (
           <Group justify="space-between" wrap="wrap" gap="sm" align="flex-end">
             <Text size="sm" c="dimmed">
-              Confirm the options once you have nothing more to add.
+              Confirm the options once you're done.
               <br />
               {confirm.opensWhenEveryoneHas ? (
                 <>The poll opens for voting once everyone confirms.</>
@@ -1056,7 +1055,7 @@ function OptionList({
             onClick={saveOwn}
             loading={busy}
             disabled={!dirty}
-            leftSection={<FloppyDiskIcon size={16} aria-hidden />}
+            leftSection={<CheckIcon size={16} aria-hidden />}
           >
             Save options
           </Button>

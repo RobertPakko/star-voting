@@ -19,7 +19,6 @@ import { useAuth } from '../lib/auth'
 import { migrateHiddenPolls, removePolls, restorePolls } from '../lib/removedPolls'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { Banners } from '../components/Banners'
-import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { PollHeading, type PollHeadingProps } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
 import { PollListSkeleton } from '../components/Skeletons'
@@ -291,7 +290,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   // tell; now that their ballots carry their account, they are.
   const topic = session?.user.id ? userTopic(session.user.id) : null
 
-  const { status: liveStatus, reread } = useLiveStream(topic, load)
+  const { reread } = useLiveStream(topic, load)
 
   // Turning a page, or switching between the two lists, is the one change the
   // socket will not bring: the topic does not depend on which page is on
@@ -390,8 +389,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   return (
     <Reveal rise={!kept}>
       <Stack maw={720} mx="auto" gap="md">
-        <LiveConnectionNotice status={liveStatus} />
-
         <Group justify="space-between">
           <Title order={1} size="h2">
             {viewingRemoved ? 'Removed polls' : 'Your polls'}

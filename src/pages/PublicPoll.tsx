@@ -7,8 +7,6 @@ import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
 import { rememberAnswered, rememberConfirmed, useQuestionMarks } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
-import type { LiveStatus } from '../lib/useLiveStream'
-import { LiveConnectionNotice } from '../components/LiveConnectionNotice'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
@@ -51,7 +49,6 @@ import { usePageTitle } from '../lib/pageTitle'
  */
 export function PublicPoll({
   initial,
-  live,
   watch,
   reread,
   prefetched = null,
@@ -62,8 +59,6 @@ export function PublicPoll({
    * poll. Used once and then dropped — see `handoff` below.
    */
   initial: OpenRead | UnreadableRead | null
-  /** Whether the route's subscription is carrying, for the notice below. */
-  live: LiveStatus
   /**
    * Registers what this page does with a signal. The route holds the
    * subscription — see `PollPage` — and calls this back in place of its own
@@ -460,8 +455,6 @@ export function PublicPoll({
 
   return (
     <Stack maw={720} mx="auto" gap="md">
-      <LiveConnectionNotice status={live} />
-
       {/* The same heading the signed-in poll page and the poll list carry,
           for the reason PollHeading exists: one poll should not be two
           different-looking things depending on how you reached it.

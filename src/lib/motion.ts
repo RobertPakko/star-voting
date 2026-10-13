@@ -11,7 +11,7 @@
  * stylesheet has not reached the document yet.
  */
 
-const FALLBACK_MS = { fast: 120, base: 200, slow: 500, travel: 450 } as const
+const FALLBACK_MS = { fast: 120, base: 200, resize: 320, slow: 500, travel: 450 } as const
 const FALLBACK_EASE = 'cubic-bezier(0.2, 0, 0.2, 1)'
 
 /** A duration from the scale, in milliseconds. */

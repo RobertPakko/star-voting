@@ -1,7 +1,12 @@
 import { Stack, Switch, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
-import { useNotificationSettings, type NotificationSettings } from '../lib/notificationSettings'
+import {
+  SWITCH_LABELS,
+  useNotificationSettings,
+  type NotificationSettings,
+} from '../lib/notificationSettings'
+import { ClockSwitch } from './ClockSwitch'
 import { PushSwitch } from './PushSwitch'
 import { SwitchesSkeleton } from './Skeletons'
 
@@ -24,8 +29,20 @@ import { SwitchesSkeleton } from './Skeletons'
  *
  * The switches save as they are flipped, the way a phone's settings do: a
  * Save button under two switches is a button people forget to press.
+ *
+ * `withClock` draws the 24-hour switch under them, which is how the gear menu
+ * holds all three. That switch reads nothing and could be drawn at once, but
+ * the menu is one list of switches and should arrive as one: two rows of
+ * skeleton above a row already settled read as a menu half broken. The
+ * settings page keeps it in a card of its own, so it asks for two.
  */
-export function NotificationSwitches({ userId }: { userId: string }) {
+export function NotificationSwitches({
+  userId,
+  withClock = false,
+}: {
+  userId: string
+  withClock?: boolean
+}) {
   const { settings, setSettings, error } = useNotificationSettings(userId)
 
   if (error) {
@@ -36,7 +53,16 @@ export function NotificationSwitches({ userId }: { userId: string }) {
     )
   }
 
-  if (!settings) return <SwitchesSkeleton />
+  if (!settings)
+    return (
+      <SwitchesSkeleton
+        labels={[
+          SWITCH_LABELS.email,
+          SWITCH_LABELS.push,
+          ...(withClock ? [SWITCH_LABELS.clock] : []),
+        ]}
+      />
+    )
 
   async function saveEmail(email: boolean) {
     if (!settings) return
@@ -56,11 +82,12 @@ export function NotificationSwitches({ userId }: { userId: string }) {
   return (
     <Stack gap="sm">
       <Switch
-        label="Email notifications"
+        label={SWITCH_LABELS.email}
         checked={settings.email}
         onChange={(event) => saveEmail(event.currentTarget.checked)}
       />
       <PushSwitch userId={userId} settings={settings} onChange={setSettings} />
+      {withClock && <ClockSwitch />}
     </Stack>
   )
 }

@@ -7,6 +7,7 @@ import {
   SimpleGrid,
   Skeleton,
   Stack,
+  Switch,
   Title,
   VisuallyHidden,
 } from '@mantine/core'
@@ -16,6 +17,7 @@ import type { PollSchedule } from '../lib/types'
 import { usePageTitle } from '../lib/pageTitle'
 import { PollTitleText } from './PollTitleText'
 import { PollHeading, type PollHeadingProps } from './PollHeading'
+import { SWITCH_LABELS } from '../lib/notificationSettings'
 
 /**
  * The shapes each page draws while it is waiting for its first read.
@@ -949,6 +951,9 @@ export function AboutSkeleton() {
           ))}
         </SimpleGrid>
 
+        {/* The rule with *Watch intro* on it. */}
+        <Divider label={<Skeleton height={26} width={118} radius="sm" />} />
+
         {/* `Tabs.List grow`: three tabs sharing the width, over the rule they
             sit on. */}
         <Stack gap={0}>
@@ -1057,28 +1062,45 @@ export function FormSkeleton() {
 }
 
 /**
- * The two notification switches while the account's settings are read: a
- * switch and its label, twice. Drawn in the header's menu and on the settings
- * page alike, since both hold the same two switches.
+ * The notification switches while the account's settings are read: one shape
+ * per switch, labelled with the words the switch will carry. Drawn in the
+ * header's menu and on the settings page alike, since both hold the same
+ * switches — the menu's three, and the page's two.
  */
-export function SwitchesSkeleton() {
+export function SwitchesSkeleton({ labels }: { labels: readonly string[] }) {
   return (
     <Loading>
-      <SwitchRows />
+      <SwitchRows labels={labels} />
     </Loading>
   )
 }
 
-function SwitchRows() {
+function SwitchRows({ labels }: { labels: readonly string[] }) {
   return (
     <Stack gap="sm">
-      {[128, 124].map((w, i) => (
-        <Group key={i} gap="sm" wrap="nowrap">
-          <Skeleton height={20} width={36} radius="xl" />
-          <Bar kind="line" width={w} />
-        </Group>
+      {labels.map((label) => (
+        <SwitchShape key={label} label={label} />
       ))}
     </Stack>
+  )
+}
+
+/**
+ * One switch, the size of the real one to the pixel. The real one is drawn
+ * underneath, invisible, and the shapes are laid over it: the menu this sits
+ * in is as wide as its widest row, so a bar guessed at the label's width made
+ * the whole popover jump when the settings arrived. Laid over the real switch,
+ * the bar is the label's width because it is the label's box.
+ */
+function SwitchShape({ label }: { label: string }) {
+  return (
+    <Box pos="relative">
+      <Switch label={label} readOnly tabIndex={-1} style={{ visibility: 'hidden' }} />
+      <Group gap="sm" wrap="nowrap" pos="absolute" inset={0}>
+        <Skeleton height={20} width={38} radius="xl" style={{ flex: 'none' }} />
+        <Skeleton height={text.line.bar} radius="sm" style={{ flex: 1 }} />
+      </Group>
+    </Box>
   )
 }
 
@@ -1092,7 +1114,7 @@ export function SettingsSkeleton() {
       <Stack maw={720} mx="auto" gap="md">
         <Bar kind="title" width={160} />
         <Card withBorder>
-          <SwitchRows />
+          <SwitchRows labels={[SWITCH_LABELS.email, SWITCH_LABELS.push]} />
         </Card>
       </Stack>
     </Loading>

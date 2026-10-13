@@ -89,7 +89,7 @@ export function SmoothHeight({
       running?.cancel()
       box.style.overflow = 'clip'
       const move = box.animate([{ height: `${from}px` }, { height: `${next}px` }], {
-        duration: motionMs('base'),
+        duration: motionMs('resize'),
         easing: motionEase(),
       })
       running = move

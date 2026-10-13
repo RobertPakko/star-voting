@@ -13,7 +13,7 @@ import {
 import { useAuth } from './lib/auth'
 import { forgetSampleBallots, isSampleId } from './lib/samplePoll'
 import { questionsCovered, readPollPage } from './lib/pollPage'
-import { pollTopic, useLiveStream, type LiveStatus, type LiveStream } from './lib/useLiveStream'
+import { pollTopic, useLiveStream, type LiveStream } from './lib/useLiveStream'
 import { rememberDestination, takeDestination } from './lib/shareLink'
 import { SignIn } from './pages/SignIn'
 import { Layout } from './components/Layout'
@@ -446,16 +446,13 @@ function PollPage() {
   }, [])
   const hasAhead = useCallback((id: string) => id in aheadNow.current, [])
 
-  // What the question on screen reports up: whether its channel is carrying,
-  // for the notice, and the way into its funnel, which the page's own reads go
-  // through. `reread` keeps one identity for the life of the route, as the
+  // What the question on screen reports up: the way into its funnel, which the
+  // page's own reads go through. `reread` keeps one identity for the life of the route, as the
   // single stream's did, and reaches whichever question is on screen.
-  const [liveStatus, setLiveStatus] = useState<LiveStatus>('connecting')
   const currentReread = useRef<() => void>(() => {})
   const reread = useCallback(() => currentReread.current(), [])
   const report = useCallback((stream: LiveStream) => {
     currentReread.current = stream.reread
-    setLiveStatus(stream.status)
   }, [])
 
   const watched = !pollId
@@ -622,7 +619,7 @@ function PollPage() {
     // is nobody's poll and never was a row. It reads for itself, and a sample
     // id `samplePollData.ts` holds nothing for is a mistyped sample link, which
     // `PublicPoll` draws "poll not found" for.
-    if (sample) return <PublicPoll initial={null} live={liveStatus} watch={watch} reread={reread} />
+    if (sample) return <PublicPoll initial={null} watch={watch} reread={reread} />
 
     // Ahead of whatever was on screen, ballot and all: a vote cast on it now
     // would only be refused, with nothing to say why.
@@ -662,7 +659,6 @@ function PollPage() {
       return (
         <PublicPoll
           initial={exact ? covering : null}
-          live={liveStatus}
           watch={watch}
           reread={reread}
           prefetched={ahead[pollId ?? ''] ?? null}
@@ -671,7 +667,6 @@ function PollPage() {
     return (
       <PollDetail
         initial={exact ? covering : null}
-        live={liveStatus}
         watch={watch}
         reread={reread}
         prefetched={ahead[pollId ?? ''] ?? null}

@@ -22,13 +22,13 @@ body {
   margin: 0;
 }
 
-/* The app's motion, in the four lengths it comes in.
+/* The app's motion, in the five lengths it comes in.
  *
  * Nothing in the app animated at all until these existed, and the risk in
  * adding a dozen small animations at once is that each one gets its own
  * opinion about how long it should take — which reads as a dozen unrelated
  * effects rather than as one app. So durations are picked from here and never
- * written by hand, and the scale is deliberately short: four values, named
+ * written by hand, and the scale is deliberately short: five values, named
  * for what they are for rather than for how long they are.
  *
  * `--motion-ease` is the same curve throughout: quick to leave, gentle to
@@ -42,6 +42,11 @@ body {
   --motion-fast: 120ms;
   /* Something arriving or leaving: a card, a row of a list, a page. */
   --motion-base: 200ms;
+  /* A card changing height because what is in it was swapped for something
+     else: Edit vote, Confirm options, the option editor. Longer than an
+     arrival, because at 200ms a box growing by a few hundred pixels was over
+     before anybody saw it move; see SmoothHeight. */
+  --motion-resize: 320ms;
   /* Data resolving into a shape worth reading, which is only the results
      bars. Long enough to be watched on purpose; see Results.module.css. */
   --motion-slow: 500ms;

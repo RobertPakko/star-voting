@@ -94,10 +94,12 @@ already — `leftSection`, 16px (14px on `xs` and compact buttons), always
 `aria-hidden` since the label is the name. The same act gets the same glyph
 everywhere: a pencil for *Edit*, a plus for adding, the counter-clockwise
 arrow for anything that puts something back (*Restore*, *Keep*, *Add back to
-your list*), a lock for closing and an open lock for reopening. The one
-deliberate exception is **Cancel** in a modal or beside a ballot's Submit: it
-is a way out rather than an act, and giving it an icon puts it on equal
-footing with the button that does something.
+your list*), a lock for closing and an open lock for reopening, a tick for
+anything that keeps what was just done (*Done*, *Confirm options*, *Save
+changes*, *Save times*) — the floppy disk it replaced is a picture of a thing
+nobody saves to any more. **Cancel** in a modal or beside a ballot's Submit carries
+none: it is a way out rather than an act, and giving it an icon puts it on
+equal footing with the button that does something.
 
 The one `<svg>` left in `src/` is the QR code in `ShareQr.tsx`, which is a
 path generated from the share link rather than an icon. `public/favicon.svg`
@@ -908,9 +910,9 @@ Four rules govern the telling half:
   Its own topic hears **`poll_deleted`**, the one event that is not a prompt
   to re-read. It was silent for a long time, for a real reason: a watcher
   answers a signal by re-reading, a re-read of a poll that has gone *fails*,
-  and the page would retry five times and then tell its reader they were
-  offline. So somebody with a poll open went on looking at a ballot for a poll
-  that no longer existed. The answer was a message that is the news rather
+  and the page would retry five times and then give up on it. So somebody
+  with a poll open went on looking at a ballot for a poll that no longer
+  existed. The answer was a message that is the news rather
   than a knock on the door: `useLiveStream` hands `poll_deleted` to the
   page's `onGone` instead of reading, and the poll page says the poll has been
   deleted. A page that passes no `onGone` — the poll list — reads it like any
@@ -971,12 +973,16 @@ A subscription arriving is the exception and reads unconditionally: Realtime
 replays nothing sent while a socket was down, so there is no signal to count
 and nothing a finished read could be said to cover.
 
-**There is no live indicator, and there is one notice.** A page that updates
-itself demonstrates that by updating itself. A page that has *stopped* is the
-one state a reader cannot work out by looking, so
-[`LiveConnectionNotice`](src/components/LiveConnectionNotice.tsx) says it. There is
-deliberately no polling fallback — refreshing is the fallback, which is what
-the notice asks for.
+**There is no live indicator, and no notice either.** A page that updates
+itself demonstrates that by updating itself. There used to be one notice, for
+a page that had *stopped* — *Not receiving live updates*, asking for a
+refresh — on the grounds that it is the one state a reader cannot work out by
+looking. It went because it was wrong far more often than it was right: a
+socket that was merely slow to join tripped it, so it flashed up on an
+ordinary page load and was gone again a second later, and the cost of the
+case it was for is only a page catching up late. `useLiveStream` still
+reports `offline`; nothing draws it. There is deliberately no polling
+fallback — refreshing is the fallback.
 
 **The next question is read before it is opened.** On a poll of several
 questions the route (`PollPage`) holds the question on screen and the ones
@@ -2368,9 +2374,12 @@ score was cleared rather than a tap missed; a bar growing to its length makes
 the comparison the page exists for happen on screen; a page fading in says the
 last one has been left. Anything that would only be pleasant is not in.
 
-The scale is four durations and one curve, declared on `:root` in
+The scale is five durations and one curve, declared on `:root` in
 `src/index.css`: `--motion-fast` (120ms) for feedback on a press,
-`--motion-base` (200ms) for something arriving or leaving, `--motion-slow`
+`--motion-base` (200ms) for something arriving or leaving, `--motion-resize`
+(320ms) for a card changing height around a swap — it was `base` until it
+was noticed that a box growing by a few hundred pixels in 200ms is over
+before anybody sees it move — `--motion-slow`
 (500ms) for the results bars and the runoff's half pie, which are the things
 meant to be watched rather than merely not-jarring, and `--motion-travel`
 (450ms) for something crossing the screen to a place of its own — a poll's
@@ -2991,7 +3000,7 @@ every other link — see [Link previews](#link-previews).
 
 Paste a poll's link into Signal, Messenger or an SMS app and the app draws a
 card under it from the Open Graph tags in [`index.html`](index.html): the
-title, a sentence about STAR, and `logo.png`. Messenger and Facebook fetch the
+title, the intro's byline — *Group decisions, made simple.* — and `logo.png`. Messenger and Facebook fetch the
 page from their own servers; Signal and iMessage fetch it from the sender's
 phone. Either way it is a plain HTTP fetch that runs no JavaScript.
 
@@ -4575,14 +4584,6 @@ the wrong number for the reason at the top of this section. `turnoutLabel` in
 `PollTags` still falls back to the option count when `confirmed_count` arrives
 undefined, which is a browser running ahead of the migration; a confident zero
 would be a lie where the old number is merely old.
-
-The line under the name field went the same way, and for a nearer reason: it
-said *confirm the options once you have nothing more to add*, which is about
-the button rather than about the name, and it sat on a field that is now at the
-top of the card while the button is at the bottom of it. It says the same thing
-in the one place it belongs, beside the button, where the ballot puts the same
-kind of sentence — and it is now said to everybody rather than only to the
-readers a poll happened to ask a name from.
 
 That is also why the **Confirm options** button carries no count of its own,
 only what pressing it will do: [turnout is reported in exactly one

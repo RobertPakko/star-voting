@@ -11,6 +11,17 @@ import { currentSubscription, rememberAccountPush } from './push'
  * account's push setting that a poll page reads to decide whether to point at
  * that menu (`accountPushHere`).
  */
+/**
+ * What the settings switches are called, in one place because each is written
+ * twice: by the switch, and by the skeleton standing in for it, which draws the
+ * real label invisibly so that the two are the same size (see SwitchShape).
+ */
+export const SWITCH_LABELS = {
+  email: 'Email notifications',
+  push: 'Push notifications',
+  clock: '24-hour time',
+} as const
+
 export type NotificationSettings = {
   email: boolean
   push: boolean

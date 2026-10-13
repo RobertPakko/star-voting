@@ -4,6 +4,7 @@ import {
   Anchor,
   Button,
   Card,
+  Divider,
   Group,
   List,
   Paper,
@@ -14,7 +15,13 @@ import {
   ThemeIcon,
   Title,
 } from '@mantine/core'
-import { ArrowRightIcon, ChartBarIcon, PlusIcon, StarIcon } from '@phosphor-icons/react'
+import {
+  ArrowRightIcon,
+  ChartBarIcon,
+  PlayCircleIcon,
+  PlusIcon,
+  StarIcon,
+} from '@phosphor-icons/react'
 import { useAuth } from '../lib/auth'
 import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 import { pollPath } from '../lib/pollId'
@@ -51,6 +58,25 @@ export function About() {
         in to try it yourself.
       </Text>
       <Samples />
+
+      {/* The film, between the samples and the reference: a third way in for
+          somebody who would rather watch than click or read. A rule with a
+          button in it, as the full ranking's is; see FullRanking for why the
+          rule is presentational. */}
+      <Divider
+        role="presentation"
+        label={
+          <Button
+            component={Link}
+            to="/intro"
+            variant="subtle"
+            size="compact-sm"
+            leftSection={<PlayCircleIcon size={14} aria-hidden />}
+          >
+            Watch intro
+          </Button>
+        }
+      />
 
       <Tabs value={tab} onChange={setTab} keepMounted={false}>
         <Tabs.List grow>

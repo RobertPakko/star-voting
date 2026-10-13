@@ -279,7 +279,7 @@ export function CreatorControls({
               Duplicate
             </Button>
             <Button
-              variant="subtle"
+              variant="light"
               color="red"
               onClick={deleteModal.open}
               ml="auto"

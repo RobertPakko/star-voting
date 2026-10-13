@@ -56,13 +56,18 @@ const FIRST_READ_MS = 5000
  * Whether the page in front of the reader is still being told about changes.
  *
  * `connecting` covers both the first moments and any later gap short enough
- * not to be worth mentioning; only `offline` is worth putting on screen.
+ * not to be worth mentioning; `offline` is a socket that has given up.
  */
 export type LiveStatus = 'connecting' | 'live' | 'offline'
 
 /** What a watching page gets back: what to say, and how to ask. */
 export interface LiveStream {
-  /** Whether the page is still being told; see `LiveConnectionNotice`. */
+  /**
+   * Whether the page is still being told. Nothing puts this on screen: a
+   * socket that is slow to join is the common case, and a page that catches up
+   * a little late is no great loss, so a notice about it flashed up for no
+   * reason more often than it helped.
+   */
   status: LiveStatus
   /**
    * Read now, through the same funnel a signal goes through.
@@ -277,8 +282,7 @@ export function useLiveStream(
         return
       } else {
         // Out of patience. The socket may well be fine, but nothing this
-        // page shows can be trusted to be current, which is the thing the
-        // notice actually says. Nothing is chained from here — the next
+        // page shows can be trusted to be current. Nothing is chained from here — the next
         // signal, or the next subscription, is what tries again — because
         // what this page is still owed has not moved and would otherwise
         // read in a tight loop.

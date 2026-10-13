@@ -179,14 +179,18 @@ export function Layout() {
                         no address for an account's push to be sent by (the
                         database picks a poll's devices by email), so that
                         reader gets the link's switch, as signed out. */}
+                    {/* The clock is this browser's, not the account's, so the
+                        same for every reader (see lib/clock.ts) — but it
+                        waits with the account's switches when there are
+                        some, so the three arrive together. */}
                     {account ? (
-                      <NotificationSwitches userId={account.user.id} />
+                      <NotificationSwitches userId={account.user.id} withClock />
                     ) : (
-                      <LinkPushSwitch />
+                      <>
+                        <LinkPushSwitch />
+                        <ClockSwitch />
+                      </>
                     )}
-                    {/* This browser's, not the account's, so the same for
-                        every reader; see lib/clock.ts. */}
-                    <ClockSwitch />
                     <Divider />
                     {/* Pages rather than switches, so they sit under the
                         switches and apart from them. All are links: the menu
@@ -238,19 +242,15 @@ export function Layout() {
                 <SignOutIcon size={18} aria-hidden />
               </ActionIcon>
             ) : (
-              // Without an account the sign-in screen has an address of its
-              // own, since `/` is that reader's poll list; it is told where
-              // they were, to bring them back there.
-              <Button
+              <ActionIcon
                 component={Link}
                 to={anonymous ? '/sign-in' : '/'}
                 state={anonymous ? { from: pathname + search } : undefined}
                 variant="outline"
-                leftSection={<SignInIcon size={16} aria-hidden />}
-                size="sm"
+                size="lg"
               >
-                Sign in
-              </Button>
+                <SignInIcon size={16} aria-hidden />
+              </ActionIcon>
             )}
           </Group>
         </Group>
