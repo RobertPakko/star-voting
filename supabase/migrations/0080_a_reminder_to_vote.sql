@@ -25,13 +25,6 @@ COMMENT ON COLUMN "public"."polls"."reminder_sent_at" IS 'When the creator sent 
 
 COMMENT ON COLUMN "public"."polls"."results_announced_at" IS 'When the poll''s results-ready announcement went out; null while it has not, and cleared when the poll goes back to taking votes, so a second finish is announced again. Set on the group''s first question only.';
 
--- Every poll already announced stays announced, or the next ballot or removal
--- that touched a finished poll would announce it a second time.
-UPDATE "public"."polls" p
-SET "results_announced_at" = n."sent_at"
-FROM "public"."results_notices" n
-WHERE n."poll_id" = p."id" AND p."results_announced_at" IS NULL;
-
 DROP TABLE IF EXISTS "public"."results_notices";
 
 -- ---------------------------------------------------------------------------
