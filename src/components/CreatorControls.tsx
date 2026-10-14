@@ -385,9 +385,8 @@ export function CreatorControls({
         >
           <Stack gap="md">
             <Text size="sm">
-              Everyone invited who hasn't{' '}
-              {questions.length > 1 ? 'answered every question' : 'voted yet'} will get an email and
-              a notification reminding them to vote.
+              Everyone invited who hasn't voted yet and hasn't disabled notifications will get a
+              notification reminding them to vote.
             </Text>
             <Text size="sm" c="dimmed">
               You can only send one reminder for this poll.

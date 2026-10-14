@@ -87,11 +87,11 @@ begin
   perform send_poll_email(
     p_poll.id,
     p_email,
-    'A reminder to vote in your poll',
-    'Your vote is still needed',
-    'Voting is still open for <strong>'
-      || email_escape(coalesce(p_poll.title, 'a poll')) || '</strong>, and your ballot '
-      || 'hasn''t been cast yet. Sign in with this email address to vote.');
+    'Poll reminder',
+    'Don''t forget to vote!',
+    'You haven''t voted yet in <strong>'
+      || email_escape(coalesce(p_poll.title, 'a poll')) || '</strong>. Sign in with this '
+      || 'email address to vote.');
 end;
 $$;
 
@@ -116,7 +116,8 @@ CREATE OR REPLACE FUNCTION "public"."push_message"("p_poll" "public"."polls", "p
       when 'invite_options' then 'You''ve been invited to add options to this poll.'
       when 'invite_vote' then 'You''ve been invited to vote in this poll.'
       when 'opened' then 'The options are settled and voting is now open.'
-      when 'reminder' then 'A reminder: your vote is still needed.'
+      when 'reminder' then 'Reminder: you haven''t voted in '
+        || coalesce(nullif(trim(p_poll.title), ''), 'this poll')
       when 'results' then 'The results are ready.'
     end,
     -- Relative to the app's own address, which the service worker resolves
