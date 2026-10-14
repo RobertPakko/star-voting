@@ -63,12 +63,14 @@ begin
   -- ------------------------------------------------------------------
   perform tests.forget_signals();
   perform send_poll_reminder(v_questions[2]);
-  perform tests.assert_eq('it is filed against the first question',
-    (select count(*)::int from poll_reminders where poll_id = v_questions[1]), 1);
+  perform tests.assert_eq('it is kept on the first question',
+    (select reminder_sent_at is not null from polls where id = v_questions[1]), true);
+  perform tests.assert_null('and on no other',
+    (select reminder_sent_at from polls where id = v_questions[2]));
   perform tests.assert_eq('and every question says it has been sent',
     (select reminded_at from poll_status(v_questions[1])) is not null
       and (select reminded_at from poll_status(v_questions[2])) is not null, true);
-  perform tests.assert_eq('and it changes nothing anybody is watching',
+  perform tests.assert_eq('and it wakes nobody watching the poll',
     tests.signalled(), array[]::text[]);
 
   perform tests.assert_raises('a second is refused',
@@ -147,8 +149,6 @@ begin
     has_function_privilege('authenticated', 'public.send_poll_reminder(uuid)', 'execute'), true);
   perform tests.assert_eq('the audience is internal',
     has_function_privilege('authenticated', 'public.poll_reminder_audience(polls, text)', 'execute'), false);
-  perform tests.assert_eq('nobody reads the table directly',
-    has_table_privilege('authenticated', 'public.poll_reminders', 'select'), false);
   perform tests.assert_eq('poll_status is still an account''s to ask',
     has_function_privilege('authenticated', 'public.poll_status(uuid)', 'execute'), true);
   perform tests.assert_eq('and not a link''s',

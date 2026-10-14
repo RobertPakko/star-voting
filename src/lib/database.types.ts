@@ -169,6 +169,8 @@ export type Database = {
           options_finalized_at: string | null
           question_position: number | null
           question_title: string | null
+          reminder_sent_at: string | null
+          results_announced_at: string | null
           reopened_after_reveal: boolean
           schedule: Json | null
           show_ballots: boolean
@@ -193,6 +195,8 @@ export type Database = {
           options_finalized_at?: string | null
           question_position?: number | null
           question_title?: string | null
+          reminder_sent_at?: string | null
+          results_announced_at?: string | null
           reopened_after_reveal?: boolean
           schedule?: Json | null
           show_ballots?: boolean
@@ -217,6 +221,8 @@ export type Database = {
           options_finalized_at?: string | null
           question_position?: number | null
           question_title?: string | null
+          reminder_sent_at?: string | null
+          results_announced_at?: string | null
           reopened_after_reveal?: boolean
           schedule?: Json | null
           show_ballots?: boolean
@@ -247,52 +253,6 @@ export type Database = {
             foreignKeyName: 'removed_polls_poll_id_fkey'
             columns: ['poll_id']
             isOneToOne: false
-            referencedRelation: 'polls'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      poll_reminders: {
-        Row: {
-          poll_id: string
-          sent_at: string
-        }
-        Insert: {
-          poll_id: string
-          sent_at?: string
-        }
-        Update: {
-          poll_id?: string
-          sent_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'poll_reminders_poll_id_fkey'
-            columns: ['poll_id']
-            isOneToOne: true
-            referencedRelation: 'polls'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      results_notices: {
-        Row: {
-          poll_id: string
-          sent_at: string
-        }
-        Insert: {
-          poll_id: string
-          sent_at?: string
-        }
-        Update: {
-          poll_id?: string
-          sent_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'results_notices_poll_id_fkey'
-            columns: ['poll_id']
-            isOneToOne: true
             referencedRelation: 'polls'
             referencedColumns: ['id']
           },

@@ -1,30 +1,66 @@
--- A reminder to vote.
+-- A reminder to vote, and the poll keeping its own notices.
 --
 -- An invite poll's creator can nudge the people it is still waiting on, once:
 -- every invitee who has not voted in every question is emailed and pushed,
 -- under their own notification settings, unless they have removed the poll
--- from their list. The once is a row, for the reason results_notices is one:
--- its primary key is the whole rule, and a column on `polls` would widen every
--- `select *` and wake every watcher of the poll for bookkeeping. See "Reminding
--- the voters a poll is waiting on" in AGENTS.md.
+-- from their list. See "Reminding the voters a poll is waiting on" in
+-- AGENTS.md.
+--
+-- The once is a column on the poll, `reminder_sent_at`. And the results-ready
+-- announcement, which kept its once in a table of its own (results_notices),
+-- moves to a column beside it, `results_announced_at`, so the two notices a
+-- poll keeps track of are kept the same way. A column does everything the
+-- table's primary key did: setting it only where it is still null is a claim
+-- two transactions cannot both win, since the second waits on the first's row
+-- lock and then finds the column set.
 
 -- ---------------------------------------------------------------------------
--- The once-only rule
+-- The two columns
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS "public"."poll_reminders" (
-    "poll_id" "uuid" NOT NULL,
-    "sent_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "poll_reminders_pkey" PRIMARY KEY ("poll_id"),
-    CONSTRAINT "poll_reminders_poll_id_fkey" FOREIGN KEY ("poll_id")
-      REFERENCES "public"."polls"("id") ON DELETE CASCADE
-);
+ALTER TABLE "public"."polls" ADD COLUMN IF NOT EXISTS "reminder_sent_at" timestamp with time zone;
+ALTER TABLE "public"."polls" ADD COLUMN IF NOT EXISTS "results_announced_at" timestamp with time zone;
 
-ALTER TABLE "public"."poll_reminders" OWNER TO "postgres";
+COMMENT ON COLUMN "public"."polls"."reminder_sent_at" IS 'When the creator sent the poll''s one reminder to vote; null until then. Set on the group''s first question only, and never cleared -- reopening does not give the reminder back.';
 
-COMMENT ON TABLE "public"."poll_reminders" IS 'One row per poll whose creator has sent its reminder to vote, keyed on the group''s first question. Never deleted while the poll stands -- reopening does not give the reminder back. Internal bookkeeping: no grants, read through poll_status.';
+COMMENT ON COLUMN "public"."polls"."results_announced_at" IS 'When the poll''s results-ready announcement went out; null while it has not, and cleared when the poll goes back to taking votes, so a second finish is announced again. Set on the group''s first question only.';
 
-ALTER TABLE "public"."poll_reminders" ENABLE ROW LEVEL SECURITY;
+-- Every poll already announced stays announced, or the next ballot or removal
+-- that touched a finished poll would announce it a second time.
+UPDATE "public"."polls" p
+SET "results_announced_at" = n."sent_at"
+FROM "public"."results_notices" n
+WHERE n."poll_id" = p."id" AND p."results_announced_at" IS NULL;
+
+DROP TABLE IF EXISTS "public"."results_notices";
+
+-- ---------------------------------------------------------------------------
+-- Bookkeeping says nothing to anybody watching
+-- ---------------------------------------------------------------------------
+
+-- Every update to a poll row tells every page watching it to re-read. The
+-- winner columns were already exempt, because they only ever change inside a
+-- transaction that has announced its change some other way. The two new
+-- columns are exempt for the same reason or a better one: the results notice
+-- is written inside the close or the ballot that finished the poll, and the
+-- reminder changes nothing anybody but the creator draws -- whose own press
+-- re-reads the page anyway.
+CREATE OR REPLACE FUNCTION "public"."broadcast_poll_updated"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_quiet text[] := array['winner_name', 'winner_settled_at',
+                          'results_announced_at', 'reminder_sent_at'];
+begin
+  if to_jsonb(NEW) - v_quiet is not distinct from to_jsonb(OLD) - v_quiet then
+    return null;
+  end if;
+
+  perform broadcast_poll_change(NEW.id);
+  return null;
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Who is reminded
@@ -182,9 +218,11 @@ begin
     raise exception 'Everyone invited has already voted';
   end if;
 
-  -- The once-only rule, and all of it.
-  insert into poll_reminders (poll_id) values (v_first.id)
-  on conflict (poll_id) do nothing;
+  -- The once-only rule, and all of it: only a poll with no reminder on it
+  -- takes one, and a second press racing the first waits for it and finds
+  -- the column set.
+  update polls set reminder_sent_at = now()
+  where id = v_first.id and reminder_sent_at is null;
 
   if not found then
     raise exception 'A reminder has already been sent for this poll';
@@ -275,7 +313,7 @@ begin
     -- When the creator sent the poll's one reminder, on any question of it.
     -- Readable by its invitees too, which tells them nothing they were not
     -- emailed.
-    (select r.sent_at from poll_reminders r where r.poll_id = poll_list_row(p_poll_id));
+    (select q.reminder_sent_at from polls q where q.id = poll_list_row(p_poll_id));
 end;
 $$;
 
@@ -283,3 +321,78 @@ ALTER FUNCTION "public"."poll_status"("p_poll_id" "uuid") OWNER TO "postgres";
 
 REVOKE ALL ON FUNCTION "public"."poll_status"("p_poll_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."poll_status"("p_poll_id" "uuid") TO "authenticated";
+
+-- ---------------------------------------------------------------------------
+-- The results announcement, kept on the poll
+-- ---------------------------------------------------------------------------
+
+-- The baseline's body with the table swapped for the column: a delete became
+-- clearing it, and the insert that claimed the announcement became setting it
+-- where it is null. Both writes are conditional, so the many calls that change
+-- nothing -- every ballot on a poll still taking votes -- write nothing.
+CREATE OR REPLACE FUNCTION "public"."notify_results_ready"("p_poll_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+  v_first polls;
+  v_email text;
+  -- The last ballot, the removal that left nobody to wait for, or the Close
+  -- button: whichever of them crossed the line, it is this transaction and
+  -- this is who is in it.
+  v_actor text := lower(auth.jwt() ->> 'email');
+begin
+  select * into v_poll from polls where id = p_poll_id;
+
+  -- A poll on its way out -- the nightly purge, or the creator's own Delete
+  -- button -- has nobody left to tell.
+  if not found then
+    return;
+  end if;
+
+  -- poll_group_members orders by question_position with nulls first, so this
+  -- is question 1 of a group and the poll itself when it has no group. It is
+  -- the row the invitation names, so the two emails about one poll point at
+  -- the same page.
+  select q.* into v_first from poll_group_members(v_poll) q limit 1;
+
+  if not poll_results_ready(v_first) then
+    -- Back to taking votes. A poll that finishes again is a second result,
+    -- and the people in it are told about it again.
+    update polls set results_announced_at = null
+    where id = v_first.id and results_announced_at is not null;
+
+    -- A poll closed with nobody having voted is finished with nothing to
+    -- announce, so its watches will never be answered. Gone now rather than
+    -- left on the poll until the purge.
+    if v_first.closed_at is not null then
+      delete from poll_push_watches where poll_id = v_first.id;
+    end if;
+    return;
+  end if;
+
+  -- The once-only rule, and all of it: two ballots arriving together both run
+  -- this, the second waits on the first's row lock, and finds the column set.
+  update polls set results_announced_at = now()
+  where id = v_first.id and results_announced_at is null;
+
+  if not found then
+    return;
+  end if;
+
+  -- One request per address rather than one request with every address in it;
+  -- see notify_poll_opened.
+  for v_email in select * from poll_results_audience(v_first, v_actor) loop
+    perform send_results_ready_email(v_first, v_email);
+  end loop;
+
+  perform push_poll(v_first, 'results',
+    array(select * from poll_results_audience(v_first, v_actor)), true);
+
+  -- A watch has done its job once the results are out. Keeping it would
+  -- leave a record on the poll, for the rest of its six months, of a browser
+  -- that answered it.
+  delete from poll_push_watches where poll_id = v_first.id;
+end;
+$$;

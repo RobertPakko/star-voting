@@ -2164,8 +2164,9 @@ commits.
 on any update to a poll row, so the write `settle_winner` makes was a second
 message and a second read of the same poll by every watcher, on top of the one
 the close had already sent — the failure `16_live_update_signals` exists to
-catch. It stays quiet when the winner columns are the only thing that changed,
-and nothing is lost by that: the settle only ever happens inside a transaction
+catch. It stays quiet when the winner columns are the only thing that changed —
+and since 0080 when `results_announced_at` or `reminder_sent_at` are, for the
+same reason or a better one — and nothing is lost by that: the settle only ever happens inside a transaction
 that has already announced the change which produced the result, and both
 writes commit together, so the re-read that message triggers sees the winner.
 
@@ -3049,7 +3050,7 @@ matching email goes to, decided by the same `poll_email_audience` and
 `poll_results_audience`, from inside the same `notify_poll_opened`,
 `notify_results_ready` and invitation trigger — so *nobody is told what they
 just did* holds on both channels by construction, and the once-only claim on
-`results_notices` covers both. The suite asks `poll_push_targets` who would be
+`polls.results_announced_at` covers both. The suite asks `poll_push_targets` who would be
 pushed, exactly as case 23 asks the audience functions who would be emailed.
 
 **Two doors, one subscription per browser** — and a third way into a poll's
@@ -4991,7 +4992,7 @@ that column were written to reconcile rather than to assume.
   any that no longer has one. A poll that finishes a second time is elected
   again, from the votes it has then. See [The winner is kept with the
   poll](#the-winner-is-kept-with-the-poll).
-- `notify_results_ready` drops the poll's `results_notices` row, so the second
+- `notify_results_ready` clears the poll's `results_announced_at`, so the second
   finish is announced like the first. See [Telling people the results are
   ready](#telling-people-the-results-are-ready).
 - `broadcast_poll_updated` wakes every page holding the poll, which re-reads
@@ -5666,19 +5667,24 @@ noticed exactly once.
   together, so five questions are one result and one email, pointing at
   question 1 — the same rule and the same landing place as the invitation.
 
-- **The claim is a row, not a column.** `results_notices` holds one row per
-  poll that has been announced, and its primary key *is* the once-only rule:
-  two ballots landing in the same instant both try to insert it, one wins, one
-  email goes. A column on `polls` would have done the same job and would also
-  have widened every `select *` the app makes and woken every watcher of the
-  poll a second time, for bookkeeping nothing on screen reads. The table has no
-  grants and RLS on with no policies; only the `SECURITY DEFINER` functions
-  that maintain it can see it.
+- **The claim is a column, set only where it is null.**
+  `polls.results_announced_at`, on the group's first question, *is* the
+  once-only rule: two ballots landing in the same instant both run `update
+  polls set results_announced_at = now() where … and results_announced_at is
+  null`, the second waits on the first's row lock and then finds it set, and
+  one email goes. It was a table of its own, `results_notices`, until 0080,
+  on the grounds that a column would widen every `select *` and wake every
+  watcher of the poll a second time; the first is a timestamp's worth, and
+  the second is answered the way it already was for the winner columns —
+  `broadcast_poll_updated` stays quiet when only bookkeeping columns moved
+  (see [The winner is kept with the poll](#the-winner-is-kept-with-the-poll)).
+  The reminder to vote keeps its once the same way, and one shape for both is
+  easier to follow than a column for one and a table for the other.
 
 - **Reopening takes the notice back.** A poll put back to taking votes by
   `reopen_poll` can finish again with a different answer; that is a second
   result, and the people in it are told about it. So
-  anything that puts a poll back to taking votes drops its notice row, and
+  anything that puts a poll back to taking votes clears the column, and
   being announced is a property of the poll *being* finished rather than of it
   having once been finished.
 
@@ -5732,13 +5738,13 @@ noticed exactly once.
 triggers — a ballot arriving, a ballot leaving, an invitee leaving, and
 `closed_at` moving — and idempotent by construction, so none of them has to
 know what the others have done. It re-derives whether the poll has a result and
-reconciles the notice row with that answer; called on a poll nothing has
+reconciles `results_announced_at` with that answer; called on a poll nothing has
 changed about, it does nothing. Nothing is needed for an invitee *arriving*,
 because `guard_invitee_changes` already refuses to widen the list of a poll
 whose results are out.
 
 The claim comes before the send, so a mailer that is not configured leaves a
-notice row with no email behind it — the same bargain the invitation makes.
+poll marked announced with no email behind it — the same bargain the invitation makes.
 Releasing the claim on a failed send was the alternative, and it would turn
 every transient Resend outage into a duplicate on the next vote.
 
@@ -5821,7 +5827,7 @@ is the four letters and the two rules that decide them.
   invitees and not to them. Nothing special-cases it: it is the same address
   rule, applied to the same session.
 
-- **Opening needs no notice row, and finishing does.** `options_finalized_at`
+- **Opening needs no notice, and finishing does.** `options_finalized_at`
   is written once and nothing puts it back — reopening a poll reopens voting,
   not the option list — so the two functions that open a poll are the two
   openings there are, and each writes once. `open_options_when_all_confirmed`
@@ -5863,7 +5869,7 @@ is the four letters and the two rules that decide them.
   invitation trigger fires for question 1 alone, which is what makes them one
   letter. The other two are addressed about question 1 as well and take the
   group's audience once: opening is a single statement over every question in
-  the group, and finishing is one notice row filed against the first. Nothing
+  the group, and finishing is one notice, kept on the first. Nothing
   in a group announces itself per question.
 
 - **An open poll writes only to the accounts that answered it**, and needs no
@@ -5901,14 +5907,14 @@ is all of it, and `42_a_reminder_to_vote` covers everything but the send.
 
 - **Once per poll, ever.** A button that writes to other people's inboxes on
   demand is a way to pester them, so it has a ceiling, and the ceiling is the
-  smallest one that is still useful. The rule is a row in `poll_reminders`,
-  whose primary key is the whole of it — the shape `results_notices` already
-  has, for the same reasons: a column on `polls` would widen every `select *`
-  and, through `broadcast_poll_updated`, wake every watcher of the poll for
-  bookkeeping nobody but the creator reads. It is filed against the group's
-  first question, so a poll of five questions has one reminder, whichever
-  question it was pressed on, and **reopening does not give it back** — the
-  row stands until the poll is deleted. A second press is refused in words.
+  smallest one that is still useful. The rule is `polls.reminder_sent_at`,
+  set only where it is null — the same claim `results_announced_at` makes
+  (see [Telling people the results are
+  ready](#telling-people-the-results-are-ready)) — and `broadcast_poll_updated`
+  ignores it, since nothing changed for anybody but the creator. It is kept on
+  the group's first question, so a poll of five questions has one reminder,
+  whichever question it was pressed on, and **reopening does not give it
+  back** — the column is never cleared. A second press is refused in words.
 - **Only an invite poll that is taking votes.** An open poll has nobody's
   address to remind; a poll still collecting its options has nothing to vote
   on (its own stage has *Confirm options* for that, and no reminder); and a
