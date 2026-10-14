@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, Group, Modal, Stack, Text, Title, Tooltip } from '@mantine/core'
 import {
+  BellRingingIcon,
   CopyIcon,
   LockIcon,
   LockOpenIcon,
@@ -39,6 +40,13 @@ import { shortPollId } from '../lib/pollId'
  * while scoring options. Keeping it in this block also means it is never
  * withheld; the creator has to be able to send the link out before anyone,
  * themselves included, has voted.
+ *
+ * **Send reminder** is the one act here aimed at people rather than at the
+ * poll: it emails and pushes every invitee still owed a vote, and it can be
+ * done once per poll, ever, so a creator cannot turn it into a way to pester
+ * anybody. After that the button stays where it was, disabled and saying it
+ * has been sent, rather than vanishing and leaving the creator to wonder
+ * whether it ever existed. See `send_poll_reminder`.
  *
  * Closing exists so a single person who never votes can't freeze the
  * results permanently and for open polls it's the only way results are
@@ -89,6 +97,26 @@ export function CreatorControls({
   const [reopenOpened, reopenModal] = useDisclosure(false)
   const [openOpened, openModal] = useDisclosure(false)
   const [lateEditOpened, lateEditModal] = useDisclosure(false)
+  const [remindOpened, remindModal] = useDisclosure(false)
+  // Set on a sent reminder so the button says so at once, rather than after
+  // the re-read that `onChange` starts has landed.
+  const [remindedHere, setRemindedHere] = useState(false)
+
+  async function sendReminder() {
+    setError(null)
+    setBusy(true)
+    const { error: rpcError } = await supabase.rpc('send_poll_reminder', { p_poll_id: pollId })
+    setBusy(false)
+    remindModal.close()
+
+    if (rpcError) {
+      setError(rpcError.message)
+      return
+    }
+    setRemindedHere(true)
+    notifications.show({ message: 'Reminder sent', color: 'green' })
+    onChange()
+  }
 
   async function reopenPoll() {
     setError(null)
@@ -191,6 +219,19 @@ export function CreatorControls({
   // Open polls have no invite list, so invited_count is 0 and there is
   // nobody we can say we're cutting off.
   const pending = Math.max(0, status.invited_count - status.voted_count)
+  // A reminder is for an invite poll that is taking votes: there is nobody to
+  // remind on an open poll, nothing to vote on while the options are being
+  // collected, and no vote left to cast once the poll is closed or its
+  // results are out -- which on an invite poll is also what full turnout
+  // means. The database asks the same questions and refuses the rest,
+  // including a poll waiting on nobody but its own creator.
+  const canRemind =
+    poll.mode === 'invite' &&
+    status.invited_count > 0 &&
+    !status.soliciting &&
+    !status.is_closed &&
+    !status.results_available
+  const reminded = remindedHere || Boolean(status.reminded_at)
 
   return (
     <Stack gap={2}>
@@ -260,6 +301,22 @@ export function CreatorControls({
                 Reopen poll
               </Button>
             )}
+            {canRemind && (
+              <Tooltip label="You can send one reminder per poll" disabled={!reminded} withArrow>
+                {/* As above: a disabled button needs something around it to
+                    say why. */}
+                <span>
+                  <Button
+                    variant="light"
+                    disabled={reminded}
+                    onClick={remindModal.open}
+                    leftSection={<BellRingingIcon size={16} aria-hidden />}
+                  >
+                    {reminded ? 'Reminder sent' : 'Send reminder'}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
             {showEditOptions && (
               <Button
                 variant="light"
@@ -315,6 +372,36 @@ export function CreatorControls({
                 }}
               >
                 Edit options
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+
+        <Modal
+          opened={remindOpened}
+          onClose={remindModal.close}
+          title={<Text fw={600}>Send a reminder?</Text>}
+          centered
+        >
+          <Stack gap="md">
+            <Text size="sm">
+              Everyone invited who hasn't{' '}
+              {questions.length > 1 ? 'answered every question' : 'voted yet'} will get an email and
+              a notification reminding them to vote.
+            </Text>
+            <Text size="sm" c="dimmed">
+              You can only send one reminder for this poll.
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={remindModal.close}>
+                Cancel
+              </Button>
+              <Button
+                onClick={sendReminder}
+                loading={busy}
+                leftSection={<BellRingingIcon size={16} aria-hidden />}
+              >
+                Send reminder
               </Button>
             </Group>
           </Stack>

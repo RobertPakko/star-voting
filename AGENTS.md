@@ -222,7 +222,7 @@ npm run dev
 
 ### 4. Emails
 
-The app sends four, and every one of them goes through
+The app sends five, and every one of them goes through
 [Resend](https://resend.com) from inside Postgres, calling Resend's HTTP API
 directly with `pg_net`:
 
@@ -235,7 +235,10 @@ directly with `pg_net`:
   collecting, from `notify_poll_opened`;
 - **the results**, when a poll finishes, from `notify_results_ready` — see
   [Telling people the results are
-  ready](#telling-people-the-results-are-ready).
+  ready](#telling-people-the-results-are-ready);
+- **a reminder to vote**, when an invite poll's creator presses *Send
+  reminder*, from `send_poll_reminder` — see [Reminding the voters a poll is
+  waiting on](#reminding-the-voters-a-poll-is-waiting-on).
 
 The last two go to an open poll's signed-in voters as well as to an invite
 poll's list — see [Open polls you answered while signed
@@ -773,6 +776,10 @@ announcement except the sending — whether a poll has a result at all, who
 would be told and who is deliberately not, and that the notice is made exactly
 once, forgotten when the poll goes back to taking votes and made again when it
 finishes a second time;
+and the same half of the reminder to vote — who is still owed a vote, who of
+them would be reminded, that it is the creator's alone, once per poll through
+a reopen, refused where there is no vote to remind anybody of, and sendable
+whatever anybody removed;
 and the same half of the other emails — which invitation an address is owed at
 each stage a poll goes through, that the creator is owed none, and who hears
 that a poll opened by hand as against one that opened itself, minus in each
@@ -5193,6 +5200,10 @@ they do to the *poll*:
   invite poll everyone has answered is revealed by its turnout rather than by
   its close and reopening one would change nothing on screen. See [Reopening a
   closed poll](#reopening-a-closed-poll).
+- **Send reminder** — on an invite poll that is taking votes: emails and
+  pushes everyone still owed a vote, once per poll, and then stays on the
+  block disabled, reading *Reminder sent*. See [Reminding the voters a poll is
+  waiting on](#reminding-the-voters-a-poll-is-waiting-on).
 - **Duplicate** — opens the create form prefilled from this poll (options,
   invitees, all four settings). Nothing is created until submit, so the copy
   can be edited first, and the original is untouched.
@@ -5208,7 +5219,7 @@ dropped from the database too, in the same migration: a granted RPC that
 empties a poll is not a thing to leave lying behind a button that no longer
 exists.
 
-Open, close, reopen and delete all confirm in a modal first, and **the modal
+Open, close, reopen, remind and delete all confirm in a modal first, and **the modal
 is where what the button will do is spelled out** — none of them carries a
 paragraph of explanation out beside it. A block of six buttons each with its
 own sentence is a block nobody reads, and the sentence that matters is the one
@@ -5876,6 +5887,54 @@ a poll that has opened not opening again. The sending is untestable here for
 the reason it always was — there is no `pg_net` in the throwaway
 database — so the suite can say
 who *would* have been written to and never that anybody was.
+
+### Reminding the voters a poll is waiting on
+
+An invite poll waits on its invitees, and the only thing its creator could do
+about one who had not voted was write to them by hand — from outside the app,
+to an address the app already had. **Send reminder** in *Manage poll* does it
+from inside: every invitee still owed a vote is emailed and pushed, on the same
+letterhead and through the same `send_poll_email` and `push_poll` as every
+other moment, under their own two settings.
+[`0080_a_reminder_to_vote.sql`](supabase/migrations/0080_a_reminder_to_vote.sql)
+is all of it, and `42_a_reminder_to_vote` covers everything but the send.
+
+- **Once per poll, ever.** A button that writes to other people's inboxes on
+  demand is a way to pester them, so it has a ceiling, and the ceiling is the
+  smallest one that is still useful. The rule is a row in `poll_reminders`,
+  whose primary key is the whole of it — the shape `results_notices` already
+  has, for the same reasons: a column on `polls` would widen every `select *`
+  and, through `broadcast_poll_updated`, wake every watcher of the poll for
+  bookkeeping nobody but the creator reads. It is filed against the group's
+  first question, so a poll of five questions has one reminder, whichever
+  question it was pressed on, and **reopening does not give it back** — the
+  row stands until the poll is deleted. A second press is refused in words.
+- **Only an invite poll that is taking votes.** An open poll has nobody's
+  address to remind; a poll still collecting its options has nothing to vote
+  on (its own stage has *Confirm options* for that, and no reminder); and a
+  poll that is closed or whose results are out has no vote left to cast. Nor
+  one waiting on nobody but its own creator, who would be reminding
+  themselves.
+- **Still owed a vote means any question.** Every question of a group carries
+  the whole invite list and a ballot is per question, so an invitee halfway
+  through a poll is reminded — `poll_outstanding_invitees`.
+- **Nobody who removed the poll is reminded**, and that is not a rule of its
+  own: `poll_reminder_audience` is `poll_email_audience` narrowed to the
+  outstanding, so the removal rule and *nobody is told what they just did* are
+  stated where they always were. The creator is left out too — they are the
+  one sending it.
+- **Whether it can be sent never depends on removals.** The check that there
+  is somebody to remind runs before removals are taken away, so a creator
+  cannot learn that everybody left by watching the button refuse — a reminder
+  that reaches nobody still spends the poll's one reminder. Nor does it say
+  how many it reached, which would be the same leak as a number.
+- **The page learns it from `poll_status`**, as `reminded_at`. Adding a field
+  to a `RETURNS TABLE` is a new return type, so 0080 drops and recreates the
+  function with its grant restated; an older browser strips the field and a
+  newer one against an older database reads it as not sent, which the
+  database refuses anyway. The press itself sets the button to *Reminder sent*
+  at once rather than waiting on the re-read, and sends no live signal:
+  nothing anybody else is looking at changed.
 
 ### Removing a poll from your list
 

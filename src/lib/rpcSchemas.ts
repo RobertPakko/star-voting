@@ -136,6 +136,7 @@ export const pollStatusSchema = z.object({
   confirmed_count: z.number().optional(),
   winner_name: z.string().nullable().optional(),
   winner_settled: z.boolean().optional(),
+  reminded_at: z.string().nullable().optional(),
 }) satisfies z.ZodType<PollStatus>
 
 export const openPollViewSchema = z.object({

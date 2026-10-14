@@ -254,6 +254,12 @@ export interface PollStatus {
    */
   winner_name?: string | null
   winner_settled?: boolean
+  /**
+   * When the creator sent the poll's one reminder to vote, on any question of
+   * it; null until they do. Optional for the reason `expires_at` is, and
+   * undefined is drawn as not sent — the database refuses a second anyway.
+   */
+  reminded_at?: string | null
 }
 
 /**
