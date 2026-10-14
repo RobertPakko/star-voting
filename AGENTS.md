@@ -776,6 +776,10 @@ announcement except the sending — whether a poll has a result at all, who
 would be told and who is deliberately not, and that the notice is made exactly
 once, forgotten when the poll goes back to taking votes and made again when it
 finishes a second time;
+that every function that writes to a poll on the strength of its state takes
+the poll's lock before it reads anything, which is what stops two writers
+deciding on pictures missing each other's work (the races themselves need two
+sessions, and are not in the suite);
 and the same half of the reminder to vote — who is still owed a vote, who of
 them would be reminded, that it is the creator's alone, once per poll through
 a reopen, refused where there is no vote to remind anybody of, and sendable
@@ -5755,6 +5759,55 @@ voter whose ballot ended it, in whatever case their address arrives — that the
 notice appears exactly once when the poll crosses the line, that reopening
 takes it back and a second finish announces again, and that a group is one
 notice filed against question 1.
+
+### Writers take turns
+
+Every function that reads a poll's state and then writes on the strength of it
+takes a lock on the poll first — `lock_poll`, on the group's first question, so
+a poll of several questions is one queue — and holds it to the commit.
+[`0081_one_writer_at_a_time.sql`](supabase/migrations/0081_one_writer_at_a_time.sql)
+put it at the top of every such function, and
+`43_one_writer_at_a_time` fails if one is added without it.
+
+**Without it, two transactions could each decide on a picture missing the
+other's write.** Under READ COMMITTED a statement sees only what had committed
+when it began, and every one of these was reproduced with two real sessions
+before the lock went in:
+
+- the last two invitees voting together each saw one vote still to come, so
+  neither settled the winner or sent the results — a fully voted poll reading
+  *Results ready* with nobody told;
+- the last two confirmations each saw one still to come, so the poll never
+  opened itself;
+- a vote beside **Close** went into a poll that had just closed, after the
+  winner was settled without it — and `settle_winner` never revisits a settled
+  question, so the badge named one option and the tally another for good;
+- a vote beside an option being added missed the zero score
+  `fill_scores_for_new_option` writes for every ballot it can see, leaving a
+  ballot short an option and impossible to revise.
+
+The same reasoning covers the ones not staged: a suggestion beside **Open
+poll**, a revision beside the vote that reveals the results, an invitee taken
+off the list while their ballot goes in.
+
+**What the lock is.** `FOR NO KEY UPDATE`, taken as the function's first
+statement, before it reads anything — a lock taken after a read is a lock on a
+stale picture, which is the thing the case checks. The second writer waits for
+the first to commit, and its statements after the lock see what the first did,
+so it either carries on correctly or is refused in the words it would always
+have used (*This poll has been closed…*, *Must submit a score for every
+option*). `NO KEY` rather than a plain `FOR UPDATE` so it does not also block
+the foreign-key checks of rows being inserted under the poll; it does conflict
+with the `UPDATE`s `close_poll` and `reopen_poll` make, which is what puts them
+in the queue too. **Reads take nothing and wait for nothing**: no page, list
+or live tick is ever held up by it, only a second write to the same poll, and
+that for as long as the first takes to commit.
+
+**The two tables the browser writes directly** — invitees added or removed,
+options deleted — are queued by the guard triggers already standing in front
+of them, and the three reconcilers (`settle_winner`, `notify_results_ready`,
+`open_options_when_all_confirmed`) lock as well, so a writer added later
+without the lock still cannot have them decide on a stale picture.
 
 ### What a poll writes to people
 
