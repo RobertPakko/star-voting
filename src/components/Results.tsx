@@ -238,8 +238,16 @@ export function Results({
                 <Text fw={700} size="lg">
                   Winner: {nameById.get(shown.winner_id)}
                   {/* A time poll's length: every option is a window of it, and
-                      nothing else on the results says how long that is. */}
-                  {winnerEvent && ` (${describeLength(winnerEvent.minutes)})`}
+                      nothing else on the results says how long that is. Kept
+                      on one line, so "(4" and "hours)" are never split. */}
+                  {winnerEvent && (
+                    <>
+                      {' '}
+                      <span style={{ whiteSpace: 'nowrap' }}>
+                        ({describeLength(winnerEvent.minutes)})
+                      </span>
+                    </>
+                  )}
                 </Text>
                 {winnerEvent && <AddToCalendar event={winnerEvent} />}
               </Group>

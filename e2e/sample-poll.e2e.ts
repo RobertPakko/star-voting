@@ -143,7 +143,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
     // Taking everybody out leaves nothing to average, and Everyone puts them back.
     await page.getByRole('button', { name: 'Clear', exact: true }).click()
-    await expect(page.getByText('Nobody picked, so there is nothing to average.')).toBeVisible()
+    await expect(page.getByText('Nobody picked.', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Everyone' }).click()
     await expect(page.getByText(/^The average of all \d+ voters\.$/)).toBeVisible()
   })
