@@ -55,7 +55,7 @@ export async function readPollPage(
  * them and works the other out here, rather than paying a round trip for a
  * strict subset of what it already has.
  *
- * Five of the fields are `poll_status`' alone, and all five are answered here
+ * Six of the fields are `poll_status`' alone, and all six are answered here
  * exactly as it answers them on an open poll. That is the whole point: this
  * has to be a translation rather than a second opinion.
  *
@@ -72,6 +72,8 @@ export async function readPollPage(
  *    this reader has done through the link — by their account or this
  *    browser's key — is in `OpenPollView.voted` and `.confirmed`, which is
  *    where the page reads it.
+ *  - **`reminded_at` is null**, because a reminder to vote goes to an invite
+ *    list and `send_poll_reminder` refuses an open poll outright.
  *
  * And `expires_at` is the one field the view genuinely does not carry, which
  * is why it is asked for rather than derived: it is `created_at` plus the
@@ -97,6 +99,7 @@ export function statusFromOpenView(
     confirmed_count: view.confirmed_count,
     winner_name: view.winner_name,
     winner_settled: view.winner_settled,
+    reminded_at: null,
   }
 }
 

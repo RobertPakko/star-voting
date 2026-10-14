@@ -169,6 +169,8 @@ export type Database = {
           options_finalized_at: string | null
           question_position: number | null
           question_title: string | null
+          reminder_sent_at: string | null
+          results_announced_at: string | null
           reopened_after_reveal: boolean
           schedule: Json | null
           show_ballots: boolean
@@ -193,6 +195,8 @@ export type Database = {
           options_finalized_at?: string | null
           question_position?: number | null
           question_title?: string | null
+          reminder_sent_at?: string | null
+          results_announced_at?: string | null
           reopened_after_reveal?: boolean
           schedule?: Json | null
           show_ballots?: boolean
@@ -217,6 +221,8 @@ export type Database = {
           options_finalized_at?: string | null
           question_position?: number | null
           question_title?: string | null
+          reminder_sent_at?: string | null
+          results_announced_at?: string | null
           reopened_after_reveal?: boolean
           schedule?: Json | null
           show_ballots?: boolean
@@ -247,29 +253,6 @@ export type Database = {
             foreignKeyName: 'removed_polls_poll_id_fkey'
             columns: ['poll_id']
             isOneToOne: false
-            referencedRelation: 'polls'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      results_notices: {
-        Row: {
-          poll_id: string
-          sent_at: string
-        }
-        Insert: {
-          poll_id: string
-          sent_at?: string
-        }
-        Update: {
-          poll_id?: string
-          sent_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'results_notices_poll_id_fkey'
-            columns: ['poll_id']
-            isOneToOne: true
             referencedRelation: 'polls'
             referencedColumns: ['id']
           },
@@ -630,11 +613,22 @@ export type Database = {
       poll_is_first_question: { Args: { p_poll_id: string }; Returns: boolean }
       poll_is_removed: { Args: { p_poll_id: string }; Returns: boolean }
       poll_list_row: { Args: { p_poll_id: string }; Returns: string }
+      poll_outstanding_invitees: {
+        Args: { p_poll: Database['public']['Tables']['polls']['Row'] }
+        Returns: string[]
+      }
       poll_page: {
         Args: { p_poll_id: string; p_voter_key?: string }
         Returns: Json
       }
       poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
+      poll_reminder_audience: {
+        Args: {
+          p_actor: string
+          p_poll: Database['public']['Tables']['polls']['Row']
+        }
+        Returns: string[]
+      }
       poll_results_audience: {
         Args: {
           p_actor: string
@@ -661,6 +655,7 @@ export type Database = {
           invited_count: number
           is_closed: boolean
           is_complete: boolean
+          reminded_at: string
           results_available: boolean
           soliciting: boolean
           voted: boolean
@@ -706,6 +701,14 @@ export type Database = {
         Returns: undefined
       }
       send_poll_opened_email: {
+        Args: {
+          p_email: string
+          p_poll: Database['public']['Tables']['polls']['Row']
+        }
+        Returns: undefined
+      }
+      send_poll_reminder: { Args: { p_poll_id: string }; Returns: undefined }
+      send_reminder_email: {
         Args: {
           p_email: string
           p_poll: Database['public']['Tables']['polls']['Row']

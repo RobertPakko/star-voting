@@ -30,7 +30,7 @@ begin
   perform tests.assert_eq('a poll nobody has voted in has no result to announce',
     poll_results_ready((select p from polls p where p.id = v_poll)), false);
   perform tests.assert_eq('and nothing has been announced about it',
-    (select count(*)::int from results_notices where poll_id = v_poll), 0);
+    (select count(*)::int from polls where results_announced_at is not null and id = v_poll), 0);
 
   perform tests.sign_in('voter1@example.com');
   perform tests.cast_ballot(v_poll, array[5, 1]);
@@ -38,7 +38,7 @@ begin
   perform tests.assert_eq('one vote of two is still a poll in progress',
     poll_results_ready((select p from polls p where p.id = v_poll)), false);
   perform tests.assert_eq('so still nothing announced',
-    (select count(*)::int from results_notices where poll_id = v_poll), 0);
+    (select count(*)::int from polls where results_announced_at is not null and id = v_poll), 0);
 
   perform tests.sign_in('voter2@example.com');
   perform tests.cast_ballot(v_poll, array[2, 4]);
@@ -46,7 +46,7 @@ begin
   perform tests.assert_eq('the last ballot unlocks the results',
     poll_results_ready((select p from polls p where p.id = v_poll)), true);
   perform tests.assert_eq('and the poll is announced, once',
-    (select count(*)::int from results_notices where poll_id = v_poll), 1);
+    (select count(*)::int from polls where results_announced_at is not null and id = v_poll), 1);
 
   -- Everyone in the poll, creator included, because nobody closed it: the
   -- last vote is what ended it, and that is news to the creator like anybody
@@ -87,12 +87,12 @@ begin
     'voter-key-1', 'Robin');
 
   perform tests.assert_eq('an open poll runs until its creator closes it',
-    (select count(*)::int from results_notices where poll_id = v_open), 0);
+    (select count(*)::int from polls where results_announced_at is not null and id = v_open), 0);
 
   perform close_poll(v_open);
 
   perform tests.assert_eq('closing crosses the line',
-    (select count(*)::int from results_notices where poll_id = v_open), 1);
+    (select count(*)::int from polls where results_announced_at is not null and id = v_open), 1);
   -- And there is nobody to write to. Its voters gave no addresses, and the
   -- one person it could have written to is the person who closed it.
   perform tests.assert_null('but an open poll has nobody left to tell',
@@ -118,7 +118,7 @@ begin
   perform tests.assert_eq('a poll closed by hand has a result too',
     poll_results_ready((select p from polls p where p.id = v_closed)), true);
   perform tests.assert_eq('and is announced like any other',
-    (select count(*)::int from results_notices where poll_id = v_closed), 1);
+    (select count(*)::int from polls where results_announced_at is not null and id = v_closed), 1);
   perform tests.assert_eq('to everyone invited except the creator, who closed it',
     (select array_agg(a order by a)
        from poll_results_audience((select p from polls p where p.id = v_closed),
@@ -138,7 +138,7 @@ begin
   perform tests.assert_eq('a reopened poll has no result again',
     poll_results_ready((select p from polls p where p.id = v_closed)), false);
   perform tests.assert_eq('and its announcement is forgotten',
-    (select count(*)::int from results_notices where poll_id = v_closed), 0);
+    (select count(*)::int from polls where results_announced_at is not null and id = v_closed), 0);
 
   -- The two who had not voted do, which finishes the poll the other way --
   -- on turnout rather than on the creator's button.
@@ -148,7 +148,7 @@ begin
   perform tests.cast_ballot(v_closed, array[3, 3]);
 
   perform tests.assert_eq('finishing a second time announces a second time',
-    (select count(*)::int from results_notices where poll_id = v_closed), 1);
+    (select count(*)::int from polls where results_announced_at is not null and id = v_closed), 1);
 
   -- ---------------------------------------------------------------------
   -- A poll of several questions is one result and one announcement, filed
@@ -165,17 +165,17 @@ begin
   perform tests.assert_eq('question 1 answered is not the poll answered',
     poll_results_ready((select p from polls p where p.id = v_group[1])), false);
   perform tests.assert_eq('so the poll is not announced yet',
-    (select count(*)::int from results_notices
-      where poll_id = any(v_group)), 0);
+    (select count(*)::int from polls
+      where results_announced_at is not null and id = any(v_group)), 0);
 
   perform tests.cast_ballot(v_group[2], array[3, 4]);
 
   perform tests.assert_eq('answering the last question finishes the poll',
     poll_results_ready((select p from polls p where p.id = v_group[2])), true);
   perform tests.assert_eq('and the whole poll is announced exactly once',
-    (select count(*)::int from results_notices where poll_id = any(v_group)), 1);
+    (select count(*)::int from polls where results_announced_at is not null and id = any(v_group)), 1);
   perform tests.assert_eq('against question 1, which is where the link goes',
-    (select count(*)::int from results_notices where poll_id = v_group[1]), 1);
+    (select count(*)::int from polls where results_announced_at is not null and id = v_group[1]), 1);
 
   raise notice '  results-ready notices ok';
 end $$;
