@@ -894,8 +894,7 @@ function ReadCalendarShape({ schedule, picker }: { schedule: PollSchedule; picke
       <Stack gap="xs">
         {picker && (
           <>
-            {/* The picker's label, its field, and the line under it. */}
-            <Bar kind="note" width={160} />
+            {/* The picker's field, and the line under it. */}
             <Skeleton height={36} radius="sm" />
             <Bar kind="note" width={180} />
           </>

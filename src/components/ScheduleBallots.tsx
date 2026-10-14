@@ -141,7 +141,9 @@ export function ScheduleBallots({
     <Card withBorder p="sm">
       <Stack gap="xs">
         <MultiSelect
-          label={sheet.voters_named ? 'Whose ballots to average' : 'Which ballots to average'}
+          // No visible label: the line under the field already says what it
+          // is averaging. A screen reader still needs the field named.
+          aria-label={sheet.voters_named ? 'Whose ballots to average' : 'Which ballots to average'}
           placeholder={chosen.length === 0 ? `Pick a ${noun}` : undefined}
           data={choices}
           value={chosen}
