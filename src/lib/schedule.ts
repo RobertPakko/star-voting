@@ -145,6 +145,24 @@ export function formatTimeOfDay(minutes: number, h24: boolean): string {
   return `${hours % 12 || 12}:${String(minutes % 60).padStart(2, '0')}${suffix}`
 }
 
+/**
+ * One marked stretch, as a month chip says it: `09:00–11:00`, or on the
+ * 12-hour clock `9–11am`.
+ *
+ * A month cell is about six rem wide on a phone, and `6:00pm–10:00pm` does not
+ * fit in one -- the chip was cut off at `6:00pm–10:0`. So the 12-hour form
+ * drops what says nothing: the `:00` of a time on the hour, and the first
+ * suffix where both ends share one. The 24-hour form is already short.
+ */
+export function formatTimeRange(from: number, to: number, h24: boolean): string {
+  if (h24) return `${formatTimeOfDay(from, true)}–${formatTimeOfDay(to, true)}`
+  const short = (minutes: number) => formatTimeOfDay(minutes, false).replace(':00', '')
+  const start = short(from)
+  const end = short(to)
+  const sameHalf = start.slice(-2) === end.slice(-2)
+  return `${sameHalf ? start.slice(0, -2) : start}–${end}`
+}
+
 /** One cell of the grid, from the two halves of it. */
 export function granuleKey(day: ScheduleDay, minutes: number): GranuleKey {
   return `${day} ${toTimeOfDay(minutes)}`

@@ -17,7 +17,7 @@ import {
   paintingRuns,
   runBounds,
   todayIn,
-  formatTimeOfDay,
+  formatTimeRange,
   type Bounds,
   type GranuleKey,
 } from '../lib/schedule'
@@ -250,12 +250,7 @@ export function ScheduleFields({
     for (const key of marked) asPainting[key] = 1
     return paintingRuns(asPainting, schedule).map((run) => ({
       id: `${run.day} ${run.from}`,
-      title:
-        view !== 'month'
-          ? ''
-          : daily
-            ? ''
-            : `${formatTimeOfDay(run.from, h24)}–${formatTimeOfDay(run.to, h24)}`,
+      title: view !== 'month' ? '' : daily ? '' : formatTimeRange(run.from, run.to, h24),
       ...runBounds(run),
       color: 'teal.6',
       display: view === 'month' ? 'default' : 'background',

@@ -17,7 +17,7 @@ import {
   paintingRuns,
   runBounds,
   scoresFromPainting,
-  formatTimeOfDay,
+  formatTimeRange,
   type GranuleKey,
   type ScheduleDay,
 } from '../lib/schedule'
@@ -343,9 +343,9 @@ export function TimeBallotCard({
   )
 }
 
-/** `09:00–11:00`, which is what a month cell says about one marked stretch. */
+/** `9–11am`, which is what a month cell says about one marked stretch. */
 function timeTitle(from: number, to: number, h24: boolean): string {
-  return `${formatTimeOfDay(from, h24)}–${formatTimeOfDay(to, h24)}`
+  return formatTimeRange(from, to, h24)
 }
 
 /** And what one says on a poll answered in whole days, which has no hours. */

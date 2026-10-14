@@ -14,6 +14,7 @@ import {
   enumerateWindows,
   formatDay,
   formatTimeOfDay,
+  formatTimeRange,
   formatWindow,
   fromDay,
   paintingRuns,
@@ -721,6 +722,15 @@ describe('what a window is called on screen', () => {
     expect(formatTimeOfDay(23 * 60 + 30, false)).toBe('11:30pm')
     // Midnight at the end of a day, which only ever ends a stretch.
     expect(formatTimeOfDay(DAY_MINUTES, false)).toBe('12:00am')
+  })
+
+  test('a month chip names its stretch as briefly as it can', () => {
+    expect(formatTimeRange(18 * 60, 22 * 60, true)).toBe('18:00–22:00')
+    // Drop `:00`, and the first suffix where both ends share it.
+    expect(formatTimeRange(18 * 60, 22 * 60, false)).toBe('6–10pm')
+    expect(formatTimeRange(9 * 60, 10 * 60 + 30, false)).toBe('9–10:30am')
+    expect(formatTimeRange(10 * 60 + 30, 13 * 60, false)).toBe('10:30am–1pm')
+    expect(formatTimeRange(22 * 60, DAY_MINUTES, false)).toBe('10pm–12am')
   })
 
   test('a name that is not a window is shown as it is, not as a crash', () => {

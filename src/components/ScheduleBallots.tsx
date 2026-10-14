@@ -9,7 +9,7 @@ import {
   boundsOf,
   daysOf,
   describeOffset,
-  formatTimeOfDay,
+  formatTimeRange,
   isDaily,
   paintingFromScores,
   paintingRuns,
@@ -148,15 +148,13 @@ export function ScheduleBallots({
           data={choices}
           value={chosen}
           onChange={setChosen}
-          searchable
-          nothingFoundMessage={`No ${noun} by that name`}
           leftSection={<UsersThreeIcon size={16} aria-hidden />}
           comboboxProps={{ withinPortal: true }}
         />
         <Group justify="space-between" gap="xs" wrap="wrap">
           <Text size="xs" c="dimmed" aria-live="polite">
             {chosen.length === 0
-              ? 'Nobody picked, so there is nothing to average.'
+              ? 'Nobody picked.'
               : all
                 ? `The average of all ${count(everyone.length, noun)}.`
                 : `The average of ${chosen.length} of ${count(everyone.length, noun)}.`}
@@ -237,7 +235,7 @@ function ReadCalendar({
 
   function buildEvents(view: ScheduleViewLevel): ScheduleEventData[] {
     return paintingRuns(shown, schedule).map((run) => {
-      const times = `${formatTimeOfDay(run.from, h24)}–${formatTimeOfDay(run.to, h24)}`
+      const times = formatTimeRange(run.from, run.to, h24)
       // A month chip still needs words to have a height; on a poll answered in
       // whole days there are no hours to name, so an average's chip is a bare
       // swatch of its colour.

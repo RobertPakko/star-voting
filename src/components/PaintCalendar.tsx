@@ -464,7 +464,10 @@ export function PaintCalendar({
   const narrowLabels = useMediaQuery('(max-width: 560px)', false, {
     getInitialValueInEffect: false,
   })
-  const timeLabelWidth = narrowLabels ? '3rem' : '5rem'
+  // `10:00am` needs more room than `10:00`, and at three rem the 12-hour labels
+  // were cut off on a phone.
+  const timeLabelWidth = narrowLabels ? (h24 ? '3rem' : '4.25rem') : '5rem'
+  const daySlotWidth = narrowLabels ? '3rem' : '5rem'
 
   const events = buildEvents(showing)
 
@@ -774,7 +777,7 @@ export function PaintCalendar({
   } as CSSProperties
   const weekStyle = {
     '--week-view-slots-label-width': timeLabelWidth,
-    '--week-view-min-slot-width': timeLabelWidth,
+    '--week-view-min-slot-width': daySlotWidth,
   } as CSSProperties
   const monthStyle = {
     '--min-day-width': '6rem',
