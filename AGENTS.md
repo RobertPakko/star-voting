@@ -15,7 +15,7 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
@@ -1770,9 +1770,11 @@ only the body arrives.
 
 ### Reading the results
 
-The results view is reused exactly as it stands. No calendar heat map: an
+The tally is reused exactly as it stands. No calendar heat map of it: an
 option's name *is* its identity, the page already ranks options by score, and a
-ranked list of times is a legible answer. The only thing wrong with it on a
+ranked list of times is a legible answer. (The ballots under the tally are a
+different matter, and are drawn on the calendar; see *The ballots, on the
+calendar* below.) The only thing wrong with it on a
 time poll is that the names are ISO timestamps — so they are rewritten once, on
 the payload, by `relabelResults` / `relabelRanking` / `relabelSheet`, rather
 than threading a formatter down through the score rows, the tie-break prose,
@@ -1801,6 +1803,46 @@ back, and every window in a poll is the same length — ten rows each saying
 "– 17:00" four hours after their own start is noise. If the length is wanted on
 the results page it belongs once, in a line above the list, rather than once
 per option.
+
+### The ballots, on the calendar
+
+Under the tally an ordinary poll draws either the published sheet or, where
+ballots are private, the reader's own ballot — a grid of every voter against
+every option, or a list of options with stars beside them. On a time poll both
+are correct and neither can be read: the options are a hundred windows, and
+"when could people make it" is a question about a week. So on a time poll
+`Ballots` and `YourBallot` draw [`ScheduleBallots`](src/components/ScheduleBallots.tsx)
+in place of the table and the list.
+
+- **Your ballot is the calendar you painted, read only.** Rebuilt from the
+  scores by the same `paintingFromScores` that fills a ballot back in behind
+  *Edit vote*, so it carries the same blur (see *Reading a ballot back*), and
+  drawn on the ballot's own `PaintCalendar` with `readOnly` set — the library's
+  `mode="static"`, plus a header whose range is a label rather than the control
+  that fills it.
+- **The published sheet is one calendar of everybody's ratings averaged**,
+  cell by cell (`averagePainting`), with a `MultiSelect` over it naming whose
+  ballots go in. Everybody to begin with; *Everyone* and *Clear* beside it,
+  because Mantine's own clear button only appears under a pointer.
+- **An average is shown by colour alone.** It falls between the six ratings,
+  so its block is blended between the two either side (`blendFor` in
+  [`ratings.ts`](src/lib/ratings.ts)) — a 3.4 four tenths of the way from the
+  3's yellow to the 4's teal — and the key is that ramp rather than six
+  swatches. Numbers printed on every block were tried and read as clutter; the
+  exact figure is a hover title instead. The calendar draws any colour that is
+  not a theme shade as a faint tint, so `eventBody` paints the blend itself.
+- **The average is taken over paintings, not over scores**, so that a set of
+  one voter is exactly that voter's own calendar, cell for cell — the two
+  cards cannot draw one person two ways. An unmarked cell is a 0 in the
+  average, as it is on the ballot.
+- **All of it is worked out in the browser, from the sheet already read.**
+  Picking a different set of people costs no request and discloses nothing:
+  anybody holding the sheet could add up any subset of its rows, and the CSV
+  exists so that they can. The download beside the heading is untouched — the
+  same file, of the same rows, whichever way the sheet is drawn.
+- **Fetched only by a time poll.** The calendar comes in its own `lazy()`
+  (`deferred.ts`), not as an import of `Ballots` or `YourBallot`, so an option
+  poll's sheet still fetches a table and nothing of `@mantine/schedule`.
 
 ### Duplicating one
 
@@ -2083,7 +2125,8 @@ closes](#the-creator-can-correct-the-options-until-the-poll-closes) for
 
 ### Deliberately not built yet
 
-- **A calendar heat map of the results.** Decided against; see above.
+- **A calendar heat map of the tally.** Decided against; see above. The
+  ballots under it are on a calendar, which is a different question.
 - **Named timezones, and DST-spanning polls.** Fixed offsets only. A poll
   running across a clock change is warned about and then held at one offset for
   its whole length, so its later days read an hour off the wall wherever it was

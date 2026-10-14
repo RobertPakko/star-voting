@@ -983,12 +983,20 @@ export function PollDetail({
           page included, and a second grid under it was a second answer to a
           question already answered. */}
       {showing && !isOpen && status.results_available && poll.show_ballots && (
-        <Suspense fallback={<BallotsSkeleton rows={status.voted_count || undefined} />}>
+        <Suspense
+          fallback={
+            <BallotsSkeleton
+              rows={status.voted_count || undefined}
+              schedule={poll.kind === 'time' ? poll.schedule : null}
+            />
+          }
+        >
           <Ballots
             source={{ kind: 'poll', pollId: poll.id }}
             title={poll.title}
             question={poll.question_title}
             initial={ballots}
+            schedule={poll.kind === 'time' ? poll.schedule : null}
           />
         </Suspense>
       )}
@@ -1005,8 +1013,19 @@ export function PollDetail({
           and `poll_ballot_scores` says so rather than returning an empty one.
           See YourBallot. */}
       {showing && !isOpen && status.results_available && !poll.show_ballots && status.voted && (
-        <Suspense fallback={<YourBallotSkeleton rows={optionList.length || undefined} />}>
-          <YourBallot pollId={poll.id} options={optionList} />
+        <Suspense
+          fallback={
+            <YourBallotSkeleton
+              rows={optionList.length || undefined}
+              schedule={poll.kind === 'time' ? poll.schedule : null}
+            />
+          }
+        >
+          <YourBallot
+            pollId={poll.id}
+            options={optionList}
+            schedule={poll.kind === 'time' ? poll.schedule : null}
+          />
         </Suspense>
       )}
 

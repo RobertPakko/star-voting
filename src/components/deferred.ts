@@ -56,3 +56,20 @@ export const YourBallot = lazy(() =>
 export const TimeBallotCard = lazy(() =>
   import('./TimeBallotCard').then((m) => ({ default: m.TimeBallotCard })),
 )
+
+/**
+ * And the results' calendars, which stand in for the two cards above on a
+ * time poll: the reader's own ballot and the published sheet, read back onto
+ * the calendar they were painted on. Behind a `lazy()` of their own rather
+ * than imported by `Ballots` and `YourBallot`, because they carry
+ * `PaintCalendar` and the library under it -- and a poll that chooses an
+ * option, which is most of them, should fetch the sheet's table and nothing
+ * of the calendar. See ScheduleBallots.
+ */
+export const ScheduleBallot = lazy(() =>
+  import('./ScheduleBallots').then((m) => ({ default: m.ScheduleBallot })),
+)
+
+export const ScheduleBallots = lazy(() =>
+  import('./ScheduleBallots').then((m) => ({ default: m.ScheduleBallots })),
+)

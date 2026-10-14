@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { ActionIcon, Group, Stack, Table, Text, Title, Tooltip } from '@mantine/core'
 import { DownloadSimpleIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { ballotsCsv, ballotsFileName, downloadCsv } from '../lib/ballotCsv'
 import { Reveal } from './Reveal'
-import { BallotsSkeleton } from './Skeletons'
+import { BallotsSkeleton, ReadCalendarSkeleton } from './Skeletons'
+import { ScheduleBallots } from './deferred'
 import classes from './Ballots.module.css'
 import { relabelSheet } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
-import type { BallotSheet } from '../lib/types'
+import type { BallotSheet, PollSchedule } from '../lib/types'
 
 /**
  * Which ballot endpoint to read. Same split as ResultsSource, and for the
@@ -33,6 +34,7 @@ export function Ballots({
   title,
   question,
   initial = null,
+  schedule = null,
 }: {
   source: BallotsSource
   /**
@@ -54,6 +56,13 @@ export function Ballots({
    * sample. It reads for itself, exactly as before.
    */
   initial?: BallotSheet | null
+  /**
+   * The poll's schedule, on a time poll, which draws the sheet as one
+   * calendar of everybody's ratings averaged rather than as a table of
+   * windows -- see ScheduleBallots. Only the drawing changes: the sheet is
+   * read the same way, and the download beside the heading is the same file.
+   */
+  schedule?: PollSchedule | null
 }) {
   const h24 = use24HourTime()
   // Flattened to primitives so the dependency list is complete without
@@ -105,7 +114,7 @@ export function Ballots({
     )
   }
 
-  if (!sheet) return <BallotsSkeleton />
+  if (!sheet) return <BallotsSkeleton schedule={schedule} />
 
   // The columns of a time poll's sheet are its windows, which are stored as
   // ISO timestamps and read as headings; see relabelSheet. Applied to every
@@ -151,67 +160,77 @@ export function Ballots({
             </Tooltip>
           )}
         </Group>
-        {/* The frame is drawn round the scroll area rather than the table (see
+        {schedule ? (
+          // The raw sheet rather than `shown`: the calendar is laid out by the
+          // windows' own timestamps, and labels them itself.
+          <Suspense fallback={<ReadCalendarSkeleton schedule={schedule} picker />}>
+            <ScheduleBallots sheet={sheet} schedule={schedule} />
+          </Suspense>
+        ) : (
+          <>
+            {/* The frame is drawn round the scroll area rather than the table (see
             Ballots.module.css), so the strip Mantine keeps free under the
             table for its scrollbar would sit inside the frame as an empty
             row. */}
-        <Table.ScrollContainer
-          minWidth={120 + shown.options.length * 90}
-          className={classes.frame}
-          scrollAreaProps={{
-            offsetScrollbars: false,
-            classNames: { scrollbar: classes.scrollbar },
-            // A grid wider than a phone scrolls sideways, and a region that
-            // scrolls has to be reachable from the keyboard to be scrolled
-            // without a pointer: it takes focus, and the arrow keys move it.
-            viewportProps: { tabIndex: 0, role: 'region', 'aria-label': 'Ballots' },
-          }}
-        >
-          <Table striped withColumnBorders className={classes.table}>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th className={classes.label}>{named ? 'Voter' : 'Ballot'}</Table.Th>
-                {shown.options.map((o) => (
-                  <Table.Th key={o.id} ta="right">
-                    {o.name}
-                  </Table.Th>
-                ))}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {/* Index as key: the list is static once fetched, and an
+            <Table.ScrollContainer
+              minWidth={120 + shown.options.length * 90}
+              className={classes.frame}
+              scrollAreaProps={{
+                offsetScrollbars: false,
+                classNames: { scrollbar: classes.scrollbar },
+                // A grid wider than a phone scrolls sideways, and a region that
+                // scrolls has to be reachable from the keyboard to be scrolled
+                // without a pointer: it takes focus, and the arrow keys move it.
+                viewportProps: { tabIndex: 0, role: 'region', 'aria-label': 'Ballots' },
+              }}
+            >
+              <Table striped withColumnBorders className={classes.table}>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th className={classes.label}>{named ? 'Voter' : 'Ballot'}</Table.Th>
+                    {shown.options.map((o) => (
+                      <Table.Th key={o.id} ta="right">
+                        {o.name}
+                      </Table.Th>
+                    ))}
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {/* Index as key: the list is static once fetched, and an
                   unnamed sheet has nothing else to key on by design. */}
-              {shown.ballots.map((ballot, i) => (
-                <Table.Tr key={i}>
-                  <Table.Td className={classes.label}>
-                    {named ? (
-                      ballot.voter
-                    ) : (
-                      <Text size="sm" c="dimmed">
-                        #{i + 1}
-                      </Text>
-                    )}
-                  </Table.Td>
-                  {shown.options.map((o) => (
-                    <Table.Td key={o.id} ta="right">
-                      {scoreOn(ballot.scores, o.id)}
-                    </Table.Td>
+                  {shown.ballots.map((ballot, i) => (
+                    <Table.Tr key={i}>
+                      <Table.Td className={classes.label}>
+                        {named ? (
+                          ballot.voter
+                        ) : (
+                          <Text size="sm" c="dimmed">
+                            #{i + 1}
+                          </Text>
+                        )}
+                      </Table.Td>
+                      {shown.options.map((o) => (
+                        <Table.Td key={o.id} ta="right">
+                          {scoreOn(ballot.scores, o.id)}
+                        </Table.Td>
+                      ))}
+                    </Table.Tr>
                   ))}
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-            <Table.Tfoot>
-              <Table.Tr>
-                <Table.Th className={classes.label}>Total</Table.Th>
-                {totals.map((total, i) => (
-                  <Table.Th key={shown.options[i].id} ta="right">
-                    {total}
-                  </Table.Th>
-                ))}
-              </Table.Tr>
-            </Table.Tfoot>
-          </Table>
-        </Table.ScrollContainer>
+                </Table.Tbody>
+                <Table.Tfoot>
+                  <Table.Tr>
+                    <Table.Th className={classes.label}>Total</Table.Th>
+                    {totals.map((total, i) => (
+                      <Table.Th key={shown.options[i].id} ta="right">
+                        {total}
+                      </Table.Th>
+                    ))}
+                  </Table.Tr>
+                </Table.Tfoot>
+              </Table>
+            </Table.ScrollContainer>
+          </>
+        )}
       </Stack>
     </Reveal>
   )

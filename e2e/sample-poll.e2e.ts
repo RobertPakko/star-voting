@@ -1,4 +1,4 @@
-import { test, expect, expectAccessible } from './fixtures'
+import { test, expect, expectAccessible, setColorScheme } from './fixtures'
 import type { Page } from '@playwright/test'
 
 /**
@@ -120,6 +120,34 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   await page.keyboard.press('Escape')
   await expect(ranking).toBeHidden()
 })
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`a calendar poll publishes its ballots as one averaged calendar (${scheme})`, async ({
+    page,
+  }) => {
+    await setColorScheme(page, scheme)
+    await page.goto('#/polls/sample-result-when')
+    await expect(page.getByRole('heading', { name: 'Ballots' })).toBeVisible()
+    // The calendar stands where the table would have, and the download is
+    // still beside the heading.
+    await expect(page.getByRole('region', { name: 'Ballots' })).toHaveCount(0)
+    await expect(
+      page.getByRole('button', { name: 'Download these ballots as a CSV' }),
+    ).toBeVisible()
+
+    await expect(page.getByRole('combobox', { name: 'Whose ballots to average' })).toBeVisible()
+    await expect(page.getByText(/^The average of all \d+ voters\.$/)).toBeVisible()
+    await expectAccessible(page, 'the averaged calendar')
+    await page.getByRole('tab', { name: 'Switch to month view' }).click()
+    await expectAccessible(page, 'the averaged calendar, by the month')
+
+    // Taking everybody out leaves nothing to average, and Everyone puts them back.
+    await page.getByRole('button', { name: 'Clear', exact: true }).click()
+    await expect(page.getByText('Nobody picked, so there is nothing to average.')).toBeVisible()
+    await page.getByRole('button', { name: 'Everyone' }).click()
+    await expect(page.getByText(/^The average of all \d+ voters\.$/)).toBeVisible()
+  })
+}
 
 test('a tie-break can be opened over its round', async ({ page }) => {
   // The second question is the one the sample records as needing one.

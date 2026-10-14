@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Card, Group, Stack, Text, Title } from '@mantine/core'
 import { StarIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { formatWindow } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import { Reveal } from './Reveal'
-import { YourBallotSkeleton } from './Skeletons'
-import type { PollOption } from '../lib/types'
+import { ReadCalendarSkeleton, YourBallotSkeleton } from './Skeletons'
+import { ScheduleBallot } from './deferred'
+import type { PollOption, PollSchedule } from '../lib/types'
 import classes from './YourBallot.module.css'
 
 /** How many stars an option is scored out of; the ballot's own scale. */
@@ -47,6 +48,7 @@ export function YourBallot({
   pollId,
   options,
   scores: given,
+  schedule = null,
 }: {
   pollId: string
   /**
@@ -63,15 +65,29 @@ export function YourBallot({
    * `your_scores`. Absent, it is read for the signed-in account.
    */
   scores?: Record<string, number>
+  /**
+   * The poll's schedule, on a time poll, which hands the ballot back as the
+   * calendar it was painted on rather than as a list of windows -- see
+   * ScheduleBallots.
+   */
+  schedule?: PollSchedule | null
 }) {
   return given ? (
-    <BallotRows options={options} scores={given} />
+    <BallotRows options={options} scores={given} schedule={schedule} />
   ) : (
-    <ReadBallot pollId={pollId} options={options} />
+    <ReadBallot pollId={pollId} options={options} schedule={schedule} />
   )
 }
 
-function ReadBallot({ pollId, options }: { pollId: string; options: PollOption[] }) {
+function ReadBallot({
+  pollId,
+  options,
+  schedule,
+}: {
+  pollId: string
+  options: PollOption[]
+  schedule: PollSchedule | null
+}) {
   // Read every time the card is drawn, like the tally above it and the sheet
   // it stands in place of. A closed poll can be opened again, take a changed
   // vote and be closed again without telling anybody holding a copy of this,
@@ -112,19 +128,42 @@ function ReadBallot({ pollId, options }: { pollId: string; options: PollOption[]
     )
   }
 
-  if (!scores) return <YourBallotSkeleton rows={options.length || undefined} />
+  if (!scores) {
+    return <YourBallotSkeleton rows={options.length || undefined} schedule={schedule} />
+  }
 
-  return <BallotRows options={options} scores={scores} />
+  return <BallotRows options={options} scores={scores} schedule={schedule} />
 }
 
 function BallotRows({
   options,
   scores,
+  schedule,
 }: {
   options: PollOption[]
   scores: Record<string, number>
+  schedule: PollSchedule | null
 }) {
   const h24 = use24HourTime()
+
+  // A time poll's ballot is a calendar, and is handed back as one: a list of a
+  // hundred windows with stars beside each is the same ballot in a shape
+  // nobody painted. See ScheduleBallots.
+  if (schedule) {
+    return (
+      <Reveal>
+        <Stack gap={2}>
+          <Title order={2} size="h4">
+            Your ballot
+          </Title>
+          <Suspense fallback={<ReadCalendarSkeleton schedule={schedule} />}>
+            <ScheduleBallot options={options} scores={scores} schedule={schedule} />
+          </Suspense>
+        </Stack>
+      </Reveal>
+    )
+  }
+
   // Faded in over the shape that was standing in for it, as the tally and the
   // sheet are; see Reveal.
   return (

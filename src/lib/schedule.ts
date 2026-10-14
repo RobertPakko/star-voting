@@ -555,6 +555,43 @@ export function paintingFromScores(
   return painting
 }
 
+/**
+ * Several ballots read back and laid over one another: each cell's average
+ * rating across them.
+ *
+ * Averaged over the *paintings*, each ballot repainted by `paintingFromScores`
+ * first, rather than over the window scores and repainted once. That is what
+ * makes the two results calendars agree with each other: a group of one is
+ * exactly that voter's own calendar, cell for cell, because the average of one
+ * painting is that painting. Averaging the scores first would put a different
+ * picture under the same voter depending on which card was drawing them.
+ *
+ * An unpainted cell counts as a 0 in the average, for the reason it is a 0 on
+ * the ballot: it is an answer meaning unavailable, not a missing one. A cell
+ * that averages 0 -- nobody can make it -- is left out, as a 0 is left out of
+ * a single painting.
+ *
+ * No ballots at all is an empty calendar rather than a division by zero.
+ */
+export function averagePainting(
+  windowStarts: WindowStart[],
+  ballots: Record<WindowStart, number>[],
+  schedule: PollSchedule,
+): Record<GranuleKey, number> {
+  const totals: Record<GranuleKey, number> = {}
+  for (const scores of ballots) {
+    const painting = paintingFromScores(windowStarts, scores, schedule)
+    for (const [key, rating] of Object.entries(painting)) {
+      totals[key] = (totals[key] ?? 0) + rating
+    }
+  }
+  const average: Record<GranuleKey, number> = {}
+  for (const [key, total] of Object.entries(totals)) {
+    if (total > 0) average[key] = total / ballots.length
+  }
+  return average
+}
+
 // ---------------------------------------------------------------------------
 // How long a meeting is, as a person says it
 // ---------------------------------------------------------------------------

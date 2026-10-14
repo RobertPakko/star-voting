@@ -821,7 +821,14 @@ export function RankingSkeleton({ places = 5 }: { places?: number }) {
  * most polls — so it claims a table with a header, some ballots and a total,
  * which every one of them has.
  */
-export function BallotsSkeleton({ rows = 5 }: { rows?: number }) {
+export function BallotsSkeleton({
+  rows = 5,
+  schedule,
+}: {
+  rows?: number
+  /** A time poll's, whose sheet is drawn as a calendar; see ScheduleBallots. */
+  schedule?: PollSchedule | null
+}) {
   return (
     <Loading>
       <Stack gap={2}>
@@ -831,23 +838,83 @@ export function BallotsSkeleton({ rows = 5 }: { rows?: number }) {
           <Bar kind="heading" width={76} />
           <IconShape />
         </Group>
-        {/* The border and the rules are the table's own; the cells inside them
-            are one bar per row, in a box the height a table row is drawn at. */}
-        <Card withBorder p={0} radius="sm">
-          <Stack gap={0}>
-            <TableRowShape width="45%" />
-            <Divider />
-            {Array.from({ length: rows }, (_, i) => (
-              <Fragment key={i}>
-                <TableRowShape />
-                <Divider />
-              </Fragment>
-            ))}
-            <TableRowShape width="30%" />
-          </Stack>
-        </Card>
+        {schedule ? (
+          <ReadCalendarShape schedule={schedule} picker />
+        ) : (
+          /* The border and the rules are the table's own; the cells inside them
+            are one bar per row, in a box the height a table row is drawn at. */
+          <Card withBorder p={0} radius="sm">
+            <Stack gap={0}>
+              <TableRowShape width="45%" />
+              <Divider />
+              {Array.from({ length: rows }, (_, i) => (
+                <Fragment key={i}>
+                  <TableRowShape />
+                  <Divider />
+                </Fragment>
+              ))}
+              <TableRowShape width="30%" />
+            </Stack>
+          </Card>
+        )}
       </Stack>
     </Loading>
+  )
+}
+
+/**
+ * A time poll's ballot, or its ballots averaged, read back onto the calendar
+ * while the calendar's own code arrives: the line naming the offset over the
+ * key, the header that walks the calendar, and the grid -- the parts of
+ * `CalendarShape` a calendar nobody paints still has, in a card.
+ */
+export function ReadCalendarSkeleton({
+  schedule,
+  picker = false,
+}: {
+  schedule: PollSchedule
+  /** Whether it is the published sheet's, with the picker over the calendar. */
+  picker?: boolean
+}) {
+  return (
+    <Loading>
+      <ReadCalendarShape schedule={schedule} picker={picker} />
+    </Loading>
+  )
+}
+
+function ReadCalendarShape({ schedule, picker }: { schedule: PollSchedule; picker: boolean }) {
+  const grid = isDaily(schedule)
+    ? 536
+    : 58 +
+      Math.max(1, (toMinutes(schedule.window.end) - toMinutes(schedule.window.start)) / 60) * 40
+
+  return (
+    <Card withBorder p="sm">
+      <Stack gap="xs">
+        {picker && (
+          <>
+            {/* The picker's label, its field, and the line under it. */}
+            <Bar kind="note" width={160} />
+            <Skeleton height={36} radius="sm" />
+            <Bar kind="note" width={180} />
+          </>
+        )}
+        <Group justify="space-between" wrap="wrap" gap="sm">
+          <Bar kind="note" width={220} />
+          <Bar kind="note" width={160} />
+        </Group>
+        <Group justify="space-between" wrap="nowrap" gap="sm">
+          <Group gap={8} wrap="nowrap">
+            <Skeleton height={32} width={32} radius="md" />
+            <Skeleton height={32} width={190} radius="md" />
+            <Skeleton height={32} width={32} radius="md" />
+          </Group>
+          <Skeleton height={32} width={189} radius="md" />
+        </Group>
+        <Skeleton height={grid} mt={8} radius="md" />
+      </Stack>
+    </Card>
   )
 }
 
@@ -877,23 +944,34 @@ function TableRowShape({ width }: { width?: string }) {
  * card. Short is the safe direction -- the page grows into it rather than
  * losing a row that was promised. See resultsRows.ts and TallyShape.
  */
-export function YourBallotSkeleton({ rows = 5 }: { rows?: number }) {
+export function YourBallotSkeleton({
+  rows = 5,
+  schedule,
+}: {
+  rows?: number
+  /** A time poll's, whose ballot is handed back as a calendar. */
+  schedule?: PollSchedule | null
+}) {
   return (
     <Loading>
       <Stack gap={2}>
         <Bar kind="heading" width={84} />
-        <Card withBorder p="sm">
-          <Stack gap="xs">
-            {Array.from({ length: Math.min(rows, RESULTS_ROWS_MAX) }, (_, i) => (
-              <Group key={i} justify="space-between" wrap="nowrap" gap="sm">
-                <Bar kind="line" width="40%" grow />
-                {/* Five 18px stars with 2px between them, which is what the
+        {schedule ? (
+          <ReadCalendarShape schedule={schedule} picker={false} />
+        ) : (
+          <Card withBorder p="sm">
+            <Stack gap="xs">
+              {Array.from({ length: Math.min(rows, RESULTS_ROWS_MAX) }, (_, i) => (
+                <Group key={i} justify="space-between" wrap="nowrap" gap="sm">
+                  <Bar kind="line" width="40%" grow />
+                  {/* Five 18px stars with 2px between them, which is what the
                     row beside the name actually is. */}
-                <Skeleton height={18} width={98} radius="sm" />
-              </Group>
-            ))}
-          </Stack>
-        </Card>
+                  <Skeleton height={18} width={98} radius="sm" />
+                </Group>
+              ))}
+            </Stack>
+          </Card>
+        )}
       </Stack>
     </Loading>
   )

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import {
+  averagePainting,
   axisFor,
   boundsOf,
   boundsOnDay,
@@ -437,6 +438,52 @@ describe('reading a ballot back onto the calendar', () => {
     // The cells either side of it, which the 0 does not reach, stay 5.
     expect(repainted[`${day} 12:00`]).toBe(5)
     expect(repainted[`${day} 15:30`]).toBe(5)
+  })
+})
+
+describe('several ballots laid over one calendar', () => {
+  const day = '2026-09-01'
+  const starts = enumerateWindows(threeHours, painted([day], '08:00', '22:00'))
+
+  /** The window scores a voter painting one stretch at one rating sends. */
+  function ballot(from: string, to: string, rating: number): Record<string, number> {
+    const painting: Record<string, number> = {}
+    for (const key of painted([day], from, to)) painting[key] = rating
+    return scoresFromPainting(starts, painting, threeHours)
+  }
+
+  test("one ballot is that voter's own calendar, cell for cell", () => {
+    // Which is the whole reason the average is taken over paintings: picking
+    // one voter on the published calendar shows what their own card shows.
+    const scores = ballot('13:00', '20:00', 4)
+    expect(averagePainting(starts, [scores], threeHours)).toEqual(
+      paintingFromScores(starts, scores, threeHours),
+    )
+  })
+
+  test('a cell only some voters marked is averaged over all of them', () => {
+    // Somebody leaving a cell unmarked said they cannot make it, so the cell
+    // is a 0 in their column rather than missing from it.
+    const average = averagePainting(
+      starts,
+      [ballot('13:00', '19:00', 5), ballot('13:00', '19:00', 3), ballot('08:00', '11:00', 5)],
+      threeHours,
+    )
+    expect(average[`${day} 14:00`]).toBeCloseTo(8 / 3)
+    expect(average[`${day} 09:00`]).toBeCloseTo(5 / 3)
+  })
+
+  test('a cell nobody can make is left off, as a 0 is on one ballot', () => {
+    const average = averagePainting(
+      starts,
+      [ballot('13:00', '19:00', 5), ballot('13:00', '19:00', 2)],
+      threeHours,
+    )
+    expect(average[`${day} 10:00`]).toBeUndefined()
+  })
+
+  test('no ballots is an empty calendar', () => {
+    expect(averagePainting(starts, [], threeHours)).toEqual({})
   })
 })
 

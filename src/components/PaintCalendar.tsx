@@ -95,17 +95,41 @@ const VIEWS: readonly ScheduleViewLevel[] = ['day', 'week', 'month']
  */
 const LABELS = { weekday: 'Fill the whole day' }
 
+/** And on a calendar that is only read, where a heading is only a caption. */
+const READ_LABELS = { weekday: 'Weekday' }
+
 /**
  * The one thing drawn inside an event: a month chip's label, in a colour the
  * calendar would otherwise pick badly.
  *
  * A chip takes its text colour from Mantine's variant resolver, and at the
  * darker end of a rating ramp that comes back close enough to the background
- * to be unreadable -- `green.9` on `green.9`. The two time grids draw runs with
- * no title at all, so this is only ever the month.
+ * to be unreadable -- `green.9` on `green.9`. The ballot draws its runs on the
+ * two time grids with no title at all. The results' average carries a `fill`
+ * of its own as well, and a `hint` naming the number behind it.
  */
 function eventBody(event: ScheduleEventData) {
-  return <span style={{ color: event.payload?.ink as string | undefined }}>{event.title}</span>
+  const hint = event.payload?.hint as string | undefined
+  const fill = event.payload?.fill as string | undefined
+  const ink = event.payload?.ink as string | undefined
+  if (!fill) return <span style={{ color: ink }}>{event.title}</span>
+  // A colour that is not one of the theme's own shades -- the results' blend
+  // between two ratings -- is drawn by the library as a ten-percent tint of
+  // itself, which is near enough white to say nothing. So the block is painted
+  // here instead: a layer filling it edge to edge, padding included, behind
+  // the text. Pointer events are handed back to it, which the library takes
+  // off a background block, so that hovering it can show the hint; it is only
+  // ever set on a calendar nobody paints, where there is nothing under the
+  // block for a pointer to reach.
+  return (
+    <>
+      <span
+        title={hint}
+        style={{ position: 'absolute', inset: 0, background: fill, pointerEvents: 'auto' }}
+      />
+      <span style={{ position: 'relative', color: ink, pointerEvents: 'none' }}>{event.title}</span>
+    </>
+  )
 }
 
 /**
@@ -176,6 +200,16 @@ const outOfBounds = {
 const outOfBoundsSlot = {
   ...outOfBounds,
   style: { ...outOfBounds.style, touchAction: 'pan-x pan-y pinch-zoom' },
+}
+
+/**
+ * The same, on a calendar that is only read: still greyed, because "the poll
+ * did not ask about this" is part of what is being read, but without the
+ * cursor that says a press was refused -- there is no press to refuse.
+ */
+const outOfBoundsRead = {
+  disabled: true,
+  style: { background: outOfBounds.style.background },
 }
 
 /**
@@ -303,6 +337,7 @@ export function PaintCalendar({
   earliest,
   onShowRange,
   reveal,
+  readOnly = false,
 }: {
   schedule: PollSchedule
   /** The cells that may be painted at all; everything else is drawn greyed. */
@@ -310,13 +345,17 @@ export function PaintCalendar({
   /** The hours the grid is drawn between -- the poll's `window` on a ballot. */
   axis: DailyWindow
   painting: Record<GranuleKey, number>
-  /** What a gesture writes. 0 rubs out, and never toggles; see `fillCells`. */
-  brush: number
+  /**
+   * What a gesture writes. 0 rubs out, and never toggles; see `fillCells`.
+   * Absent on a calendar nobody paints; see `readOnly`.
+   */
+  brush?: number
   /**
    * Write one value over a set of cells. The caller keeps the painting,
-   * because the caller is the one that has to send it somewhere.
+   * because the caller is the one that has to send it somewhere. Absent on a
+   * calendar nobody paints.
    */
-  onPaint: (keys: GranuleKey[], value: number) => void
+  onPaint?: (keys: GranuleKey[], value: number) => void
   /**
    * The painting as events, asked per view: a month has no rows to lay a run
    * of granules on, so its callers draw something else there. Called during
@@ -388,7 +427,25 @@ export function PaintCalendar({
    * moved off it -- is still a change.
    */
   reveal?: { day: ScheduleDay } | null
+  /**
+   * A calendar to be read rather than painted: the results' copy of a ballot,
+   * or of every ballot averaged.
+   *
+   * The library's own `mode="static"` does most of it -- no drag, no slot or
+   * heading or chip that answers a press, and nothing in the tab order that
+   * would move nothing -- and what is left is ours: the range in the header
+   * stops being the control that fills it, and the day headings stop being
+   * named after a gesture they no longer have. The arrows and the views still
+   * work, because walking a calendar is reading it.
+   */
+  readOnly?: boolean
 }) {
+  const write = onPaint ?? (() => {})
+  const strokeWith = brush ?? 0
+  const mode = readOnly ? ('static' as const) : ('default' as const)
+  // The heading's accessible name: a gesture on a calendar that has one, and
+  // plain "Weekday" on one that does not. See LABELS.
+  const labels = readOnly ? READ_LABELS : LABELS
   const days = daysOf(bounds)
   const daily = isDaily(schedule)
   const open = canPaint ?? ((key: GranuleKey) => bounds.has(key))
@@ -567,7 +624,7 @@ export function PaintCalendar({
     // so it is refused rather than converted.
     if (typeof event.start !== 'string' || typeof event.end !== 'string') return
     const keys = cellsBetween(event.start, event.end)
-    if (keys.length > 0) onPaint(keys, 0)
+    if (keys.length > 0) write(keys, 0)
   }
 
   /** What a click covers across a run of days, from one date to another. */
@@ -593,8 +650,8 @@ export function PaintCalendar({
    */
   function fillCells(cells: GranuleKey[]) {
     if (cells.length === 0) return
-    const already = brush > 0 && cells.every((key) => painting[key] === brush)
-    onPaint(cells, already ? 0 : brush)
+    const already = strokeWith > 0 && cells.every((key) => painting[key] === strokeWith)
+    write(cells, already ? 0 : strokeWith)
   }
 
   /** Fill a whole day, or clear it. */
@@ -622,7 +679,7 @@ export function PaintCalendar({
    * drag that made it.
    */
   function fillDays(fromDay: string, toDay: string) {
-    onPaint(cellsAcross(fromDay.slice(0, 10), toDay.slice(0, 10)), brush)
+    write(cellsAcross(fromDay.slice(0, 10), toDay.slice(0, 10)), strokeWith)
   }
 
   const inView = visibleRange(date, showing)
@@ -649,7 +706,7 @@ export function PaintCalendar({
           .filter((day) => !asks(day))
           .map(
             (day) =>
-              `[data-paint-calendar="${calendarId}"] [aria-label="${LABELS.weekday} ${day}"]`,
+              `[data-paint-calendar="${calendarId}"] [aria-label="${labels.weekday} ${day}"]`,
           )
       : []
   // Whether the calendar has been navigated off the poll entirely. Worth
@@ -736,7 +793,16 @@ export function PaintCalendar({
     withAllDaySlots: false as const,
     withCurrentTimeIndicator: false as const,
     withAgenda: false as const,
-    withDragSlotSelect: true as const,
+    withDragSlotSelect: !readOnly,
+    mode,
+    // A week wider than the screen scrolls sideways, and a region that scrolls
+    // has to be reachable from the keyboard to be scrolled without a pointer.
+    // A painting calendar's slots are in the tab order and carry it there; a
+    // static one has nothing focusable inside, so the viewport takes focus
+    // itself, as the published sheet's table does.
+    scrollAreaProps: readOnly
+      ? { viewportProps: { tabIndex: 0, role: 'region', 'aria-label': 'Calendar' } }
+      : undefined,
     onSlotDragEnd: (fromSlot: string, toSlot: string) => {
       // The swipe that scrolled the days, not a stroke; see `cancelled`.
       if (!cancelled.current) paint(fromSlot, toSlot)
@@ -745,8 +811,12 @@ export function PaintCalendar({
     // `PAN_SIDEWAYS` and `outOfBoundsSlot`.
     getTimeSlotProps: ({ start }: { start: string }) =>
       open(granuleKey(start.slice(0, 10), toMinutes(start.slice(11, 16))))
-        ? { style: PAN_SIDEWAYS }
-        : outOfBoundsSlot,
+        ? readOnly
+          ? {}
+          : { style: PAN_SIDEWAYS }
+        : readOnly
+          ? outOfBoundsRead
+          : outOfBoundsSlot,
   }
 
   return (
@@ -783,15 +853,23 @@ export function PaintCalendar({
               replacing it, so a screen reader is told both -- "Apply to all of
               September 2026" -- the way the week grid's day headings are; see
               LABELS. */}
-          <Tooltip label="Apply to everything on screen" withArrow>
-            <ScheduleHeader.Control
-              miw={190}
-              aria-label={`Apply to all of ${rangeLabel(date, showing)}`}
-              onClick={fillVisible}
-            >
+          {readOnly ? (
+            // Only a label, on a calendar nobody paints: there is nothing on
+            // it for the range to fill.
+            <ScheduleHeader.Control miw={190} interactive={false} tabIndex={-1}>
               {rangeLabel(date, showing)}
             </ScheduleHeader.Control>
-          </Tooltip>
+          ) : (
+            <Tooltip label="Apply to everything on screen" withArrow>
+              <ScheduleHeader.Control
+                miw={190}
+                aria-label={`Apply to all of ${rangeLabel(date, showing)}`}
+                onClick={fillVisible}
+              >
+                {rangeLabel(date, showing)}
+              </ScheduleHeader.Control>
+            </Tooltip>
+          )}
           <ScheduleHeader.Next
             aria-label={`Next ${showing}`}
             {...dead(forward === null)}
@@ -864,7 +942,8 @@ export function PaintCalendar({
             // `touch-action: none` with it and will not move. The attribute is
             // the drag's: turning the drag off is what lets the month scroll, and
             // `onDayClick` is wired past it, so a tap still fills a day.
-            withDragSlotSelect={!touch}
+            withDragSlotSelect={!touch && !readOnly}
+            mode={mode}
             onSlotDragEnd={(fromDay: string, toDay: string) => {
               // As on the time grids, and for a cancel that was not a scroll:
               // this drag is off on the devices that scroll one away. See
@@ -876,7 +955,7 @@ export function PaintCalendar({
             // buttons, so this is the only handler such a tap reaches -- it
             // never doubles as a day click.
             onEventClick={erase}
-            getDayProps={(day) => (asks(day) ? {} : outOfBounds)}
+            getDayProps={(day) => (asks(day) ? {} : readOnly ? outOfBoundsRead : outOfBounds)}
             // No red weekends here either; see the week grid.
             weekendDays={[]}
             firstDayOfWeek={1}
@@ -906,6 +985,7 @@ export function PaintCalendar({
             }}
             withAllDaySlot={false}
             events={events}
+            renderEventBody={eventBody}
             onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
             // One day on screen and no heading over it, so there is nothing to
             // fill it in a click. There is no need: a drag from the top of the
@@ -918,7 +998,7 @@ export function PaintCalendar({
               <style>{`${greyedHeadings.join(',\n')} {
               color: var(--mantine-color-dimmed);
               background: var(--mantine-color-gray-light);
-              cursor: not-allowed;
+              cursor: ${readOnly ? 'default' : 'not-allowed'};
             }`}</style>
             )}
             <WeekView
@@ -927,13 +1007,14 @@ export function PaintCalendar({
               {...grid}
               style={weekStyle}
               events={events}
+              renderEventBody={eventBody}
               onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
               // The day's own column heading, which with the header off is the
               // only thing left in this view that changes the date -- so it is a
               // callback with one caller and one meaning rather than a guess about
               // which control fired. Its accessible name says so too; see LABELS.
               onDateChange={fillDay}
-              labels={LABELS}
+              labels={labels}
               // The time column: pinned so that scrolling a narrow week sideways
               // does not take the hours with it (STICKY_TIMES), and lined up with
               // the rows it names (`hoursColumn`).

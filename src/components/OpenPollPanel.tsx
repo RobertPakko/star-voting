@@ -269,17 +269,37 @@ export function OpenPollPanel({
             later. A poll that publishes its ballots is already showing it, on
             the grid below with everybody else's. */}
         {!view.poll.show_ballots && view.voted && view.your_scores && (
-          <Suspense fallback={<YourBallotSkeleton rows={view.options.length || undefined} />}>
-            <YourBallot pollId={pollId} options={view.options} scores={view.your_scores} />
+          <Suspense
+            fallback={
+              <YourBallotSkeleton
+                rows={view.options.length || undefined}
+                schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
+              />
+            }
+          >
+            <YourBallot
+              pollId={pollId}
+              options={view.options}
+              scores={view.your_scores}
+              schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
+            />
           </Suspense>
         )}
         {view.poll.show_ballots && (
-          <Suspense fallback={<BallotsSkeleton rows={view.voted_count || undefined} />}>
+          <Suspense
+            fallback={
+              <BallotsSkeleton
+                rows={view.voted_count || undefined}
+                schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
+              />
+            }
+          >
             <Ballots
               source={{ kind: 'open', pollId }}
               title={view.poll.title}
               question={view.poll.question_title}
               initial={ballots}
+              schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
             />
           </Suspense>
         )}

@@ -23,6 +23,7 @@ import {
 } from '../lib/schedule'
 import { NameList } from './NameList'
 import { use24HourTime } from '../lib/clock'
+import { RATINGS, colorFor, inkFor, swatchFor } from '../lib/ratings'
 import { offsetName } from '../lib/timezones'
 import type { PollOption, PollSchedule } from '../lib/types'
 
@@ -56,42 +57,6 @@ import type { PollOption, PollSchedule } from '../lib/types'
  * shuffling it would produce a week with Thursday in the middle. That is a
  * deliberate exception to the rule that file argues for, and the only one.
  */
-
-/**
- * The six ratings, and the colours they are painted in.
- *
- * **A ramp of hue, not of shade.** These were six blues from `blue.2` to
- * `blue.9`, which is a scale you can order but cannot read: a 2 and a 3 beside
- * each other on a week grid are two rectangles of nearly the same colour, and
- * the question a painted calendar is answering is "what did I put here". Red
- * through green is the ordering everybody already knows for "bad to good", and
- * the shades still darken along it -- so the ramp survives being seen by
- * somebody who cannot tell the red end from the green one, and does not depend
- * on that for its first reading.
- *
- * `ink` is chosen here rather than left to the calendar. A month chip takes
- * its text colour from Mantine's variant resolver, and at the dark end of this
- * ramp that comes back close enough to the background to be unreadable --
- * `green.9` on `green.9`, which is a label everywhere except on screen. Picked
- * against the six swatches rather than computed, because there are six of them
- * and they do not change.
- */
-const RATINGS = [
-  { value: '0', label: '0', color: 'gray.5', ink: 'black' },
-  { value: '1', label: '1', color: 'red.4', ink: 'black' },
-  { value: '2', label: '2', color: 'orange.5', ink: 'black' },
-  { value: '3', label: '3', color: 'yellow.5', ink: 'black' },
-  { value: '4', label: '4', color: 'teal.6', ink: 'white' },
-  { value: '5', label: '5', color: 'green.9', ink: 'white' },
-]
-
-function inkFor(rating: number): string {
-  return `var(--mantine-color-${RATINGS[rating]?.ink ?? 'black'})`
-}
-
-function colorFor(rating: number): string {
-  return RATINGS[rating]?.color ?? 'gray.5'
-}
 
 export function TimeBallotCard({
   options,
@@ -307,10 +272,7 @@ export function TimeBallotCard({
                     h={10}
                     style={{
                       borderRadius: 2,
-                      background:
-                        level.value === '0'
-                          ? 'var(--mantine-color-default-border)'
-                          : `var(--mantine-color-${level.color.replace('.', '-')})`,
+                      background: swatchFor(Number(level.value)),
                     }}
                   />
                   <span>{level.label}</span>
