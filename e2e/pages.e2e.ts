@@ -10,6 +10,7 @@ const PAGES = [
   { path: '#/about', title: 'About STAR', name: 'About' },
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
   { path: '#/intro', title: 'STAR Voting', name: 'the intro' },
+  { path: '#/support', title: 'Support', name: 'the support page' },
   { path: '#/polls/sample-dinner', title: 'Movie night', name: 'a ballot' },
   { path: '#/polls/sample-when', title: 'Movie night', name: 'a calendar ballot' },
   { path: '#/polls/sample-result-dinner', title: 'Movie night', name: 'a result' },
@@ -34,7 +35,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await setColorScheme(page, scheme)
       await page.goto('#/about')
       await page.getByRole('button', { name: 'Settings' }).click()
-      await expect(page.getByRole('link', { name: 'View intro' })).toBeVisible()
+      await expect(page.getByRole('link', { name: 'Support' })).toBeVisible()
       await page.waitForTimeout(300)
       await expectAccessible(page, 'the settings menu')
     })
@@ -67,6 +68,23 @@ test.describe('the sign-in screen', () => {
     await page.getByText('Email a code').click()
     await expect(page.getByRole('button', { name: 'Send sign-in code' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Continue without an account' })).toBeVisible()
+  })
+})
+
+test.describe('the support page', () => {
+  test('is reached from the settings menu, and gives through Every.org', async ({ page }) => {
+    await page.goto('#/about')
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await page.getByRole('link', { name: 'Support' }).click()
+    await expect(page).toHaveTitle('Support')
+    await expect(page.getByRole('link', { name: 'Donate', exact: true })).toHaveAttribute(
+      'href',
+      /^https:\/\/www\.every\.org\/khan-academy(\/f\/[^#]+)?#donate$/,
+    )
+    // Nothing links a page to itself from the menu.
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await expect(page.getByRole('link', { name: 'About STAR' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Support' })).toHaveCount(0)
   })
 })
 

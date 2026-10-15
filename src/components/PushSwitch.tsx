@@ -170,7 +170,7 @@ function reasonFor(state: PushState) {
   )
 
   return state === 'unconfigured' ? (
-    'Not available on this site yet.'
+    'Not available on this site'
   ) : state === 'needs-install' ? (
     <>On iPhone and iPad, install the app first.{guide}</>
   ) : state === 'unsupported' ? (

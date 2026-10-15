@@ -18,6 +18,7 @@ import { usePageTitle } from '../lib/pageTitle'
 import { PollTitleText } from './PollTitleText'
 import { PollHeading, type PollHeadingProps } from './PollHeading'
 import { SWITCH_LABELS } from '../lib/notificationSettings'
+import { countsRaised } from '../lib/support'
 
 /**
  * The shapes each page draws while it is waiting for its first read.
@@ -1221,6 +1222,58 @@ export function GuideSkeleton() {
           </Stack>
         </Card>
         <Skeleton height={control} radius="md" />
+      </Stack>
+    </Loading>
+  )
+}
+
+/**
+ * The support page, while its chunk is fetched: the heading, the note and its
+ * signature, and the charity's card down to its button — the count and its
+ * bar included where this build has a fundraiser to count (`countsRaised`),
+ * since that is fixed when the app is built. Not the tax note under the card.
+ */
+export function SupportSkeleton() {
+  return (
+    <Loading>
+      <Stack maw={720} mx="auto" gap="md">
+        <Bar kind="page" width={160} />
+        {[
+          ['100%', '30%'],
+          ['100%', '100%', '100%', '60%'],
+        ].map((lines, i) => (
+          <Stack key={i} gap={0}>
+            {lines.map((w, j) => (
+              <Bar key={j} kind="name" width={w} />
+            ))}
+          </Stack>
+        ))}
+        {/* The signature, which is set in a hand at 28px: a taller line than
+            any kind above has. */}
+        <Box h={34} style={{ display: 'flex', alignItems: 'center' }}>
+          <Skeleton height={20} width={72} radius="sm" />
+        </Box>
+        <Card withBorder>
+          <Stack gap="md">
+            <Group gap="sm" wrap="nowrap">
+              <Skeleton height={48} width={48} radius={12} />
+              <Bar kind="heading" width={120} />
+            </Group>
+            <Stack gap={0}>
+              {['100%', '100%', '40%'].map((w, i) => (
+                <Bar key={i} kind="line" width={w} />
+              ))}
+            </Stack>
+            {countsRaised && (
+              <Stack gap={6}>
+                <Skeleton height={22} width={200} my={4} radius="sm" />
+                <Skeleton height={8} radius="xl" />
+                <Bar kind="note" width={64} />
+              </Stack>
+            )}
+            <Skeleton height={control} width={110} radius="md" />
+          </Stack>
+        </Card>
       </Stack>
     </Loading>
   )

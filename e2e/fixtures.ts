@@ -13,6 +13,19 @@ export const test = base.extend<{ page: Page }>({
       problems.push(`request to the database: ${route.request().method()} ${route.request().url()}`)
       return route.abort()
     })
+    // The support page's count, answered here rather than by Every.org: a
+    // test that passes or fails on somebody else's server is not a test.
+    await page.route('https://partners.every.org/**', (route) =>
+      route.fulfill({
+        json: {
+          currency: 'USD',
+          raised: '123400',
+          supporters: 12,
+          goalAmount: '200000',
+          goalType: 'AUTOMATIC',
+        },
+      }),
+    )
     page.on('pageerror', (error) => problems.push(`uncaught: ${error.message}`))
     page.on('console', (message) => {
       if (message.type() === 'error') problems.push(`console: ${message.text()}`)

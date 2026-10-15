@@ -15,7 +15,7 @@ import {
   BookOpenIcon,
   DownloadSimpleIcon,
   GearIcon,
-  PlayCircleIcon,
+  HeartIcon,
   SignInIcon,
   SignOutIcon,
   type Icon,
@@ -46,7 +46,7 @@ import { ThemeToggle } from './ThemeToggle'
  * that would strand every poll it made.
  *
  * The pages that are not polls — the removed polls, the install guide, About
- * and the intro — are links in the gear menu rather than in the header. About
+ * and the support page — are links in the gear menu rather than in the header. About
  * was a link of its own up here once, and the row is one control shorter on a
  * phone without it. Each is dropped from the menu while it is what's on
  * screen: a link to the page you are already reading is a dead end that
@@ -194,8 +194,9 @@ export function Layout() {
                     <Divider />
                     {/* Pages rather than switches, so they sit under the
                         switches and apart from them. All are links: the menu
-                        closes on any change of address, and each is two words. The reader's own
-                        things first, then the app's, then the method's. */}
+                        closes on any change of address, and each is a word or two. The
+                        reader's own things first, then the app's, then the method's,
+                        and asking for something back last. */}
                     {session && (
                       <MenuLink to="/?removed" icon={ArchiveIcon}>
                         Removed polls
@@ -211,9 +212,13 @@ export function Layout() {
                         About STAR
                       </MenuLink>
                     )}
-                    <MenuLink to="/intro" icon={PlayCircleIcon}>
-                      View intro
-                    </MenuLink>
+                    {/* The intro is not here: About links to it, and a reader
+                        who has found the gear has already met the app. */}
+                    {pathname !== '/support' && (
+                      <MenuLink to="/support" icon={HeartIcon}>
+                        Support
+                      </MenuLink>
+                    )}
                   </Stack>
                 </Popover.Dropdown>
               </Popover>
