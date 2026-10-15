@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS "public"."polls" (
     "description" "text",
     "created_by" "uuid" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "created_by_email" "text" DEFAULT "lower"(("auth"."jwt"() ->> 'email'::"text")) NOT NULL,
+    "created_by_email" "text" DEFAULT NULLIF("lower"(("auth"."jwt"() ->> 'email'::"text")), ''::"text"),
     "closed_at" timestamp with time zone,
     "mode" "text" DEFAULT 'invite'::"text" NOT NULL,
     "show_voters" boolean DEFAULT true NOT NULL,
@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS "public"."polls" (
     "options_edited_after_votes" boolean DEFAULT false NOT NULL,
     "votes_after_reveal" boolean DEFAULT false NOT NULL,
     "reopened_after_reveal" boolean DEFAULT false NOT NULL,
+    "reminder_sent_at" timestamp with time zone,
+    "results_announced_at" timestamp with time zone,
     CONSTRAINT "polls_kind_ck" CHECK (("kind" = ANY (ARRAY['option'::"text", 'time'::"text"]))),
     CONSTRAINT "polls_mode_ck" CHECK (("mode" = ANY (ARRAY['invite'::"text", 'open'::"text"]))),
     CONSTRAINT "polls_options_finalized_ck" CHECK ((("options_finalized_at" IS NULL) OR "solicit_options")),
@@ -147,6 +149,14 @@ COMMENT ON COLUMN "public"."polls"."votes_after_reveal" IS 'A ballot was cast or
 
 
 COMMENT ON COLUMN "public"."polls"."reopened_after_reveal" IS 'This question was reopened having already shown its tally, which is what makes the next vote a late one. Internal bookkeeping for the flag above: poll_results_revealed is computed from closed_at and turnout, so it goes false the moment the poll reopens and cannot answer "was it ever out" afterwards.';
+
+
+
+COMMENT ON COLUMN "public"."polls"."reminder_sent_at" IS 'When the creator sent the poll''s one reminder to vote; null until then. Set on the group''s first question only, and never cleared -- reopening does not give the reminder back.';
+
+
+
+COMMENT ON COLUMN "public"."polls"."results_announced_at" IS 'When the poll''s results-ready announcement went out; null while it has not, and cleared when the poll goes back to taking votes, so a second finish is announced again. Set on the group''s first question only.';
 
 
 
@@ -370,6 +380,36 @@ $$;
 ALTER FUNCTION "public"."ballot_sheet"("p_poll_id" "uuid", "p_named" boolean) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."begin_account_carry_over"() RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_token text;
+begin
+  if auth.uid() is null or not is_anonymous_session() then
+    raise exception 'Only an account made without signing in has anything to carry over';
+  end if;
+
+  -- One live ticket per anonymous account, and nobody's expired ones.
+  delete from account_carry_overs
+  where anon_id = auth.uid() or created_at < now() - interval '1 day';
+
+  -- Two uuids' worth of randomness: the same generator as every id here.
+  v_token := replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
+  insert into account_carry_overs (token, anon_id) values (v_token, auth.uid());
+  return v_token;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."begin_account_carry_over"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."begin_account_carry_over"() IS 'Takes out a one-day ticket for the calling anonymous account, to be redeemed by finish_account_carry_over once the browser has signed in to a real account.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."broadcast_poll_change"("p_poll_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -487,14 +527,11 @@ CREATE OR REPLACE FUNCTION "public"."broadcast_poll_updated"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
+declare
+  v_quiet text[] := array['winner_name', 'winner_settled_at',
+                          'results_announced_at', 'reminder_sent_at'];
 begin
-  if (
-    NEW.winner_name is distinct from OLD.winner_name
-    or NEW.winner_settled_at is distinct from OLD.winner_settled_at
-  ) and to_jsonb(NEW) - 'winner_name' - 'winner_settled_at'
-        is not distinct from
-        to_jsonb(OLD) - 'winner_name' - 'winner_settled_at'
-  then
+  if to_jsonb(NEW) - v_quiet is not distinct from to_jsonb(OLD) - v_quiet then
     return null;
   end if;
 
@@ -589,6 +626,8 @@ CREATE OR REPLACE FUNCTION "public"."close_poll"("p_poll_id" "uuid") RETURNS "vo
 declare
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
 
   if not found then
@@ -618,6 +657,8 @@ CREATE OR REPLACE FUNCTION "public"."confirm_options"("p_poll_id" "uuid") RETURN
 declare
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   v_poll := confirming_invitee(p_poll_id);
   perform assert_collecting_options(v_poll);
 
@@ -876,6 +917,8 @@ declare
   v_poll polls;
   v_voted boolean;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
 
   -- The same 'not found' a poll that exists but isn't yours gets everywhere
@@ -925,6 +968,8 @@ declare
   v_added int;
   v_voted boolean;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
 
   if not found then
@@ -975,6 +1020,8 @@ declare
   v_clash text;
   i int;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
 
   -- The same 'not found' a poll that exists but isn't yours gets everywhere
@@ -1177,6 +1224,8 @@ declare
   v_poll polls;
   v_short record;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
 
   if not found then
@@ -1235,6 +1284,75 @@ ALTER FUNCTION "public"."finalize_options"("p_poll_id" "uuid") OWNER TO "postgre
 
 
 COMMENT ON FUNCTION "public"."finalize_options"("p_poll_id" "uuid") IS 'Turns a collected option list into a ballot, for every question of the poll at once, and tells the voters. Refuses until each of them has two options, naming the one that is short.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."finish_account_carry_over"("p_token" "text") RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_me uuid := auth.uid();
+  v_from uuid;
+  v_moved int;
+begin
+  if v_me is null or is_anonymous_session() then
+    raise exception 'Sign in to an account to carry polls over to it';
+  end if;
+
+  -- Used once whatever happens next, and refused once it is a day old.
+  delete from account_carry_overs
+  where token = p_token and created_at > now() - interval '1 day'
+  returning anon_id into v_from;
+
+  -- Only ever from an account that is still anonymous. begin_ already
+  -- refuses anybody else a ticket; this is the same rule read at the other
+  -- end, so a ticket cannot outlive the account it was taken out for being
+  -- linked to an address of its own.
+  if v_from is null
+     or v_from = v_me
+     or not exists (select 1 from auth.users where id = v_from and is_anonymous) then
+    return 0;
+  end if;
+
+  -- The polls it made, which is what this is for. created_by_email goes with
+  -- them, because the column exists to say who made the poll.
+  update polls
+  set created_by = v_me, created_by_email = nullif(lower(auth.jwt() ->> 'email'), '')
+  where created_by = v_from;
+  get diagnostics v_moved = row_count;
+
+  -- What it answered through links, so those polls stay on the list too. A
+  -- poll the account had already answered keeps the account's own ballot,
+  -- and the anonymous one stays where it is: one account, one ballot.
+  update ballots b set account_id = v_me
+  where b.account_id = v_from
+    and not exists (select 1 from ballots o where o.poll_id = b.poll_id and o.account_id = v_me);
+
+  update option_confirmations c set account_id = v_me
+  where c.account_id = v_from
+    and not exists (
+      select 1 from option_confirmations o where o.poll_id = c.poll_id and o.account_id = v_me);
+
+  insert into removed_polls (user_id, poll_id)
+  select v_me, poll_id from removed_polls where user_id = v_from
+  on conflict do nothing;
+  delete from removed_polls where user_id = v_from;
+
+  -- The poll updates above have told every list these polls are on, the
+  -- account's own included; the removals moved silently, and the list is
+  -- what shows them.
+  perform announce('user:' || v_me::text, 'polls_changed');
+
+  return v_moved;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."finish_account_carry_over"("p_token" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."finish_account_carry_over"("p_token" "text") IS 'Moves the polls, link ballots, confirmations and removals of the anonymous account a ticket was taken out by to the calling account, and spends the ticket. Returns how many polls moved.';
 
 
 
@@ -1303,6 +1421,56 @@ $$;
 ALTER FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."guard_anonymous_polls"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_made int;
+begin
+  if not is_anonymous_session() then
+    return new;
+  end if;
+
+  -- An invite poll emails every address on its list, from this app's
+  -- domain, through its Resend key. Anybody can mint an anonymous account
+  -- with no inbox behind it, so letting one make an invite poll would make
+  -- this app a way to send mail to any address on earth. An open poll writes
+  -- to nobody it was not given an account by, and guard_invitee_changes
+  -- already refuses an invite list on one, so this is the one door.
+  if new.mode <> 'open' then
+    raise exception 'Sign in to invite people by email. A poll made without an account is open to anyone with its link.';
+  end if;
+
+  -- A ceiling on how fast one anonymous account can fill the database. Not a
+  -- defence on its own -- a fresh account is one request away, and Supabase's
+  -- per-address limit on anonymous sign-ins (and its CAPTCHA, if enabled) is
+  -- what bounds those -- but it stops one session from looping create_poll.
+  -- A poll of several questions is one poll: counted by group, and its own
+  -- earlier questions, inserted in this same statement's transaction, are
+  -- not counted against it.
+  select count(distinct coalesce(group_id, id)) into v_made
+  from polls
+  where created_by = new.created_by
+    and created_at > now() - interval '1 day'
+    and (new.group_id is null or group_id is distinct from new.group_id);
+
+  if v_made >= 20 then
+    raise exception 'That is as many polls as can be made without an account in a day. Sign in to make more.';
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."guard_anonymous_polls"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."guard_anonymous_polls"() IS 'Refuses an invite poll from an account made without signing in, which would otherwise be a way to email any address, and caps how many polls one such account makes in a day. Internal: a trigger on polls, so every way of making a poll passes it.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."guard_invitee_changes"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1312,6 +1480,8 @@ declare
   v_invited int;
   v_voted int;
 begin
+  perform lock_poll(case when tg_op = 'DELETE' then old.poll_id else new.poll_id end);
+
   if tg_op = 'DELETE' then
     v_poll_id := old.poll_id;
   else
@@ -1368,6 +1538,8 @@ declare
   v_poll_id uuid;
   v_remaining int;
 begin
+  perform lock_poll(case when tg_op = 'DELETE' then old.poll_id else new.poll_id end);
+
   if tg_op = 'DELETE' then
     v_poll_id := old.poll_id;
   else
@@ -1627,6 +1799,23 @@ COMMENT ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description"
 
 
 
+CREATE OR REPLACE FUNCTION "public"."is_anonymous_session"() RETURNS boolean
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public'
+    AS $$
+  -- The claim Supabase puts on every token; absent (and so false) on a token
+  -- minted before anonymous sign-ins existed, and on no token at all.
+  select coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false);
+$$;
+
+
+ALTER FUNCTION "public"."is_anonymous_session"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."is_anonymous_session"() IS 'Whether the caller signed in without an account (Supabase anonymous sign-in): signed in, with an auth.uid(), and no email address. Internal.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."is_invited_to_poll"("p_poll_id" "uuid") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1860,6 +2049,26 @@ COMMENT ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer,
 
 
 
+CREATE OR REPLACE FUNCTION "public"."lock_poll"("p_poll_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  -- Nothing comes back from this and nothing is meant to: the row is taken
+  -- for what is left of the transaction, and a poll that does not exist --
+  -- one being deleted, or the purge -- locks nothing and stops nobody.
+  perform 1 from polls where id = poll_list_row(p_poll_id) for no key update;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."lock_poll"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."lock_poll"("p_poll_id" "uuid") IS 'Queues this transaction behind any other writing to the same poll, by locking the group''s first question until commit. Every function that reads a poll''s state and writes on it calls this first. Internal.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."mark_votes_after_reveal"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1868,7 +2077,11 @@ begin
   -- Every way a vote is cast or changed passes through this table -- the two
   -- submit paths insert a ballot, the two revise paths stamp revised_at on one
   -- -- so the flag is raised here rather than in four functions that would
-  -- each have to remember to.
+  -- each have to remember to. Any other update is bookkeeping.
+  if tg_op = 'UPDATE' and new.revised_at is not distinct from old.revised_at then
+    return null;
+  end if;
+
   update polls set votes_after_reveal = true
   where id = new.poll_id and reopened_after_reveal and not votes_after_reveal;
 
@@ -2075,11 +2288,12 @@ declare
   -- this is who is in it.
   v_actor text := lower(auth.jwt() ->> 'email');
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id;
 
   -- A poll on its way out -- the nightly purge, or the creator's own Delete
-  -- button -- has nobody left to tell, and its notice row is cascading after
-  -- it either way.
+  -- button -- has nobody left to tell.
   if not found then
     return;
   end if;
@@ -2093,7 +2307,8 @@ begin
   if not poll_results_ready(v_first) then
     -- Back to taking votes. A poll that finishes again is a second result,
     -- and the people in it are told about it again.
-    delete from results_notices where poll_id = v_first.id;
+    update polls set results_announced_at = null
+    where id = v_first.id and results_announced_at is not null;
 
     -- A poll closed with nobody having voted is finished with nothing to
     -- announce, so its watches will never be answered. Gone now rather than
@@ -2105,16 +2320,16 @@ begin
   end if;
 
   -- The once-only rule, and all of it: two ballots arriving together both run
-  -- this, and the primary key decides which of them is the announcement.
-  insert into results_notices (poll_id) values (v_first.id)
-  on conflict (poll_id) do nothing;
+  -- this, the second waits on the first's row lock, and finds the column set.
+  update polls set results_announced_at = now()
+  where id = v_first.id and results_announced_at is null;
 
   if not found then
     return;
   end if;
 
   -- One request per address rather than one request with every address in it;
-  -- see the note at the top of 0072.
+  -- see notify_poll_opened.
   for v_email in select * from poll_results_audience(v_first, v_actor) loop
     perform send_results_ready_email(v_first, v_email);
   end loop;
@@ -2198,6 +2413,8 @@ CREATE OR REPLACE FUNCTION "public"."open_options_when_all_confirmed"("p_poll_id
 declare
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id;
 
   -- Gone, or on its way out behind a cascade.
@@ -2298,6 +2515,8 @@ declare
   v_name text;
   v_key text;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id and mode = 'open';
 
   if not found then
@@ -2461,6 +2680,8 @@ declare
   v_poll polls;
   v_ballot_id uuid;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls
   where id = p_poll_id and mode = 'open';
 
@@ -2520,6 +2741,8 @@ declare
   v_candidate_id uuid;
   v_score int;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls
   where id = p_poll_id and mode = 'open';
 
@@ -2620,6 +2843,8 @@ CREATE OR REPLACE FUNCTION "public"."open_poll_suggest_option"("p_poll_id" "uuid
 declare
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls
   where id = p_poll_id and mode = 'open';
 
@@ -2642,6 +2867,8 @@ CREATE OR REPLACE FUNCTION "public"."open_poll_suggest_options"("p_poll_id" "uui
 declare
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls
   where id = p_poll_id and mode = 'open';
 
@@ -2669,6 +2896,8 @@ CREATE OR REPLACE FUNCTION "public"."open_poll_unconfirm_options"("p_poll_id" "u
 declare
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id and mode = 'open';
 
   if not found then
@@ -2893,6 +3122,8 @@ declare
   v_poll polls;
   v_first polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id and mode = 'open';
 
   if not found then
@@ -3520,6 +3751,33 @@ COMMENT ON FUNCTION "public"."poll_list_row"("p_poll_id" "uuid") IS 'The id a po
 
 
 
+CREATE OR REPLACE FUNCTION "public"."poll_outstanding_invitees"("p_poll" "public"."polls") RETURNS SETOF "text"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  -- Every question of a group carries the whole invite list, so the list is
+  -- read once; a ballot is per question, so an invitee is still owed a vote
+  -- while any question has none of theirs. That is the reading a voter
+  -- halfway through a poll would give "have you voted yet".
+  select lower(iv.email)
+  from invited_voters iv
+  where iv.poll_id = p_poll.id
+    and exists (
+      select 1 from poll_group_members(p_poll) q
+      where not exists (
+        select 1 from ballots b
+        join auth.users u on u.id = b.voter_id
+        where b.poll_id = q.id and lower(u.email) = lower(iv.email)));
+$$;
+
+
+ALTER FUNCTION "public"."poll_outstanding_invitees"("p_poll" "public"."polls") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."poll_outstanding_invitees"("p_poll" "public"."polls") IS 'Every invitee who has not voted in every question of this poll''s group. Internal.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."poll_page"("p_poll_id" "uuid", "p_voter_key" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3774,6 +4032,27 @@ $$;
 ALTER FUNCTION "public"."poll_ranking"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."poll_reminder_audience"("p_poll" "public"."polls", "p_actor" "text") RETURNS SETOF "text"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  -- poll_email_audience is where "removed the poll" and "nobody is told what
+  -- they just did" are written, so the reminder is that audience narrowed to
+  -- the people still owed a vote rather than a third copy of either rule. The
+  -- creator is left out: they are the one sending it.
+  select a
+  from poll_email_audience(p_poll, false, p_actor) a
+  where a in (select * from poll_outstanding_invitees(p_poll));
+$$;
+
+
+ALTER FUNCTION "public"."poll_reminder_audience"("p_poll" "public"."polls", "p_actor" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."poll_reminder_audience"("p_poll" "public"."polls", "p_actor" "text") IS 'Every address to remind to vote: the invitees still owed a vote in some question, minus the creator, the actor and every account that has removed the poll from its list. Internal.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."poll_results_audience"("p_poll" "public"."polls", "p_actor" "text") RETURNS SETOF "text"
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3836,7 +4115,7 @@ COMMENT ON FUNCTION "public"."poll_retention_window"() IS 'How long a poll is ke
 
 
 
-CREATE OR REPLACE FUNCTION "public"."poll_status"("p_poll_id" "uuid") RETURNS TABLE("invited_count" integer, "voted_count" integer, "is_complete" boolean, "voted" boolean, "is_closed" boolean, "results_available" boolean, "soliciting" boolean, "expires_at" timestamp with time zone, "invited" boolean, "confirmed" boolean, "confirmed_count" integer, "winner_name" "text", "winner_settled" boolean)
+CREATE OR REPLACE FUNCTION "public"."poll_status"("p_poll_id" "uuid") RETURNS TABLE("invited_count" integer, "voted_count" integer, "is_complete" boolean, "voted" boolean, "is_closed" boolean, "results_available" boolean, "soliciting" boolean, "expires_at" timestamp with time zone, "invited" boolean, "confirmed" boolean, "confirmed_count" integer, "winner_name" "text", "winner_settled" boolean, "reminded_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -3889,7 +4168,11 @@ begin
     -- out, so a tie can never be drawn as *Results ready* nor the other way
     -- about.
     v_poll.winner_name,
-    v_poll.winner_settled_at is not null;
+    v_poll.winner_settled_at is not null,
+    -- When the creator sent the poll's one reminder, on any question of it.
+    -- Readable by its invitees too, which tells them nothing they were not
+    -- emailed.
+    (select q.reminder_sent_at from polls q where q.id = poll_list_row(p_poll_id));
 end;
 $$;
 
@@ -4134,6 +4417,8 @@ CREATE OR REPLACE FUNCTION "public"."push_message"("p_poll" "public"."polls", "p
       when 'invite_options' then 'You''ve been invited to add options to this poll.'
       when 'invite_vote' then 'You''ve been invited to vote in this poll.'
       when 'opened' then 'The options are settled and voting is now open.'
+      when 'reminder' then 'Reminder: you haven''t voted in '
+        || coalesce(nullif(trim(p_poll.title), ''), 'this poll')
       when 'results' then 'The results are ready.'
     end,
     -- Relative to the app's own address, which the service worker resolves
@@ -4149,7 +4434,7 @@ $$;
 ALTER FUNCTION "public"."push_message"("p_poll" "public"."polls", "p_event" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."push_message"("p_poll" "public"."polls", "p_event" "text") IS 'The notification sent about one of a poll''s three moments -- invite_options, invite_vote, opened, results. Internal.';
+COMMENT ON FUNCTION "public"."push_message"("p_poll" "public"."polls", "p_event" "text") IS 'The notification sent about one of a poll''s moments -- invite_options, invite_vote, opened, reminder, results. Internal.';
 
 
 
@@ -4277,6 +4562,8 @@ CREATE OR REPLACE FUNCTION "public"."reopen_poll"("p_poll_id" "uuid") RETURNS "v
 declare
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
 
   if not found then
@@ -4433,6 +4720,8 @@ declare
   v_poll polls;
   v_ballot_id uuid;
 begin
+  perform lock_poll(p_poll_id);
+
   if v_email is null then
     raise exception 'Not authenticated';
   end if;
@@ -4668,6 +4957,85 @@ COMMENT ON FUNCTION "public"."send_poll_opened_email"("p_poll" "public"."polls",
 
 
 
+CREATE OR REPLACE FUNCTION "public"."send_poll_reminder"("p_poll_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+  v_first polls;
+  v_email text;
+  v_actor text := lower(auth.jwt() ->> 'email');
+begin
+  perform lock_poll(p_poll_id);
+
+  select * into v_poll from polls where id = p_poll_id and created_by = auth.uid();
+
+  if not found then
+    raise exception 'Only the poll creator can send a reminder';
+  end if;
+
+  -- Filed against question 1, like every notice: a reminder is about the
+  -- poll, whichever question the creator pressed it on.
+  select q.* into v_first from poll_group_members(v_poll) q limit 1;
+
+  if v_first.mode <> 'invite' then
+    raise exception 'Only a poll with an invite list can send a reminder';
+  end if;
+
+  if v_first.closed_at is not null then
+    raise exception 'This poll is closed';
+  end if;
+
+  if v_first.solicit_options and v_first.options_finalized_at is null then
+    raise exception 'This poll is still collecting its options';
+  end if;
+
+  if poll_results_revealed(v_first) then
+    raise exception 'The results are already out';
+  end if;
+
+  -- Asked before removals are taken away, and deliberately: the creator must
+  -- not be able to learn who has removed their poll from whether the button
+  -- works. A reminder that reaches nobody because everybody left still spends
+  -- the poll's one reminder.
+  if not exists (
+    select 1 from poll_outstanding_invitees(v_first) e
+    where e is distinct from v_actor
+  ) then
+    raise exception 'Everyone invited has already voted';
+  end if;
+
+  -- The once-only rule, and all of it: only a poll with no reminder on it
+  -- takes one, and a second press racing the first waits for it and finds
+  -- the column set.
+  update polls set reminder_sent_at = now()
+  where id = v_first.id and reminder_sent_at is null;
+
+  if not found then
+    raise exception 'A reminder has already been sent for this poll';
+  end if;
+
+  -- One request per address, so no invitee sees another's; see
+  -- notify_poll_opened.
+  for v_email in select * from poll_reminder_audience(v_first, v_actor) loop
+    perform send_reminder_email(v_first, v_email);
+  end loop;
+
+  -- No watchers: an invite poll has none.
+  perform push_poll(v_first, 'reminder',
+    array(select * from poll_reminder_audience(v_first, v_actor)), false);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."send_poll_reminder"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."send_poll_reminder"("p_poll_id" "uuid") IS 'The creator''s one reminder: emails and pushes every invitee still owed a vote in an invite poll that is taking votes, except those who removed the poll. Once per poll, ever.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."send_push"("p_targets" "jsonb", "p_message" "jsonb") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -4719,6 +5087,30 @@ ALTER FUNCTION "public"."send_push"("p_targets" "jsonb", "p_message" "jsonb") OW
 
 
 COMMENT ON FUNCTION "public"."send_push"("p_targets" "jsonb", "p_message" "jsonb") IS 'Hands one notification and every browser it is for to the send-push Edge Function. Best-effort: silent where pg_net, Vault or either of its two secrets is missing. Internal: the one place this app talks to a push sender.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."send_reminder_email"("p_poll" "public"."polls", "p_email" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform send_poll_email(
+    p_poll.id,
+    p_email,
+    'Poll reminder',
+    'Don''t forget to vote!',
+    'You haven''t voted yet in <strong>'
+      || email_escape(coalesce(p_poll.title, 'a poll')) || '</strong>. Sign in with this '
+      || 'email address to vote.');
+end;
+$$;
+
+
+ALTER FUNCTION "public"."send_reminder_email"("p_poll" "public"."polls", "p_email" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."send_reminder_email"("p_poll" "public"."polls", "p_email" "text") IS 'Posts one reminder-to-vote email to Resend. Best-effort: silent where pg_net, Vault or the API key is missing. Internal.';
 
 
 
@@ -4780,7 +5172,7 @@ CREATE OR REPLACE FUNCTION "public"."set_poll_creator_email"() RETURNS "trigger"
     SET "search_path" TO 'public'
     AS $$
 begin
-  new.created_by_email := lower(auth.jwt() ->> 'email');
+  new.created_by_email := nullif(lower(auth.jwt() ->> 'email'), '');
   return new;
 end;
 $$;
@@ -4797,6 +5189,8 @@ declare
   v_poll polls;
   v_question polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id;
 
   -- A poll on its way out -- the nightly purge, or the creator's own Delete
@@ -5156,6 +5550,8 @@ declare
   v_score int;
   v_candidate_count int;
 begin
+  perform lock_poll(p_poll_id);
+
   if auth.uid() is null then
     raise exception 'Not authenticated';
   end if;
@@ -5227,6 +5623,8 @@ declare
   v_email text := lower(auth.jwt() ->> 'email');
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id;
 
   if not found then
@@ -5264,6 +5662,8 @@ declare
   v_email text := lower(auth.jwt() ->> 'email');
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   select * into v_poll from polls where id = p_poll_id;
 
   if not found then
@@ -5305,6 +5705,8 @@ CREATE OR REPLACE FUNCTION "public"."unconfirm_options"("p_poll_id" "uuid") RETU
 declare
   v_poll polls;
 begin
+  perform lock_poll(p_poll_id);
+
   v_poll := confirming_invitee(p_poll_id);
   -- Only while the stage is still running, which is also the only time it can
   -- mean anything: once the poll is open there is nothing left to be done
@@ -5424,6 +5826,20 @@ ALTER FUNCTION "public"."wants_push"("p_user_id" "uuid") OWNER TO "postgres";
 
 
 COMMENT ON FUNCTION "public"."wants_push"("p_user_id" "uuid") IS 'Whether an account''s subscribed browsers should be pushed to: true unless it has turned push off. Internal.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."account_carry_overs" (
+    "token" "text" NOT NULL,
+    "anon_id" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."account_carry_overs" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."account_carry_overs" IS 'Tickets an anonymous account takes out before signing in, so that what it made can be moved to the account it signs in to. Read and written only by begin_account_carry_over and finish_account_carry_over: no grants and no policies, like results_notices.';
 
 
 
@@ -5559,19 +5975,6 @@ COMMENT ON TABLE "public"."removed_polls" IS 'The polls each account has taken o
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."results_notices" (
-    "poll_id" "uuid" NOT NULL,
-    "sent_at" timestamp with time zone DEFAULT "now"() NOT NULL
-);
-
-
-ALTER TABLE "public"."results_notices" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."results_notices" IS 'One row per poll whose results have been announced by email, keyed on the group''s first question. Internal bookkeeping: no grants, and dropped when a reset puts the poll back to taking votes.';
-
-
-
 CREATE TABLE IF NOT EXISTS "public"."scores" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "ballot_id" "uuid" NOT NULL,
@@ -5582,6 +5985,11 @@ CREATE TABLE IF NOT EXISTS "public"."scores" (
 
 
 ALTER TABLE "public"."scores" OWNER TO "postgres";
+
+
+ALTER TABLE ONLY "public"."account_carry_overs"
+    ADD CONSTRAINT "account_carry_overs_pkey" PRIMARY KEY ("token");
+
 
 
 ALTER TABLE ONLY "public"."ballots"
@@ -5596,6 +6004,11 @@ ALTER TABLE ONLY "public"."ballots"
 
 ALTER TABLE ONLY "public"."candidates"
     ADD CONSTRAINT "candidates_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE "public"."invited_voters"
+    ADD CONSTRAINT "invited_voters_email_ck" CHECK (("email" ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'::"text")) NOT VALID;
 
 
 
@@ -5636,11 +6049,6 @@ ALTER TABLE ONLY "public"."push_subscriptions"
 
 ALTER TABLE ONLY "public"."removed_polls"
     ADD CONSTRAINT "removed_polls_pkey" PRIMARY KEY ("user_id", "poll_id");
-
-
-
-ALTER TABLE ONLY "public"."results_notices"
-    ADD CONSTRAINT "results_notices_pkey" PRIMARY KEY ("poll_id");
 
 
 
@@ -5782,6 +6190,10 @@ CREATE OR REPLACE TRIGGER "candidates_fill_scores" AFTER INSERT ON "public"."can
 
 
 
+CREATE OR REPLACE TRIGGER "guard_anonymous_polls" BEFORE INSERT ON "public"."polls" FOR EACH ROW EXECUTE FUNCTION "public"."guard_anonymous_polls"();
+
+
+
 CREATE OR REPLACE TRIGGER "invited_voters_broadcast_delete" AFTER DELETE ON "public"."invited_voters" REFERENCING OLD TABLE AS "old_rows" FOR EACH STATEMENT EXECUTE FUNCTION "public"."broadcast_polls_emptied"();
 
 
@@ -5916,11 +6328,6 @@ ALTER TABLE ONLY "public"."removed_polls"
 
 
 
-ALTER TABLE ONLY "public"."results_notices"
-    ADD CONSTRAINT "results_notices_poll_id_fkey" FOREIGN KEY ("poll_id") REFERENCES "public"."polls"("id") ON DELETE CASCADE;
-
-
-
 ALTER TABLE ONLY "public"."scores"
     ADD CONSTRAINT "scores_ballot_id_fkey" FOREIGN KEY ("ballot_id") REFERENCES "public"."ballots"("id") ON DELETE CASCADE;
 
@@ -5929,6 +6336,9 @@ ALTER TABLE ONLY "public"."scores"
 ALTER TABLE ONLY "public"."scores"
     ADD CONSTRAINT "scores_candidate_id_fkey" FOREIGN KEY ("candidate_id") REFERENCES "public"."candidates"("id") ON DELETE CASCADE;
 
+
+
+ALTER TABLE "public"."account_carry_overs" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."ballots" ENABLE ROW LEVEL SECURITY;
@@ -5996,9 +6406,6 @@ ALTER TABLE "public"."push_subscriptions" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."removed_polls" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."results_notices" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."scores" ENABLE ROW LEVEL SECURITY;
@@ -6226,6 +6633,11 @@ REVOKE ALL ON FUNCTION "public"."ballot_sheet"("p_poll_id" "uuid", "p_named" boo
 
 
 
+REVOKE ALL ON FUNCTION "public"."begin_account_carry_over"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."begin_account_carry_over"() TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."broadcast_poll_gone"() FROM PUBLIC;
 
 
@@ -6286,6 +6698,11 @@ GRANT ALL ON FUNCTION "public"."finalize_options"("p_poll_id" "uuid") TO "authen
 
 
 
+REVOKE ALL ON FUNCTION "public"."finish_account_carry_over"("p_token" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."finish_account_carry_over"("p_token" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."forget_push_endpoints"("p_endpoints" "text"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."forget_push_endpoints"("p_endpoints" "text"[]) TO "service_role";
 
@@ -6306,6 +6723,10 @@ GRANT ALL ON FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") TO "authen
 
 
 
+REVOKE ALL ON FUNCTION "public"."guard_anonymous_polls"() FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") FROM PUBLIC;
 
 
@@ -6315,6 +6736,10 @@ REVOKE ALL ON FUNCTION "public"."insert_options"("p_poll" "public"."polls", "p_o
 
 
 REVOKE ALL ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."is_anonymous_session"() FROM PUBLIC;
 
 
 
@@ -6330,6 +6755,10 @@ GRANT ALL ON FUNCTION "public"."is_poll_creator"("p_poll_id" "uuid") TO "authent
 
 REVOKE ALL ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer, "p_removed" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."list_polls"("p_limit" integer, "p_offset" integer, "p_removed" boolean) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."lock_poll"("p_poll_id" "uuid") FROM PUBLIC;
 
 
 
@@ -6525,6 +6954,10 @@ REVOKE ALL ON FUNCTION "public"."poll_list_row"("p_poll_id" "uuid") FROM PUBLIC;
 
 
 
+REVOKE ALL ON FUNCTION "public"."poll_outstanding_invitees"("p_poll" "public"."polls") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."poll_page"("p_poll_id" "uuid", "p_voter_key" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."poll_page"("p_poll_id" "uuid", "p_voter_key" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."poll_page"("p_poll_id" "uuid", "p_voter_key" "text") TO "authenticated";
@@ -6536,6 +6969,10 @@ REVOKE ALL ON FUNCTION "public"."poll_push_targets"("p_poll" "public"."polls", "
 
 
 REVOKE ALL ON FUNCTION "public"."poll_ranking"("p_poll_id" "uuid") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_reminder_audience"("p_poll" "public"."polls", "p_actor" "text") FROM PUBLIC;
 
 
 
@@ -6635,7 +7072,16 @@ REVOKE ALL ON FUNCTION "public"."send_poll_opened_email"("p_poll" "public"."poll
 
 
 
+REVOKE ALL ON FUNCTION "public"."send_poll_reminder"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."send_poll_reminder"("p_poll_id" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."send_push"("p_targets" "jsonb", "p_message" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."send_reminder_email"("p_poll" "public"."polls", "p_email" "text") FROM PUBLIC;
 
 
 
@@ -6713,6 +7159,10 @@ REVOKE ALL ON FUNCTION "public"."wants_push"("p_user_id" "uuid") FROM PUBLIC;
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."account_carry_overs" TO "service_role";
+
+
+
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."ballots" TO "anon";
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."ballots" TO "authenticated";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."ballots" TO "service_role";
@@ -6731,6 +7181,8 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."invited_voters" TO
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."notification_settings" TO "anon";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."notification_settings" TO "authenticated";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."notification_settings" TO "service_role";
 
 
@@ -6741,21 +7193,21 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."option_confirmatio
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."poll_push_watches" TO "anon";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."poll_push_watches" TO "authenticated";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."poll_push_watches" TO "service_role";
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."push_subscriptions" TO "anon";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."push_subscriptions" TO "authenticated";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."push_subscriptions" TO "service_role";
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."removed_polls" TO "anon";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."removed_polls" TO "authenticated";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."removed_polls" TO "service_role";
-
-
-
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."results_notices" TO "anon";
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."results_notices" TO "authenticated";
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."results_notices" TO "service_role";
 
 
 
