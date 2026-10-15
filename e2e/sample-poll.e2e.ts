@@ -103,11 +103,30 @@ test('the questions can be walked with the strip', async ({ page }) => {
   await expect(page).toHaveTitle('Movie night')
 })
 
+test('a ballot left half done is there to come back to', async ({ page }) => {
+  await page.goto('#/polls/sample-dinner')
+  const first = page.getByRole('radiogroup', { name: /^Score for / }).first()
+  const fourStars = first.getByRole('radio', { name: '4 stars', exact: true })
+  await fourStars.click()
+  await expect(fourStars).toBeChecked()
+
+  // Walking to another question unmounts this ballot; its scores come back
+  // with it rather than going with it. See lib/ballotDraft.ts.
+  await page.getByRole('link', { name: 'Next →' }).click()
+  await expect(page.getByText('Question 2 of 3', { exact: true })).toBeVisible()
+  await page.getByRole('link', { name: '← Previous' }).click()
+  await expect(page.getByText('Question 1 of 3', { exact: true })).toBeVisible()
+  await expect(fourStars).toBeChecked()
+})
+
 test('the results show the rounds, the tie-break and the full ranking', async ({ page }) => {
   await page.goto('#/polls/sample-result-dinner')
   await expect(page.getByText('Winner: Two big pizzas')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Scoring' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Runoff' })).toBeVisible()
+  // The runoff elected the winner, so it is read first, straight under it.
+  const rounds = page.getByRole('heading', { name: /^(Runoff|Scoring)$/ })
+  await expect(rounds).toHaveText(['Runoff', 'Scoring'])
   await expect(page.getByRole('heading', { name: 'Ballots' })).toBeVisible()
 
   await page.getByRole('button', { name: 'See the full ranking' }).click()

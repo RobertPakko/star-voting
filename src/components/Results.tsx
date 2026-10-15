@@ -292,6 +292,27 @@ export function Results({
           </Caveat>
         )}
 
+        {/* The runoff first, straight under the winner, because it is what
+            elected the winner. Read the other way round, the first thing a
+            reader saw was the score round's leader -- who often is not the
+            winner -- and the card that explains why came second. */}
+        {shown.runoff && shown.finalists.length === 2 && (
+          <RoundCard
+            title="Runoff"
+            tieBreak={
+              shown.runoff.resolved_by === 'preference' ? null : (
+                <RunoffTieBreak results={shown} runoff={shown.runoff} nameById={nameById} />
+              )
+            }
+          >
+            <RunoffChart
+              a={nameById.get(shown.finalists[0]) ?? ''}
+              b={nameById.get(shown.finalists[1]) ?? ''}
+              runoff={shown.runoff}
+            />
+          </RoundCard>
+        )}
+
         <RoundCard
           title="Scoring"
           tieBreak={
@@ -335,23 +356,6 @@ export function Results({
             )}
           </Stack>
         </RoundCard>
-
-        {shown.runoff && shown.finalists.length === 2 && (
-          <RoundCard
-            title="Runoff"
-            tieBreak={
-              shown.runoff.resolved_by === 'preference' ? null : (
-                <RunoffTieBreak results={shown} runoff={shown.runoff} nameById={nameById} />
-              )
-            }
-          >
-            <RunoffChart
-              a={nameById.get(shown.finalists[0]) ?? ''}
-              b={nameById.get(shown.finalists[1]) ?? ''}
-              runoff={shown.runoff}
-            />
-          </RoundCard>
-        )}
 
         <FullRanking source={source} results={shown} />
       </Stack>

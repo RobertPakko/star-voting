@@ -14,6 +14,7 @@ import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { voterKeyFor } from '../lib/voterKey'
+import type { DraftScope } from '../lib/ballotDraft'
 import { rememberAnswered, rememberConfirmed, useQuestionMarks } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
 import { BallotCard } from '../components/BallotCard'
@@ -179,7 +180,8 @@ export function PollDetail({
   // Bumped only by creator actions, and used as OpenPollPanel's key so it
   // remounts. Closing the poll, opening it again, or correcting its options
   // invalidates a half-filled ballot in the panel, and remounting is what
-  // discards it.
+  // rebuilds it -- from the draft this browser kept of it (lib/ballotDraft.ts),
+  // narrowed to whatever the ballot can still hold.
   const [refreshKey, setRefreshKey] = useState(0)
   // The scores on this reader's own ballot while they are changing it, or
   // null when they are not. Read from the database at the moment they ask
@@ -945,7 +947,8 @@ export function PollDetail({
             ) : (
               /* Keyed like the open-poll panel, and for the same reason: a
            correction to the option list invalidates a half-filled ballot,
-           and remounting is what discards it. */
+           and remounting is what rebuilds it -- from the draft kept in this
+           browser, narrowed to the options still on the list. */
               <VoteForm
                 key={refreshKey}
                 poll={poll}
@@ -1194,7 +1197,7 @@ function VoteForm({
   questionStrip,
 }: {
   /** Which ballot to put up, and the grid to draw it on if it is a calendar. */
-  poll: Pick<Poll, 'id' | 'kind' | 'schedule'>
+  poll: Pick<Poll, 'id' | 'kind' | 'schedule' | 'group_id'>
   options: PollOption[]
   /** The scores already on this voter's ballot; absent when casting a new one. */
   initial?: Record<string, number>
@@ -1206,6 +1209,12 @@ function VoteForm({
   questionStrip?: ReactNode
 }) {
   const revising = initial !== undefined
+  const { session } = useAuth()
+  // Kept in this browser until it goes in, under this account; see
+  // lib/ballotDraft.ts. A revision keeps nothing: the server holds that ballot.
+  const draft: DraftScope | undefined = revising
+    ? undefined
+    : { pollId: poll.id, groupId: poll.group_id, owner: session?.user.id ?? null }
 
   async function send(scores: BallotScore[]) {
     const { error } = await supabase.rpc(revising ? 'revise_ballot' : 'submit_ballot', {
@@ -1225,6 +1234,7 @@ function VoteForm({
           options={options}
           schedule={poll.schedule}
           initial={initial}
+          draft={draft}
           questionStrip={questionStrip}
           note={<RevealNote reveal={{ kind: 'invite' }} canRevise />}
           onSubmit={send}
@@ -1239,6 +1249,7 @@ function VoteForm({
     <BallotCard
       options={options}
       initial={initial}
+      draft={draft}
       questionStrip={questionStrip}
       note={<RevealNote reveal={{ kind: 'invite' }} canRevise />}
       onSubmit={send}

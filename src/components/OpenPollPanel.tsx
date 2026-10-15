@@ -6,6 +6,7 @@ import { isSampleId, openPollRpc } from '../lib/samplePoll'
 import { forgetWatch, usePushHere, useWatching, watchPoll } from '../lib/push'
 import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
+import type { DraftScope } from '../lib/ballotDraft'
 import type { VoterName } from '../lib/voterName'
 import { BallotCard } from './BallotCard'
 import type { BallotScore } from './BallotFrame'
@@ -498,7 +499,7 @@ function OpenBallot({
 }: {
   pollId: string
   /** Which ballot to put up, and the grid to draw it on if it is a calendar. */
-  poll: Pick<OpenPollView['poll'], 'kind' | 'schedule'>
+  poll: Pick<OpenPollView['poll'], 'kind' | 'schedule' | 'group_id'>
   options: PollOption[]
   /** The name to vote under, on the polls that ask; absent on a revision. */
   voterName?: VoterName
@@ -511,6 +512,12 @@ function OpenBallot({
   questionStrip?: ReactNode
 }) {
   const revising = initial !== undefined
+  const { session } = useAuth()
+  // Kept in this browser until it goes in, under whoever is signed in; see
+  // lib/ballotDraft.ts. A revision keeps nothing: the server holds that ballot.
+  const draft: DraftScope | undefined = revising
+    ? undefined
+    : { pollId, groupId: poll.group_id ?? null, owner: session?.user.id ?? null }
 
   /**
    * Dismissing the on-screen keyboard on a phone does not blur the field it
@@ -570,6 +577,7 @@ function OpenBallot({
           options={options}
           schedule={poll.schedule}
           initial={initial}
+          draft={draft}
           nameField={voterName && <VoterNameField name={voterName} />}
           questionStrip={questionStrip}
           note={<RevealNote reveal={{ kind: 'open', isCreator }} canRevise />}
@@ -586,6 +594,7 @@ function OpenBallot({
     <BallotCard
       options={options}
       initial={initial}
+      draft={draft}
       nameField={voterName && <VoterNameField name={voterName} />}
       questionStrip={questionStrip}
       note={<RevealNote reveal={{ kind: 'open', isCreator }} canRevise />}

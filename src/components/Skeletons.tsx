@@ -363,8 +363,8 @@ function BannerShape() {
 }
 
 /**
- * A finished question's tally: the banner naming the winner, the scoring
- * round, and the runoff that settled it. What `Results` draws, down to the
+ * A finished question's tally: the banner naming the winner, the runoff that
+ * elected it, and the scoring round that filled the runoff. What `Results` draws, down to the
  * order and the gaps, minus the two parts of it that are conditional.
  *
  * **All three cards, because a tally has all three.** The runoff used to be
@@ -399,28 +399,6 @@ function TallyShape({ options }: { options?: number }) {
     <Stack gap="md">
       <BannerShape />
 
-      <Stack gap={2}>
-        <Bar kind="heading" width={68} />
-        <Card withBorder p="sm">
-          <Stack gap="xs">
-            {Array.from({ length: rows }, (_, i) => (
-              <div key={i}>
-                <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
-                  <Bar kind="line" width="35%" grow />
-                  <Bar kind="line" width={104} />
-                </Group>
-                {/* A Progress bar, at the height and radius Mantine draws
-                    one; the one shape here that is not a line of text. */}
-                <Skeleton height={8} radius="md" />
-              </div>
-            ))}
-            {/* Past the ceiling the scoring round says how many it left out,
-                which is certain from the count alone. */}
-            {options !== undefined && options > SCORING_ROWS_MAX && <Bar kind="line" width="75%" />}
-          </Stack>
-        </Card>
-      </Stack>
-
       {/* The runoff: the half pie, each finalist under its own end of it with
           what it was preferred by, and the line counting the ballots that
           split them evenly. The tie-break a level runoff needed is behind a
@@ -442,6 +420,28 @@ function TallyShape({ options }: { options?: number }) {
               </Stack>
             </Group>
             <Bar kind="line" width={232} />
+          </Stack>
+        </Card>
+      </Stack>
+
+      <Stack gap={2}>
+        <Bar kind="heading" width={68} />
+        <Card withBorder p="sm">
+          <Stack gap="xs">
+            {Array.from({ length: rows }, (_, i) => (
+              <div key={i}>
+                <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
+                  <Bar kind="line" width="35%" grow />
+                  <Bar kind="line" width={104} />
+                </Group>
+                {/* A Progress bar, at the height and radius Mantine draws
+                    one; the one shape here that is not a line of text. */}
+                <Skeleton height={8} radius="md" />
+              </div>
+            ))}
+            {/* Past the ceiling the scoring round says how many it left out,
+                which is certain from the count alone. */}
+            {options !== undefined && options > SCORING_ROWS_MAX && <Bar kind="line" width="75%" />}
           </Stack>
         </Card>
       </Stack>
@@ -768,8 +768,8 @@ export function PollListSkeleton({ rows = 5 }: { rows?: number }) {
 }
 
 /**
- * The tally, while `Results` reads it: the winner, the score round and the
- * runoff. See `TallyShape`, which is the same three cards `QuestionSkeleton`
+ * The tally, while `Results` reads it: the winner, the runoff and the score
+ * round. See `TallyShape`, which is the same three cards `QuestionSkeleton`
  * puts up a beat earlier on the crossings that can be sure of them, so the
  * two stages of that wait are one shape standing still rather than a page
  * that fills in twice.

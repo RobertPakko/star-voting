@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro, Donate)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -5177,6 +5177,48 @@ no caveat.
 Neither flag is ever cleared. A poll cannot un-edit a list people have already
 scored, and cannot un-show a tally people have already read.
 
+### A ballot started is kept until it goes in
+
+A ballot's scores lived in the card and nowhere else, so anything that took the
+card down took them with it: a refresh, a phone throwing a background tab
+away, and — the one people met most — a step to another question of the same
+poll and back, which [replaces the question's
+half](#a-poll-can-ask-more-than-one-question) and with it the card. A voter
+halfway down a long list came back to a blank ballot. So
+[`lib/ballotDraft.ts`](src/lib/ballotDraft.ts) writes every score a first
+ballot is given to `localStorage` (`star-voting:ballot-drafts`) as it is given,
+and both ballots — `BallotCard`'s scores, `TimeBallotCard`'s painting — open
+with it when they mount again.
+
+- **Only before the ballot goes in.** The server's answer always wins: a
+  reader who has voted is shown *your vote is in*, never a ballot, and *Edit
+  vote* opens with the scores the server hands back (`initial`) and reads and
+  writes no draft at all. A draft is deleted the moment its ballot is
+  accepted; a refused submit keeps it.
+- **Ten polls, the newest kept.** A poll of several questions is filed under
+  its group and counts once. Writing a draft makes its poll the newest, and
+  the eleventh drops whichever was touched longest ago — which is also what
+  happens to a draft left behind by a ballot cast on another device, since
+  nothing here ever reads it again.
+- **Filed against whoever wrote it** — the signed-in account, or nobody — and
+  read back only by the same, so a half-filled invite ballot on a shared
+  browser is not the next account's to find.
+- **Narrowed to the ballot as it now is.** A creator's correction can take
+  options off or put new ones on; an option gone is dropped from the draft,
+  one added starts at 0, and a calendar keeps only the cells the poll still
+  asks about. That is also why the remount on a correction (`refreshKey`)
+  rebuilds the ballot rather than emptying it.
+- **The calendar keeps its painting, not its scores**, because scores read
+  back into a painting blur (see *Reading a ballot back*), and an unsent
+  ballot should come back exactly as it was left.
+- **The About page's sample keeps its drafts in memory**, for the life of the
+  visit like its ballots, and `PollPage` forgets both on its way out.
+
+The voter's name is not part of it: it is the page's, kept across a crossing
+already (`useVoterName`), and remembered once a ballot has gone in under it.
+Nothing in a draft reaches the server or is trusted by it; the worst a stale
+one can do is fill in a score the voter can see and change before sending.
+
 ### The order the options come in
 
 Every ballot shuffles its options, and shuffles them the same way for any one
@@ -6423,8 +6465,9 @@ unasked.
 
 ### Results and the full ranking
 
-Results show the winner, every option's score-round total, any tie-break that
-had to be resolved, and the automatic runoff between the two finalists. On a
+Results show the winner, then the automatic runoff between the two finalists,
+then every option's score-round total, each round with any tie-break it had to
+resolve. On a
 poll that publishes its ballots, the grid of every ballot cast follows
 underneath, with column totals to check the score round against; on an invite
 poll that does not, the reader's *own* ballot follows there instead — see
@@ -6549,9 +6592,21 @@ staggered 40ms apart (`Results.module.css`), which is a reading of the ranking
 over ten options and five and a half seconds of bars still arriving over a
 hundred and thirty-seven.
 
+#### The runoff comes first
+
+The runoff is drawn straight under the winner and the scoring round under
+that, which is the opposite of the order STAR runs them in. It was the other
+way round, and readers kept arriving at a winner who was not the option at the
+top of the scores: the first thing under the green card was a list whose
+leader had often *lost*, and the card that explained why came second. The
+runoff is what elects the winner, so it is the card that belongs next to the
+name it elected; the scoring round is how the two finalists in it were chosen,
+which is the question a reader asks next. `TallyShape` in `Skeletons.tsx`
+waits in the same order, and so does the intro film's drawing of the results.
+
 #### Each round carries its own tie-break
 
-The page has two rounds, **Scoring** and **Runoff**, and each is a heading over
+The page has two rounds, **Runoff** and **Scoring**, and each is a heading over
 one card ([`RoundCard`](src/components/RoundCard.tsx)). The tie-break a round
 needed is not on the page until somebody asks for it: a **Show tie-break**
 button sits at the right of that round's heading, and pressing it slides a

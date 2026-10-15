@@ -654,66 +654,6 @@ export function PollPage({
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <div style={h4}>Scoring</div>
-              <div data-tg="scoring" style={card(12)}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {TALLY.map((o, i) => {
-                    const w =
-                      p01(T, D + 0.45 + i * 0.12, D + 1.35 + i * 0.12) * (o.pts / maxPts) * 100
-                    return (
-                      <div key={o.name}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            gap: 10,
-                            marginBottom: 2,
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 14,
-                              lineHeight: 1.45,
-                              fontWeight: o.fin ? 700 : 400,
-                            }}
-                          >
-                            {o.name}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 14,
-                              lineHeight: 1.45,
-                              color: COL.dimmed,
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {o.pts} pts (avg {Number((o.pts / 9).toFixed(2))})
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            height: 8,
-                            borderRadius: 4,
-                            background: COL.track,
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: '100%',
-                              width: w + '%',
-                              background: o.fin ? COL.blue : COL.gray6,
-                              borderRadius: 4,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <div style={h4}>Runoff</div>
               <div data-tg="runoff" style={card(12)}>
                 <div
@@ -773,6 +713,66 @@ export function PollPage({
                   <div style={{ fontSize: 14, color: COL.dimmed, lineHeight: 1.45 }}>
                     0 voters scored both finalists equally.
                   </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={h4}>Scoring</div>
+              <div data-tg="scoring" style={card(12)}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {TALLY.map((o, i) => {
+                    const w =
+                      p01(T, D + 0.45 + i * 0.12, D + 1.35 + i * 0.12) * (o.pts / maxPts) * 100
+                    return (
+                      <div key={o.name}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                            marginBottom: 2,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 14,
+                              lineHeight: 1.45,
+                              fontWeight: o.fin ? 700 : 400,
+                            }}
+                          >
+                            {o.name}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              lineHeight: 1.45,
+                              color: COL.dimmed,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {o.pts} pts (avg {Number((o.pts / 9).toFixed(2))})
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            height: 8,
+                            borderRadius: 4,
+                            background: COL.track,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: '100%',
+                              width: w + '%',
+                              background: o.fin ? COL.blue : COL.gray6,
+                              borderRadius: 4,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>

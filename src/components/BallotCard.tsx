@@ -1,6 +1,12 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import { Divider, Group, Text } from '@mantine/core'
 import { useBallotOrder } from '../lib/ballotOrder'
+import {
+  clearBallotDraft,
+  readBallotDraft,
+  useSaveBallotDraft,
+  type DraftScope,
+} from '../lib/ballotDraft'
 import { BallotFrame, type BallotScore } from './BallotFrame'
 import { OptionDescription } from './OptionDescription'
 import { StarRating } from './StarRating'
@@ -23,6 +29,7 @@ export type { BallotScore }
 export function BallotCard({
   options,
   initial,
+  draft,
   nameField,
   questionStrip,
   note,
@@ -35,6 +42,12 @@ export function BallotCard({
   options: PollOption[]
   /** The scores already on this voter's ballot; absent when casting a new one. */
   initial?: Record<string, number>
+  /**
+   * Where this ballot's unsent scores are kept; see lib/ballotDraft.ts. Read
+   * and written only on a first ballot -- a revision opens with `initial`,
+   * which is the server's.
+   */
+  draft?: DraftScope
   /** The name box, on the one ballot that has nothing else to name a voter by. */
   nameField?: ReactNode
   /** Navigation for a multi-question ballot, rendered inside its card. */
@@ -60,7 +73,11 @@ export function BallotCard({
   // lib/ballotOrder.ts. The scores below are keyed by option id, so this
   // changes what the voter reads and nothing about what they send.
   const ballot = useBallotOrder(options)
-  const [values, setValues] = useState<Record<string, number>>(initial ?? {})
+  const drafting = initial === undefined ? draft : undefined
+  const [values, setValues] = useState<Record<string, number>>(
+    () => initial ?? restoreDraft(drafting, options),
+  )
+  useSaveBallotDraft(drafting, values)
 
   function setScore(optionId: string, score: number) {
     setValues((prev) => ({ ...prev, [optionId]: score }))
@@ -75,7 +92,10 @@ export function BallotCard({
       beforeSubmit={beforeSubmit}
       collect={() => ballot.map((o) => ({ candidate_id: o.id, score: values[o.id] ?? 0 }))}
       onSubmit={onSubmit}
-      onVoted={onVoted}
+      onVoted={() => {
+        if (drafting) clearBallotDraft(drafting)
+        onVoted()
+      }}
       onCancel={onCancel}
     >
       <Text size="sm">
@@ -101,4 +121,20 @@ export function BallotCard({
       ))}
     </BallotFrame>
   )
+}
+
+/**
+ * The scores this voter gave before the page lost them, for the options still
+ * on the ballot. An option taken off since has nothing to be scored against;
+ * one added since starts at 0, like any option nobody has scored.
+ */
+function restoreDraft(
+  scope: DraftScope | undefined,
+  options: PollOption[],
+): Record<string, number> {
+  const draft = scope && readBallotDraft(scope)
+  if (!draft) return {}
+  const restored: Record<string, number> = {}
+  for (const option of options) if (option.id in draft) restored[option.id] = draft[option.id]
+  return restored
 }

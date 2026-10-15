@@ -22,6 +22,12 @@ import {
   type ScheduleDay,
 } from '../lib/schedule'
 import { NameList } from './NameList'
+import {
+  clearBallotDraft,
+  readBallotDraft,
+  useSaveBallotDraft,
+  type DraftScope,
+} from '../lib/ballotDraft'
 import { use24HourTime } from '../lib/clock'
 import { RATINGS, colorFor, inkFor, swatchFor } from '../lib/ratings'
 import { offsetName } from '../lib/timezones'
@@ -62,6 +68,7 @@ export function TimeBallotCard({
   options,
   schedule,
   initial,
+  draft,
   nameField,
   questionStrip,
   note,
@@ -75,6 +82,11 @@ export function TimeBallotCard({
   schedule: PollSchedule
   /** The scores already on this voter's ballot; absent when casting a new one. */
   initial?: Record<string, number>
+  /**
+   * Where this ballot's unsent painting is kept; see lib/ballotDraft.ts. Only
+   * on a first ballot, as on the list.
+   */
+  draft?: DraftScope
   nameField?: ReactNode
   questionStrip?: ReactNode
   note: ReactNode
@@ -88,14 +100,29 @@ export function TimeBallotCard({
   const bounds = useMemo(() => boundsOf(windows, schedule), [windows, schedule])
   const days = useMemo(() => daysOf(bounds), [bounds])
 
+  const drafting = initial === undefined ? draft : undefined
   const [painting, setPainting] = useState<Record<GranuleKey, number>>(() => {
-    if (!initial) return {}
+    if (!initial) {
+      // The painting itself is what is kept rather than the scores it makes,
+      // because scores read back into a painting blur (see `paintingFromScores`)
+      // and an unsent ballot should come back exactly as it was left. Only
+      // cells the poll still asks about: anywhere else moves no score.
+      const saved = drafting && readBallotDraft(drafting)
+      if (!saved) return {}
+      const restored: Record<GranuleKey, number> = {}
+      for (const [key, value] of Object.entries(saved)) {
+        if (value > 0 && bounds.has(key)) restored[key] = value
+      }
+      return restored
+    }
     // `initial` is keyed by option id and the derivation works in window
     // starts, because a window start is the only thing both sides agree on.
     const byName: Record<string, number> = {}
     for (const option of options) byName[option.name] = initial[option.id] ?? 0
     return paintingFromScores(windows, byName, schedule)
   })
+
+  useSaveBallotDraft(drafting, painting)
 
   const [rating, setRating] = useState('5')
 
@@ -232,7 +259,10 @@ export function TimeBallotCard({
       confirmSubmit={confirmSubmit}
       collect={collect}
       onSubmit={onSubmit}
-      onVoted={onVoted}
+      onVoted={() => {
+        if (drafting) clearBallotDraft(drafting)
+        onVoted()
+      }}
       onCancel={onCancel}
       // Fetched when it is drawn rather than bundled with the ballot, so it
       // arrives after the page's own entrance has finished and has to make one

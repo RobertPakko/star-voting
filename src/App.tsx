@@ -12,6 +12,7 @@ import {
 } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import { forgetSampleBallots, isSampleId } from './lib/samplePoll'
+import { forgetSampleDrafts } from './lib/ballotDraft'
 import { questionsCovered, readPollPage } from './lib/pollPage'
 import { pollTopic, useLiveStream, type LiveStream } from './lib/useLiveStream'
 import { rememberDestination, takeDestination } from './lib/shareLink'
@@ -493,7 +494,14 @@ function PollPage() {
   // that visit: it stays mounted while a reader walks the sample's three
   // questions and on to the finished copy, and goes when they leave the poll
   // addresses altogether. See `SampleBallot` for why the sample forgets at all.
-  useEffect(() => forgetSampleBallots, [])
+  // Its unsent ballots go with the sent ones (lib/ballotDraft.ts).
+  useEffect(
+    () => () => {
+      forgetSampleBallots()
+      forgetSampleDrafts()
+    },
+    [],
+  )
 
   // A read that failed is remembered against the poll it failed for, so that
   // it is reported rather than retried on every render — but only for as long
