@@ -104,16 +104,32 @@ function Steps({ children }: { children: ReactNode }) {
   )
 }
 
-function Trouble({ children }: { children: ReactNode }) {
+/** A titled aside under a device's steps. */
+function Aside({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card withBorder bg="var(--mantine-color-default-hover)">
       <Stack gap={4}>
         <Text fw={500} size="sm">
-          Said no to notifications by mistake?
+          {title}
         </Text>
         <Text size="sm">{children}</Text>
       </Stack>
     </Card>
+  )
+}
+
+function Trouble({ children }: { children: ReactNode }) {
+  return <Aside title="Said no to notifications by mistake?">{children}</Aside>
+}
+
+/** Why a phone installs it from the browser rather than from a store. */
+function WhyNotStore() {
+  return (
+    <Aside title="Why can't I just install this on the app store?">
+      Apple and Google charge money for that, and since this is a free app, I want to keep costs
+      down. Installing the app this way brings all the same functionality without going through
+      Apple or Google.
+    </Aside>
   )
 }
 
@@ -164,6 +180,7 @@ function IosSteps() {
         Open the <strong>Settings</strong> app, then <strong>Notifications</strong>, then{' '}
         <strong>STAR Voting</strong>, and switch on <strong>Allow Notifications</strong>.
       </Trouble>
+      <WhyNotStore />
     </Stack>
   )
 }
@@ -195,6 +212,7 @@ function AndroidSteps() {
         <strong>⋮</strong> → <strong>Settings</strong> → <strong>Site settings</strong> →{' '}
         <strong>Notifications</strong> and allow choicelab.app.
       </Trouble>
+      <WhyNotStore />
     </Stack>
   )
 }
