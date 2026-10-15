@@ -13,7 +13,7 @@ export const test = base.extend<{ page: Page }>({
       problems.push(`request to the database: ${route.request().method()} ${route.request().url()}`)
       return route.abort()
     })
-    // The support page's count, answered here rather than by Every.org: a
+    // The donate page's count, answered here rather than by Every.org: a
     // test that passes or fails on somebody else's server is not a test.
     await page.route('https://partners.every.org/**', (route) =>
       route.fulfill({

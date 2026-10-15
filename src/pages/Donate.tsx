@@ -1,27 +1,27 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Anchor, Button, Card, Group, Progress, Skeleton, Stack, Text, Title } from '@mantine/core'
 import { HeartIcon } from '@phosphor-icons/react'
-import { countsRaised, donateUrl, fetchRaised, type Raised } from '../lib/support'
+import { countsRaised, donateUrl, fetchRaised, type Raised } from '../lib/donate'
 import { usePageTitle } from '../lib/pageTitle'
-import classes from './Support.module.css'
+import classes from './Donate.module.css'
 
 /**
- * The /support route: the site costs nothing to use, and this is where its
+ * The /donate route: the site costs nothing to use, and this is where its
  * readers are asked to say thanks to a charity instead. Public, like About —
  * the readers most likely to want it are the ones who arrived on a share
  * link.
  *
  * The donate button goes to Every.org rather than to the charity's own form,
  * because Every.org can say how much its fundraiser has raised and the
- * charity's form cannot; see "The support page" in AGENTS.md for why that
+ * charity's form cannot; see "The donate page" in AGENTS.md for why that
  * costs a donor nothing on their taxes.
  */
-export function Support() {
-  usePageTitle('Support')
+export function Donate() {
+  usePageTitle('Donate')
 
   return (
     <Stack maw={720} mx="auto" gap="md">
-      <Title order={1}>Support</Title>
+      <Title order={1}>Donate</Title>
 
       <Text>
         STAR Voting is free to use, with no ads and no subscriptions, and I’m happy to cover the

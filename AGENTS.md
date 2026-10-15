@@ -14,9 +14,9 @@ hash-based routing, deployed to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ```
-src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro, Support)
+src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro, Donate)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, the Support page's charity and what its fundraiser has raised (support.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -3051,9 +3051,9 @@ for people who have never heard of the app.
 copies the link otherwise. Every intro link draws the same preview card as
 every other link — see [Link previews](#link-previews).
 
-## The support page
+## The donate page
 
-`#/support` asks readers who find the site useful to give to a charity —
+`#/donate` asks readers who find the site useful to give to a charity —
 Khan Academy — rather than to the site, whose running costs are paid for out
 of pocket. (It was to be The Conservation Fund, which is not yet set up on
 Every.org to take a fundraiser.) It is public, like About, and reached from the gear menu, where
@@ -3061,7 +3061,7 @@ it took the place of *View intro*: About already links to the intro, and a
 reader who has found the gear has met the app.
 
 **The donate button goes to Every.org**, to a fundraiser of the site's own for
-the charity (`EVERY_ORG` in [`lib/support.ts`](src/lib/support.ts)), because
+the charity (`EVERY_ORG` in [`lib/donate.ts`](src/lib/donate.ts)), because
 a fundraiser there can say what it has raised and from how many people, and
 the charity's own donation form cannot. The page reads both from Every.org's
 partner API — `GET partners.every.org/v0.2/nonprofit/<slug>/fundraiser/<slug>/raised`
@@ -3090,7 +3090,7 @@ that is not the system's. It is not loaded from Google Fonts: the file in
 by this page's stylesheet, with the font's licence beside it. A signature
 with any other letter in it falls back to a system cursive for that letter, so
 changing it means cutting the font again — the comment in
-`Support.module.css` says how.
+`Donate.module.css` says how.
 
 **The tax note was checked, and should be checked again before it is
 changed.** From 2026 a US taxpayer who does not itemize can deduct up to

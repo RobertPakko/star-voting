@@ -46,7 +46,7 @@ import { ThemeToggle } from './ThemeToggle'
  * that would strand every poll it made.
  *
  * The pages that are not polls — the removed polls, the install guide, About
- * and the support page — are links in the gear menu rather than in the header. About
+ * and the donate page — are links in the gear menu rather than in the header. About
  * was a link of its own up here once, and the row is one control shorter on a
  * phone without it. Each is dropped from the menu while it is what's on
  * screen: a link to the page you are already reading is a dead end that
@@ -214,9 +214,9 @@ export function Layout() {
                     )}
                     {/* The intro is not here: About links to it, and a reader
                         who has found the gear has already met the app. */}
-                    {pathname !== '/support' && (
-                      <MenuLink to="/support" icon={HeartIcon}>
-                        Support
+                    {pathname !== '/donate' && (
+                      <MenuLink to="/donate" icon={HeartIcon}>
+                        Donate
                       </MenuLink>
                     )}
                   </Stack>

@@ -18,7 +18,7 @@ import { usePageTitle } from '../lib/pageTitle'
 import { PollTitleText } from './PollTitleText'
 import { PollHeading, type PollHeadingProps } from './PollHeading'
 import { SWITCH_LABELS } from '../lib/notificationSettings'
-import { countsRaised } from '../lib/support'
+import { countsRaised } from '../lib/donate'
 
 /**
  * The shapes each page draws while it is waiting for its first read.
@@ -1228,12 +1228,12 @@ export function GuideSkeleton() {
 }
 
 /**
- * The support page, while its chunk is fetched: the heading, the note and its
+ * The donate page, while its chunk is fetched: the heading, the note and its
  * signature, and the charity's card down to its button — the count and its
  * bar included where this build has a fundraiser to count (`countsRaised`),
  * since that is fixed when the app is built. Not the tax note under the card.
  */
-export function SupportSkeleton() {
+export function DonateSkeleton() {
   return (
     <Loading>
       <Stack maw={720} mx="auto" gap="md">

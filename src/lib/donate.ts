@@ -1,6 +1,6 @@
 /**
- * The Support page's charity, and the fundraiser on Every.org that counts
- * what this site has raised for it. See "The support page" in AGENTS.md.
+ * The Donate page's charity, and the fundraiser on Every.org that counts
+ * what this site has raised for it. See "The donate page" in AGENTS.md.
  *
  * All three are public: the slugs are in the donate link anybody can see, and
  * the key is Every.org's *publishable* one, made for a browser to send. So

@@ -27,7 +27,7 @@ import {
   GuideSkeleton,
   PollPageSkeleton,
   SettingsSkeleton,
-  SupportSkeleton,
+  DonateSkeleton,
 } from './components/Skeletons'
 import type { PollRead } from './lib/types'
 import { pollIdFromParam } from './lib/pollId'
@@ -89,7 +89,7 @@ const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m
 const InstallGuide = lazy(() =>
   import('./pages/InstallGuide').then((m) => ({ default: m.InstallGuide })),
 )
-const Support = lazy(() => import('./pages/Support').then((m) => ({ default: m.Support })))
+const Donate = lazy(() => import('./pages/Donate').then((m) => ({ default: m.Donate })))
 const Intro = lazy(() => import('./pages/Intro').then((m) => ({ default: m.Intro })))
 
 function App() {
@@ -184,10 +184,10 @@ function App() {
             the same reason as About: the site is free to everybody, and so is
             saying thanks for it. */}
         <Route
-          path="support"
+          path="donate"
           element={
-            <Suspense fallback={<SupportSkeleton />}>
-              <Support />
+            <Suspense fallback={<DonateSkeleton />}>
+              <Donate />
             </Suspense>
           }
         />
