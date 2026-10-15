@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
 /**
@@ -72,19 +72,26 @@ export async function migrateHiddenPolls(): Promise<void> {
  * card is where to say so. `null` until the database has answered, and false
  * with nobody signed in or no poll to ask about, without asking.
  *
+ * `known` is the answer where the page already has it: `poll_page` carries
+ * `removed`, so a card under a poll opened by that read asks nothing. Left
+ * undefined — a database older than 0083, or a page holding no such read —
+ * and it asks for itself, as it always did.
+ *
  * The setter is handed back so a restore made from that card can say so at
  * once, rather than waiting for a read nothing would prompt: the answer is
- * read once per card, not kept live.
+ * read once per card, not kept live, and the setter wins over `known`.
  */
 export function usePollRemoved(
   pollId: string | undefined,
   userId: string | undefined,
+  known?: boolean,
 ): [boolean | null, (removed: boolean) => void] {
   const asked = pollId && userId ? `${userId}:${pollId}` : null
   const [answer, setAnswer] = useState<{ asked: string; removed: boolean } | null>(null)
+  const told = known !== undefined
 
   useEffect(() => {
-    if (!asked || !pollId) return
+    if (!asked || !pollId || told) return
     let live = true
     supabase.rpc('poll_is_removed', { p_poll_id: pollId }).then(({ data, error }) => {
       // A database older than the function answers with an error, which is
@@ -94,11 +101,41 @@ export function usePollRemoved(
     return () => {
       live = false
     }
-  }, [asked, pollId])
+  }, [asked, pollId, told])
 
-  const removed = !asked ? false : answer?.asked === asked ? answer.removed : null
+  const removed = !asked ? false : answer?.asked === asked ? answer.removed : (known ?? null)
   const set = (next: boolean) => {
     if (asked) setAnswer({ asked, removed: next })
   }
   return [removed, set]
+}
+
+/**
+ * Whether the reader of a poll page removed the poll from their list, as that
+ * page's reads say — and as a restore made on the page says after them.
+ *
+ * `poll_page` carries `removed`, so the page hands it to the card that says so
+ * (`Banners`) rather than that card asking. The catch is the reads a page holds
+ * for the questions beside the one on screen: they were taken before the reader
+ * pressed *Add back to your list*, and a restore is told to the reader's list
+ * rather than to the poll, so nothing reads them again. Walking on to the next
+ * question would draw one of those and put the banner back. A poll page can
+ * only ever restore — removing is the list's — so once one has, the poll it
+ * restored stays restored for as long as the page is open, whatever an older
+ * read says.
+ *
+ * `group` is the poll, by the group its questions share (or the question
+ * itself, for a poll of one), since a removal is of the whole poll. `heard`
+ * takes what a `poll_page` read said; undefined is a database older than
+ * 0083, which leaves the card asking for itself.
+ */
+export function useRemovedHere(group: string | undefined) {
+  const [read, setRead] = useState<boolean | undefined>(undefined)
+  const [restored, setRestored] = useState<string | null>(null)
+  const onRestored = useCallback(() => setRestored(group ?? null), [group])
+  return {
+    removed: group !== undefined && restored === group ? false : read,
+    heard: setRead,
+    onRestored,
+  }
 }

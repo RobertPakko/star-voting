@@ -289,6 +289,8 @@ export const pollReadSchema = z.discriminatedUnion('kind', [
     results: pollResultsSchema.nullable(),
     ballots: ballotSheetSchema.nullable(),
     invitees: z.array(invitee).nullable(),
+    your_scores: z.record(z.string(), z.number()).nullable().optional(),
+    removed: z.boolean().optional(),
   }),
   z.object({
     kind: z.literal('open'),
@@ -296,6 +298,7 @@ export const pollReadSchema = z.discriminatedUnion('kind', [
     questions: z.array(openGroupQuestion),
     results: pollResultsSchema.nullable(),
     ballots: ballotSheetSchema.nullable(),
+    removed: z.boolean().optional(),
   }),
   z.object({ kind: z.literal('unreadable') }),
 ]) satisfies z.ZodType<PollRead>

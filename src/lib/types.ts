@@ -324,6 +324,20 @@ export interface AccountRead {
    * respondents nulls the per-person columns for everybody, creator included.
    */
   invitees: Invitee[] | null
+  /**
+   * This reader's own ballot, keyed by option id, on an invite poll whose
+   * results are out and whose ballots are private — the poll `YourBallot` is
+   * drawn under — and only where they cast one. Same terms as `results`: one
+   * read's worth of work handed over, and null is the card reading for itself
+   * through `poll_ballot_scores`. Optional for the reason `expires_at` is.
+   */
+  your_scores?: Record<string, number> | null
+  /**
+   * Whether this reader has removed the poll from their list, which the card
+   * after voting or confirming says. Optional for the reason `expires_at` is;
+   * undefined is that card asking for itself. See lib/removedPolls.ts.
+   */
+  removed?: boolean
 }
 
 /** An open poll to somebody outside it, which is anyone holding the link. */
@@ -341,6 +355,12 @@ export interface OpenRead {
   results: PollResults | null
   /** The published ballot sheet, on the same terms; see `AccountRead`. */
   ballots: BallotSheet | null
+  /**
+   * Whether this reader has removed the poll from their list; see
+   * `AccountRead`. An account that answered through the link has it on its
+   * list and can take it off. False for a reader who is not signed in.
+   */
+  removed?: boolean
 }
 
 /**

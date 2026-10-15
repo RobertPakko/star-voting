@@ -140,6 +140,10 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
         // answered out of the same file.
         results: question.results ?? null,
         ballots: question.ballots ?? null,
+        // Nobody's list holds the sample, so nobody can have taken it off one —
+        // and saying so here spares a signed-in reader's card asking the
+        // database about an id that is not a uuid.
+        removed: false,
       })
     case 'open_poll_results':
       return question.results ? ok(question.results) : failed('Results are not available yet')

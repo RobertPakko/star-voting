@@ -42,13 +42,36 @@ import { restorePolls, usePollRemoved } from '../lib/removedPolls'
  * offers the poll back — and the push banner stands down, since turning push
  * on would not reach a poll their account has asked to hear nothing about.
  */
-export function Banners({ moment, pollId }: { moment?: 'opening' | 'results'; pollId?: string }) {
+export function Banners({
+  moment,
+  pollId,
+  removed: known,
+  onRestored,
+}: {
+  moment?: 'opening' | 'results'
+  pollId?: string
+  /**
+   * Whether the reader removed `pollId`, where the page's read already said —
+   * `poll_page` carries it. Undefined is this asking for itself.
+   */
+  removed?: boolean
+  /** Told when the reader puts the poll back from here; see `useRemovedHere`. */
+  onRestored?: () => void
+}) {
   const { session } = useAuth()
-  const [removed, setRemoved] = usePollRemoved(pollId, session?.user.id)
+  const [removed, setRemoved] = usePollRemoved(pollId, session?.user.id, known)
 
   return (
     <>
-      {removed && pollId && <RemovedBanner pollId={pollId} onRestored={() => setRemoved(false)} />}
+      {removed && pollId && (
+        <RemovedBanner
+          pollId={pollId}
+          onRestored={() => {
+            setRemoved(false)
+            onRestored?.()
+          }}
+        />
+      )}
       {/* Held back until the answer is in, rather than drawn and then taken
           away a moment later. */}
       {removed === false && <PushBanner moment={moment} />}

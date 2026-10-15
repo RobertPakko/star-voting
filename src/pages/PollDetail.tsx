@@ -41,6 +41,7 @@ import { useVoterName } from '../lib/voterName'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { readPollPage, statusFromOpenView } from '../lib/pollPage'
+import { useRemovedHere } from '../lib/removedPolls'
 import { openPollViewSchema, parseAnswer, pollStatusSchema } from '../lib/rpcSchemas'
 import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
@@ -135,6 +136,16 @@ export function PollDetail({
   const [results, setResults] = useState<PollResults | null>(null)
   const [ballots, setBallots] = useState<BallotSheet | null>(null)
   const [invitees, setInvitees] = useState<Invitee[] | null>(null)
+  // This reader's own ballot under a finished poll that keeps its ballots
+  // private, on the same terms as the tally: handed to `YourBallot` once, and
+  // dropped by every read that did not bring it.
+  const [yourScores, setYourScores] = useState<Record<string, number> | null>(null)
+  // Whether this reader removed the poll from their list, for the card they
+  // are left waiting on. Kept across the narrow reads, which do not carry it:
+  // it is about the reader's list rather than about the poll, and only the
+  // read that opens the page says. See useRemovedHere.
+  const removedHere = useRemovedHere(poll ? (poll.group_id ?? poll.id) : undefined)
+  const { heard: heardRemoved } = removedHere
   // Which questions this reader has answered, and which they have finished
   // adding options to, for the strip's marks on an *open* poll. The creator
   // votes in their own open poll through the link like everybody else, so
@@ -251,6 +262,8 @@ export function PollDetail({
       setResults(page.results)
       setBallots(page.ballots)
       setInvitees(page.invitees)
+      setYourScores(page.your_scores ?? null)
+      heardRemoved(page.removed)
       retention.current = page.status.expires_at
 
       // An open poll read by its own creator: the panel they manage it through
@@ -267,7 +280,7 @@ export function PollDetail({
       setLoadedFor(page.poll.id)
       setLoading(false)
     },
-    [marksFromGroup, markFromView],
+    [marksFromGroup, markFromView, heardRemoved],
   )
 
   // The route's read, drawn at once rather than waiting to be asked for. Every
@@ -324,6 +337,7 @@ export function PollDetail({
     // remounts the cards that draw them without waiting for this to land.
     setResults(null)
     setBallots(null)
+    setYourScores(null)
 
     // One request. `poll_page` answers with the poll, its options, its status,
     // its group and — on an open poll — the open view as well, which used to
@@ -384,6 +398,7 @@ export function PollDetail({
     // away and back on every vote anybody casts.
     setResults(null)
     setBallots(null)
+    setYourScores(null)
 
     const openId = poll?.mode === 'open' ? poll.id : null
     const [statusRes, viewRes, optionsRes, inviteesRes] = await Promise.all([
@@ -829,6 +844,8 @@ export function PollDetail({
                   ballots={ballots}
                   isCreator={isCreator}
                   voterName={voterName}
+                  removed={removedHere.removed}
+                  onRestored={removedHere.onRestored}
                   onChanged={reload}
                   onFirstVote={advance}
                   onFirstConfirm={advance}
@@ -852,7 +869,14 @@ export function PollDetail({
                 {/* Once this reader has said they are done, the next thing that
                   happens is voting opening, whenever the rest have — the same
                   moment the push switch in the gear menu tells them about. */}
-                {confirmation?.confirmed && <Banners moment="opening" pollId={poll.id} />}
+                {confirmation?.confirmed && (
+                  <Banners
+                    moment="opening"
+                    pollId={poll.id}
+                    removed={removedHere.removed}
+                    onRestored={removedHere.onRestored}
+                  />
+                )}
               </>
             ) : status.results_available ? (
               /* The strip sits above the tally rather than inside it, which is
@@ -912,6 +936,8 @@ export function PollDetail({
                 <Waiting
                   status={status}
                   pollId={poll.id}
+                  removed={removedHere.removed}
+                  onRestored={removedHere.onRestored}
                   onRevise={setRevising}
                   questionStrip={questionStrip}
                 />
@@ -1024,6 +1050,7 @@ export function PollDetail({
           <YourBallot
             pollId={poll.id}
             options={optionList}
+            initial={yourScores}
             schedule={poll.kind === 'time' ? poll.schedule : null}
           />
         </Suspense>
@@ -1073,11 +1100,17 @@ export function PollDetail({
 function Waiting({
   status,
   pollId,
+  removed,
+  onRestored,
   onRevise,
   questionStrip,
 }: {
   status: PollStatus
   pollId: string
+  /** Whether the reader removed the poll from their list; see `Banners`. */
+  removed?: boolean
+  /** Told when the reader puts the poll back from this card. */
+  onRestored?: () => void
   /** The ballot came back: hand it to the page, which puts the form up. */
   onRevise: (scores: Record<string, number>) => void
   /** Navigation for a multi-question ballot, rendered inside its card. */
@@ -1132,7 +1165,7 @@ function Waiting({
           </Group>
         </Stack>
       </Card>
-      <Banners moment="results" pollId={pollId} />
+      <Banners moment="results" pollId={pollId} removed={removed} onRestored={onRestored} />
     </Stack>
   )
 }

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Stack, Text, Title } from '@mantine/core'
 import { isSampleId, openPollRpc, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 import { readPollPage } from '../lib/pollPage'
+import { useRemovedHere } from '../lib/removedPolls'
 import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
 import { rememberAnswered, rememberConfirmed, useQuestionMarks } from '../lib/questionMarks'
@@ -101,6 +102,12 @@ export function PublicPoll({
     ballots: BallotSheet | null
   } | null>(null)
   const [questions, setQuestions] = useState<OpenGroupQuestion[]>([])
+  // Whether this reader removed the poll from their list, for the card they
+  // are left waiting on. From `poll_page` only, and kept across the narrow
+  // reads, which do not carry it — it is about the reader's list rather than
+  // the poll. See useRemovedHere.
+  const removedHere = useRemovedHere(read ? (read.view.poll.group_id ?? read.pollId) : undefined)
+  const { heard: heardRemoved } = removedHere
   // Which questions of this poll this reader has answered, and which they have
   // finished adding options to, for the strip's marks: the account's answer
   // from the group read where they are signed in, on whichever device they
@@ -189,6 +196,16 @@ export function PublicPoll({
     [marksFromGroup, marksFromView],
   )
 
+  // The same, for a read that is a whole `poll_page` rather than the view
+  // alone: everything `finish` takes, and what only that read carries.
+  const finishPage = useCallback(
+    (of: string, page: OpenRead) => {
+      finish(of, page.view, page.questions, page.results, page.ballots)
+      heardRemoved(page.removed)
+    },
+    [finish, heardRemoved],
+  )
+
   // The route's read, drawn at once rather than waiting to be asked for. See
   // the same effect in PollDetail for why this one does not wait to be
   // invited the way every other read on this page does, and for why it is a
@@ -197,12 +214,11 @@ export function PublicPoll({
     const given = handoff.current
     if (!given || !pollId) return
     handoff.current = null
-    if (given.kind === 'open')
-      finish(pollId, given.view, given.questions, given.results, given.ballots)
+    if (given.kind === 'open') finishPage(pollId, given)
     // The link is not a link, which `PollPage` established rather than this
     // page having to be refused twice to find out. Same card either way.
     else setFailed({ pollId, message: 'Poll not found.' })
-  }, [pollId, finish])
+  }, [pollId, finishPage])
 
   // A question opened with its read already in hand, drawn before the browser
   // paints; see the same effect in PollDetail.
@@ -216,10 +232,9 @@ export function PublicPoll({
     if (adopted.current && adopted.current.pollId !== pollId) adopted.current = null
     if (!prefetched || !pollId || adopted.current?.read === prefetched) return
     adopted.current = { pollId, read: prefetched }
-    if (prefetched.kind === 'open')
-      finish(pollId, prefetched.view, prefetched.questions, prefetched.results, prefetched.ballots)
+    if (prefetched.kind === 'open') finishPage(pollId, prefetched)
     else reread()
-  }, [prefetched, pollId, finish, reread])
+  }, [prefetched, pollId, finishPage, reread])
 
   // The whole poll, read once here and handed to the panel below: this page
   // needs the title and the tags, the panel needs everything else, and one
@@ -265,7 +280,7 @@ export function PublicPoll({
         return false
       }
       if (page.kind === 'open') {
-        finish(pollId, page.view, page.questions, page.results, page.ballots)
+        finishPage(pollId, page)
         return true
       }
     }
@@ -292,7 +307,7 @@ export function PublicPoll({
     }
     finish(pollId, value)
     return true
-  }, [pollId, finish])
+  }, [pollId, finish, finishPage])
 
   // This question's own view. Null while a read for it is still in flight,
   // which is what stops the question being left from rendering under the
@@ -529,6 +544,8 @@ export function PublicPoll({
               view={view}
               results={results}
               ballots={ballots}
+              removed={removedHere.removed}
+              onRestored={removedHere.onRestored}
               onChanged={reread}
               onFirstVote={advance}
               onFirstConfirm={advance}

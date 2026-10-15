@@ -50,6 +50,8 @@ export function OpenPollPanel({
   onFirstConfirm,
   questionStrip,
   resultsLive = false,
+  removed,
+  onRestored,
 }: {
   pollId: string
   view: OpenPollView
@@ -113,6 +115,14 @@ export function OpenPollPanel({
   questionStrip?: ReactNode
   /** The results came out while the page was watching; see useResultsLanding. */
   resultsLive?: boolean
+  /**
+   * Whether this reader removed the poll from their list, where the page's
+   * read said — `poll_page` carries it — for the card they are left waiting
+   * on. Undefined is that card asking for itself. See `Banners`.
+   */
+  removed?: boolean
+  /** Told when the reader puts the poll back from that card. */
+  onRestored?: () => void
 }) {
   // Whether this poll asks a name at all, which is the one rule both stages
   // apply: a share link has no account to name whoever is answering, so a
@@ -145,7 +155,9 @@ export function OpenPollPanel({
   // What stands under the card a reader is left waiting on: where the push
   // switch is and that the site installs, the same for an account and a link.
   function waiting(stage: 'opening' | 'results') {
-    return canWatch ? <Banners moment={stage} pollId={pollId} /> : null
+    return canWatch ? (
+      <Banners moment={stage} pollId={pollId} removed={removed} onRestored={onRestored} />
+    ) : null
   }
 
   // A signed-out reader who has turned push on from the gear menu gets a

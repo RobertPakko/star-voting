@@ -2257,14 +2257,25 @@ deliberately narrow — `poll_status` alone on an invite poll, plus
 `open_poll_view` on an open one — because a poll's title, its terms and the
 questions it asks are frozen at creation.
 
-**What the page draws rides along with it.** `results`, `ballots` and
-`invitees` travel on the read, gated on exactly the condition the cards are
-rendered behind, so a poll still taking votes pays nothing: STAR does not run.
-Null on any of them means "ask for yourself", not "there is none" —
-`results_available` is still the only thing that says whether a result exists.
-That is what keeps the cards right where no `poll_page` read is in hand: a poll
-that finishes while somebody is watching, a crossing between two questions, and
-the About page's sample.
+**What the page draws rides along with it.** `results`, `ballots`,
+`invitees` and — on an invite poll that keeps its ballots private — the
+reader's own `your_scores` travel on the read, gated on exactly the condition
+the cards are rendered behind, so a poll still taking votes pays nothing: STAR
+does not run. Null on any of them means "ask for yourself", not "there is
+none" — `results_available` is still the only thing that says whether a result
+exists. That is what keeps the cards right where no `poll_page` read is in
+hand: a poll that finishes while somebody is watching, a crossing between two
+questions, and the About page's sample.
+
+**And so does whether the reader removed the poll** (`removed`, on both
+readings), for the card they are left waiting on; see [Removing a poll from
+your list](#removing-a-poll-from-your-list). Both it and `your_scores` were
+requests of their own, made by their cards once `poll_page` had come back,
+until [`0083_your_ballot_on_the_page.sql`](supabase/migrations/0083_your_ballot_on_the_page.sql)
+— which is what a finished private-ballot invite poll cost on top of the one
+read, and a page left at *your vote is in* too. Each calls the function its
+card used to (`poll_ballot_scores`, `poll_is_removed`), so the rule is still
+written once. `44_your_ballot_on_the_page` holds the conditions.
 
 **One gate over all three, and it was a real hole.** `poll_results_revealed` is
 group-wide on purpose — a poll of five questions that revealed question one's
@@ -4396,7 +4407,9 @@ Four rules hold the published setting together:
   added together and none of their own. `YourBallot` draws it, in the place the
   published grid would have stood and only there — a poll that publishes its
   ballots is already showing this one, on a grid with everybody else's, so the
-  two are exclusive and `PollDetail` picks between them.
+  two are exclusive and `PollDetail` picks between them. It arrives on
+  `poll_page` as `your_scores`, on the same terms as the tally, and the card
+  asks `poll_ballot_scores` itself only where no such read is in hand.
 
   The invite side is the whole of it, because that is the side with an account
   to ask under. A ballot cast through a share link is identified by a
@@ -6124,7 +6137,9 @@ view saying so, with the way back beside it.
 reader can remove a poll and still vote in it or confirm its options, and then
 they would wait for a result nobody is going to tell them about. So the card
 they land on — *your vote is in*, or the one after confirming the options —
-asks `poll_is_removed` and, where it is, puts a banner above the others
+reads `removed` off the `poll_page` that opened the page (asking
+`poll_is_removed` itself only where it has no such read) and, where it is,
+puts a banner above the others
 (`Banners`, with the poll's id): the poll is off your list and you won't hear
 about it, with **Add back to your list** beside it. The push banner stands down
 while it is there, since turning push on would not reach a poll the account has

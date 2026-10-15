@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { Card, Group, Stack, Text, Title } from '@mantine/core'
 import { StarIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
@@ -35,8 +35,12 @@ const STARS = 5
  * and no new grant: it is the same function *Edit vote* fills the ballot back
  * in from, asked one stage later.
  *
- * **Both kinds of poll, two ways of getting the scores.** An invite poll's are
- * read here, through `poll_ballot_scores`. An open poll's arrive already in
+ * **Both kinds of poll, two ways of getting the scores.** An invite poll's
+ * come with the read that opened the page -- `poll_page` carries them as
+ * `your_scores` on exactly the polls this card is drawn under -- and are read
+ * here, through `poll_ballot_scores`, only where no such read is in hand: a
+ * poll that finished while somebody watched, or a crossing between questions.
+ * An open poll's arrive already in
  * hand: `open_poll_view` returns `your_scores` at every stage, found by the
  * account that cast the ballot when the reader is signed in and by this
  * browser's `voter_key` otherwise -- so on a finished open poll the reader gets
@@ -48,6 +52,7 @@ export function YourBallot({
   pollId,
   options,
   scores: given,
+  initial = null,
   schedule = null,
 }: {
   pollId: string
@@ -66,6 +71,13 @@ export function YourBallot({
    */
   scores?: Record<string, number>
   /**
+   * An invite poll's ballot, where the read that opened the page brought it --
+   * `poll_page`'s `your_scores`. Taken once, the way `Results` takes its
+   * tally: the page drops it on its next read, which did not bring one, and
+   * this card must not read again for that.
+   */
+  initial?: Record<string, number> | null
+  /**
    * The poll's schedule, on a time poll, which hands the ballot back as the
    * calendar it was painted on rather than as a list of windows -- see
    * ScheduleBallots.
@@ -75,7 +87,7 @@ export function YourBallot({
   return given ? (
     <BallotRows options={options} scores={given} schedule={schedule} />
   ) : (
-    <ReadBallot pollId={pollId} options={options} schedule={schedule} />
+    <ReadBallot pollId={pollId} options={options} schedule={schedule} initial={initial} />
   )
 }
 
@@ -83,23 +95,32 @@ function ReadBallot({
   pollId,
   options,
   schedule,
+  initial,
 }: {
   pollId: string
   options: PollOption[]
   schedule: PollSchedule | null
+  initial: Record<string, number> | null
 }) {
   // Read every time the card is drawn, like the tally above it and the sheet
   // it stands in place of. A closed poll can be opened again, take a changed
   // vote and be closed again without telling anybody holding a copy of this,
   // so nothing is held: see the note in `Results`, which is the same trade
   // and the same reasoning.
-  const [scores, setScores] = useState<Record<string, number> | null>(null)
+  //
+  // Starting from what was handed in, so a ballot the page already holds is
+  // drawn on the first paint rather than a frame after its skeleton.
+  const [scores, setScores] = useState<Record<string, number> | null>(initial)
   // Said quietly, and not in red. Everything else on this page is
   // load-bearing -- the tally is the answer the poll was run to get -- and
   // this is a reminder of something the reader already knows they did, so a
   // line of red would be the most alarming thing on a page whose news is
   // good. It says what happened and the page carries on around it.
   const [failed, setFailed] = useState(false)
+  // The ballot the page's read brought, taken once and then gone, for the
+  // reason `Results` gives for its tally: one read's worth of work already
+  // done gets used up, and a re-read must never come back with it.
+  const handoff = useRef(initial)
 
   useEffect(() => {
     // Cleared as well as re-read, because one page serves every question of a
@@ -107,6 +128,13 @@ function ReadBallot({
     // the last question's ballot on screen under the next question's heading.
     setScores(null)
     setFailed(false)
+
+    const given = handoff.current
+    handoff.current = null
+    if (given) {
+      setScores(given)
+      return
+    }
 
     let cancelled = false
     supabase.rpc('poll_ballot_scores', { p_poll_id: pollId }).then(({ data, error }) => {
