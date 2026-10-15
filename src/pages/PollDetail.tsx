@@ -29,7 +29,7 @@ import { SmoothHeight } from '../components/SmoothHeight'
 import { useResultsLanding } from '../lib/resultsLanding'
 import { Banners } from '../components/Banners'
 import { RetentionNote } from '../components/RetentionNote'
-import { Ballots, Results, TimeBallotCard, YourBallot } from '../components/deferred'
+import { Ballots, preloadCards, Results, TimeBallotCard, YourBallot } from '../components/deferred'
 import {
   BallotsSkeleton,
   PollPageSkeleton,
@@ -346,6 +346,8 @@ export function PollDetail({
     // be a second round trip behind the first four because nothing before
     // them said the poll was open. See lib/pollPage.ts.
     const { page, error: readError } = await readPollPage(pollId)
+    // The cards it will draw, before it is drawn; see `preloadCards`.
+    if (page) await preloadCards(page)
     if (onScreen.current !== pollId) return true
 
     // A poll that stopped being this account's to read while they were

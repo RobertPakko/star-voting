@@ -74,7 +74,9 @@ export function Ballots({
   // same reason: a reopened poll takes more ballots and tells nobody who is
   // holding a sheet, so a sheet held for the life of the tab is a sheet that
   // can outlive the votes on it. See the note in Results.
-  const [sheet, setSheet] = useState<BallotSheet | null>(null)
+  // Starting from what was handed in, so a sheet the page already holds is
+  // drawn on the first paint rather than a frame after its skeleton.
+  const [sheet, setSheet] = useState<BallotSheet | null>(initial)
   const [error, setError] = useState<string | null>(null)
   // Taken once and then gone, for the reason this grid re-reads at all: the
   // ballots under it can move, so a re-read must never come back with the
@@ -82,12 +84,10 @@ export function Ballots({
   const handoff = useRef(initial)
 
   useEffect(() => {
+    // Already drawn, by the state's starting value.
     const given = handoff.current
     handoff.current = null
-    if (given) {
-      setSheet(given)
-      return
-    }
+    if (given) return
 
     let cancelled = false
     const request: PromiseLike<RpcAnswer> =

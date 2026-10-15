@@ -50,6 +50,7 @@ import type { PollHeadingProps } from './components/PollHeading'
 import { motionMs } from './lib/motion'
 import { BackToList } from './components/BackToList'
 import { Reveal } from './components/Reveal'
+import { preloadCards } from './components/deferred'
 
 /**
  * The least time a poll page's skeleton is on screen once it is up.
@@ -397,6 +398,11 @@ function PollPage() {
     // the address being written down.
     if (page.kind === 'unreadable' && (!session || anonymous))
       rememberDestination(location.pathname)
+    // And the code for the cards it will draw, while the skeleton is still up
+    // anyway: a finished poll's tally is a chunk of its own, and fetched after
+    // the page arrived it was a second skeleton under the heading for as long
+    // as that took. See `preloadCards`.
+    await preloadCards(page)
     // Back behind a skeleton that has only just gone up: left there long
     // enough not to flash; see SKELETON_MIN_MS.
     const since = skeletonSince.current
@@ -448,6 +454,8 @@ function PollPage() {
   aheadNow.current = ahead
   const onAhead = useCallback((id: string, page: PollRead) => {
     setAhead((held) => ({ ...held, [id]: page }))
+    // So a step to it draws its cards at once, as it draws the rest of it.
+    void preloadCards(page)
   }, [])
   // A question let go takes its read with it: nothing keeps it current any
   // more, and a read nothing keeps current is not one to draw a page from.

@@ -152,6 +152,30 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   await expect(ranking).toBeHidden()
 })
 
+test('a finished poll goes from one skeleton straight to its results', async ({ page }) => {
+  // Every frame from the first, which is the only way to see a wait that
+  // lasts one: the page used to arrive and then fill its tally in behind a
+  // second skeleton of a different shape, while that card's code was fetched
+  // and again while the card took the tally it had been handed.
+  await page.addInitScript(() => {
+    const shapes: number[] = []
+    Object.assign(window, { skeletonShapes: shapes })
+    const frame = () => {
+      const count = document.querySelectorAll('.mantine-Skeleton-root').length
+      if (count !== shapes.at(-1)) shapes.push(count)
+      requestAnimationFrame(frame)
+    }
+    requestAnimationFrame(frame)
+  })
+  await page.goto('#/polls/sample-result-dinner')
+  await expect(page.getByText('Winner: Two big pizzas')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Ballots' })).toBeVisible()
+  const shapes = await page.evaluate(
+    () => (window as unknown as { skeletonShapes: number[] }).skeletonShapes,
+  )
+  expect(shapes.filter((count) => count > 0)).toHaveLength(1)
+})
+
 for (const scheme of ['light', 'dark'] as const) {
   test(`a calendar poll publishes its ballots as one averaged calendar (${scheme})`, async ({
     page,

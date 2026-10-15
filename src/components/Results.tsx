@@ -107,7 +107,12 @@ export function Results({
   // cheap now that the full ranking is fetched only when somebody opens it
   // (see FullRanking), which is what makes paying for it on every load the
   // easy trade.
-  const [results, setResults] = useState<PollResults | null>(null)
+  //
+  // Starting from what was handed in, so a tally the page already holds is
+  // drawn on the first paint rather than a frame after its skeleton -- which
+  // was a second, differently shaped skeleton, since this one is not told the
+  // option count the page's own fallback is.
+  const [results, setResults] = useState<PollResults | null>(initial)
   const [error, setError] = useState<string | null>(null)
   // The handed-over tally, taken once and then gone. A ref rather than the
   // prop read straight through, because one read's worth of work already done
@@ -144,12 +149,10 @@ export function Results({
   }, [results])
 
   useEffect(() => {
+    // Already drawn, by the state's starting value.
     const given = handoff.current
     handoff.current = null
-    if (given) {
-      setResults(given)
-      return
-    }
+    if (given) return
 
     let cancelled = false
     const request: PromiseLike<RpcAnswer> =

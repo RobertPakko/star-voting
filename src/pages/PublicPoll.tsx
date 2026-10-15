@@ -9,6 +9,7 @@ import { voterKeyFor } from '../lib/voterKey'
 import { rememberAnswered, rememberConfirmed, useQuestionMarks } from '../lib/questionMarks'
 import { nextUnansweredKey } from '../lib/nextQuestion'
 import { OpenPollPanel } from '../components/OpenPollPanel'
+import { preloadCards } from '../components/deferred'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { SmoothHeight } from '../components/SmoothHeight'
@@ -265,6 +266,8 @@ export function PublicPoll({
     // the narrow one.
     if (!covered.current.includes(pollId) || loadedFor.current !== pollId) {
       const { page, error: readError } = await readPollPage(pollId)
+      // The cards it will draw, before it is drawn; see `preloadCards`.
+      if (page) await preloadCards(page)
       if (onScreen.current !== pollId) return true
 
       if (readError || !page || page.kind === 'unreadable') {

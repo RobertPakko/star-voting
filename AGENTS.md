@@ -2324,6 +2324,22 @@ survive the same test because both are still reachable holding nothing.
 The one wait that is still a spinner is the app's own boot, before the session
 is known — at that point there is no page to draw the shape of.
 
+**One wait, one shape.** A finished poll opened at its link used to go through
+three: the route's skeleton, then — the read back, the page drawn — a results
+skeleton under the real heading while the tally's chunk was fetched (and held
+up to 300ms more by React's reveal throttle), then for a frame the card's own
+skeleton, of a different row count, while it took the tally it had been handed
+in an effect. Two fixes, both in the shape of rules: **a read is not drawn
+until the code for the cards it will draw is in** (`preloadCards` in
+[`components/deferred.ts`](src/components/deferred.ts), awaited by every
+`poll_page` read before it is drawn, and started for the questions read ahead);
+and **a card handed its data starts from it** (`useState(initial)`, never an
+effect). The first needs the cards to be `deferred()` rather than `lazy()`:
+`lazy()` suspends on its first render however long ago the chunk arrived, and
+`deferred()` hands a fetched chunk to `use` already settled.
+`a finished poll goes from one skeleton straight to its results` in the browser
+suite counts the shapes, frame by frame.
+
 ### When a wait ends badly
 
 Everything above is about a wait that ends. The one that does not is a render
