@@ -554,9 +554,6 @@ function OpenBallot({
           p_voter_name: voterName?.trimmed ?? null,
         })
     if (error) throw new Error(error.message)
-    // Remembered only once a ballot has actually gone in under it, so a name
-    // typed into a form that was refused is not offered back on the next one.
-    voterName?.remember()
   }
 
   // Two ballots, one submit path: whichever of them is on screen produces the

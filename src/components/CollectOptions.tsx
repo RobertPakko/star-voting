@@ -290,9 +290,6 @@ export function CollectOptions({
       if (save) onChanged()
       return
     }
-    // Remembered only once a confirmation has actually gone in under it, so a
-    // name the server refused is not offered back on the next poll.
-    voterName?.remember()
     notifications.show({ message: 'Options confirmed', color: 'green' })
     ;(onConfirmed ?? onChanged)()
   }

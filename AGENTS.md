@@ -5214,9 +5214,12 @@ with it when they mount again.
 - **The About page's sample keeps its drafts in memory**, for the life of the
   visit like its ballots, and `PollPage` forgets both on its way out.
 
-The voter's name is not part of it: it is the page's, kept across a crossing
-already (`useVoterName`), and remembered once a ballot has gone in under it.
-Nothing in a draft reaches the server or is trusted by it; the worst a stale
+The voter's name is not part of it, because it needs nothing of its own:
+`star-voting:voter-name` is written as the box is typed in rather than when a
+ballot goes in, so a refresh brings back whatever was typed. It used to wait
+for a successful submit, so that a refused name was not offered back on the
+next poll — but the server refuses a name only for being blank, and an
+emptied box forgets the name rather than storing it. Nothing in a draft reaches the server or is trusted by it; the worst a stale
 one can do is fill in a score the voter can see and change before sending.
 
 ### The order the options come in

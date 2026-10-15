@@ -119,6 +119,18 @@ test('a ballot left half done is there to come back to', async ({ page }) => {
   await expect(fourStars).toBeChecked()
 })
 
+test('a name typed and not yet sent survives a refresh', async ({ page }) => {
+  await page.goto('#/polls/sample-dinner')
+  await page.getByLabel('Your name').fill('Sam')
+  await page.reload()
+  await expect(page.getByLabel('Your name')).toHaveValue('Sam')
+
+  // An emptied box forgets the name rather than leaving part of it behind.
+  await page.getByLabel('Your name').fill('')
+  await page.reload()
+  await expect(page.getByLabel('Your name')).toHaveValue('')
+})
+
 test('the results show the rounds, the tie-break and the full ranking', async ({ page }) => {
   await page.goto('#/polls/sample-result-dinner')
   await expect(page.getByText('Winner: Two big pizzas')).toBeVisible()

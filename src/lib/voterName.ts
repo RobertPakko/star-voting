@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 
 /**
- * The name this browser last voted under, offered back on the next ballot.
+ * The name last typed into this browser's name box, offered back on the next
+ * ballot.
  *
  * An open poll's ballots are identified by a `voter_key` minted per question
  * precisely so one browser's ballots cannot be joined to each other, so
@@ -14,6 +15,13 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
  * **Stored per browser, not per poll.** A name is not a per-poll secret; it is
  * what this person is called. Somebody answering under a pseudonym overwrites
  * it by typing a different one.
+ *
+ * **Written as it is typed, not when a ballot goes in.** A name typed and not
+ * yet sent used to be lost to a refresh, while the half-filled ballot under it
+ * came back (lib/ballotDraft.ts). Remembering it only on a successful submit
+ * kept a refused name from being offered back, but the only name the server
+ * refuses is a blank one, and a blank box is never remembered: emptying the
+ * box forgets the name rather than leaving its last letter behind.
  *
  * It is only ever a suggestion — every field starts filled in and stays
  * editable — and a poll that hides its respondents shows no field at all:
@@ -33,12 +41,12 @@ export function rememberedVoterName(): string {
   }
 }
 
-/** Remembers the name a ballot went in under. Blank names are not remembered. */
+/** Remembers what is in the box; an empty box forgets it. */
 export function rememberVoterName(name: string): void {
   const trimmed = name.trim()
-  if (!trimmed) return
   try {
-    localStorage.setItem(STORAGE_KEY, trimmed)
+    if (trimmed) localStorage.setItem(STORAGE_KEY, trimmed)
+    else localStorage.removeItem(STORAGE_KEY)
   } catch {
     // Nothing to do and nothing lost: the next ballot starts empty, which is
     // where this browser was anyway.
@@ -83,11 +91,6 @@ export type VoterName = {
    * every star a voter then taps pops the keyboard back up over the ballot.
    */
   blur: () => void
-  /**
-   * Remember it, once something has actually gone in under it — a name the
-   * server refused is not offered back on the next poll. See lib/voterName.ts.
-   */
-  remember: () => void
 }
 
 /**
@@ -117,6 +120,7 @@ export function useVoterName(question: string | undefined): VoterName {
     onChange(next) {
       setValue(next)
       setError(null)
+      rememberVoterName(next)
     },
     check(complaint) {
       setError(null)
@@ -127,9 +131,6 @@ export function useVoterName(question: string | undefined): VoterName {
     },
     blur() {
       ref.current?.blur()
-    },
-    remember() {
-      rememberVoterName(value)
     },
   }
 }
