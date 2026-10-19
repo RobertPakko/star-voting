@@ -61,8 +61,8 @@ create table if not exists sample.link (
 --           because five of the nine prefer it, which is the whole reason STAR
 --           runs a runoff at all.
 --   movie   the same ballot with a paragraph under each option, and a
---           three-way tie for the second finalist slot, settled head to head
---           with one of the three pairs itself tied.
+--           three-way tie for the second finalist slot, settled on five-star
+--           votes: Paddington 2 has two, the other two one each.
 --   when    a different ballot altogether: a calendar, painted rather than
 --           scored. It is last because it is the most to take in, and it is a
 --           plain election on purpose -- the score leader wins the runoff too,

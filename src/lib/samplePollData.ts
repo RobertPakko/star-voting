@@ -29,6 +29,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: null,
+        created_at: '2026-10-19T13:36:54.02919-07:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -152,6 +153,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '72b22b36-9803-668e-a119-9de317add162',
         schedule: null,
         closed_at: null,
+        created_at: '2026-10-19T13:36:54.02919-07:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -253,6 +255,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '72b22b36-9803-668e-a119-9de317add162',
         schedule: null,
         closed_at: null,
+        created_at: '2026-10-19T13:36:54.02919-07:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -348,7 +351,8 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           granularity: 30,
           desired_slots: 8,
         },
-        closed_at: '2026-02-13T21:37:00+00:00',
+        closed_at: '2026-02-13T13:37:00-08:00',
+        created_at: '2026-10-19T13:36:54.02919-07:00',
         description:
           'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
         show_voters: true,
@@ -724,56 +728,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             slots: 1,
             steps: [
               {
-                rule: 'head_to_head',
-                results: [
-                  {
-                    id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
-                    name: '2026-02-21T11:00:00-07:00',
-                    value: 0,
-                  },
-                  {
-                    id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
-                    name: '2026-02-21T11:30:00-07:00',
-                    value: 0,
-                  },
-                  {
-                    id: '72b623e7-4444-6197-3b84-77f30167d46b',
-                    name: '2026-02-21T12:00:00-07:00',
-                    value: 0,
-                  },
-                ],
-                decisive: false,
-                matchups: [
-                  {
-                    a: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
-                    b: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
-                    ties: 9,
-                    a_name: '2026-02-21T11:00:00-07:00',
-                    b_name: '2026-02-21T11:30:00-07:00',
-                    prefers_a: 0,
-                    prefers_b: 0,
-                  },
-                  {
-                    a: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
-                    b: '72b623e7-4444-6197-3b84-77f30167d46b',
-                    ties: 9,
-                    a_name: '2026-02-21T11:00:00-07:00',
-                    b_name: '2026-02-21T12:00:00-07:00',
-                    prefers_a: 0,
-                    prefers_b: 0,
-                  },
-                  {
-                    a: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
-                    b: '72b623e7-4444-6197-3b84-77f30167d46b',
-                    ties: 9,
-                    a_name: '2026-02-21T11:30:00-07:00',
-                    b_name: '2026-02-21T12:00:00-07:00',
-                    prefers_a: 0,
-                    prefers_b: 0,
-                  },
-                ],
-              },
-              {
                 rule: 'five_star_votes',
                 results: [
                   {
@@ -851,56 +805,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             slots: 2,
             steps: [
               {
-                rule: 'head_to_head',
-                results: [
-                  {
-                    id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
-                    name: '2026-02-21T11:00:00-07:00',
-                    value: 0,
-                  },
-                  {
-                    id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
-                    name: '2026-02-21T11:30:00-07:00',
-                    value: 0,
-                  },
-                  {
-                    id: '72b623e7-4444-6197-3b84-77f30167d46b',
-                    name: '2026-02-21T12:00:00-07:00',
-                    value: 0,
-                  },
-                ],
-                decisive: false,
-                matchups: [
-                  {
-                    a: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
-                    b: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
-                    ties: 9,
-                    a_name: '2026-02-21T11:00:00-07:00',
-                    b_name: '2026-02-21T11:30:00-07:00',
-                    prefers_a: 0,
-                    prefers_b: 0,
-                  },
-                  {
-                    a: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
-                    b: '72b623e7-4444-6197-3b84-77f30167d46b',
-                    ties: 9,
-                    a_name: '2026-02-21T11:00:00-07:00',
-                    b_name: '2026-02-21T12:00:00-07:00',
-                    prefers_a: 0,
-                    prefers_b: 0,
-                  },
-                  {
-                    a: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
-                    b: '72b623e7-4444-6197-3b84-77f30167d46b',
-                    ties: 9,
-                    a_name: '2026-02-21T11:30:00-07:00',
-                    b_name: '2026-02-21T12:00:00-07:00',
-                    prefers_a: 0,
-                    prefers_b: 0,
-                  },
-                ],
-              },
-              {
                 rule: 'five_star_votes',
                 results: [
                   {
@@ -976,56 +880,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             ],
             slots: 1,
             steps: [
-              {
-                rule: 'head_to_head',
-                results: [
-                  {
-                    id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
-                    name: '2026-02-21T09:00:00-07:00',
-                    value: 0,
-                  },
-                  {
-                    id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
-                    name: '2026-02-21T09:30:00-07:00',
-                    value: 0,
-                  },
-                  {
-                    id: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
-                    name: '2026-02-21T10:30:00-07:00',
-                    value: 0,
-                  },
-                ],
-                decisive: false,
-                matchups: [
-                  {
-                    a: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
-                    b: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
-                    ties: 9,
-                    a_name: '2026-02-21T09:00:00-07:00',
-                    b_name: '2026-02-21T09:30:00-07:00',
-                    prefers_a: 0,
-                    prefers_b: 0,
-                  },
-                  {
-                    a: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
-                    b: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
-                    ties: 7,
-                    a_name: '2026-02-21T09:00:00-07:00',
-                    b_name: '2026-02-21T10:30:00-07:00',
-                    prefers_a: 1,
-                    prefers_b: 1,
-                  },
-                  {
-                    a: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
-                    b: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
-                    ties: 7,
-                    a_name: '2026-02-21T09:30:00-07:00',
-                    b_name: '2026-02-21T10:30:00-07:00',
-                    prefers_a: 1,
-                    prefers_b: 1,
-                  },
-                ],
-              },
               {
                 rule: 'five_star_votes',
                 results: [
@@ -1103,56 +957,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             ],
             slots: 2,
             steps: [
-              {
-                rule: 'head_to_head',
-                results: [
-                  {
-                    id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
-                    name: '2026-02-21T09:00:00-07:00',
-                    value: 0,
-                  },
-                  {
-                    id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
-                    name: '2026-02-21T09:30:00-07:00',
-                    value: 0,
-                  },
-                  {
-                    id: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
-                    name: '2026-02-21T10:30:00-07:00',
-                    value: 0,
-                  },
-                ],
-                decisive: false,
-                matchups: [
-                  {
-                    a: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
-                    b: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
-                    ties: 9,
-                    a_name: '2026-02-21T09:00:00-07:00',
-                    b_name: '2026-02-21T09:30:00-07:00',
-                    prefers_a: 0,
-                    prefers_b: 0,
-                  },
-                  {
-                    a: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
-                    b: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
-                    ties: 7,
-                    a_name: '2026-02-21T09:00:00-07:00',
-                    b_name: '2026-02-21T10:30:00-07:00',
-                    prefers_a: 1,
-                    prefers_b: 1,
-                  },
-                  {
-                    a: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
-                    b: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
-                    ties: 7,
-                    a_name: '2026-02-21T09:30:00-07:00',
-                    b_name: '2026-02-21T10:30:00-07:00',
-                    prefers_a: 1,
-                    prefers_b: 1,
-                  },
-                ],
-              },
               {
                 rule: 'five_star_votes',
                 results: [
@@ -1313,6 +1117,8 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       voter_count: 9,
       closed_early: false,
       invited_count: 0,
+      votes_after_reveal: false,
+      options_edited_after_votes: false,
     },
   },
   'sample-result-movie': {
@@ -1324,7 +1130,8 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         title: 'Movie night',
         group_id: '423ac0bc-0ec1-c015-0f1a-5110613b338c',
         schedule: null,
-        closed_at: '2026-02-13T21:37:00+00:00',
+        closed_at: '2026-02-13T13:37:00-08:00',
+        created_at: '2026-10-19T13:36:54.02919-07:00',
         description:
           'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
         show_voters: true,
@@ -1554,7 +1361,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           prefers_b: 2,
           resolved_by: 'preference',
           five_stars_a: 2,
-          five_stars_b: 1,
+          five_stars_b: 2,
         },
         options: [
           {
@@ -1563,7 +1370,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             total_score: 33,
           },
         ],
-        finalists: ['08726bf7-0f4d-190a-d5ed-c00d0565abbe', '283438a5-4cf9-8a00-c399-cf9c72c9b2ac'],
+        finalists: ['08726bf7-0f4d-190a-d5ed-c00d0565abbe', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
         tiebreaks: [
           {
             tied: [
@@ -1585,157 +1392,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             ],
             slots: 1,
             steps: [
-              {
-                rule: 'head_to_head',
-                results: [
-                  {
-                    id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                    name: 'Spirited Away',
-                    value: 1,
-                  },
-                  {
-                    id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                    name: 'Paddington 2',
-                    value: 0,
-                  },
-                  {
-                    id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-                    name: 'The Matrix',
-                    value: 0,
-                  },
-                ],
-                decisive: true,
-                matchups: [
-                  {
-                    a: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                    b: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                    ties: 0,
-                    a_name: 'Paddington 2',
-                    b_name: 'Spirited Away',
-                    prefers_a: 3,
-                    prefers_b: 6,
-                  },
-                  {
-                    a: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                    b: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-                    ties: 1,
-                    a_name: 'Paddington 2',
-                    b_name: 'The Matrix',
-                    prefers_a: 4,
-                    prefers_b: 4,
-                  },
-                  {
-                    a: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                    b: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-                    ties: 1,
-                    a_name: 'Spirited Away',
-                    b_name: 'The Matrix',
-                    prefers_a: 4,
-                    prefers_b: 4,
-                  },
-                ],
-              },
-            ],
-            tied_at: 26,
-            advanced: [
-              {
-                id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                name: 'Spirited Away',
-              },
-            ],
-            resolved_by: 'head_to_head',
-          },
-        ],
-      },
-      {
-        place: 2,
-        runoff: {
-          ties: 0,
-          prefers_a: 6,
-          prefers_b: 3,
-          resolved_by: 'preference',
-          five_stars_a: 1,
-          five_stars_b: 2,
-        },
-        options: [
-          {
-            id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-            name: 'Spirited Away',
-            total_score: 26,
-          },
-        ],
-        finalists: ['283438a5-4cf9-8a00-c399-cf9c72c9b2ac', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
-        tiebreaks: [
-          {
-            tied: [
-              {
-                id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                name: 'Paddington 2',
-                total_score: 26,
-              },
-              {
-                id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                name: 'Spirited Away',
-                total_score: 26,
-              },
-              {
-                id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-                name: 'The Matrix',
-                total_score: 26,
-              },
-            ],
-            slots: 2,
-            steps: [
-              {
-                rule: 'head_to_head',
-                results: [
-                  {
-                    id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                    name: 'Spirited Away',
-                    value: 1,
-                  },
-                  {
-                    id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                    name: 'Paddington 2',
-                    value: 0,
-                  },
-                  {
-                    id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-                    name: 'The Matrix',
-                    value: 0,
-                  },
-                ],
-                decisive: false,
-                matchups: [
-                  {
-                    a: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                    b: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                    ties: 0,
-                    a_name: 'Paddington 2',
-                    b_name: 'Spirited Away',
-                    prefers_a: 3,
-                    prefers_b: 6,
-                  },
-                  {
-                    a: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                    b: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-                    ties: 1,
-                    a_name: 'Paddington 2',
-                    b_name: 'The Matrix',
-                    prefers_a: 4,
-                    prefers_b: 4,
-                  },
-                  {
-                    a: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                    b: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-                    ties: 1,
-                    a_name: 'Spirited Away',
-                    b_name: 'The Matrix',
-                    prefers_a: 4,
-                    prefers_b: 4,
-                  },
-                ],
-              },
               {
                 rule: 'five_star_votes',
                 results: [
@@ -1761,10 +1417,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             tied_at: 26,
             advanced: [
               {
-                id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                name: 'Spirited Away',
-              },
-              {
                 id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
                 name: 'Paddington 2',
               },
@@ -1774,7 +1426,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
       },
       {
-        place: 3,
+        place: 2,
         runoff: {
           ties: 1,
           prefers_a: 4,
@@ -1791,26 +1443,87 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           },
         ],
         finalists: ['240967c0-62e5-88a7-a662-5dc029b84eaf', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
-        tiebreaks: [],
+        tiebreaks: [
+          {
+            tied: [
+              {
+                id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+                name: 'Paddington 2',
+                total_score: 26,
+              },
+              {
+                id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+                name: 'Spirited Away',
+                total_score: 26,
+              },
+              {
+                id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+                name: 'The Matrix',
+                total_score: 26,
+              },
+            ],
+            slots: 2,
+            steps: [
+              {
+                rule: 'five_star_votes',
+                results: [
+                  {
+                    id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+                    name: 'Paddington 2',
+                    value: 2,
+                  },
+                  {
+                    id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+                    name: 'Spirited Away',
+                    value: 1,
+                  },
+                  {
+                    id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+                    name: 'The Matrix',
+                    value: 1,
+                  },
+                ],
+                decisive: false,
+              },
+            ],
+            tied_at: 26,
+            advanced: [
+              {
+                id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+                name: 'Paddington 2',
+              },
+              {
+                id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+                name: 'The Matrix',
+              },
+            ],
+            resolved_by: 'random',
+          },
+        ],
       },
       {
-        place: 4,
+        place: 3,
         runoff: {
-          ties: 2,
-          prefers_a: 6,
-          prefers_b: 1,
-          resolved_by: 'preference',
+          ties: 1,
+          prefers_a: 4,
+          prefers_b: 4,
+          resolved_by: 'unresolved',
           five_stars_a: 1,
-          five_stars_b: 0,
+          five_stars_b: 1,
         },
         options: [
+          {
+            id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+            name: 'Spirited Away',
+            total_score: 26,
+          },
           {
             id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
             name: 'The Matrix',
             total_score: 26,
           },
         ],
-        finalists: ['240967c0-62e5-88a7-a662-5dc029b84eaf', 'b50cd426-947e-4697-2dbc-db6c26d1e385'],
+        finalists: ['240967c0-62e5-88a7-a662-5dc029b84eaf', '283438a5-4cf9-8a00-c399-cf9c72c9b2ac'],
         tiebreaks: [],
       },
       {
@@ -1856,7 +1569,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         prefers_b: 2,
         resolved_by: 'preference',
         five_stars_a: 2,
-        five_stars_b: 1,
+        five_stars_b: 2,
       },
       options: [
         {
@@ -1868,18 +1581,18 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           average_score: 3.67,
         },
         {
-          id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-          name: 'Spirited Away',
-          description:
-            "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts.",
-          total_score: 26,
-          average_score: 2.89,
-        },
-        {
           id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
           name: 'Paddington 2',
           description:
             "Paddington, now happily settled with the Brown family and a popular member of the local community, picks up a series of odd jobs to buy the perfect present for his Aunt Lucy's 100th birthday, only for the gift to be stolen.",
+          total_score: 26,
+          average_score: 2.89,
+        },
+        {
+          id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+          name: 'Spirited Away',
+          description:
+            "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts.",
           total_score: 26,
           average_score: 2.89,
         },
@@ -1908,7 +1621,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           average_score: 1.22,
         },
       ],
-      finalists: ['08726bf7-0f4d-190a-d5ed-c00d0565abbe', '283438a5-4cf9-8a00-c399-cf9c72c9b2ac'],
+      finalists: ['08726bf7-0f4d-190a-d5ed-c00d0565abbe', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
       tiebreaks: [
         {
           tied: [
@@ -1931,70 +1644,43 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           slots: 1,
           steps: [
             {
-              rule: 'head_to_head',
+              rule: 'five_star_votes',
               results: [
+                {
+                  id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+                  name: 'Paddington 2',
+                  value: 2,
+                },
                 {
                   id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
                   name: 'Spirited Away',
                   value: 1,
                 },
                 {
-                  id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                  name: 'Paddington 2',
-                  value: 0,
-                },
-                {
                   id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
                   name: 'The Matrix',
-                  value: 0,
+                  value: 1,
                 },
               ],
               decisive: true,
-              matchups: [
-                {
-                  a: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                  b: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                  ties: 0,
-                  a_name: 'Paddington 2',
-                  b_name: 'Spirited Away',
-                  prefers_a: 3,
-                  prefers_b: 6,
-                },
-                {
-                  a: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-                  b: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-                  ties: 1,
-                  a_name: 'Paddington 2',
-                  b_name: 'The Matrix',
-                  prefers_a: 4,
-                  prefers_b: 4,
-                },
-                {
-                  a: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-                  b: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-                  ties: 1,
-                  a_name: 'Spirited Away',
-                  b_name: 'The Matrix',
-                  prefers_a: 4,
-                  prefers_b: 4,
-                },
-              ],
             },
           ],
           tied_at: 26,
           advanced: [
             {
-              id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-              name: 'Spirited Away',
+              id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+              name: 'Paddington 2',
             },
           ],
-          resolved_by: 'head_to_head',
+          resolved_by: 'five_star_votes',
         },
       ],
       winner_id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
       voter_count: 9,
       closed_early: false,
       invited_count: 0,
+      votes_after_reveal: false,
+      options_edited_after_votes: false,
     },
   },
   'sample-result-dinner': {
@@ -2006,7 +1692,8 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         title: 'Movie night',
         group_id: '423ac0bc-0ec1-c015-0f1a-5110613b338c',
         schedule: null,
-        closed_at: '2026-02-13T21:37:00+00:00',
+        closed_at: '2026-02-13T13:37:00-08:00',
+        created_at: '2026-10-19T13:36:54.02919-07:00',
         description:
           'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
         show_voters: true,
@@ -2350,6 +2037,8 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       voter_count: 9,
       closed_early: false,
       invited_count: 0,
+      votes_after_reveal: false,
+      options_edited_after_votes: false,
     },
   },
 }

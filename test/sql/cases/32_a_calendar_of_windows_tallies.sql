@@ -4,20 +4,21 @@
 -- A time poll hands the tally the worst shape it has ever been given. A voter
 -- paints a calendar rather than reading a list, so contiguous windows come
 -- back with the same score or very nearly it, and the score round ends in one
--- enormous tie rather than a handful of small ones. `star_round` then builds
--- every ordered pair in the tied group and cross-joins each against every
--- ballot: sixty tied windows is 3,540 ordered pairs.
+-- enormous tie rather than a handful of small ones. `star_round` used to
+-- break it head to head, building every ordered pair in the tied group --
+-- 3,540 of them for sixty windows -- and cross-joining each against every
+-- ballot. Since 0086 a tie of three or more goes to five-star votes, which are
+-- already counted, so this is now cheap; the timeout stays as a guard against
+-- it becoming expensive again.
 --
 -- Both of the paths a person waits on run that. `poll_tally` runs on every
 -- read of the results, and `poll_winner_name` -- through `settle_winner` --
 -- runs inside the transaction of the deciding ballot, so the last voter to
 -- submit waits for it before their vote returns. The timeout here is the
--- ceiling those two are allowed to cost. It is generous against what was
--- measured when this landed (about a second for the deciding ballot at twelve
--- ballots, about 2.4s for the tally at sixty) so that an ordinary slow machine
--- does not fail the suite; what it catches is the tally becoming an order of
+-- ceiling those two are allowed to cost. It was set against the pairwise
+-- tie-break (about 2.4s for the tally at sixty), so it is far above what the
+-- five-star rule costs; what it catches is the tally becoming an order of
 -- magnitude worse, which is what a re-planned join or a lost index looks like.
--- See section 4 of 0055_schedule_polls.sql for what makes it as fast as it is.
 
 begin;
 
@@ -45,10 +46,11 @@ $$;
 -- round sixty ways -- the expensive shape this case exists to time.
 --
 -- **Three that split the group three ways**: the times a third of the team
--- cannot make, each a different third. They beat every ordinary window head
--- to head and cycle among themselves -- 58 beats 60 beats 59 beats 58 -- so
--- they are level on wins and on five-star votes, and the draw picks two of
--- the three. Which two is random; that the runoff can separate them is not.
+-- cannot make, each a different third. Each has four five-star ballots where
+-- no ordinary window has any, so the five-star rule narrows the sixty to
+-- these three and cannot separate them, and the draw picks two of the three.
+-- They cycle among themselves head to head -- 58 beats 60 beats 59 beats 58 --
+-- so which two is random; that the runoff can separate them is not.
 --
 -- The case used to be one rotation for all sixty, which is where the flake
 -- was: `((i + j) % 12)` depends on j only through its remainder, so windows
@@ -138,9 +140,9 @@ begin
   -- produces as a matter of course rather than by accident.
   perform tests.assert_eq('with all sixty tied in the score round',
     jsonb_array_length(v_tally #> '{tiebreaks,0,tied}'), 60);
-  -- Head to head narrows the sixty to the three that cycle, and there is
-  -- nothing left to separate *those*: level on wins and on five-star votes
-  -- alike, so the draw picks which two go through.
+  -- Five-star votes narrow the sixty to the three that cycle, and there is
+  -- nothing left to separate *those*: level on five-star votes, so the draw
+  -- picks which two go through.
   perform tests.assert_eq('and nothing to separate them but the draw',
     v_tally #>> '{tiebreaks,0,resolved_by}', 'random');
   -- Whichever two it drew. A cycle has no pair that is level on preference,

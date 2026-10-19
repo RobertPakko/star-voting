@@ -579,7 +579,11 @@ export interface HeadToHeadStep {
   rule: 'head_to_head'
   results: TiebreakEntry[]
   decisive: boolean
-  /** Every pair in the tied group, once what `results` was counted from. */
+  /**
+   * The one pair compared. Only a two-option tie is settled head to head, so
+   * this holds exactly one matchup; it is an array because it once held every
+   * pair in a group of any size, and recorded results still carry that shape.
+   */
   matchups: Matchup[]
 }
 

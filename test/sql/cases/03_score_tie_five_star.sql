@@ -1,7 +1,7 @@
--- The second tie-break rule. Three options tied on points again, but this
--- time head-to-head cannot separate the two that matter -- the option holding
--- the last finalist slot and the one that would take it -- so the count of
--- five-star ballots decides which of them advances.
+-- Three options tied for two finalist slots. A tie of three or more is not
+-- settled head to head at all: the count of five-star ballots is its first
+-- rule. Here head-to-head would have advanced Banana, and five-star votes
+-- advance Cherry instead.
 
 begin;
 
@@ -11,46 +11,57 @@ declare
   t jsonb;
   tb jsonb;
 begin
-  -- Everyone finishes on 10 points. Apple wins both its head-to-heads on the
-  -- strength of a flat 2 everywhere. Banana and Cherry split theirs two votes
-  -- each, so neither has a head-to-head win to show.
+  -- All three finish on 15 points. A majority of three voters ranks
+  -- Apple > Banana > Cherry, but nobody gives Banana five stars, while the
+  -- other two voters give them to Cherry.
   v_poll := tests.seed_poll(
     array['Apple', 'Banana', 'Cherry'],
     array[
-      [2, 1, 0],
-      [2, 0, 1],
-      [2, 1, 1],
-      [2, 3, 4],
-      [2, 5, 4]
+      [5, 4, 2],
+      [5, 4, 2],
+      [5, 4, 1],
+      [0, 2, 5],
+      [0, 1, 5]
     ]);
 
   t := poll_tally(v_poll);
   tb := t #> '{tiebreaks,0}';
 
-  perform tests.assert_eq('Apple ties on points',  tests.total_score(t, 'Apple'), 10);
-  perform tests.assert_eq('Banana ties on points', tests.total_score(t, 'Banana'), 10);
-  perform tests.assert_eq('Cherry ties on points', tests.total_score(t, 'Cherry'), 10);
+  perform tests.assert_eq('Apple ties on points',  tests.total_score(t, 'Apple'), 15);
+  perform tests.assert_eq('Banana ties on points', tests.total_score(t, 'Banana'), 15);
+  perform tests.assert_eq('Cherry ties on points', tests.total_score(t, 'Cherry'), 15);
 
-  perform tests.assert_eq('it is a tie at 10 points', (tb->>'tied_at')::int, 10);
+  perform tests.assert_eq('it is a tie at 15 points', (tb->>'tied_at')::int, 15);
+  perform tests.assert_eq('for two finalist slots',   (tb->>'slots')::int, 2);
+  perform tests.assert_eq('between all three options', jsonb_array_length(tb->'tied'), 3);
+
   perform tests.assert_eq('five-star votes settle it',
     tb->>'resolved_by', 'five_star_votes');
+  perform tests.assert_eq('it is the only rule shown', jsonb_array_length(tb->'steps'), 1);
+  perform tests.assert_eq('and it is the five-star count',
+    tb #>> '{steps,0,rule}', 'five_star_votes');
+  perform tests.assert_eq('marked decisive',
+    (tb #>> '{steps,0,decisive}')::boolean, true);
+  perform tests.assert_eq('Apple has the most five-star ballots',
+    tb #>> '{steps,0,results,0,name}', 'Apple');
+  perform tests.assert_eq('three of them',
+    (tb #>> '{steps,0,results,0,value}')::int, 3);
+  perform tests.assert_eq('Cherry has the next most',
+    tb #>> '{steps,0,results,1,name}', 'Cherry');
 
-  perform tests.assert_eq('both rules are shown', jsonb_array_length(tb->'steps'), 2);
-  perform tests.assert_eq('head-to-head is shown first',
-    tb #>> '{steps,0,rule}', 'head_to_head');
-  perform tests.assert_eq('but it did not decide anything',
-    (tb #>> '{steps,0,decisive}')::boolean, false);
-  perform tests.assert_eq('the five-star count did',
-    tb #>> '{steps,1,rule}', 'five_star_votes');
-  perform tests.assert_eq('and is marked decisive',
-    (tb #>> '{steps,1,decisive}')::boolean, true);
-  perform tests.assert_eq('Banana has the one five-star ballot',
-    tb #>> '{steps,1,results,0,name}', 'Banana');
+  perform tests.assert_eq('so Apple and Cherry advance',
+    tests.finalists(t), array['Apple', 'Cherry']);
+  perform tests.assert_eq('three voters prefer Apple in the runoff',
+    tests.prefers(t, 'Apple'), 3);
+  perform tests.assert_eq('Apple wins', tests.winner(t), 'Apple');
 
-  perform tests.assert_eq('so Banana takes the second slot',
-    tests.finalists(t), array['Apple', 'Banana']);
-  perform tests.assert_eq('Apple wins the runoff', tests.winner(t), 'Apple');
-  perform tests.assert_eq('Cherry, having lost the tie-break, is third',
+  -- The ladder below first place is its own runoff: Banana and Cherry, level
+  -- on points, are the two left and meet head to head, where Banana is
+  -- preferred three to two. Missing the finalists' runoff does not stop an
+  -- option placing above the one that took its slot.
+  perform tests.assert_eq('Banana is second',
+    tests.placed_at(poll_ranking(v_poll), 2), array['Banana']);
+  perform tests.assert_eq('Cherry is third',
     tests.placed_at(poll_ranking(v_poll), 3), array['Cherry']);
 end $$;
 

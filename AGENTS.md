@@ -1977,22 +1977,15 @@ already exists**: the `UNIQUE (ballot_id, candidate_id)` constraint on `scores`
 is backed by a btree on exactly those columns, and `EXPLAIN` shows the
 tie-break block using it. Adding another would have been a duplicate.
 
-What the worst case actually costs is the pair build, which is quadratic in the
-tied group and multiplied by the ballots. Measured on this schema with
-everything cached:
-
-| | |
-| --- | --- |
-| `poll_tally`, 60 options × 60 ballots, every window tied | ~2.4 s |
-| the same, with the ballots actually differing | ~0.65 s |
-| `poll_ranking`, 60 options, every window tied | ~6 s |
-
-The tally is the number that matters: `settle_winner` runs it inside the
-transaction of the deciding ballot, so the last voter to submit waits for it.
-It is acceptable and it is not comfortable. The fix, when it is wanted, is to
-stop asking `scores` the same question 212,400 times — pivot each ballot's
-scores over the tied group once and join, rather than reading them back a pair
-at a time.
+The worst case used to be the tie-break's pair build, quadratic in the tied
+group and multiplied by the ballots: 60 windows × 60 ballots, every window
+tied, was ~2.4 s for `poll_tally` and ~6 s for `poll_ranking`, and
+`settle_winner` runs the tally inside the transaction of the deciding ballot,
+so the last voter to submit waited for it. That cost is gone with
+`0086_simpler_score_round_tie_break.sql`: a tie of three or more is settled on
+five-star votes, which `_round` has already counted, and head-to-head only ever
+compares the one pair a two-way tie is (see [Tie-breaks](#tie-breaks)). What
+is left is linear in the options and the ballots.
 
 ### Collecting times, and a calendar among several questions
 
@@ -6654,10 +6647,9 @@ Two consequences, which the modal states rather than hides:
 Two of the lists on a results page have no natural ceiling, and a schedule
 poll reaches both. The scoring round is a row per option, and an option there is
 a half-hour window: a working week of them is over a hundred rows, and
-`MAX_OPTIONS` allows five hundred. A head-to-head tie-break is a row per
-*pair* in the tied group, which is quadratic, and windows tie at the top score
-readily -- thirty of them level is four hundred and thirty-five lines of
-working. Either one buries the runoff card, the full-ranking button and the
+`MAX_OPTIONS` allows five hundred. A five-star tie-break is a row per option
+in the tied group, and windows tie at the top score readily -- thirty of them
+level is thirty lines of working. Either one buries the runoff card, the full-ranking button and the
 published ballots under a document nobody scrolls to the end of, in front of
 a reader who came for the name in the green card at the top.
 
@@ -6668,8 +6660,7 @@ leaders. It cannot lose a finalist, because `poll_tally` orders by total and
 lifts a tie-break winner above the options it tied with, so the finalists are
 always the first two rows. It is a browser-only number on purpose, so changing
 it is a deploy rather than a migration. **The tie-break's lists stop at twenty**
-([`RESULTS_ROWS_MAX`](src/lib/resultsRows.ts)): the per-option totals and the
-pair list inside a head-to-head step, the five-star step's list, and the names
+([`RESULTS_ROWS_MAX`](src/lib/resultsRows.ts)): the five-star step's list, and the names
 in the sentence saying who tied (`NameList`'s `max`, which counts the rest as
 "and 28 others" rather than naming them). Those are folded away behind a button
 (see *Each round carries its own tie-break* below), so they get the longer
@@ -6750,42 +6741,40 @@ filling in a ballot never fetches it.
 ### Tie-breaks
 
 Documented for readers on the `/about` page (`src/pages/About.tsx`) and
-implemented in the migrations. A score-round tie goes to the option preferred by
-more voters head-to-head, then to the one given five stars on the most ballots,
-then randomly. A runoff tie goes to the higher total score, then to the
+implemented in the migrations. A score-round tie between **two** options goes to
+the one preferred by more voters head-to-head, then to the one given five stars
+on the most ballots, then randomly; a tie between **three or more** goes
+straight to the five-star count, then randomly. These are the rules the STAR
+Voting project publishes and [BetterVoting](https://docs.bettervoting.com/help/ties.html)
+runs. A runoff tie goes to the higher total score, then to the
 five-star count, and if the options are level on all three the election has no
 winner — the app reports the tie rather than inventing a result. If you change a
 rule, change the SQL, the About page and the cases in `test/sql/cases/`
 together; they are a set.
 
-**A head-to-head tie-break is reported as the comparisons it is made of**, not
-as the score it keeps. The rule pairs every tied option with every other and
-counts the pairs each one won, and for the commonest tie there is — two
-options level on points, one runoff slot between them — that count is zero on
-both sides whenever the pair itself is level. "0 matchups won" twice is a true
-and unreadable statement of a tie, in a unit nobody outside voting theory uses,
-at the moment a reader is working out why their option went out.
+**Head-to-head was once tried on a tie of any size**, as a round-robin: every
+tied option paired with every other, ordered by pairs won. It was dropped in
+`0086` for two reasons. The cost was quadratic in the tied group, and a time
+poll ties dozens of identical windows without trying (see [The option ceiling,
+and what the tally costs](#the-option-ceiling-and-what-the-tally-costs)). And
+the explanation was a round-robin a reader had to follow to see why their
+option went out. Ties of three or more are rare in real polls, so the answers
+it changes are rare; the five-star count is one number per option, already in
+hand.
 
-So `star_round` sends the pairs themselves (`steps[].matchups`: the two
-options, the voters who preferred each, and the voters who scored them the
-same), and `Results.tsx` renders a two-option tie as the single comparison it
-is — "3 voters preferred each, 2 scored them equally", the words the runoff
-uses for the same arithmetic, with the word *matchup* gone. A
-group of three or more keeps the per-option totals, because there the totals
-are the point (the rule is asking which option beat the most others), and
-each total opens onto the matchups it counted — *Beat*, *Tied with*, *Lost
-to*, told from that option's side, wins first, closed until asked for. The
-totals are derived from those same pair rows, so the two can't disagree.
-
-**They used to be one list of every pair, under all the totals.** The right
-size and the wrong shape: a reader checking why an option "won 1 of 2" had to
-find its two pairs among everybody's and work out which way round each was
-written. Grouped under the option, every pair appears twice — once under each
-of its options — and the lines under a total are exactly what that total
-counted.
+**A head-to-head tie-break is reported as the comparison it is**, not as the
+score it keeps. The step still carries a win count per option (`results`), and
+when the pair itself is level that count is zero on both sides — a true and
+unreadable statement of a tie. So `star_round` sends the pair (`steps[].matchups`,
+always exactly one: the two options, the voters who preferred each, and the
+voters who scored them the same), and `Results.tsx` renders it in the words the
+runoff uses for the same arithmetic — "3 voters preferred each, 2 scored them
+equally". It stays an array because recorded payloads, the About page's sample
+among them, were written when it could hold many.
 
 **The rules are named in order, not numbered** — *First rule: Head-to-head
-preference*, *Second rule: Five-star votes*. A tie settled by its first rule
+preference*, *Second rule: Five-star votes*, or for a larger tie *First rule:
+Five-star votes* alone. A tie settled by its first rule
 showed a lone "1." over a list with nothing after it, which read as the rest
 of the list having gone missing; "First rule" says the same thing about order
 and is still true when it is the only rule there was any need to try.

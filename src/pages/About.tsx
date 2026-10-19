@@ -128,14 +128,10 @@ export function About() {
  */
 const PROCEDURE_NOTES: ReactNode[] = [
   <>
-    A tie in the scoring round is broken in favor of the option that is preferred by the most voters
-    among the tied options. That's decided by comparing the tied options one pair at a time. For
-    each pair, we check which option is preferred by more voters. An option is 'preferred by more
-    voters' when it receives a higher score than the other option on a greater number of ballots
-    than the other option. Whichever option is preferred in the most of these one-on-one comparisons
-    wins the tie. If the options are still tied, the tie is broken in favor of the option given five
-    stars on the most ballots. If they remain tied after both rules, a finalist is chosen randomly
-    between them.
+    A tie between two options in the scoring round is broken in favor of the one preferred by more
+    voters: the one scored higher than the other on more ballots. If that is level too, or if three
+    or more options are tied, the tie is broken in favor of the options given five stars on the most
+    ballots. If they remain tied after that, a finalist is chosen randomly between them.
   </>,
   <>
     A tie in the runoff is broken in favor of the option with the higher total score. If both
