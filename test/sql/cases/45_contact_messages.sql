@@ -64,8 +64,8 @@ begin
   perform tests.sign_out();
   select count(*) into v_count from contact_messages where created_at > now() - interval '1 hour';
   insert into contact_messages (email, message)
-  select 'flood@example.com', 'x' from generate_series(1, 100 - v_count);
-  perform tests.assert_raises('a hundred messages an hour, from everybody together',
+  select 'flood@example.com', 'x' from generate_series(1, 10 - v_count);
+  perform tests.assert_raises('ten messages an hour, from everybody together',
     $q$ select send_contact_message('late@example.com', 'Hello') $q$, 'in the last hour');
 end $$;
 

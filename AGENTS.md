@@ -843,6 +843,9 @@ never stops watching a page that is on screen. Those are not repeated here.
 they are what this section is about. Realtime has to be enabled on the Supabase
 project and nothing else: broadcasting from the database writes to
 `realtime.messages`, which needs no publication changes and no table grants.
+The one thing on the Realtime side that is this repo's is the policy that lets
+clients receive (below), and with it in place **Realtime → Settings → Allow
+public access** can be turned off: nothing uses a public channel.
 
 **A signal, not the data.** Every message is empty. It says a poll changed and
 refuses to say how; whoever hears it re-reads through the same RPC they would
@@ -853,11 +856,30 @@ directly would have meant opening those tables to `anon` and re-deriving every
 rule in this file as an RLS policy: a second copy of the access model to keep
 in step with the first.
 
-**The topics are public, and that is a decision rather than an oversight.** A
-listener needs no authorization because there is nothing to authorize: the
-payload is `{}`, and the most anyone gains by guessing a topic is knowing that
-a poll whose id they already held changed at some moment. It is still the RPC,
-not the socket, that decides what comes back.
+**Anybody may listen; only the database may speak.** A listener needs next to
+no authorization, because there is next to nothing to authorize: the payload is
+`{}`, and the most anyone gains by guessing a topic is knowing that a poll
+whose id they already held changed at some moment. It is still the RPC, not the
+socket, that decides what comes back. So the one policy on `realtime.messages`
+lets `anon` and `authenticated` receive on any `poll:` topic, and on
+`user:<id>` only as that user.
+
+Sending is the other half, and for a long time it was open by accident. The
+topics were public channels, and a public channel takes broadcasts from any
+client holding the anon key — so anybody holding a poll's link could send
+`poll_deleted` to everybody watching it, and every one of those pages would say
+the poll had been deleted, since that event is acted on without a read. Since
+`0085_live_updates_are_received_not_sent.sql` the database sends on **private**
+channels (`announce()` passes `true` to `realtime.send`), clients subscribe
+with `private: true`, and there is no INSERT policy, so no client may send at
+all. A private and a public channel of the same name are different channels,
+so a message sent on the old public one reaches nobody. The policy is outside
+the public schema, which a squash does not dump, so it is restated in
+[`supabase/after-squash.sql`](supabase/after-squash.sql); `46_live_updates_are_received_not_sent`
+checks the flag and the policies, though not that the Realtime service honours
+them. The same migration revoked `broadcast_poll_change(uuid)` from `PUBLIC`:
+it had been callable through the API, which is the database sending and so out
+of reach of any channel permission.
 
 There are two: `poll:<id>`, for every page watching one poll, whichever side
 of it they are on; and `user:<id>`, for one person's poll list — every change
@@ -3162,10 +3184,12 @@ holding a link, and asking them to sign in to report it is asking them not to.
 What the grant can do is add a row nobody it can reach will read. The bounds on
 it are in the function: the two lengths `limits.ts` carries for the form, the
 same address shape `invited_voters_email_ck` asks for, five messages a day per
-session, and a hundred an hour from everybody together — the last being the
+session, and ten an hour from everybody together — the last being the
 only bound there is on a caller with no session, and there to stop a script
-filling the table — and the owner's inbox — rather than to stop anybody
-real. `45_contact_messages` covers all of it but the send. The address is
+filling the table and the owner's inbox, and spending the Resend key every
+poll email shares, rather than to stop anybody real. It was a hundred until
+0085: enough for one script to use up a free tier's day of sending in an hour,
+after which every invitation and result would have gone nowhere, silently. `45_contact_messages` covers all of it but the send. The address is
 filled in from the account where there is one, since that is where a reply
 would go. The email is best-effort like every other this app sends (see
 [Emails](#4-emails)): silent where the Resend key is missing, sent once, never

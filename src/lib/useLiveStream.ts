@@ -358,7 +358,11 @@ export function useLiveStream(
     function open() {
       armGrace()
       armFirstRead()
-      const opened = supabase.channel(watching)
+      // Private, because on a public channel any client may broadcast too, and
+      // `poll_deleted` below is acted on without a read. A private channel is
+      // authorized against the policy on realtime.messages, which lets a
+      // client receive and nothing more; see 0085.
+      const opened = supabase.channel(watching, { config: { private: true } })
       channel = opened
       // Every event on the topic, because a poll change and an invite arrive
       // under different names and both mean the same thing here: ask again.

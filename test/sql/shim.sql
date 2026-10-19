@@ -143,6 +143,7 @@ create schema if not exists realtime;
 create table if not exists realtime.messages (
   id          bigserial primary key,
   topic       text not null,
+  extension   text not null default 'broadcast',
   event       text,
   payload     jsonb,
   private     boolean not null default true,
@@ -161,3 +162,12 @@ create or replace function realtime.send(
     insert into realtime.messages (topic, event, payload, private)
     values (topic, event, payload, private)
   $$;
+
+-- The topic of the channel a subscriber is joining, which Realtime sets while
+-- it checks the policies on realtime.messages; Supabase's definition, verbatim.
+-- Nothing subscribes here, so it only has to exist for a policy to name it.
+create or replace function realtime.topic()
+  returns text
+  language sql
+  stable
+  as $$ select nullif(current_setting('realtime.topic', true), '')::text $$;
