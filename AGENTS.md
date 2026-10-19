@@ -6233,13 +6233,18 @@ the poll list's own address with `?archived` on it, which swaps the list for
 the archived polls, each with a **Restore**. It is drawn only while there is
 something archived.
 
-**The pager is in the list's top row** (`.head` in `PollList.module.css`),
-centred between the Archived button (or the heading) and *New poll*, and on a
-line of its own under them below 48em, where the three no longer fit. It was a
-bar pinned to the foot of the screen with the Archived button beside it, which
-put two unrelated controls together and kept a strip of every screen covered;
-a page turn scrolls to the top anyway, so the top is where the reader is when
-the new page arrives. The page size stays ten rather than however
+**The pager is a pill floating at the foot of the screen** (`.pager` in
+`PollList.module.css`): `position: sticky`, so the list scrolls under it and
+it settles under the last card at the end, and drawn in the opposite colour
+scheme to the page's — dark on a light page, light on a dark one — so it reads
+as a control laid over the list rather than as one more card in it. Its
+colours are stated in that stylesheet rather than borrowed by putting
+`data-mantine-color-scheme` on it, because Mantine writes its control styles
+against every ancestor carrying that attribute, and a light pill inside a dark
+page matched the dark rule too. It sat at the top of the list for a day, which
+meant scrolling back up to turn a page; before that it was a full-width bar at
+the foot with the Archived button beside it, two unrelated controls in one
+strip. The page size stays ten rather than however
 many cards would fit, because cards are not one height and a page
 size that moved with the window would move the reader's page on every
 rotation. The archived list has no *New poll*, since a new poll goes

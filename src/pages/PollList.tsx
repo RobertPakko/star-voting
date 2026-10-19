@@ -6,11 +6,13 @@ import {
   Box,
   Button,
   Card,
+  Group,
   Pagination,
   Stack,
   Text,
   Title,
   Tooltip,
+  useComputedColorScheme,
   VisuallyHidden,
 } from '@mantine/core'
 import { useMediaQuery, useReducedMotion } from '@mantine/hooks'
@@ -81,6 +83,11 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   // JavaScript, which the global rule in index.css cannot reach.
   const reducedMotion = useReducedMotion()
   const phone = useMediaQuery('(max-width: 36em)', false, { getInitialValueInEffect: false })
+  // The pager is drawn in the other scheme from the page's; see its comment.
+  const pagerScheme =
+    useComputedColorScheme('light', { getInitialValueInEffect: false }) === 'dark'
+      ? 'light'
+      : 'dark'
   const userId = session?.user.id
   // A return to the list — the way back on a poll's page, or the browser's
   // back button — draws the list as it was left rather than starting over;
@@ -406,13 +413,9 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             polls once there are any — the list is what anybody lands on, so
             its name says nothing the page does not, and the archive is the
             one other place it leads. The heading stays for a screen reader,
-            which has no other way to hear where it is. The pager sits
-            between the two, centred, once there is a second page; below
-            them on a narrow screen (`head` in PollList.module.css). It is at
-            the top rather than the foot because that is where a page turn
-            lands the reader anyway (the scroll below). */}
-        <div className={classes.head}>
-          <div className={classes.headStart}>
+            which has no other way to hear where it is. */}
+        <Group justify="space-between" gap="sm">
+          <div>
             {!viewingRemoved && removedCount > 0 ? (
               <>
                 <VisuallyHidden>
@@ -433,27 +436,11 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
               </Title>
             )}
           </div>
-          {pageCount > 1 && (
-            <Pagination
-              className={classes.headPager}
-              total={pageCount}
-              value={current}
-              size={phone ? 'sm' : 'md'}
-              gap={phone ? 4 : 8}
-              onChange={(next) => {
-                setPage(next)
-                // The list is taller than a phone; landing halfway down the
-                // new page reads as nothing having happened.
-                window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
-              }}
-            />
-          )}
           {/* Not on the archived list: a new poll goes on the other one, and
               this page is a look at what was put away rather than somewhere
               to start anything. */}
           {!viewingRemoved && (
             <Button
-              className={classes.headEnd}
               component={Link}
               to="/polls/new"
               leftSection={<PlusIcon size={16} aria-hidden />}
@@ -461,7 +448,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
               New poll
             </Button>
           )}
-        </div>
+        </Group>
 
         {/* The one thing a list made without an account most needs saying:
             it lives in this browser's session, and nothing else knows it is
@@ -639,6 +626,31 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             )
           })}
         </PollCards>
+
+        {/* The pager, once there is a second page: a pill floating at the
+            foot of the screen while the list scrolls under it, and settling
+            under the last card at the end (`pager` in PollList.module.css),
+            so the next page is never a scroll away in either direction. It
+            is drawn in the opposite colour scheme to the page's — dark on a
+            light page, light on a dark one — so it reads as a control laid
+            over the list rather than as one more card in it. */}
+        {pageCount > 1 && (
+          <div className={classes.pager} data-scheme={pagerScheme}>
+            <Pagination
+              classNames={{ control: classes.pagerControl }}
+              total={pageCount}
+              value={current}
+              size={phone ? 'sm' : 'md'}
+              gap={phone ? 4 : 8}
+              onChange={(next) => {
+                setPage(next)
+                // The list is taller than a phone; landing halfway down the
+                // new page reads as nothing having happened.
+                window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
+              }}
+            />
+          </div>
+        )}
       </Stack>
     </Reveal>
   )

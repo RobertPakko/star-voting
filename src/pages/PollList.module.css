@@ -94,43 +94,57 @@
   opacity: 0.55;
 }
 
-/* The row the list opens with: its name or the Archived button at the left,
- * New poll at the right, and the pager centred between them. Centred on the
- * row rather than on the room left over, which is what the two equal outer
- * columns are for: a grid rather than a Group, since a Group centres the
- * middle child only when its neighbours happen to be the same width.
+/* The pager: a pill held at the foot of the screen while the list scrolls
+ * under it, and settling under the last card once the list is at its end.
+ * Sticky rather than fixed, so it stays in the column and takes room in the
+ * page instead of covering the last card; above the cards' own corner
+ * controls (`action`, z-index 1); and clear of the home indicator on a phone
+ * running the installed app.
  *
- * Under 48em the three no longer fit on one line beside a full pager, so the
- * pager takes a line of its own under the other two, still centred. */
-.head {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  grid-template-areas: 'start pager end';
-  align-items: center;
-  gap: var(--mantine-spacing-sm);
+ * It is drawn in the opposite scheme to the page's (`data-scheme`), and its
+ * colours are stated here rather than borrowed by putting Mantine's own
+ * `data-mantine-color-scheme` on it: Mantine writes its control styles
+ * against the nearest *and* every further ancestor carrying that attribute,
+ * so a light pill inside a dark page still matched the dark rule and drew
+ * dark buttons on white. The values are Mantine's own for each scheme. The
+ * current page keeps Mantine's filled primary in both. */
+.pager {
+  position: sticky;
+  bottom: calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom));
+  z-index: 2;
+  align-self: center;
+  margin-top: var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-xs);
+  border-radius: var(--mantine-radius-xl);
+  box-shadow: var(--mantine-shadow-lg);
 }
 
-.headStart {
-  grid-area: start;
-  justify-self: start;
-  min-width: 0;
+.pager[data-scheme='dark'] {
+  --pager-text: var(--mantine-color-dark-0);
+  --pager-control: var(--mantine-color-dark-6);
+  --pager-border: var(--mantine-color-dark-4);
+  --pager-hover: var(--mantine-color-dark-5);
+  background: var(--mantine-color-dark-7);
+  color: var(--pager-text);
 }
 
-.headPager {
-  grid-area: pager;
-  justify-self: center;
+.pager[data-scheme='light'] {
+  --pager-text: var(--mantine-color-black);
+  --pager-control: var(--mantine-color-white);
+  --pager-border: var(--mantine-color-gray-4);
+  --pager-hover: var(--mantine-color-gray-0);
+  background: var(--mantine-color-white);
+  color: var(--pager-text);
 }
 
-.headEnd {
-  grid-area: end;
-  justify-self: end;
+.pager .pagerControl:not([data-active]) {
+  color: var(--pager-text);
+  background-color: var(--pager-control);
+  border-color: var(--pager-border);
 }
 
-@media (max-width: 48em) {
-  .head {
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-      'start end'
-      'pager pager';
+@media (hover: hover) {
+  .pager .pagerControl:not([data-active], :disabled, [data-disabled]):hover {
+    background-color: var(--pager-hover);
   }
 }
