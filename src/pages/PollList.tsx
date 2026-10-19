@@ -608,12 +608,15 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             page size stays ten rather than however many cards fit above it:
             cards are not one height, and a page size that moved with the
             window would move the reader's page with it on every rotation.
-            Both lists draw it, the archived one with no button in it. On a
+            Both lists draw it, the archived one with no button in it. The
+            pager is at the left and the button at the right, as far apart as
+            the row allows, because they have nothing to do with each other;
+            the button keeps to the right when it is alone. On a
             phone the pager is drawn smaller and with no neighbours either
             side of the current page, so it and the button fit on one line
             and the bar takes as little of the screen as it can. */}
         {(pageCount > 1 || (!viewingRemoved && removedCount > 0)) && (
-          <Group justify="center" gap="sm" className={classes.pager}>
+          <Group justify="space-between" gap="sm" className={classes.pager}>
             {pageCount > 1 && (
               <Pagination
                 total={pageCount}
@@ -634,6 +637,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                 component={Link}
                 to="/?archived"
                 variant="default"
+                ml="auto"
                 leftSection={<ArchiveIcon size={16} aria-hidden />}
               >
                 Archived

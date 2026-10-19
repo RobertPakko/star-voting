@@ -98,16 +98,30 @@
  * list scrolls under them, and settling into place under the last card once
  * the list has been scrolled to its end. Sticky rather than fixed, so it
  * stays inside the column and takes room in the page instead of covering the
- * last card. An opaque body-coloured bar with a rule above it, so the cards
- * passing under it are cut off cleanly rather than showing through; above
- * the cards' own corner controls (`action`, z-index 1); and clear of the
- * home indicator on a phone running the installed app. */
+ * last card; above the cards' own corner controls (`action`, z-index 1); and
+ * clear of the home indicator on a phone running the installed app.
+ *
+ * No rule above it: the cards fade out under it instead (`::before`), so the
+ * bar reads as the page running out rather than as a box laid over it. The
+ * fade is exactly as tall as the room left above the bar — the stack's gap
+ * plus this margin — so once the list is at its end it falls in that gap and
+ * never over the last card's bottom edge. */
 .pager {
   position: sticky;
   bottom: 0;
   z-index: 2;
+  margin-top: var(--mantine-spacing-md);
   background: var(--mantine-color-body);
-  border-top: 1px solid var(--mantine-color-default-border);
-  padding-top: var(--mantine-spacing-sm);
+  padding-top: var(--mantine-spacing-xs);
   padding-bottom: calc(var(--mantine-spacing-sm) + env(safe-area-inset-bottom));
+}
+
+.pager::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 100%;
+  height: calc(var(--mantine-spacing-md) * 2);
+  background: linear-gradient(to bottom, transparent, var(--mantine-color-body));
+  pointer-events: none;
 }

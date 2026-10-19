@@ -6235,7 +6235,11 @@ something archived.
 **The pager is pinned to the foot of the screen** (`.pager` in
 `PollList.module.css`), on both lists, with the Archived button beside it on
 the main one: `position: sticky`, so the list scrolls under it and it settles
-under the last card at the end. The page size stays ten rather than however
+under the last card at the end. It has no rule above it; the cards fade out
+under it instead, over exactly the room left above the bar, so the fade never
+reaches the last card once the list is at its end. The pager sits at the left
+and the button at the right, since the two have nothing to do with each
+other, and the button keeps to the right when it is alone. The page size stays ten rather than however
 many cards would fit above it, because cards are not one height and a page
 size that moved with the window would move the reader's page on every
 rotation. On a phone the pager is drawn smaller with no neighbours beside the
