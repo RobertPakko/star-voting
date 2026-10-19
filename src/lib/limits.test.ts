@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
+  CONTACT_EMAIL_MAX,
+  CONTACT_MESSAGE_MAX,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   OPTION_DESCRIPTION_MAX,
@@ -120,6 +122,11 @@ describe('the form and the database agree about', () => {
 
   test('how long a voter may name themselves', () => {
     expect(guard('open_poll_submit', 'length\\(v_name\\) >')).toBe(VOTER_NAME_MAX)
+  })
+
+  test('how long a contact message and its reply address may be', () => {
+    expect(guard('send_contact_message', 'length\\(v_email\\) >')).toBe(CONTACT_EMAIL_MAX)
+    expect(guard('send_contact_message', 'length\\(v_message\\) >')).toBe(CONTACT_MESSAGE_MAX)
   })
 })
 

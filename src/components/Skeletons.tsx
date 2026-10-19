@@ -1280,6 +1280,40 @@ export function DonateSkeleton() {
 }
 
 /**
+ * The contact page: its heading, the note and the signature under it, and the
+ * card holding the two fields and the button.
+ */
+export function ContactSkeleton() {
+  return (
+    <Loading>
+      <Stack maw={720} mx="auto" gap="md">
+        <Bar kind="page" width={140} />
+        <Stack gap={0}>
+          <Bar kind="name" width="100%" />
+          <Bar kind="name" width="40%" />
+        </Stack>
+        {/* The signature, as on the donate page. */}
+        <Box h={34} style={{ display: 'flex', alignItems: 'center' }}>
+          <Skeleton height={20} width={72} radius="sm" />
+        </Box>
+        <Card withBorder>
+          <Stack gap="md">
+            <FieldShape label={150}>
+              <Skeleton height={control} radius="md" />
+            </FieldShape>
+            <FieldShape label={80}>
+              {/* A textarea of six rows, which is what the message opens at. */}
+              <Skeleton height={146} radius="md" />
+            </FieldShape>
+            <Skeleton height={control} width={140} radius="md" />
+          </Stack>
+        </Card>
+      </Stack>
+    </Loading>
+  )
+}
+
+/**
  * A poll's title, known before the poll is read: drawn exactly as
  * `PollHeading` draws it, so nothing moves when the heading takes over.
  */

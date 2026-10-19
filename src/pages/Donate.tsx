@@ -3,7 +3,7 @@ import { Anchor, Button, Card, Group, Progress, Skeleton, Stack, Text, Title } f
 import { HeartIcon } from '@phosphor-icons/react'
 import { countsRaised, donateUrl, fetchRaised, type Raised } from '../lib/donate'
 import { usePageTitle } from '../lib/pageTitle'
-import classes from './Donate.module.css'
+import { Signature } from '../components/Signature'
 
 /**
  * The /donate route: the site costs nothing to use, and this is where its
@@ -34,7 +34,7 @@ export function Donate() {
         Everything given through the button below is counted here, so we can see what this little
         site adds up to together.
       </Text>
-      <Text className={classes.signature}>— Rob</Text>
+      <Signature />
 
       <Card withBorder>
         <Stack gap="md">

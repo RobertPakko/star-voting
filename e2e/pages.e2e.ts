@@ -11,6 +11,7 @@ const PAGES = [
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
   { path: '#/intro', title: 'STAR Voting', name: 'the intro' },
   { path: '#/donate', title: 'Donate', name: 'the donate page' },
+  { path: '#/contact', title: 'Contact', name: 'the contact page' },
   { path: '#/polls/sample-dinner', title: 'Movie night', name: 'a ballot' },
   { path: '#/polls/sample-when', title: 'Movie night', name: 'a calendar ballot' },
   { path: '#/polls/sample-result-dinner', title: 'Movie night', name: 'a result' },
@@ -83,8 +84,29 @@ test.describe('the donate page', () => {
     )
     // Nothing links a page to itself from the menu.
     await page.getByRole('button', { name: 'Settings' }).click()
-    await expect(page.getByRole('link', { name: 'About STAR' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'About', exact: true })).toBeVisible()
     await expect(page.locator('a[href="#/donate"]')).toHaveCount(0)
+  })
+})
+
+test.describe('the contact page', () => {
+  test('is in the settings menu, in its place among the pages', async ({ page }) => {
+    await page.goto('#/donate')
+    await page.getByRole('button', { name: 'Settings' }).click()
+    const pages = page.getByRole('dialog').getByRole('link')
+    await expect(pages).toHaveText(['About', 'Contact', 'App installation'])
+    await pages.getByText('Contact').click()
+    await expect(page).toHaveTitle('Contact')
+  })
+
+  test('marks what is missing on the press, and sends nothing', async ({ page }) => {
+    await page.goto('#/contact')
+    await page.getByRole('button', { name: 'Send message' }).click()
+    await expect(page.getByText('Enter an email address so I can reply')).toBeVisible()
+    await expect(page.getByText('Write a message to send')).toBeVisible()
+    await expect(page.getByLabel('Your email address')).toBeFocused()
+    await page.getByLabel('Your email address').fill('reader@example.com')
+    await expect(page.getByText('Enter an email address so I can reply')).toHaveCount(0)
   })
 })
 

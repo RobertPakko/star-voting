@@ -111,8 +111,7 @@ function RemovedBanner({ pollId, onRestored }: { pollId: string; onRestored: () 
     >
       <Stack gap="xs">
         <Text size="sm">
-          You removed this poll from your list, so you won&rsquo;t get emails or notifications about
-          it.
+          You archived this poll, so you won&rsquo;t get emails or notifications about it.
         </Text>
         {error && (
           <Text role="alert" size="sm" c="red">

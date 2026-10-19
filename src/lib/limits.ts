@@ -71,3 +71,12 @@ export function tooLong(what: string, length: number, max: number): string {
  * one result.
  */
 export const MAX_QUESTIONS = 20
+
+/**
+ * The contact form's two fields. Both match `send_contact_message`. The
+ * address is the longest a mail server will route; the message is a few
+ * screens of text, which is more than a bug report needs and less than
+ * anybody filling the table needs.
+ */
+export const CONTACT_EMAIL_MAX = 254
+export const CONTACT_MESSAGE_MAX = 5000

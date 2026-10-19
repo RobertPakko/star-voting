@@ -1,9 +1,9 @@
 /*
  * The signature under the note, in a hand rather than in type. Caveat at 600,
  * cut down to the five characters it draws ("— Rob"), so it costs three
- * kilobytes and only this page's stylesheet asks for it. Google Fonts made the
- * cut (`text=` on its CSS API); the file is the result, and its licence is
- * beside it. Changing the signature means cutting it again.
+ * kilobytes and only the pages that are signed (Donate, Contact) ask for it.
+ * Google Fonts made the cut (`text=` on its CSS API); the file is the result,
+ * and its licence is beside it. Changing the signature means cutting it again.
  */
 @font-face {
   font-family: 'Caveat Signature';

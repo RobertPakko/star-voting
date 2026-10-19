@@ -14,7 +14,7 @@ hash-based routing, deployed to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ```
-src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro, Donate)
+src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
 src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the service worker (see Installing it to a home screen)
@@ -159,8 +159,8 @@ Repo **Settings → Pages** should show the domain once DNS resolves, with
    SQL Editor. No dashboard settings need changing for open polls either: the
    `anon` role's access is granted entirely by the migrations, and is limited to
    the `open_poll_*` functions (`view`, `submit`, `suggest_option`, `results`,
-   `ballots`) — it has
-   no read or write grant on any table.
+   `ballots`) and `send_contact_message` (see [The contact
+   page](#the-contact-page)) — it has no read or write grant on any table.
 3. Under **Project Settings → API**, copy the Project URL and `anon` public key.
 4. The **Email** auth provider is enabled by default — no extra provider
    setup needed. Two settings under it are not:
@@ -3114,10 +3114,11 @@ The signature under the note is set in Caveat, the one typeface in the app
 that is not the system's. It is not loaded from Google Fonts: the file in
 `src/assets/fonts/` is Caveat cut down to the five characters of "— Rob"
 (Google Fonts' `text=` parameter does the cut), three kilobytes, fetched only
-by this page's stylesheet, with the font's licence beside it. A signature
+by the stylesheet of the `Signature` component the donate and contact pages
+share, with the font's licence beside it. A signature
 with any other letter in it falls back to a system cursive for that letter, so
 changing it means cutting the font again — the comment in
-`Donate.module.css` says how.
+`Signature.module.css` says how.
 
 **The tax note was checked, and should be checked again before it is
 changed.** From 2026 a US taxpayer who does not itemize can deduct up to
@@ -3134,6 +3135,36 @@ used to spell out the exceptions, and read as a riddle to everybody they did
 not apply to — and a gift out of a DAF was deducted when the fund was paid
 into, so the giver already knows. If Every.org's terms or the rule change,
 that note is the thing on the page that becomes untrue.
+
+## The contact page
+
+`#/contact` is a reply address and a message, under a note signed the way the
+donate page's is (`Signature`). Public, like About and Donate, and reached from
+the gear menu, which lists its pages as About, Contact, Donate, and then *App
+installation* for as long as the app is not installed here.
+
+**A message is a row, and nothing in the app reads it back.**
+`send_contact_message` (`0084_contact_messages.sql`) puts it in
+`contact_messages`, which has row-level security on, no policies and no
+grants — so only the service role sees it, which is how it is read: from the
+dashboard,
+
+```sql
+select created_at, email, message from contact_messages order by created_at desc;
+```
+
+**`anon` may call it**, which makes it the one function `anon` holds that is
+not an `open_poll_*` one. The reader most likely to have met a bug is a voter
+holding a link, and asking them to sign in to report it is asking them not to.
+What the grant can do is add a row nobody it can reach will read. The bounds on
+it are in the function: the two lengths `limits.ts` carries for the form, the
+same address shape `invited_voters_email_ck` asks for, five messages a day per
+session, and a hundred an hour from everybody together — the last being the
+only bound there is on a caller with no session, and there to stop a script
+filling the table rather than to stop anybody real. `45_contact_messages`
+covers all of it. The address is filled in from the account where there is
+one, since that is where a reply would go, and nothing is emailed: there is no
+notice of a new message, so it is read when somebody goes and looks.
 
 ## Link previews
 
@@ -6183,16 +6214,22 @@ anything. [`0077_removing_a_poll_from_your_list.sql`](supabase/migrations/0077_r
 is all of it on the database's side and
 [`src/lib/removedPolls.ts`](src/lib/removedPolls.ts) on the browser's.
 
-Each card carries a cross at its bottom right, alongside the badges, whose
-tooltip says what it costs: *Remove from your list and stop notifications about
-it*. **Removed polls** in the header's gear menu opens the poll list's own
-address with `?removed` on it, which swaps the list for the removed polls, each
-with a **Restore** — and a line above them saying these polls send no emails or
-notifications. It is in the menu rather than on the page because it is not
-something the reader wants in front of them all the time; the page keeps only
-**Back to your polls**. The list is keyed on the query, so each list starts
-from its own skeleton. Restoring the last one leaves the reader on an empty
-view saying so, with the way back beside it.
+**On screen it is called archiving**, as a mail client would call it; the
+database and the code still say *removed* (`removed_polls`, `remove_polls`),
+because renaming a table to relabel a button is a migration for nothing.
+
+Each card carries an archive box at its bottom right, alongside the badges,
+whose tooltip says what it costs: *Archive: move it off your list and stop
+notifications about it*. **Archived**, beside the pager at the foot of the
+list — where a mail client keeps its archive, at hand and out of the way — opens
+the poll list's own address with `?archived` on it, which swaps the list for
+the archived polls, each with a **Restore**. It is drawn only while there is
+something archived. The archived list has no *New poll*, since a new poll goes
+on the other list, and its way back is `BackToList` — the same *Your polls*
+every poll page carries, in the same place, because it is the same act. The
+list is keyed on the query, so each list starts from its own skeleton.
+Restoring the last one leaves the reader on an empty view saying so, with the
+way back above it.
 
 **Answering a removed poll does not bring it back, and the poll says so.** A
 reader can remove a poll and still vote in it or confirm its options, and then

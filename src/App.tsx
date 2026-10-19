@@ -24,11 +24,12 @@ import { PublicPoll } from './pages/PublicPoll'
 import { NotFound } from './pages/NotFound'
 import {
   AboutSkeleton,
+  ContactSkeleton,
+  DonateSkeleton,
   FormSkeleton,
   GuideSkeleton,
   PollPageSkeleton,
   SettingsSkeleton,
-  DonateSkeleton,
 } from './components/Skeletons'
 import type { PollRead } from './lib/types'
 import { pollIdFromParam } from './lib/pollId'
@@ -92,6 +93,7 @@ const InstallGuide = lazy(() =>
   import('./pages/InstallGuide').then((m) => ({ default: m.InstallGuide })),
 )
 const Donate = lazy(() => import('./pages/Donate').then((m) => ({ default: m.Donate })))
+const Contact = lazy(() => import('./pages/Contact').then((m) => ({ default: m.Contact })))
 const Intro = lazy(() => import('./pages/Intro').then((m) => ({ default: m.Intro })))
 
 function App() {
@@ -190,6 +192,18 @@ function App() {
           element={
             <Suspense fallback={<DonateSkeleton />}>
               <Donate />
+            </Suspense>
+          }
+        />
+
+        {/* The contact form. In front of the gate for the same reason as
+            About: a bug is as likely to be met by a voter holding a link as by
+            anybody with an account. */}
+        <Route
+          path="contact"
+          element={
+            <Suspense fallback={<ContactSkeleton />}>
+              <Contact />
             </Suspense>
           }
         />

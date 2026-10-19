@@ -90,6 +90,30 @@ export type Database = {
           },
         ]
       }
+      contact_messages: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          message: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       invited_voters: {
         Row: {
           email: string
@@ -688,6 +712,10 @@ export type Database = {
       }
       save_push_subscription: {
         Args: { p_auth: string; p_endpoint: string; p_p256dh: string }
+        Returns: undefined
+      }
+      send_contact_message: {
+        Args: { p_email: string; p_message: string }
         Returns: undefined
       }
       send_poll_email: {

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom'
+import { Link, useNavigationType, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
   Alert,
+  Box,
   Button,
   Card,
   Group,
@@ -13,11 +14,12 @@ import {
   Tooltip,
 } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
-import { ArrowCounterClockwiseIcon, ArrowLeftIcon, PlusIcon, XIcon } from '@phosphor-icons/react'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, PlusIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { migrateHiddenPolls, removePolls, restorePolls } from '../lib/removedPolls'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
+import { BackToList } from '../components/BackToList'
 import { Banners } from '../components/Banners'
 import { PollHeading, type PollHeadingProps } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
@@ -57,21 +59,23 @@ import { announce } from '../lib/announce'
 const PAGE_SIZE = 10
 
 /**
- * The poll list, or the removed polls — which of the two is the address's
- * `?removed`, so the gear menu can link to it. Keyed on it, so the other list
+ * The poll list, or the archived polls — which of the two is the address's
+ * `?archived`, so the button beside the pager can link to it. Keyed on it, so the other list
  * starts from the skeleton with its own state instead of the first list's
  * cards standing under the second one's heading.
  */
 export function PollList() {
   const [params] = useSearchParams()
-  const removed = params.has('removed')
-  usePageTitle(removed ? 'Removed polls' : 'Your polls')
+  // "Archived" on screen, "removed" in the database and in this file's names:
+  // the rows are `removed_polls`, and renaming a table to relabel a button is
+  // a migration for nothing.
+  const removed = params.has('archived')
+  usePageTitle(removed ? 'Archived polls' : 'Your polls')
   return <PollListView key={String(removed)} viewingRemoved={removed} />
 }
 
 function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   const h24 = use24HourTime()
-  const navigate = useNavigate()
   const { session, anonymous } = useAuth()
   // Asked here rather than in CSS because the scroll below is asked for from
   // JavaScript, which the global rule in index.css cannot reach.
@@ -334,7 +338,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     reread()
     // The card goes, and focus with it; this is the only trace of the press
     // a screen reader would otherwise be left with.
-    announce(remove ? 'Removed from your list' : 'Restored to your list')
+    announce(remove ? 'Archived' : 'Restored to your list')
   }
 
   // Clamped rather than reset: a poll deleted from page three should leave
@@ -388,24 +392,23 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   // low — the heading came down, and then stepped up into place.
   return (
     <Reveal rise={!kept}>
+      {/* The way back is the one every poll page carries, in the same place,
+          because it is the same act: back to the list. No flight — there is
+          no poll heading here to fly. */}
+      {viewingRemoved && (
+        <Box maw={720} mx="auto">
+          <BackToList />
+        </Box>
+      )}
       <Stack maw={720} mx="auto" gap="md">
         <Group justify="space-between">
           <Title order={1} size="h2">
-            {viewingRemoved ? 'Removed polls' : 'Your polls'}
+            {viewingRemoved ? 'Archived polls' : 'Your polls'}
           </Title>
-          <Group gap="xs">
-            {/* The way into the removed polls is in the gear menu, which is
-                quieter than a button that is on this page for good; only the
-                way back lives here, because it is only needed here. */}
-            {viewingRemoved && (
-              <Button
-                variant="default"
-                onClick={() => navigate('/')}
-                leftSection={<ArrowLeftIcon size={16} aria-hidden />}
-              >
-                Back to your polls
-              </Button>
-            )}
+          {/* Not on the archived list: a new poll goes on the other one, and
+              this page is a look at what was put away rather than somewhere
+              to start anything. */}
+          {!viewingRemoved && (
             <Button
               component={Link}
               to="/polls/new"
@@ -413,7 +416,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             >
               New poll
             </Button>
-          </Group>
+          )}
         </Group>
 
         {/* The one thing a list made without an account most needs saying:
@@ -438,19 +441,19 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
         )}
 
         {/* An empty list, and the sentence says which kind: one with nothing
-            in it, or one whose every poll was removed, which is a different
+            in it, or one whose every poll was archived, which is a different
             thing and would otherwise read as the app losing the reader's polls
-            in front of them. The way back is the sentence's other half, in
-            the gear menu. */}
+            in front of them. The way back is the sentence's other half: the
+            Archived button at the foot of the list. */}
         {viewingRemoved && polls.length === 0 && (
           <Text c="dimmed" size="sm">
-            No removed polls.
+            No archived polls.
           </Text>
         )}
         {!viewingRemoved && polls.length === 0 && (
           <Text c="dimmed" size="sm">
             {removedCount > 0
-              ? 'Every poll you\u2019re in has been removed from your list.'
+              ? 'Every poll you\u2019re in has been archived.'
               : anonymous
                 ? 'No polls yet. Create one, or open a poll\u2019s link.'
                 : 'No polls yet. Create one, wait for an invite, or open a poll\u2019s link.'}
@@ -549,10 +552,10 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                   />
                 </Link>
 
-                {/* Remove on the list, Restore on the removed list: one
+                {/* Archive on the list, Restore on the archived list: one
                     control, whichever way round the card is. The tooltip says
-                    what removing costs, because the silence is the part of it
-                    nobody would guess from a cross — and nothing here deletes,
+                    what archiving costs, because the silence is the part of it
+                    nobody would guess from the icon — and nothing here deletes,
                     declines or leaves a poll, which a control on a card of
                     somebody else's poll had better not look like it might. The
                     label names the poll, because a screen reader hearing ten of
@@ -571,7 +574,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                   </Button>
                 ) : (
                   <Tooltip
-                    label="Remove from your list and stop notifications about it"
+                    label="Archive: move it off your list and stop notifications about it"
                     withArrow
                     multiline
                     w={220}
@@ -581,10 +584,10 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                       color="gray"
                       className={classes.action}
                       loading={moving}
-                      aria-label={`Remove ${poll.title} from your list`}
+                      aria-label={`Archive ${poll.title}`}
                       onClick={() => void move(poll.id, true)}
                     >
-                      <XIcon size={18} aria-hidden />
+                      <ArchiveIcon size={18} aria-hidden />
                     </ActionIcon>
                   </Tooltip>
                 )}
@@ -593,19 +596,35 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
           })}
         </PollCards>
 
-        {/* Only once there is a second page to go to. */}
-        {pageCount > 1 && (
-          <Group justify="center">
-            <Pagination
-              total={pageCount}
-              value={current}
-              onChange={(next) => {
-                setPage(next)
-                // The list is taller than a phone; landing halfway down the
-                // new page reads as nothing having happened.
-                window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
-              }}
-            />
+        {/* The pager, once there is a second page to go to, and the way to
+            the archived polls beside it, once there are any — where a mail
+            client keeps its archive: at hand, and out of the way of the
+            list. The count is what decides whether the button is drawn; it
+            is not printed on it, since the list it opens is the count. */}
+        {(pageCount > 1 || (!viewingRemoved && removedCount > 0)) && (
+          <Group justify="center" gap="md">
+            {pageCount > 1 && (
+              <Pagination
+                total={pageCount}
+                value={current}
+                onChange={(next) => {
+                  setPage(next)
+                  // The list is taller than a phone; landing halfway down the
+                  // new page reads as nothing having happened.
+                  window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
+                }}
+              />
+            )}
+            {!viewingRemoved && removedCount > 0 && (
+              <Button
+                component={Link}
+                to="/?archived"
+                variant="default"
+                leftSection={<ArchiveIcon size={16} aria-hidden />}
+              >
+                Archived
+              </Button>
+            )}
           </Group>
         )}
       </Stack>

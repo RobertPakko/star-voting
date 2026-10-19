@@ -11,9 +11,9 @@ import {
   Text,
 } from '@mantine/core'
 import {
-  ArchiveIcon,
   BookOpenIcon,
   DownloadSimpleIcon,
+  EnvelopeSimpleIcon,
   GearIcon,
   HeartIcon,
   SignInIcon,
@@ -45,8 +45,8 @@ import { ThemeToggle } from './ThemeToggle'
  * there too, and its corner says Sign in rather than offering a sign-out
  * that would strand every poll it made.
  *
- * The pages that are not polls — the removed polls, the install guide, About
- * and the donate page — are links in the gear menu rather than in the header. About
+ * The pages that are not polls — About, the contact form, the donate page and
+ * the install guide — are links in the gear menu rather than in the header. About
  * was a link of its own up here once, and the row is one control shorter on a
  * phone without it. Each is dropped from the menu while it is what's on
  * screen: a link to the page you are already reading is a dead end that
@@ -61,10 +61,10 @@ export function Layout() {
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
   const onSettings = pathname === '/settings'
-  // The gear menu, held here so that following any of its links — the install
-  // guide, the removed polls — closes it rather than leaving it open over the
-  // page it went to. The search is watched as well as the path, since the
-  // removed polls are the poll list's own address with a query on it.
+  // The gear menu, held here so that following any of its links — About, the
+  // install guide — closes it rather than leaving it open over the page it
+  // went to. The search is watched as well as the path, so that any address
+  // differing only in its query closes it too.
   const [menuOpen, setMenuOpen] = useState(false)
   useEffect(() => setMenuOpen(false), [pathname, search])
   // How far the menu is slid right from under the gear, so that its right edge
@@ -194,29 +194,31 @@ export function Layout() {
                     <Divider />
                     {/* Pages rather than switches, so they sit under the
                         switches and apart from them. All are links: the menu
-                        closes on any change of address, and each is a word or two. The
-                        reader's own things first, then the app's, then the method's,
-                        and asking for something back last. */}
-                    {session && (
-                      <MenuLink to="/?removed" icon={ArchiveIcon}>
-                        Removed polls
+                        closes on any change of address, and each is a word or
+                        two. The method first, then the two ways of talking
+                        back, and installing last, since it is the one that
+                        comes and goes. The archived polls are not here: they
+                        are a button on the poll list, beside the pager. */}
+                    {pathname !== '/about' && (
+                      <MenuLink to="/about" icon={BookOpenIcon}>
+                        About
+                      </MenuLink>
+                    )}
+                    {/* The intro is not here: About links to it, and a reader
+                        who has found the gear has already met the app. */}
+                    {pathname !== '/contact' && (
+                      <MenuLink to="/contact" icon={EnvelopeSimpleIcon}>
+                        Contact
+                      </MenuLink>
+                    )}
+                    {pathname !== '/donate' && (
+                      <MenuLink to="/donate" icon={HeartIcon}>
+                        Donate
                       </MenuLink>
                     )}
                     {!isInstalledApp() && pathname !== '/app' && (
                       <MenuLink to="/app" icon={DownloadSimpleIcon}>
                         App installation
-                      </MenuLink>
-                    )}
-                    {pathname !== '/about' && (
-                      <MenuLink to="/about" icon={BookOpenIcon}>
-                        About STAR
-                      </MenuLink>
-                    )}
-                    {/* The intro is not here: About links to it, and a reader
-                        who has found the gear has already met the app. */}
-                    {pathname !== '/donate' && (
-                      <MenuLink to="/donate" icon={HeartIcon}>
-                        Donate
                       </MenuLink>
                     )}
                   </Stack>
