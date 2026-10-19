@@ -8,6 +8,7 @@ import {
   Easing,
   FILMS,
   FONT,
+  framed,
   keyed,
   lerp,
   LOGO_SRC,
@@ -174,21 +175,26 @@ export function PortraitFilm({ T }: { T: number }) {
   const vA = (p: { x: number; y: number }) => ({ x: p.x, y: 60 + p.y - scrollA })
   const vB = (p: { x: number; y: number }) => ({ x: p.x, y: 60 + p.y - scrollB })
 
-  const cam = [
-    { t: C, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
-    { t: C + 0.2, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
-    { t: C + 1.3, z: 2.25, fx: 0, fy: 60 + (tTitle.y + tOpts.y) / 2 },
-    { t: C + 3.3, z: 2.27, fx: 0, fy: 60 + (tTitle.y + tOpts.y) / 2 },
-    { t: C + 4.2, z: 2.2, fx: VW, fy: 60 + tCreate.y - maxA - 140 },
-    { t: C + 4.4, z: 2.2, fx: VW, fy: 60 + tCreate.y - maxA - 140 },
-    { t: R + 0.3, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
-    { t: R + 1.3, z: 2.15, fx: VW / 2, fy: 60 + (rowsY + tSubmit.y) / 2 },
-    { t: R + 3.9, z: 2.17, fx: VW / 2, fy: 60 + (rowsY + tSubmit.y) / 2 },
-    { t: R + 5.0, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
-    { t: D + 4.4, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
-    { t: D + 5.4, z: 2.3, fx: 0, fy: 60 + tWinner.y + 60 },
-    { t: X, z: 2.32, fx: 0, fy: 60 + tWinner.y + 60 },
-  ]
+  const cam = framed(
+    [
+      { t: C, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
+      { t: C + 0.2, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
+      { t: C + 1.3, z: 2.25, fx: 0, fy: 60 + (tTitle.y + tOpts.y) / 2 },
+      { t: C + 3.3, z: 2.27, fx: 0, fy: 60 + (tTitle.y + tOpts.y) / 2 },
+      { t: C + 4.2, z: 2.2, fx: VW, fy: 60 + tCreate.y - maxA - 140 },
+      { t: C + 4.4, z: 2.2, fx: VW, fy: 60 + tCreate.y - maxA - 140 },
+      { t: R + 0.3, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
+      { t: R + 1.3, z: 2.15, fx: VW / 2, fy: 60 + (rowsY + tSubmit.y) / 2 },
+      { t: R + 3.9, z: 2.17, fx: VW / 2, fy: 60 + (rowsY + tSubmit.y) / 2 },
+      { t: R + 5.0, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
+      { t: D + 4.4, z: BASE.z, fx: BASE.fx, fy: BASE.fy },
+      { t: D + 5.4, z: 2.3, fx: 0, fy: 60 + tWinner.y + 60 },
+      { t: X, z: 2.32, fx: 0, fy: 60 + tWinner.y + 60 },
+    ],
+    WIN,
+    VW,
+    VH,
+  )
   const z = keyed(T, cam, 'z')
   const hw = WIN.w / (2 * z)
   const hh = WIN.h / (2 * z)

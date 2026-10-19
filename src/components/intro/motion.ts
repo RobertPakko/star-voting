@@ -128,6 +128,34 @@ export function keyed<K extends string>(
   return list[list.length - 1][prop]
 }
 
+export interface Shot {
+  t: number
+  z: number
+  fx: number
+  fy: number
+}
+
+/**
+ * Camera keyframes with each focus point pulled inside the page at that
+ * keyframe's own zoom. The clamp has to happen here, before the curve, and
+ * not only on the value it produces: a shot aimed past the page's edge would
+ * otherwise sit pinned to that edge for most of a move and cross the short
+ * distance it really travels in the few fastest frames of the curve, which
+ * is a snap rather than a pan. Between two clamped shots the bound moves with
+ * 1/z, which is convex, so the interpolated focus stays inside it.
+ */
+export function framed(shots: Shot[], win: { w: number; h: number }, vw: number, vh: number) {
+  return shots.map((s) => {
+    const hw = win.w / (2 * s.z)
+    const hh = win.h / (2 * s.z)
+    return {
+      ...s,
+      fx: clamp(s.fx, hw, Math.max(hw, vw - hw)),
+      fy: clamp(s.fy, hh, Math.max(hh, vh - hh)),
+    }
+  })
+}
+
 /** How much of `text` has been typed by `T`, typing from `a` to `b`. */
 export const typed = (T: number, text: string, a: number, b: number) =>
   text.slice(0, Math.round(clamp((T - a) / (b - a), 0, 1) * text.length))
