@@ -3139,12 +3139,15 @@ that note is the thing on the page that becomes untrue.
 ## The contact page
 
 `#/contact` is a reply address and a message, under a note signed the way the
-donate page's is (`Signature`). Public, like About and Donate, and reached from
+donate page's is (`Signature`) and a link to GitHub's new-issue form for
+anybody who would rather file one. Public, like About and Donate, and reached from
 the gear menu, which lists its pages as About, Contact, Donate, and then *App
 installation* for as long as the app is not installed here.
 
-**A message is a row, and nothing in the app reads it back.**
-`send_contact_message` (`0084_contact_messages.sql`) puts it in
+**A message is a row and an email, and nothing in the app reads it back.**
+`send_contact_message` (`0084_contact_messages.sql`) emails it to the owner
+(`send_contact_email`, a fixed address, with the sender's address as Reply-To
+so that answering is pressing Reply) and puts it in
 `contact_messages`, which has row-level security on, no policies and no
 grants — so only the service role sees it, which is how it is read: from the
 dashboard,
@@ -3161,10 +3164,13 @@ it are in the function: the two lengths `limits.ts` carries for the form, the
 same address shape `invited_voters_email_ck` asks for, five messages a day per
 session, and a hundred an hour from everybody together — the last being the
 only bound there is on a caller with no session, and there to stop a script
-filling the table rather than to stop anybody real. `45_contact_messages`
-covers all of it. The address is filled in from the account where there is
-one, since that is where a reply would go, and nothing is emailed: there is no
-notice of a new message, so it is read when somebody goes and looks.
+filling the table — and the owner's inbox — rather than to stop anybody
+real. `45_contact_messages` covers all of it but the send. The address is
+filled in from the account where there is one, since that is where a reply
+would go. The email is best-effort like every other this app sends (see
+[Emails](#4-emails)): silent where the Resend key is missing, sent once, never
+failing the message — so the table is the record and the email only the
+notice of it.
 
 ## Link previews
 
@@ -6224,7 +6230,16 @@ notifications about it*. **Archived**, beside the pager at the foot of the
 list — where a mail client keeps its archive, at hand and out of the way — opens
 the poll list's own address with `?archived` on it, which swaps the list for
 the archived polls, each with a **Restore**. It is drawn only while there is
-something archived. The archived list has no *New poll*, since a new poll goes
+something archived.
+
+**The pager is pinned to the foot of the screen** (`.pager` in
+`PollList.module.css`), on both lists, with the Archived button beside it on
+the main one: `position: sticky`, so the list scrolls under it and it settles
+under the last card at the end. The page size stays ten rather than however
+many cards would fit above it, because cards are not one height and a page
+size that moved with the window would move the reader's page on every
+rotation. On a phone the pager is drawn smaller with no neighbours beside the
+current page, so it and the button stay on one line. The archived list has no *New poll*, since a new poll goes
 on the other list, and its way back is `BackToList` — the same *Your polls*
 every poll page carries, in the same place, because it is the same act. The
 list is keyed on the query, so each list starts from its own skeleton.

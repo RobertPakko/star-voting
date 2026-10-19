@@ -7,7 +7,7 @@ import { test, expect, expectAccessible, setColorScheme } from './fixtures'
  */
 const PAGES = [
   { path: '#/', title: 'Sign in', name: 'the sign-in screen' },
-  { path: '#/about', title: 'About STAR', name: 'About' },
+  { path: '#/about', title: 'About', name: 'About' },
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
   { path: '#/intro', title: 'STAR Voting', name: 'the intro' },
   { path: '#/donate', title: 'Donate', name: 'the donate page' },
@@ -53,7 +53,7 @@ test.describe('page titles', () => {
 
   test('a change of page is announced, and its title with it', async ({ page }) => {
     await page.goto('#/about')
-    await expect(page).toHaveTitle('About STAR')
+    await expect(page).toHaveTitle('About')
     await page.getByRole('button', { name: 'Settings' }).click()
     await page.getByRole('link', { name: 'App installation' }).click()
     await expect(page).toHaveTitle('Install the app')

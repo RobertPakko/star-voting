@@ -17,6 +17,10 @@ begin
   perform tests.assert_eq('but neither can read the messages',
     has_table_privilege('anon', 'public.contact_messages', 'select')
       or has_table_privilege('authenticated', 'public.contact_messages', 'select'), false);
+  perform tests.assert_eq('nor send the owner''s email except by sending a message',
+    has_function_privilege('anon', 'public.send_contact_email(text, text)', 'execute')
+      or has_function_privilege('authenticated', 'public.send_contact_email(text, text)', 'execute'),
+    false);
   perform tests.assert_eq('or write to the table past the function',
     has_table_privilege('anon', 'public.contact_messages', 'insert')
       or has_table_privilege('authenticated', 'public.contact_messages', 'insert'), false);

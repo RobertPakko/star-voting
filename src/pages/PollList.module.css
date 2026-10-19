@@ -93,3 +93,21 @@
 .leaving {
   opacity: 0.55;
 }
+
+/* The pager and the Archived button, held at the foot of the screen while the
+ * list scrolls under them, and settling into place under the last card once
+ * the list has been scrolled to its end. Sticky rather than fixed, so it
+ * stays inside the column and takes room in the page instead of covering the
+ * last card. An opaque body-coloured bar with a rule above it, so the cards
+ * passing under it are cut off cleanly rather than showing through; above
+ * the cards' own corner controls (`action`, z-index 1); and clear of the
+ * home indicator on a phone running the installed app. */
+.pager {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--mantine-color-body);
+  border-top: 1px solid var(--mantine-color-default-border);
+  padding-top: var(--mantine-spacing-sm);
+  padding-bottom: calc(var(--mantine-spacing-sm) + env(safe-area-inset-bottom));
+}

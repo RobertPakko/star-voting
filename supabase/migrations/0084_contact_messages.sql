@@ -1,11 +1,17 @@
 -- Messages sent from the contact page.
 --
 -- The contact page (`#/contact`) asks for a reply address and a message, and
--- the message lands here. Nothing in the app reads it back: the table is read
--- by hand, with the service role, from the dashboard's table editor or SQL
--- editor —
+-- the message lands here — and is emailed to the site's owner, with the
+-- sender's address as its Reply-To, so answering it is pressing Reply. Nothing
+-- in the app reads it back: the table is the record, read by hand with the
+-- service role from the dashboard's table editor or SQL editor —
 --
 --   select created_at, email, message from contact_messages order by created_at desc;
+--
+-- The email goes the way every email this app sends goes — Resend through
+-- `pg_net`, with the key read from Vault — and is best-effort in the same way:
+-- silent where either is missing, never failing the insert, sent once. So a
+-- message whose email went nowhere is still in the table.
 --
 -- Row-level security is on with no policies and there are no table grants, the
 -- shape every table in this schema has that the browser never touches. The
@@ -54,6 +60,57 @@ REVOKE ALL ON TABLE "public"."contact_messages" FROM "anon";
 REVOKE ALL ON TABLE "public"."contact_messages" FROM "authenticated";
 GRANT ALL ON TABLE "public"."contact_messages" TO "service_role";
 
+-- The letter to the site's owner. Plain on purpose: it is not a poll's email,
+-- so it has no button onto a poll and no footer about notification settings,
+-- and it goes to one fixed address rather than through `wants_email`.
+CREATE OR REPLACE FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_api_key text;
+begin
+  if to_regnamespace('net') is null or to_regnamespace('vault') is null then
+    return;
+  end if;
+
+  select decrypted_secret into v_api_key
+  from vault.decrypted_secrets
+  where name = 'resend_api_key'
+  limit 1;
+
+  if v_api_key is null then
+    return;
+  end if;
+
+  perform net.http_post(
+    url := 'https://api.resend.com/emails',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || v_api_key
+    ),
+    body := jsonb_build_object(
+      'from', 'STAR Voting <noreply@choicelab.app>',
+      'to', jsonb_build_array('RobertPakko@gmail.com'),
+      'reply_to', p_from,
+      'subject', 'Contact form: message from ' || p_from,
+      'html', '<p style="font-family: sans-serif; color: #5b5468;">From '
+        || email_escape(p_from) || ', via the contact page. Reply to answer them.</p>'
+        || '<p style="font-family: sans-serif; white-space: pre-wrap;">'
+        || email_escape(p_message) || '</p>'
+    ),
+    timeout_milliseconds := 8000
+  );
+end;
+$$;
+
+ALTER FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") OWNER TO "postgres";
+
+COMMENT ON FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") IS 'Emails one contact-page message to the site''s owner, with the sender as Reply-To. Best-effort: silent where pg_net, Vault or the API key is missing. Internal.';
+
+REVOKE ALL ON FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") TO "service_role";
+
 CREATE OR REPLACE FUNCTION "public"."send_contact_message"("p_email" "text", "p_message" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -94,6 +151,8 @@ begin
 
   insert into contact_messages (email, message, user_id)
   values (v_email, v_message, v_user);
+
+  perform send_contact_email(v_email, v_message);
 end;
 $$;
 

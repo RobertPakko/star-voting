@@ -44,7 +44,7 @@ import { usePageTitle } from '../lib/pageTitle'
  * own footnotes, numbered from 1; see `Footnotes`.
  */
 export function About() {
-  usePageTitle('About STAR')
+  usePageTitle('About')
   const [tab, setTab] = useState<string | null>('procedure')
 
   return (

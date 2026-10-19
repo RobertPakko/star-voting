@@ -13,7 +13,7 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core'
-import { useReducedMotion } from '@mantine/hooks'
+import { useMediaQuery, useReducedMotion } from '@mantine/hooks'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, PlusIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -80,6 +80,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   // Asked here rather than in CSS because the scroll below is asked for from
   // JavaScript, which the global rule in index.css cannot reach.
   const reducedMotion = useReducedMotion()
+  const phone = useMediaQuery('(max-width: 36em)', false, { getInitialValueInEffect: false })
   const userId = session?.user.id
   // A return to the list — the way back on a poll's page, or the browser's
   // back button — draws the list as it was left rather than starting over;
@@ -600,13 +601,26 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             the archived polls beside it, once there are any — where a mail
             client keeps its archive: at hand, and out of the way of the
             list. The count is what decides whether the button is drawn; it
-            is not printed on it, since the list it opens is the count. */}
+            is not printed on it, since the list it opens is the count.
+
+            Pinned to the foot of the screen (`pager`), so the way to the
+            next page is never a scroll away; the list scrolls under it. The
+            page size stays ten rather than however many cards fit above it:
+            cards are not one height, and a page size that moved with the
+            window would move the reader's page with it on every rotation.
+            Both lists draw it, the archived one with no button in it. On a
+            phone the pager is drawn smaller and with no neighbours either
+            side of the current page, so it and the button fit on one line
+            and the bar takes as little of the screen as it can. */}
         {(pageCount > 1 || (!viewingRemoved && removedCount > 0)) && (
-          <Group justify="center" gap="md">
+          <Group justify="center" gap="sm" className={classes.pager}>
             {pageCount > 1 && (
               <Pagination
                 total={pageCount}
                 value={current}
+                size={phone ? 'sm' : 'md'}
+                siblings={phone ? 0 : 1}
+                gap={phone ? 4 : 8}
                 onChange={(next) => {
                   setPage(next)
                   // The list is taller than a phone; landing halfway down the
