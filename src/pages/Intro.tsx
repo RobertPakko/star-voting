@@ -185,7 +185,7 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
       leftSection={<BookOpenIcon size={18} aria-hidden />}
       style={rise(0)}
     >
-      Learn more about STAR
+      Learn more
     </Button>,
     session ? (
       <Button

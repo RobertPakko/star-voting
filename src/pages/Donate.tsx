@@ -31,8 +31,7 @@ export function Donate() {
         If it’s helped your group make a decision, it would mean a lot if you would consider making
         a tax-deductible donation to my fundraiser. I chose Khan Academy because it’s made a huge
         difference in my life and I want to give it the support it needs to help future generations.
-        Everything given through the button below is counted here, so we can see what this little
-        site adds up to together.
+        Everything given through the button below is counted here.
       </Text>
       <Signature />
 

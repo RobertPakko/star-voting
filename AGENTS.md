@@ -3014,7 +3014,7 @@ which is the reader most likely to want it.
 ## The intro
 
 `#/intro` is a twenty-two-second film of the app at work — a poll made, voted
-in and decided — that ends on three buttons: **Learn more about STAR**
+in and decided — that ends on three buttons: **Learn more**
 (`/about`), **Make your own poll** (`/polls/new`) and **Share this intro**. It
 is a link to hand somebody who has never heard of the method, so it is public
 and sits outside the app shell: the film draws the app's header itself, and a

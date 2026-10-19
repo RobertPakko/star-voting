@@ -97,7 +97,7 @@ export function Contact() {
           <Stack gap="md" align="flex-start">
             <Group gap="xs" wrap="nowrap">
               <CheckIcon size={20} weight="bold" color="var(--mantine-color-green-8)" aria-hidden />
-              <Text fw={600}>Thanks, your message has been sent.</Text>
+              <Text fw={600}>Thanks!</Text>
             </Group>
             <Text size="sm" c="dimmed">
               I&rsquo;ll reply to {trimmedEmail}.

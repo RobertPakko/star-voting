@@ -169,9 +169,9 @@ test.describe('the intro', () => {
 
   test('ends on its three ways on', async ({ page }) => {
     await page.goto('#/intro')
-    await expect(page.getByRole('link', { name: 'Learn more about STAR' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Learn more' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Make your own poll' })).toBeVisible()
-    await page.getByRole('link', { name: 'Learn more about STAR' }).click()
+    await page.getByRole('link', { name: 'Learn more' }).click()
     await expect(page).toHaveURL(/#\/about$/)
   })
 })
