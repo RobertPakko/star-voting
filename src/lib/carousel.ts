@@ -87,13 +87,23 @@ export function still(copy: HTMLElement): HTMLElement {
  * scrolls the page at the same time — the poll list goes to its top as its
  * page changes — so the copy goes up with the page instead of hanging where
  * the window was.
+ *
+ * `after` puts the copy in the page, straight after that element, rather than
+ * over the whole of it on `document.body` — for a row with something floating
+ * over it that the copy must pass *under*. On the body the copy is above every
+ * part of the page, and the poll list's pager, sticky at the foot of the
+ * screen, had the old page sliding across it. In the page it shares the
+ * pager's stacking context and sits under it by z-index. Placed by measuring
+ * where it lands rather than by the document's coordinates, since an ancestor
+ * holding a transform (`Reveal`'s entrance) is what it is positioned against
+ * there; and being in the page, it scrolls with it, so `scrolls` is implied.
  */
 export function pushOut(
   snap: Snapshot,
   side: 1 | -1,
   distance: number,
   start: number,
-  { scrolls = false }: { scrolls?: boolean } = {},
+  { scrolls = false, after }: { scrolls?: boolean; after?: HTMLElement } = {},
 ) {
   const { clip } = snap
   if (!snap.pieces.length || clip.height <= 0) return
@@ -101,15 +111,16 @@ export function pushOut(
   frame.setAttribute('aria-hidden', 'true')
   frame.inert = true
   Object.assign(frame.style, {
-    position: scrolls ? 'absolute' : 'fixed',
+    position: scrolls || after ? 'absolute' : 'fixed',
     left: `${clip.left + (scrolls ? window.scrollX : 0)}px`,
     top: `${clip.top + (scrolls ? window.scrollY : 0)}px`,
     width: `${clip.width}px`,
     height: `${clip.height}px`,
     overflow: 'hidden',
     pointerEvents: 'none',
-    // Under the header, like the page it is part of.
-    zIndex: 'calc(var(--app-shell-header-z-index, 100) - 1)',
+    // Under the header, like the page it is part of; in the page, above the
+    // cards and under whatever floats over them.
+    zIndex: after ? '1' : 'calc(var(--app-shell-header-z-index, 100) - 1)',
   } satisfies Partial<CSSStyleDeclaration>)
   const track = document.createElement('div')
   Object.assign(track.style, { position: 'absolute', inset: '0' })
@@ -127,7 +138,15 @@ export function pushOut(
     track.appendChild(copy)
   }
   frame.appendChild(track)
-  document.body.appendChild(frame)
+  if (after) {
+    Object.assign(frame.style, { left: '0px', top: '0px' })
+    after.after(frame)
+    const origin = frame.getBoundingClientRect()
+    frame.style.left = `${clip.left - origin.left}px`
+    frame.style.top = `${clip.top - origin.top}px`
+  } else {
+    document.body.appendChild(frame)
+  }
   // Near enough opaque for most of the way, so it is seen to leave rather than
   // to fade where it stood. It does go in the end, because what arrives may be
   // shorter, and a copy still at full strength below it would be drawn over

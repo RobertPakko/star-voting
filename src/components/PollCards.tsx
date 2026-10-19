@@ -31,9 +31,9 @@ let left: (Snapshot & ListPage & { at: number }) | null = null
  * and the page being opened comes in through the other — forward from the
  * right, back from the left. Without it a page turn was the list blinking into
  * a different list in place, at the bottom of a page the reader had just been
- * scrolled away from. The page being left is copied as it unmounts and pinned
- * to the document rather than the window, since the list goes to its top as
- * its page changes and the copy has to go up with it.
+ * scrolled away from. The page being left is copied as it unmounts and put in
+ * the page beside the new cards, so it goes up with the list as the list goes
+ * to its top, and slides under the floating pager rather than across it.
  *
  * **Within a page, cards move rather than jump.** A poll taken off the list
  * used to vanish and every card under it jump up into the gap, and a poll
@@ -77,7 +77,8 @@ export function PollCards({ turn, children }: { turn: ListPage; children: ReactN
       const side = here.page > last.page ? 1 : -1
       const box = el.getBoundingClientRect()
       const start = timelineNow()
-      pushOut(last, side, box.width, start, { scrolls: true })
+      // In the page beside the cards, so it passes under the pager.
+      pushOut(last, side, box.width, start, { after: el })
       pushIn(el, box, side, box.width, start)
     }
     return () => {
