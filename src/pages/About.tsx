@@ -269,6 +269,16 @@ const FEATURES: Entry[] = [
     ),
   },
   {
+    name: 'Convenient notifications',
+    body: (
+      <>
+        The site can let you know when results are ready, when a poll that's soliciting options has
+        opened for voting, or when you've been invited to a new poll; either via email or with push
+        notifications.
+      </>
+    ),
+  },
+  {
     name: 'Trustworthy design',
     body: (
       <>
