@@ -205,7 +205,9 @@ begin
   -- the topic can be told again by whatever runs next. The setting is local,
   -- so the commit clears it with nothing to remember to do.
   perform set_config('app.announced', v_told || v_key, true);
-  perform realtime.send('{}'::jsonb, p_event, p_topic, false);
+  -- Private: received under the policy on realtime.messages, and sendable by
+  -- nobody but the database. See 0085.
+  perform realtime.send('{}'::jsonb, p_event, p_topic, true);
 end;
 $$;
 
@@ -3787,34 +3789,18 @@ declare
   v_creator boolean;
   v_revealed boolean;
 begin
-  -- Read without a visibility test, because which test applies is what this
-  -- function is here to work out. Nothing about the row escapes below except
-  -- through a branch that has earned it.
   select p.* into v_poll from polls p where p.id = p_poll_id;
 
   if not found then
     return jsonb_build_object('kind', 'unreadable');
   end if;
 
-  -- Held rather than asked twice: the account door below tests it, and the
-  -- roster wants the same answer for its own reason -- a creator keeps the
-  -- invite list on a poll that shows nobody, because for them it is the list
-  -- they manage rather than a record of who voted.
   v_creator := is_poll_creator(v_poll.id);
-  -- Likewise, and it is the more expensive of the two: this walks the group.
-  -- Both branches below gate the tally and the sheet on it, and it is the same
-  -- predicate `poll_status` and `open_poll_view` report as
-  -- `results_available` -- which is what keeps what the server carries and
-  -- what the browser draws from coming apart.
   v_revealed := poll_results_revealed(v_poll);
 
-  -- The account reading: the same door `polls_select` opens, asked with the
-  -- same two functions so there is no second wording of it to keep in step.
   if v_creator or is_invited_to_poll(v_poll.id) then
     return jsonb_build_object(
       'kind', 'account',
-      -- The whole row, which is exactly what `select *` through row-level
-      -- security handed back a moment ago: this reader is inside the poll.
       'poll', to_jsonb(v_poll),
       'options', (
         select coalesce(jsonb_agg(jsonb_build_object(
@@ -3828,74 +3814,51 @@ begin
       ),
       'status', (select to_jsonb(s) from poll_status(v_poll.id) s),
       'questions', poll_group(v_poll.id),
-      -- An open poll read by its own creator is still an open poll: the panel
-      -- they manage it through is the one everybody else votes in, and it
-      -- wants this. Null on an invite poll, where there is no such panel and
-      -- open_poll_view would refuse to answer anyway.
       'view', case
         when v_poll.mode = 'open' then open_poll_view(v_poll.id, p_voter_key)
         else null
       end,
-      -- The tally, once there is one. `get_poll_results` re-establishes the
-      -- reader for itself before running STAR, which is the whole of the rule
-      -- and is stated in one place still.
-      --
-      -- One field for both readings of an open poll: the creator's page draws
-      -- the same panel a stranger's does, and `open_poll_results` would hand
-      -- it the same `poll_tally` this does.
       'results', case when v_revealed then get_poll_results(v_poll.id) else null end,
-      -- And the sheet those numbers can be checked against, on the poll that
-      -- publishes it. Same reveal, now that there is only one; `poll_ballots`
-      -- applies `show_ballots` itself, and it is repeated here because this is
-      -- the condition `<Ballots>` is rendered behind and asking for a sheet
-      -- the page will not draw is the request this is here to save.
       'ballots', case
         when v_revealed and v_poll.show_ballots then poll_ballots(v_poll.id)
         else null
       end,
-      -- And the roster, on the poll and the reader that have one to draw: an
-      -- invite poll, read by its creator or showing its respondents. Anyone
-      -- else on a poll that hides them has no card, so there is nothing to
-      -- carry and nothing is asked for -- the same reason the browser does
-      -- not make the request rather than making it and expecting it to fail.
-      --
-      -- `poll_invitees` decides what each row may say, including nulling the
-      -- per-person columns for a creator whose poll hides respondents. It is
-      -- called, not copied, so that stays true here.
       'invitees', case
         when v_poll.mode = 'invite' and (v_creator or v_poll.show_voters) then (
           select coalesce(jsonb_agg(to_jsonb(i) order by i.email), '[]'::jsonb)
           from poll_invitees(v_poll.id) i
         )
         else null
-      end
+      end,
+      'your_scores', case
+        when v_revealed
+          and v_poll.mode = 'invite'
+          and not v_poll.show_ballots
+          and exists (
+            select 1 from ballots b
+            where b.poll_id = v_poll.id and b.voter_id = auth.uid()
+          )
+        then poll_ballot_scores(v_poll.id)
+        else null
+      end,
+      'removed', poll_is_removed(v_poll.id)
     );
   end if;
 
-  -- Outside the poll. An open one is readable by anyone holding its link, and
-  -- holding its link is what being here means; anything else is not.
   if v_poll.mode = 'open' then
     return jsonb_build_object(
       'kind', 'open',
       'view', open_poll_view(v_poll.id, p_voter_key),
-      -- The bare group. See the note above: no per-reader mark reaches this
-      -- branch, and adding one is a change to make on purpose or not at all.
       'questions', open_poll_group(v_poll.id),
-      -- The tally and the sheet on the same terms as the account branch, and
-      -- through the doors this reader actually has: the poll's own link proves
-      -- the right to both rather than a session. The same numbers and the same
-      -- rows either way -- neither says anything about who is reading it, so
-      -- there is no boundary here for them to cross.
       'results', case when v_revealed then open_poll_results(v_poll.id) else null end,
       'ballots', case
         when v_revealed and v_poll.show_ballots then open_poll_ballots(v_poll.id)
         else null
-      end
+      end,
+      'removed', poll_is_removed(v_poll.id)
     );
   end if;
 
-  -- An invite poll somebody else is in. Answered exactly as a poll that does
-  -- not exist is answered, which is the point.
   return jsonb_build_object('kind', 'unreadable');
 end;
 $$;
@@ -3904,7 +3867,7 @@ $$;
 ALTER FUNCTION "public"."poll_page"("p_poll_id" "uuid", "p_voter_key" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."poll_page"("p_poll_id" "uuid", "p_voter_key" "text") IS 'The one read that opens a poll page: what this reader may see at this address, and the whole of it. Tagged account / open / unreadable. Carries the tally, the published ballot sheet and the invitee roster where the page it describes will draw them, so a finished poll opens in one round trip; null on any of them means "not here, ask for yourself" rather than "there is none".';
+COMMENT ON FUNCTION "public"."poll_page"("p_poll_id" "uuid", "p_voter_key" "text") IS 'The one read that opens a poll page: what this reader may see at this address, and the whole of it. Tagged account / open / unreadable. Carries the tally, the published ballot sheet, the invitee roster and the reader''s own private ballot where the page it describes will draw them, so a finished poll opens in one round trip; null on any of them means "not here, ask for yourself" rather than "there is none". Also says whether the reader has removed the poll from their list.';
 
 
 
@@ -4824,6 +4787,104 @@ COMMENT ON FUNCTION "public"."save_push_subscription"("p_endpoint" "text", "p_p2
 
 
 
+CREATE OR REPLACE FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_api_key text;
+begin
+  if to_regnamespace('net') is null or to_regnamespace('vault') is null then
+    return;
+  end if;
+
+  select decrypted_secret into v_api_key
+  from vault.decrypted_secrets
+  where name = 'resend_api_key'
+  limit 1;
+
+  if v_api_key is null then
+    return;
+  end if;
+
+  perform net.http_post(
+    url := 'https://api.resend.com/emails',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || v_api_key
+    ),
+    body := jsonb_build_object(
+      'from', 'STAR Voting <noreply@choicelab.app>',
+      'to', jsonb_build_array('RobertPakko@gmail.com'),
+      'reply_to', p_from,
+      'subject', 'Contact form: message from ' || p_from,
+      'html', '<p style="font-family: sans-serif; color: #5b5468;">From '
+        || email_escape(p_from) || ', via the contact page. Reply to answer them.</p>'
+        || '<p style="font-family: sans-serif; white-space: pre-wrap;">'
+        || email_escape(p_message) || '</p>'
+    ),
+    timeout_milliseconds := 8000
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") IS 'Emails one contact-page message to the site''s owner, with the sender as Reply-To. Best-effort: silent where pg_net, Vault or the API key is missing. Internal.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."send_contact_message"("p_email" "text", "p_message" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $_$
+declare
+  v_email text := btrim(coalesce(p_email, ''));
+  v_message text := btrim(coalesce(p_message, ''));
+  v_user uuid := auth.uid();
+begin
+  if v_email = '' then
+    raise exception 'Enter an email address so a reply can reach you';
+  end if;
+  if length(v_email) > 254 then
+    raise exception 'That email address is too long';
+  end if;
+  if v_email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
+    raise exception 'That does not look like an email address';
+  end if;
+  if v_message = '' then
+    raise exception 'Write a message to send';
+  end if;
+  if length(v_message) > 5000 then
+    raise exception 'Messages can be at most 5000 characters';
+  end if;
+
+  if v_user is not null and (
+    select count(*) from contact_messages
+    where user_id = v_user and created_at > now() - interval '1 day'
+  ) >= 5 then
+    raise exception 'You have sent several messages today already. Please try again tomorrow';
+  end if;
+
+  if (
+    select count(*) from contact_messages where created_at > now() - interval '1 hour'
+  ) >= 10 then
+    raise exception 'A lot of messages have arrived in the last hour. Please try again later';
+  end if;
+
+  insert into contact_messages (email, message, user_id)
+  values (v_email, v_message, v_user);
+
+  perform send_contact_email(v_email, v_message);
+end;
+$_$;
+
+
+ALTER FUNCTION "public"."send_contact_message"("p_email" "text", "p_message" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."send_invite_email"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -5314,12 +5375,12 @@ declare
   v_grp_size int;
   v_tied jsonb;
   v_h2h jsonb;
-  v_matchups jsonb;
+  v_matchup jsonb;
   v_fs jsonb;
   v_steps jsonb;
   v_advanced jsonb;
   v_resolved text;
-  v_wn int; v_fn int; v_wn1 int; v_fn1 int;
+  v_fn int; v_fn1 int;
   v_a uuid; v_b uuid;
   v_ta int; v_tb int;
   v_fa int; v_fb int;
@@ -5352,94 +5413,100 @@ begin
       v_finalists := v_finalists || v_group;
       v_need := v_need - v_grp_size;
     else
-      -- Every ordered pair in the tied group, with the ballots that scored
-      -- the first above the second, the second above the first, and the two
-      -- the same. Counted both ways round because the win totals below read
-      -- one row per option per opponent; the payload keeps one row per pair.
-      drop table if exists _tb_pairs;
-      create temp table _tb_pairs on commit drop as
-      with grp as (select unnest(v_group) as cid),
-      pairs as (
-        select g1.cid as a, g2.cid as b
-        from grp g1 join grp g2 on g1.cid <> g2.cid
-      )
-      select
-        p.a,
-        p.b,
-        (count(*) filter (where v.a_score > v.b_score))::int as prefers_a,
-        (count(*) filter (where v.b_score > v.a_score))::int as prefers_b,
-        (count(*) filter (where v.a_score = v.b_score))::int as ties
-      from pairs p
-      cross join lateral (
-        select
-          coalesce((select score from scores where ballot_id = bal.id and candidate_id = p.a), 0) as a_score,
-          coalesce((select score from scores where ballot_id = bal.id and candidate_id = p.b), 0) as b_score
-        from ballots bal
-        where bal.poll_id = p_poll_id
-      ) v
-      group by p.a, p.b;
-
-      drop table if exists _tb;
-      create temp table _tb on commit drop as
-      with grp as (select unnest(v_group) as cid),
-      wins as (
-        select m.a as cid, (count(*) filter (where m.prefers_a > m.prefers_b))::int as w
-        from _tb_pairs m group by m.a
-      )
-      select
-        g.cid,
-        t.name,
-        t.total,
-        t.five_stars,
-        coalesce(w.w, 0) as h2h_wins,
-        row_number() over (order by coalesce(w.w, 0) desc, t.five_stars desc, g.cid) as rn
-      from grp g
-      join _round t on t.cid = g.cid
-      left join wins w on w.cid = g.cid;
-
       select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'total_score', total) order by name)
-        into v_tied from _tb;
-      select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'value', h2h_wins) order by h2h_wins desc, name)
-        into v_h2h from _tb;
+        into v_tied from _round where cid = any(v_group);
       select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'value', five_stars) order by five_stars desc, name)
-        into v_fs from _tb;
+        into v_fs from _round where cid = any(v_group);
 
-      -- One row per pair rather than two: the halves of a matchup are the
-      -- same comparison read from opposite ends. The id joins the name in
-      -- the ordering so that two options sharing a name still pick a side.
-      select jsonb_agg(jsonb_build_object(
-               'a', m.a, 'a_name', ca.name,
-               'b', m.b, 'b_name', cb.name,
-               'prefers_a', m.prefers_a,
-               'prefers_b', m.prefers_b,
-               'ties', m.ties) order by ca.name, cb.name)
-        into v_matchups
-      from _tb_pairs m
-      join _round ca on ca.cid = m.a
-      join _round cb on cb.cid = m.b
-      where (ca.name, m.a) < (cb.name, m.b);
+      if v_grp_size = 2 then
+        -- Two options for one slot: the single comparison between them, then
+        -- five-star votes, then the arbitrary-but-stable order by id. The pair
+        -- is named in alphabetical order, as the results page reads it.
+        select cid into v_a from _round where cid = any(v_group) order by name, cid limit 1;
+        select cid into v_b from _round where cid = any(v_group) and cid <> v_a;
 
-      -- Whatever separates the last advancing option from the first
-      -- eliminated one is what actually decided the tie.
-      select h2h_wins, five_stars into v_wn, v_fn from _tb where rn = v_need;
-      select h2h_wins, five_stars into v_wn1, v_fn1 from _tb where rn = v_need + 1;
+        select
+          (count(*) filter (where a_score > b_score))::int,
+          (count(*) filter (where b_score > a_score))::int,
+          (count(*) filter (where a_score = b_score))::int
+        into v_prefers_a, v_prefers_b, v_ties
+        from (
+          select
+            coalesce((select score from scores where ballot_id = bal.id and candidate_id = v_a), 0) as a_score,
+            coalesce((select score from scores where ballot_id = bal.id and candidate_id = v_b), 0) as b_score
+          from ballots bal
+          where bal.poll_id = p_poll_id
+        ) v;
 
-      if v_wn > v_wn1 then
-        v_resolved := 'head_to_head';
-      elsif v_fn > v_fn1 then
-        v_resolved := 'five_star_votes';
+        select jsonb_build_object(
+                 'a', v_a, 'a_name', ca.name,
+                 'b', v_b, 'b_name', cb.name,
+                 'prefers_a', v_prefers_a,
+                 'prefers_b', v_prefers_b,
+                 'ties', v_ties)
+          into v_matchup
+        from _round ca, _round cb
+        where ca.cid = v_a and cb.cid = v_b;
+
+        drop table if exists _tb;
+        create temp table _tb on commit drop as
+        with w as (
+          select
+            t.cid,
+            t.name,
+            t.five_stars,
+            case
+              when t.cid = v_a then (v_prefers_a > v_prefers_b)::int
+              else (v_prefers_b > v_prefers_a)::int
+            end as h2h_wins
+          from _round t
+          where t.cid = any(v_group)
+        )
+        select w.*, row_number() over (order by h2h_wins desc, five_stars desc, cid) as rn
+        from w;
+
+        select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'value', h2h_wins) order by h2h_wins desc, name)
+          into v_h2h from _tb;
+
+        if v_prefers_a <> v_prefers_b then
+          v_resolved := 'head_to_head';
+        elsif (select max(five_stars) <> min(five_stars) from _tb) then
+          v_resolved := 'five_star_votes';
+        else
+          v_resolved := 'random';
+        end if;
+
+        v_steps := jsonb_build_array(jsonb_build_object(
+          'rule', 'head_to_head',
+          'results', v_h2h,
+          'matchups', jsonb_build_array(v_matchup),
+          'decisive', v_resolved = 'head_to_head'));
+
+        if v_resolved <> 'head_to_head' then
+          v_steps := v_steps || jsonb_build_array(jsonb_build_object(
+            'rule', 'five_star_votes', 'results', v_fs, 'decisive', v_resolved = 'five_star_votes'));
+        end if;
       else
-        v_resolved := 'random';
-      end if;
+        -- Three or more for the slots left: five-star votes, then the
+        -- arbitrary-but-stable order by id.
+        drop table if exists _tb;
+        create temp table _tb on commit drop as
+        select
+          t.cid,
+          t.name,
+          t.five_stars,
+          row_number() over (order by t.five_stars desc, t.cid) as rn
+        from _round t
+        where t.cid = any(v_group);
 
-      v_steps := jsonb_build_array(jsonb_build_object(
-        'rule', 'head_to_head',
-        'results', v_h2h,
-        'matchups', coalesce(v_matchups, '[]'::jsonb),
-        'decisive', v_resolved = 'head_to_head'));
+        -- Whatever separates the last advancing option from the first
+        -- eliminated one is what actually decided the tie.
+        select five_stars into v_fn from _tb where rn = v_need;
+        select five_stars into v_fn1 from _tb where rn = v_need + 1;
 
-      if v_resolved <> 'head_to_head' then
-        v_steps := v_steps || jsonb_build_array(jsonb_build_object(
+        v_resolved := case when v_fn > v_fn1 then 'five_star_votes' else 'random' end;
+
+        v_steps := jsonb_build_array(jsonb_build_object(
           'rule', 'five_star_votes', 'results', v_fs, 'decisive', v_resolved = 'five_star_votes'));
       end if;
 
@@ -5883,6 +5950,22 @@ COMMENT ON COLUMN "public"."candidates"."description" IS 'Optional detail shown 
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."contact_messages" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "email" "text" NOT NULL,
+    "message" "text" NOT NULL,
+    "user_id" "uuid"
+);
+
+
+ALTER TABLE "public"."contact_messages" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."contact_messages" IS 'Messages sent from the contact page, read by hand with the service role. Written only by send_contact_message; nothing in the app reads them.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."invited_voters" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "poll_id" "uuid" NOT NULL,
@@ -6007,6 +6090,11 @@ ALTER TABLE ONLY "public"."candidates"
 
 
 
+ALTER TABLE ONLY "public"."contact_messages"
+    ADD CONSTRAINT "contact_messages_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE "public"."invited_voters"
     ADD CONSTRAINT "invited_voters_email_ck" CHECK (("email" ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'::"text")) NOT VALID;
 
@@ -6059,6 +6147,10 @@ ALTER TABLE ONLY "public"."scores"
 
 ALTER TABLE ONLY "public"."scores"
     ADD CONSTRAINT "scores_pkey" PRIMARY KEY ("id");
+
+
+
+CREATE INDEX "contact_messages_created_at_idx" ON "public"."contact_messages" USING "btree" ("created_at");
 
 
 
@@ -6278,6 +6370,11 @@ ALTER TABLE ONLY "public"."candidates"
 
 
 
+ALTER TABLE ONLY "public"."contact_messages"
+    ADD CONSTRAINT "contact_messages_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
 ALTER TABLE ONLY "public"."invited_voters"
     ADD CONSTRAINT "invited_voters_poll_id_fkey" FOREIGN KEY ("poll_id") REFERENCES "public"."polls"("id") ON DELETE CASCADE;
 
@@ -6361,6 +6458,9 @@ CREATE POLICY "candidates_insert" ON "public"."candidates" FOR INSERT WITH CHECK
 
 CREATE POLICY "candidates_select" ON "public"."candidates" FOR SELECT USING (("public"."is_poll_creator"("poll_id") OR "public"."is_invited_to_poll"("poll_id")));
 
+
+
+ALTER TABLE "public"."contact_messages" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."invited_voters" ENABLE ROW LEVEL SECURITY;
@@ -6635,6 +6735,11 @@ REVOKE ALL ON FUNCTION "public"."ballot_sheet"("p_poll_id" "uuid", "p_named" boo
 
 REVOKE ALL ON FUNCTION "public"."begin_account_carry_over"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."begin_account_carry_over"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."broadcast_poll_change"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."broadcast_poll_change"("p_poll_id" "uuid") TO "service_role";
 
 
 
@@ -7060,6 +7165,18 @@ GRANT ALL ON FUNCTION "public"."save_push_subscription"("p_endpoint" "text", "p_
 
 
 
+REVOKE ALL ON FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."send_contact_message"("p_email" "text", "p_message" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."send_contact_message"("p_email" "text", "p_message" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."send_contact_message"("p_email" "text", "p_message" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."send_contact_message"("p_email" "text", "p_message" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."send_invite_email"() FROM PUBLIC;
 
 
@@ -7159,6 +7276,8 @@ REVOKE ALL ON FUNCTION "public"."wants_push"("p_user_id" "uuid") FROM PUBLIC;
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."account_carry_overs" TO "anon";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."account_carry_overs" TO "authenticated";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."account_carry_overs" TO "service_role";
 
 
@@ -7172,6 +7291,10 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."ballots" TO "servi
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."candidates" TO "anon";
 GRANT SELECT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."candidates" TO "authenticated";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."candidates" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."contact_messages" TO "service_role";
 
 
 

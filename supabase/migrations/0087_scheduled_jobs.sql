@@ -40,3 +40,19 @@ begin
   -- competes for the database's attention.
   perform cron.schedule('purge-old-polls', '17 4 * * *', $cron$select public.purge_old_polls()$cron$);
 end $$;
+
+
+-- Who may receive live updates, and that nobody but the database may send
+-- them (0085). A policy on realtime.messages is outside the public schema,
+-- which the squash does not dump, so it is restated here. Idempotent: dropped
+-- by name first.
+DROP POLICY IF EXISTS "live updates are received, never sent" ON "realtime"."messages";
+CREATE POLICY "live updates are received, never sent" ON "realtime"."messages"
+  FOR SELECT TO "anon", "authenticated"
+  USING (
+    "realtime"."messages"."extension" = 'broadcast'
+    AND (
+      "realtime"."topic"() LIKE 'poll:%'
+      OR "realtime"."topic"() = 'user:' || (SELECT "auth"."uid"())::text
+    )
+  );
