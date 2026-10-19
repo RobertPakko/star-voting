@@ -6,12 +6,12 @@ import {
   Box,
   Button,
   Card,
-  Group,
   Pagination,
   Stack,
   Text,
   Title,
   Tooltip,
+  VisuallyHidden,
 } from '@mantine/core'
 import { useMediaQuery, useReducedMotion } from '@mantine/hooks'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, PlusIcon } from '@phosphor-icons/react'
@@ -60,7 +60,7 @@ const PAGE_SIZE = 10
 
 /**
  * The poll list, or the archived polls — which of the two is the address's
- * `?archived`, so the button beside the pager can link to it. Keyed on it, so the other list
+ * `?archived`, so the Archived button can link to it. Keyed on it, so the other list
  * starts from the skeleton with its own state instead of the first list's
  * cards standing under the second one's heading.
  */
@@ -402,15 +402,58 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
         </Box>
       )}
       <Stack maw={720} mx="auto" gap="md">
-        <Group justify="space-between">
-          <Title order={1} size="h2">
-            {viewingRemoved ? 'Archived polls' : 'Your polls'}
-          </Title>
+        {/* One row: on the left the page's name, or the way to the archived
+            polls once there are any — the list is what anybody lands on, so
+            its name says nothing the page does not, and the archive is the
+            one other place it leads. The heading stays for a screen reader,
+            which has no other way to hear where it is. The pager sits
+            between the two, centred, once there is a second page; below
+            them on a narrow screen (`head` in PollList.module.css). It is at
+            the top rather than the foot because that is where a page turn
+            lands the reader anyway (the scroll below). */}
+        <div className={classes.head}>
+          <div className={classes.headStart}>
+            {!viewingRemoved && removedCount > 0 ? (
+              <>
+                <VisuallyHidden>
+                  <Title order={1}>Your polls</Title>
+                </VisuallyHidden>
+                <Button
+                  component={Link}
+                  to="/?archived"
+                  variant="default"
+                  leftSection={<ArchiveIcon size={16} aria-hidden />}
+                >
+                  Archived
+                </Button>
+              </>
+            ) : (
+              <Title order={1} size="h2">
+                {viewingRemoved ? 'Archived polls' : 'Your polls'}
+              </Title>
+            )}
+          </div>
+          {pageCount > 1 && (
+            <Pagination
+              className={classes.headPager}
+              total={pageCount}
+              value={current}
+              size={phone ? 'sm' : 'md'}
+              gap={phone ? 4 : 8}
+              onChange={(next) => {
+                setPage(next)
+                // The list is taller than a phone; landing halfway down the
+                // new page reads as nothing having happened.
+                window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
+              }}
+            />
+          )}
           {/* Not on the archived list: a new poll goes on the other one, and
               this page is a look at what was put away rather than somewhere
               to start anything. */}
           {!viewingRemoved && (
             <Button
+              className={classes.headEnd}
               component={Link}
               to="/polls/new"
               leftSection={<PlusIcon size={16} aria-hidden />}
@@ -418,7 +461,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
               New poll
             </Button>
           )}
-        </Group>
+        </div>
 
         {/* The one thing a list made without an account most needs saying:
             it lives in this browser's session, and nothing else knows it is
@@ -445,7 +488,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             in it, or one whose every poll was archived, which is a different
             thing and would otherwise read as the app losing the reader's polls
             in front of them. The way back is the sentence's other half: the
-            Archived button at the foot of the list. */}
+            Archived button at the top of the list. */}
         {viewingRemoved && polls.length === 0 && (
           <Text c="dimmed" size="sm">
             No archived polls.
@@ -596,55 +639,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             )
           })}
         </PollCards>
-
-        {/* The pager, once there is a second page to go to, and the way to
-            the archived polls beside it, once there are any — where a mail
-            client keeps its archive: at hand, and out of the way of the
-            list. The count is what decides whether the button is drawn; it
-            is not printed on it, since the list it opens is the count.
-
-            Pinned to the foot of the screen (`pager`), so the way to the
-            next page is never a scroll away; the list scrolls under it. The
-            page size stays ten rather than however many cards fit above it:
-            cards are not one height, and a page size that moved with the
-            window would move the reader's page with it on every rotation.
-            Both lists draw it, the archived one with no button in it. The
-            pager is at the left and the button at the right, as far apart as
-            the row allows, because they have nothing to do with each other;
-            the button keeps to the right when it is alone. On a
-            phone the pager is drawn smaller and with no neighbours either
-            side of the current page, so it and the button fit on one line
-            and the bar takes as little of the screen as it can. */}
-        {(pageCount > 1 || (!viewingRemoved && removedCount > 0)) && (
-          <Group justify="space-between" gap="sm" className={classes.pager}>
-            {pageCount > 1 && (
-              <Pagination
-                total={pageCount}
-                value={current}
-                size={phone ? 'sm' : 'md'}
-                siblings={phone ? 0 : 1}
-                gap={phone ? 4 : 8}
-                onChange={(next) => {
-                  setPage(next)
-                  // The list is taller than a phone; landing halfway down the
-                  // new page reads as nothing having happened.
-                  window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
-                }}
-              />
-            )}
-            {!viewingRemoved && removedCount > 0 && (
-              <Button
-                component={Link}
-                to="/?archived"
-                variant="default"
-                ml="auto"
-                leftSection={<ArchiveIcon size={16} aria-hidden />}
-              >
-                Archived
-              </Button>
-            )}
-          </Group>
-        )}
       </Stack>
     </Reveal>
   )

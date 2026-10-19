@@ -6226,24 +6226,23 @@ because renaming a table to relabel a button is a migration for nothing.
 
 Each card carries an archive box at its bottom right, alongside the badges,
 whose tooltip says what it costs: *Archive: move it off your list and stop
-notifications about it*. **Archived**, beside the pager at the foot of the
-list — where a mail client keeps its archive, at hand and out of the way — opens
+notifications about it*. **Archived**, at the top left of the list in place of
+its *Your polls* heading — which says nothing the page does not, and stays for
+a screen reader — opens
 the poll list's own address with `?archived` on it, which swaps the list for
 the archived polls, each with a **Restore**. It is drawn only while there is
 something archived.
 
-**The pager is pinned to the foot of the screen** (`.pager` in
-`PollList.module.css`), on both lists, with the Archived button beside it on
-the main one: `position: sticky`, so the list scrolls under it and it settles
-under the last card at the end. It has no rule above it; the cards fade out
-under it instead, over exactly the room left above the bar, so the fade never
-reaches the last card once the list is at its end. The pager sits at the left
-and the button at the right, since the two have nothing to do with each
-other, and the button keeps to the right when it is alone. The page size stays ten rather than however
-many cards would fit above it, because cards are not one height and a page
+**The pager is in the list's top row** (`.head` in `PollList.module.css`),
+centred between the Archived button (or the heading) and *New poll*, and on a
+line of its own under them below 48em, where the three no longer fit. It was a
+bar pinned to the foot of the screen with the Archived button beside it, which
+put two unrelated controls together and kept a strip of every screen covered;
+a page turn scrolls to the top anyway, so the top is where the reader is when
+the new page arrives. The page size stays ten rather than however
+many cards would fit, because cards are not one height and a page
 size that moved with the window would move the reader's page on every
-rotation. On a phone the pager is drawn smaller with no neighbours beside the
-current page, so it and the button stay on one line. The archived list has no *New poll*, since a new poll goes
+rotation. The archived list has no *New poll*, since a new poll goes
 on the other list, and its way back is `BackToList` — the same *Your polls*
 every poll page carries, in the same place, because it is the same act. The
 list is keyed on the query, so each list starts from its own skeleton.

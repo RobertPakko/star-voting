@@ -74,7 +74,13 @@ export function Layout() {
   const controls = useRef<HTMLDivElement>(null)
   const gear = useRef<HTMLButtonElement>(null)
   const [menuShift, setMenuShift] = useState(0)
+  // The page the menu was opened on, which is the one its links leave out.
+  // Not the address as it is now: following a link closes the menu, and the
+  // menu fades out over the next page — so filtered on the current address it
+  // swapped one link for another in the moment before it went.
+  const [menuPage, setMenuPage] = useState(pathname)
   function toggleMenu() {
+    if (!menuOpen) setMenuPage(pathname)
     const edge = controls.current?.getBoundingClientRect().right
     const own = gear.current?.getBoundingClientRect().right
     if (edge !== undefined && own !== undefined) setMenuShift(Math.max(0, edge - own))
@@ -199,24 +205,24 @@ export function Layout() {
                         back, and installing last, since it is the one that
                         comes and goes. The archived polls are not here: they
                         are a button on the poll list, beside the pager. */}
-                    {pathname !== '/about' && (
+                    {menuPage !== '/about' && (
                       <MenuLink to="/about" icon={BookOpenIcon}>
                         About
                       </MenuLink>
                     )}
                     {/* The intro is not here: About links to it, and a reader
                         who has found the gear has already met the app. */}
-                    {pathname !== '/contact' && (
+                    {menuPage !== '/contact' && (
                       <MenuLink to="/contact" icon={EnvelopeSimpleIcon}>
                         Contact
                       </MenuLink>
                     )}
-                    {pathname !== '/donate' && (
+                    {menuPage !== '/donate' && (
                       <MenuLink to="/donate" icon={HeartIcon}>
                         Donate
                       </MenuLink>
                     )}
-                    {!isInstalledApp() && pathname !== '/app' && (
+                    {!isInstalledApp() && menuPage !== '/app' && (
                       <MenuLink to="/app" icon={DownloadSimpleIcon}>
                         App installation
                       </MenuLink>

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Anchor, Button, Card, Group, Stack, Text, TextInput, Textarea, Title } from '@mantine/core'
-import { CheckIcon, PaperPlaneRightIcon } from '@phosphor-icons/react'
+import { CheckIcon, PaperPlaneRightIcon, PlusIcon } from '@phosphor-icons/react'
 import { Signature } from '../components/Signature'
 import { announce } from '../lib/announce'
 import { useAuth } from '../lib/auth'
@@ -102,7 +102,11 @@ export function Contact() {
             <Text size="sm" c="dimmed">
               I&rsquo;ll reply to {trimmedEmail}.
             </Text>
-            <Button variant="default" onClick={() => setSent(false)}>
+            <Button
+              variant="default"
+              leftSection={<PlusIcon size={16} aria-hidden />}
+              onClick={() => setSent(false)}
+            >
               Send another message
             </Button>
           </Stack>
