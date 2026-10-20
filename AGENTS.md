@@ -3144,10 +3144,11 @@ account on the press.
 
 **Every size is a fraction of one square**, as large as the screen allows,
 so the arrangement is the same shape everywhere. The three circles that show
-something are larger than the three that go somewhere; the numbers in
-`Start.module.css` are chosen so the larger circles reach the square's edge
-and no two circles touch at any point of the turn. On a phone that makes the
-benefits circle about 130 pixels across, which is why **the benefits are a
+something are larger than the three that go somewhere, which orbit further
+out to leave them room; the numbers in `Start.module.css` are chosen so
+every circle reaches the square's edge and no two circles touch at any point
+of the turn. On a phone that makes the
+benefits circle about 145 pixels across, which is why **the benefits are a
 word or two each** and must stay that way.
 
 **The turn is one revolution every eight minutes** — a couple of pixels a

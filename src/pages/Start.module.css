@@ -3,10 +3,13 @@
  * (`--s`), so the arrangement is the same shape on a phone and a monitor.
  *
  * The three circles that show something are larger than the three that go
- * somewhere. The numbers are chosen so nothing touches: the larger circles'
- * outer edge is the square's edge (0.315 + 0.37 / 2 = 0.5), and neighbours
- * 60 degrees apart are 0.315 between centres against 0.2925 of radii. The
- * mark in the middle needs only (0.18 + 0.37) / 2 = 0.275 of the same 0.315. */
+ * somewhere, and the three that go somewhere orbit further out to make room
+ * for them. The ring turns, so every circle passes every edge, and each
+ * kind's outer edge is the square's edge: 0.3 + 0.4 / 2 and
+ * 0.3925 + 0.215 / 2, both 0.5. Nothing touches: neighbours 60 degrees apart
+ * are sqrt(0.3² + 0.3925² - 0.3 * 0.3925) = 0.355 between centres against
+ * 0.3075 of radii, and the mark in the middle needs (0.18 + 0.4) / 2 = 0.29
+ * of the larger circles' 0.3. */
 .page {
   position: fixed;
   inset: 0;
@@ -18,7 +21,7 @@
 
 .ring {
   --s: min(calc(100vw - 24px), calc(100dvh - 24px), 46rem);
-  --orbit: 0.315;
+  --orbit: 0.3;
   --turn: 480s;
   position: relative;
   width: var(--s);
@@ -53,7 +56,7 @@
 }
 
 .spot {
-  --d: calc(var(--s) * 0.37);
+  --d: calc(var(--s) * 0.4);
   position: absolute;
   width: var(--d);
   height: var(--d);
@@ -63,6 +66,7 @@
 
 .spot[data-small] {
   --d: calc(var(--s) * 0.215);
+  --orbit: 0.3925;
 }
 
 /* The mark in the middle: the logo's star and gradient, with the name under
@@ -192,10 +196,16 @@
   box-shadow: var(--mantine-shadow-md);
 }
 
+/* Set a little inside its circle on a white ground, the colour the
+ * recordings are drawn on, so the circle crops less of a square frame's
+ * corners — which is where the calendar's hours and the poll's tabs are. */
 .video {
   display: block;
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
+  padding: 3%;
+  background: var(--mantine-color-white);
   object-fit: cover;
   border-radius: 50%;
 }
