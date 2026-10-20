@@ -61,7 +61,7 @@ export const SAMPLE_RESULT_ID = 'sample-result-dinner'
  *
  * The `polls` table would not merely fail to find these — it errors on the
  * cast — so this has to be asked before anything puts one in front of the
- * database. Two places do: `openPollRpc` below, and `PollPage` in App.tsx.
+ * database. Two places do: `openPollRpc` below, and `PollPage` in pages/PollPage.tsx.
  */
 export function isSampleId(pollId: string): boolean {
   return pollId.startsWith('sample-')

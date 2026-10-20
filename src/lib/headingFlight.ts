@@ -14,7 +14,7 @@ import { motionEase, motionMs, prefersReducedMotion } from './motion'
  * with only its heading in the air, while the poll is read underneath. If the
  * read is back by the time the heading lands, the page arrives whole and no
  * skeleton is ever drawn; if not, the skeleton arrives instead. See
- * `PollPage` in App.tsx.
+ * `PollPage` in pages/PollPage.tsx.
  *
  * **How.** Each part of the heading is copied from the heading it is flying
  * to, drawn over the page fixed to the viewport exactly where that part is,

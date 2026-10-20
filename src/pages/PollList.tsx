@@ -31,7 +31,7 @@ import type { PollListItem } from '../lib/types'
 import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import classes from './PollList.module.css'
-import { pollIdFromParam, pollPath } from '../lib/pollId'
+import { isPollParam, pollIdFromParam, pollPath } from '../lib/pollId'
 import {
   departing,
   fly,
@@ -47,30 +47,16 @@ import { readListSnapshot, writeListScroll, writeListSnapshot } from '../lib/lis
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
 
-/**
- * How many polls a page of the list holds.
- *
- * The page is taken in the database, not here: `list_polls()` is handed this
- * and an offset, and answers with those rows and the total. It used to return
- * everything and let the browser slice it, on the grounds that a poll history
- * is a number in the tens — but the expensive half of that function is a set
- * of correlated subqueries run *per poll*, so reading it whole meant paying
- * for every poll you had ever been invited to in order to draw ten of them.
- * See 0036_page_the_poll_list.sql.
- */
+/** Polls per page. `list_polls()` pages in the database, before its per-poll aggregates. */
 const PAGE_SIZE = 10
 
 /**
- * The poll list, or the archived polls — which of the two is the address's
- * `?archived`, so the Archived button can link to it. Keyed on it, so the other list
- * starts from the skeleton with its own state instead of the first list's
- * cards standing under the second one's heading.
+ * The poll list, or with `?archived` the archived polls. Keyed on which, so
+ * switching starts from a skeleton with fresh state. ("Archived" on screen is
+ * "removed" in the database and the code.)
  */
 export function PollList() {
   const [params] = useSearchParams()
-  // "Archived" on screen, "removed" in the database and in this file's names:
-  // the rows are `removed_polls`, and renaming a table to relabel a button is
-  // a migration for nothing.
   const removed = params.has('archived')
   usePageTitle(removed ? 'Archived polls' : 'Your polls')
   return <PollListView key={String(removed)} viewingRemoved={removed} />
@@ -79,23 +65,17 @@ export function PollList() {
 function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   const h24 = use24HourTime()
   const { session, anonymous } = useAuth()
-  // Asked here rather than in CSS because the scroll below is asked for from
-  // JavaScript, which the global rule in index.css cannot reach.
+  // For the JS-driven scroll, which the CSS reduced-motion rule can't reach.
   const reducedMotion = useReducedMotion()
   const phone = useMediaQuery('(max-width: 36em)', false, { getInitialValueInEffect: false })
-  // The pager is drawn in the other scheme from the page's; see its comment.
+  // The pager is drawn in the opposite scheme to the page.
   const pagerScheme =
     useComputedColorScheme('light', { getInitialValueInEffect: false }) === 'dark'
       ? 'light'
       : 'dark'
   const userId = session?.user.id
-  // A return to the list — the way back on a poll's page, or the browser's
-  // back button — draws the list as it was left rather than starting over;
-  // see lib/listCache.ts. Taken once, on mount: this is how the page starts,
-  // not something it goes on consulting. Which kind of arrival it is can be
-  // told while rendering, though the heading flying back cannot always be:
-  // the browser's back button launches it as the poll's page goes, which is
-  // after this has rendered. See the landing below.
+  // Returning to the list (the way back, or browser back) restores it as it
+  // was left; see lib/listCache.ts. Decided once, on mount.
   const navigationType = useNavigationType()
   const [kept] = useState(() =>
     !viewingRemoved && (peekFlight('list')?.deliberate || navigationType === 'POP')
@@ -106,59 +86,32 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   const [polls, setPolls] = useState<PollListItem[] | null>(kept?.polls ?? null)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(kept?.page ?? 1)
-  // Which page of which list the rows on screen are, which is what the cards
-  // are keyed by; see PollCards. Not `page`, which moves as the reader presses
-  // and runs ahead of the rows until the read for it lands.
+  // Which page the rows on screen are of; cards are keyed by it (see
+  // PollCards). `page` runs ahead of it until the read lands.
   const [rowsOf, setRowsOf] = useState<ListPage>({ removed: false, page: kept?.page ?? 1 })
-  // Which of the two lists is on screen is the address's, and arrives as a
-  // prop: the reader's polls, or the ones they have removed from it. Both are
-  // read from `list_polls`, which pages each of them separately, so a page is
-  // always full of the list it is a page of — see lib/removedPolls.ts.
-  // Deliberately not remembered: a look at what has been put away is a thing
-  // you do and then stop doing.
   const removedView = useRef(viewingRemoved)
   removedView.current = viewingRemoved
-  // How many polls are in the other list, which is whether the way into it is
-  // drawn at all.
+  // Size of the archived list, which decides whether the Archived button shows.
   const [removedCount, setRemovedCount] = useState(kept?.removedCount ?? 0)
-  // The polls a remove or restore is in flight for, so a card can say so
-  // under the press, and whatever the last one said if it was refused.
+  // Polls with an archive/restore in flight (their cards are dimmed).
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
-  // How many reads of the list have been started, and — for each card whose
-  // removal or restore has gone in — how many had been when it did. A read
-  // started after that is the first that can be without it.
+  // Reads started, and per moved card how many had started when it moved: a
+  // read started after that is the first that can come back without it.
   const readsStarted = useRef(0)
   const movedBefore = useRef(new Map<string, number>())
   const [actionError, setActionError] = useState<string | null>(null)
-  // How many polls there are in total, which only a read can tell us: it
-  // arrives on every row (see PollListItem.total_count) because that is the
-  // only place a set-returning function can put it.
   const [total, setTotal] = useState(kept?.total ?? 0)
-  // Whether a read has ever come back; see the note in PublicPoll. Rows kept
-  // from the last visit count: they are on screen, and a refresh that fails
-  // should leave them there rather than replace them with an error.
+  // Kept rows count as loaded: a failed refresh shouldn't replace them with an error.
   const loaded = useRef(!!kept)
-  // The page the rows on screen were read for. Kept in a ref so `load` never
-  // changes identity — `useLiveStream` calls whatever it holds, and a fresh
-  // function every render would be a fresh subscription every render.
+  // Refs keep `load` stable, since `useLiveStream` would resubscribe otherwise.
   const chosen = useRef(page)
   chosen.current = page
-  // Whose list the rows are, for the snapshot `load` leaves behind; a ref for
-  // the reason `chosen` is one.
   const owner = useRef(userId)
   owner.current = userId
-  // The list and page most recently *asked* for, which is how turning a page
-  // or switching lists tells itself apart from the first read. Null until the
-  // first read lands.
+  // The list and page last read, as `${removed}:${page}`; null before the first read.
   const fetched = useRef<string | null>(kept ? `false:${kept.page}` : null)
-  // One round trip for a page of polls, their status, and the total. This
-  // used to be a select plus one poll_status RPC per poll; which is also what
-  // makes it cheap enough to re-read whenever anything on it moves.
-  //
-  // Open polls somebody else made are on it too, where this account has voted
-  // in or confirmed them through their links: the database knows which, from
-  // the account on those ballots, so nothing is handed in and the list is the
-  // same on every device. See 0075_answered_open_polls_on_the_list.sql.
+
+  /** One round trip: a page of polls, their statuses, and the total. */
   const load = useCallback(async () => {
     const asked = chosen.current
     const removed = removedView.current
@@ -169,34 +122,20 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
       p_removed: removed,
     })
     if (rpcError) {
-      // A refresh that fails keeps the list already on screen; only a first
-      // read that fails leaves nothing to show.
       if (!loaded.current) setError(rpcError.message)
       return false
     }
     loaded.current = true
-    // Clears an error from a first read that failed: a failed read is tried
-    // again, so a connection that comes back brings the list with it instead
-    // of leaving the reader looking at a dead end.
     setError(null)
     const rows = (data as PollListItem[]) ?? []
-    // No rows means no total to read off one, and that can only be an empty
-    // list: the database clamps a page request past the end onto the last
-    // page there is, so a page that comes back empty is a list with nothing
-    // in it rather than a page number that overshot.
+    // The database clamps past-the-end pages, so no rows means an empty list.
     const count = rows[0]?.total_count ?? 0
-    // The page these rows are actually of, which is not always the page that
-    // was asked for — the database clamps a request past the end. Recording
-    // the clamped one is what stops the effect below from reading again the
-    // moment `page` is brought down to match.
+    // Record the clamped page, so bringing `page` down doesn't re-read.
     const landed = Math.min(asked, Math.max(1, Math.ceil(count / PAGE_SIZE)))
-    // The rows and the page they are of, in the same render: the cards are
-    // keyed by the page, and new rows drawn for one render under the old key
-    // would be read as the old page's cards all moving at once.
+    // Rows and their page in one render: cards are keyed by the page.
     setPolls(rows)
     setRowsOf({ removed, page: landed })
-    // A card that has gone stays dimmed until a read that started after it
-    // went has come back without it; see `move`.
+    // Undim cards whose move a read started after it now reflects.
     const settled = [...movedBefore.current].filter(([, before]) => before < started)
     if (settled.length) {
       for (const [id] of settled) movedBefore.current.delete(id)
@@ -207,10 +146,8 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
       })
     }
     setTotal(count)
-    // The other list's size rides on every row, so an empty read has nowhere
-    // to carry it — and a list emptied by removing everything on it is the one
-    // whose reader most needs the way back. So that read, and only that one,
-    // asks. A database older than the count answers neither, which is none.
+    // The archived count rides on every row; an empty page has none to carry
+    // it, so ask separately then.
     let removedTotal: number
     if (rows.length > 0) {
       removedTotal = rows[0].removed_count ?? 0
@@ -220,7 +157,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     }
     setRemovedCount(removedTotal)
     fetched.current = `${removed}:${landed}`
-    // Left for the walk back from a poll; see lib/listCache.ts.
     if (!removed && owner.current)
       writeListSnapshot({
         userId: owner.current,
@@ -232,14 +168,9 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     return true
   }, [])
 
-  // Back where the reader left it, and the heading of the poll they were on
-  // flying back onto its card. Before the first paint, so the list is never
-  // seen at the top and then moved; and the scroll first, because the flight
-  // aims at where the card is on screen.
-  //
-  // Looked for in a layout effect, which runs after the poll's page has gone
-  // and launched it, and before the first paint. Held in a ref once found,
-  // since finding it claims it.
+  // On return: restore the scroll, then fly the poll's heading back onto its
+  // card, before first paint. The browser's back button launches the flight
+  // as the poll page unmounts, which is why it is looked for here.
   useLayoutEffect(() => {
     if (!kept) return
     window.scrollTo(0, kept.scrollY)
@@ -248,8 +179,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     landFlight(flight)
     const card = document.querySelector(`[data-poll-card="${CSS.escape(flight.id)}"]`)
     const heading = card && headingIn(card, 'card')
-    // Not on this page of the list any more — removed, or deleted, since the
-    // reader left — so there is nowhere for it to land and nothing flies.
+    // The card is gone (archived or deleted since): nothing to land on.
     if (!heading) return
     stillEntrances(heading)
     const run = fly(flight, heading)
@@ -261,16 +191,12 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
       live = false
       run.cancel()
     }
-    // Once, on arrival; see above.
+    // On arrival only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Leaving, written while the list is still in the document — a layout
-  // effect's cleanup — and the page is still scrolled where the reader had
-  // it: how far down it was, and, where the address has moved on to a poll
-  // whose card is on screen, that card's heading taking off. The second is the
-  // browser's forward button; a press on the card launched its own flight
-  // before the address moved.
+  // On leaving (still in the document): save the scroll, and if the address
+  // moved to a poll on screen (browser forward), launch its heading's flight.
   useLayoutEffect(() => {
     if (viewingRemoved || !userId) return
     return () => {
@@ -281,49 +207,25 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     }
   }, [viewingRemoved, userId])
 
-  // Unlike a single poll, a list has no settled state to stop at: any poll on
-  // it can take a vote, and a new invite can add a row. So it watches one
-  // thing, and that thing is the reader rather than the polls.
-  //
-  // Watching the polls would mean holding one channel per row, which the page
-  // cannot even name until it has read the list — so it would read once to
-  // learn them, subscribe, and read again on subscribing. The reader's own
-  // topic is known from the session before anything is read, so the page
-  // subscribes on mount and its first read is its only read. It also does not
-  // change when the reader turns a page, so a page turn costs the one read it
-  // genuinely needs and no re-subscription on top of it.
-  //
-  // It carries every change to every poll on the reader's list: the polls
-  // they made, the polls they are invited to, and the open polls their account
-  // has answered through a link. See 0035_broadcast_polls_to_watchers.sql for
-  // the fan-out that makes it so, and 0075_answered_open_polls_on_the_list.sql
-  // for the third of those. There used to be a topic per open poll on the page
-  // as well, because an open poll's voters were nobody the database could
-  // tell; now that their ballots carry their account, they are.
+  // The list watches the reader's own topic, which is known before any read
+  // and carries every change to every poll on their list.
   const topic = session?.user.id ? userTopic(session.user.id) : null
 
   const { reread } = useLiveStream(topic, load)
 
-  // Turning a page, or switching between the two lists, is the one change the
-  // socket will not bring: the topic does not depend on which page is on
-  // screen, so nothing announces it. The first read is deliberately left to
-  // the subscription — see useLiveStream — which is why this waits for one to
-  // have landed before it fires.
+  // A page turn or list switch is the one change no signal brings. Waits for
+  // the first read, which belongs to the subscription.
   useEffect(() => {
     if (fetched.current === null || fetched.current === `${viewingRemoved}:${page}`) return
     reread()
   }, [page, viewingRemoved, reread])
 
-  // What this browser hid before hiding moved into the database, handed over
-  // once. It announces itself on the reader's topic, so the list re-reads
-  // without being asked; see lib/removedPolls.ts.
+  // One-time handover of polls hidden by an older, browser-only build.
   useEffect(() => {
     if (session) void migrateHiddenPolls()
   }, [session])
 
-  // Both directions of the one control. The read afterwards goes through the
-  // live stream's own queue, so the echo of the write's broadcast is covered
-  // by it rather than costing a second one; see readLedger.ts.
+  /** Archive or restore. The re-read goes through the live queue, absorbing the echo. */
   const move = async (id: string, remove: boolean) => {
     setActionError(null)
     setPending((was) => new Set(was).add(id))
@@ -337,48 +239,21 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
       })
       return
     }
-    // Still dimmed until the list has been read again without it, which is
-    // `load`'s to say: let go here, the card came back to full strength for
-    // as long as that read took and then vanished, and the copy that fades
-    // out where it stood was taken from a card that no longer looked like
-    // it was going.
+    // Stays dimmed until `load` sees a list without it.
     movedBefore.current.set(id, readsStarted.current)
     reread()
-    // The card goes, and focus with it; this is the only trace of the press
-    // a screen reader would otherwise be left with.
+    // The card (and focus) go; tell a screen reader what happened.
     announce(remove ? 'Archived' : 'Restored to your list')
   }
 
-  // Clamped rather than reset: a poll deleted from page three should leave
-  // the reader on page three, or on the last page there is if that was it.
-  // Derived at render from the same total the database clamps its own offset
-  // against, so the page this claims to be showing and the page it was handed
-  // cannot drift apart.
+  // Clamped to the same total the database clamps against.
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const current = Math.min(page, pageCount)
 
-  // And brought down in state as well, not only in what is drawn. A `page`
-  // left pointing past the end is invisible until the list grows back, at
-  // which point the reader would be silently thrown forward to a page they
-  // were moved off. This costs no read: `load` already recorded the clamped
-  // page as the one on screen.
+  // Clamp the state too, so a later-growing list doesn't jump the reader forward.
   useEffect(() => {
     if (page > pageCount) setPage(pageCount)
   }, [page, pageCount])
-
-  // The winner of a finished poll arrives on the row that draws the card.
-  //
-  // It used to be a second request — `poll_winners()`, asked for the finished
-  // polls on screen whose result this tab could not already name — and a
-  // module-level cache to stop it being asked twice. Both are gone. The
-  // objection to a column was that it would re-run every finished poll's
-  // election on every read of a list that re-reads itself whenever anything
-  // on it moves; what `list_polls` carries now is not an election but a
-  // column the database settled once, when the poll finished. So the badge is
-  // final on the first paint, there is nothing in flight for it to wait on,
-  // and a poll reopened on another device cannot leave a name on this card
-  // that its votes no longer support. See
-  // 0047_the_winner_is_kept_with_the_poll.sql.
 
   if (error) {
     return (
@@ -390,30 +265,18 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
 
   if (!polls) return <PollListSkeleton />
 
-  // Faded in over the shape that was standing in for it, rather than swapped
-  // for it between two frames; see Reveal. Kept rows fade in too, under the
-  // heading flying back onto its card: there was no shape before them, but
-  // there was a poll's page, and a list that appeared between two frames in
-  // its place would be the one swap on the way back. Without the rise every
-  // other arrival has, though: the flight measures where its card is as the
-  // list mounts, and a list still rising then is a landing aimed a few pixels
-  // low — the heading came down, and then stepped up into place.
+  // Kept rows fade in without the rise: the returning flight measures its
+  // card on mount, and a rising list would make it land low.
   return (
     <Reveal rise={!kept}>
-      {/* The way back is the one every poll page carries, in the same place,
-          because it is the same act: back to the list. No flight — there is
-          no poll heading here to fly. */}
       {viewingRemoved && (
         <Box maw={720} mx="auto">
           <BackToList />
         </Box>
       )}
       <Stack maw={720} mx="auto" gap="md">
-        {/* One row: on the left the page's name, or the way to the archived
-            polls once there are any — the list is what anybody lands on, so
-            its name says nothing the page does not, and the archive is the
-            one other place it leads. The heading stays for a screen reader,
-            which has no other way to hear where it is. */}
+        {/* Once there are archived polls, the Archived button replaces the
+            visible heading (the heading stays for screen readers). */}
         <Group justify="space-between" gap="sm">
           <div>
             {!viewingRemoved && removedCount > 0 ? (
@@ -436,9 +299,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
               </Title>
             )}
           </div>
-          {/* Not on the archived list: a new poll goes on the other one, and
-              this page is a look at what was put away rather than somewhere
-              to start anything. */}
           {!viewingRemoved && (
             <Button
               component={Link}
@@ -450,10 +310,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
           )}
         </Group>
 
-        {/* The one thing a list made without an account most needs saying:
-            it lives in this browser's session, and nothing else knows it is
-            theirs. Clearing the site's data, or another device, is a list
-            nobody can get back. Signing in is how it stops being that. */}
         {anonymous && !viewingRemoved && (
           <Alert color="yellow" variant="light">
             <Text size="sm">
@@ -471,11 +327,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
           </Text>
         )}
 
-        {/* An empty list, and the sentence says which kind: one with nothing
-            in it, or one whose every poll was archived, which is a different
-            thing and would otherwise read as the app losing the reader's polls
-            in front of them. The way back is the sentence's other half: the
-            Archived button at the top of the list. */}
         {viewingRemoved && polls.length === 0 && (
           <Text c="dimmed" size="sm">
             No archived polls.
@@ -484,31 +335,21 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
         {!viewingRemoved && polls.length === 0 && (
           <Text c="dimmed" size="sm">
             {removedCount > 0
-              ? 'Every poll you\u2019re in has been archived.'
+              ? 'Every poll you’re in has been archived.'
               : anonymous
-                ? 'No polls yet. Create one, or open a poll\u2019s link.'
-                : 'No polls yet. Create one, wait for an invite, or open a poll\u2019s link.'}
+                ? 'No polls yet. Create one, or open a poll’s link.'
+                : 'No polls yet. Create one, wait for an invite, or open a poll’s link.'}
           </Text>
         )}
 
-        {/* Keyed by the page the rows are of, so a page turn is a new set of
-            cards and the old set can be pushed out as the new comes in; see
-            PollCards, which also closes the gap a removed poll leaves. */}
         <PollCards key={`${rowsOf.removed}:${rowsOf.page}`} turn={rowsOf}>
           {polls.map((poll) => {
-            // Dimmed under the press until the list re-reads without it, which
-            // is the only feedback a control has between being pressed and
-            // the card it is on going away.
             const moving = pending.has(poll.id)
-            // The same heading the poll's own page carries, at card size; see
-            // PollHeading. Built once, because it is also handed to the page
-            // the card opens, which draws it before it has read the poll.
+            // Also handed to the poll page, which draws it before its read.
             const heading: PollHeadingProps = {
               title: poll.title,
               description: poll.description,
-              // Null on an open poll that is here because this account
-              // answered it through its link, which is told no more about who
-              // made it than the link's own page is.
+              // Null for an open poll listed only because this account answered it.
               createdBy: poll.created_by === session?.user.id ? 'you' : poll.created_by_email,
               mode: poll.mode,
               showVoters: poll.show_voters,
@@ -526,15 +367,8 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                 soliciting: poll.soliciting,
                 resultsAvailable: poll.results_available,
                 closed: poll.is_closed,
-                // `undefined` rather than null where the database has not
-                // settled an answer — including a database old enough not to
-                // carry the columns at all — because null is a real answer
-                // here and means a poll that elected nobody.
-                //
-                // A group's row on this list *is* its first question, so this
-                // is that question's winner rather than the poll's. The badge
-                // withholds it on `inGroup`, in one place for all three
-                // screens, rather than leaving three callers to remember.
+                // `undefined` = not settled; null = no winner. A group row is
+                // its first question; the badge withholds it via `inGroup`.
                 winner: poll.winner_settled
                   ? winnerLabel(poll.winner_name ?? null, h24)
                   : undefined,
@@ -549,17 +383,8 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                 withBorder
                 className={`${classes.card} ${moving ? classes.leaving : ''}`}
               >
-                {/* The heading takes the whole width of the card, so the state
-                  badge beside the title sits in the corner like on every other
-                  screen. The control is pinned to the bottom right, which is
-                  the end of the row of badges, and that row keeps room for it
-                  (`reserve`) — so however the badges wrap on a phone, none of
-                  them ends up underneath it. */}
-                {/* The heading carried along in the navigation, so the page it
-                    opens draws it from the press; and the press flies it to
-                    the top of the page while the poll is read. A click that
-                    asks for a new tab or window is left to the browser. See
-                    lib/headingFlight.ts. */}
+                {/* A plain left-click launches the heading flight; modified
+                    clicks (new tab etc.) are left to the browser. */}
                 <Link
                   to={pollPath(poll.id)}
                   state={{ title: poll.title, heading, voted: poll.voted }}
@@ -576,6 +401,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                     launchFlight('poll', poll.id, headingIn(event.currentTarget, 'card'))
                   }}
                 >
+                  {/* `reserve` keeps room in the badge row for the pinned action. */}
                   <PollHeading
                     compact
                     tagsClassName={viewingRemoved ? classes.reserveWide : classes.reserve}
@@ -583,14 +409,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                   />
                 </Link>
 
-                {/* Archive on the list, Restore on the archived list: one
-                    control, whichever way round the card is. The tooltip says
-                    what archiving costs, because the silence is the part of it
-                    nobody would guess from the icon — and nothing here deletes,
-                    declines or leaves a poll, which a control on a card of
-                    somebody else's poll had better not look like it might. The
-                    label names the poll, because a screen reader hearing ten of
-                    these needs to know which one it is on. */}
                 {viewingRemoved ? (
                   <Button
                     variant="default"
@@ -627,13 +445,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
           })}
         </PollCards>
 
-        {/* The pager, once there is a second page: a pill floating at the
-            foot of the screen while the list scrolls under it, and settling
-            under the last card at the end (`pager` in PollList.module.css),
-            so the next page is never a scroll away in either direction. It
-            is drawn in the opposite colour scheme to the page's — dark on a
-            light page, light on a dark one — so it reads as a control laid
-            over the list rather than as one more card in it. */}
+        {/* A sticky pill at the foot of the screen; see `pager` in PollList.module.css. */}
         {pageCount > 1 && (
           <div className={classes.pager} data-scheme={pagerScheme}>
             <Pagination
@@ -644,8 +456,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
               gap={phone ? 4 : 8}
               onChange={(next) => {
                 setPage(next)
-                // The list is taller than a phone; landing halfway down the
-                // new page reads as nothing having happened.
                 window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
               }}
             />
@@ -656,12 +466,9 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
   )
 }
 
-/**
- * The poll the address has just moved on to, if it has moved on to one: what
- * a list going away while the address names a poll is opening.
- */
+/** The poll the address has just moved to, if it names one (`#/<id>`). */
 function pollOpening(): string | null {
-  const match = /^#\/polls\/([^/?]+)/.exec(window.location.hash)
-  if (!match || match[1] === 'new') return null
+  const match = /^#\/([^/?]+)/.exec(window.location.hash)
+  if (!match || !isPollParam(match[1])) return null
   return pollIdFromParam(match[1])
 }

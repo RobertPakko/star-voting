@@ -9,7 +9,7 @@ import type { OpenPollView, PollRead, PollStatus } from './types'
  * `poll_page` answers what the route is actually asking — *what may this
  * reader see at this address* — and hands back the page along with the
  * answer, so the two are one request rather than a guess followed by a
- * correction. See `PollPage` in App.tsx.
+ * correction. See `PollPage` in pages/PollPage.tsx.
  *
  * It goes through `openPollRpc` so the About page's sample answers out of its
  * file like every other open-poll read; asking the database about

@@ -20,24 +20,10 @@ import { Banners } from './Banners'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
 
 /**
- * The whole voting experience for an open poll, driven by the poll's id --
- * which, on an open poll, is the link.
- *
- * Used twice: for people who never sign in, and inside the creator's own
- * poll page so they can vote in their own poll without going through the
- * link. Both go through the same anon-callable RPCs, so there is one code
- * path and one set of rules.
- *
- * It covers every stage an open poll can be in, because every one of them
- * is reached through the same link: collecting options, taking votes, and
- * showing the result.
- *
- * The view is handed in rather than fetched here. Both pages already read
- * it, they render the poll's title and tags around this panel, and both
- * now re-read it whenever the database says it moved, so fetching it here as
- * well would mean two copies of the same poll on one screen, answering the
- * same signal separately and free to disagree about whether it has closed.
- * The page owns the poll; this renders it and reports a vote back.
+ * An open poll at every stage -- collecting, voting, results -- through the
+ * anon RPCs. Used on the public page and on the creator's own page, so the
+ * creator votes exactly as everyone else does. The page owns and re-reads the
+ * view; this renders it and reports back.
  */
 export function OpenPollPanel({
   pollId,
@@ -56,118 +42,56 @@ export function OpenPollPanel({
 }: {
   pollId: string
   view: OpenPollView
-  /**
-   * The tally, when the page above already has it — handed down for the same
-   * reason `view` is, and by the same route: `poll_page` brings it on a poll
-   * whose results are out, so the card below draws it rather than asking for
-   * it a round trip later. Null everywhere else, which is where that card has
-   * always started. See 0050 and `Results`.
-   */
+  /** The tally, when `poll_page` carried it. */
   results?: PollResults | null
-  /** The published ballot sheet, handed down for the same reason. */
+  /** The published sheet, likewise. */
   ballots?: BallotSheet | null
-  /**
-   * The name this browser is answering under, held by the page. A share link
-   * carries no account, so a poll that shows its respondents has to ask for
-   * one — on the ballot and on the card the option list is confirmed from,
-   * which is why this is handed to both from here rather than kept in either.
-   * A poll that names nobody asks for nothing and is handed nothing; see
-   * VoterNameField for why the page is what holds it.
-   */
+  /** The name to answer under, held by the page; only asked where the poll shows respondents. */
   voterName?: VoterName
-  /**
-   * The creator reading their own open poll. It buys them the `×` on each
-   * option while the list is still being collected, and the second person in
-   * the sentences below — "once you close the poll" rather than "once the
-   * poll's creator does". It no longer buys an early look at the roster,
-   * because nobody's is late any more; see `participation`.
-   */
+  /** The creator reading their own open poll: option removal and second-person wording. */
   isCreator?: boolean
   /** A ballot went in, or the option list moved: the page re-reads the poll. */
   onChanged: () => void
   /**
-   * A *first* ballot went in from this browser, as against a changed one.
-   * Offered so a poll of several questions can move the voter on to the next
-   * one, which is the whole of what a voter does next; a revision is a
-   * deliberate return to a question already behind them and moving them on
-   * from it would undo the trip they made.
-   *
-   * It **replaces** `onChanged` on that path rather than joining it: the page
-   * that takes this is leaving the question, and a re-read of the question
-   * being left would land after the next one had loaded. Absent on the last
-   * question and on a poll that asks one, where there is nowhere to go and
-   * re-reading is exactly right.
+   * A first ballot went in (not a revision), so a multi-question poll can move
+   * on. Replaces `onChanged` on that path; absent where there is nowhere to go.
    */
   onFirstVote?: () => void
-  /**
-   * The same, one stage earlier: a *first* confirmation of this question's
-   * option list, as against one taken back. A poll of several questions
-   * collects a list for each, so the reader who has finished with this one is
-   * moved to the next list they owe exactly as a first ballot moves them to
-   * the next question. Absent where there is nowhere to go.
-   */
+  /** The same for a first confirmation of the option list. */
   onFirstConfirm?: () => void
-  /**
-   * Navigation between the poll's questions, drawn at every stage this panel
-   * can be in. Inside the card wherever there is one card — the option list,
-   * the ballot, the card a voter comes back to — and above the block where
-   * there is not, which is the tally.
-   */
+  /** Drawn inside the card where there is one, above the tally where there isn't. */
   questionStrip?: ReactNode
-  /** The results came out while the page was watching; see useResultsLanding. */
   resultsLive?: boolean
-  /**
-   * Whether this reader removed the poll from their list, where the page's
-   * read said — `poll_page` carries it — for the card they are left waiting
-   * on. Undefined is that card asking for itself. See `Banners`.
-   */
+  /** Whether the reader removed the poll from their list; see `Banners`. */
   removed?: boolean
-  /** Told when the reader puts the poll back from that card. */
   onRestored?: () => void
 }) {
-  // Whether this poll asks a name at all, which is the one rule both stages
-  // apply: a share link has no account to name whoever is answering, so a
-  // poll that shows its respondents asks, and one that hides them asks for
-  // none and stores none. `open_poll_submit` and `open_poll_confirm_options`
-  // both discard the name on such a poll whatever the client sends.
+  // A share link has no account, so a poll that shows respondents asks for a
+  // name; one that hides them stores none whatever is sent.
   const needsName = view.poll.show_voters
+  const schedule = view.poll.kind === 'time' ? view.poll.schedule : null
 
-  // What a watch on this poll is filed under here: its group, so that every
-  // question of a poll says the same thing about it. See lib/push.ts.
+  // Watches are filed per group, so every question agrees. See lib/push.ts.
   const watchKey = view.poll.group_id ?? pollId
-  // Only a voter holding the link watches. The creator is the one who opens
-  // and closes the poll, so there is nothing to tell them; and the About
-  // page's sample is a file, with nobody on the other end to send anything.
+  // The creator runs the poll, and the sample has nobody to send anything.
   const canWatch = !isCreator && !isSampleId(pollId)
   const finished = view.results_available || view.is_closed
 
-  // A signed-in voter does not watch: their ballot or confirmation carries
-  // their account, and an account that has answered an open poll is part of
-  // its audience (see poll_answering_accounts), so it hears about the poll on
-  // whichever channels its settings allow, on every device it is bound to,
-  // with nothing to press and nothing for this page to file.
-  //
-  // Signed in without an account is signed out for this purpose: the account
-  // has no address, and a poll's audience is made of addresses, so its ballot
-  // puts it in no audience and the watch is the only way it hears.
+  // A signed-in account that answers is in the poll's audience already (see
+  // poll_answering_accounts), so it files no watch. An anonymous session has
+  // no address to be in an audience by, so it watches like a signed-out reader.
   const { session, anonymous } = useAuth()
   const signedIn = !!session && !anonymous
 
-  // What stands under the card a reader is left waiting on: where the push
-  // switch is and that the site installs, the same for an account and a link.
   function waiting(stage: 'opening' | 'results') {
     return canWatch ? (
       <Banners moment={stage} pollId={pollId} removed={removed} onRestored={onRestored} />
     ) : null
   }
 
-  // A signed-out reader who has turned push on from the gear menu gets a
-  // watch on every open poll they have answered here, filed the first time
-  // this page sees one that is not watched yet — which is the moment they
-  // vote or confirm, and for a poll answered before the switch went on, the
-  // next time it is opened. Nothing to press on the poll itself; the switch is
-  // the ask. A failure is let go: the page says nothing about watches, and the
-  // next visit tries again.
+  // With link push on, file a watch on any answered poll not yet watched --
+  // at the vote, or on the next visit for one answered earlier. Failures are
+  // ignored; the next visit retries.
   const pushHere = usePushHere(undefined)
   const watching = useWatching(watchKey)
   const answered = view.soliciting ? !!view.confirmed : view.voted
@@ -176,42 +100,29 @@ export function OpenPollPanel({
     watchPoll(pollId, watchKey).catch(() => {})
   }, [canWatch, signedIn, pushHere, finished, answered, watching, pollId, watchKey])
 
-  // The database dropped the watch when it announced the results; the mirror
-  // of it in this browser goes too, so a poll that is reopened later does not
-  // claim a watch that no longer exists.
+  // The database dropped the watch at the results; drop the mirror too.
   useEffect(() => {
     if (finished) forgetWatch(watchKey)
   }, [finished, watchKey])
 
-  // Before anything else, because a poll still collecting its options has no
-  // ballot to show and no result to show either. It carries the strip the
-  // ballot carries, in the same place: a poll of several questions collects a
-  // list for each of them, so this stage needs the way between them exactly
-  // as the next one does.
   if (view.soliciting) {
     return (
       <Stack gap="md">
         <CollectOptions
           source={{ kind: 'open', pollId }}
           options={view.options}
-          // A time poll collects windows rather than typed names, so the list
-          // is a calendar; see CollectOptions.
-          schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
+          schedule={schedule}
           isCreator={isCreator}
           voterName={needsName ? voterName : undefined}
           questionStrip={questionStrip}
           confirm={
-            // Undefined against a database whose open_poll_view predates the
-            // field, and then there is no button rather than one that could
-            // only fail; the same rule `your_scores` follows for "Edit vote".
+            // No button against a database that doesn't report it.
             view.confirmed === undefined
               ? undefined
               : {
                   confirmed: view.confirmed,
-                  // Never: an open poll has no list of people, so there is no
-                  // set of them who could all have confirmed and no press that
-                  // could be the last one. Its creator ends the stage. How many
-                  // have is in the count badge above, like everywhere else.
+                  // An open poll has no participant list, so no confirmation
+                  // can be the last one; its creator ends the stage.
                   opensWhenEveryoneHas: false,
                 }
           }
@@ -219,32 +130,14 @@ export function OpenPollPanel({
           onConfirmed={onFirstConfirm ?? onChanged}
         />
 
-        {/* Who is done, on a poll that names them. No embargo, unlike the
-            voter roster below: what that one withholds is the order ballots
-            arrived in, and a poll still collecting its options has no ballots
-            to attach an order to. Knowing who has finished is the whole point
-            of the stage. */}
         {view.confirmations && <Confirmations names={view.confirmations} />}
 
-        {/* Once this reader has said they are done: the next thing that
-            happens is the creator opening the poll, and there is no telling
-            when, which is what a notification is for. One watch or follow
-            covers the poll's opening and its results alike. */}
         {view.confirmed && waiting('opening')}
       </Stack>
     )
   }
 
-  // Who has voted, on a poll that names them. Only the names: how many is in
-  // the header badge, once, on every screen the poll appears on.
-  //
-  // One condition and no second one. It was once held back until you had
-  // voted, because watching a roster fill up is a live feed of the arrival
-  // order — but that bought a narrower version of a leak it could not close (a
-  // voter still sees everyone arriving after them) at the price of one card
-  // behaving three ways. A poll that says it shows who has responded shows it,
-  // to everyone in it, whichever stage it is at; one that hides them renders
-  // nothing here, and the header has already said how many and why.
+  // Names only; the count is in the header badge. Null when respondents are hidden.
   const participation = view.voters ? (
     <NameRoster title="Voters" names={view.voters} empty="Nobody has voted yet." />
   ) : null
@@ -252,11 +145,6 @@ export function OpenPollPanel({
   if (view.results_available) {
     return (
       <Stack gap="md">
-        {/* Above the tally rather than inside it, which is the one place this
-            strip is not inside a card — there is no one card here for it to
-            be inside, and a tally still loading, or a read of it that failed,
-            must not take the way out of the question with it. The invite
-            reading places it the same way, for the same reason. */}
         {questionStrip}
         <Suspense fallback={<ResultsSkeleton options={view.options.length || undefined} />}>
           <Results
@@ -270,49 +158,32 @@ export function OpenPollPanel({
             live={resultsLive}
           />
         </Suspense>
-        {/* Gated in the database on the same terms as the results, so this
-            condition only decides whether to ask. */}
         {participation}
-        {/* This reader's own ballot, where the poll withholds everybody's —
-            the open side of what YourBallot does for an invite poll, standing
-            in the same place. Nothing is asked for: open_poll_view already
-            hands `your_scores` back at every stage, found by the account that
-            cast it or by this browser's key, so this is the ballot the reader
-            could have opened behind Edit vote an hour ago, shown one stage
-            later. A poll that publishes its ballots is already showing it, on
-            the grid below with everybody else's. */}
+        {/* Where ballots are private, the reader's own, from `your_scores`. */}
         {!view.poll.show_ballots && view.voted && view.your_scores && (
           <Suspense
             fallback={
-              <YourBallotSkeleton
-                rows={view.options.length || undefined}
-                schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
-              />
+              <YourBallotSkeleton rows={view.options.length || undefined} schedule={schedule} />
             }
           >
             <YourBallot
               pollId={pollId}
               options={view.options}
               scores={view.your_scores}
-              schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
+              schedule={schedule}
             />
           </Suspense>
         )}
         {view.poll.show_ballots && (
           <Suspense
-            fallback={
-              <BallotsSkeleton
-                rows={view.voted_count || undefined}
-                schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
-              />
-            }
+            fallback={<BallotsSkeleton rows={view.voted_count || undefined} schedule={schedule} />}
           >
             <Ballots
               source={{ kind: 'open', pollId }}
               title={view.poll.title}
               question={view.poll.question_title}
               initial={ballots}
-              schedule={view.poll.kind === 'time' ? view.poll.schedule : null}
+              schedule={schedule}
             />
           </Suspense>
         )}
@@ -358,18 +229,8 @@ export function OpenPollPanel({
 }
 
 /**
- * The card someone who has voted through the link comes back to, and the
- * ballot behind it when they want it changed.
- *
- * Everything it needs is already here: `open_poll_view` hands this reader
- * their own scores back alongside the poll, reached with the voter_key that
- * cast them or, signed in, the account that did — so the ballot cast on the
- * laptop is the one the phone comes back to. Signed out, changing a vote costs
- * no request until there is a changed vote to send; signed in, pressing Edit
- * vote reads the ballot again first, since another device may have changed
- * it. This is only ever rendered while the
- * results are still sealed — the branch above returns before it otherwise —
- * which is the same window `open_poll_revise` will accept a change in.
+ * "Your vote is in", and the ballot behind it when changing. Only rendered
+ * while results are sealed, which is the window `open_poll_revise` accepts.
  */
 function Voted({
   pollId,
@@ -382,31 +243,20 @@ function Voted({
   pollId: string
   view: OpenPollView
   isCreator: boolean
-  /** A changed ballot went in: the page re-reads the poll. */
   onRevised: () => void
   questionStrip?: ReactNode
-  /** What stands under the card: see `waiting` above. */
   banner?: ReactNode
 }) {
   const { session } = useAuth()
-  // The scores the ballot being changed opens with, or null when nobody is
-  // changing it.
   const [revising, setRevising] = useState<Record<string, number> | null>(null)
   const [fetching, setFetching] = useState(false)
-  // A database that predates `your_scores` returns undefined, and a ballot
-  // that cannot be handed back is a ballot that cannot be changed. Better to
-  // offer nothing than a button that opens an empty ballot and silently
-  // zeroes what somebody scored.
+  // Without `your_scores` (older database), offer no Edit rather than an
+  // empty ballot that would overwrite real scores.
   const scores = view.your_scores
 
-  // Signed out, the scores in hand are the ones to open with: only this
-  // browser's key reaches this ballot, so nothing can have changed it that
-  // this page did not. Signed in, the ballot is the account's and another
-  // device may have changed it since this page last read — and a change
-  // announces nothing (see "Changing your vote" in AGENTS.md), so opening the
-  // copy in hand could hand the voter an old ballot to overwrite a newer one
-  // with. So that press asks first, the way an invite ballot's Edit vote
-  // always has, and falls back to what is in hand if the read fails.
+  // Signed out, only this browser's key reaches the ballot, so the scores in
+  // hand are current. Signed in, another device may have changed it (silently),
+  // so re-read first, falling back to what is in hand.
   const edit = async () => {
     if (!scores) return
     if (!session) {
@@ -472,19 +322,9 @@ function Voted({
 }
 
 /**
- * The ballot behind a share link, filled in for the first time or filled in
- * again.
- *
- * Everything a voter touches is `BallotCard`, which is the same card the
- * invite side puts up; what is here is what an open poll's ballot alone has
- * to deal with. That is the name — a share link carries no account, so a poll
- * that shows who has responded has to ask — and the RPCs it goes to, which
- * take a voter key in place of one.
- *
- * The name field is gone from a revision, because a name on an open poll is
- * already on the roster everyone else is reading and `open_poll_revise` will
- * not change it. What somebody is changing is their vote, which is the only
- * part of that ballot nobody has seen.
+ * An open poll's ballot, new or being changed. `BallotCard`/`TimeBallotCard`
+ * draws it; this adds the name and the voter-key RPCs. A revision has no name
+ * field: the name is already on the roster and `open_poll_revise` won't change it.
  */
 function OpenBallot({
   pollId,
@@ -498,44 +338,31 @@ function OpenBallot({
   questionStrip,
 }: {
   pollId: string
-  /** Which ballot to put up, and the grid to draw it on if it is a calendar. */
   poll: Pick<OpenPollView['poll'], 'kind' | 'schedule' | 'group_id'>
   options: PollOption[]
-  /** The name to vote under, on the polls that ask; absent on a revision. */
+  /** Absent on a revision and on polls that don't ask. */
   voterName?: VoterName
   isCreator: boolean
-  /** The scores already on this browser's ballot; absent when casting one. */
+  /** The scores already on this ballot; absent when casting one. */
   initial?: Record<string, number>
   onVoted: () => void
-  /** Offered only when changing a vote; leaves the ballot as it stands. */
+  /** Offered only when changing a vote. */
   onCancel?: () => void
   questionStrip?: ReactNode
 }) {
   const revising = initial !== undefined
   const { session } = useAuth()
-  // Kept in this browser until it goes in, under whoever is signed in; see
-  // lib/ballotDraft.ts. A revision keeps nothing: the server holds that ballot.
+  // A new ballot is drafted in this browser until it goes in; a revision isn't.
   const draft: DraftScope | undefined = revising
     ? undefined
     : { pollId, groupId: poll.group_id ?? null, owner: session?.user.id ?? null }
 
-  /**
-   * Dismissing the on-screen keyboard on a phone does not blur the field it
-   * belongs to, so focus never moves off the name box on its own. Left alone,
-   * every score a voter gives pops the keyboard back up over the ballot.
-   * Dropping focus as the tap starts, before the browser decides whether to
-   * re-open the keyboard, leaves the stars tappable in peace.
-   */
+  // Closing a phone keyboard doesn't blur the field, so every star tap would
+  // pop it back up. Drop focus as the tap starts.
   function releaseNameFocus() {
     voterName?.blur()
   }
 
-  /**
-   * The one thing to be happy about before any of this is sent. The name is
-   * the one thing on this ballot that can be wrong, so it is marked on the
-   * box rather than as a line above the submit button, where it sat below the
-   * field it was about.
-   */
   function checkName() {
     return !voterName || voterName.check('Enter your name so the group can see who has voted.')
   }
@@ -556,9 +383,6 @@ function OpenBallot({
     if (error) throw new Error(error.message)
   }
 
-  // Two ballots, one submit path: whichever of them is on screen produces the
-  // same BallotScore[] and sends it through the same open_poll_submit. See
-  // BallotFrame, which is everything the two have in common.
   if (poll.kind === 'time' && poll.schedule) {
     return (
       <Suspense

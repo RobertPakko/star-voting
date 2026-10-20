@@ -6,35 +6,12 @@ import classes from './PollTags.module.css'
 import { announce } from '../lib/announce'
 
 /**
- * A poll's high-level details, in the same shape on every screen that shows
- * a poll: a row of badges saying what kind of poll it is, and one badge
- * beside the title saying where it has got to.
- *
- * The row is the same four badges everywhere, in the same order: **invite
- * only/open link**, respondents shown/hidden, ballots published/private, then
- * how many have answered. The three settings run in the order `CreatePoll`
- * asks them, so the form that sets a poll's terms and the row that reports
- * them tell one story in one order. The count comes last because it is the
- * only one that is not a setting: it is the poll happening rather than its
- * terms.
- *
- * **Both states of every setting are always shown.** A tag that appeared for
- * only one of its states made its absence carry the other, and "no tag" is not
- * something anyone reads.
- *
- * The wording is deliberately not symmetrical: respondents are shown or
- * *hidden* — hiding them lists nobody, which is not the same as listing them
- * anonymously — while ballots are published or private. An anonymous ballot is
- * the two together: respondents hidden, ballots published.
- *
- * These tags are the only place a voter is told what happens to their ballot,
- * so every page carrying a ballot puts them above it, and every one of these
- * strings is decided here.
- *
- * **Where the poll has got to is not in this row.** It is a state rather than
- * a setting, the one thing on a card that moves on its own, and the only part
- * worth reading before deciding whether to open the poll — so it sits beside
- * the title as `PollStateBadge`, where a row of settings cannot bury it.
+ * The row of four badges describing a poll, identical on every screen: mode,
+ * respondents, ballots (in the order CreatePoll asks), then the count. Both
+ * states of each setting are always shown, since an absent tag reads as
+ * nothing. Every string here is decided here; this is the only place a voter
+ * is told what happens to their ballot. See "Poll settings are frozen at
+ * creation" in AGENTS.md.
  */
 export function PollTags({
   mode,
@@ -49,28 +26,15 @@ export function PollTags({
   showBallots: boolean
   /** For a caller that has to keep room at the end of the row; see PollList. */
   className?: string
-  /**
-   * The numbers behind the count badge. Left off entirely; rather than
-   * passed as zero; where the poll withholds participation from this
-   * reader, since a badge saying nobody has voted is not the same as no
-   * badge at all.
-   */
+  /** Omit (not zero) where the count isn't known yet. */
   turnout?: Turnout
-  /**
-   * Say a change of count to a screen reader, as the highlight says it to
-   * everybody else. The poll's own page only: a list of ten polls announcing
-   * each other's votes would be noise. See lib/announce.ts.
-   */
+  /** Announce count changes to screen readers -- the poll's own page only. */
   announceChanges?: boolean
 }) {
-  // The badge's own words, worked out before the badge so that whether they
-  // have changed is a question that can be asked at all.
   const label = turnout ? turnoutLabel(turnout) : null
   const { changes, was, settled } = useChangeCount(label)
 
-  // Spoken with "of" for the slash, which a screen reader reads out as a
-  // word. A count arriving where there was none is the page finishing its
-  // read, not a change, and says nothing.
+  // "of" for the slash, which a screen reader would read literally.
   useStateAnnouncement(announceChanges && label ? label.replace(/^(\d+)\/(\d+)/, '$1 of $2') : null)
 
   return (
@@ -93,18 +57,11 @@ export function PollTags({
       {turnout && (
         <Badge
           {...countBadge}
-          /* Re-mounted on every change, which is what makes the highlight
-             play every time rather than only the first: a CSS animation
-             already running does not restart because the class it came from
-             is still there. Nothing is lost by the remount — a badge holds no
-             state and takes no focus. */
+          // Remounted per change so the highlight animation restarts.
           key={changes}
           className={changes > 0 ? classes.bumped : undefined}
         >
-          {/* And the words themselves roll, the old count leaving upwards as
-              the new one comes up from under it — an odometer, which is the
-              shape everybody already reads as a number going up. The badge's
-              label clips it, so nothing spills out of the pill. */}
+          {/* The old count rolls up and out as the new one rolls in. */}
           {changes > 0 && was ? (
             <span className={classes.roll}>
               <span className={classes.rollOut} aria-hidden onAnimationEnd={settled}>
@@ -122,28 +79,10 @@ export function PollTags({
 }
 
 /**
- * How many times a value has changed since this was first rendered — which is
- * a different question from what it is now, and the one a highlight has to
- * answer.
- *
- * Starts at 0 and stays there for the first value, however that value got
- * here: the count a page opens holding is not news, and a badge that flashed
- * on arrival would be announcing that the page had loaded.
- *
- * It counts every change, including the reader's own vote going in. That is
- * deliberate — a ballot lands, the page re-reads, and the badge is where the
- * poll admits it — and it costs nothing on the one screen where the reader
- * already knows, because the notification saying so is on screen at the same
- * moment saying the same thing.
- *
- * Hands back what the value was before the last change as well, which is
- * what the badge rolls away as the new one rolls in, and `settled`, which
- * lets it go once it has: left in the pill, invisible, it was still part of
- * the badge's text, so copying "1 vote" gave "0 votes1 vote".
- *
- * Worked out while rendering rather than in an effect, so the frame the new
- * words are first drawn in is already the first frame of the roll, rather
- * than a frame of the new words standing still before they roll in again.
+ * How many times `value` has changed since first render (the first value
+ * isn't news), and the previous value for the roll. `settled` drops it once
+ * the roll ends -- otherwise copying the badge gave "0 votes1 vote". Computed
+ * during render so the first frame of new text is already rolling.
  */
 function useChangeCount(value: string | null): {
   changes: number
@@ -158,46 +97,25 @@ function useChangeCount(value: string | null): {
   return { changes: state.changes, was: state.was, settled }
 }
 
-/** What the count badge counts, which is not the same at every stage. */
+/** What the count badge counts. */
 export interface Turnout {
   soliciting: boolean
   mode: PollMode
   votedCount: number
   invitedCount: number
-  /**
-   * How many people have said they are done adding options — the badge's whole
-   * content while the poll is collecting, because it is the number that is
-   * moving then. Undefined against a database whose `poll_status` and
-   * `list_polls` predate the column, which is the only reason `optionCount`
-   * below still exists.
-   */
+  /** Confirmations, shown while collecting. Undefined only against an older database. */
   confirmedCount?: number
-  /** How many options the poll holds. Only the fallback for the line above. */
+  /** Fallback for a missing `confirmedCount`. */
   optionCount: number
-  /**
-   * How many questions the poll asks. Above one it takes the badge over
-   * entirely; see turnoutLabel.
-   *
-   * Every screen that draws a poll passes it, so one poll wears one badge
-   * wherever it is read. A page that does not yet know leaves `turnout` off
-   * altogether rather than passing this undefined, since a turnout drawn now
-   * is a turnout rewritten in a moment.
-   */
+  /** Above one, the badge shows the question count instead of a turnout. */
   questionCount?: number
 }
 
 /**
- * How many have answered so far; which is not the same question at every
- * stage, and the badge says whichever one the poll is actually asking.
- *
- * It stays on the card after the poll closes. It used to be replaced by
- * "Results ready" the moment they were, which threw away the turnout the
- * result was reached on at exactly the point it became a permanent fact
- * about the poll; and said nothing the state badge does not now say better.
- *
- * Not exported: every string this file decides is decided in this file, and
- * a helper the callers could reach would be a second place for the wording
- * to drift to.
+ * The count: questions on a multi-question poll (their turnouts differ),
+ * confirmations while collecting, votes otherwise. Open polls have no invite
+ * list, so no denominator. Kept after close, as the turnout the result was
+ * reached on.
  */
 function turnoutLabel({
   soliciting,
@@ -208,70 +126,27 @@ function turnoutLabel({
   optionCount,
   questionCount,
 }: Turnout): string {
-  // A poll that asks several questions has no turnout, only turnouts: each
-  // question takes its own ballots, and the numbers come apart the moment
-  // one person answers three of five. Reporting the first question's count
-  // as the poll's would be a number that reads like the whole and is not,
-  // so the badge says the one thing about the shape of the poll that is
-  // true of all of it — how much of it there is to answer.
   if (questionCount !== undefined && questionCount > 1) {
     return `${questionCount} questions`
   }
   if (soliciting) {
-    // Turnout is zero until the list is settled, so this stage counts what is
-    // actually moving — and that is people, not options: seven options is
-    // seven people with an idea each or one person with seven, and neither is
-    // distinguishable from a poll nobody opened. Counting who is *done* has
-    // the same shape and denominator as the turnout it gives way to, so "2/5
-    // confirmed" today and "5/5 votes" next week count the same list of
-    // people.
-    //
-    // The option count is the fallback and nothing else, for a browser talking
-    // to a database that predates the confirmations.
     if (confirmedCount === undefined) {
       return `${optionCount} ${optionCount === 1 ? 'option' : 'options'}`
     }
-    // No invite list, so no denominator to count towards — the same reason
-    // an open poll's turnout below is a bare number.
     if (mode === 'open') return `${confirmedCount} confirmed`
     return `${confirmedCount}/${invitedCount} confirmed`
   }
   if (mode === 'open') {
-    // No invite list, so no denominator to count towards.
     return `${votedCount} ${votedCount === 1 ? 'vote' : 'votes'}`
   }
   return `${votedCount}/${invitedCount} votes`
 }
 
 /**
- * Where the poll has got to, in one badge beside its title: collecting its
- * options, in progress, or finished; and a finished poll names the option
- * that won, because that is the answer the whole poll was for and the reason
- * anybody opens it again months later.
- *
- * The name is not prefixed with "Winner:". The badge is green, it sits where
- * every other poll's state sits, and the polls around it read *In progress*
- * and *Collecting options*.
- *
- * Three outcomes are told apart rather than collapsed, because a reader
- * scanning a list of finished polls needs *what happened*, and "ready to look
- * at" is not that:
- *
- *  - a name: the option STAR elected;
- *  - *Tie*: the election ran and settled nothing, which STAR can genuinely
- *    produce and the app reports rather than inventing a result. It carries
- *    the colour of a tie-break that decided nothing;
- *  - *Results ready*: finished, and no single option is this badge's to name.
- *    A real state, not a fallback: a poll of several questions has a winner
- *    per question, so the badge names none and the question the reader opens
- *    names its own. A database older than the winner columns and a read that
- *    failed arrive here too. It must never read as *Tie*, which would be a
- *    wrong answer rather than a missing one.
- *
- * **Nothing here waits on anything.** `list_polls`, `poll_status` and
- * `open_poll_view` all carry the winner, so every state below is decided by
- * the read that drew the page — no in-flight case, and no flicker through
- * *Results ready* on the way to a name.
+ * Where the poll has got to, beside its title: collecting, in progress,
+ * closed, or finished -- naming the winner, *Tie* for no winner, or *Results
+ * ready* when there is no single name to give (a multi-question poll, or an
+ * answer this page wasn't told). *Results ready* must never read as *Tie*.
  */
 export function PollStateBadge({
   soliciting,
@@ -284,25 +159,14 @@ export function PollStateBadge({
   soliciting: boolean
   resultsAvailable: boolean
   closed: boolean
-  /**
-   * The option that won, `null` for a poll that elected nobody, and
-   * `undefined` for one whose result this page has not been told — a database
-   * older than the columns that carry it, or a read that failed.
-   */
+  /** The winner; null for no winner; undefined when not told. */
   winner?: string | null
   /**
-   * Whether this poll asks more than one question, in which case there is no
-   * winner for this badge to name and it says so before it looks.
-   *
-   * Decided here rather than by each caller passing `winner: undefined`,
-   * because "a poll of several questions names none of them" is one rule and
-   * three screens draw this badge. Left to the callers, the poll list could
-   * not keep it: a group's list row *is* its first question, so walking back
-   * from that question handed the group's card the name it had just been told
-   * to withhold.
+   * A multi-question poll, which names no winner. Decided here rather than by
+   * callers, since a group's list row is its first question and would
+   * otherwise carry that question's winner.
    */
   inGroup?: boolean
-  /** As on `PollTags`: say where the poll has got to when that moves. */
   announceChanges?: boolean
 }) {
   useStateAnnouncement(
@@ -320,11 +184,7 @@ export function PollStateBadge({
   }
 
   if (resultsAvailable) {
-    // A poll of several questions, whose answer is one per question rather
-    // than one at all. Ahead of everything below, including the wait: there
-    // is nothing in flight for it and nothing that could arrive, so this is
-    // its final state rather than a placeholder for one.
-    if (inGroup) {
+    if (inGroup || winner === undefined) {
       return (
         <Badge color={badgeColor.done} variant="light" style={{ flexShrink: 0 }}>
           Results ready
@@ -338,25 +198,8 @@ export function PollStateBadge({
         </Badge>
       )
     }
-    // Finished, and nothing is going to tell this page what it decided: a
-    // read that failed, or a database older than the columns carrying the
-    // answer. A poll with several answers rather than one was caught above.
-    if (winner === undefined) {
-      return (
-        <Badge color={badgeColor.done} variant="light" style={{ flexShrink: 0 }}>
-          Results ready
-        </Badge>
-      )
-    }
-    // The only badge whose text belongs to the poll rather than to the app,
-    // and so the only one with a ceiling: an elected option can be a sentence,
-    // and past 40% of the heading's row the name ellipsises with the whole of
-    // it on the `title` attribute. Every other badge is a fixed phrase the app
-    // wrote and knows the length of, and keeps its width instead.
-    //
-    // 40% is a *max-width* rather than a basis, which is what makes the badge
-    // exactly as wide as its name up to that point and the title's 60% a floor
-    // rather than a serving. See PollHeading.
+    // The one badge holding the poll's own text, so the only one capped:
+    // up to 40% of the heading row, ellipsised beyond. See PollHeading.
     return (
       <Badge
         color={badgeColor.done}
@@ -371,8 +214,6 @@ export function PollStateBadge({
   }
 
   if (closed) {
-    // Closed with nothing in it: there is no result to name, and never will
-    // be unless the creator opens it again.
     return (
       <Badge color={badgeColor.closed} variant="light" style={{ flexShrink: 0 }}>
         Closed
@@ -387,10 +228,7 @@ export function PollStateBadge({
   )
 }
 
-/**
- * Where a poll has got to, as a sentence a screen reader can say when it
- * moves: the badge's state, in words that make sense heard on their own.
- */
+/** The badge's state as a sentence for a screen reader. */
 function stateSentence({
   soliciting,
   resultsAvailable,
@@ -415,9 +253,8 @@ function stateSentence({
 }
 
 /**
- * Announces a sentence each time it changes, and not the first time: the
- * state a page opens in is read with the page. Nor from or to nothing, which
- * is a page still reading or a badge it no longer draws.
+ * Announce a sentence when it changes -- not on first render, and not to or
+ * from null (still loading, or no longer drawn).
  */
 function useStateAnnouncement(sentence: string | null) {
   const previous = useRef(sentence)

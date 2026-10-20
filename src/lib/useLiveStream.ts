@@ -1,182 +1,69 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { readLedger } from './readLedger'
 import { supabase } from './supabase'
 
 /**
- * The minimum time between reads caused by live signals.
- *
- * A signal reads immediately when the page is idle, then further signals in
- * the interval share one trailing read. A creator pasting in six invitees
- * therefore gets a prompt first update without six reads of the same poll.
+ * Minimum gap between reads caused by signals: an idle page reads at once,
+ * and a burst shares one trailing read.
  */
 const SETTLE_MS = 250
 
 /**
- * How long a page will sit with no working subscription before it says so.
- *
- * A socket that drops and comes straight back is the ordinary weather of a
- * laptop moving between networks, and a warning that flashes up every time is
- * worse than no warning at all. This is the pause that tells a blip apart
- * from a page that is genuinely no longer being told anything.
- */
-const GRACE_MS = 8000
-
-/**
- * How long to wait before asking again after a read that failed, and how many
- * times to bother.
- *
- * Nothing follows a failed read on its own — the next one comes when somebody
- * votes, and on the last vote of a poll that is never — so without this, one
- * dropped request leaves a page showing a ballot for a poll that has closed.
- *
- * A read failing while the socket is up is the unusual case, because the
- * common kinds of trouble take the socket with them and reconnecting already
- * re-reads. So this is short and gives up quickly: past that, the honest thing
- * is to stop guessing and tell the reader.
+ * Retry after a failed read, a few times. Nothing else would trigger the next
+ * read on a quiet poll, so one dropped request could otherwise leave a page
+ * stale for good.
  */
 const RETRY_MS = 5000
 const RETRY_LIMIT = 5
 
 /**
- * How long a page waits for a subscription before reading anyway.
- *
- * On a network that blocks websockets outright — the corporate proxy, the
- * hotel captive portal — nothing would ever subscribe, so nothing would ever
- * read, and the poll would sit behind its skeleton for good. Losing live
- * updates there is a decision this app has made; losing the poll is not.
- *
- * Once per page rather than on a repeat: a floor under the page, not a timer
- * creeping back in. A healthy socket subscribes in a fraction of this and
- * cancels it on the way past.
+ * Read anyway if subscribing hasn't worked by then, so a network that blocks
+ * websockets loses live updates but still shows the poll. Once per page.
  */
 const FIRST_READ_MS = 5000
 
-/**
- * Whether the page in front of the reader is still being told about changes.
- *
- * `connecting` covers both the first moments and any later gap short enough
- * not to be worth mentioning; `offline` is a socket that has given up.
- */
-export type LiveStatus = 'connecting' | 'live' | 'offline'
-
-/** What a watching page gets back: what to say, and how to ask. */
 export interface LiveStream {
   /**
-   * Whether the page is still being told. Nothing puts this on screen: a
-   * socket that is slow to join is the common case, and a page that catches up
-   * a little late is no great loss, so a notice about it flashed up for no
-   * reason more often than it helped.
-   */
-  status: LiveStatus
-  /**
-   * Read now, through the same funnel a signal goes through.
-   *
-   * This is for a page that has just written something and wants what it
-   * wrote on screen. It exists because the alternative — the page calling its
-   * own read directly — is a *second* funnel, and two funnels cannot see each
-   * other: the write's own broadcast comes back to the page that caused it,
-   * the hook cannot tell that echo from somebody else's vote, and the press
-   * ends up reading the poll twice. Asking here puts both reads in one queue,
-   * where the throttle, the chaining and the accounting below apply to them
-   * equally.
-   *
-   * It does not answer. A read is not this caller's to wait for — the poll is
-   * one thing and several presses may be asking about it at once — and every
-   * page here renders from state a read sets rather than from what a read
-   * returned.
+   * Read now, through the same queue as signals. A page that has just written
+   * uses this rather than reading directly, so its read and its write's own
+   * broadcast echo collapse into one. Fire-and-forget: pages render from
+   * state the read sets.
    */
   reread: () => void
 }
 
-/** Until the effect below is running, and after it has stopped. */
 const noop = () => {}
 
 /**
- * Re-read `onChange` whenever the database says `topic` moved.
+ * Call `onChange` whenever the database broadcasts on `topic`. Messages are
+ * empty -- a prompt to re-read through the page's usual RPC, so access rules
+ * stay in the database.
  *
- * **Streaming, not polling.** Pages used to re-read themselves every few
- * seconds. They now hold a websocket and re-read when told to; the telling
- * half is `broadcast_poll_change()` and the triggers around it, in the
- * squashed baseline and `0035_broadcast_polls_to_watchers.sql`.
+ * - The first read happens on SUBSCRIBED, as does every reconnect's catch-up
+ *   (Realtime doesn't replay missed messages). `FIRST_READ_MS` is the floor.
+ * - A hidden tab drops its socket; coming back re-subscribes and re-reads.
+ * - It keeps watching a settled poll, since the creator can reopen it.
  *
- * **The message is a knock on the door, not the news.** Every broadcast is
- * empty. It says a poll changed, and this hook answers by calling the same RPC
- * the page would have called anyway — so the database functions remain the
- * only way anything is read, and every rule about who may see what stays where
- * it was. That is what lets an open poll's voters, who have no read grant on
- * any table, be told about a vote at all: they are told nothing, then they ask.
- *
- * **The first read happens on subscribe, not on mount.** A page that loaded
- * itself and then subscribed would either read twice or leave a gap where a
- * vote could slip through unseen. It also makes a reconnect self-healing:
- * Realtime does not replay what it sent while a socket was down, but rejoining
- * reports `SUBSCRIBED` again, and every one of those is a fresh read.
- *
- * **Except that a page never waits on the socket forever.** Taken literally
- * that rule makes the websocket load-bearing for the poll appearing at all.
- * `FIRST_READ_MS` is the floor: one read, once, if subscribing has not worked
- * by then. Live updates are what such a network costs; the poll is not.
- *
- * **Nothing stops watching while it is on screen**, a settled poll included.
- * Its creator can open it again, which puts the results back under their gate
- * and broadcasts like everything else, and a page that had stopped listening
- * would sit showing a settled tally of a poll that is taking votes again.
- *
- * **A hidden tab holds no socket.** Nobody is reading a backgrounded poll, and
- * twenty behind a closed lid should not each hold a connection open. Coming
- * back re-subscribes, which re-reads.
- *
- * **One funnel, and the page's own reads go through it too.** A page that has
- * just written something wants it on screen without waiting to be told about
- * it, and it used to get that by calling its read directly — beside this hook
- * rather than through it. Which meant a single press read the poll twice: once
- * because the page asked, and once because the write's own broadcast came back
- * to the page that made it. `reread` is the way in; see `LiveStream`.
- *
- * Returns what to tell the reader and how to ask; see `LiveStream`.
+ * See "Live updates" in AGENTS.md and readLedger.ts.
  */
 export function useLiveStream(
-  /**
-   * The one topic this page is told on — `poll:<id>` for a poll, `user:<id>`
-   * for the reader's list — or null for a page with nothing to watch.
-   *
-   * One, not several. The poll list used to hold a topic per open poll on the
-   * page as well as the reader's own, because the database had no way to
-   * reach an open poll's voters; since their ballots carry their account it
-   * reaches them on `user:<id>` like everybody else, and every page here is
-   * told everything it needs on one topic.
-   */
+  /** `poll:<id>` or `user:<id>`; null for a page with nothing to watch (the sample). */
   topic: string | null,
-  /**
-   * Re-read whatever this page shows. Returning `false` means the read did
-   * not work and is worth trying again shortly; anything else, including
-   * nothing at all, means it did.
-   */
+  /** Re-read the page. Return `false` if the read failed and is worth retrying. */
   onChange: () => boolean | void | Promise<boolean | void>,
   /**
-   * What to do when a poll this page watches has been deleted, which arrives
-   * as `poll_deleted` on its own topic rather than as a change: a re-read of
-   * a poll that has gone is a read that fails, so answering this one with a
-   * read would retry five times and then call the page offline. Given the
-   * topic it came on. Left out, it is read like any other signal — right for
-   * the poll list, whose read simply comes back without the card.
+   * Called on `poll_deleted` instead of reading (a read of a deleted poll
+   * fails). If omitted, the event is read like any other -- right for the
+   * poll list, whose read just comes back without the card.
    */
   onGone?: (topic: string) => void,
 ): LiveStream {
-  const [status, setStatus] = useState<LiveStatus>('connecting')
-
-  // The way into the funnel, which lives inside the effect below with the
-  // rest of its bookkeeping. A ref because `reread` has to keep one identity
-  // for the life of the page — it is handed down through a route and into
-  // callbacks — while what it reaches changes whenever the subscription is
-  // rebuilt.
+  // `reread` keeps one identity; what it reaches changes with the subscription.
   const demand = useRef<() => void>(noop)
   const reread = useCallback(() => demand.current(), [])
 
-  // Held in a ref so a caller passing a fresh closure every render resubscribes
-  // nothing: the channel belongs to the poll being watched, not to the identity
-  // of the function watching it.
+  // Refs, so a fresh closure each render doesn't resubscribe.
   const onChangeRef = useRef(onChange)
   const onGoneRef = useRef(onGone)
   useEffect(() => {
@@ -185,15 +72,8 @@ export function useLiveStream(
   })
 
   useEffect(() => {
-    // Nothing to watch. The About page's sample is the one poll this is ever
-    // true of: it is answered out of a file in this browser, so there is
-    // nothing on the other end of a subscription to it and nothing that could
-    // ever change. Its page reads for itself instead.
-    //
-    // Which is what `reread` has to keep doing here. There is no funnel to
-    // queue behind and nothing that could ever be waiting in it, but the
-    // sample takes a ballot, and a card that asked for a re-read and got
-    // silence would sit there as though the press had missed.
+    // Nothing to subscribe to (the sample), but `reread` must still read, or
+    // a vote there would seem to do nothing.
     if (topic === null) {
       demand.current = () => {
         void onChangeRef.current()
@@ -203,54 +83,27 @@ export function useLiveStream(
       }
     }
 
-    // Narrowed for the closures below, which TypeScript will not carry the
-    // check above into.
     const watching: string = topic
     let cancelled = false
     let channel: RealtimeChannel | null = null
     let settle: number | undefined
-    let grace: number | undefined
-    // Whether a read is in flight. Reads are chained rather than run in
-    // parallel, so a slow connection spaces them out instead of stacking them
-    // up -- and so a page's own read and the echo of its write queue behind
-    // one another rather than racing.
+    // Reads are chained, never parallel, so a page's own read and its echo queue up.
     let reading = false
-    // What this page is owed a read for, and what the read it has just made
-    // covers. It was a boolean — *something arrived while I was reading* —
-    // which could say that a read was outstanding but never that one had
-    // already accounted for it, so a page's own read could not absorb the
-    // echo of its own write. See readLedger.ts, where the rule and its
-    // reasoning are, and readLedger.test.ts, which is the only place any of
-    // it can be checked.
+    // What the page is owed a read for; see readLedger.ts.
     const ledger = readLedger()
-    // The throttle is measured between read starts, so a slow read does not
-    // add another delay before the trailing read.
+    // Measured between read starts.
     let lastReadAt: number | undefined
-    // Whether the channel is currently carrying messages.
-    let subscribed = false
-    // Whether the channel was let go on purpose, because the tab went behind
-    // something. Closing it reports itself back through the same callback a
-    // channel that broke would, and a tab put away deliberately must not come
-    // back to a warning about it.
+    // Set while the tab is hidden, so the deliberate close isn't treated as a failure.
     let paused = false
-    // Reads that have failed in a row. Cleared by the first one that works,
-    // so a page that is fine apart from one dropped request forgets about it.
     let failures = 0
-    // Whether this page has anything on it yet, which decides whether the
-    // floor below is still needed.
     let everRead = false
     let first: number | undefined
 
     async function read() {
-      // Nothing queues here: what is outstanding is in the counters, and the
-      // read in flight checks them again when it lands.
       if (reading) return
       reading = true
       lastReadAt = Date.now()
-      // What this read will have accounted for, taken before it is sent
-      // rather than after it answers: a signal that arrives while it is in
-      // the air is about a commit that may be later than what it is about to
-      // see. See readLedger.ts.
+      // Taken before sending: a signal arriving mid-read may be about a later commit.
       const mark = ledger.starting()
       let ok = true
       try {
@@ -260,33 +113,19 @@ export function useLiveStream(
       } finally {
         reading = false
       }
-      // A read that was in flight when the tab went away still finishes, and
-      // what it found is kept; what it must not do is report on a page
-      // nobody is looking at, or line up another.
       ledger.settled(mark, ok)
       if (cancelled || paused) return
 
       if (ok) {
         failures = 0
         everRead = true
-        // Puts the page back after a run of failed reads gave up. Only worth
-        // saying while there is still something listening, or the next
-        // signal would have nowhere to arrive.
-        if (subscribed) setStatus('live')
       } else if (failures < RETRY_LIMIT) {
         failures += 1
-        // Nothing was read, so everything is still outstanding -- the ledger
-        // has already put it back -- and the retry below is the read that
-        // owes it.
+        // The ledger has already put the debt back; this retry pays it.
         again(RETRY_MS)
         return
       } else {
-        // Out of patience. The socket may well be fine, but nothing this
-        // page shows can be trusted to be current. Nothing is chained from here — the next
-        // signal, or the next subscription, is what tries again — because
-        // what this page is still owed has not moved and would otherwise
-        // read in a tight loop.
-        setStatus('offline')
+        // Give up until the next signal or subscription, rather than looping.
         return
       }
 
@@ -300,13 +139,7 @@ export function useLiveStream(
       }, delay)
     }
 
-    /**
-     * Read, unless there is nothing outstanding or a read is already on its
-     * way.
-     *
-     * The throttle is measured between read *starts*, so a slow read does not
-     * add another delay before the trailing one.
-     */
+    /** Read if anything is owed and nothing is in flight, respecting the throttle. */
     function schedule() {
       if (!ledger.owing()) return
       if (reading) return
@@ -315,38 +148,16 @@ export function useLiveStream(
     }
 
     /**
-     * A read this page has asked for outright: a subscription arriving, or the
-     * page saying it has just written. Never absorbed by a read already in
-     * flight; see `owed`.
-     *
-     * It forgives past failures, as every signal does: a page that is fine
-     * apart from one dropped request should not be held to a budget it spent
-     * minutes ago.
+     * A read asked for outright (a subscription arriving, or `reread`), which
+     * a read already in flight cannot absorb. Forgives past failures.
      */
     function insist() {
-      // A tab behind something holds no subscription and reads nothing:
-      // coming back re-subscribes, and that is itself an `insist`. Nothing
-      // presses a button on a page nobody is looking at, but a read started
-      // here would outlive the pause and report on it.
       if (cancelled || paused) return
       ledger.insisted()
       failures = 0
       schedule()
     }
 
-    // Start counting towards telling the reader that this page has gone
-    // quiet. Cleared by the next subscription that works.
-    function armGrace() {
-      if (grace !== undefined) return
-      grace = window.setTimeout(() => {
-        grace = undefined
-        if (!cancelled) setStatus('offline')
-      }, GRACE_MS)
-    }
-
-    // The floor under a page that may never manage to subscribe. Armed only
-    // while there is nothing on screen: once a read has landed, a socket that
-    // will not connect costs live updates and says so, which is the bargain.
     function armFirstRead() {
       if (everRead || first !== undefined) return
       first = window.setTimeout(() => {
@@ -356,51 +167,28 @@ export function useLiveStream(
     }
 
     function open() {
-      armGrace()
       armFirstRead()
-      // Private, because on a public channel any client may broadcast too, and
-      // `poll_deleted` below is acted on without a read. A private channel is
-      // authorized against the policy on realtime.messages, which lets a
-      // client receive and nothing more; see 0085.
+      // Private: only the database may broadcast (`poll_deleted` is acted on
+      // without a read, so a public channel would let anyone fake it).
       const opened = supabase.channel(watching, { config: { private: true } })
       channel = opened
-      // Every event on the topic, because a poll change and an invite arrive
-      // under different names and both mean the same thing here: ask again.
       opened.on('broadcast', { event: '*' }, (message) => {
         if (cancelled || paused) return
-        // The one message that is not a prompt to re-read; see `onGone`.
         if (message.event === 'poll_deleted' && onGoneRef.current) {
           onGoneRef.current(watching)
           return
         }
         ledger.signalled()
-        // Forgiven for the reason `insist` forgives them: a run of failed
-        // reads minutes ago should not stop this page answering a poll that
-        // has just moved.
         failures = 0
         schedule()
       })
       opened.subscribe((state) => {
         if (cancelled || paused) return
         if (state === 'SUBSCRIBED') {
-          window.clearTimeout(grace)
-          grace = undefined
-          // The subscription arrived in time, so the floor is not needed:
-          // the read below is the one this page was waiting for.
           window.clearTimeout(first)
           first = undefined
-          subscribed = true
-          setStatus('live')
-          // Both the first read and the catch-up after a reconnect. Every
-          // SUBSCRIBED reads, unconditionally: Realtime replays nothing sent
-          // while the socket was down, so there is no signal to count and
-          // nothing a finished read could be said to cover. A redundant read
-          // is a wasted round trip, where a suppressed one is a page left
-          // showing votes that have since been overtaken.
+          // Unconditional: nothing sent while disconnected is replayed.
           insist()
-        } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
-          subscribed = false
-          armGrace()
         }
       })
     }
@@ -412,22 +200,12 @@ export function useLiveStream(
 
     function onVisibilityChange() {
       if (document.hidden) {
-        // Set before closing, not after: letting the channel go reports
-        // itself back as `CLOSED`, which is indistinguishable from one that
-        // broke and would otherwise start the clock on a warning that fires
-        // while nobody is even looking.
         paused = true
         window.clearTimeout(settle)
-        window.clearTimeout(grace)
         window.clearTimeout(first)
-        grace = undefined
         first = undefined
-        subscribed = false
         failures = 0
         close()
-        // Not `offline`: nothing is wrong, and there is nobody in front of
-        // the page to tell anyway.
-        setStatus('connecting')
         return
       }
       if (channel === null) {
@@ -436,10 +214,6 @@ export function useLiveStream(
       }
     }
 
-    // The way in for the page's own reads, pointed at this funnel for as long
-    // as it is the one running — including while the tab is away, since a page
-    // that comes back and presses something must not find `reread` pointing at
-    // nothing. See `LiveStream.reread`.
     demand.current = insist
 
     document.addEventListener('visibilitychange', onVisibilityChange)
@@ -449,32 +223,21 @@ export function useLiveStream(
       cancelled = true
       demand.current = noop
       window.clearTimeout(settle)
-      window.clearTimeout(grace)
       window.clearTimeout(first)
       close()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [topic])
 
-  // `reread` never changes identity, so this is one object for as long as the
-  // status holds still: a page holding it in a dependency list is watching the
-  // status rather than the render it arrived on.
-  return useMemo(() => ({ status, reread }), [status, reread])
+  return useMemo(() => ({ reread }), [reread])
 }
 
-/** The topic a poll is announced on: one, for every page that watches it. */
+/** The topic a poll is announced on. */
 export function pollTopic(pollId: string): string {
   return `poll:${pollId}`
 }
 
-/**
- * The topic a person's own poll list is announced on.
- *
- * Everything that moves on that list arrives here: a vote in any poll on it, a
- * poll closing, and an invite to one they have never seen. It is the whole of
- * what `PollList` subscribes to, because it is the one topic the page can name
- * before it has read anything — which is what keeps that read to one.
- */
+/** The topic a person's poll list is announced on: every change to any poll on it. */
 export function userTopic(userId: string): string {
   return `user:${userId}`
 }

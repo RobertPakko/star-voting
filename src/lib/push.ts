@@ -1,46 +1,28 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabase'
+import { readFlag, writeFlag } from './storage'
 
 /**
- * Push notifications, as far as the browser is concerned: whether this device
- * can have them, asking for them, and the two ways a subscription is put to
- * use.
+ * Push notifications in the browser. A browser has one subscription, used two
+ * ways:
  *
- * **One subscription per browser, two uses of it.** A browser's push
- * subscription is one endpoint, whoever is using it, and it reaches this app's
- * database through one of two doors:
+ * - **Bound to an account** (`save_push_subscription`): hears about every poll
+ *   the account is in, under its settings. Undone on sign-out, so a shared
+ *   browser doesn't keep buzzing for the last person.
+ * - **Watching one open poll** (`open_poll_watch`), with no account: hears that
+ *   poll open and finish.
  *
- * - **bound to an account** (`save_push_subscription`), so it hears about
- *   every poll that account is in — the invitations, voting opening, the
- *   results — exactly as that account's inbox does, subject to the account's
- *   settings. This needs somebody signed in, and it is undone on signing out,
- *   because a shared browser that stays bound is the next person's phone
- *   buzzing with the last person's polls.
- * - **watching one open poll** (`open_poll_watch`), with no account and nothing
- *   else attached, so it hears that poll open and finish. This is the gap an
- *   email could never close: an open poll's voters gave no address.
- *
- * What each door is and is not allowed to record is the migration's business;
- * see 0072_push_notifications.sql.
- *
- * **Asking is always a press.** Browsers ignore, or quietly block, a
- * permission prompt that no gesture asked for, and Safari will not show one at
- * all — so nothing here asks on its own, and every function that can prompt is
- * called straight from a click handler, with the permission request as its
- * first await.
+ * Anything that can prompt must be called straight from a click handler, with
+ * the permission request as its first await -- browsers block prompts nobody
+ * asked for. See "Push notifications" in AGENTS.md.
  */
 
 const PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || ''
 
 export type DevicePlatform = 'ios' | 'android' | 'desktop'
 
-/**
- * Which set of installation steps apply to this device.
- *
- * iPadOS reports itself as a Mac, so a Mac with a touch screen is an iPad:
- * there is no touch-screen Mac.
- */
+/** Which install steps apply. iPadOS reports as a Mac; a touch-screen "Mac" is an iPad. */
 export function devicePlatform(): DevicePlatform {
   const agent = navigator.userAgent
   if (/iPhone|iPad|iPod/.test(agent) || (/Macintosh/.test(agent) && navigator.maxTouchPoints > 1)) {
@@ -50,7 +32,6 @@ export function devicePlatform(): DevicePlatform {
   return 'desktop'
 }
 
-/** Whether this page is the installed app, rather than a tab in a browser. */
 export function isInstalledApp(): boolean {
   return (
     window.matchMedia?.('(display-mode: standalone)').matches === true ||
@@ -59,17 +40,10 @@ export function isInstalledApp(): boolean {
 }
 
 /**
- * Where this device stands, in the order a reader would have to fix it.
- *
- * - `unconfigured`: this build has no VAPID key, so push is off for everybody.
- * - `needs-install`: an iPhone or iPad in a browser tab. Apple only gives the
- *   push APIs to a site added to the home screen, so there is nothing to ask
- *   for until it is.
- * - `unsupported`: a browser with no push at all.
- * - `denied`: the reader said no, and only the browser's own settings can undo
- *   that — a site is not allowed to ask twice.
- * - `ask`: nothing decided yet.
- * - `granted`: allowed. Whether a subscription exists is a separate question.
+ * Where this device stands, in the order a reader would have to fix it:
+ * no VAPID key in this build; an iPhone/iPad outside the installed app (Apple
+ * only offers push there); no push at all; refused (only browser settings can
+ * undo it); undecided; or allowed (whether subscribed is a separate question).
  */
 export type PushState =
   | 'unconfigured'
@@ -91,12 +65,10 @@ export function pushState(): PushState {
   return 'ask'
 }
 
-/** Whether pressing a button here can end in a subscription. */
 export function canAskForPush(state: PushState = pushState()): boolean {
   return state === 'ask' || state === 'granted'
 }
 
-/** Said when the reader dismisses the browser's prompt or says no. */
 export class PushRefused extends Error {
   constructor() {
     super('Notifications were not allowed. You can change that in your browser’s settings.')
@@ -117,12 +89,9 @@ function sameKey(buffer: ArrayBuffer | null, key: string): boolean {
 }
 
 /**
- * The service worker's registration, waited for if the page is new.
- *
- * `serviceWorker.ts` registers it on `load`, so a button pressed in the first
- * second can arrive before it exists. Under `vite dev` it never will — the
- * worker is only registered in the built app — and that is said rather than
- * waited on for ever.
+ * The service worker registration, waited for if the page is new (it is
+ * registered on `load`). It never appears under `vite dev`, so give up after
+ * a while.
  */
 async function registration(): Promise<ServiceWorkerRegistration> {
   const existing = await navigator.serviceWorker.getRegistration()
@@ -135,23 +104,18 @@ async function registration(): Promise<ServiceWorkerRegistration> {
   return ready
 }
 
-/** This browser's subscription, without asking for anything. */
+/** This browser's subscription, without prompting. */
 export async function currentSubscription(): Promise<PushSubscription | null> {
   if (!canAskForPush()) return null
   const found = await navigator.serviceWorker.getRegistration()
   const subscription = (await found?.pushManager.getSubscription()) ?? null
-  // One made against a key this build no longer uses cannot be sent to.
+  // One made under a different (rotated) key can't be sent to.
   return subscription && sameKey(subscription.options.applicationServerKey, PUBLIC_KEY)
     ? subscription
     : null
 }
 
-/**
- * Asks for permission if it has not been given, and returns this browser's
- * subscription — the existing one where there is one.
- *
- * Call it from a click handler and nowhere else: see the note at the top.
- */
+/** Prompt if needed and return a subscription. Click handlers only. */
 async function subscribe(): Promise<PushSubscription> {
   if (!PUBLIC_KEY) throw new Error('Notifications are not set up on this site.')
   const permission = await Notification.requestPermission()
@@ -160,8 +124,7 @@ async function subscribe(): Promise<PushSubscription> {
   const found = await registration()
   const existing = await found.pushManager.getSubscription()
   if (existing && sameKey(existing.options.applicationServerKey, PUBLIC_KEY)) return existing
-  // A subscription under a rotated key is one the sender can no longer sign
-  // for; a browser holds one subscription at a time, so it has to go first.
+  // A browser holds one subscription; one under a rotated key must go first.
   if (existing) await existing.unsubscribe()
   return found.pushManager.subscribe({
     userVisibleOnly: true,
@@ -183,10 +146,8 @@ function keysOf(subscription: PushSubscription) {
 // ---------------------------------------------------------------------------
 
 /**
- * Which account this browser bound itself to, remembered so that the binding
- * can be refreshed when the app opens and taken back when that account signs
- * out. The database is the truth about whether it is bound; this is only what
- * lets the browser act on it without asking.
+ * The account this browser bound itself to, so the binding can be refreshed
+ * on open and dropped on sign-out. The database is the truth; this is a mirror.
  */
 const ACCOUNT_KEY = 'star-voting:push-account'
 
@@ -203,55 +164,29 @@ function writeAccount(userId: string | null) {
     if (userId) localStorage.setItem(ACCOUNT_KEY, userId)
     else localStorage.removeItem(ACCOUNT_KEY)
   } catch {
-    // The binding still holds in the database; it just will not be refreshed
-    // or forgotten from here, which is the same bargain voterKey.ts strikes.
+    // The database binding still holds; it just won't be refreshed from here.
   }
   accountPushChanged()
 }
 
-/**
- * Whether the account's push is off, as last seen by this browser: written by
- * the settings page whenever it reads or changes the setting. Only a mirror —
- * the database decides what is sent — kept so a poll page can say whether
- * this device will be notified without a request of its own.
- */
+/** A mirror of "the account's push is off", written by the settings switches. */
 const ACCOUNT_OFF_KEY = 'star-voting:push-account-off'
 
 export function rememberAccountPush(on: boolean): void {
-  try {
-    if (on) localStorage.removeItem(ACCOUNT_OFF_KEY)
-    else localStorage.setItem(ACCOUNT_OFF_KEY, '1')
-  } catch {
-    // The poll page then says less than it could; nothing is sent differently.
-  }
+  writeFlag(ACCOUNT_OFF_KEY, !on)
   accountPushChanged()
 }
 
-function accountPushOff(): boolean {
-  try {
-    return localStorage.getItem(ACCOUNT_OFF_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
 /**
- * Whether this device is bound to this account and the account wants push —
- * both from local mirrors, so answering costs no request. Another device
- * turning push off is only seen here once this one opens the settings page;
- * until then the sender, which asks the database, is still right.
+ * Whether this device is bound to this account and the account wants push,
+ * from local mirrors only (no request). Another device's change shows here
+ * once this one opens the settings.
  */
 export function accountPushHere(userId: string): boolean {
-  return pushState() === 'granted' && readAccount() === userId && !accountPushOff()
+  return pushState() === 'granted' && readAccount() === userId && !readFlag(ACCOUNT_OFF_KEY)
 }
 
-/**
- * Everything drawn from the mirrors of the push switches, told when one moves
- * — so the banner under a poll that says where the push switch is goes away
- * the moment that switch is turned on, rather than on the next page load. A
- * counter rather than the answer, because the answer is per account and this
- * is not. See usePushHere.
- */
+/** Bumped whenever a push mirror changes, so `usePushHere` re-renders. */
 let accountPushVersion = 0
 const accountPushListeners = new Set<() => void>()
 
@@ -267,7 +202,6 @@ function subscribeAccountPush(notify: () => void) {
   }
 }
 
-/** Turns notifications on for the signed-in account, on this device. */
 export async function enableAccountPush(userId: string): Promise<void> {
   const subscription = await subscribe()
   const { error } = await supabase.rpc('save_push_subscription', keysOf(subscription))
@@ -275,7 +209,6 @@ export async function enableAccountPush(userId: string): Promise<void> {
   writeAccount(userId)
 }
 
-/** Stops this device hearing about the signed-in account's polls. */
 export async function disableAccountPush(): Promise<void> {
   const subscription = await currentSubscription()
   if (subscription) {
@@ -288,13 +221,8 @@ export async function disableAccountPush(): Promise<void> {
 }
 
 /**
- * Re-saves this device for the account it was bound to, on opening the app.
- *
- * Push services rotate endpoints — rarely, and without telling the site — and
- * a rotated one is only ever discovered by a send that fails. Saving the
- * current one whenever the app opens under that account keeps the database
- * pointing at the endpoint that works. It asks for nothing: it only runs where
- * permission is already granted.
+ * Re-save this device on app open, since push services rotate endpoints
+ * silently. Only runs where permission is already granted.
  */
 export async function refreshAccountPush(userId: string): Promise<void> {
   if (readAccount() !== userId || pushState() !== 'granted') return
@@ -311,22 +239,17 @@ export async function refreshAccountPush(userId: string): Promise<void> {
     }
     await supabase.rpc('save_push_subscription', keysOf(subscription))
   } catch {
-    // Best-effort, on a page that did not ask for it. The settings page says
-    // honestly whether this device is still bound.
+    // Best-effort.
   }
 }
 
-/**
- * Takes this device off the account before it signs out, while there is still
- * a session to do it with.
- */
+/** Unbind before signing out, while there is still a session to do it with. */
 export async function forgetAccountPush(): Promise<void> {
   if (!readAccount()) return
   try {
     await disableAccountPush()
   } catch {
-    // Signing out must not fail because of this; the flag goes regardless,
-    // and a send to a device nobody is signed in to is the worst case left.
+    // Sign-out must not fail on this.
     writeAccount(null)
   }
 }
@@ -336,13 +259,9 @@ export async function forgetAccountPush(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * The polls this browser has asked to hear about, by the key the page knows
- * the poll by — its group, so that every question of a poll shows the same
- * answer — each with the question the watch was filed through, which is what
- * `open_poll_unwatch` needs to take it back (a group's id is not a poll's).
- * Only ever a mirror of the database, kept so the page knows which polls are
- * already watched without a request; the watch itself is what the database
- * holds, and it is deleted there when the results go out.
+ * Polls this browser watches, keyed by group (so every question agrees), each
+ * with the poll id the watch was filed through (`open_poll_unwatch` needs
+ * it). A mirror of the database, which deletes a watch once results go out.
  */
 const WATCHED_KEY = 'star-voting:watched-polls'
 
@@ -353,9 +272,8 @@ const watchers = new Set<() => void>()
 function readWatched(): ReadonlyMap<string, string | null> {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(WATCHED_KEY) ?? '{}')
-    // An array is the mirror as an earlier build wrote it: keys and no poll
-    // ids. Those watches are still honoured; they just cannot be taken back
-    // from here, and go when their poll finishes like every other.
+    // An array is an older build's format, with no poll ids: still honoured,
+    // just not revocable from here.
     const entries: [string, string | null][] = Array.isArray(parsed)
       ? parsed.filter((key): key is string => typeof key === 'string').map((key) => [key, null])
       : parsed && typeof parsed === 'object'
@@ -377,7 +295,7 @@ function setWatched(key: string, pollId: string | null, on: boolean) {
     if (watched.size === 0) localStorage.removeItem(WATCHED_KEY)
     else localStorage.setItem(WATCHED_KEY, JSON.stringify(Object.fromEntries(watched)))
   } catch {
-    // Kept for this tab; see readAccount.
+    // Kept for this tab.
   }
   for (const notify of watchers) notify()
 }
@@ -389,7 +307,6 @@ function subscribeWatched(notify: () => void) {
   }
 }
 
-/** Whether this browser is watching the poll known by `key`, live. */
 export function useWatching(key: string): boolean {
   const map = useSyncExternalStore(
     subscribeWatched,
@@ -399,11 +316,7 @@ export function useWatching(key: string): boolean {
   return map.has(key)
 }
 
-/**
- * Files a watch on this open poll: this browser hears when it opens for
- * voting and when it finishes. Asks for nothing — it is only called once
- * the reader has turned push on, so permission is already there.
- */
+/** File a watch on an open poll. Doesn't prompt: only called once push is on. */
 export async function watchPoll(pollId: string, key: string): Promise<void> {
   const subscription = await currentSubscription()
   if (!subscription) throw new Error('This browser has no push subscription.')
@@ -416,9 +329,8 @@ export async function watchPoll(pollId: string, key: string): Promise<void> {
 }
 
 /**
- * Drops the mirror once a poll has nothing left to announce — the database
- * deleted the watch when it sent the results, and a reopened poll would
- * otherwise be taken for one still watched and never watched again.
+ * Drop the mirror once a poll has finished (the database already deleted the
+ * watch), so a reopened poll gets watched again.
  */
 export function forgetWatch(key: string): void {
   setWatched(key, null, false)
@@ -429,46 +341,23 @@ export function forgetWatch(key: string): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Whether this browser, with nobody signed in, wants to hear about the open
- * polls it answers. The gear menu's one switch for a reader holding a link;
- * see LinkPushSwitch. It is a fact about the browser and lives only in it,
- * since there is no account to keep it on, and what it does is file a watch
- * on each open poll answered here (see OpenPollPanel) — the same watch, with
- * nothing on it saying who asked, that Notify me used to file one press at a
- * time.
+ * The signed-out reader's push switch (`LinkPushSwitch`). Per browser, since
+ * there is no account; when on, OpenPollPanel files a watch on each open poll
+ * answered here.
  */
 const LINK_PUSH_KEY = 'star-voting:push-link-polls'
 
-function linkPushOn(): boolean {
-  try {
-    return localStorage.getItem(LINK_PUSH_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
 function writeLinkPush(on: boolean) {
-  try {
-    if (on) localStorage.setItem(LINK_PUSH_KEY, '1')
-    else localStorage.removeItem(LINK_PUSH_KEY)
-  } catch {
-    // On for this tab only; the next page load asks again.
-  }
+  writeFlag(LINK_PUSH_KEY, on)
   accountPushChanged()
 }
 
-/** Turns push on for a reader with no account: permission, then the flag. */
 export async function enableLinkPush(): Promise<void> {
   await subscribe()
   writeLinkPush(true)
 }
 
-/**
- * Turns it off, and takes back every watch this browser filed — a switch that
- * says off while polls go on buzzing would be a switch nobody could trust.
- * Best-effort per poll: one that has closed or been deleted has no watch left
- * to take back.
- */
+/** Turn it off and revoke every watch this browser filed (best-effort per poll). */
 export async function disableLinkPush(): Promise<void> {
   writeLinkPush(false)
   const subscription = await currentSubscription()
@@ -485,36 +374,28 @@ export async function disableLinkPush(): Promise<void> {
   )
 }
 
-/**
- * Whether this device will be pushed to about the reader's polls: through the
- * account when there is one, through the link switch when there is not. Live,
- * so a banner telling the reader where the switch is goes away the moment
- * they turn it on.
- */
+/** Whether this device will be pushed to: via the account, or the link switch. Live. */
 export function usePushHere(userId: string | undefined): boolean {
   useSyncExternalStore(
     subscribeAccountPush,
     () => accountPushVersion,
     () => 0,
   )
-  return userId ? accountPushHere(userId) : pushState() === 'granted' && linkPushOn()
+  return userId ? accountPushHere(userId) : pushState() === 'granted' && readFlag(LINK_PUSH_KEY)
 }
 
 // ---------------------------------------------------------------------------
 // Arriving from a notification
 // ---------------------------------------------------------------------------
 
-/** The note a tapped notification leaves behind; see `rememberOpen` in public/sw.js. */
+/** The note a tapped notification leaves; see `rememberOpen` in public/sw.js. */
 const OPEN_CACHE = 'star-voting-open'
-/** Older than this, a note is a tap nobody's app picked up, not one to act on now. */
+/** Older notes are taps nobody's app picked up. */
 const OPEN_FRESH_MS = 2 * 60_000
 
 /**
- * Takes the destination a tapped notification left, if there is a fresh one,
- * and deletes it so it is acted on once.
- *
- * `caches.has` first, because `caches.open` would create the cache — an empty
- * one in every browser that ever loaded the app, for a note most never get.
+ * Take (and delete) a fresh destination left by a tapped notification.
+ * `caches.has` first, since `caches.open` would create an empty cache.
  */
 async function takeNotificationPath(): Promise<string | null> {
   if (typeof caches === 'undefined') return null
@@ -536,22 +417,11 @@ async function takeNotificationPath(): Promise<string | null> {
 }
 
 /**
- * Takes the app to the poll a tapped notification is about.
- *
- * Three ways in, because each of the ways a tap can arrive fails somewhere:
- *
- * - **A message**, when the app was already open: the service worker focuses
- *   the window and posts it the poll's hash, and the app moves the way it moves
- *   for any link — no reload, nothing lost.
- * - **On starting**, for an app the tap launched. The worker opens the poll's
- *   own address, but an iPhone launching the installed app from a
- *   notification opens its start page instead, so the note the worker left is
- *   read here.
- * - **On coming back to the foreground**, for an app that was suspended and
- *   resumed without the message ever arriving.
- *
- * The note is deleted whichever way it is acted on, so the same tap cannot
- * move the reader twice. See `notificationclick` in public/sw.js.
+ * Navigate to the poll a tapped notification is about. Three routes in, since
+ * each fails somewhere: a message to an open window; the cached note on start
+ * (iOS launches the installed app at its start page); and the note again on
+ * returning to the foreground (a resumed app may miss the message). The note
+ * is deleted either way, so one tap moves the reader once.
  */
 export function useNotificationRoutes(): void {
   const navigate = useNavigate()
@@ -559,8 +429,7 @@ export function useNotificationRoutes(): void {
     let alive = true
 
     function go(path: string) {
-      // Already there — the launch that honoured the poll's address — needs no
-      // second entry in the history for the back button to walk through.
+      // Already there: don't add a duplicate history entry.
       if (alive && window.location.hash !== path) navigate(path.slice(1))
     }
 
@@ -573,8 +442,7 @@ export function useNotificationRoutes(): void {
       const data = event.data as { type?: unknown; path?: unknown } | null
       if (data?.type !== 'open-path' || typeof data.path !== 'string') return
       if (!data.path.startsWith('#/')) return
-      // Taken as well, or coming back to the foreground a minute later would
-      // act on the same tap a second time.
+      // Consume the note too, or foregrounding later would act on it again.
       void takeNotificationPath()
       go(data.path)
     }
@@ -586,9 +454,7 @@ export function useNotificationRoutes(): void {
     void check()
     document.addEventListener('visibilitychange', onVisible)
     navigator.serviceWorker?.addEventListener('message', onMessage)
-    // Messages from a worker wait in a queue until the page says it is
-    // listening; saying so here rather than relying on the page having
-    // finished loading is what makes one sent at launch arrive.
+    // Worker messages queue until the page says it is listening.
     navigator.serviceWorker?.startMessages()
     return () => {
       alive = false
@@ -599,46 +465,27 @@ export function useNotificationRoutes(): void {
 }
 
 // ---------------------------------------------------------------------------
-// The banner
+// Banners dismissed for good
 // ---------------------------------------------------------------------------
 
 const BANNER_KEY = 'star-voting:app-banner-dismissed'
 
-/** Whether the reader has closed the "you can install this" banner for good. */
+/** The install banner. */
 export function appBannerDismissed(): boolean {
-  try {
-    return localStorage.getItem(BANNER_KEY) === '1'
-  } catch {
-    return false
-  }
+  return readFlag(BANNER_KEY)
 }
 
 export function dismissAppBanner(): void {
-  try {
-    localStorage.setItem(BANNER_KEY, '1')
-  } catch {
-    // Closed for this page, then; it comes back on the next.
-  }
+  writeFlag(BANNER_KEY, true)
 }
 
-/**
- * The same, for the banner under a poll that says where the push switch is
- * (`Banners`): closed for good in this browser, like the one above.
- */
+/** The banner saying where the push switch is (`Banners`). */
 const NOTIFY_HINT_KEY = 'star-voting:notify-hint-dismissed'
 
 export function notifyHintDismissed(): boolean {
-  try {
-    return localStorage.getItem(NOTIFY_HINT_KEY) === '1'
-  } catch {
-    return false
-  }
+  return readFlag(NOTIFY_HINT_KEY)
 }
 
 export function dismissNotifyHint(): void {
-  try {
-    localStorage.setItem(NOTIFY_HINT_KEY, '1')
-  } catch {
-    // Closed for this page only; it comes back on the next.
-  }
+  writeFlag(NOTIFY_HINT_KEY, true)
 }

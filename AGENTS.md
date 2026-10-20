@@ -14,9 +14,9 @@ hash-based routing, deployed to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ```
-src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro, Start, Donate, Contact)
+src/pages/       route components (SignIn, PollList, CreatePoll, PollPage — the route that picks PollDetail or PublicPoll — About, Settings, InstallGuide, Intro, Start, Donate, Contact)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, "Make your own poll" for a reader who may have no session (makePoll.ts), the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), the create form's drafts and validation (pollForm.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, "Make your own poll" for a reader who may have no session (makePoll.ts), the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the Start page's two loops (start/), the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -1000,7 +1000,7 @@ one because the page asked, and one because the write's own broadcast came back
 to the page that made it. The messages are empty by design, so nothing can tell
 your echo from somebody else's vote.
 
-`useLiveStream` now hands back a `reread` alongside the status, and every
+`useLiveStream` now hands back a `reread`, and every
 page-initiated read goes through it — a vote, a confirmation, a creator's
 action, a turn of the poll list's pages. One queue, so the throttle and the
 chaining apply to all of them, a burst collapses into one trailing read
@@ -1032,8 +1032,8 @@ refresh — on the grounds that it is the one state a reader cannot work out by
 looking. It went because it was wrong far more often than it was right: a
 socket that was merely slow to join tripped it, so it flashed up on an
 ordinary page load and was gone again a second later, and the cost of the
-case it was for is only a page catching up late. `useLiveStream` still
-reports `offline`; nothing draws it. There is deliberately no polling
+case it was for is only a page catching up late, so `useLiveStream` no
+longer tracks connection status at all. There is deliberately no polling
 fallback — refreshing is the fallback.
 
 **The next question is read before it is opened.** On a poll of several
@@ -1048,7 +1048,7 @@ step to a neighbour shows no skeleton at all. The skeleton is what a jump
 further along the strip still gets.
 
 **A crossing hands the subscription over rather than opening another.** Each
-question's topic is held by one `QuestionWatch` (in `App.tsx`), keyed by the
+question's topic is held by one `QuestionWatch` (in `pages/PollPage.tsx`), keyed by the
 question, so walking from question 2 to question 3 keeps 3's channel and
 changes only which of them is on screen — and opens 4's. That is the rule
 "subscribe, then read" kept across a crossing: question 3 needs no read on
@@ -2274,7 +2274,7 @@ actually asking — *what may this reader see here* — and returns the page wit
 it. It is tagged `account` / `open` / `unreadable`; why a tagged union rather
 than one flat shape is in `PollRead` in [`src/lib/types.ts`](src/lib/types.ts),
 and how the route spends the answer is in `PollPage` in
-[`src/App.tsx`](src/App.tsx). What belongs here is why it is allowed to exist
+[`src/pages/PollPage.tsx`](src/pages/PollPage.tsx). What belongs here is why it is allowed to exist
 at all, and the one gate that had to be fixed before it could.
 
 **Nothing here is a new privilege.** Each branch returns what the caller could
@@ -2603,7 +2603,7 @@ page **waits**:
    if the read is back, and **no skeleton is ever drawn**; its skeleton, if
    not.
 4. A skeleton that has gone up stays up for at least `SKELETON_MIN_MS`
-   (`App.tsx`), however soon the read lands after it, because a shape replaced
+   (`pages/PollPage.tsx`), however soon the read lands after it, because a shape replaced
    a few frames after it appeared is a flicker rather than a wait. The read
    that comes back first is held, rather than the skeleton hurried away.
 
@@ -4389,7 +4389,7 @@ resolve against. That was a deliberate call, taken while the polls in flight
 were few enough to be worth less than the shim.
 
 **One address means the route has to decide what the reader may see**, since
-the URL no longer says. `App.tsx`'s `PollPage` asks one question and reads the
+the URL no longer says. `PollPage` (`pages/PollPage.tsx`) asks one question and reads the
 answer off the reply:
 
 1. **A sample id?** Render `PublicPoll` and stop, whoever is reading. The
@@ -7017,7 +7017,7 @@ read in an address bar and said out loud. They are ids the `polls` table would
 refuse, which is safe precisely because the sample never reaches it.
 
 **One thing outside that file has to recognise a sample id: the router.**
-`PollPage` in [`src/App.tsx`](src/App.tsx) sends a sample id straight to
+`PollPage` in [`src/pages/PollPage.tsx`](src/pages/PollPage.tsx) sends a sample id straight to
 `PublicPoll` instead of offering it to the account reading first. Every other
 address is offered to `PollDetail` and falls back when row-level security
 returns nothing (see [A poll's link is its id](#a-polls-link-is-its-id)), but a

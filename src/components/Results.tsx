@@ -13,8 +13,7 @@ import {
 } from '@mantine/core'
 import { PieChart } from '@mantine/charts'
 import { useReducedMotion } from '@mantine/hooks'
-// Here rather than in main.tsx, so the chart's stylesheet is split off with
-// this chunk and a reader filling in a ballot never fetches it. See deferred.ts.
+// Imported here so the chart CSS ships in this lazy chunk.
 import '@mantine/charts/styles.css'
 import { InfoIcon, WarningIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
@@ -45,11 +44,7 @@ import { count, voters } from '../lib/plural'
 import { capRows, RESULTS_ROWS_MAX, SCORING_ROWS_MAX } from '../lib/resultsRows'
 import classes from './Results.module.css'
 
-/**
- * Which tally endpoint to read. Both return the same shape; the split is
- * only about how the caller proves it's allowed to see it: a session for
- * invite polls, the poll's own link for open ones.
- */
+/** Which tally endpoint to read: a session for invite polls, the link for open ones. */
 export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
 export function Results({
@@ -59,81 +54,31 @@ export function Results({
   meeting = null,
 }: {
   source: ResultsSource
-  /**
-   * What a time poll's result needs to become a calendar event: its title and
-   * its schedule, for the length. Null on every other poll, which is what
-   * keeps *Add to calendar* off a result that is not a time.
-   */
+  /** A time poll's title and schedule, for *Add to calendar*. Null otherwise. */
   meeting?: { title: string; schedule: PollSchedule } | null
-  /**
-   * The tally the read that opened this page already brought, or null when it
-   * brought none. `poll_page` carries it on exactly the polls whose page
-   * draws this card, so on a poll opened at its results the card is drawn
-   * from what is already in hand rather than from a request that could not
-   * even be sent until that read came back. See 0050.
-   *
-   * Null is where this card has always been: the sample poll, a poll that
-   * finished while somebody was watching it (the live tick carries no tally),
-   * and a crossing between two questions. It reads for itself, exactly as
-   * before.
-   */
+  /** The tally `poll_page` already carried; null means read it here. */
   initial?: PollResults | null
-  /**
-   * The results came out while this reader was watching the poll, rather than
-   * being out already when they opened it — the one moment a poll page is
-   * worth marking. See `landed` in Results.module.css.
-   */
+  /** The results came out while the reader watched; see `landed` in Results.module.css. */
   live?: boolean
 }) {
   const h24 = use24HourTime()
-  // Flattened to primitives so the dependency list is complete without
-  // depending on a fresh object identity every render.
   const kind = source.kind
   const key = source.pollId
 
-  // Read every time the card is drawn.
-  //
-  // This used to be remembered for the life of the tab, on the grounds that a
-  // poll whose results are out has taken its last vote and a second read could
-  // only say the same thing. It is not true: a creator can open a closed poll
-  // again and a reopened poll takes more votes, and can correct its options
-  // over the votes it already has — neither is announced to the reader of a
-  // tally held here, which would then be of a poll that has moved on. That
-  // window is gone rather than narrowed: nothing is held. The head round is
-  // cheap now that the full ranking is fetched only when somebody opens it
-  // (see FullRanking), which is what makes paying for it on every load the
-  // easy trade.
-  //
-  // Starting from what was handed in, so a tally the page already holds is
-  // drawn on the first paint rather than a frame after its skeleton -- which
-  // was a second, differently shaped skeleton, since this one is not told the
-  // option count the page's own fallback is.
+  // Read on every draw, never cached: a closed poll can be reopened or have
+  // its options corrected, unannounced to a tally held here.
   const [results, setResults] = useState<PollResults | null>(initial)
   const [error, setError] = useState<string | null>(null)
-  // The handed-over tally, taken once and then gone. A ref rather than the
-  // prop read straight through, because one read's worth of work already done
-  // is a thing that gets used up: this card re-reads whenever it is drawn,
-  // deliberately — a poll can be reopened and take more votes — and a re-read
-  // must never come back with the answer from before it.
+  // The handed-over tally, used once; a later re-read must not reuse it.
   const handoff = useRef(initial)
-  // Whether the bars have been let go. They are drawn at nothing for one
-  // frame and then at their real lengths, which is what there is to animate:
-  // a bar rendered at its length has never been any other length and has
-  // nothing to travel from. Once true it stays true — a live tick that brings
-  // a new tally moves the bars from where they were, and re-running the whole
-  // reveal on every vote would be the page shouting at the reader.
+  // Bars render at zero, then grow. Stays true so a live update moves bars
+  // from where they were instead of replaying the reveal.
   const [grown, setGrown] = useState(false)
 
   useEffect(() => {
     if (!results) return
-    // Two frames, and both of them are load-bearing. A transition needs the
-    // browser to have *painted* the width it is travelling from, and an
-    // effect does not guarantee that has happened: React runs this after the
-    // commit but the frame may not have been drawn yet, so flipping the width
-    // one frame later can still land in the same paint as the zero — which
-    // the browser resolves by drawing the bars full length and transitioning
-    // nothing. Waiting for the frame after the first is what makes the empty
-    // bar real.
+    // Two frames: the zero width must actually be painted before the
+    // transition, and one rAF after an effect doesn't guarantee that.
     let second = 0
     const first = requestAnimationFrame(() => {
       second = requestAnimationFrame(() => setGrown(true))
@@ -145,7 +90,6 @@ export function Results({
   }, [results])
 
   useEffect(() => {
-    // Already drawn, by the state's starting value.
     const given = handoff.current
     handoff.current = null
     if (given) return
@@ -179,24 +123,14 @@ export function Results({
 
   if (!results) return <ResultsSkeleton />
 
-  // The one thing a time poll changes about this card, and it is applied to
-  // every poll because it costs nothing to: an ordinary poll's options are not
-  // window starts, so they come back exactly as they went in. Everything below
-  // reads `name` and none of it knows or cares that the name it is reading was
-  // an ISO timestamp a line ago. See relabelResults.
+  // Time-poll names become readable; ordinary names pass through.
   const shown = relabelResults(results, h24)
   const nameById = new Map(shown.options.map((o) => [o.id, o.name]))
   const maxScore = Math.max(1, ...shown.options.map((o) => o.total_score))
-  // The scoring round, as far down it as this page goes: the top ten. The
-  // bars are scaled against the whole field's best rather than the shown
-  // rows' -- the two are the same number, since the rows are taken off the
-  // top -- and the full ranking below still receives every option, which is
-  // what it names places from. See resultsRows.ts.
+  // Capped for the page; the full ranking still gets every option.
   const scoreRound = capRows(shown.options, SCORING_ROWS_MAX)
 
-  // The winning window as an event, from its *unrelabelled* name: that is the
-  // instant, offset and all, where the shown name is only how it reads. Asked
-  // of the elected option and of the coin's, which is why it takes an id.
+  // A calendar event from the *raw* option name, which is the actual instant.
   const startById = new Map(results.options.map((o) => [o.id, o.name]))
   const eventFor = (id: string): MeetingEvent | null => {
     const start = startById.get(id)
@@ -211,21 +145,11 @@ export function Results({
   }
   const winnerEvent = shown.winner_id ? eventFor(shown.winner_id) : null
 
-  // Wrapped so the tally fades in over the shape that was standing in for it,
-  // rather than replacing it between two frames. The winner card below has an
-  // entrance of its own as well, and needs one: a poll watched as it finishes
-  // grows a winner without this ever remounting.
   return (
     <Reveal>
       <Stack gap="md">
-        {/* The one card on the page worth arriving rather than appearing. It is
-          the answer the whole poll was run to get, and it is also the only
-          thing here that was not on screen a moment ago — everything below it
-          is a working, and a working does not need announcing. Deliberately
-          the same small rise as everything else in the app: this is the end of
-          a decision about where to eat, and it should look pleased rather
-          than triumphant. The card that says there is no winner gets the same
-          entrance, being the same news. */}
+        {/* Its own entrance, since a poll that finishes while watched grows
+            this card without the rest remounting. */}
         {shown.winner_id && (
           <Reveal>
             <Card
@@ -236,9 +160,7 @@ export function Results({
               <Group justify="space-between" align="center" gap="sm">
                 <Text fw={700} size="lg">
                   Winner: {nameById.get(shown.winner_id)}
-                  {/* A time poll's length: every option is a window of it, and
-                      nothing else on the results says how long that is. Kept
-                      on one line, so "(4" and "hours)" are never split. */}
+                  {/* A time poll's meeting length, kept on one line. */}
                   {winnerEvent && (
                     <>
                       {' '}
@@ -259,7 +181,6 @@ export function Results({
               withBorder
               bg="var(--mantine-color-orange-light)"
               className={live ? classes.landed : undefined}
-              // Its ring in its own colour; see `landed`.
               style={
                 { '--landed-ring': 'var(--mantine-color-orange-filled)' } as React.CSSProperties
               }
@@ -291,10 +212,8 @@ export function Results({
           </Caveat>
         )}
 
-        {/* The runoff first, straight under the winner, because it is what
-            elected the winner. Read the other way round, the first thing a
-            reader saw was the score round's leader -- who often is not the
-            winner -- and the card that explains why came second. */}
+        {/* The runoff comes first: it is what elected the winner, and the
+            score round's leader often isn't the winner. */}
         {shown.runoff && shown.finalists.length === 2 && (
           <RoundCard
             title="Runoff"
@@ -333,16 +252,13 @@ export function Results({
                     {o.total_score} pts (avg {o.average_score})
                   </Text>
                 </Group>
-                {/* Hidden from a screen reader, which has the points in words on
-                    the line above and would otherwise hear an unnamed
-                    progress bar at 85.71428571428571%. */}
+                {/* The points are already in words above. */}
                 <Progress
                   aria-hidden
                   value={grown ? (o.total_score / maxScore) * 100 : 0}
                   color={shown.finalists.includes(o.id) ? 'blue' : 'var(--muted-bar)'}
                   classNames={{ root: classes.bar, section: classes.section }}
-                  // Its place in the tally, which is what the bars are
-                  // staggered along; see Results.module.css.
+                  // Staggers the bars; see Results.module.css.
                   style={{ '--row': index } as React.CSSProperties}
                 />
               </div>
@@ -362,14 +278,7 @@ export function Results({
   )
 }
 
-/**
- * The ties the scoring round had to break to fill the runoff, laid over the
- * scoring card when somebody asks for them. See RoundCard.
- *
- * One section per tie, in the order they were met. A poll needs two only when
- * the first tie filled one runoff slot and a second, lower down, filled the
- * other.
- */
+/** The score round's tie-breaks, one section per tie in the order met. */
 function ScoringTieBreaks({ tiebreaks }: { tiebreaks: Tiebreak[] }) {
   return (
     <Stack gap="sm">
@@ -418,16 +327,7 @@ function ScoringTieBreaks({ tiebreaks }: { tiebreaks: Tiebreak[] }) {
   )
 }
 
-/**
- * How a level runoff was settled, laid over the runoff card when somebody
- * asks. See RoundCard.
- *
- * The same shape as the scoring round's tie-break on purpose: the rules in
- * the order they are tried, each marked as having settled it or not, then a
- * line saying what came of it. The rules are the runoff's own: the higher
- * scoring total, then five-star votes. A runoff level on all three elects nobody, which the card
- * at the top of the page already says.
- */
+/** How a level runoff was settled: higher score total, then five-star votes. */
 function RunoffTieBreak({
   results,
   runoff,
@@ -494,15 +394,7 @@ function RunoffTieBreak({
   )
 }
 
-/**
- * One rule a tie-break tried, by its place in the order, and whether it
- * settled the tie.
- *
- * Named rather than numbered. A bare "1." over the only rule a tie needed
- * read as the first item of a list whose other items had gone missing; "First
- * rule" says the same thing about order and is still true when it is the only
- * rule shown, since the later ones were never reached.
- */
+/** "First rule: …", named rather than numbered (a lone "1." looks like a truncated list). */
 function StepHeading({ n, label, decisive }: { n: number; label: string; decisive: boolean }) {
   return (
     <Group gap="xs">
@@ -516,63 +408,33 @@ function StepHeading({ n, label, decisive }: { n: number; label: string; decisiv
   )
 }
 
-/** Every tie-break has two rules at most: the score round's and the runoff's alike. */
+/** Every tie-break has at most two rules. */
 const RULE_ORDINALS = ['First rule', 'Second rule']
 
 const fiveStarVotes = (n: number) => `${n} ${n === 1 ? 'five-star vote' : 'five-star votes'}`
 
 /**
- * The colours of the runoff's answers: either finalist, or neither.
- *
- * Two hues rather than the one blue both finalists wear in the scoring round,
- * because here they are being told apart rather than picked out. Blue and
- * violet are the two ends of the app's own gradient. "Scored them equally" is
- * grey, like the options that missed the runoff, and is only ever drawn when
- * it is the whole chart (see RunoffChart). Colour is never the only cue: each
- * name is written under its own end of the arc.
+ * Runoff colours: blue and violet (the app's gradient ends) to tell the
+ * finalists apart, grey for "scored equally". Names are always written too.
  */
 const RUNOFF_COLORS = { a: 'blue.6', b: 'violet.6', equal: 'gray.5' } as const
 
 const cssColor = (color: string) => `var(--mantine-color-${color.replace('.', '-')})`
 
-/** How wide the runoff's half pie is; it stands half as tall. */
+/** The half pie's width; it is half as tall. */
 const CHART_SIZE = 240
 
 /**
- * The runoff as half a pie: one finalist's voters from the left and the
- * other's from the right.
- *
- * **Two slices at most.** A voter who scored both finalists the same took
- * neither side, and the runoff is decided by the voters who did, so a grey
- * slice between the two would make the result look closer than it was. They
- * are still counted, in the line under the chart. The one time they are drawn
- * is when nobody preferred either finalist, where they are the whole arc:
- * a grey half pie is a truthful picture of a runoff nobody took a side in,
- * and an empty space is not.
- *
- * Half a pie, because a runoff is only ever two options and the question is
- * which side of the middle the vote fell on. The top of the arc is the
- * halfway mark, so a reader can see who won before reading a number.
- *
- * It is drawn as a full pie whose centre sits on the bottom edge of a box half
- * its height (`cy: '100%'`), so the half that is never drawn takes no room on
- * the page.
- *
- * It sweeps in the way the scoring bars grow, and for the same reason: the
- * comparison happens on screen. Not under reduced motion, which the rule in
- * index.css cannot reach here, because the chart animates from JavaScript.
- * 500ms is `--motion-slow`, written as a number because that is all the chart
- * takes.
- *
- * Hidden from screen readers and kept out of the tab order: the lines under
- * it say everything the arc does, in words.
+ * The runoff as a half pie, one finalist from each side, so the winner is
+ * visible past the top. Voters who scored both equally are left out (they
+ * don't decide it) except when nobody chose a side. Drawn as a full pie
+ * centred on the bottom edge of a half-height box. The chart animates from
+ * JS, so reduced motion is checked here; 500ms is `--motion-slow`.
  */
 function RunoffChart({ a, b, runoff }: { a: string; b: string; runoff: Runoff }) {
   const reducedMotion = useReducedMotion(false, { getInitialValueInEffect: false })
   const nobodyChose = runoff.prefers_a + runoff.prefers_b === 0
-  // A zero slice is still drawn as a hairline of stroke; leaving it out draws
-  // nothing, which is what it is. And with no ballots at all there is no
-  // chart, only the lines under it.
+  // Zero slices would still draw a hairline of stroke.
   const data = (
     nobodyChose
       ? [{ name: 'Scored equally', value: runoff.ties, color: RUNOFF_COLORS.equal }]
@@ -585,9 +447,7 @@ function RunoffChart({ a, b, runoff }: { a: string; b: string; runoff: Runoff })
   return (
     <Stack gap="xs" align="center">
       {data.length > 0 && (
-        // Inert as well as hidden: the chart draws a focusable surface, and a
-        // hidden thing the keyboard can still land on is a stop that
-        // announces nothing.
+        // Inert too: the chart draws a focusable surface.
         <Box aria-hidden inert>
           <PieChart
             data={data}
@@ -617,7 +477,6 @@ function RunoffChart({ a, b, runoff }: { a: string; b: string; runoff: Runoff })
         <RunoffSide name={b} preferred={runoff.prefers_b} color={RUNOFF_COLORS.b} side="right" />
       </Group>
       <Group gap={6} wrap="nowrap" justify="center">
-        {/* No swatch for a slice the chart did not draw. */}
         {nobodyChose && runoff.ties > 0 && <Swatch color={RUNOFF_COLORS.equal} />}
         <Text size="sm" c="dimmed">
           {voters(runoff.ties)} scored both finalists equally.
@@ -627,11 +486,7 @@ function RunoffChart({ a, b, runoff }: { a: string; b: string; runoff: Runoff })
   )
 }
 
-/**
- * One finalist, under its own end of the arc: its colour, its name, and the
- * voters who preferred it. The swatch is on the outside edge on both sides, so
- * the two read as a pair facing each other.
- */
+/** One finalist under its end of the arc, swatch on the outside edge. */
 function RunoffSide({
   name,
   preferred,
@@ -677,33 +532,15 @@ function Swatch({ color }: { color: string }) {
 }
 
 /**
- * Something that happened to this poll after people started voting in it,
- * stated on the results themselves.
- *
- * Both of the things it says are consequences of rules this app deliberately
- * relaxed: a creator may now correct an option list that already has ballots
- * scored against it, and may open a closed poll again rather than duplicating
- * it. Neither is a mistake, and neither is announced as one — but both of them
- * mean the tally below rests on something a reader would otherwise assume did
- * not happen, and a result is only worth as much as what the reader knows
- * about how it was reached.
- *
- * Yellow rather than red: nothing here is broken, and the card is not the
- * news. Yellow rather than the orange the no-winner card wears, so that a tie
- * and a caveat are never the same colour on the same screen.
- *
- * The database says *whether*, not *what*: see the flags on `polls`. A poll
- * keeps no history of which option was renamed or whose vote moved, because
- * the ballots it holds are secret and were secret when they were cast, so
- * there is nothing more truthful to put here than the fact itself.
+ * A caveat on the result (options edited after votes, or votes after the
+ * reveal). Yellow: not an error, and distinct from the no-winner orange.
+ * The database records only that it happened, not what.
  */
 function Caveat({ children }: { children: ReactNode }) {
   return (
     <Card withBorder bg="var(--mantine-color-yellow-light)" p="sm">
       <Group gap="xs" wrap="nowrap" align="flex-start">
-        {/* Nudged down to the text's own line, since the sentence wraps to two
-            or three on a phone and an icon centred against the block would
-            float away from the words it belongs to. */}
+        {/* Aligned with the first line, since the text wraps on a phone. */}
         <WarningIcon size={18} weight="fill" style={{ flexShrink: 0, marginTop: 2 }} />
         <Text size="sm">{children}</Text>
       </Group>
@@ -711,34 +548,14 @@ function Caveat({ children }: { children: ReactNode }) {
   )
 }
 
-/**
- * The two finalists of a tie, named, as a pair rather than as a list.
- *
- * `finalists` arrives from the tally as an array of ids, and the coin takes
- * exactly two of them — so the tuple is where "exactly two" is stated, and the
- * component never has to wonder what to do with one or three. The only caller
- * is the card above, which has already established the length.
- *
- * A name is looked up rather than carried, and falls back to the id: every
- * finalist is an option of the same tally and so is always in the map, and a
- * coin showing a uuid would be a visible bug rather than a page that failed to
- * draw.
- */
+/** The two tied finalists, as the pair `CoinFlip` takes. */
 function tiedPair(results: PollResults, nameById: Map<string, string>): [Finalist, Finalist] {
   const named = (id: string): Finalist => ({ id, name: nameById.get(id) ?? id })
 
   return [named(results.finalists[0]), named(results.finalists[1])]
 }
 
-/**
- * The head-to-head tie-break, in the units the ballots were cast in.
- *
- * Only a tie between two options is ever settled head to head -- three or
- * more go straight to five-star votes -- so the rule is one comparison, and
- * it is reported as that comparison, in the same words the runoff uses for the
- * same arithmetic. `results` still carries a win count per option, which is
- * one and nothing, or nothing twice, and says less than the pair does.
- */
+/** The head-to-head step: only two-way ties use it, so it is one comparison. */
 function HeadToHead({ step }: { step: HeadToHeadStep }) {
   const m = step.matchups[0]
   if (!m) return null
@@ -760,14 +577,7 @@ function HeadToHead({ step }: { step: HeadToHeadStep }) {
   )
 }
 
-/**
- * The five-star tie-break: how many ballots gave each tied option full marks.
- *
- * Cut short at the same twenty as everything else here. The options this rule
- * settles a tie *for* are at the top of it — it is read in descending order —
- * so what a long group loses from the bottom is the options that were never
- * going to advance on it.
- */
+/** Five-star counts, capped; the cut-off tail is options that weren't going to advance. */
 function FiveStars({ step }: { step: FiveStarStep }) {
   const { rows, hidden } = capRows(step.results)
 
@@ -783,15 +593,7 @@ function FiveStars({ step }: { step: FiveStarStep }) {
   )
 }
 
-/**
- * What a cut-short list left out, in the list's own place.
- *
- * Said rather than implied, because a list that stops at twenty and says
- * nothing is a list claiming the poll had twenty of whatever it is counting —
- * and on this page of all pages a reader is checking numbers against each
- * other. Dimmed and last: it is the one line here that is about the page
- * rather than about the poll.
- */
+/** Says how many a capped list left out, so it never looks complete. */
 function Rest({ hidden, what, pl }: { hidden: number; what: string; pl?: string }) {
   return (
     <Text size="sm" c="dimmed" pl={pl}>
@@ -815,19 +617,8 @@ function renderAdvancedNames(
 }
 
 /**
- * What an option said, once the ballot that said it is gone.
- *
- * A description is a voting aid: on the ballot it belongs under the option's
- * name, where it is read while the decision is being made. By the time the
- * results are out that decision has been taken, and a paragraph beside a bar
- * of points is in the way of the number it is sitting next to. But it is
- * also the only record of what the option actually was, and a poll read back
- * months later is exactly when "Option B" needs explaining.
- *
- * So it is here, and it is folded away: one dimmed mark beside the name,
- * showing nothing at all on the options that never had one; which is
- * nearly all of them. A popover rather than a tooltip, because a tooltip on
- * a phone is a thing that cannot be opened.
+ * An option's description, folded into a popover beside its name (a tooltip
+ * can't be opened on a phone). Shown only for options that have one.
  */
 function OptionNote({ name, description }: { name: string; description: string }) {
   return (

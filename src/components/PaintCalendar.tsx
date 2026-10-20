@@ -9,10 +9,7 @@ import {
   type ScheduleEventData,
   type ScheduleViewLevel,
 } from '@mantine/schedule'
-// Imported here rather than in main.tsx so it travels in this component's own
-// chunk: Vite splits a lazy chunk's CSS with it, and the two things that draw
-// a calendar -- the time ballot and the create form -- are both behind a
-// lazy() of their own. A poll that chooses an option never fetches it.
+// Imported here so the CSS is split into this lazy chunk rather than main.
 import '@mantine/schedule/styles.css'
 import dayjs from 'dayjs'
 import {
@@ -32,95 +29,40 @@ import { use24HourTime } from '../lib/clock'
 import type { DailyWindow, PollSchedule } from '../lib/types'
 
 /**
- * A calendar somebody paints, and the only place in this app that knows how.
+ * The paintable calendar shared by the time ballot, the create form and the
+ * time-collecting card. Built on `@mantine/schedule`, an event calendar, by
+ * rendering the painting back as background events and wiring its gestures:
+ * drag and tap to paint, a day heading or month day to fill a day, a month
+ * chip to erase, and the header's range label to fill what is on screen.
  *
- * It is used twice and the two uses are the same gesture asked two questions:
- * a **voter** paints how good each time is for them, and a **creator** paints
- * which times the poll is asking about at all. Both are a rating per cell --
- * the creator's happens to have two values -- so both are one component, one
- * set of drag handlers and one header. Before this the create form asked for
- * per-day hours as rows of dropdowns, which is the same answer typed out.
+ * The library's own header is off (`withHeader={false}`) and rebuilt from its
+ * parts, which leaves the day heading as the only caller of `onDateChange` in
+ * the week view -- so that callback can safely mean "fill this day".
  *
- * **What `@mantine/schedule` is**, since building on it looks stranger than it
- * is: an event calendar in the Google Calendar mould, whose primitive is an
- * event with a start, an end and a colour. It has no notion of a rated cell
- * and no availability grid. The adaptation is a handful of its props, and each
- * one is a gesture:
- *
- * - `withDragSlotSelect` with `onSlotDragEnd` gives the drag, and
- *   `onTimeSlotClick` covers a single tap -- a plain click is not a drag of
- *   length zero to that hook, it is nothing at all, so both are wired.
- * - The painting is rendered back as events, which the caller builds: the two
- *   callers colour a cell by different things.
- * - **A day's column heading fills that day**, through `onDateChange`.
- * - In the month view, which has no time grid at all, a day *is* the unit:
- *   `onDayClick` fills one and a drag across several fills those -- on a
- *   pointer that is not a finger; see the view for why touch gets the tap
- *   alone and the scrolling back in exchange. **A tap on a chip rubs out what
- *   it covers** (`onEventClick`), which is the way back from the tap that drew
- *   it.
- * - **Which way a touch means the calendar and which way it means the answer**
- *   is `PAN_SIDEWAYS`, on the two time grids: sideways scrolls the days,
- *   downwards paints -- except on a cell the poll is not asking about, which
- *   has nothing to paint and scrolls either way (`outOfBoundsSlot`).
- * - **The range in the header fills everything on screen**, which is the one
- *   gesture here that is not the library's at all: its own label made clickable
- *   (`fillVisible`), so the answer to "all of September" is the word September.
- *
- * **The header is ours, and that is what makes the heading gesture honest.**
- * `onDateChange` is fired by four things in a week grid -- the previous and
- * next controls, Today, and the day heading -- and by two in a month. Turning
- * the library's header off (`withHeader={false}`) leaves exactly one caller in
- * each view: the day heading in the week grid, and nothing at all in the other
- * two. So the callback means one thing, and the code reads as what it is
- * rather than as a guess about which control fired.
+ * See "The ballot" in AGENTS.md for the reasoning behind each gesture.
  */
 
-/**
- * The views offered, which is the library's four minus the year: a year of
- * months is a screen with nothing on it to paint, and no poll spans one.
- *
- * A poll answered in whole days gets the month alone. There are no hours to
- * paint on one -- a granule *is* a day -- so a week grid would be a wall of
- * cells that all do the same thing and a day grid would be one cell.
- */
+/** No year view. A daily poll gets the month alone. */
 const VIEWS: readonly ScheduleViewLevel[] = ['day', 'week', 'month']
 
-/**
- * The week grid gives every day heading the accessible name
- * `<weekday label> <date>`, and that label is the one string this calendar has
- * to say what the heading does. A screen reader reads "Fill the whole day
- * 2026-09-04" rather than "Weekday 2026-09-04", which is the difference
- * between a control and a caption.
- */
+// The week grid names each day heading `<weekday label> <date>`; this makes a
+// screen reader say "Fill the whole day 2026-09-04".
 const LABELS = { weekday: 'Fill the whole day' }
-
-/** And on a calendar that is only read, where a heading is only a caption. */
 const READ_LABELS = { weekday: 'Weekday' }
 
 /**
- * The one thing drawn inside an event: a month chip's label, in a colour the
- * calendar would otherwise pick badly.
- *
- * A chip takes its text colour from Mantine's variant resolver, and at the
- * darker end of a rating ramp that comes back close enough to the background
- * to be unreadable -- `green.9` on `green.9`. The ballot draws its runs on the
- * two time grids with no title at all. The results' average carries a `fill`
- * of its own as well, and a `hint` naming the number behind it.
+ * What is drawn inside an event. `ink` overrides the chip text colour, which
+ * Mantine picks unreadably at the dark end of the ramp. `fill` is for colours
+ * that are not theme shades (the results' blends), which the library would
+ * otherwise draw as a faint tint.
  */
 function eventBody(event: ScheduleEventData) {
   const hint = event.payload?.hint as string | undefined
   const fill = event.payload?.fill as string | undefined
   const ink = event.payload?.ink as string | undefined
   if (!fill) return <span style={{ color: ink }}>{event.title}</span>
-  // A colour that is not one of the theme's own shades -- the results' blend
-  // between two ratings -- is drawn by the library as a ten-percent tint of
-  // itself, which is near enough white to say nothing. So the block is painted
-  // here instead: a layer filling it edge to edge, padding included, behind
-  // the text. Pointer events are handed back to it, which the library takes
-  // off a background block, so that hovering it can show the hint; it is only
-  // ever set on a calendar nobody paints, where there is nothing under the
-  // block for a pointer to reach.
+  // pointerEvents is restored so the hint shows on hover; `fill` is only set
+  // on read-only calendars, where nothing underneath needs the pointer.
   return (
     <>
       <span
@@ -133,141 +75,50 @@ function eventBody(event: ScheduleEventData) {
 }
 
 /**
- * Which way a finger on a time grid means the calendar and which way it means
- * the answer: **sideways is the view, downwards is a stroke.**
- *
- * A week of seven days is wider than a phone, so the days have always had to
- * scroll sideways -- and they could not. The library gives every paintable
- * slot a `data-drag-slot-index`, and its stylesheet gives everything holding
- * that attribute `touch-action: none`, so the browser did nothing at all with
- * a touch that started on the grid: a sideways swipe moved no days, and a
- * downwards one painted the column it started in rather than scrolling the
- * page. The one way across a week was to find the hour column or the day
- * headings, which carry no slots and so were the only part of the calendar
- * that still scrolled.
- *
- * `pan-x` hands the sideways axis back to the browser and keeps the other,
- * which is the split the grid already means: a drag down a column is how a
- * stretch of the day gets painted, and there is nothing down there to scroll
- * to, since the days run across. The browser decides which it is from the
- * first few pixels and holds that for the rest of the gesture, so a swipe
- * that is not quite straight still does one thing rather than half of each --
- * and what it hands back is a real scroll, with the momentum and the overscroll
- * a hand-rolled one never quite has.
- *
- * `pinch-zoom` is kept beside it because the alternative is taking it away:
- * `pan-x` alone is the whole of what the browser may do, and a grid nobody can
- * zoom into is a grid somebody cannot read. It costs nothing here -- a pinch
- * is two fingers and a stroke is one.
- *
- * Only touch and pen ever read this. A mouse drag is unaffected, so painting
- * with one is exactly what it was.
+ * On a finger, sideways scrolls the days and downwards paints. Needed because
+ * the library gives every slot `touch-action: none`. Mouse is unaffected.
  */
 const PAN_SIDEWAYS = { touchAction: 'pan-x pinch-zoom' }
 
-/** A cell or a day the poll is not asking about: visible, and not paintable. */
 const outOfBounds = {
   disabled: true,
   style: { background: 'var(--mantine-color-gray-light)', cursor: 'not-allowed' },
 }
 
 /**
- * The same on a time grid, where it also has to say which way it may be
- * swiped -- and the answer is **either way**.
- *
- * A greyed cell takes no gesture, and that is exactly why it needs this: the
- * library hands every slot a drag index whether or not the caller will paint
- * it, so an out-of-bounds cell is `touch-action: none` like any other and a
- * whole greyed morning is a patch the days will not scroll under. Refusing to
- * be painted and refusing to be swiped across are different refusals.
- *
- * It gets the downward axis too, which a paintable cell keeps for its stroke.
- * A cell that cannot be painted has no stroke to keep it for, so `pan-x`
- * alone left a downward swipe on it doing nothing at all -- the one place on
- * the page where a finger moved and nothing answered, between a page that
- * scrolls and cells that paint. Handing it back makes a greyed day part of
- * the page: a swipe that starts there scrolls, and one that starts on a day
- * the poll asks about still paints. The browser settles which from the cell
- * the finger lands on and holds it, so a stroke begun on an open cell that
- * runs into a greyed one is still a stroke, and a scroll begun on a greyed
- * one is still a scroll; a drag the library had opened under that scroll is
- * ended without painting by `cancelled`, like any other.
- *
- * Not shared with the month, whose out-of-bounds days go through `getDayProps`
- * and want no restriction at all: with the drag off there (see the view) a
- * greyed day is simply part of the page already.
+ * An out-of-bounds time slot. It still carries the library's drag index (and
+ * so `touch-action: none`), and has no stroke to protect, so it scrolls both
+ * ways. Month days don't need this: their drag is off on touch.
  */
 const outOfBoundsSlot = {
   ...outOfBounds,
   style: { ...outOfBounds.style, touchAction: 'pan-x pan-y pinch-zoom' },
 }
 
-/**
- * The same, on a calendar that is only read: still greyed, because "the poll
- * did not ask about this" is part of what is being read, but without the
- * cursor that says a press was refused -- there is no press to refuse.
- */
+/** Greyed on a read-only calendar, without the not-allowed cursor. */
 const outOfBoundsRead = {
   disabled: true,
   style: { background: outOfBounds.style.background },
 }
 
-/**
- * An arrow with nowhere left to go; see `stepTo`.
- *
- * `disabled` is what stops the press, and the other two are what say so: the
- * library's control has no disabled state in its own stylesheet, so
- * `interactive` takes away the pointer and the hover and the dimming is the
- * rest of it.
- */
+/** An arrow with nowhere to go. The library's control has no disabled style of its own. */
 function dead(is: boolean) {
   return { disabled: is, interactive: !is, style: is ? { opacity: 0.4 } : undefined }
 }
 
-/**
- * How tall one hour of the two time grids is, in pixels.
- *
- * The library's `slotHeight` is an hour and not a row: a row is that times
- * `intervalMinutes / 60`, so a half-hour grid draws forty-pixel hours as
- * twenty-pixel rows. The hours column beside them is laid out from the same
- * number, which is why this is a constant rather than a literal in `grid` --
- * a grid whose rows and whose labels disagreed about the height of an hour is
- * exactly the fault `hoursColumn` exists to correct.
- */
+/** One hour of the time grids, in px. The library's `slotHeight` is per hour, not per row. */
 const HOUR_HEIGHT = 40
 
 /**
- * The hours column, lined up with the rows beside it on an axis that does not
- * begin or end on the hour.
- *
- * The library draws that column as one box per whole hour the axis contains,
- * each an hour tall and stacked from the top of the grid -- which is the same
- * thing as assuming the axis starts on one. A poll whose earliest start is
- * 14:30 begins half an hour above its first label, so every hour in the column
- * named the row half an hour before it -- `15:00` against the 14:30 row -- and
- * the column ran out of labels before the grid ran out of rows, leaving the
- * last hour listed with three half-hours under it instead of two.
- *
- * One declaration for each end of the axis:
- *
- * - **`paddingTop`** is the part of the first hour the axis begins inside --
- *   half an hour at 14:30, nothing at 14:00 -- which drops the first label
- *   onto the line where its hour really starts, and every label after it with
- *   it, since they are a stack.
- * - **`height`, with the overflow hidden**, is the other end. An axis ending
- *   at 17:30 has a `17:00` box an hour tall over a grid with half an hour left
- *   in it, so the column hung half a row below the last row and took the
- *   grid's bottom edge down with it. Cut to the height of the rows, the last
- *   label is as tall as the row it names.
- *
- * Neither is a special case: an axis that does start and end on the hour gets
- * no padding and the height the column already had.
+ * Lines the hours column up with the rows on an axis that does not start or
+ * end on the hour. The library stacks one hour-tall label per hour from the
+ * top, so a 14:30 start put every label half a row off; pad the top by the
+ * partial first hour and cut the height to the rows.
  */
 function hoursColumn(axis: DailyWindow, granularity: number) {
   const start = toMinutes(axis.start)
   const perMinute = HOUR_HEIGHT / 60
-  // The rows the library will draw: one per granule, and a last one drawn
-  // whole even where the axis ends partway through it.
+  // One row per granule; a partial last one is drawn whole.
   const rows = Math.ceil((toMinutes(axis.end) - start) / granularity)
   return {
     paddingTop: ((60 - (start % 60)) % 60) * perMinute,
@@ -276,44 +127,24 @@ function hoursColumn(axis: DailyWindow, granularity: number) {
   }
 }
 
-/**
- * The time column, held still while the days scroll under it.
- *
- * A week of seven days will not fit on a phone -- the library holds every day
- * column to a five-rem minimum and scrolls the lot sideways -- and what
- * scrolled out of sight first was the one column saying what the rows are. A
- * grid of unlabelled cells is not a grid.
- *
- * Three declarations, and the first is the one that needs explaining.
- * `weekViewInner` is `overflow: hidden`, which makes it a scroll container in
- * its own right, and a sticky element sticks to the nearest one of those --
- * a box that never scrolls, so it would not stick at all. Opening it up hands
- * the column back to the scroll area that actually moves. Nothing is lost by
- * it: every event this calendar draws is positioned inside the day column it
- * belongs to, and the rounded corner is clipped by `weekViewRoot`, which is
- * outside the scroll area and still hides what leaves it.
- */
-/**
- * One hour label in the grid's time column. The library sets that column in
- * capitals, which turns `9:00am` into `9:00AM` -- the one place in the app a
- * time would read differently from the selects and chips beside it.
- */
+/** The library uppercases slot labels, turning `9:00am` into `9:00AM`. */
 const SLOT_LABEL: CSSProperties = { textTransform: 'none' }
 
+/**
+ * Pins the time column while a wide week scrolls sideways. `weekViewInner` has
+ * to be opened up: its `overflow: hidden` makes it the (non-scrolling) box a
+ * sticky child would stick to.
+ */
 const STICKY_TIMES = {
   weekViewInner: { overflow: 'visible' },
   weekViewSlotLabels: {
     position: 'sticky',
     insetInlineStart: 0,
-    // Over the painted runs, which the library's own sheet puts at 2.
+    // Above the painted runs, which the library puts at 2.
     zIndex: 3,
-    // The first day column's own border, redrawn on the sticky edge -- the
-    // real one travels with the day that owns it.
+    // Redraws the first day column's border, which scrolls away with its day.
     boxShadow: '1px 0 0 var(--week-view-border-color)',
   },
-  // The corner above it, which is inside the header's stacking context and so
-  // needs only to beat the day headings sliding beneath it. Transparent by
-  // default, and a transparent pane is not a pane.
   weekViewCorner: {
     position: 'sticky',
     insetInlineStart: 0,
@@ -342,109 +173,45 @@ export function PaintCalendar({
   schedule: PollSchedule
   /** The cells that may be painted at all; everything else is drawn greyed. */
   bounds: Bounds
-  /** The hours the grid is drawn between -- the poll's `window` on a ballot. */
+  /** The hours the grid is drawn between. */
   axis: DailyWindow
   painting: Record<GranuleKey, number>
-  /**
-   * What a gesture writes. 0 rubs out, and never toggles; see `fillCells`.
-   * Absent on a calendar nobody paints; see `readOnly`.
-   */
+  /** What a gesture writes. 0 rubs out and never toggles. Absent when read-only. */
   brush?: number
-  /**
-   * Write one value over a set of cells. The caller keeps the painting,
-   * because the caller is the one that has to send it somewhere. Absent on a
-   * calendar nobody paints.
-   */
+  /** Write one value over a set of cells; the caller owns the painting. */
   onPaint?: (keys: GranuleKey[], value: number) => void
   /**
-   * The painting as events, asked per view: a month has no rows to lay a run
-   * of granules on, so its callers draw something else there. Called during
-   * render rather than passed as an array so that switching view cannot show
-   * the previous view's events for a frame.
+   * The painting as events for a view. A function (called during render) so
+   * switching views never shows the previous view's events for a frame.
    */
   buildEvents: (view: ScheduleViewLevel) => ScheduleEventData[]
-  /**
-   * What clicking a whole day covers, where that is not simply every cell the
-   * day has in bounds.
-   *
-   * The create form is the caller that needs it: every cell of a chosen day is
-   * paintable there, and a day-fill is meant to lay down the creator's own
-   * earliest and latest rather than midnight to midnight. On a ballot the two
-   * are the same set and this is left out.
-   */
+  /** What filling a whole day covers, when not simply the day's in-bounds cells (create form). */
   fillOnDay?: (day: ScheduleDay) => GranuleKey[]
   /**
-   * Whether one cell may be painted, where that is not simply whether it is in
-   * bounds.
-   *
-   * The suggestion calendar is the caller that needs it: a poll collecting its
-   * times is asking for days nobody has proposed yet, so its bounds are the
-   * windows already on the list and what may be painted is any cell of the
-   * grid, on any day. `bounds` still decides which days the calendar opens on
-   * and whether it has wandered off them.
+   * Whether a cell may be painted, when not simply "in bounds" -- the
+   * time-collecting card lets any cell be painted. `bounds` still picks the
+   * opening day and drives `adrift`.
    */
   canPaint?: (key: GranuleKey) => boolean
-  /** And whether a whole day is one the poll is asking about; see `canPaint`. */
+  /** Whether a whole day is one the poll asks about; see `canPaint`. */
   dayInBounds?: (day: ScheduleDay) => boolean
   /**
-   * Keep the arrows on the poll: they step to the next range that has a day in
-   * bounds on it, and stop at the ends.
-   *
-   * **The ballot is the caller, and it is the only screen where the poll's own
-   * days are the whole of the answer.** A voter has nothing to say about a week
-   * the poll is not asking about, so a Next that lands on one is a press that
-   * empties the screen and asks them to work out why -- and on a poll about
-   * three days in September the month arrows do that in one press. Stepping
-   * over the empty ranges rather than into them means every press changes what
-   * there is to answer, and a disabled arrow says there is no more of it.
-   *
-   * The two painting screens do not set it, and must not: on the create form
-   * the bounds *are* the answer, so an empty calendar would confine the arrows
-   * to nothing at all, and a poll collecting its times is asking about days
-   * nobody has proposed yet.
+   * Arrows jump to the next range with an in-bounds day and stop at the ends.
+   * The ballot only: on the painting screens the days are the open question.
    */
   confine?: boolean
-  /**
-   * The earliest day the arrows will reach, where there is one.
-   *
-   * The create form's floor, and a weaker rule than `confine`: it says which
-   * way is out of the question rather than which ranges are worth showing. A
-   * poll cannot ask about a day that has already gone (see `ScheduleFields`),
-   * so the month before it is a screen of greyed cells and no way to say
-   * anything on it.
-   */
+  /** The earliest day the back arrow will reach (the create form's "today"). */
   earliest?: ScheduleDay
-  /**
-   * Told the first and last day on screen whenever they change, the first
-   * time included. The ballot keeps a tally of the poll's days a voter has
-   * had in front of them, so that it can say which they have not before the
-   * vote goes in; see TimeBallotCard.
-   */
+  /** Told the first and last day on screen whenever they change. */
   onShowRange?: (from: ScheduleDay, to: ScheduleDay) => void
-  /**
-   * Bring this day on screen, at the current zoom. An object rather than a
-   * bare day so that asking for the same day twice -- after the reader has
-   * moved off it -- is still a change.
-   */
+  /** Bring this day on screen. An object so asking for the same day twice is still a change. */
   reveal?: { day: ScheduleDay } | null
-  /**
-   * A calendar to be read rather than painted: the results' copy of a ballot,
-   * or of every ballot averaged.
-   *
-   * The library's own `mode="static"` does most of it -- no drag, no slot or
-   * heading or chip that answers a press, and nothing in the tab order that
-   * would move nothing -- and what is left is ours: the range in the header
-   * stops being the control that fills it, and the day headings stop being
-   * named after a gesture they no longer have. The arrows and the views still
-   * work, because walking a calendar is reading it.
-   */
+  /** Read, not painted: `mode="static"`, a plain range label, and plain heading names. */
   readOnly?: boolean
 }) {
   const write = onPaint ?? (() => {})
   const strokeWith = brush ?? 0
   const mode = readOnly ? ('static' as const) : ('default' as const)
-  // The heading's accessible name: a gesture on a calendar that has one, and
-  // plain "Weekday" on one that does not. See LABELS.
   const labels = readOnly ? READ_LABELS : LABELS
   const days = daysOf(bounds)
   const daily = isDaily(schedule)
@@ -452,11 +219,8 @@ export function PaintCalendar({
   const asks = dayInBounds ?? ((day: ScheduleDay) => boundsOnDay(bounds, day).length > 0)
   const fill = fillOnDay ?? ((day: ScheduleDay) => boundsOnDay(bounds, day))
 
-  // Which date is on screen, and at what zoom. A poll can span more than one
-  // week, and the calendar opens on the first day it is asking about rather
-  // than on today -- which may be months away from the poll and is never where
-  // the answer is. One date across all three views, so switching between them
-  // stays where the reader was.
+  // Opens on the poll's first day rather than today. One date shared by all
+  // three views, so switching zoom stays put.
   const [date, setDate] = useState(() => days[0] ?? dayjs().format('YYYY-MM-DD'))
   const [view, setView] = useState<ScheduleViewLevel>(daily ? 'month' : 'week')
   const h24 = use24HourTime()
@@ -464,60 +228,25 @@ export function PaintCalendar({
   const narrowLabels = useMediaQuery('(max-width: 560px)', false, {
     getInitialValueInEffect: false,
   })
-  // `10:00am` needs more room than `10:00`, and at three rem the 12-hour labels
-  // were cut off on a phone.
   const timeLabelWidth = narrowLabels ? (h24 ? '3rem' : '4.25rem') : '5rem'
   const daySlotWidth = narrowLabels ? '3rem' : '5rem'
 
   const events = buildEvents(showing)
 
-  // The header, and where its top sat on screen when the zoom last changed;
-  // see `showView`. `null` between changes, so that scrolling for any other
-  // reason -- reading the page, moving a week -- is never corrected.
+  // See `showView`. Null except across a zoom change.
   const header = useRef<HTMLDivElement>(null)
   const held = useRef<number | null>(null)
 
-  /**
-   * Whether the pointer on this device is a finger, asked of the device rather
-   * than of the screen's width: a narrow window on a laptop is still a mouse,
-   * and a tablet turned sideways is still not one. It is what decides whether
-   * the month may be dragged across; see the view itself.
-   *
-   * Read during the first render rather than in an effect, which is what
-   * `getInitialValueInEffect` turns off. The default defers the answer by a
-   * commit, and the month would mount with the drag on and lose it a frame
-   * later -- a gesture that exists for the length of one frame is worse than
-   * one that never existed. There is no server to render this for, so there is
-   * nothing the early answer can disagree with.
-   */
+  // Asked of the device, not the width. Read on first render so the month
+  // never mounts with a drag it loses a frame later.
   const touch = useMediaQuery('(pointer: coarse)', false, { getInitialValueInEffect: false })
 
   /**
-   * A drag the browser took away, and the paint it must not leave behind.
-   *
-   * `PAN_SIDEWAYS` lets the browser claim a sideways swipe, and the way it
-   * claims one is `pointercancel` -- fired after `pointerdown` has already
-   * opened a drag in the library, and after a move or two has already widened
-   * it. The library's own drag listens for `pointermove` and `pointerup` and
-   * for nothing else, so a cancelled gesture leaves it holding a drag that
-   * never ends: the cells keep the border that says they are selected, and the
-   * *next* `pointerup` anywhere on the page -- a tap on Submit, a minute later
-   * -- closes it and paints the range. A stroke nobody made, arriving after
-   * they had stopped looking.
-   *
-   * So the cancel is turned into the ending the library is waiting for. A
-   * `pointerup` on the document runs its handler, which clears the drag and
-   * the border; the flag is what stops that handler's one side effect, since
-   * the range it would commit is the swipe that scrolled. Both drag-end
-   * callbacks read it -- the month cannot be cancelled this way while its drag
-   * is off on touch, but a cancel has other causes than a scroll, and a rule
-   * that holds for one of the two gestures is a rule the next reader has to
-   * check.
-   *
-   * Sent on the next frame rather than now, so that a drag opened microseconds
-   * ago has had its listeners attached by the effect that attaches them; the
-   * flag is dropped immediately after, because the handler runs inside the
-   * dispatch and a cancel that commits nothing must not disarm the next drag.
+   * When the browser claims a swipe it fires `pointercancel`, but the
+   * library's drag only listens for `pointerup` -- so it would stay open and
+   * paint on the next `pointerup` anywhere. We dispatch a synthetic
+   * `pointerup` (next frame, once its listeners exist) and set this flag so
+   * the drag-end callbacks skip committing it.
    */
   const cancelled = useRef(false)
 
@@ -534,122 +263,54 @@ export function PaintCalendar({
   }, [])
 
   /**
-   * Change the zoom, and leave the calendar where it was on screen.
-   *
-   * The three views are wildly different heights: a week of half-hours is over
-   * a thousand pixels tall and the same poll's month is a few hundred. So
-   * switching between them moves the page under the reader -- the document
-   * becomes shorter than the position it is scrolled to, the browser clamps
-   * that position, and a calendar that was filling the screen is suddenly
-   * halfway down it. Nothing scrolled on purpose, which is exactly why it
-   * reads as a fault rather than as a consequence.
-   *
-   * So the calendar's own top is measured before the switch and the page is
-   * scrolled by however far it moved after it, which pins the header and lets
-   * the grid change size below it. Where the document is too short to hold the
-   * position the reader was at, there is nowhere to put them back and the
-   * effect below brings the calendar to the top of the screen instead.
+   * Change zoom without the page jumping. The views differ in height by
+   * hundreds of pixels, so the browser clamps the scroll; we measure the
+   * header before and scroll it back into place in a layout effect after.
    */
   function showView(next: ScheduleViewLevel) {
     held.current = header.current?.getBoundingClientRect().top ?? null
     setView(next)
   }
 
-  // After React has committed the new view and before the browser paints it,
-  // so neither correction is ever a visible jump and back.
   useLayoutEffect(() => {
     const was = held.current
     held.current = null
     const row = header.current
     if (was === null || !row) return
 
-    // Reading the rectangle forces layout, so this is the new view's geometry
-    // with the browser's own clamping already applied. Nothing above the header
-    // moved, so all the difference can be is that clamping.
     window.scrollBy({ top: row.getBoundingClientRect().top - was })
 
-    // And when it could not be undone, the page had no room for the position
-    // the reader was at: they were a thousand pixels into a week of half-hours
-    // and the month that replaced it is a few hundred tall, so the scroll above
-    // asked to go past the bottom of a document that had just got shorter. The
-    // reader cannot be put back, so the calendar is brought to the top of the
-    // screen instead -- the new view whole, rather than the part of it the
-    // clamp happened to leave on screen. `scrollMarginTop` is what keeps it out
-    // from under the app's own fixed header; see the element itself.
+    // Still lower than before: the document got too short to restore the
+    // position, so bring the calendar to the top instead.
     if (row.getBoundingClientRect().top > was + 1) row.scrollIntoView({ block: 'start' })
   }, [showing])
 
-  /**
-   * Set every cell in a half-open range to the brush, skipping what is out --
-   * or, where the range is already exactly that, take it back.
-   *
-   * **A stroke toggles, the same way every other gesture on this calendar
-   * does.** Painting over what you have just painted is how somebody says "not
-   * that after all": it is the gesture already to hand, it is the one the day
-   * heading and the header's range have always answered to, and without it the
-   * only way back from a stroke is to find the brush that means nothing and
-   * lay it over the same cells. See `fillCells` for the rule and for why a
-   * brush of 0 is exempt from it.
-   */
   function paint(fromSlot: string, toSlot: string) {
     fillCells(cellsBetween(fromSlot, toSlot))
   }
 
-  /**
-   * The cells one stretch of a day covers and the poll is asking about -- the
-   * shape a dragged range and a drawn event both arrive in; see
-   * `granulesBetween`.
-   *
-   * Filtered cell by cell rather than day by day, because a day can be in
-   * bounds for part of itself: a drag from 09:00 down a Friday that only
-   * starts at 18:00 marks the evening and leaves the morning alone, rather
-   * than being refused whole.
-   */
+  /** The paintable cells in one stretch of a day (filtered per cell, since a day can be partly in bounds). */
   function cellsBetween(fromSlot: string, toSlot: string): GranuleKey[] {
     return granulesBetween(fromSlot, toSlot, schedule.granularity).filter(open)
   }
 
-  /**
-   * Rub out what one drawn block covers, which is what tapping it means.
-   *
-   * The month is where this matters: a day there is filled by tapping it, and
-   * the chip that appears is the only thing left on top of that day -- so the
-   * tap that would take it back lands on the chip and, until this, did
-   * nothing. Two gestures a finger cannot tell apart, one of which worked.
-   *
-   * It clears rather than toggling. The stretch under the chip is by
-   * definition painted, so the only thing "again" could mean is gone.
-   */
+  /** Tapping a drawn block clears it -- the undo for a tap-filled month day. */
   function erase(event: ScheduleEventData) {
-    // Every event this calendar draws comes back from `runBounds` as wall
-    // clock in the poll's own offset. The library's type also allows a `Date`,
-    // which is the one thing that could carry a reader's zone into this grid,
-    // so it is refused rather than converted.
+    // Our events are always wall-clock strings; a `Date` would smuggle in the
+    // reader's zone, so refuse it.
     if (typeof event.start !== 'string' || typeof event.end !== 'string') return
     const keys = cellsBetween(event.start, event.end)
     if (keys.length > 0) write(keys, 0)
   }
 
-  /** What a click covers across a run of days, from one date to another. */
   function cellsAcross(from: string, to: string): GranuleKey[] {
-    // Every day in the range rather than only the days already in bounds: on a
-    // calendar that is collecting times the range is exactly the days nobody
-    // has proposed yet, and `asks` is what says which of them count.
     return daysBetween(from, to).filter(asks).flatMap(fill)
   }
 
   /**
-   * Lay the brush over a set of cells a gesture asked for, or clear them.
-   *
-   * **It toggles**, and that is the difference between a shortcut and a trap.
-   * There is no undo beside any of these gestures; a stretch that is already
-   * exactly what the brush would make it is a stretch the gesture was meant to
-   * take back. Anything else fills -- including one that is half-marked, or
-   * marked at a different rating, both of which are answers the gesture is
-   * being used to replace.
-   *
-   * A brush of 0 never toggles: clearing a cleared day would fill it, which is
-   * the one thing a brush that means "not then" must never do.
+   * Lay the brush over cells -- or clear them if they already hold exactly the
+   * brush. Every gesture toggles this way. A 0 brush never toggles (clearing
+   * a cleared stretch would fill it).
    */
   function fillCells(cells: GranuleKey[]) {
     if (cells.length === 0) return
@@ -657,30 +318,15 @@ export function PaintCalendar({
     write(cells, already ? 0 : strokeWith)
   }
 
-  /** Fill a whole day, or clear it. */
   function fillDay(on: string) {
-    // `YYYY-MM-DD` from the month grid's day and `YYYY-MM-DD 00:00:00` from
-    // the week grid's heading, which is the shape every date callback in this
-    // library hands back. Sliced here rather than at each call site, so the two
-    // gestures are one function.
+    // `YYYY-MM-DD` from the month, `YYYY-MM-DD 00:00:00` from the week heading.
     const day = on.slice(0, 10)
-    // A day the poll is not asking about is not filled by its heading. The
-    // month grid disables such a day outright, but a week grid's heading sits
-    // above the disabled cells rather than among them -- and on the create
-    // form, where a heading is how a day joins the poll at all, that heading is
-    // the one way a day behind the floor could still be marked.
+    // The week heading isn't disabled with its column, so guard here.
     if (!asks(day)) return
     fillCells(fill(day))
   }
 
-  /**
-   * The same over a run of days, from a drag across the month.
-   *
-   * Never toggles, unlike the two clicks: a drag says which days it means by
-   * covering them, so there is no gesture left over to mean "and take that
-   * back" -- releasing over a stretch that is already marked would undo the
-   * drag that made it.
-   */
+  /** A drag across the month. Never toggles: the drag itself says which days. */
   function fillDays(fromDay: string, toDay: string) {
     write(cellsAcross(fromDay.slice(0, 10), toDay.slice(0, 10)), strokeWith)
   }
@@ -695,13 +341,9 @@ export function PaintCalendar({
     if (reveal) setDate(reveal.day)
   }, [reveal])
 
-  // The week grid's day headings, greyed where the poll is not asking about
-  // that day -- the column under it already is, but a heading drawn exactly
-  // like its neighbours read as a day that could be filled, and a press on it
-  // does nothing (see `fillDay`). The library takes no props per heading, so
-  // they are found by the one thing each carries that names its date: the
-  // accessible name LABELS gives it. Scoped to this calendar by `calendarId`,
-  // so two calendars on one page cannot grey each other's days.
+  // The library takes no per-heading props, so out-of-bounds week headings
+  // are greyed by a stylesheet keyed on their accessible names, scoped by
+  // `calendarId`.
   const calendarId = useId()
   const greyedHeadings =
     showing === 'week'
@@ -712,24 +354,9 @@ export function PaintCalendar({
               `[data-paint-calendar="${calendarId}"] [aria-label="${labels.weekday} ${day}"]`,
           )
       : []
-  // Whether the calendar has been navigated off the poll entirely. Worth
-  // asking now that a month view exists: the arrows move a month at a time,
-  // and a poll asking about three days in September is one press away from a
-  // screen with nothing on it and no clue why. A confined calendar cannot get
-  // there at all; see `stepTo`.
   const adrift = days.length > 0 && (days[days.length - 1] < inView.from || days[0] > inView.to)
 
-  /**
-   * Where one arrow goes, or null when there is nowhere for it to go and it is
-   * drawn as a dead control rather than as a press that changes nothing.
-   *
-   * Unconfined this is a view's worth of movement and nothing more, save for
-   * the floor `earliest` puts under it. Confined it is a *jump*: the nearest
-   * day the poll asks about that this range is not already showing, which the
-   * containing week or month is then drawn around. So the arrows walk the poll
-   * rather than the calendar -- on a poll about a Friday in September and a
-   * Friday in November, Next is one press rather than two through October.
-   */
+  /** Where an arrow goes, or null for a dead arrow. Confined, it jumps to the next poll day. */
   function stepTo(by: 1 | -1): string | null {
     if (confine) {
       const day =
@@ -737,9 +364,7 @@ export function PaintCalendar({
       return day ?? null
     }
     const next = step(date, showing, by)
-    // The whole of the range has to be behind the floor before the arrow dies,
-    // rather than its first day: the week the floor falls in is a week with
-    // days in it, and the poll is asking about them.
+    // Dead only once the whole range is behind the floor.
     if (by < 0 && earliest !== undefined && visibleRange(next, showing).to < earliest) return null
     return next
   }
@@ -747,29 +372,11 @@ export function PaintCalendar({
   const back = stepTo(-1)
   const forward = stepTo(1)
 
-  /**
-   * Everything on screen, from the range the header is already naming.
-   *
-   * This is the header's own label made into the gesture it describes: a reader
-   * looking at September clicks *September 2026* to answer for the whole of it,
-   * and the same control on the week grid answers for the week and on the day
-   * grid for the day. It replaced a button beside the calendar reading *apply 5
-   * to every time*, which was the same idea attached to nothing a reader was
-   * looking at -- it answered for the whole poll however much of it was on
-   * screen, so a fortnight in two halves could only be answered in one go or
-   * cell by cell.
-   *
-   * It reaches exactly what is drawn, which is what makes the label honest: the
-   * month grid hides the days either side of its month (`withOutsideDays`) and
-   * both time grids run Monday to Sunday, which is what `visibleRange` works
-   * out. Out-of-bounds days inside the range are left alone, by `cellsAcross`.
-   */
+  /** The header's range label as a control: fill exactly what is on screen. */
   function fillVisible() {
     fillCells(cellsAcross(inView.from, inView.to))
   }
 
-  // The hours down the side of the two time grids, which the library lays out
-  // as though the axis began on the hour; see `hoursColumn`.
   const timeColumn = hoursColumn(axis, schedule.granularity)
 
   const dayStyle = {
@@ -785,12 +392,9 @@ export function PaintCalendar({
 
   const grid = {
     startTime: `${axis.start}:00`,
-    // 24:00 is midnight at the end of the day, which the calendar cannot draw
-    // as a time of day; a second before it is the same last row.
+    // The library cannot parse 24:00.
     endTime: axis.end === '24:00' ? '23:59:59' : `${axis.end}:00`,
     intervalMinutes: schedule.granularity,
-    // The hour column, on whichever clock this browser reads (`lib/clock.ts`).
-    // The library hands a callback `YYYY-MM-DD HH:mm:ss`.
     slotLabelFormat: (slot: string) => formatTimeOfDay(toMinutes(slot.slice(11, 16)), h24),
     slotHeight: HOUR_HEIGHT,
     withAllDaySlots: false as const,
@@ -798,20 +402,14 @@ export function PaintCalendar({
     withAgenda: false as const,
     withDragSlotSelect: !readOnly,
     mode,
-    // A week wider than the screen scrolls sideways, and a region that scrolls
-    // has to be reachable from the keyboard to be scrolled without a pointer.
-    // A painting calendar's slots are in the tab order and carry it there; a
-    // static one has nothing focusable inside, so the viewport takes focus
-    // itself, as the published sheet's table does.
+    // A static calendar has nothing focusable, so the scroll viewport takes
+    // focus itself to stay keyboard-scrollable.
     scrollAreaProps: readOnly
       ? { viewportProps: { tabIndex: 0, role: 'region', 'aria-label': 'Calendar' } }
       : undefined,
     onSlotDragEnd: (fromSlot: string, toSlot: string) => {
-      // The swipe that scrolled the days, not a stroke; see `cancelled`.
       if (!cancelled.current) paint(fromSlot, toSlot)
     },
-    // Every slot says which way it may be swiped, in bounds or out; see
-    // `PAN_SIDEWAYS` and `outOfBoundsSlot`.
     getTimeSlotProps: ({ start }: { start: string }) =>
       open(granuleKey(start.slice(0, 10), toMinutes(start.slice(11, 16))))
         ? readOnly
@@ -824,25 +422,10 @@ export function PaintCalendar({
 
   return (
     <>
-      {/* The calendar's own header, rebuilt -- see the note at the top of this
-          file. What it carries is what a ballot needs: where you are, how to
-          move, and how far to zoom. What it does not carry is Today, which is
-          a week the poll is probably not asking about; the way back to the
-          poll's own dates is offered beside it, and only when it is needed.
-
-          Rebuilt out of the library's own pieces rather than out of ours:
-          `ScheduleHeader.Previous`, `.Control`, `.Next` and `.ViewSelect` are
-          plain buttons taking an ordinary onClick -- no navigation context
-          behind them -- so using them costs nothing and buys a header that is
-          the calendar's rather than one sitting above it in a different
-          shape. `navigationGroup` comes with them, and with it the container
-          query that lets the cluster fill a narrow screen. */}
+      {/* Our header, from the library's own parts (no Today button). */}
       <ScheduleHeader
         ref={header}
-        // Clear of the app's own header, which is fixed over the top of the
-        // page: this row is what a view change scrolls back into view, and
-        // `scrollIntoView` measures the viewport rather than what is painted
-        // over it. See `showView`.
+        // Clear of the fixed app header when `showView` scrolls this into view.
         style={{ scrollMarginTop: 'var(--app-shell-header-offset, 0px)', marginBottom: 0 }}
       >
         <div className={ScheduleHeader.classes.navigationGroup}>
@@ -851,14 +434,7 @@ export function PaintCalendar({
             {...dead(back === null)}
             onClick={() => back !== null && setDate(back)}
           />
-          {/* The range, which says what is on screen and fills it; see
-              `fillVisible`. The accessible name carries the label rather than
-              replacing it, so a screen reader is told both -- "Apply to all of
-              September 2026" -- the way the week grid's day headings are; see
-              LABELS. */}
           {readOnly ? (
-            // Only a label, on a calendar nobody paints: there is nothing on
-            // it for the range to fill.
             <ScheduleHeader.Control miw={190} interactive={false} tabIndex={-1}>
               {rangeLabel(date, showing)}
             </ScheduleHeader.Control>
@@ -880,42 +456,23 @@ export function PaintCalendar({
           />
         </div>
 
-        {/* Navigated off the poll's own dates, which a month of arrows makes
-            easy. A way back, rather than a rule against leaving: a voter
-            checking what else is on that week is doing something reasonable.
-            A control of the header's own, because it belongs to the row it
-            sits in -- it moves the calendar rather than going anywhere, and a
-            link the width of a date between two icon buttons was the one
-            thing there that did not look like a control. */}
         {adrift && (
           <Group gap="xs" wrap="nowrap">
-            {/* `tt="none"` because the library capitalises every word in a
-                control, which is right for its own one-word labels (Day,
-                Week, Today) and turns this one into "Back To Fri Feb 20". */}
+            {/* The library title-cases control text. */}
             <ScheduleHeader.Control tt="none" onClick={() => setDate(days[0])}>
               Back to {formatDay(days[0])}
             </ScheduleHeader.Control>
           </Group>
         )}
 
-        {/* A poll answered in whole days has one view and no switch: see VIEWS. */}
         {!daily && (
           <Group gap="xs" wrap="nowrap" style={{ marginInlineStart: 'auto' }}>
-            <ScheduleHeader.ViewSelect
-              views={VIEWS}
-              value={view}
-              // Not `setView`: the three views are different heights, and
-              // changing one without holding the calendar still scrolls the
-              // page out from under the reader. See `showView`.
-              onChange={showView}
-            />
+            <ScheduleHeader.ViewSelect views={VIEWS} value={view} onChange={showView} />
           </Group>
         )}
       </ScheduleHeader>
 
-      {/* The views are wildly different heights, and switching between them
-          already holds the page still (see `showView`), so the block the
-          question sits in leaves this one's height to it; see SmoothHeight. */}
+      {/* Opts out of SmoothHeight: `showView` already holds the page still. */}
       <div data-own-height>
         {showing === 'month' ? (
           <MonthView
@@ -923,43 +480,18 @@ export function PaintCalendar({
             withHeader={false}
             style={monthStyle}
             events={events}
-            // A month has no hours in it, so a day is the smallest thing there
-            // is to say something about -- which makes the day itself the
-            // gesture rather than a shortcut for one.
             onDayClick={fillDay}
-            // And on a finger it is the *only* gesture: a run of days is tapped
-            // out one at a time, or taken in one press by the range in the
-            // header.
-            //
-            // A month cannot make the bargain the two time grids make. There the
-            // axes mean different things -- across is which day, down is what
-            // time -- so `PAN_SIDEWAYS` can give one to the browser and keep the
-            // other. A drag across a month means neither: Monday the 5th to
-            // Friday the 16th sweeps down the weeks and across them at once, and
-            // it is one range, not two. There is no axis to hand over that does
-            // not cut the gesture in half.
-            //
-            // So on touch the drag goes and the scrolling comes back -- seven
-            // columns at the library's five-and-a-quarter-rem floor is wider than
-            // a phone, and while the days carry a drag slot they carry
-            // `touch-action: none` with it and will not move. The attribute is
-            // the drag's: turning the drag off is what lets the month scroll, and
-            // `onDayClick` is wired past it, so a tap still fills a day.
+            // No drag on touch: a month drag spans both axes, so there is no
+            // axis to give the browser for scrolling. Turning the drag off is
+            // what removes `touch-action: none`; taps still fill days.
             withDragSlotSelect={!touch && !readOnly}
             mode={mode}
             onSlotDragEnd={(fromDay: string, toDay: string) => {
-              // As on the time grids, and for a cancel that was not a scroll:
-              // this drag is off on the devices that scroll one away. See
-              // `cancelled`.
               if (!cancelled.current) fillDays(fromDay, toDay)
             }}
-            // And a tap on what a day's tap put there takes it back; see
-            // `erase`. The chips sit in a layer of their own above the day
-            // buttons, so this is the only handler such a tap reaches -- it
-            // never doubles as a day click.
             onEventClick={erase}
             getDayProps={(day) => (asks(day) ? {} : readOnly ? outOfBoundsRead : outOfBounds)}
-            // No red weekends here either; see the week grid.
+            // No red weekend headings.
             weekendDays={[]}
             firstDayOfWeek={1}
             withOutsideDays={false}
@@ -972,13 +504,9 @@ export function PaintCalendar({
             {...grid}
             style={dayStyle}
             styles={{
-              // The hours, lined up with the rows; see `hoursColumn`.
               dayViewSlotLabels: timeColumn,
-              // And the line back over the first of them, which this view --
-              // alone of the two -- takes away on the grounds that the first
-              // label sits at the top of the grid where the header has already
-              // drawn one. Pushed down onto its own hour it has a row under it
-              // to be the top of, and every label below it already has this.
+              // This view drops the first label's top border; give it back
+              // once padding has pushed that label down onto its own row.
               dayViewSlotLabel: {
                 borderTop: timeColumn.paddingTop
                   ? '1px solid var(--day-view-border-color)'
@@ -990,10 +518,6 @@ export function PaintCalendar({
             events={events}
             renderEventBody={eventBody}
             onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
-            // One day on screen and no heading over it, so there is nothing to
-            // fill it in a click. There is no need: a drag from the top of the
-            // column to the bottom is the same gesture and the same result, and
-            // this is the view somebody has zoomed into to be precise.
           />
         ) : (
           <>
@@ -1012,15 +536,9 @@ export function PaintCalendar({
               events={events}
               renderEventBody={eventBody}
               onTimeSlotClick={({ slotStart, slotEnd }) => paint(slotStart, slotEnd)}
-              // The day's own column heading, which with the header off is the
-              // only thing left in this view that changes the date -- so it is a
-              // callback with one caller and one meaning rather than a guess about
-              // which control fired. Its accessible name says so too; see LABELS.
+              // With the header off, only the day heading fires this.
               onDateChange={fillDay}
               labels={labels}
-              // The time column: pinned so that scrolling a narrow week sideways
-              // does not take the hours with it (STICKY_TIMES), and lined up with
-              // the rows it names (`hoursColumn`).
               styles={{
                 ...STICKY_TIMES,
                 weekViewSlotLabels: { ...STICKY_TIMES.weekViewSlotLabels, ...timeColumn },
@@ -1028,12 +546,8 @@ export function PaintCalendar({
               }}
               withWeekNumber={false}
               data-paint-calendar={calendarId}
-              // Saturday and Sunday drawn like any other day: the library colours
-              // a weekend heading red, which on a poll reads as a warning about
-              // those days rather than as a fact about the week.
               weekendDays={[]}
-              // Monday first, pinned rather than inherited, because `visibleRange`
-              // works out which week is on screen and the two have to agree.
+              // Must match `visibleRange`.
               firstDayOfWeek={1}
             />
           </>
@@ -1043,7 +557,6 @@ export function PaintCalendar({
   )
 }
 
-/** Every date from one to another, inclusive: what a drag across a month covers. */
 function daysBetween(from: string, to: string): string[] {
   const days: string[] = []
   for (let on = dayjs(from); !on.isAfter(dayjs(to)); on = on.add(1, 'day')) {
@@ -1052,22 +565,12 @@ function daysBetween(from: string, to: string): string[] {
   return days
 }
 
-/** One view's worth of movement: a day, a week or a month, forwards or back. */
 function step(date: string, view: ScheduleViewLevel, by: number): string {
   const unit = view === 'month' ? 'month' : view === 'week' ? 'week' : 'day'
   return dayjs(date).add(by, unit).format('YYYY-MM-DD')
 }
 
-/**
- * What the header says you are looking at: `Fri 4 Sep`, `Mon 31 Aug - Sun 6
- * Sep`, `September 2026`.
- *
- * Formatted from the view's own date, which is a date somebody navigated to
- * rather than a time in the poll's grid -- so `dayjs` is safe here in a way it
- * would not be over a window start: it parses `YYYY-MM-DD` as a wall-clock
- * date and no instant is built from it. The days inside the grid are still
- * formatted by hand; see `formatWindow`.
- */
+/** `Fri Sep 4`, `Aug 31 – Sep 06`, `September 2026`. */
 function rangeLabel(date: string, view: ScheduleViewLevel): string {
   if (view === 'day') return formatDay(date)
   if (view === 'month') return dayjs(date).format('MMMM YYYY')
@@ -1076,14 +579,8 @@ function rangeLabel(date: string, view: ScheduleViewLevel): string {
 }
 
 /**
- * The first and last dates a view has on screen.
- *
- * Exact, and it has to be: as well as deciding whether the calendar has
- * wandered off the poll, it is what the header's range control fills. The two
- * things that make it exact are set on the grids themselves -- the month draws
- * only its own days (`withOutsideDays={false}`, so the week either side of it
- * is blank rather than borrowed) and both time grids start on Monday
- * (`firstDayOfWeek={1}`) -- so a change to either of those belongs here too.
+ * The first and last dates on screen. Must be exact, since `fillVisible`
+ * fills it: relies on `withOutsideDays={false}` and `firstDayOfWeek={1}`.
  */
 function visibleRange(date: string, view: ScheduleViewLevel): { from: string; to: string } {
   const on = dayjs(date)
@@ -1094,9 +591,7 @@ function visibleRange(date: string, view: ScheduleViewLevel): { from: string; to
       to: on.endOf('month').format('YYYY-MM-DD'),
     }
   }
-  // Monday-first, to match `firstDayOfWeek` on the week grid. Worked out here
-  // rather than with `startOf('week')`, which follows dayjs's locale and
-  // defaults to Sunday.
+  // Monday-first by hand; dayjs's `startOf('week')` is locale-dependent.
   const back = (on.day() + 6) % 7
   const monday = on.subtract(back, 'day')
   return { from: monday.format('YYYY-MM-DD'), to: monday.add(6, 'day').format('YYYY-MM-DD') }
