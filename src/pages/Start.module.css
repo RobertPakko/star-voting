@@ -49,6 +49,17 @@
   animation-play-state: paused;
 }
 
+/* Firefox only (`-moz-appearance` is the test): the ring stands still. Two
+ * videos clipped to circles under a rotating layer locked up the whole
+ * browser there after a minute or so, and moving the circles without
+ * rotating anything cured that and made the videos flicker instead. */
+@supports (-moz-appearance: none) {
+  .orbit,
+  .upright {
+    animation: none;
+  }
+}
+
 @keyframes turn {
   to {
     transform: rotate(360deg);

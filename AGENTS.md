@@ -3154,7 +3154,12 @@ word or two each** and must stay that way.
 **The turn is one revolution every eight minutes** — a couple of pixels a
 second where the circles are — and stops while the pointer is over the ring
 or focus is inside it. Each circle turns back the other way at the same rate,
-so its face stays upright. Reduced motion stops the turn, holds the benefits
+so its face stays upright. **Firefox gets no turn at all**
+(`@supports (-moz-appearance: none)`): with the two videos clipped to circles
+under the rotating ring it locked up the whole browser after a minute or so,
+and carrying the circles round without rotating anything — a transform that
+turned and turned back, then a motion path — cured the lockup and made the
+videos flicker instead. Reduced motion stops the turn, holds the benefits
 still between changes, and shows each loop's poster (its last frame) rather
 than playing it. Playwright will not click an element that is moving, and axe
 takes ten seconds and more over a page that is, so the browser suite visits
