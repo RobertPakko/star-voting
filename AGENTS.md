@@ -14,10 +14,10 @@ hash-based routing, deployed to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ```
-src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro, Donate, Contact)
+src/pages/       route components (SignIn, PollList, CreatePoll, PollDetail, PublicPoll, About, Settings, InstallGuide, Intro, Start, Donate, Contact)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
-public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the service worker (see Installing it to a home screen)
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, "Make your own poll" for a reader who may have no session (makePoll.ts), the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
+public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the Start page's two loops (start/), the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 supabase/functions/   Edge Functions: send-push, the half of a push notification Postgres cannot do
@@ -26,14 +26,16 @@ scripts/         squash.sh, which squashes the migrations and replays the above;
 test/            tally tests, run against a throwaway Postgres; build-db.sh, which builds one
                  (the one piece of election logic that is not SQL is tested beside it, in src/lib/schedule.test.ts)
 e2e/             the browser suite: the built app in Chromium, checked with axe (see Tests);
-                 screenshots.capture.ts, which takes the manifest's screenshots
+                 screenshots.capture.ts, which takes the manifest's screenshots;
+                 videos.capture.ts, which records the Start page's loops
 ```
 
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
 `npm run lint` (oxlint), `npm run fmt` (oxfmt; `npm run fmt:check` reports
 without writing), `npm run preview`, `npm test`, `npm run test:unit` and
-`npm run test:e2e` (see [Tests](#tests)), and `npm run screenshots` (see
-[What the manifest says](#what-the-manifest-says)).
+`npm run test:e2e` (see [Tests](#tests)), `npm run screenshots` (see
+[What the manifest says](#what-the-manifest-says)), and `npm run videos` (see
+[The Start page](#the-start-page)).
 
 The formatter is configured in `.oxfmtrc.json` to the style the code was
 already written in — no semicolons, single quotes, a hundred columns — and
@@ -3120,6 +3122,60 @@ for people who have never heard of the app.
 **Share this intro** opens the device's share sheet where there is one and
 copies the link otherwise. Every intro link draws the same preview card as
 every other link — see [Link previews](#link-previews).
+
+## The Start page
+
+`#/start` is the intro for somebody who will not sit through the intro: the
+logo, and six circles turning slowly round it, and nothing else. Three go
+somewhere — **Make your own poll**, **See a sample poll**, **See a sample
+result** — and three show something — **Choose a place** and **Choose a time**,
+each a few seconds of the app in use, and **Make it easy**, the benefits
+rolling through one at a time. Each loop's caption is a pill drawn in the
+opposite scheme to the page, like the poll list's pager, so it stands out
+against a recording that is mostly white. They alternate round the ring, and each side
+puts a loop beside the sample nearest to it. The logo in the middle goes to
+About. [`pages/Start.tsx`](src/pages/Start.tsx) is all of it.
+
+**Nothing links to it.** It is an address to hand out — a poster, a bio, a QR
+code — and like the intro it sits outside the app shell and is reachable
+signed in or out. *Make your own poll* behaves as it does on the intro and
+About (`useMakePoll`): a reader with no session is given one without an
+account on the press.
+
+**Every size is a fraction of one square**, as large as the screen allows,
+so the arrangement is the same shape everywhere. The three circles that show
+something are larger than the three that go somewhere; the numbers in
+`Start.module.css` are chosen so the larger circles reach the square's edge
+and no two circles touch at any point of the turn. On a phone that makes the
+benefits circle about 130 pixels across, which is why **the benefits are a
+word or two each** and must stay that way.
+
+**The turn is one revolution every eight minutes** — a couple of pixels a
+second where the circles are — and stops while the pointer is over the ring
+or focus is inside it. Each circle turns back the other way at the same rate,
+so its face stays upright. Reduced motion stops the turn, holds the benefits
+still between changes, and shows each loop's poster (its last frame) rather
+than playing it. Playwright will not click an element that is moving, and axe
+takes ten seconds and more over a page that is, so the browser suite visits
+this page with reduced motion.
+
+**The loops are recorded from the sample poll**, by `npm run videos`
+([`e2e/videos.capture.ts`](e2e/videos.capture.ts)), into `public/start/`
+as an mp4 and a poster each, and committed. Like the manifest's screenshots
+they need no database, so they can be recorded again by anybody whenever the
+ballot or the calendar changes shape — which nothing will remind you to do.
+The script takes frames from Chromium's screencast rather than Playwright's
+own video, whose bitrate blurs text, and needs `ffmpeg` on the PATH; it
+draws a fingertip on the page, since headless Chromium draws no pointer, and
+hides the header and the toasts. The sample's first question is about food,
+so for *Choose a place* its options are renamed to places as the recorded
+data reaches the page (`PLACES`): only the labels change, and the tally is
+still the one STAR recorded. The frames are square and the circle crops
+their corners, so what matters in each is kept to the middle.
+
+**The service worker leaves video alone.** A video is fetched in byte
+ranges, and a whole file from the cache handed to a range request is a video
+Safari will not play.
 
 ## The donate page
 

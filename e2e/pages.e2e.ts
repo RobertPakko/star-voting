@@ -5,11 +5,14 @@ import { test, expect, expectAccessible, setColorScheme } from './fixtures'
  * accessibility in both colour schemes, and the pieces of each that work
  * without a database.
  */
-const PAGES = [
+const PAGES: { path: string; title: string; name: string; still?: boolean }[] = [
   { path: '#/', title: 'Sign in', name: 'the sign-in screen' },
   { path: '#/about', title: 'About', name: 'About' },
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
   { path: '#/intro', title: 'ChoiceLab', name: 'the intro' },
+  // Held still for axe, which takes ten seconds and more over a page that
+  // never stops turning; the markup is the same either way.
+  { path: '#/start', title: 'ChoiceLab', name: 'the Start page', still: true },
   { path: '#/donate', title: 'Donate', name: 'the donate page' },
   { path: '#/contact', title: 'Contact', name: 'the contact page' },
   { path: '#/sample-dinner', title: 'Movie night', name: 'a ballot' },
@@ -20,9 +23,10 @@ const PAGES = [
 
 for (const scheme of ['light', 'dark'] as const) {
   test.describe(`${scheme} scheme`, () => {
-    for (const { path, name } of PAGES) {
+    for (const { path, name, still } of PAGES) {
       test(`${name} is accessible`, async ({ page }) => {
         await setColorScheme(page, scheme)
+        if (still) await page.emulateMedia({ reducedMotion: 'reduce' })
         await page.goto(path)
         await expect(page.getByRole('heading', { level: 1 })).toBeAttached()
         // Past every entrance: a fade caught halfway is a colour axe would
@@ -171,6 +175,39 @@ test.describe('the intro', () => {
     await expect(page.getByRole('button', { name: 'Make your own poll' })).toBeVisible()
     await page.getByRole('link', { name: 'Learn more' }).click()
     await expect(page).toHaveURL(/#\/about$/)
+  })
+})
+
+test.describe('the Start page', () => {
+  // Held still: a circle on its slow turn is never "stable" to Playwright,
+  // which will not click one until it stops moving.
+  test.use({ contextOptions: { reducedMotion: 'reduce' } })
+
+  test('goes to the sample poll, the sample result and About', async ({ page }) => {
+    await page.goto('#/start')
+    await page.getByRole('link', { name: 'See a sample poll' }).click()
+    await expect(page).toHaveURL(/#\/sample-dinner$/)
+    await page.goBack()
+    await page.getByRole('link', { name: 'See a sample result' }).click()
+    await expect(page).toHaveURL(/#\/sample-result-dinner$/)
+    await page.goBack()
+    await page.getByRole('link', { name: 'About ChoiceLab' }).click()
+    await expect(page).toHaveURL(/#\/about$/)
+  })
+
+  test('offers a poll without signing in, and both loops are there to play', async ({
+    page,
+    request,
+  }) => {
+    await page.goto('#/start')
+    await expect(page.getByRole('button', { name: 'Make your own poll' })).toBeVisible()
+    for (const src of await page
+      .locator('video')
+      .evaluateAll((vs) =>
+        vs.flatMap((v) => [(v as HTMLVideoElement).src, (v as HTMLVideoElement).poster]),
+      )) {
+      expect((await request.get(src)).ok(), src).toBe(true)
+    }
   })
 })
 

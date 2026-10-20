@@ -111,7 +111,17 @@ describe('isPollParam', () => {
   })
 
   it('turns away every page name, so a one-segment poll address swallows none', () => {
-    for (const page of ['', 'about', 'app', 'contact', 'donate', 'intro', 'polls', 'settings']) {
+    for (const page of [
+      '',
+      'about',
+      'app',
+      'contact',
+      'donate',
+      'intro',
+      'polls',
+      'settings',
+      'start',
+    ]) {
       expect(isPollParam(page)).toBe(false)
     }
     expect(isPollParam('sign-in')).toBe(false)

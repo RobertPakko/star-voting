@@ -95,6 +95,7 @@ const InstallGuide = lazy(() =>
 const Donate = lazy(() => import('./pages/Donate').then((m) => ({ default: m.Donate })))
 const Contact = lazy(() => import('./pages/Contact').then((m) => ({ default: m.Contact })))
 const Intro = lazy(() => import('./pages/Intro').then((m) => ({ default: m.Intro })))
+const Start = lazy(() => import('./pages/Start').then((m) => ({ default: m.Start })))
 
 function App() {
   const { session, anonymous, loading } = useAuth()
@@ -149,6 +150,17 @@ function App() {
             fallback={<div style={{ position: 'fixed', inset: 0, background: '#f8f9fa' }} />}
           >
             <Intro />
+          </Suspense>
+        }
+      />
+
+      {/* The Start page, likewise for everybody and outside the shell: it is
+          the logo and six circles and nothing else. Nothing links to it. */}
+      <Route
+        path="start"
+        element={
+          <Suspense fallback={null}>
+            <Start />
           </Suspense>
         }
       />

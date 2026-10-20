@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Anchor,
   Button,
@@ -22,7 +22,7 @@ import {
   PlusIcon,
   StarIcon,
 } from '@phosphor-icons/react'
-import { useAuth } from '../lib/auth'
+import { useMakePoll } from '../lib/makePoll'
 import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 import { pollPath } from '../lib/pollId'
 import { usePageTitle } from '../lib/pageTitle'
@@ -405,35 +405,8 @@ const PROPERTIES: Entry[] = [
  * their own tab (`Ext`), which is the distinction: those leave the app.
  */
 function Samples() {
-  // The third card reads the same to everybody, because anybody can make a
-  // poll: a reader with no session is given one without an account on the
-  // press, as "Continue without an account" on the sign-in screen does, and
-  // taken to the create form. It used to send them to sign in first, which
-  // was a step the app no longer needs and the one card on the page that
-  // asked for an email address before showing anything.
-  //
-  // The form is only a route once there is a session, so the navigation waits
-  // for the session to arrive rather than following the sign-in's promise:
-  // `/polls/new` without one is matched as a poll whose id is "new".
-  const { session, continueWithoutAccount } = useAuth()
-  const navigate = useNavigate()
-  const [starting, setStarting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (starting && session) navigate('/polls/new')
-  }, [starting, session, navigate])
-
-  async function tryIt() {
-    setError(null)
-    setStarting(true)
-    try {
-      await continueWithoutAccount()
-    } catch (e) {
-      setStarting(false)
-      setError(e instanceof Error ? e.message : 'Could not start a poll. Try again.')
-    }
-  }
+  // The third card reads the same to everybody: see lib/makePoll.ts.
+  const { start: tryIt, starting, error } = useMakePoll()
 
   return (
     <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
@@ -455,7 +428,7 @@ function Samples() {
       />
       <Sample
         to="/polls/new"
-        onClick={session ? undefined : tryIt}
+        onClick={tryIt}
         loading={starting}
         error={error}
         icon={<PlusIcon size={22} aria-hidden />}

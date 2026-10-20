@@ -20,7 +20,7 @@
  * old, and activate throws them away.
  */
 
-const VERSION = 'v5'
+const VERSION = 'v6'
 const CACHE = `star-voting-${VERSION}`
 
 // This file is served from the app's own directory, so its own URL is the
@@ -84,6 +84,10 @@ self.addEventListener('fetch', (event) => {
   // outside the app's own directory are somebody else's to serve.
   if (url.origin !== self.location.origin || !url.href.startsWith(SCOPE.href)) return
   if (url.href.startsWith(LEGACY)) return
+  // A video is fetched in ranges, and a whole file from the cache handed to a
+  // request for part of one is a video Safari will not play. The Start page's
+  // loops are decoration and are left to the network.
+  if (request.destination === 'video' || request.headers.has('range')) return
 
   event.respondWith(request.mode === 'navigate' ? shell(event) : asset(event))
 })

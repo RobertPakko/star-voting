@@ -2,11 +2,11 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { Button, Group, Stack, Text, UnstyledButton, VisuallyHidden } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
 import { BookOpenIcon, CheckIcon, PlusIcon, ShareNetworkIcon } from '@phosphor-icons/react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { LandscapeFilm } from '../components/intro/Landscape'
 import { PortraitFilm } from '../components/intro/Portrait'
 import { COL, CUES, FILMS, p01, tween, TOTAL, type FilmShape } from '../components/intro/motion'
-import { useAuth } from '../lib/auth'
+import { useMakePoll } from '../lib/makePoll'
 import { shareLink } from '../lib/share'
 import { announce } from '../lib/announce'
 
@@ -114,30 +114,9 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
     return () => clearTimeout(id)
   }, [copied])
 
-  // Make your own poll goes straight to the create form for everybody, as the
-  // About page's "Try it yourself" does: a reader with no session is given one
-  // without an account on the press rather than sent to the sign-in screen.
-  // The navigation waits for the session to arrive, because `/polls/new`
-  // without one is matched as a poll whose id is "new".
-  const { session, continueWithoutAccount } = useAuth()
-  const navigate = useNavigate()
-  const [starting, setStarting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (starting && session) navigate('/polls/new')
-  }, [starting, session, navigate])
-
-  async function makePoll() {
-    setError(null)
-    setStarting(true)
-    try {
-      await continueWithoutAccount()
-    } catch (e) {
-      setStarting(false)
-      setError(e instanceof Error ? e.message : 'Could not start a poll. Try again.')
-    }
-  }
+  // Make your own poll goes straight to the create form for everybody; see
+  // lib/makePoll.ts.
+  const { start: makePoll, starting, error } = useMakePoll()
 
   async function share() {
     // The phone's own share sheet where there is one, since that is where the
@@ -187,7 +166,7 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
     >
       Learn more
     </Button>,
-    session ? (
+    !makePoll ? (
       <Button
         key="make"
         size={size}
