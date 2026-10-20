@@ -37,7 +37,7 @@ create schema if not exists sample;
 -- script runs: the build records which poll each name belongs to, and the
 -- recording below substitutes the name for the uuid in the payloads it
 -- prints. What ships is a sample whose questions are reached at
--- `#/polls/sample-host`, which is a link that can be read out in a talk.
+-- `#/sample-host`, which is a link that can be read out in a talk.
 --
 -- Nothing in the database is fooled by it. Every payload here is what the
 -- real functions answered about the real uuid; the swap happens in the text

@@ -35,7 +35,7 @@ const event = {
   title: 'Movie night',
   start: '2026-09-04T18:00:00-07:00',
   minutes: 120,
-  details: 'https://choicelab.app/star-voting/#/polls/abc',
+  details: 'https://choicelab.app/#/abc',
   uid: 'abc-2026-09-04T18:00:00-07:00@choicelab.app',
 }
 

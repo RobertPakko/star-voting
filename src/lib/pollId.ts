@@ -22,7 +22,8 @@
  *
  * **Old links keep working.** `pollIdFromParam` accepts a full uuid as readily
  * as a short one, so every `#/polls/<uuid>` already pasted into a chat or sent
- * in an invitation email resolves exactly as it did. That is not a shim with a
+ * in an invitation email resolves exactly as it did -- by way of the redirect
+ * from `/polls/:pollId` to the address `pollPath` spells now. That is not a shim with a
  * date on it: this schema writes poll ids into email bodies, those bodies are
  * permanent, and there is no point at which it becomes safe to stop reading
  * the long form. It costs one regex.
@@ -110,7 +111,21 @@ export function pollIdFromParam(param: string): string {
   return toUuid(param) ?? param
 }
 
+/**
+ * Whether a route parameter could be a poll at all: either spelling of an id,
+ * or a sample's word (`sample-` is `isSampleId`'s test, restated so this file
+ * imports nothing).
+ *
+ * This is what lets a poll live at the top of the address -- `#/<id>` rather
+ * than `#/polls/<id>` -- without swallowing every other one-word address. A
+ * poll's segment is one of three shapes no page name is, so a mistyped
+ * `#/abuot` is a missing page rather than a poll nobody can find.
+ */
+export function isPollParam(param: string): boolean {
+  return SHORT.test(param) || UUID.test(param) || param.startsWith('sample-')
+}
+
 /** The in-app path of a poll, which is the one place its address is spelled. */
 export function pollPath(pollId: string): string {
-  return `/polls/${shortPollId(pollId)}`
+  return `/${shortPollId(pollId)}`
 }

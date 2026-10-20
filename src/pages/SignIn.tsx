@@ -154,7 +154,7 @@ export function SignIn() {
         <Paper withBorder shadow="sm" p="xl" radius="md" w="100%">
           <Stack align="center" gap="md">
             <Title order={1} size="h2">
-              STAR Voting
+              ChoiceLab
             </Title>
             {sent === 'code' ? (
               <>

@@ -44,7 +44,7 @@ export function InstallGuide() {
       <Title order={1}>Install the app</Title>
 
       <Text>
-        STAR Voting works in any browser, but when installed as an app it can open from your home
+        ChoiceLab works in any browser, but when installed as an app it can open from your home
         screen and more easily send you notifications.
       </Text>
 
@@ -89,7 +89,7 @@ function ThisDevice() {
         <Text size="sm" c={installed ? undefined : 'dimmed'}>
           {installed
             ? 'You’re using the installed app.'
-            : 'You’re using STAR Voting in a browser. The steps below install it.'}
+            : 'You’re using ChoiceLab in a browser. The steps below install it.'}
         </Text>
       </Group>
     </Card>
@@ -166,7 +166,7 @@ function IosSteps() {
           <strong>Open as Web App</strong>, leave it switched on. Then tap <strong>Add</strong>.
         </List.Item>
         <List.Item>
-          Open <strong>STAR Voting</strong> from your Home Screen. Notifications work in the app
+          Open <strong>ChoiceLab</strong> from your Home Screen. Notifications work in the app
           opened this way, not in a Safari tab.
         </List.Item>
         <List.Item>
@@ -178,7 +178,7 @@ function IosSteps() {
       </Steps>
       <Trouble>
         Open the <strong>Settings</strong> app, then <strong>Notifications</strong>, then{' '}
-        <strong>STAR Voting</strong>, and switch on <strong>Allow Notifications</strong>.
+        <strong>ChoiceLab</strong>, and switch on <strong>Allow Notifications</strong>.
       </Trouble>
       <WhyNotStore />
     </Stack>
@@ -202,12 +202,12 @@ function AndroidSteps() {
           </InstallNow>
         </List.Item>
         <List.Item>
-          Open <strong>STAR Voting</strong> from your home screen or app drawer.
+          Open <strong>ChoiceLab</strong> from your home screen or app drawer.
         </List.Item>
         <TurnOn />
       </Steps>
       <Trouble>
-        Long-press the <strong>STAR Voting</strong> icon, tap <strong>App info</strong>, then{' '}
+        Long-press the <strong>ChoiceLab</strong> icon, tap <strong>App info</strong>, then{' '}
         <strong>Notifications</strong>, and turn them on. In Chrome without installing, open{' '}
         <strong>⋮</strong> → <strong>Settings</strong> → <strong>Site settings</strong> →{' '}
         <strong>Notifications</strong> and allow choicelab.app.
@@ -239,7 +239,7 @@ function DesktopSteps() {
       <Trouble>
         Click the icon at the left end of the address bar, find <strong>Notifications</strong>, and
         set it to <strong>Allow</strong>. On a Mac, also check <strong>System Settings</strong> →{' '}
-        <strong>Notifications</strong> for your browser, or for STAR Voting if you installed it.
+        <strong>Notifications</strong> for your browser, or for ChoiceLab if you installed it.
       </Trouble>
     </Stack>
   )
@@ -260,7 +260,7 @@ function InstallNow({ install, children }: { install: (() => void) | null; child
         leftSection={<DownloadSimpleIcon size={14} aria-hidden />}
         onClick={install}
       >
-        Install STAR Voting
+        Install ChoiceLab
       </Button>
     </Stack>
   )

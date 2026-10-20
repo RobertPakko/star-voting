@@ -42,14 +42,14 @@ test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 
   test('ballot', async ({ page }) => {
-    await open(page, '#/polls/sample-dinner')
+    await open(page, '#/sample-dinner')
     await scoreSome(page)
     await page.evaluate(() => window.scrollTo(0, 0))
     await page.screenshot({ path: `${OUT}/phone-ballot.png` })
   })
 
   test('calendar', async ({ page }) => {
-    await open(page, '#/polls/sample-when')
+    await open(page, '#/sample-when')
     await page.getByLabel('Your name').fill('Sam')
     // Friday evening whole, at the brush's default of 5; then the 3 brush
     // over Saturday, so the picture shows the ramp rather than one colour.
@@ -65,7 +65,7 @@ test.describe('phone', () => {
   })
 
   test('results', async ({ page }) => {
-    await open(page, '#/polls/sample-result-dinner')
+    await open(page, '#/sample-result-dinner')
     await page.screenshot({ path: `${OUT}/phone-results.png` })
   })
 })
@@ -74,14 +74,14 @@ test.describe('desktop', () => {
   test.use({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 })
 
   test('ballot', async ({ page }) => {
-    await open(page, '#/polls/sample-dinner')
+    await open(page, '#/sample-dinner')
     await scoreSome(page)
     await page.evaluate(() => window.scrollTo(0, 0))
     await page.screenshot({ path: `${OUT}/desktop-ballot.png` })
   })
 
   test('results', async ({ page }) => {
-    await open(page, '#/polls/sample-result-dinner')
+    await open(page, '#/sample-result-dinner')
     await page.screenshot({ path: `${OUT}/desktop-results.png` })
   })
 })

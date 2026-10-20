@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChoiceLab</title>
+    <!--
+      The app lived here, under /star-voting/, until it moved to the root of
+      choicelab.app. Every email it ever sent links here, so this page stays:
+      it sends the reader to the same place at the new address. The part after
+      the # is the whole of the place -- the routes are in the hash -- so it is
+      carried across, and the app redirects the old #/polls/<id> to #/<id>
+      itself. A meta refresh could not carry it, which is why there is none;
+      without JavaScript the link below does.
+    -->
+    <script>
+      window.location.replace('/' + window.location.search + window.location.hash)
+    </script>
+  </head>
+  <body>
+    <p><a href="/">Continue to ChoiceLab</a></p>
+  </body>
+</html>

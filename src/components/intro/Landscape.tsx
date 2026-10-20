@@ -401,7 +401,7 @@ export function LandscapeFilm({ T }: { T: number }) {
           transform: `translateY(${wordY}px)`,
         }}
       >
-        STAR Voting
+        ChoiceLab
       </div>
       <div
         style={{

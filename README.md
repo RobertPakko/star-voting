@@ -1,8 +1,8 @@
-# STAR Voting
+# ChoiceLab
 
 Make a poll, share it, and get an easy an accurate result using [STAR voting](https://en.wikipedia.org/wiki/STAR_voting)
 
-**[Open the app](https://choicelab.app/star-voting/)**  ·  [What is STAR voting, and why use it?](https://choicelab.app/star-voting/#/about)
+**[Open the app](https://choicelab.app/)**  ·  [What is STAR voting, and why use it?](https://choicelab.app/#/about)
 
 ## Running your own copy
 

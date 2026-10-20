@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pollIdFromParam, pollPath, shortPollId } from './pollId'
+import { isPollParam, pollIdFromParam, pollPath, shortPollId } from './pollId'
 
 /**
  * The shortened link is the same number in a denser alphabet, and the property
@@ -83,7 +83,7 @@ describe('pollIdFromParam', () => {
     for (const id of ['sample-dinner', 'sample-result-dinner', 'sample-when']) {
       expect(shortPollId(id)).toBe(id)
       expect(pollIdFromParam(id)).toBe(id)
-      expect(pollPath(id)).toBe(`/polls/${id}`)
+      expect(pollPath(id)).toBe(`/${id}`)
     }
   })
 
@@ -97,7 +97,24 @@ describe('pollIdFromParam', () => {
 describe('pollPath', () => {
   it('is where the short spelling is written, and the only place', () => {
     const id = seededUuid(11)
-    expect(pollPath(id)).toBe(`/polls/${shortPollId(id)}`)
-    expect(pollIdFromParam(pollPath(id).replace('/polls/', ''))).toBe(id)
+    expect(pollPath(id)).toBe(`/${shortPollId(id)}`)
+    expect(pollIdFromParam(pollPath(id).slice(1))).toBe(id)
+  })
+})
+
+describe('isPollParam', () => {
+  it('takes both spellings of an id and a sample word', () => {
+    const id = seededUuid(12)
+    for (const param of [id, id.toUpperCase(), shortPollId(id), 'sample-dinner']) {
+      expect(isPollParam(param)).toBe(true)
+    }
+  })
+
+  it('turns away every page name, so a one-segment poll address swallows none', () => {
+    for (const page of ['', 'about', 'app', 'contact', 'donate', 'intro', 'polls', 'settings']) {
+      expect(isPollParam(page)).toBe(false)
+    }
+    expect(isPollParam('sign-in')).toBe(false)
+    expect(isPollParam('not-a-uuid-at-all')).toBe(false)
   })
 })

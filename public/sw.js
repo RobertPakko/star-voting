@@ -20,7 +20,7 @@
  * old, and activate throws them away.
  */
 
-const VERSION = 'v4'
+const VERSION = 'v5'
 const CACHE = `star-voting-${VERSION}`
 
 // This file is served from the app's own directory, so its own URL is the
@@ -28,6 +28,12 @@ const CACHE = `star-voting-${VERSION}`
 // against — no build-time base to keep in step with vite.config.ts.
 const SCOPE = new URL('./', self.location.href)
 const SHELL = SCOPE.href
+
+// Where the app lived before it moved to the root of the domain, and where a
+// redirect still answers (site-root/star-voting/). It is inside this scope
+// now and must be left to the network: cached as the shell, that redirect
+// would be what an offline launch got, and it redirects back here.
+const LEGACY = new URL('star-voting/', SCOPE).href
 
 self.addEventListener('install', (event) => {
   // The shell only. Everything else the app needs is hashed into filenames
@@ -77,6 +83,7 @@ self.addEventListener('fetch', (event) => {
   // above on why a cached answer about a poll is a wrong answer. Files
   // outside the app's own directory are somebody else's to serve.
   if (url.origin !== self.location.origin || !url.href.startsWith(SCOPE.href)) return
+  if (url.href.startsWith(LEGACY)) return
 
   event.respondWith(request.mode === 'navigate' ? shell(event) : asset(event))
 })
@@ -186,7 +193,7 @@ self.addEventListener('push', (event) => {
     // show something, and the app's own name is the honest minimum.
   }
 
-  const title = typeof message.title === 'string' && message.title ? message.title : 'STAR Voting'
+  const title = typeof message.title === 'string' && message.title ? message.title : 'ChoiceLab'
   // Only ever a place inside the app: a path is resolved against the scope and
   // must start with the hash every route here lives in.
   const path = typeof message.path === 'string' && message.path.startsWith('#') ? message.path : ''

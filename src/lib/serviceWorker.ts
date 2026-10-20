@@ -24,5 +24,27 @@ export function registerServiceWorker() {
       // policies. Nothing here is load-bearing: the app runs exactly as it
       // did, it just cannot be installed.
     })
+    void retireOldWorker()
   })
+}
+
+/**
+ * Takes down the worker registered when the app lived under /star-voting/.
+ *
+ * Left alone it would go on controlling that path, which is now only a
+ * redirect, and go on holding push subscriptions bound to a worker the app no
+ * longer talks to. Unregistering drops them: a device bound to an account is
+ * subscribed again under this worker the next time the app opens signed in
+ * (`refreshAccountPush`), and the push services refuse the old endpoints, so
+ * the database forgets them the first time it sends. A watch on an open poll
+ * filed from the old address is lost, which is the one cost of the move.
+ */
+async function retireOldWorker() {
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations()
+    const old = new URL('/star-voting/', window.location.origin).href
+    await Promise.all(registrations.filter((r) => r.scope === old).map((r) => r.unregister()))
+  } catch {
+    // Nothing depends on it; a worker left behind controls only a redirect.
+  }
 }

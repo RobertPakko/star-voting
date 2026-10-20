@@ -31,7 +31,7 @@ const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 const politeAnnouncement = (page: Page) => page.locator('[data-announcer="polite"]')
 
 test('a voter can answer all three questions and is taken to the result', async ({ page }) => {
-  await page.goto('#/polls/sample-dinner')
+  await page.goto('#/sample-dinner')
   await expect(heading(page)).toHaveText('Movie night')
   await expect(page).toHaveTitle('Movie night')
   await expect(page.getByText('Question 1 of 3', { exact: true })).toBeVisible()
@@ -43,7 +43,7 @@ test('a voter can answer all three questions and is taken to the result', async 
   // A first ballot carries the voter on to the next question by itself, and
   // a screen reader is told where they have been taken.
   await expect(page.getByText('Question 2 of 3', { exact: true })).toBeVisible()
-  await expect(page).toHaveURL(/#\/polls\/sample-movie$/)
+  await expect(page).toHaveURL(/#\/sample-movie$/)
   await expect(politeAnnouncement(page)).toHaveText(/^Question 2 of 3: /)
   // The name typed once is offered again rather than asked for twice.
   await expect(page.getByLabel('Your name')).toHaveValue('Sam')
@@ -60,12 +60,12 @@ test('a voter can answer all three questions and is taken to the result', async 
   await page.getByRole('button', { name: 'Submit vote' }).click()
 
   // The sample's last ballot leads to the same poll after it was decided.
-  await expect(page).toHaveURL(/#\/polls\/sample-result-dinner$/)
+  await expect(page).toHaveURL(/#\/sample-result-dinner$/)
   await expect(page.getByText(/^Winner: /)).toBeVisible()
 })
 
 test('a vote can be changed before the results are out', async ({ page }) => {
-  await page.goto('#/polls/sample-movie')
+  await page.goto('#/sample-movie')
   await page.getByLabel('Your name').fill('Sam')
   await scoreAll(page)
   await page.getByRole('button', { name: 'Submit vote' }).click()
@@ -85,15 +85,15 @@ test('a vote can be changed before the results are out', async ({ page }) => {
 })
 
 test('the ballot asks for a name before it is sent', async ({ page }) => {
-  await page.goto('#/polls/sample-dinner')
+  await page.goto('#/sample-dinner')
   await scoreAll(page)
   await page.getByRole('button', { name: 'Submit vote' }).click()
   await expect(page.getByText('Question 1 of 3', { exact: true })).toBeVisible()
-  await expect(page).toHaveURL(/#\/polls\/sample-dinner$/)
+  await expect(page).toHaveURL(/#\/sample-dinner$/)
 })
 
 test('the questions can be walked with the strip', async ({ page }) => {
-  await page.goto('#/polls/sample-dinner')
+  await page.goto('#/sample-dinner')
   await page.getByRole('link', { name: 'Next →' }).click()
   await expect(page.getByText('Question 2 of 3', { exact: true })).toBeVisible()
   await expect(politeAnnouncement(page)).toHaveText('Question 2 of 3: What are we watching?')
@@ -104,7 +104,7 @@ test('the questions can be walked with the strip', async ({ page }) => {
 })
 
 test('a ballot left half done is there to come back to', async ({ page }) => {
-  await page.goto('#/polls/sample-dinner')
+  await page.goto('#/sample-dinner')
   const first = page.getByRole('radiogroup', { name: /^Score for / }).first()
   const fourStars = first.getByRole('radio', { name: '4 stars', exact: true })
   await fourStars.click()
@@ -120,7 +120,7 @@ test('a ballot left half done is there to come back to', async ({ page }) => {
 })
 
 test('a name typed and not yet sent survives a refresh', async ({ page }) => {
-  await page.goto('#/polls/sample-dinner')
+  await page.goto('#/sample-dinner')
   await page.getByLabel('Your name').fill('Sam')
   await page.reload()
   await expect(page.getByLabel('Your name')).toHaveValue('Sam')
@@ -132,7 +132,7 @@ test('a name typed and not yet sent survives a refresh', async ({ page }) => {
 })
 
 test('the results show the rounds, the tie-break and the full ranking', async ({ page }) => {
-  await page.goto('#/polls/sample-result-dinner')
+  await page.goto('#/sample-result-dinner')
   await expect(page.getByText('Winner: Two big pizzas')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Scoring' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Runoff' })).toBeVisible()
@@ -167,7 +167,7 @@ test('a finished poll goes from one skeleton straight to its results', async ({ 
     }
     requestAnimationFrame(frame)
   })
-  await page.goto('#/polls/sample-result-dinner')
+  await page.goto('#/sample-result-dinner')
   await expect(page.getByText('Winner: Two big pizzas')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Ballots' })).toBeVisible()
   const shapes = await page.evaluate(
@@ -181,7 +181,7 @@ for (const scheme of ['light', 'dark'] as const) {
     page,
   }) => {
     await setColorScheme(page, scheme)
-    await page.goto('#/polls/sample-result-when')
+    await page.goto('#/sample-result-when')
     await expect(page.getByRole('heading', { name: 'Ballots' })).toBeVisible()
     // The calendar stands where the table would have, and the download is
     // still beside the heading.
@@ -206,7 +206,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
 test('a tie-break can be opened over its round', async ({ page }) => {
   // The second question is the one the sample records as needing one.
-  await page.goto('#/polls/sample-result-movie')
+  await page.goto('#/sample-result-movie')
   const show = page.getByRole('button', { name: /Show tie-break/ }).first()
   await show.click()
   await expect(page.getByText(/First rule/).first()).toBeVisible()
@@ -214,7 +214,19 @@ test('a tie-break can be opened over its round', async ({ page }) => {
 })
 
 test('a mistyped sample link says so', async ({ page }) => {
-  await page.goto('#/polls/sample-nothing-here')
+  await page.goto('#/sample-nothing-here')
   await expect(heading(page)).toHaveText('Poll not found')
   await expect(page).toHaveTitle('Poll not found')
+})
+
+test('a link from before the rebrand still opens its poll', async ({ page }) => {
+  // `#/polls/<id>` was every poll's address, and is in every email ever sent.
+  await page.goto('#/sample-dinner')
+  await expect(page).toHaveURL(/#\/sample-dinner$/)
+  await expect(heading(page)).toHaveText('Movie night')
+})
+
+test('a one-word address that is not a poll is a missing page', async ({ page }) => {
+  await page.goto('#/abuot')
+  await expect(heading(page)).toHaveText('Page not found')
 })

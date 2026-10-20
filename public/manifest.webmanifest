@@ -1,7 +1,7 @@
 {
   "id": "/star-voting/",
-  "name": "STAR Voting",
-  "short_name": "STAR Voting",
+  "name": "ChoiceLab",
+  "short_name": "ChoiceLab",
   "description": "Make a poll, share it, and get an easy and accurate result using STAR voting.",
   "start_url": "./",
   "scope": "./",

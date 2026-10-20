@@ -24,8 +24,8 @@ export function Donate() {
       <Title order={1}>Donate</Title>
 
       <Text>
-        STAR Voting is free to use, with no ads and no subscriptions, and I’m happy to cover the
-        costs of running it out of my own pocket.
+        ChoiceLab is free to use, with no ads and no subscriptions, and I’m happy to cover the costs
+        of running it out of my own pocket.
       </Text>
       <Text>
         If it’s helped your group make a decision, it would mean a lot if you would consider making

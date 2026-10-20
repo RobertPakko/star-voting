@@ -9,13 +9,13 @@ const PAGES = [
   { path: '#/', title: 'Sign in', name: 'the sign-in screen' },
   { path: '#/about', title: 'About', name: 'About' },
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
-  { path: '#/intro', title: 'STAR Voting', name: 'the intro' },
+  { path: '#/intro', title: 'ChoiceLab', name: 'the intro' },
   { path: '#/donate', title: 'Donate', name: 'the donate page' },
   { path: '#/contact', title: 'Contact', name: 'the contact page' },
-  { path: '#/polls/sample-dinner', title: 'Movie night', name: 'a ballot' },
-  { path: '#/polls/sample-when', title: 'Movie night', name: 'a calendar ballot' },
-  { path: '#/polls/sample-result-dinner', title: 'Movie night', name: 'a result' },
-  { path: '#/polls/sample-result-when', title: 'Movie night', name: 'a calendar result' },
+  { path: '#/sample-dinner', title: 'Movie night', name: 'a ballot' },
+  { path: '#/sample-when', title: 'Movie night', name: 'a calendar ballot' },
+  { path: '#/sample-result-dinner', title: 'Movie night', name: 'a result' },
+  { path: '#/sample-result-when', title: 'Movie night', name: 'a calendar result' },
 ]
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -64,7 +64,7 @@ test.describe('page titles', () => {
 test.describe('the sign-in screen', () => {
   test('offers a link or a code, and a way past it', async ({ page }) => {
     await page.goto('#/')
-    await expect(page.getByRole('heading', { name: 'STAR Voting', level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'ChoiceLab', level: 1 })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Send sign-in link' })).toBeVisible()
     await page.getByText('Email a code').click()
     await expect(page.getByRole('button', { name: 'Send sign-in code' })).toBeVisible()
@@ -123,7 +123,7 @@ test.describe('About', () => {
       .getByRole('link', { name: /sample/i })
       .first()
       .click()
-    await expect(page).toHaveURL(/#\/polls\/sample-/)
+    await expect(page).toHaveURL(/#\/sample-/)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Movie night')
   })
 })
@@ -149,9 +149,7 @@ test.describe('the intro', () => {
     const shared = await page.evaluate(() => (window as unknown as { shared: ShareData[] }).shared)
     expect(shared).toHaveLength(1)
     expect(shared[0].url).toBeUndefined()
-    expect(shared[0].text).toMatch(
-      /^Check out STAR Voting!\n\nhttp:\/\/localhost:\d+\/star-voting\/#\/intro$/,
-    )
+    expect(shared[0].text).toMatch(/^Check out ChoiceLab!\n\nhttp:\/\/localhost:\d+\/#\/intro$/)
   })
 
   test('copies the link where there is no share sheet', async ({ page, context }) => {
@@ -164,7 +162,7 @@ test.describe('the intro', () => {
     await expect(page.getByRole('button', { name: 'Link copied' })).toBeVisible()
     await expect(page.locator('[data-announcer="polite"]')).toHaveText('Link copied')
     const copied = await page.evaluate(() => navigator.clipboard.readText())
-    expect(copied).toMatch(/^http:\/\/localhost:\d+\/star-voting\/#\/intro$/)
+    expect(copied).toMatch(/^http:\/\/localhost:\d+\/#\/intro$/)
   })
 
   test('ends on its three ways on', async ({ page }) => {

@@ -113,28 +113,45 @@ being signed out on every edit. `src/lib/auth.ts` holds the context and
 Every `useAuth` import still reads `from '../lib/auth'`, which is why the
 split goes that way round.
 
-The app is served under `/star-voting/` (see `base` in `vite.config.ts`) and
-routes are hash-based, so it works as a GitHub Pages site with no
-SPA-fallback configuration. Links into the app therefore look like
-`https://choicelab.app/star-voting/#/poll/<id>`.
+The app is **ChoiceLab**, served from the root of `choicelab.app` (`base: '/'`
+in `vite.config.ts`), and routes are hash-based, so it works as a GitHub Pages
+site with no SPA-fallback configuration. A poll's link is its id and nothing
+else: `https://choicelab.app/#/<id>`. The repository, the package and the
+`star-voting:` prefix on every `localStorage` key keep the old name, because
+renaming any of them is churn nobody sees — and renaming the keys would throw
+away every browser's voter keys, drafts and settings.
+
+**It was STAR Voting, at `https://choicelab.app/star-voting/#/polls/<id>`,
+until October 2026**, and both halves of that address are still answered,
+because every email the app ever sent links to one:
+
+- [`site-root/star-voting/index.html`](site-root/star-voting/index.html) is a
+  redirect from the old directory to the root that carries the query string
+  and the hash across. It has to be JavaScript — the hash never reaches the
+  server, and a meta refresh drops it.
+- `#/polls/<id>` is a route of its own (`OldPollAddress` in `App.tsx`) that
+  redirects to `#/<id>`. `#/polls/new` is still the create form.
+- `retireOldWorker` (`lib/serviceWorker.ts`) unregisters the service worker
+  that was registered at `/star-voting/`, and `public/sw.js` leaves that path
+  to the network, so the redirect is never cached as the app shell.
+- The manifest's `id` is still `/star-voting/`, so a browser can take the app
+  at `/` for the same installed app; see [What the manifest
+  says](#what-the-manifest-says).
+
+**A poll at the top of the address means one segment is a poll's shape.** The
+route is `:pollId`, which outranks the catch-all, so `PollRoute` renders the
+poll only when the segment *is* shaped like one — 22 characters of base64url,
+a uuid, or a `sample-` word (`isPollParam` in `lib/pollId.ts`) — and "page not
+found" otherwise. No page name is any of those shapes. Signed out, `sign-in`
+and `settings` are named routes to the sign-in screen for the same reason: the
+one-segment route would otherwise take them.
 
 It's served from the custom domain `choicelab.app` rather than the default
-`<username>.github.io/star-voting/` GitHub Pages URL. A custom domain is
-served from its own root by GitHub Pages, with no automatic `/star-voting/`
-prefix the way the default `github.io` project URL gets one — so that prefix
-has to be built into the deployed files themselves, and choicelab.app is
-meant to eventually host more than just this app. The setup:
-
-- `vite.config.ts` sets `base: '/star-voting/'` and `build.outDir:
-  'dist/star-voting'`, so the built app (and its asset URLs) live under that
-  path rather than at the output root.
-- [`site-root/`](site-root) holds what's served at the actual domain root:
-  `CNAME` (read by GitHub Pages from the published artifact to map the
-  domain) and an `index.html` that redirects to `/star-voting/`. The deploy
-  workflow copies it into `dist/` after the Vite build, alongside the
-  `star-voting/` subdirectory Vite produced.
-- Once there's more than one app, `site-root/index.html` is where a real
-  landing/directory page replaces the redirect.
+`<username>.github.io/star-voting/` GitHub Pages URL.
+[`site-root/`](site-root) holds what is copied over the build in `dist/` by
+the deploy workflow: `CNAME` (read by GitHub Pages from the published artifact
+to map the domain) and the redirect above. It must never hold an `index.html`
+at its own top level, which would overwrite the app's.
 
 DNS for `choicelab.app` needs an `ANAME`/`ALIAS` record (or the four GitHub
 Pages `A` records, plus `AAAA` records for IPv6) pointing at GitHub Pages;
@@ -173,14 +190,14 @@ Repo **Settings → Pages** should show the domain once DNS resolves, with
      how many boxes the code screen draws, and nothing in the app can ask.
      Supabase's default is 6; this project uses 8.
 5. Under **Authentication → URL Configuration**, set the Site URL to
-   `https://choicelab.app/star-voting/`, and add your dev URL
-   (`http://localhost:5173/star-voting/**`) to the allowed redirect URLs.
+   `https://choicelab.app/`, and add your dev URL
+   (`http://localhost:5173/**`) to the allowed redirect URLs.
 
    **The dev entry is the one that matters**, and the `/**` is the point of
    it. The code half of the sign-in carries its choice in a query parameter
    on the redirect address, and Supabase accepts an address either because
    its scheme and hostname match the Site URL's — which is why production
-   needs no entry of its own, and a `https://choicelab.app/star-voting/**`
+   needs no entry of its own, and a `https://choicelab.app/**`
    alongside it is belt and braces rather than load-bearing — or because it
    matches a pattern on this list, which is the only way `localhost` gets in.
    A refused address is not an error and is not visible: see [Why the marker
@@ -2906,9 +2923,9 @@ for that, and they are the three files below.
 
 - **[`public/manifest.webmanifest`](public/manifest.webmanifest)** — the
   name, the icons, and `display: standalone`. `start_url` and `scope` are
-  written as `./`, which resolves against the manifest's own URL: the app is
-  served from `/star-voting/` and the manifest sits in it, so the scope is
-  the app's directory without the base being spelled out a third time.
+  written as `./`, which resolves against the manifest's own URL: the
+  manifest sits in the app's own directory, so the scope is that directory
+  without the base being spelled out a third time.
   Hash-based routing means every address in the app is inside that scope
   already, so a share link opens in the installed window rather than
   bouncing out to the browser.
@@ -2952,7 +2969,18 @@ would notice:
   makes the same app open somewhere else rather than a second app. It is
   `/star-voting/`, which is exactly what the identity already was (the
   resolved start URL), so nothing installed before it was added became a
-  different app.
+  different app — and it stayed `/star-voting/` when the app moved to the
+  root, which is that change to `start_url` happening. **Leave it alone:**
+  it is an identifier, not an address, and changing it makes every
+  installed copy a stranger to the app it was installed from.
+
+  Whether a copy installed at the old address follows the app to the root
+  is the browser's business. Chromium re-reads the manifest of an installed
+  app and takes a new `start_url` and `scope` under the same `id`; a browser
+  that does not opens the old start URL, gets the redirect, and shows the
+  root outside its window until the app is installed again. iOS keeps a home
+  screen icon pointing at the address it was added from, so it always does
+  the latter.
 - **`shortcuts`** — *New poll* and *Your polls* — on a long press of the icon.
   *Your polls* is `#/` rather than the start URL, for the reason below.
 - **`launch_handler`**, `focus-existing`: opening the installed app while it is
@@ -3198,7 +3226,7 @@ page from their own servers; Signal and iMessage fetch it from the sender's
 phone. Either way it is a plain HTTP fetch that runs no JavaScript.
 
 **Every poll link gets the same card, and that is the hash routing, not a
-choice.** A link is `…/star-voting/#/polls/<id>`, and the part after `#` never
+choice.** A link is `https://choicelab.app/#/<id>`, and the part after `#` never
 leaves the browser: it is not in the request a crawler makes, so GitHub Pages
 serves the one `index.html` whatever poll the link names. Nothing static can
 tell two polls apart. A card per poll needs something that runs on the
@@ -3555,8 +3583,8 @@ not part of that test either way.
 Which means production needs nothing added for this: `https://choicelab.app/…`
 already shares a scheme and hostname with the Site URL, marker or no marker.
 **The dev server is the case that needs the list entry** — `localhost` is not
-`choicelab.app`, so `http://localhost:5173/star-voting/?method=code` gets in
-only by matching `http://localhost:5173/star-voting/**`.
+`choicelab.app`, so `http://localhost:5173/?method=code` gets in
+only by matching `http://localhost:5173/**`.
 
 And when it does not get in, nothing anywhere says so. `GetReferrer` next to
 that function falls back, in order, to the request's own `Referer` header and
@@ -3598,10 +3626,10 @@ to the `or` for every origin the app is served from.
             <!-- Header -->
             <tr>
               <td align="center" style="background-color:#ffffff; padding:40px 24px 24px; border-bottom:1px solid #f0edf7;">
-                <img src="https://choicelab.app/star-voting/logo.png" width="72" height="72" alt="STAR Voting"
+                <img src="https://choicelab.app/logo.png" width="72" height="72" alt="ChoiceLab"
                      style="display:block; width:72px; height:72px; border-radius:16px;">
                 <div style="margin-top:16px; font-size:20px; font-weight:700; color:#1a1523; letter-spacing:0.2px;">
-                  STAR Voting
+                  ChoiceLab
                 </div>
               </td>
             </tr>
@@ -3609,7 +3637,7 @@ to the `or` for every origin the app is served from.
             <!-- Body -->
             <tr>
               <td style="padding:36px 32px 28px;">
-{{ if or (eq .RedirectTo "https://choicelab.app/star-voting/?method=code") (eq .RedirectTo "http://localhost:5173/star-voting/?method=code") }}
+{{ if or (eq .RedirectTo "https://choicelab.app/?method=code") (eq .RedirectTo "http://localhost:5173/?method=code") }}
                 <h1 style="margin:0 0 12px; font-size:22px; line-height:1.3; color:#1a1523; font-weight:700;">
                   Your sign-in code
                 </h1>
@@ -4264,7 +4292,7 @@ knowing how it is going.
 
 ### A poll's link is its id
 
-**One address, `#/polls/<id>`, for every poll and every reader of it.** There
+**One address, `#/<id>`, for every poll and every reader of it.** There
 were two: open polls lived at `#/p/<share token>` and everything else at
 `#/polls/<id>`, so an open poll's creator was permanently looking at an
 address that was not the one to hand out. Copying what was in front of them
@@ -4293,7 +4321,7 @@ The set of people who can vote in a poll is the set it was.
   separate token that was an `UPDATE`.
 - **A primary key travels where a single-purpose secret does not.** This
   schema already writes poll ids into email bodies — every email this app
-  sends links to `#/polls/<id>`. Those only go to invite polls, so nothing
+  sends links to `#/<id>`. Those only go to invite polls, so nothing
   leaks today; but the pattern is established,
   and every future thing that logs, exports, or reports an id is now handling
   a ballot rather than a row number. That is the standing cost of the merge
@@ -4360,6 +4388,12 @@ a chat resolves as it did. Unlike `0039` this is not a break that was judged
 affordable: the schema writes poll ids into email bodies, those bodies do not
 expire, and there is no later date at which dropping the long form becomes
 safe. It costs one regex, which is cheaper than the shim `0039` declined.
+
+**And the address dropped `/polls/` in the rebrand**, by the same rule: the
+old one is redirected rather than retired. `#/polls/<id>` — short or long —
+lands on `#/<id>`, and the old directory `/star-voting/` lands on the root;
+see [Stack and layout](#stack-and-layout). `0088_choicelab.sql` is where the
+emails and push notifications started linking to the new spelling.
 
 `0062` gives Postgres the same encoding as `short_poll_id`, so the link in an
 invitation email is spelled the way the app spells it. The sample's ids are
@@ -6873,8 +6907,8 @@ derived, because they sit inside prose.
 
 #### The sample poll is a recording, not rows
 
-`/#/polls/sample-dinner` is a three-question poll ("Movie night") still taking
-votes; `/#/polls/sample-result-dinner` is the same poll after nine people
+`/#/sample-dinner` is a three-question poll ("Movie night") still taking
+votes; `/#/sample-result-dinner` is the same poll after nine people
 finished it. Its questions ask more of the reader as they go — a bare list, the
 same list with a paragraph under each option, and then a **calendar**, so both
 of this app's ballots are on the one sample. The calendar is last for that

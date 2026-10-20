@@ -134,7 +134,7 @@ export function icsFile(event: MeetingEvent, now: number = Date.now()): string |
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//ChoiceLab//STAR Voting//EN',
+    'PRODID:-//ChoiceLab//Polls//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',

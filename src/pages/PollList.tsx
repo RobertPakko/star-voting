@@ -457,8 +457,8 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
         {anonymous && !viewingRemoved && (
           <Alert color="yellow" variant="light">
             <Text size="sm">
-              You're using STAR Voting without an account, so these polls are only reachable from
-              this browser. Sign in to keep them on your account and see them on other devices.
+              You're using ChoiceLab without an account, so these polls are only reachable from this
+              browser. Sign in to keep them on your account and see them on other devices.
             </Text>
           </Alert>
         )}

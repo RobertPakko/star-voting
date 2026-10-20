@@ -26,6 +26,7 @@ import { ClockSwitch } from './ClockSwitch'
 import { InstallButton } from './InstallButton'
 import { NotificationSwitches } from './NotificationSwitches'
 import { isInstalledApp } from '../lib/push'
+import { isPollParam } from '../lib/pollId'
 import { LinkPushSwitch } from './PushSwitch'
 import { Reveal } from './Reveal'
 import { ThemeToggle } from './ThemeToggle'
@@ -131,7 +132,7 @@ export function Layout() {
                 fz="var(--mantine-h4-font-size)"
                 lh="var(--mantine-h4-line-height)"
               >
-                STAR Voting
+                ChoiceLab
               </Text>
             </Group>
           </Link>
@@ -347,9 +348,10 @@ function MenuLink({ to, icon: Glyph, children }: { to: string; icon: Icon; child
  * Every poll is one page — the address carries the poll's id because a poll's
  * link is its id, and each of a poll's questions has an address of its own —
  * so all of them answer to one key and moving between them opens nothing.
- * `/polls/new` is the create form and genuinely another page, which is why it
- * is named rather than swept in with the rest.
+ * A poll's address is its id alone, so it is recognised by shape
+ * (`isPollParam`), which also keeps `/polls/new` -- the create form, and
+ * genuinely another page -- out of it.
  */
 function pageKey(pathname: string): string {
-  return pathname.startsWith('/polls/') && pathname !== '/polls/new' ? '/polls/:pollId' : pathname
+  return isPollParam(pathname.slice(1)) ? '/:pollId' : pathname
 }

@@ -133,7 +133,7 @@ begin
   perform tests.assert_eq('a notification is titled with its poll', v_message ->> 'title', 'Lunch');
   perform tests.assert_eq('and says what happened', v_message ->> 'body', 'The results are ready.');
   perform tests.assert_eq('and opens the poll''s own address',
-    v_message ->> 'path', '#/polls/' || short_poll_id(v_poll));
+    v_message ->> 'path', '#/' || short_poll_id(v_poll));
   perform tests.assert_eq('and replaces an earlier notification about the same poll',
     v_message ->> 'tag', short_poll_id(v_poll));
   perform tests.assert_eq('an invitation to a poll with a ballot asks for a vote',
@@ -145,7 +145,7 @@ begin
   -- Every email says where to turn them off.
   perform tests.assert_eq('every email links to the notification settings',
     poll_email_html('Heading', 'Body', 'https://example.com/poll')
-      like '%https://choicelab.app/star-voting/#/settings%', true);
+      like '%https://choicelab.app/#/settings%', true);
 
   -- ---------------------------------------------------------------------
   -- Watching an open poll through its link: no account, and one-shot.

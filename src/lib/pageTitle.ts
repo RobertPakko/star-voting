@@ -6,7 +6,7 @@ import { announce } from './announce'
  * page still waiting for the poll it is about, and on the intro, which is the
  * app introducing itself.
  */
-export const APP_TITLE = 'STAR Voting'
+export const APP_TITLE = 'ChoiceLab'
 
 /** The last title a page set, which is what tells a navigation from a load. */
 let previous: string | null = null
@@ -15,7 +15,7 @@ let previous: string | null = null
  * Names the tab after the page on screen: the poll's own title on a poll, and
  * a word or two everywhere else.
  *
- * **Just the name, with no "· STAR Voting" after it.** The favicon beside it
+ * **Just the name, with no "· ChoiceLab" after it.** The favicon beside it
  * already says which site this is, and a tab is narrow: "Movie night" is the
  * part a reader is looking for among ten others, so it is the whole of it.
  *

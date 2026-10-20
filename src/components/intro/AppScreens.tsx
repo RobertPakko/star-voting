@@ -252,7 +252,7 @@ export function AppHeader({
           height={32}
           style={{ borderRadius: 8, display: 'block', opacity: logoVisible ? 1 : 0 }}
         />
-        <div style={h4}>STAR Voting</div>
+        <div style={h4}>ChoiceLab</div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {email && <span style={{ fontSize: 14, color: COL.dimmed }}>you@example.com</span>}

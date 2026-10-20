@@ -52,8 +52,9 @@ export function About() {
       <Title order={1}>About</Title>
 
       <Text>
-        STAR Voting is an application for making and responding to polls. Check out the samples to
-        see it in action, read on to learn about how its polls work, or sign in to try it yourself.
+        ChoiceLab is an application for making and responding to polls, decided by STAR voting.
+        Check out the samples to see it in action, read on to learn about how its polls work, or
+        sign in to try it yourself.
       </Text>
       <Divider
         role="presentation"

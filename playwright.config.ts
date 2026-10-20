@@ -24,7 +24,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {
-    baseURL: `http://localhost:${PORT}/star-voting/`,
+    baseURL: `http://localhost:${PORT}/`,
     trace: 'retain-on-failure',
     // The worker caches the shell, which a fresh context per test makes
     // harmless, but it also answers requests the tests would rather see go to
@@ -39,7 +39,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `npx vite build && npx vite preview --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}/star-voting/`,
+    url: `http://localhost:${PORT}/`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
     env: {

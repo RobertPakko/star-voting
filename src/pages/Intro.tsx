@@ -46,7 +46,7 @@ export function Intro() {
       }}
     >
       <VisuallyHidden>
-        <h1>STAR Voting</h1>
+        <h1>ChoiceLab</h1>
         <p>
           A short animation: somebody creates a poll, everyone rates the options from zero to five
           stars, and the two highest-scoring options meet in an automatic runoff to decide the
@@ -144,8 +144,8 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
     // people this is going to are; a copied link everywhere else. See
     // lib/share.ts for why the link rides inside the text.
     const outcome = await shareLink({
-      title: 'STAR Voting',
-      text: 'Check out STAR Voting!',
+      title: 'ChoiceLab',
+      text: 'Check out ChoiceLab!',
       url: `${window.location.origin}${window.location.pathname}#/intro`,
     })
     if (outcome === 'copied') {

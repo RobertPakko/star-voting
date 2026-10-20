@@ -32,8 +32,9 @@ jobs:
           # the other two so the build reads all three from one place; left
           # unset, the app builds with push notifications switched off.
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
-      # vite builds the app into dist/star-voting/ (see vite.config.ts); merge
-      # in the root-level CNAME and redirect from site-root/.
+      # vite builds the app into dist/; merge in the CNAME and the redirect
+      # that still answers at the app's old address, /star-voting/, from
+      # site-root/.
       - run: cp -r site-root/. dist/
       - uses: actions/upload-pages-artifact@v3
         with:

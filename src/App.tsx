@@ -32,7 +32,7 @@ import {
   SettingsSkeleton,
 } from './components/Skeletons'
 import type { PollRead } from './lib/types'
-import { pollIdFromParam } from './lib/pollId'
+import { isPollParam, pollIdFromParam, pollPath } from './lib/pollId'
 import { refreshAccountPush, useNotificationRoutes } from './lib/push'
 import { useLaunchRoutes } from './lib/launch'
 import { useClearPollNotifications } from './lib/badge'
@@ -162,8 +162,15 @@ function App() {
 
             A poll has one address whoever is reading it, which is the whole
             point of its link being its id: `PollPage` decides which of the
-            two readings of it to render, rather than the URL deciding. */}
-        <Route path="polls/:pollId" element={<PollPage />} />
+            two readings of it to render, rather than the URL deciding.
+
+            The address is the id and nothing else (`#/<id>`), so the route
+            takes any one segment and `PollRoute` turns away what is not
+            shaped like a poll. `#/polls/<id>` was the address until the
+            rebrand and is in every invitation email ever sent, so it is
+            redirected rather than dropped. */}
+        <Route path=":pollId" element={<PollRoute />} />
+        <Route path="polls/:pollId" element={<OldPollAddress />} />
         <Route
           path="about"
           element={
@@ -259,15 +266,35 @@ function App() {
           an address of its own, which the header's Sign in links to, because
           that reader's `/` is their poll list. */}
       {!session && <Route path="*" element={<SignIn />} />}
-      {/* Named, because otherwise it is a poll: signed out, `polls/:pollId`
-          above would take it and ask the database for a poll called "new".
-          The sign-in screen at this address sends the reader on to the create
-          form whichever way they get in -- see SignIn. The intro's "Make your
-          own poll" is what links here. */}
+      {/* Named, because otherwise it is the old poll address: signed out,
+          `polls/:pollId` above would take it and redirect to a poll called
+          "new". The sign-in screen at this address sends the reader on to the
+          create form whichever way they get in -- see SignIn. The intro's
+          "Make your own poll" is what links here. */}
       {!session && <Route path="polls/new" element={<SignIn />} />}
-      {anonymous && <Route path="sign-in" element={<SignIn />} />}
+      {/* Named for the same reason: one segment is a poll's shape of address,
+          and `:pollId` outranks the catch-all, so these two would otherwise
+          land on "page not found" in the shell rather than on the sign-in
+          screen. `settings` is the footer of every email. */}
+      {(!session || anonymous) && <Route path="sign-in" element={<SignIn />} />}
+      {!session && <Route path="settings" element={<SignIn />} />}
     </Routes>
   )
+}
+
+/**
+ * The one-segment route, which is a poll's address when the segment is shaped
+ * like a poll id and a missing page when it is not. See `isPollParam`.
+ */
+function PollRoute() {
+  const { pollId: param } = useParams<{ pollId: string }>()
+  return param && isPollParam(param) ? <PollPage /> : <NotFound />
+}
+
+/** `#/polls/<id>`, the address every poll had until the rebrand. */
+function OldPollAddress() {
+  const { pollId: param = '' } = useParams<{ pollId: string }>()
+  return <Navigate to={pollPath(pollIdFromParam(param))} replace />
 }
 
 /**
