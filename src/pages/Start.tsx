@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Loader, VisuallyHidden } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
 import {
@@ -137,31 +137,12 @@ function LinkFace({ icon, label }: { icon: ReactNode; label: string }) {
  * `npm run videos`. Decoration — what it shows, the links beside it say — so
  * it is hidden from a screen reader. Under reduced motion it is its poster,
  * the loop's last frame.
- *
- * `muted` is said again from an effect, and the loop started by hand, because
- * React sets `muted` as a property and never writes the attribute — and a
- * phone deciding whether a video may play by itself can ask before the
- * property lands, call it a video with sound, and leave it on its poster.
- * Desktop browsers let it through, which is why only phones showed it. A
- * phone that still refuses keeps the poster, which is what reduced motion
- * shows anyway.
  */
 function Loop({ name, label, still }: { name: string; label: string; still: boolean }) {
   const src = `${import.meta.env.BASE_URL}start/${name}`
-  const video = useRef<HTMLVideoElement>(null)
-  useEffect(() => {
-    const v = video.current
-    if (!v) return
-    v.defaultMuted = true
-    v.muted = true
-    v.setAttribute('muted', '')
-    if (still) v.pause()
-    else v.play().catch(() => {})
-  }, [still])
   return (
     <div className={classes.feature}>
       <video
-        ref={video}
         className={classes.video}
         src={`${src}.mp4`}
         poster={`${src}.jpg`}
