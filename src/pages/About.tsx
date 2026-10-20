@@ -53,8 +53,8 @@ export function About() {
 
       <Text>
         ChoiceLab is an application for making and responding to polls, decided by STAR voting.
-        Check out the samples to see it in action, read on to learn about how its polls work, or
-        sign in to try it yourself.
+        Check out the samples to see it in action, read on to learn more about STAR, or just create
+        a poll to try it yourself.
       </Text>
       <Divider
         role="presentation"

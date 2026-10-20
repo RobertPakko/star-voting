@@ -153,6 +153,15 @@ export function SignIn() {
       <Stack gap="md" w={360} maw="100%">
         <Paper withBorder shadow="sm" p="xl" radius="md" w="100%">
           <Stack align="center" gap="md">
+            {/* Decorative: the title beside it already names the app, and this
+                card has no header to carry the mark the rest of the app does. */}
+            <img
+              src={`${import.meta.env.BASE_URL}logo.png`}
+              alt=""
+              width={64}
+              height={64}
+              style={{ borderRadius: 14, display: 'block' }}
+            />
             <Title order={1} size="h2">
               ChoiceLab
             </Title>
@@ -274,9 +283,9 @@ export function SignIn() {
                   </Stack>
                 )}
                 {/* Shown either way: someone who has just requested a link has a
-              minute to spare, and may have no idea what STAR voting is. */}
+              minute to spare, and may have no idea what ChoiceLab is. */}
                 <Anchor component={Link} to="/about" size="sm">
-                  What is STAR voting?
+                  What is ChoiceLab?
                 </Anchor>
               </>
             )}
