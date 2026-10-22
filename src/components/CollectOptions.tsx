@@ -18,6 +18,8 @@ import type { VoterName } from '../lib/voterName'
 import { DescriptionField, DescriptionToggle } from './DescriptionField'
 import { NameRoster } from './NameRoster'
 import { OptionDescription } from './OptionDescription'
+import { RollingBadge } from './PollTags'
+import { formatDay, parseWindowStart } from '../lib/schedule'
 import css from './CollectOptions.module.css'
 import listRow from './listRow.module.css'
 import { VoterNameField } from './VoterNameField'
@@ -135,7 +137,9 @@ export function CollectOptions({
   // Request errors; field errors are marked on the fields.
   const [error, setError] = useState<string | null>(null)
   const draft = useRef<(() => Promise<boolean>) | null>(null)
-  // Whether the list holds an unsaved edit, as the list last reported it.
+  // Whether this reader has started an edit, as the list last reported it:
+  // anything unsaved, and also an editor merely opened (*Add option* pressed,
+  // a pencil, the calendar's *Add times*) before anything is typed in it.
   const [dirty, setDirty] = useState(false)
   // What the list is a list of, in the card's own words.
   const noun = schedule ? 'times' : 'options'
@@ -147,16 +151,24 @@ export function CollectOptions({
   // done while they are part-way through adding to the list; confirming again
   // saves the edit. See "Saying you are done adding options" in AGENTS.md.
   const confirmed = confirm?.confirmed ?? false
+  // The same withdrawal as state, so the button can show it under way: from
+  // the moment it is sent until the re-read says unconfirmed.
+  const [unconfirming, setUnconfirming] = useState(false)
   useEffect(() => {
     if (!dirty || !confirmed || withdrawing.current) return
+    setUnconfirming(true)
     // Held until the re-read says unconfirmed, so it is sent once.
     withdrawing.current = withdrawConfirmation(source).then(({ error: rpcError }) => {
-      if (rpcError) setError(rpcError.message)
-      else onChanged()
+      if (rpcError) {
+        setError(rpcError.message)
+        setUnconfirming(false)
+      } else onChanged()
     })
   }, [dirty, confirmed, source, onChanged])
   useEffect(() => {
-    if (!confirmed) withdrawing.current = null
+    if (confirmed) return
+    withdrawing.current = null
+    setUnconfirming(false)
   }, [confirmed])
 
   // Confirmed with nothing unsaved: the button reads *Options confirmed*.
@@ -260,7 +272,7 @@ export function CollectOptions({
                 data-confirmed={settled || undefined}
                 disabled={settled}
                 onClick={confirmOptions}
-                loading={busy}
+                loading={busy || unconfirming}
                 leftSection={
                   <span key={pop} className={`${css.tick} ${pop ? css.pop : ''}`}>
                     <CheckIcon size={16} aria-hidden />
@@ -406,6 +418,9 @@ function OptionList({
   const kept = staying + filled.length
   const full = kept >= MAX_OPTIONS
   const dirty = filled.length > 0 || dropping.size > 0 || changed.length > 0
+  // An edit under way, typed into or not: a field opened by *Add option* or a
+  // pencil is enough to take a confirmation back.
+  const started = dirty || drafts.length > 0 || editing.size > 0
   // No two-option floor here: `creator_edit_options` enforces it on save.
 
   /**
@@ -540,20 +555,23 @@ function OptionList({
     const checked = checkedDraft()
     if (!checked) return false
     const { added, corrected } = checked
-    if (added.length === 0 && corrected.length === 0 && dropping.size === 0) return true
 
-    setError(null)
-    setBusy(true)
-    const { error: rpcError } = await sendDraft(source, {
-      added,
-      corrected: corrected.map(({ key, name, description }) => ({ id: key, name, description })),
-      removed: [...dropping],
-    })
-    setBusy(false)
+    // Nothing to send still closes what was opened: blank fields, and rows
+    // opened by their pencil and left as they were.
+    if (added.length > 0 || corrected.length > 0 || dropping.size > 0) {
+      setError(null)
+      setBusy(true)
+      const { error: rpcError } = await sendDraft(source, {
+        added,
+        corrected: corrected.map(({ key, name, description }) => ({ id: key, name, description })),
+        removed: [...dropping],
+      })
+      setBusy(false)
 
-    if (rpcError) {
-      setError(rpcError.message)
-      return false
+      if (rpcError) {
+        setError(rpcError.message)
+        return false
+      }
     }
     setDrafts([])
     setDraftProblems(new Map())
@@ -572,12 +590,13 @@ function OptionList({
   }
 
   useEffect(() => {
-    onDirtyChange?.(dirty)
-  }, [dirty, onDirtyChange])
+    onDirtyChange?.(started)
+  }, [started, onDirtyChange])
 
-  // Re-registered every render so it closes over the current draft.
+  // Re-registered every render so it closes over the current draft. Held while
+  // anything is open, so the closing press also closes an empty field.
   useEffect(() => {
-    draft.current = dirty ? () => saveEverything() : null
+    draft.current = started ? () => saveEverything() : null
 
     return () => {
       draft.current = null
@@ -596,7 +615,11 @@ function OptionList({
   )
 
   return (
-    <Stack gap="sm">
+    // Out of the page's SmoothHeight: a row joining grows itself in
+    // (listRow.module.css), and the page clipping the card to the height it
+    // had measured with the row still at nothing hid the buttons under it
+    // until its own animation ran out.
+    <Stack gap="sm" data-own-height>
       {options.map((option) => {
         const struck = dropping.has(option.id)
         const open = editing.get(option.id)
@@ -885,12 +908,13 @@ function TimeList({
   const [error, setError] = useState<string | null>(null)
   // The painting's difference from the list, as PaintTimes last reported it.
   const [painted, setPainted] = useState<PaintedEdit | null>(null)
-  // The calendar is read back until *Add times* is pressed, as a text list
-  // shows its rows until *Add option* is. The creator's correction is already
-  // an editor, opened from *Edit options*, so it starts editing.
+  // No calendar until *Add times* is pressed, only a line saying what the
+  // list holds (`TimesSummary`): a calendar that looked paintable and was not
+  // read as broken. The creator's correction is already an editor, opened from
+  // *Edit options*, so it starts editing.
   const [editing, setEditing] = useState(source.kind === 'creator')
-  // Bumped after a save, so the next edit starts from the list as it is.
-  const [round, setRound] = useState(0)
+  // Opening the calendar is starting an edit, as opening a text field is.
+  const started = painted !== null || (editing && source.kind !== 'creator')
 
   const noteDraft = useCallback((edit: PaintedEdit | null) => {
     setPainted(edit)
@@ -898,6 +922,8 @@ function TimeList({
 
   async function save(add: string[], removeIds: string[], quiet = false): Promise<boolean> {
     if (busy) return false
+    // Nothing painted: only the calendar to close.
+    if (add.length === 0 && removeIds.length === 0) return landed(add, removeIds, quiet)
     setError(null)
     setBusy(true)
 
@@ -941,8 +967,9 @@ function TimeList({
   /** `quiet` saves are part of a closing press, which notifies and re-reads itself. */
   function landed(add: string[], removeIds: string[], quiet: boolean) {
     if (source.kind !== 'creator') {
+      // The calendar goes, and the next one opens on the list as it then is.
       setEditing(false)
-      setRound((r) => r + 1)
+      setPainted(null)
     }
     if (quiet) return true
 
@@ -958,12 +985,13 @@ function TimeList({
   }
 
   useEffect(() => {
-    onDirtyChange(painted !== null)
-  }, [painted, onDirtyChange])
+    onDirtyChange(started)
+  }, [started, onDirtyChange])
 
-  // Re-registered every render; see DraftHold.
+  // Re-registered every render; see DraftHold. Held while the calendar is
+  // open, so the closing press also closes one with nothing painted on it.
   useEffect(() => {
-    draft.current = painted ? () => save(painted.add, painted.removeIds, true) : null
+    draft.current = started ? () => save(painted?.add ?? [], painted?.removeIds ?? [], true) : null
 
     return () => {
       draft.current = null
@@ -986,17 +1014,19 @@ function TimeList({
 
   return (
     <Stack gap="sm">
-      <PaintTimes
-        key={round}
-        schedule={schedule}
-        options={options}
-        canRemove={isCreator}
-        editing={editing}
-        saving={busy}
-        showSave={ownSave}
-        onSave={save}
-        onDraftChange={noteDraft}
-      />
+      {editing ? (
+        <PaintTimes
+          schedule={schedule}
+          options={options}
+          canRemove={isCreator}
+          saving={busy}
+          showSave={ownSave}
+          onSave={save}
+          onDraftChange={noteDraft}
+        />
+      ) : (
+        <TimesSummary options={options} />
+      )}
       {error && (
         <Text role="alert" c="red" size="sm">
           {error}
@@ -1008,6 +1038,56 @@ function TimeList({
         ? !editing && <Group justify="flex-end">{addButton}</Group>
         : footer(source.kind === 'creator' ? null : addButton, true)}
     </Stack>
+  )
+}
+
+/**
+ * What a time poll's list holds, before anybody opens the calendar: how many
+ * windows, and the first and last day they fall on. Badges, because the list
+ * moves while it is read (somebody else's suggestion landing), and a badge
+ * whose words roll over shows that it did; see RollingBadge.
+ */
+function TimesSummary({ options }: { options: PollOption[] }) {
+  const days = options
+    .map((o) => parseWindowStart(o.name)?.day)
+    .filter((day) => day !== undefined)
+    .sort()
+
+  if (days.length === 0) {
+    return (
+      <Text size="sm" c="dimmed">
+        No times suggested yet.
+      </Text>
+    )
+  }
+
+  const first = days[0]
+  const last = days[days.length - 1]
+  return (
+    <Group gap={6} wrap="wrap">
+      <RollingBadge
+        label={`${options.length} ${options.length === 1 ? 'time option' : 'time options'}`}
+      />
+      {first === last ? (
+        <>
+          <Text size="sm" span>
+            on
+          </Text>
+          <RollingBadge label={formatDay(first)} />
+        </>
+      ) : (
+        <>
+          <Text size="sm" span>
+            from
+          </Text>
+          <RollingBadge label={formatDay(first)} />
+          <Text size="sm" span>
+            to
+          </Text>
+          <RollingBadge label={formatDay(last)} />
+        </>
+      )}
+    </Group>
   )
 }
 

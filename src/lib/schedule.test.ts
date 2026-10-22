@@ -29,6 +29,7 @@ import {
   paintingFromScores,
   scoresFromPainting,
   spanOf,
+  startingOn,
   stepGranule,
   todayIn,
   toTimeOfDay,
@@ -829,6 +830,22 @@ describe('duplicating a poll onto dates that have not gone', () => {
     // Friday evening rather than an answer given about the wrong day.
     const weekendSchedule: PollSchedule = { ...threeHours, desired_slots: 4 }
     expect(countWindows(weekendSchedule, moved.bounds)).toBe(countWindows(weekendSchedule, weekend))
+  })
+
+  test('a chosen first day takes the rest of the painting with it', () => {
+    // Picked a Tuesday: the Friday lands on it and the Saturday the day after,
+    // hours and all.
+    const moved = startingOn(weekend, '2026-10-13')
+    expect(daysOf(moved)).toEqual(['2026-10-13', '2026-10-14'])
+    expect(boundsOnDay(moved, '2026-10-13')[0]).toBe('2026-10-13 18:00')
+    expect(moved.size).toBe(weekend.size)
+  })
+
+  test('and several questions move from one shared first day', () => {
+    // A second question that starts the day after the first moves by the
+    // same number of days, so it still starts the day after.
+    const later = painted(['2026-09-05'], '09:00', '11:00')
+    expect(daysOf(startingOn(later, '2026-10-13', '2026-09-04'))).toEqual(['2026-10-14'])
   })
 
   test('a month boundary is a date, not a number of days in September', () => {

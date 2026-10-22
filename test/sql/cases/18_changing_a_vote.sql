@@ -299,6 +299,25 @@ begin
   perform tests.assert_eq('nobody is told through the link either',
     tests.signalled(), array[]::text[]);
 
+  -- Unless the revision brings a corrected name, which goes on the roster
+  -- and so is announced (see 0090).
+  perform open_poll_revise(v_open, jsonb_build_array(
+    jsonb_build_object('candidate_id', v_pizza, 'score', 2),
+    jsonb_build_object('candidate_id', v_sushi, 'score', 5)), 'key-a', 'Ada L.');
+
+  v_view := open_poll_view(v_open, 'key-a');
+  perform tests.assert_eq('a revision can correct the name on the ballot',
+    v_view -> 'voters', jsonb_build_array('Ada L.'));
+  perform tests.assert_eq('and the roster moving is announced',
+    cardinality(tests.signalled()) > 0, true);
+
+  perform tests.assert_raises('a corrected name cannot be blank',
+    format('select open_poll_revise(%L, %L::jsonb, %L, %L)', v_open,
+      jsonb_build_array(
+        jsonb_build_object('candidate_id', v_pizza, 'score', 2),
+        jsonb_build_object('candidate_id', v_sushi, 'score', 5)), 'key-a', '  '),
+    'Enter your name');
+
   perform tests.assert_raises('a key that cast no ballot has none to change',
     format('select open_poll_revise(%L, %L::jsonb, %L)', v_open,
       jsonb_build_array(

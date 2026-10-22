@@ -46,6 +46,7 @@ import { openPollViewSchema, parseAnswer, pollStatusSchema } from '../lib/rpcSch
 import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
+import { useFirstQuestionOnResults } from '../lib/resultsLanding'
 import type {
   PollRead,
   AccountRead,
@@ -338,6 +339,8 @@ export function PollDetail({
     if (!hasVoted) setRevising(null)
   }, [hasVoted])
 
+  useFirstQuestionOnResults(pollId, poll?.group_id, status?.results_available, questions)
+
   if (loading) return <PollPageSkeleton />
 
   if (error || !poll || !status) {
@@ -383,7 +386,8 @@ export function PollDetail({
   // What the crossing skeleton needs to know to match the question being
   // opened. `tallied` is borrowed from the question being left -- a guess,
   // but questions of one poll nearly always end alike. See QuestionSkeleton.
-  const asksName = isOpen && poll.show_voters && marking && !done.browser.has(pollId ?? poll.id)
+  const asksName = isOpen && poll.show_voters && marking
+  const answeredHere = done.browser.has(pollId ?? poll.id)
   const tallied = status.results_available
   const opening = questions.find((question) => question.id === pollId)
 
@@ -565,7 +569,9 @@ export function PollDetail({
             tallied={tallied}
             collecting={status.soliciting}
             rows={opening?.option_count}
-            nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
+            nameField={
+              asksName ? <VoterNameField name={voterName} disabled={answeredHere} /> : undefined
+            }
             strip={questionStrip}
           />
         )}

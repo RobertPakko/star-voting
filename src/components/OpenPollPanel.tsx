@@ -204,6 +204,7 @@ export function OpenPollPanel({
           pollId={pollId}
           view={view}
           isCreator={isCreator}
+          voterName={needsName ? voterName : undefined}
           onRevised={onChanged}
           questionStrip={questionStrip}
           banner={waiting('results')}
@@ -233,6 +234,7 @@ function Voted({
   pollId,
   view,
   isCreator,
+  voterName,
   onRevised,
   questionStrip,
   banner,
@@ -240,6 +242,8 @@ function Voted({
   pollId: string
   view: OpenPollView
   isCreator: boolean
+  /** Drawn disabled, showing the name on the ballot; Edit vote opens it again. */
+  voterName?: VoterName
   onRevised: () => void
   questionStrip?: ReactNode
   banner?: ReactNode
@@ -256,6 +260,8 @@ function Voted({
   // so re-read first, falling back to what is in hand.
   const edit = async () => {
     if (!scores) return
+    // The box starts from the name on the ballot, which is what a correction corrects.
+    if (voterName && view.your_name) voterName.onChange(view.your_name)
     if (!session) {
       setRevising(scores)
       return
@@ -278,6 +284,7 @@ function Voted({
         poll={view.poll}
         options={view.options}
         initial={revising}
+        voterName={voterName}
         isCreator={isCreator}
         onVoted={() => {
           setRevising(null)
@@ -293,6 +300,8 @@ function Voted({
     <Stack gap="md">
       <Card withBorder>
         <Stack gap="sm">
+          {/* Kept on the card, so the strip under it doesn't move between questions. */}
+          {voterName && <VoterNameField name={voterName} disabled value={view.your_name ?? ''} />}
           {questionStrip}
           <Stack gap={2}>
             <Text fw={500}>Your vote is in</Text>
@@ -320,8 +329,8 @@ function Voted({
 
 /**
  * An open poll's ballot, new or being changed. `BallotCard`/`TimeBallotCard`
- * draws it; this adds the name and the voter-key RPCs. A revision has no name
- * field: the name is already on the roster and `open_poll_revise` won't change it.
+ * draws it; this adds the name and the voter-key RPCs. A revision sends the name
+ * too, so a misspelt one can be put right.
  */
 function OpenBallot({
   pollId,
@@ -337,7 +346,7 @@ function OpenBallot({
   pollId: string
   poll: Pick<OpenPollView['poll'], 'kind' | 'schedule' | 'group_id'>
   options: PollOption[]
-  /** Absent on a revision and on polls that don't ask. */
+  /** Absent on polls that don't ask. */
   voterName?: VoterName
   isCreator: boolean
   /** The scores already on this ballot; absent when casting one. */
@@ -370,6 +379,7 @@ function OpenBallot({
           p_poll_id: pollId,
           p_scores: scores,
           p_voter_key: voterKeyFor(pollId),
+          p_voter_name: voterName?.trimmed,
         })
       : await openPollRpc('open_poll_submit', {
           p_poll_id: pollId,

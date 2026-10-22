@@ -32,7 +32,6 @@ export function PollTags({
   announceChanges?: boolean
 }) {
   const label = turnout ? turnoutLabel(turnout) : null
-  const { changes, was, settled } = useChangeCount(label)
 
   // "of" for the slash, which a screen reader would read literally.
   useStateAnnouncement(announceChanges && label ? label.replace(/^(\d+)\/(\d+)/, '$1 of $2') : null)
@@ -54,27 +53,38 @@ export function PollTags({
       >
         {showBallots ? 'Ballots published' : 'Ballots private'}
       </Badge>
-      {turnout && (
-        <Badge
-          {...countBadge}
-          // Remounted per change so the highlight animation restarts.
-          key={changes}
-          className={changes > 0 ? classes.bumped : undefined}
-        >
-          {/* The old count rolls up and out as the new one rolls in. */}
-          {changes > 0 && was ? (
-            <span className={classes.roll}>
-              <span className={classes.rollOut} aria-hidden onAnimationEnd={settled}>
-                {was}
-              </span>
-              <span className={classes.rollIn}>{label}</span>
-            </span>
-          ) : (
-            label
-          )}
-        </Badge>
-      )}
+      {label && <RollingBadge label={label} />}
     </Group>
+  )
+}
+
+/**
+ * A neutral badge whose words roll over when they change, under a brief
+ * highlight: the count above, and anything else that moves while nobody
+ * touches it -- a time poll's summary of the times it is collecting, for one.
+ * See PollTags.module.css.
+ */
+export function RollingBadge({ label }: { label: string }) {
+  const { changes, was, settled } = useChangeCount(label)
+  return (
+    <Badge
+      {...countBadge}
+      // Remounted per change so the highlight animation restarts.
+      key={changes}
+      className={changes > 0 ? classes.bumped : undefined}
+    >
+      {/* The old words roll up and out as the new ones roll in. */}
+      {changes > 0 && was ? (
+        <span className={classes.roll}>
+          <span className={classes.rollOut} aria-hidden onAnimationEnd={settled}>
+            {was}
+          </span>
+          <span className={classes.rollIn}>{label}</span>
+        </span>
+      ) : (
+        label
+      )}
+    </Badge>
   )
 }
 
@@ -84,14 +94,16 @@ export function PollTags({
  * the roll ends -- otherwise copying the badge gave "0 votes1 vote". Computed
  * during render so the first frame of new text is already rolling.
  */
-function useChangeCount(value: string | null): {
+function useChangeCount(value: string): {
   changes: number
   was: string | null
   settled: () => void
 } {
-  const [state, setState] = useState<{ value: string | null; changes: number; was: string | null }>(
-    { value, changes: 0, was: null },
-  )
+  const [state, setState] = useState<{ value: string; changes: number; was: string | null }>({
+    value,
+    changes: 0,
+    was: null,
+  })
   if (state.value !== value) setState({ value, changes: state.changes + 1, was: state.value })
   const settled = useCallback(() => setState((held) => ({ ...held, was: null })), [])
   return { changes: state.changes, was: state.was, settled }

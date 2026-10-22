@@ -525,7 +525,12 @@ export type Database = {
       open_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
       open_poll_results: { Args: { p_poll_id: string }; Returns: Json }
       open_poll_revise: {
-        Args: { p_poll_id: string; p_scores: Json; p_voter_key: string }
+        Args: {
+          p_poll_id: string
+          p_scores: Json
+          p_voter_key: string
+          p_voter_name?: string
+        }
         Returns: undefined
       }
       open_poll_submit: {

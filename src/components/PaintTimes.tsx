@@ -84,7 +84,6 @@ export function PaintTimes({
   schedule,
   options,
   canRemove,
-  editing,
   saving,
   showSave,
   onSave,
@@ -95,11 +94,6 @@ export function PaintTimes({
   options: PollOption[]
   /** Whether existing windows may be taken off the list; creator-only. */
   canRemove: boolean
-  /**
-   * Whether the calendar takes gestures. Off, it is the list read back, the
-   * way a text list shows its rows until *Add option* is pressed.
-   */
-  editing: boolean
   saving: boolean
   /**
    * Whether the calendar carries its own *Save times*.
@@ -242,19 +236,11 @@ export function PaintTimes({
 
   return (
     <Stack gap="xs">
-      {editing ? (
-        <Text size="sm">Mark the times this poll should offer.</Text>
-      ) : (
-        offered.size === 0 && (
-          <Text size="sm" c="dimmed">
-            No times suggested yet.
-          </Text>
-        )
-      )}
+      <Text size="sm">Mark the times this poll should offer.</Text>
 
       {/* Hidden on a poll answered in whole days, where there are no hours to
           be earliest or latest: a day is either in or out. */}
-      {editing && !daily && <HoursFields hours={hours} onChange={setHours} />}
+      {!daily && <HoursFields hours={hours} onChange={setHours} />}
 
       <Text size="xs" c="dimmed">
         All times are {describeOffset(schedule.timezone, zone)}
@@ -276,13 +262,12 @@ export function PaintTimes({
         canPaint={canPaint}
         dayInBounds={() => true}
         fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
-        readOnly={!editing}
       />
 
       {/* No tally of what is on the list or of what the painting would change
           it to: the calendar is the tally, and a line of counting under it was
           a second reading of the same thing. */}
-      {showSave && editing && (
+      {showSave && (
         <Group justify="flex-end">
           <Button
             onClick={() =>

@@ -234,13 +234,30 @@ export function carryForward(
   if (days.length === 0 || days[0] >= today) return { bounds: new Set(bounds), weeks: 0 }
 
   const weeks = Math.ceil(daysApart(days[0], today) / 7)
-  const shift = weeks * 7
+  return { bounds: shiftDays(bounds, weeks * 7), weeks }
+}
+
+/**
+ * A painting moved, every cell by the same number of days, so its first day is
+ * `first` -- the date a duplicate's creator picked. `from` is the day that
+ * lands there, for moving several questions of one poll together; it defaults
+ * to this painting's own first day.
+ */
+export function startingOn(
+  bounds: Bounds,
+  first: ScheduleDay,
+  from: ScheduleDay | undefined = daysOf(bounds)[0],
+): Set<GranuleKey> {
+  return from ? shiftDays(bounds, daysApart(from, first)) : new Set(bounds)
+}
+
+function shiftDays(bounds: Bounds, by: number): Set<GranuleKey> {
   const moved = new Set<GranuleKey>()
   for (const key of bounds) {
     const { day, minutes } = splitGranule(key)
-    moved.add(granuleKey(addDays(day, shift), minutes))
+    moved.add(granuleKey(addDays(day, by), minutes))
   }
-  return { bounds: moved, weeks }
+  return moved
 }
 
 /** Day, time and offset out of an option's name; null for anything that is not one. */

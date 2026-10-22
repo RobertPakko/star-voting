@@ -7,14 +7,24 @@ import type { VoterName } from '../lib/voterName'
  * card. Both cards draw it at the top, above the strip, and so does the
  * stand-in a crossing puts up.
  */
-export function VoterNameField({ name, disabled }: { name: VoterName; disabled?: boolean }) {
+export function VoterNameField({
+  name,
+  disabled,
+  value,
+}: {
+  name: VoterName
+  /** Once the answer is in; Edit vote enables it again. */
+  disabled?: boolean
+  /** What a disabled box shows instead of what is typed (the name the ballot carries). */
+  value?: string
+}) {
   return (
     <>
       <TextInput
         ref={name.ref}
         label="Your name"
         placeholder="Your name"
-        value={name.value}
+        value={disabled && value !== undefined ? value : name.value}
         onChange={(e) => name.onChange(e.currentTarget.value)}
         error={name.error}
         maxLength={VOTER_NAME_MAX}

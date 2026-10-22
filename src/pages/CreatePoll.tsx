@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { CopyIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -30,9 +30,13 @@ import {
   daysOf,
   enumerateWindows,
   fromDay,
+  granuleKey,
+  startingOn,
   todayIn,
   type GranuleKey,
+  type ScheduleDay,
 } from '../lib/schedule'
+import { DuplicateDates } from '../components/DuplicateDates'
 import { viewerOffsetOn } from '../lib/timezones'
 import { pollScheduleSchema } from '../lib/rpcSchemas'
 import {
@@ -61,6 +65,9 @@ import { announce } from '../lib/announce'
 
 /** The `+` tab's value. Question keys are `question-N`, so it cannot collide. */
 const ADD_QUESTION = 'add-question'
+
+/** An option's name field, for moving the cursor to it. */
+const optionNameId = (key: string) => `option-name-${key}`
 
 export function CreatePoll() {
   usePageTitle('New poll')
@@ -94,6 +101,16 @@ export function CreatePoll() {
   // Errors are shown from the first submit on.
   const [showErrors, setShowErrors] = useState(false)
   const [prefilling, setPrefilling] = useState(Boolean(duplicateOf))
+  // A duplicated time poll asks for its new first day before the form; see DuplicateDates.
+  const [datePick, setDatePick] = useState<{
+    /** The copied poll's first day, across its time questions. */
+    from: ScheduleDay
+    /** Where the picker starts: that day carried forward by whole weeks. */
+    suggested: ScheduleDay
+    today: ScheduleDay
+    /** Each time question's painting as copied, by question key. */
+    copied: Map<string, Set<GranuleKey>>
+  } | null>(null)
 
   const myEmail = session?.user.email?.toLowerCase() ?? ''
   const isOpen = mode === 'open'
@@ -153,6 +170,10 @@ export function CreatePoll() {
        * its schedule is validated rather than cast, since bad numbers would
        * break the window arithmetic far from here.
        */
+      // Each time question's painting as copied, for the date step.
+      const copiedTimes = new Map<string, Set<GranuleKey>>()
+      const clock: { today?: ScheduleDay } = {}
+
       const draftFrom = (row: Poll, rows: PollOption[]): QuestionDraft => {
         const blank = blankQuestion()
         const parsed = row.kind === 'time' ? pollScheduleSchema.safeParse(row.schedule) : null
@@ -168,13 +189,15 @@ export function CreatePoll() {
 
           // Read the painting off the options, then move it forward whole
           // weeks past today (on the poll's clock).
-          const renewed = carryForward(
-            boundsOf(
-              rows.map((option) => option.name),
-              grid,
-            ),
-            todayIn(grid.timezone),
+          const copied = boundsOf(
+            rows.map((option) => option.name),
+            grid,
           )
+          const renewed = carryForward(copied, todayIn(grid.timezone))
+          if (copied.size > 0) {
+            copiedTimes.set(blank.key, copied)
+            clock.today ??= todayIn(grid.timezone)
+          }
           return {
             ...blank,
             title: row.question_title ?? '',
@@ -236,6 +259,15 @@ export function CreatePoll() {
         setEmails(allEmails.filter((e) => e !== myEmail))
       }
 
+      // A copy of a time poll is nearly always about other dates, so ask for
+      // them first. Several time questions move together, from the earliest.
+      const today = clock.today
+      if (copiedTimes.size > 0 && today) {
+        const from = [...copiedTimes.values()].map((bounds) => daysOf(bounds)[0]).sort()[0]
+        const suggested = daysOf(carryForward(new Set([granuleKey(from, 0)]), today).bounds)[0]
+        setDatePick({ from, suggested, today, copied: copiedTimes })
+      }
+
       setPrefilling(false)
     }
 
@@ -281,6 +313,20 @@ export function CreatePoll() {
       return rest
     })
     patchOptions(question, (options) => options.filter((o) => o.key !== key))
+  }
+
+  /**
+   * Enter in an option's name or description goes to the next option's name,
+   * making one at the end of the list, so a list can be typed without the
+   * mouse. Shift+Enter still breaks a line in a description.
+   */
+  function onOptionEnter(e: KeyboardEvent<HTMLElement>, question: number, index: number) {
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+    e.preventDefault()
+    const options = questions[question].options
+    const next = options.slice(index + 1).find((o) => !leaving.has(o.key))
+    if (next) document.getElementById(optionNameId(next.key))?.focus()
+    else if (options.length < MAX_OPTIONS) addOption(question)
   }
 
   function updateQuestionTitle(index: number, value: string) {
@@ -335,6 +381,9 @@ export function CreatePoll() {
       setOpenKey(left[Math.max(0, index - 1)]?.key ?? null)
     }
     setQuestions(left)
+    // One question left is a poll asking one; unlike the switch, this keeps
+    // whichever question was not removed.
+    if (left.length < 2) setMultiQuestion(false)
   }
 
   /** On adds an empty second question; off keeps question 1 and drops the rest. */
@@ -559,6 +608,9 @@ export function CreatePoll() {
                       placeholder={`Option ${index + 1}`}
                       error={shown.optionNames[optionKey(questionIndex, index)]}
                       autoFocus={option.key === arriving}
+                      id={optionNameId(option.key)}
+                      enterKeyHint="next"
+                      onKeyDown={(e) => onOptionEnter(e, questionIndex, index)}
                     />
                     {option.description !== null && (
                       <DescriptionField
@@ -569,6 +621,8 @@ export function CreatePoll() {
                         placeholder={`Option ${index + 1} description`}
                         error={shown.optionDescriptions[optionKey(questionIndex, index)]}
                         autoFocus
+                        enterKeyHint="next"
+                        onKeyDown={(e) => onOptionEnter(e, questionIndex, index)}
                       />
                     )}
                   </Stack>
@@ -621,12 +675,6 @@ export function CreatePoll() {
               onClick={() => removeQuestion(questionIndex)}
               w="fit-content"
               leftSection={<TrashIcon size={14} aria-hidden />}
-              disabled={questions.length <= 2}
-              title={
-                questions.length <= 2
-                  ? 'A poll of several questions asks at least two; turn off Multiple questions instead.'
-                  : undefined
-              }
             >
               Remove question
             </Button>
@@ -637,6 +685,29 @@ export function CreatePoll() {
   }
 
   if (prefilling) return <FormSkeleton />
+
+  if (datePick) {
+    return (
+      <DuplicateDates
+        from={datePick.from}
+        suggested={datePick.suggested}
+        today={datePick.today}
+        onPick={(first) => {
+          // Every time question moves by the same days from where it was
+          // copied, so their spacing holds.
+          setQuestions((prev) =>
+            prev.map((question) => {
+              const copied = datePick.copied.get(question.key)
+              if (question.kind !== 'time' || !copied) return question
+              const marked = startingOn(copied, first, datePick.from)
+              return { ...question, marked, days: daysOf(marked), datesMoved: 0 }
+            }),
+          )
+          setDatePick(null)
+        }}
+      />
+    )
+  }
 
   return (
     <Stack maw={720} mx="auto" gap="md">

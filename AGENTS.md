@@ -1917,9 +1917,21 @@ Whole weeks rather than any other shift, because a painting is an answer about
 *days of the week*: "Friday evenings, Saturday from nine" moved onto a
 Wednesday is that answer given about the wrong day. Every cell moves with the
 day it was painted on, so the copy is the same poll — the same number of
-windows, the same Friday evening, at the same offset. The form says the dates
-moved and by how much, because a date that changed on its own is exactly the
-kind of thing a creator notices two screens later, or never.
+windows, the same Friday evening, at the same offset.
+
+**And that is only where the picker starts.** A copy of a time poll is nearly
+always about different dates, so before the form appears
+[`DuplicateDates`](src/components/DuplicateDates.tsx) says when the poll being
+copied started and asks for the copy's first day, opening on the whole-weeks
+answer above and refusing a day that has gone. Every painted cell then moves by
+the same number of days (`startingOn`), so the spacing comes across whole —
+pick a Tuesday and the Friday-and-Saturday poll becomes a Tuesday-and-Wednesday
+one, hours unchanged. Several time questions in one poll move together, from
+the earliest first day among them, each from its painting as copied rather
+than from its own carried-forward one, so the gaps between them hold too. The
+"these dates have moved" notice under the calendar only appears now where the
+date step did not run, since a date the creator just picked has not moved on
+its own.
 
 **The offset copies straight across**, and `offsetPicked` is set with it: an
 offset that came from the poll being copied is an answer rather than this
@@ -2070,15 +2082,19 @@ take a window off the list was narrower still — *Undo*, reaching their own
 unsaved marks and stopping there — which is exactly what painting over them
 does, and the line above the calendar now says so in those words.
 
-**It opens read only, behind *Add times*.** The calendar used to take
+**There is no calendar until *Add times*.** The calendar used to take
 gestures the moment it was drawn, so a reader who had come to look at the
-list was already in an editor with nothing saying so. Now it is the list read
-back until **Add times** (**Edit times** for the creator, whose gestures can
-take times off as well) is pressed beside *Confirm times* — the same shape as
-a text list, whose rows are rows until *Add option* opens a field. The
-hours selects and the instruction line arrive with the editor. A save puts the
-calendar back to read only and starts the next edit from the list as it then
-stands. The creator's correction of a list that is already a ballot opens
+list was already in an editor with nothing saying so. Then it was drawn read
+only until **Add times** (**Edit times** for the creator, whose gestures can
+take times off as well) was pressed, and a read-only calendar looks exactly
+like one that is broken. So until that press the card says only what the list
+holds — *5 time options from Fri Sep 4 to Sat Sep 5* — as badges
+(`TimesSummary`), which roll over like the count badge's when somebody else's
+suggestion lands; the calendar, the hours selects and the instruction line
+arrive together with the press. Pressing it is starting an edit, so it takes a
+confirmation back as opening a text field does. A save, or a *Confirm times*
+with nothing painted, closes the calendar again, and the next one opens on the
+list as it then stands. The creator's correction of a list that is already a ballot opens
 editing, since *Edit options* was the press that asked for an editor. On a
 time poll the card says *times* where a text list says *options*: *Confirm
 times*, *Times confirmed*.
@@ -4837,10 +4853,14 @@ afterwards, and the list is a shared thing still growing, which is exactly
 what a confirmed reader is waiting on.
 
 **Starting an edit takes the confirmation back.** The moment a confirmed
-reader opens a new option's field, paints a time, or (as a creator) corrects
-or strikes a row, the card withdraws their confirmation on the server
-(`unconfirm_options`, `open_poll_unconfirm_options`) and the button goes back
-to **Confirm options**, which saves the edit and confirms again. A reader
+reader presses *Add option* or *Add times*, or (as a creator) opens or strikes
+a row, the card withdraws their confirmation on the server
+(`unconfirm_options`, `open_poll_unconfirm_options`) — on the press, not on
+the first character typed, since opening the field is already the decision —
+and the button goes back to **Confirm options**, which saves the edit and
+confirms again. It is drawn loading while the withdrawal is in flight, until
+the re-read says it landed. A field opened and left blank is closed by that
+press rather than left behind to withdraw the confirmation a second time. A reader
 part-way through adding to the list is not done adding, and the roster and the
 count say so for as long as they are — a confirmation left standing would also
 let the poll open itself under an edit nobody had sent. Discarding the field
@@ -5264,12 +5284,17 @@ on `scores`, and `ballots` still has triggers on `INSERT` and `DELETE` only.
 
 Two conditions hold that up, and both are enforced rather than assumed:
 
-- **A revision changes scores and nothing else.** In particular
-  `open_poll_revise` does not take a name. A name on an open poll is on the
-  roster other people are already reading, so changing it would be the one
-  part of a revision somebody else could see — and a name quietly becoming a
-  different name mid-poll reads as another person voting rather than as the
-  same person having second thoughts.
+- **A revision changes scores, and on an open poll the voter's name, and
+  nothing else.** The name was refused for a long time, on the grounds that
+  it is on a roster other people are already reading. That is true and is
+  why a name that changes is *announced* — `open_poll_revise` calls
+  `broadcast_poll_change` when the name moved and only then — not a reason
+  to keep a misspelling on the roster for good. The box stays on the card
+  disabled once the vote is in and is enabled again by *Edit vote*, starting
+  from the name the ballot carries (`your_name`), so correcting it is part of
+  changing the vote. A revision that leaves the name alone, or passes none,
+  is as silent as it always was. See
+  [`0090_a_changed_vote_can_change_its_name.sql`](supabase/migrations/0090_a_changed_vote_can_change_its_name.sql).
 - **It updates in place and never deletes and re-inserts the ballot.** The
   lazy version is invisible at the RPC boundary and would fire
   `ballots_broadcast_delete` and then `ballots_broadcast_insert`: two spurious
@@ -5809,9 +5834,13 @@ Three things keep the tabs from hiding anything:
   strip is either a button nested inside a tab's button, or a tab that is not
   a question. What the two controls actually share is not a row — it is that
   each sits beside what it acts on, `+` beside the tabs it adds to and this
-  beside the question it ends. **Two questions is the floor**, since below it
-  the poll asks one, which is what the *Multiple questions* switch is for
-  rather than something to arrive at by removing the second.
+  beside the question it ends. **Removing one of two questions leaves a poll
+  of one**: the form goes back to a single question, keeping whichever was
+  not removed. That is the difference from turning *Multiple questions* off,
+  which always keeps question 1.
+- **Enter in an option's name or description goes to the next option's
+  name**, making one at the end of the list, so a list is typed without
+  reaching for *Add option*. Shift+Enter still breaks a line in a description.
 - **Every question is validated on every submit**, on screen or not; the tabs
   changed what is rendered, not what is checked.
 - **A tab whose question has something wrong with it is marked**, and a submit
@@ -5869,6 +5898,15 @@ three conditions, each of which is a case where moving would be wrong:
 - **Only while something is owed.** Every other question answered leaves the
   voter where they are, and the page does what a single-question poll always
   has: re-reads itself into *your vote is in*.
+
+**And the results coming out goes back to question 1**
+([`lib/resultsLanding.ts`](src/lib/resultsLanding.ts)). The ballot that
+reveals a poll is usually the last one on the last question, so the reader
+was left on question 3's tally with nothing saying questions 1 and 2 had
+results too. Only the moment of the reveal moves anybody — the read before it
+said sealed, the read after says out, both of the same group — so a reader who
+opens a finished poll at question 3, or walks there afterwards, stays where
+they asked to be.
 
 **Every stage a reader can be left standing in carries the strip**, on both
 readings, because a poll of several questions that offers no way to the others
@@ -6010,10 +6048,13 @@ there for real**, in the places the ballot draws them:
   question; it is what this person is called, which is the whole reason that
   file carries it from one question to the next. Held in the page, which
   survives a crossing, it is one field that goes on standing there with what
-  was typed still in it. The page knows whether the question being opened will
-  ask for one from the same three facts the card goes on — a poll that names
-  its respondents, still taking answers, from a reader who has not answered
-  *this* question yet — so the stand-in claims nothing it cannot deliver.
+  was typed still in it. **It is on every question still taking answers**,
+  answered or not: it used to be only on a ballot not yet cast, so the strip
+  under it jumped up and down as a reader walked between answered and
+  unanswered questions. On a question already answered it is disabled and
+  shows the name the ballot carries — *Your vote is in* draws it too — and
+  *Edit vote* enables it again. The stand-in draws it disabled on the same
+  terms, from the browser's own record of what it has answered.
 
 Both sit outside the stand-in's `Loading` wrapper, which hides what it holds
 from screen readers: a real link or a real input in there would be one nothing

@@ -214,9 +214,9 @@ function castLocally(question: SampleQuestion, args: OpenPollArgs): RpcAnswer {
 
   const existing = ballots.get(args.p_poll_id)
   ballots.set(args.p_poll_id, {
-    // A revision keeps the name given when the ballot went in, which is what
-    // open_poll_revise does: it takes no name at all.
-    name: existing ? existing.name : (args.p_voter_name ?? null),
+    // A revision without a name keeps the one given when the ballot went in,
+    // as open_poll_revise does.
+    name: args.p_voter_name ?? existing?.name ?? null,
     scores,
   })
 

@@ -29,6 +29,7 @@ import type {
   UnreadableRead,
 } from '../lib/types'
 import { usePageTitle } from '../lib/pageTitle'
+import { useFirstQuestionOnResults } from '../lib/resultsLanding'
 
 /**
  * An open poll as anyone holding the link sees it, through the anon RPCs
@@ -216,6 +217,8 @@ export function PublicPoll({
     if (sample) void load()
   }, [sample, load])
 
+  useFirstQuestionOnResults(pollId, shell?.poll.group_id, shell?.results_available, questions)
+
   usePageTitle(!pollId || error ? 'Poll not found' : null)
 
   if (!pollId || error) {
@@ -262,7 +265,8 @@ export function PublicPoll({
   const questionStrip = (
     <QuestionStrip questions={strip} current={pollId} hrefFor={(next) => pollPath(next)} />
   )
-  const asksName = shell.poll.show_voters && marking && !done.has(pollId)
+  // On every question still taking answers, disabled where this one is answered.
+  const asksName = shell.poll.show_voters && marking
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -317,7 +321,9 @@ export function PublicPoll({
             tallied={shell.results_available}
             rows={shell.options.length}
             collecting={shell.soliciting}
-            nameField={asksName ? <VoterNameField name={voterName} /> : undefined}
+            nameField={
+              asksName ? <VoterNameField name={voterName} disabled={done.has(pollId)} /> : undefined
+            }
             strip={questionStrip}
           />
         )}
