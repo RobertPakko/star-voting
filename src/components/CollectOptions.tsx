@@ -390,7 +390,11 @@ function OptionList({
 }) {
   // Typed options stay editable fields until the card's closing press; there
   // is deliberately no *Add* that would draw them as if already saved.
-  const [drafts, setDrafts] = useState<Draft[]>([])
+  const [shownDrafts, setDrafts] = useState<Draft[]>([])
+  // Drafts discarded and still shrinking out (listRow's `leaving`), dropped
+  // from state when that ends. Drawn, and counted as nothing else.
+  const [discarding, setDiscarding] = useState<ReadonlySet<string>>(new Set())
+  const drafts = shownDrafts.filter((d) => !discarding.has(d.key))
   const [draftProblems, setDraftProblems] = useState<ReadonlyMap<string, Problem>>(new Map())
   // The field just asked for, which takes the cursor.
   const [focus, setFocus] = useState<Focus | null>(null)
@@ -519,8 +523,18 @@ function OptionList({
   }
 
   function discardDraft(key: string) {
-    setDrafts((prev) => prev.filter((d) => d.key !== key))
+    setDiscarding((prev) => new Set(prev).add(key))
     setDraftProblems((prev) => without(prev, key))
+  }
+
+  /** The discarded row has finished shrinking: now it can go. */
+  function discarded(key: string) {
+    setDrafts((prev) => prev.filter((d) => d.key !== key))
+    setDiscarding((prev) => {
+      const next = new Set(prev)
+      next.delete(key)
+      return next
+    })
   }
 
   function openEditor(option: PollOption) {
@@ -574,6 +588,7 @@ function OptionList({
       }
     }
     setDrafts([])
+    setDiscarding(new Set())
     setDraftProblems(new Map())
     setDropping(new Set())
     setEditing(new Map())
@@ -701,14 +716,22 @@ function OptionList({
         )
       })}
 
-      {options.length === 0 && drafts.length === 0 && (
+      {options.length === 0 && shownDrafts.length === 0 && (
         <Text size="sm" c="dimmed">
           Nothing suggested yet.
         </Text>
       )}
 
-      {drafts.map((d, i) => (
-        <div key={d.key} className={`${listRow.row} ${listRow.joining}`}>
+      {shownDrafts.map((d, i) => (
+        <div
+          key={d.key}
+          className={`${listRow.row} ${discarding.has(d.key) ? listRow.leaving : listRow.joining}`}
+          // Its own animation only, not one bubbling up from inside the row.
+          onAnimationEnd={(e) => {
+            if (e.target === e.currentTarget && discarding.has(d.key)) discarded(d.key)
+          }}
+          inert={discarding.has(d.key) || undefined}
+        >
           <div className={`${listRow.content} ${listRow.stacked}`}>
             <Group gap="xs" align="flex-start" wrap="nowrap">
               <OptionFields
@@ -768,7 +791,7 @@ function OptionList({
         </Group>
       ) : (
         // With no rows to rule it off, the foot draws its own line.
-        footer?.(addButton, options.length === 0 && drafts.length === 0)
+        footer?.(addButton, options.length === 0 && shownDrafts.length === 0)
       )}
     </Stack>
   )
