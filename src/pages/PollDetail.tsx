@@ -26,7 +26,6 @@ import { NoResultsNotice, RevealNote } from '../components/PollNotices'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { SmoothHeight } from '../components/SmoothHeight'
-import { useResultsLanding } from '../lib/resultsLanding'
 import { Banners } from '../components/Banners'
 import { RetentionNote } from '../components/RetentionNote'
 import { Ballots, preloadCards, Results, TimeBallotCard, YourBallot } from '../components/deferred'
@@ -334,10 +333,6 @@ export function PollDetail({
     if (!editable) setEditingOptions(false)
   }, [editable])
 
-  // Of the question the state describes, which during a crossing is still the
-  // one being left.
-  const resultsLive = useResultsLanding(loadedFor ?? undefined, !!status?.results_available)
-
   const hasVoted = status?.voted === true
   useEffect(() => {
     if (!hasVoted) setRevising(null)
@@ -472,7 +467,6 @@ export function PollDetail({
                 <OpenPollPanel
                   key={refreshKey}
                   pollId={poll.id}
-                  resultsLive={resultsLive}
                   view={view}
                   results={results}
                   ballots={ballots}
@@ -522,7 +516,6 @@ export function PollDetail({
                         : null
                     }
                     initial={results}
-                    live={resultsLive}
                   />
                 </Suspense>
               </Stack>

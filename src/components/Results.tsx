@@ -50,7 +50,6 @@ export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
 export function Results({
   source,
   initial = null,
-  live = false,
   meeting = null,
 }: {
   source: ResultsSource
@@ -58,8 +57,6 @@ export function Results({
   meeting?: { title: string; schedule: PollSchedule } | null
   /** The tally `poll_page` already carried; null means read it here. */
   initial?: PollResults | null
-  /** The results came out while the reader watched; see `landed` in Results.module.css. */
-  live?: boolean
 }) {
   const h24 = use24HourTime()
   const kind = source.kind
@@ -151,12 +148,8 @@ export function Results({
         {/* Its own entrance, since a poll that finishes while watched grows
             this card without the rest remounting. */}
         {shown.winner_id && (
-          <Reveal>
-            <Card
-              withBorder
-              bg="var(--mantine-color-green-light)"
-              className={live ? classes.landed : undefined}
-            >
+          <Reveal rise={false}>
+            <Card withBorder bg="var(--mantine-color-green-light)" className={classes.landed}>
               <Group justify="space-between" align="center" gap="sm">
                 <Text fw={700} size="lg">
                   Winner: {nameById.get(shown.winner_id)}
@@ -176,11 +169,11 @@ export function Results({
           </Reveal>
         )}
         {!shown.winner_id && shown.finalists.length === 2 && (
-          <Reveal>
+          <Reveal rise={false}>
             <Card
               withBorder
               bg="var(--mantine-color-orange-light)"
-              className={live ? classes.landed : undefined}
+              className={classes.landed}
               style={
                 { '--landed-ring': 'var(--mantine-color-orange-filled)' } as React.CSSProperties
               }

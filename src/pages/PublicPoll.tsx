@@ -13,7 +13,6 @@ import { preloadCards } from '../components/deferred'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
 import { SmoothHeight } from '../components/SmoothHeight'
-import { useResultsLanding } from '../lib/resultsLanding'
 import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
@@ -205,7 +204,6 @@ export function PublicPoll({
   const known = questions.some((question) => question.id === pollId)
 
   const sample = !!pollId && isSampleId(pollId)
-  const resultsLive = useResultsLanding(read?.pollId, !!read?.view.results_available)
 
   // Kept registered even once settled: the creator can reopen.
   useEffect(() => {
@@ -300,7 +298,6 @@ export function PublicPoll({
         {view ? (
           <OpenPollPanel
             pollId={pollId}
-            resultsLive={resultsLive}
             view={view}
             results={results}
             ballots={ballots}

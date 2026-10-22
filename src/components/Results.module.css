@@ -34,35 +34,25 @@
   transition-delay: calc(var(--row) * 40ms);
 }
 
-/* The answer card, when the results came out while the reader was watching.
+/* The answer card, arriving.
  *
- * Opening a finished poll is reading a result; watching one finish is being
- * there when it is decided, and that is the moment the page has been building
- * to — the last vote lands somewhere else, the ballot or the waiting card goes,
- * and the answer is here. So it gets one thing more than the ordinary
- * entrance: the card settles up from a touch smaller, and a ring of its own
- * colour spreads out from its edge and fades. Once, and quietly — the note on
- * the card in Results.tsx says it should look pleased rather than triumphant,
- * and a ring that goes in under a second is a nod, not a fanfare.
+ * A single ring of its own colour spreads out from its edge and fades, as the
+ * card fades in — once, and quietly, a nod rather than a fanfare. It plays
+ * whenever the card appears: opening a finished poll, and watching one finish,
+ * alike, beside the bars and the half pie that already draw themselves in.
+ *
+ * Only the ring. It used to arrive with a scale that overshot and a rise from
+ * the card's own `Reveal` as well, all three starting at slightly different
+ * moments, and it read as the card twitching several times rather than as one
+ * pulse. The card's `Reveal` fades without rising for the same reason.
+ *
+ * It was once kept for results that came out while the reader watched, on the
+ * grounds that a card making a fuss every time it was opened was making it for
+ * nothing; a pulse this small is not a fuss, and it matches the rest of the
+ * tally's entrance.
  */
 .landed {
-  animation:
-    settle var(--motion-slow) var(--motion-ease) both,
-    ring calc(var(--motion-slow) * 2) var(--motion-ease) var(--motion-base) both;
-}
-
-@keyframes settle {
-  from {
-    transform: scale(0.96);
-  }
-
-  60% {
-    transform: scale(1.015);
-  }
-
-  to {
-    transform: scale(1);
-  }
+  animation: ring calc(var(--motion-slow) * 2) var(--motion-ease) both;
 }
 
 @keyframes ring {

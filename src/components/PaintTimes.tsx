@@ -12,7 +12,6 @@ import {
   daysOf,
   describeOffset,
   enumerateWindows,
-  granulesOf,
   isDaily,
   paintingRuns,
   runBounds,
@@ -67,12 +66,10 @@ import type { DailyWindow, PollOption, PollSchedule } from '../lib/types'
  */
 
 /**
- * What a cell is on this calendar: on its way off the list, already offered,
- * or newly marked. Three states rather than the ballot's six, and all of them
- * above zero, because `paintingRuns` reads a 0 as "nobody marked this" -- which
- * is true on a ballot and is not true of a window being taken off.
+ * What a cell is on this calendar: already offered, or newly marked. A cell
+ * being taken off is simply not drawn -- the calendar shows the list as it
+ * will be, not the edit that gets it there.
  */
-const DROPPING = 1
 const OFFERED = 2
 const ADDING = 3
 
@@ -87,6 +84,7 @@ export function PaintTimes({
   schedule,
   options,
   canRemove,
+  editing,
   saving,
   showSave,
   onSave,
@@ -97,6 +95,11 @@ export function PaintTimes({
   options: PollOption[]
   /** Whether existing windows may be taken off the list; creator-only. */
   canRemove: boolean
+  /**
+   * Whether the calendar takes gestures. Off, it is the list read back, the
+   * way a text list shows its rows until *Add option* is pressed.
+   */
+  editing: boolean
   saving: boolean
   /**
    * Whether the calendar carries its own *Save times*.
@@ -123,10 +126,19 @@ export function PaintTimes({
     [options, schedule],
   )
 
-  // What the calendar currently says the poll should offer. It opens as what
-  // it already offers, so the first thing a reader sees is the poll as it
-  // stands, and the difference below is empty until they touch something.
-  const [wanted, setWanted] = useState<Set<GranuleKey>>(() => new Set(offered))
+  // This reader's edit, as cells marked and cells rubbed out, kept apart from
+  // the list rather than as a copy of it. A copy taken on arrival would read
+  // somebody else's later suggestion as one this reader had rubbed out --
+  // drawn as coming off, and sent as a removal by a creator's save.
+  const [marked, setMarked] = useState<ReadonlySet<GranuleKey>>(new Set())
+  const [rubbed, setRubbed] = useState<ReadonlySet<GranuleKey>>(new Set())
+  // What the calendar says the poll should offer: the list as it now stands,
+  // with this reader's edit laid over it.
+  const wanted = useMemo(() => {
+    const next = new Set([...offered].filter((key) => !rubbed.has(key)))
+    for (const key of marked) next.add(key)
+    return next
+  }, [offered, marked, rubbed])
   // Which part of the day this reader is working in; see HoursFields. It opens
   // as the poll's own axis, so the calendar is the one the creator drew until
   // somebody says otherwise.
@@ -161,20 +173,22 @@ export function PaintTimes({
   }
 
   function paint(keys: GranuleKey[], value: number) {
-    setWanted((prev) => {
-      const next = new Set(prev)
-      for (const key of keys) {
+    const nextMarked = new Set(marked)
+    const nextRubbed = new Set(rubbed)
+    for (const key of keys) {
+      if (value === 0) {
         // A cell already on the list is only rubbed out by somebody allowed to
         // take a window off it; for everybody else painting over one of their
         // own unsaved marks takes it back and there it stops.
-        if (value === 0) {
-          if (canRemove || !offered.has(key)) next.delete(key)
-        } else {
-          next.add(key)
-        }
+        nextMarked.delete(key)
+        if (canRemove && offered.has(key)) nextRubbed.add(key)
+      } else {
+        nextRubbed.delete(key)
+        if (!offered.has(key)) nextMarked.add(key)
       }
-      return next
-    })
+    }
+    setMarked(nextMarked)
+    setRubbed(nextRubbed)
   }
 
   /**
@@ -194,12 +208,6 @@ export function PaintTimes({
 
   function buildEvents(view: ScheduleViewLevel): ScheduleEventData[] {
     const painting: Record<GranuleKey, number> = {}
-    // A window on its way off the list first, so a cell that is both -- part
-    // of a window being dropped and part of one being kept -- is drawn as
-    // kept. The dropped ones are what is left over.
-    for (const option of removing) {
-      for (const key of granulesOf(option.name, schedule)) painting[key] = DROPPING
-    }
     for (const key of wanted) painting[key] = offered.has(key) ? OFFERED : ADDING
 
     return paintingRuns(painting, schedule).map((run) => ({
@@ -234,11 +242,19 @@ export function PaintTimes({
 
   return (
     <Stack gap="xs">
-      <Text size="sm">Mark the times this poll should offer.</Text>
+      {editing ? (
+        <Text size="sm">Mark the times this poll should offer.</Text>
+      ) : (
+        offered.size === 0 && (
+          <Text size="sm" c="dimmed">
+            No times suggested yet.
+          </Text>
+        )
+      )}
 
       {/* Hidden on a poll answered in whole days, where there are no hours to
           be earliest or latest: a day is either in or out. */}
-      {!daily && <HoursFields hours={hours} onChange={setHours} />}
+      {editing && !daily && <HoursFields hours={hours} onChange={setHours} />}
 
       <Text size="xs" c="dimmed">
         All times are {describeOffset(schedule.timezone, zone)}
@@ -259,12 +275,13 @@ export function PaintTimes({
         canPaint={canPaint}
         dayInBounds={() => true}
         fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
+        readOnly={!editing}
       />
 
       {/* No tally of what is on the list or of what the painting would change
           it to: the calendar is the tally, and a line of counting under it was
           a second reading of the same thing. */}
-      {showSave && (
+      {showSave && editing && (
         <Group justify="flex-end">
           <Button
             onClick={() =>
@@ -285,21 +302,18 @@ export function PaintTimes({
   )
 }
 
-/** Being taken off, offered already, or being added. */
+/** Offered already, or being added. */
 const COLORS: Record<number, string> = {
-  [DROPPING]: 'red.4',
   [OFFERED]: 'blue.5',
   [ADDING]: 'teal.6',
 }
 const LABELS: Record<number, string> = {
-  [DROPPING]: 'Coming off',
   [OFFERED]: 'Offered',
   [ADDING]: 'Adding',
 }
 
 /** And what a month chip's label is written in over each of them. */
 const INKS: Record<number, string> = {
-  [DROPPING]: 'var(--mantine-color-black)',
   [OFFERED]: 'var(--mantine-color-white)',
   [ADDING]: 'var(--mantine-color-white)',
 }

@@ -85,6 +85,20 @@ const outOfBounds = {
   style: { background: 'var(--mantine-color-gray-light)', cursor: 'not-allowed' },
 }
 
+/** Greyed on a read-only calendar, without the not-allowed cursor. */
+const outOfBoundsRead = {
+  disabled: true,
+  style: { background: outOfBounds.style.background },
+}
+
+/**
+ * The row lines a time slot draws, taken out where it is out of bounds, so a
+ * greyed stretch reads as one block rather than as cells waiting to be
+ * painted. The border shows the slot's own grey through it; where the
+ * stretch meets open cells below, their own line still marks the edge.
+ */
+const NO_ROW_LINE = { borderTopColor: 'transparent' }
+
 /**
  * An out-of-bounds time slot. It still carries the library's drag index (and
  * so `touch-action: none`), and has no stroke to protect, so it scrolls both
@@ -92,13 +106,13 @@ const outOfBounds = {
  */
 const outOfBoundsSlot = {
   ...outOfBounds,
-  style: { ...outOfBounds.style, touchAction: 'pan-x pan-y pinch-zoom' },
+  style: { ...outOfBounds.style, ...NO_ROW_LINE, touchAction: 'pan-x pan-y pinch-zoom' },
 }
 
-/** Greyed on a read-only calendar, without the not-allowed cursor. */
-const outOfBoundsRead = {
-  disabled: true,
-  style: { background: outOfBounds.style.background },
+/** `outOfBoundsRead`, for a time slot. */
+const outOfBoundsReadSlot = {
+  ...outOfBoundsRead,
+  style: { ...outOfBoundsRead.style, ...NO_ROW_LINE },
 }
 
 /** An arrow with nowhere to go. The library's control has no disabled style of its own. */
@@ -416,7 +430,7 @@ export function PaintCalendar({
           ? {}
           : { style: PAN_SIDEWAYS }
         : readOnly
-          ? outOfBoundsRead
+          ? outOfBoundsReadSlot
           : outOfBoundsSlot,
   }
 

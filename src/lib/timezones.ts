@@ -167,38 +167,6 @@ export function offsetChoices(
 }
 
 /**
- * The clock change a poll is about to run across, or null for the ordinary
- * poll that is not.
- *
- * A poll is one offset for its whole length and that cannot be fixed -- it is
- * the point. What can be done is to say so: the zone that gave this offset its
- * name is checked on every day of the poll, and if it leaves the offset partway
- * through, the first day it does and what it moves to come back. A creator who
- * picked `UTC+01:00 · UK Time` for the week the clocks go back is told that the
- * later days will read an hour off the wall in London, and can move the poll or
- * accept it.
- *
- * Nothing to say when the offset has no name: an offset nobody is on cannot
- * drift away from anybody.
- */
-export function offsetDrift(
-  offset: string,
-  days: ScheduleDay[],
-): { day: ScheduleDay; name: string; becomes: string } | null {
-  const sorted = [...days].sort()
-  if (sorted.length === 0) return null
-
-  const named = ZONES.find((entry) => offsetsOn(sorted[0]).get(entry.zone) === offset)
-  if (!named) return null
-
-  for (const day of sorted) {
-    const then = zoneOffsetOn(named.zone, day)
-    if (then && then !== offset) return { day, name: named.name, becomes: then }
-  }
-  return null
-}
-
-/**
  * The offset this browser is on, on the day the poll starts -- the picker's
  * opening guess, and right nearly always, because a creator is usually
  * organising a meeting where they are.

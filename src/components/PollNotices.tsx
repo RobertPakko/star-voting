@@ -18,48 +18,6 @@ import { Card, Text } from '@mantine/core'
  */
 
 /**
- * When a poll that is still collecting its options starts taking votes, and —
- * while it has not — that the list can still grow.
- *
- * The same two facts in the same order as `RevealNote` below, one stage
- * earlier, because they are the same shape of fact: what ends the stage you
- * are in, and what you may still do until it does. The card a confirmed
- * reader comes back to says this beside *Edit options*, exactly as the card a
- * voter comes back to says the other beside *Edit vote*.
- *
- * `whenEveryoneHas` is the invite poll that is waiting on confirmations and
- * opens itself when it runs out of people to wait for. An open poll has no
- * list of people, so nothing can be last through the door and its creator
- * ends the stage, which is what the other sentence says.
- */
-export function OpeningNote({
-  isCreator,
-  whenEveryoneHas = false,
-  canAdd = false,
-}: {
-  isCreator: boolean
-  /** Every invitee confirming opens this poll, with nobody pressing anything. */
-  whenEveryoneHas?: boolean
-  canAdd?: boolean
-}) {
-  return (
-    <Text size="sm" c="dimmed">
-      {whenEveryoneHas
-        ? 'Voting opens once everyone has confirmed the options.'
-        : isCreator
-          ? 'Voting starts once you open the poll.'
-          : 'Voting starts once the poll’s creator opens the poll.'}
-      {canAdd && (
-        <>
-          <br />
-          You can add more options until then.
-        </>
-      )}
-    </Text>
-  )
-}
-
-/**
  * A poll that was closed with nothing in it, in place of the results it has
  * none of.
  *

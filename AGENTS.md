@@ -16,7 +16,7 @@ hash-based routing, deployed to GitHub Pages by
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollPage — the route that picks PollDetail or PublicPoll — About, Settings, InstallGuide, Intro, Start, Donate, Contact)
 src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), the create form's drafts and validation (pollForm.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, "Make your own poll" for a reader who may have no session (makePoll.ts), the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), whether a poll's results came out while somebody watched (resultsLanding.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), the create form's drafts and validation (pollForm.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, "Make your own poll" for a reader who may have no session (makePoll.ts), the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the Start page's two loops (start/), the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -1281,9 +1281,11 @@ it happens, and the old behaviour — read `getTimezoneOffset()` once and store
 it — was an hour out on every option for half the year.
 
 A poll that runs across a clock change where its offset is kept cannot be fixed
-— one poll, one offset — so it is said: `offsetDrift` names the first day it
-moves and what it moves to, and the create form puts a notice under the
-picker.
+— one poll, one offset — and **the form no longer says so**. It used to:
+`offsetDrift` named the first day the offset's zone moved, and a yellow notice
+under the picker explained it. It confused more than it helped — it warned
+about a choice the creator could not act on, and the grid every voter sees is
+the same either way — so it was taken out, function and all.
 
 **An option's name is its window start, in full ISO 8601:**
 `2026-09-01T14:00:00-07:00`. Unambiguous on its own, unique within the poll
@@ -1662,6 +1664,15 @@ any drag the library had opened under that scroll is ended without painting
 by `cancelled`, below. The month's own out-of-bounds days go through
 `getDayProps` and deliberately do *not* share it: with the drag off there on
 touch, a greyed day already scrolls like the rest of the page.
+
+**A greyed stretch draws no row lines** (`NO_ROW_LINE`). Each slot draws its
+own top border, and on a greyed one it is made transparent, so the slot's grey
+shows through it and a greyed morning is one block rather than a column of
+cells that look as if they are waiting to be painted. The edge of the open
+cells is still drawn where they start below it, by their own border; the
+column lines between days stay, since they separate days rather than cells.
+The month is left as it is: its days draw the grid's outer frame too, and a
+greyed day at the edge would take a piece of the frame with it.
 
 **And the drag the browser takes away has to be given an ending**
 (`cancelled`). Letting the browser claim a swipe means `pointercancel`, which
@@ -2059,6 +2070,30 @@ take a window off the list was narrower still — *Undo*, reaching their own
 unsaved marks and stopping there — which is exactly what painting over them
 does, and the line above the calendar now says so in those words.
 
+**It opens read only, behind *Add times*.** The calendar used to take
+gestures the moment it was drawn, so a reader who had come to look at the
+list was already in an editor with nothing saying so. Now it is the list read
+back until **Add times** (**Edit times** for the creator, whose gestures can
+take times off as well) is pressed beside *Confirm times* — the same shape as
+a text list, whose rows are rows until *Add option* opens a field. The
+hours selects and the instruction line arrive with the editor. A save puts the
+calendar back to read only and starts the next edit from the list as it then
+stands. The creator's correction of a list that is already a ballot opens
+editing, since *Edit options* was the press that asked for an editor. On a
+time poll the card says *times* where a text list says *options*: *Confirm
+times*, *Times confirmed*.
+
+**The edit is kept as a difference, not as a copy of the list.** `PaintTimes`
+holds the cells this reader marked and the cells they rubbed out, and draws
+the list as it now stands with those laid over it. It held a copy of the list
+taken on arrival, which read somebody else's later suggestion as a window this
+reader had rubbed out: drawn in the red that meant *coming off*, counted as an
+unsaved edit — enough, since confirmations are taken back on an edit, to
+un-confirm a reader who had touched nothing — and sent as a removal by a
+creator's save. That red is gone too: a window being taken off is simply not
+drawn, because the calendar shows the list as it will be, not the edit that
+gets it there.
+
 **A question of a group may be a calendar.** `create_poll_group` took no kind,
 so every question it made was an ordinary one. It now reads `kind` and
 `schedule` off each question and hands them to the same `insert_poll_row`, with
@@ -2162,7 +2197,7 @@ closes](#the-creator-can-correct-the-options-until-the-poll-closes) for
 - **A calendar heat map of the tally.** Decided against; see above. The
   ballots under it are on a calendar, which is a different question.
 - **Named timezones, and DST-spanning polls.** Fixed offsets only. A poll
-  running across a clock change is warned about and then held at one offset for
+  running across a clock change is held at one offset for
   its whole length, so its later days read an hour off the wall wherever it was
   built from.
 - **Cross-timezone rendering.** One poll, one grid, everyone sees the same one.
@@ -2842,13 +2877,14 @@ kind; the rest answer a question as well.
   because the list scrolls to its top as its page changes. The cards are keyed
   by the page their rows are of — set in the same render as the rows, since new
   rows drawn under the old key would read as every card moving at once.
-- **Results that come out while you watch land** (`landed` in
-  `Results.module.css`, decided by
-  [`useResultsLanding`](src/lib/resultsLanding.ts)). Opening a finished poll is
-  reading a result; watching one finish is being there when it is decided, so
-  the answer card settles up from a touch smaller and a ring of its own colour
-  spreads from it once. Quietly: the card is meant to look pleased rather than
-  triumphant.
+- **The answer card pulses as it arrives** (`landed` in `Results.module.css`):
+  it fades in and a ring of its own colour spreads from it once, alongside the
+  bars and the half pie drawing themselves in. One pulse and nothing else. It
+  used to also scale up past full size and rise from below, at slightly
+  different moments, which read as the card twitching. It was also kept for
+  results that came out while the reader watched (`useResultsLanding`, now
+  gone), and plays on every opening now, since a pulse this small is part of
+  the tally's entrance rather than a fuss.
 - **A new poll's title flies from the form** (`launchTitleFlight`). Creating a
   poll hands its page the whole heading — it is exactly what was just sent —
   and the title flies from the field it was typed into, or from the Create
@@ -4783,25 +4819,34 @@ themselves is an invitee like any other and confirms with everybody else —
 `poll_status` returns `invited` to tell the page which of the two it is looking
 at, since being able to *read* a poll is not the same question.
 
-**It can be taken back, for exactly as long as it can be given.** Confirming is
-one click that can open a poll for everybody, and the honest counterpart of a
-button that does something irreversible is one that undoes it while it still
-means anything. Once the poll opens there is nothing left to be done adding to,
-and both functions refuse — the same door `suggest_option` closes, in the
-same words, at the same moment.
+**Confirming does not take the list away.** The card stays exactly as it was —
+the list, live as other people's suggestions arrive, and *Add option* — and
+only its button changes: **Options confirmed**, green and disabled. Hiding the
+list behind a *you're done* card, as the ballot hides behind *your vote is
+in*, was the wrong analogy: a vote is a private act with nothing to watch
+afterwards, and the list is a shared thing still growing, which is exactly
+what a confirmed reader is waiting on.
 
-That undo is **Edit options**, and for a while it was a promise the database
-kept and the screen did not: `unconfirm_options` and
-`open_poll_unconfirm_options` shipped with `0041` and nothing called them.
-Confirming replaced the card with the same card, minus its button, and the
-only way back to the list was to have not pressed it. It is now the ballot's
-own shape one stage earlier — **you're done adding options**, what happens
-next, and the way back to the list beside it, exactly as *your vote is in*
-carries *Edit vote* — because it is exactly the same promise: a decision that
-stands until the moment it stops meaning anything, and is yours until then.
-Pressing it withdraws the confirmation on the server rather than only on
-screen, so the count and the roster it was in move with it; there is nothing
-half-confirmed to leave behind.
+**Starting an edit takes the confirmation back.** The moment a confirmed
+reader opens a new option's field, paints a time, or (as a creator) corrects
+or strikes a row, the card withdraws their confirmation on the server
+(`unconfirm_options`, `open_poll_unconfirm_options`) and the button goes back
+to **Confirm options**, which saves the edit and confirms again. A reader
+part-way through adding to the list is not done adding, and the roster and the
+count say so for as long as they are — a confirmation left standing would also
+let the poll open itself under an edit nobody had sent. Discarding the field
+leaves them unconfirmed; one press puts it back. The withdrawal is sent once
+per edit, and a confirmation pressed while it is still in flight waits for it,
+so the two cannot land in the wrong order.
+
+The name field stays on the card throughout, **disabled while confirmed**
+rather than hidden, so withdrawing and confirming do not move the card up and
+down under the reader.
+
+That card used to carry **Edit options**, which withdrew the confirmation and
+handed back the list. With the list never taken away there is nothing to hand
+back, and *Edit* was the wrong word for a non-creator who can only add, so it
+went.
 
 **A poll with participants opens itself when the last one confirms.** That is
 the whole point of collecting the signal, and `open_options_when_all_confirmed`
@@ -5513,7 +5558,9 @@ they do to the *poll*:
 - **Open poll** — on a poll collecting its options, and only there: finalizes
   the list and lets people vote. One-way. Disabled until the list has the two
   options an election needs, with the reason on a tooltip.
-- **Edit options** — on any poll that has a ballot and has not closed. It
+- **Edit options** — on any poll that has a ballot and whose results are not
+  out: not closed, and not an invite poll everybody has answered, which shows
+  its results without closing (`0089_option_edits_end_at_the_results.sql`). It
   swaps the ballot for the option list so it can be corrected; with votes
   already in the poll it puts a modal in front of that saying what the
   correction will cost. The way back out of the editor is **Done**, under the
@@ -5693,7 +5740,7 @@ confirmed before the poll opened reading afterwards as a ballot nobody cast.
 
 A record is **erased as well as written**: a creator who clears the poll's
 votes leaves a browser holding a ballot that no longer exists, and a
-confirmation can be taken back on the card that gave it, so a read that comes
+confirmation is withdrawn when its reader starts adding to the list, so a read that comes
 back *not voted* — or *not confirmed* — takes the record with it rather than
 letting a stale tick outlive it. Both are keyed by poll id, which is all a
 question has — the answered mark used to take two entries, the share token the

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Alert, Group, SegmentedControl, Select, Stack, Text } from '@mantine/core'
+import { Group, SegmentedControl, Select, Stack, Text } from '@mantine/core'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { PaintCalendar } from './PaintCalendar'
 import { HoursFields } from './HoursFields'
@@ -9,7 +9,6 @@ import {
   daysOf,
   describeLength,
   describeOffset,
-  formatDay,
   granularityFor,
   isDaily,
   MEETING_LENGTHS,
@@ -22,7 +21,7 @@ import {
   type GranuleKey,
 } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
-import { offsetChoices, offsetDrift } from '../lib/timezones'
+import { offsetChoices } from '../lib/timezones'
 import type { DailyWindow, PollSchedule } from '../lib/types'
 
 /**
@@ -161,11 +160,10 @@ export function ScheduleFields({
    */
   const floor = todayIn(schedule.timezone)
 
-  // The two facts about the chosen days that the offset answers depend on, as
-  // scalars: a memo keyed on an array rebuilds on every render, since the array
-  // is a new one each time even when the days in it have not moved.
+  // The fact about the chosen days the offset captions depend on, as a scalar:
+  // a memo keyed on an array rebuilds on every render, since the array is a new
+  // one each time even when the days in it have not moved.
   const firstDay = ordered[0] ?? ''
-  const everyDay = ordered.join(',')
 
   /**
    * One list, in order: every offset, each captioned with what people on it
@@ -184,15 +182,6 @@ export function ScheduleFields({
   const offsets = useMemo(
     () => offsetChoices(firstDay || today(), schedule.timezone),
     [firstDay, schedule.timezone],
-  )
-
-  /**
-   * A poll about to run across a clock change where its offset is kept. It
-   * cannot be fixed -- one poll, one offset -- so it is said.
-   */
-  const drift = useMemo(
-    () => offsetDrift(schedule.timezone, everyDay ? everyDay.split(',') : []),
-    [schedule.timezone, everyDay],
   )
 
   /**
@@ -345,19 +334,6 @@ export function ScheduleFields({
           </Text>
         )}
       </Stack>
-
-      {/* A poll that runs across a clock change where its offset is kept. One
-          poll is one offset -- the whole reason an offset is what is stored --
-          so this cannot be corrected here. It can be chosen, which needs it
-          said. */}
-      {drift && (
-        <Alert color="yellow" title="The clocks change during these dates">
-          {drift.name} moves to UTC{drift.becomes} on {formatDay(drift.day)}. This poll is held at
-          UTC{schedule.timezone} throughout, so times from then on will read an hour off the wall
-          there. Either is a fine answer — everybody sees the same grid — but the later days are the
-          ones to check before you send it.
-        </Alert>
-      )}
     </Stack>
   )
 }

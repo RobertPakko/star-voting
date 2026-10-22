@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NAMED_ZONES, offsetChoices, offsetDrift, offsetName } from './timezones'
+import { NAMED_ZONES, offsetChoices, offsetName } from './timezones'
 import { offsetMinutes, zoneOffsetOn } from './schedule'
 
 /**
@@ -115,27 +115,5 @@ describe('the list the picker draws', () => {
     // And does not double up when the list already has it.
     const already = offsetChoices('2026-07-15', '+05:30').map((c) => c.offset)
     expect(already.filter((offset) => offset === '+05:30')).toHaveLength(1)
-  })
-})
-
-describe('a poll that runs across a clock change', () => {
-  test('says which day it moves and what it moves to', () => {
-    // The last Sunday in October, when the UK goes back to +00:00. A poll held
-    // at +01:00 over those dates reads an hour off the wall in London from
-    // then on -- which cannot be fixed, one poll being one offset, so it is
-    // said.
-    const across = ['2026-10-23', '2026-10-24', '2026-10-26', '2026-10-27']
-    expect(offsetDrift('+01:00', across)).toEqual({
-      day: '2026-10-26',
-      name: 'UK Time',
-      becomes: '+00:00',
-    })
-  })
-
-  test('and is silent on the ordinary poll that does not', () => {
-    expect(offsetDrift('+01:00', ['2026-07-01', '2026-07-08'])).toBeNull()
-    expect(offsetDrift('+01:00', [])).toBeNull()
-    // An offset nobody is on cannot drift away from anybody.
-    expect(offsetDrift('-07:15', ['2026-10-23', '2026-10-27'])).toBeNull()
   })
 })

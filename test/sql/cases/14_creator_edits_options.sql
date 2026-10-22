@@ -277,6 +277,42 @@ begin
     'has been closed');
 
   -- ------------------------------------------------------------------
+  -- Nor is one whose results are out without anybody closing it (0089).
+  -- ------------------------------------------------------------------
+  --
+  -- An invite poll everybody has answered shows its tally with closed_at
+  -- still null, and a correction then would move a result already read --
+  -- and leave the settled winner naming the list as it was.
+
+  v_poll := create_poll('Finished', null, array['Pizza', 'Sushi'],
+                        array['voter1@example.com'], 'invite', true, false);
+  perform tests.sign_in('voter1@example.com');
+  perform tests.cast_ballot(v_poll, array[5, 0]);
+  perform tests.sign_in('creator@example.com');
+  perform tests.assert_null('a poll everybody answered is not closed',
+    (select closed_at from polls where id = v_poll));
+  select id into v_pizza from candidates where poll_id = v_poll and name = 'Pizza';
+
+  perform tests.assert_raises('it takes no typed option',
+    format('select creator_add_option(%L, %L)', v_poll, 'Ramen'),
+    'The results are out');
+  perform tests.assert_raises('nor a painted one',
+    format('select creator_add_options(%L, %L)', v_poll,
+           jsonb_build_array(jsonb_build_object('name', 'Ramen'))),
+    'The results are out');
+  perform tests.assert_raises('nor a removal',
+    format('select creator_edit_options(%L, %L, %L)', v_poll, '[]'::jsonb,
+           array[v_pizza]),
+    'The results are out');
+  perform tests.assert_raises('nor a correction',
+    format('select creator_edit_options(%L, %L, %L, %L)', v_poll, '[]'::jsonb, '{}'::uuid[],
+           jsonb_build_array(jsonb_build_object('id', v_pizza, 'name', 'Calzone'))),
+    'The results are out');
+  perform tests.assert_eq('and the list is as it was voted on',
+    (select array_agg(name order by name) from candidates where poll_id = v_poll),
+    array['Pizza', 'Sushi']);
+
+  -- ------------------------------------------------------------------
   -- A poll still collecting its options is untouched by any of it.
   -- ------------------------------------------------------------------
 

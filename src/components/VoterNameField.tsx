@@ -7,7 +7,7 @@ import type { VoterName } from '../lib/voterName'
  * card. Both cards draw it at the top, above the strip, and so does the
  * stand-in a crossing puts up.
  */
-export function VoterNameField({ name }: { name: VoterName }) {
+export function VoterNameField({ name, disabled }: { name: VoterName; disabled?: boolean }) {
   return (
     <>
       <TextInput
@@ -19,6 +19,7 @@ export function VoterNameField({ name }: { name: VoterName }) {
         error={name.error}
         maxLength={VOTER_NAME_MAX}
         required
+        disabled={disabled}
         /* Label the key "Done" rather than a Go/newline the field has no use
            for, and honour that label by putting the keyboard away: the field
            stands alone rather than in a form, so Enter has nothing to submit

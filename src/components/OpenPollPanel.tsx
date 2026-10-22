@@ -36,7 +36,6 @@ export function OpenPollPanel({
   onFirstVote,
   onFirstConfirm,
   questionStrip,
-  resultsLive = false,
   removed,
   onRestored,
 }: {
@@ -61,7 +60,6 @@ export function OpenPollPanel({
   onFirstConfirm?: () => void
   /** Drawn inside the card where there is one, above the tally where there isn't. */
   questionStrip?: ReactNode
-  resultsLive?: boolean
   /** Whether the reader removed the poll from their list; see `Banners`. */
   removed?: boolean
   onRestored?: () => void
@@ -155,7 +153,6 @@ export function OpenPollPanel({
                 : null
             }
             initial={results}
-            live={resultsLive}
           />
         </Suspense>
         {participation}

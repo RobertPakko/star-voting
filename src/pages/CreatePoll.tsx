@@ -720,6 +720,16 @@ export function CreatePoll() {
                     </>
                   }
                   placeholder="them@example.com"
+                  // A phone keyboard inside a form labels its key "Next" and
+                  // moves to the next field without sending Enter, which is
+                  // what adds an address. Asking for Enter gets one, so a list
+                  // can be typed without leaving the box. The rest keeps the
+                  // keyboard from capitalising or correcting an address.
+                  enterKeyHint="enter"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={emails}
                   onChange={setEmails}
                   error={shown.emails}

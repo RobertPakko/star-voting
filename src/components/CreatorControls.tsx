@@ -205,17 +205,19 @@ export function CreatorControls({
   const short = questions.filter((question) => question.option_count < 2)
   const enoughToOpen = questions.length > 0 ? short.length === 0 : optionCount >= 2
   // Correcting a list that is already a ballot. The database allows it on the
-  // creator's own poll for as long as the poll is open -- votes in it or not,
-  // see 0063 -- so the button is offered for exactly that long and the only
-  // thing that changes is what is said on the way in: with no votes cast
+  // creator's own poll until its results are out -- votes in it or not, see
+  // 0063 and 0089 -- so the button is offered for exactly that long and the
+  // only thing that changes is what is said on the way in: with no votes cast
   // there is nothing to warn anybody about, and with votes cast there is a
   // modal spelling out what the correction will leave on the results.
   //
-  // Closing the poll does take it away, and that is not the same problem: a
-  // poll that has closed rewrites this whole block and the page under it, so
-  // nothing there vanishes quietly.
+  // The results coming out does take it away -- by a close, or by an invite
+  // poll's last vote, which closes nothing -- and that is not the same
+  // problem: a poll whose results are out rewrites this whole block and the
+  // page under it, so nothing there vanishes quietly.
   const lateEdit = status.voted_count > 0
-  const showEditOptions = !status.soliciting && !status.is_closed && !editingOptions
+  const showEditOptions =
+    !status.soliciting && !status.is_closed && !status.results_available && !editingOptions
   // Open polls have no invite list, so invited_count is 0 and there is
   // nobody we can say we're cutting off.
   const pending = Math.max(0, status.invited_count - status.voted_count)

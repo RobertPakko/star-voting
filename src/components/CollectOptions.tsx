@@ -19,7 +19,6 @@ import { DescriptionField, DescriptionToggle } from './DescriptionField'
 import { NameRoster } from './NameRoster'
 import { OptionDescription } from './OptionDescription'
 import listRow from './listRow.module.css'
-import { OpeningNote } from './PollNotices'
 import { VoterNameField } from './VoterNameField'
 import type { PollOption, PollSchedule } from '../lib/types'
 
@@ -135,8 +134,33 @@ export function CollectOptions({
   // Request errors; field errors are marked on the fields.
   const [error, setError] = useState<string | null>(null)
   const draft = useRef<(() => Promise<boolean>) | null>(null)
+  // Whether the list holds an unsaved edit, as the list last reported it.
+  const [dirty, setDirty] = useState(false)
+  // What the list is a list of, in the card's own words.
+  const noun = schedule ? 'times' : 'options'
+  const Noun = schedule ? 'Times' : 'Options'
+  // A withdrawal in flight, which a confirmation waits behind.
+  const withdrawing = useRef<PromiseLike<unknown> | null>(null)
 
-  const nameField = confirm && voterName ? <VoterNameField name={voterName} /> : null
+  // Starting an edit takes a confirmation back, so the reader does not read as
+  // done while they are part-way through adding to the list; confirming again
+  // saves the edit. See "Saying you are done adding options" in AGENTS.md.
+  const confirmed = confirm?.confirmed ?? false
+  useEffect(() => {
+    if (!dirty || !confirmed || withdrawing.current) return
+    // Held until the re-read says unconfirmed, so it is sent once.
+    withdrawing.current = withdrawConfirmation(source).then(({ error: rpcError }) => {
+      if (rpcError) setError(rpcError.message)
+      else onChanged()
+    })
+  }, [dirty, confirmed, source, onChanged])
+  useEffect(() => {
+    if (!confirmed) withdrawing.current = null
+  }, [confirmed])
+
+  // Disabled rather than hidden while confirmed, so the card does not jump.
+  const nameField =
+    confirm && voterName ? <VoterNameField name={voterName} disabled={confirmed} /> : null
 
   async function confirmOptions() {
     if (busy || !confirm) return
@@ -147,6 +171,8 @@ export function CollectOptions({
     }
 
     setBusy(true)
+    // A withdrawal still in flight must land first, or it would undo this.
+    await withdrawing.current
 
     // Save the draft first: it is part of what is being confirmed.
     const save = draft.current
@@ -164,7 +190,7 @@ export function CollectOptions({
       if (save) onChanged()
       return
     }
-    notifications.show({ message: 'Options confirmed', color: 'green' })
+    notifications.show({ message: `${Noun} confirmed`, color: 'green' })
     ;(onConfirmed ?? onChanged)()
   }
 
@@ -183,58 +209,8 @@ export function CollectOptions({
     done.onDone()
   }
 
-  async function reopenList() {
-    if (busy) return
-    setError(null)
-    setBusy(true)
-    const { error: rpcError } = await withdrawConfirmation(source)
-    setBusy(false)
-
-    if (rpcError) {
-      setError(rpcError.message)
-      return
-    }
-    onChanged()
-  }
-
-  // Confirmed: the counterpart of "your vote is in", with *Edit options* to
-  // take it back while the poll is still collecting.
-  if (confirm?.confirmed) {
-    return (
-      <Card withBorder>
-        <Stack gap="sm">
-          {questionStrip}
-          <Stack gap={2}>
-            <Text fw={500}>You’ve confirmed the options</Text>
-            <Group justify="space-between" wrap="wrap" gap="sm">
-              <OpeningNote
-                isCreator={isCreator}
-                whenEveryoneHas={confirm.opensWhenEveryoneHas}
-                canAdd
-              />
-              <Button
-                variant="light"
-                onClick={reopenList}
-                leftSection={<PencilSimpleIcon size={16} aria-hidden />}
-                loading={busy}
-                style={{ marginLeft: 'auto' }}
-              >
-                Edit options
-              </Button>
-            </Group>
-            {error && (
-              <Text role="alert" c="red" size="sm">
-                {error}
-              </Text>
-            )}
-          </Stack>
-        </Stack>
-      </Card>
-    )
-  }
-
   /** The card's foot: its closing button, what happens next, and the list's *Add option*. */
-  function footer(addButton: ReactNode, ruled = false) {
+  function footer(addButton: ReactNode, ruled: boolean) {
     return (
       <>
         {error && (
@@ -249,7 +225,9 @@ export function CollectOptions({
         {confirm ? (
           <Group justify="space-between" wrap="wrap" gap="sm" align="flex-end">
             <Text size="sm" c="dimmed">
-              Confirm the options once you're done.
+              {confirm.confirmed && !dirty
+                ? `You’ve confirmed the ${noun}. Adding more takes that back until you confirm again.`
+                : `Confirm the ${noun} once you’re done.`}
               <br />
               {confirm.opensWhenEveryoneHas ? (
                 <>The poll opens for voting once everyone confirms.</>
@@ -263,13 +241,29 @@ export function CollectOptions({
             </Text>
             <Group gap="xs" wrap="nowrap" style={{ marginLeft: 'auto' }}>
               {addButton}
-              <Button
-                onClick={confirmOptions}
-                loading={busy}
-                leftSection={<CheckIcon size={16} aria-hidden />}
-              >
-                Confirm options
-              </Button>
+              {confirm.confirmed && !dirty ? (
+                // Disabled buttons are drawn grey; the inline colours keep it green.
+                <Button
+                  disabled
+                  variant="light"
+                  color="green"
+                  leftSection={<CheckIcon size={16} aria-hidden />}
+                  style={{
+                    backgroundColor: 'var(--mantine-color-green-light)',
+                    color: 'var(--mantine-color-green-light-color)',
+                  }}
+                >
+                  {Noun} confirmed
+                </Button>
+              ) : (
+                <Button
+                  onClick={confirmOptions}
+                  loading={busy}
+                  leftSection={<CheckIcon size={16} aria-hidden />}
+                >
+                  Confirm {noun}
+                </Button>
+              )}
             </Group>
           </Group>
         ) : (
@@ -313,9 +307,10 @@ export function CollectOptions({
               // Its own save only when the card has no closing button.
               ownSave={!confirm && !done}
               draft={draft}
+              footer={footer}
+              onDirtyChange={setDirty}
               onChanged={onChanged}
             />
-            {footer(null, true)}
           </>
         ) : (
           <OptionList
@@ -325,6 +320,7 @@ export function CollectOptions({
             ownSave={!confirm && !done}
             draft={draft}
             footer={footer}
+            onDirtyChange={setDirty}
             onChanged={onChanged}
           />
         )}
@@ -360,6 +356,7 @@ function OptionList({
   ownSave,
   draft,
   footer,
+  onDirtyChange,
   onChanged,
 }: {
   source: OptionsSource
@@ -370,6 +367,8 @@ function OptionList({
   draft: DraftHold
   /** The card's foot, handed the list's *Add option*. Unused when `ownSave`. */
   footer?: (addButton: ReactNode, ruled: boolean) => ReactNode
+  /** Told whenever the list starts or stops holding an unsaved edit. */
+  onDirtyChange?: (dirty: boolean) => void
   onChanged: () => void
 }) {
   // Typed options stay editable fields until the card's closing press; there
@@ -566,6 +565,10 @@ function OptionList({
     notifications.show({ message: 'Options saved', color: 'green' })
     onChanged()
   }
+
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
 
   // Re-registered every render so it closes over the current draft.
   useEffect(() => {
@@ -858,6 +861,8 @@ function TimeList({
   isCreator,
   ownSave,
   draft,
+  footer,
+  onDirtyChange,
   onChanged,
 }: {
   source: OptionsSource
@@ -866,12 +871,21 @@ function TimeList({
   isCreator: boolean
   ownSave: boolean
   draft: DraftHold
+  /** The card's foot, handed the calendar's *Add times*. */
+  footer: (addButton: ReactNode, ruled: boolean) => ReactNode
+  onDirtyChange: (dirty: boolean) => void
   onChanged: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // The painting's difference from the list, as PaintTimes last reported it.
   const [painted, setPainted] = useState<PaintedEdit | null>(null)
+  // The calendar is read back until *Add times* is pressed, as a text list
+  // shows its rows until *Add option* is. The creator's correction is already
+  // an editor, opened from *Edit options*, so it starts editing.
+  const [editing, setEditing] = useState(source.kind === 'creator')
+  // Bumped after a save, so the next edit starts from the list as it is.
+  const [round, setRound] = useState(0)
 
   const noteDraft = useCallback((edit: PaintedEdit | null) => {
     setPainted(edit)
@@ -921,6 +935,10 @@ function TimeList({
 
   /** `quiet` saves are part of a closing press, which notifies and re-reads itself. */
   function landed(add: string[], removeIds: string[], quiet: boolean) {
+    if (source.kind !== 'creator') {
+      setEditing(false)
+      setRound((r) => r + 1)
+    }
     if (quiet) return true
 
     notifications.show({
@@ -934,6 +952,10 @@ function TimeList({
     return true
   }
 
+  useEffect(() => {
+    onDirtyChange(painted !== null)
+  }, [painted, onDirtyChange])
+
   // Re-registered every render; see DraftHold.
   useEffect(() => {
     draft.current = painted ? () => save(painted.add, painted.removeIds, true) : null
@@ -943,12 +965,28 @@ function TimeList({
     }
   })
 
+  const addButton = (
+    <Button
+      variant="light"
+      onClick={() => setEditing(true)}
+      disabled={editing || busy}
+      leftSection={
+        isCreator ? <PencilSimpleIcon size={16} aria-hidden /> : <PlusIcon size={16} aria-hidden />
+      }
+    >
+      {/* A creator's gestures take times off as well as putting them on. */}
+      {isCreator ? 'Edit times' : 'Add times'}
+    </Button>
+  )
+
   return (
     <Stack gap="sm">
       <PaintTimes
+        key={round}
         schedule={schedule}
         options={options}
         canRemove={isCreator}
+        editing={editing}
         saving={busy}
         showSave={ownSave}
         onSave={save}
@@ -959,6 +997,11 @@ function TimeList({
           {error}
         </Text>
       )}
+      {/* With no closing button on the card, the calendar's own *Save times*
+          stands in for the foot once editing; before that, *Add times* does. */}
+      {ownSave
+        ? !editing && <Group justify="flex-end">{addButton}</Group>
+        : footer(source.kind === 'creator' ? null : addButton, true)}
     </Stack>
   )
 }
