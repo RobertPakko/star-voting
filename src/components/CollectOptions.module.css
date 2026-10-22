@@ -1,0 +1,46 @@
+/* *Confirm options* turning into *Options confirmed*, and back.
+ *
+ * One button changing in place rather than two swapped between frames: the
+ * press is what made it change, and a button that is replaced reads as a
+ * different control appearing rather than this one answering. The fill fades
+ * from the primary blue to the green of something kept, and the tick pops as
+ * it lands. The way back -- an edit taking the confirmation back -- fades the
+ * same colours the other way, which is the change a reader most needs to see.
+ *
+ * Disabled while confirmed, and Mantine draws a disabled button grey through
+ * `:where()`, which has no specificity, so this class's colours win.
+ */
+.confirm {
+  transition:
+    background-color var(--motion-base) var(--motion-ease),
+    color var(--motion-base) var(--motion-ease);
+}
+
+.confirm[data-confirmed] {
+  background-color: var(--mantine-color-green-light);
+  color: var(--mantine-color-green-light-color);
+}
+
+.tick {
+  display: flex;
+}
+
+.pop {
+  animation: pop var(--motion-base) var(--motion-ease);
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  60% {
+    transform: scale(1.25);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

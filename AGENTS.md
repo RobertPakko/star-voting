@@ -2850,6 +2850,15 @@ kind; the rest answer a question as well.
   the row for a while, and that was taken out: on a narrow screen the badges
   wrap and stack, and the copy cut across them diagonally. A fade goes nowhere,
   so it is the same whatever shape the row is in.
+- **Confirming the options turns the button green**
+  (`CollectOptions.module.css`). *Confirm options* and *Options confirmed*
+  are one button changing in place, its fill fading from blue to green and
+  the tick popping as it lands, rather than two buttons swapped between
+  frames — which read as a different control appearing, not this one
+  answering the press. The fade runs back the other way when an edit takes
+  the confirmation back, which is the change a reader most needs to notice.
+  The pop is counted from changes seen while the card is on screen, so a page
+  opened already confirmed does not play it.
 - **A count rolls over** (`roll` in `PollTags.module.css`). When the count
   badge's words change, the old ones go up and out of the pill as the new come
   up into it, under the highlight that was already there. A number changing

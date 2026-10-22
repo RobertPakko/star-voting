@@ -18,6 +18,7 @@ import type { VoterName } from '../lib/voterName'
 import { DescriptionField, DescriptionToggle } from './DescriptionField'
 import { NameRoster } from './NameRoster'
 import { OptionDescription } from './OptionDescription'
+import css from './CollectOptions.module.css'
 import listRow from './listRow.module.css'
 import { VoterNameField } from './VoterNameField'
 import type { PollOption, PollSchedule } from '../lib/types'
@@ -158,6 +159,17 @@ export function CollectOptions({
     if (!confirmed) withdrawing.current = null
   }, [confirmed])
 
+  // Confirmed with nothing unsaved: the button reads *Options confirmed*.
+  const settled = confirmed && !dirty
+  // Bumped each time it becomes settled while on screen, which re-mounts the
+  // tick to pop. Zero on arrival, so a page opened already confirmed is still.
+  const [pop, setPop] = useState(0)
+  const wasSettled = useRef(settled)
+  useEffect(() => {
+    if (settled && !wasSettled.current) setPop((n) => n + 1)
+    wasSettled.current = settled
+  }, [settled])
+
   // Disabled rather than hidden while confirmed, so the card does not jump.
   const nameField =
     confirm && voterName ? <VoterNameField name={voterName} disabled={confirmed} /> : null
@@ -241,29 +253,22 @@ export function CollectOptions({
             </Text>
             <Group gap="xs" wrap="nowrap" style={{ marginLeft: 'auto' }}>
               {addButton}
-              {confirm.confirmed && !dirty ? (
-                // Disabled buttons are drawn grey; the inline colours keep it green.
-                <Button
-                  disabled
-                  variant="light"
-                  color="green"
-                  leftSection={<CheckIcon size={16} aria-hidden />}
-                  style={{
-                    backgroundColor: 'var(--mantine-color-green-light)',
-                    color: 'var(--mantine-color-green-light-color)',
-                  }}
-                >
-                  {Noun} confirmed
-                </Button>
-              ) : (
-                <Button
-                  onClick={confirmOptions}
-                  loading={busy}
-                  leftSection={<CheckIcon size={16} aria-hidden />}
-                >
-                  Confirm {noun}
-                </Button>
-              )}
+              {/* One button changing in place, so the change can be seen; see
+                  CollectOptions.module.css. */}
+              <Button
+                className={css.confirm}
+                data-confirmed={settled || undefined}
+                disabled={settled}
+                onClick={confirmOptions}
+                loading={busy}
+                leftSection={
+                  <span key={pop} className={`${css.tick} ${pop ? css.pop : ''}`}>
+                    <CheckIcon size={16} aria-hidden />
+                  </span>
+                }
+              >
+                {settled ? `${Noun} confirmed` : `Confirm ${noun}`}
+              </Button>
             </Group>
           </Group>
         ) : (
