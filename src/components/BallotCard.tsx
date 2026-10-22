@@ -1,5 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react'
-import { Divider, Group, Text } from '@mantine/core'
+import { Divider, Text } from '@mantine/core'
 import { useBallotOrder } from '../lib/ballotOrder'
 import {
   clearBallotDraft,
@@ -11,6 +11,7 @@ import { BallotFrame, type BallotScore } from './BallotFrame'
 import { OptionDescription } from './OptionDescription'
 import { StarRating } from './StarRating'
 import type { PollOption } from '../lib/types'
+import classes from './BallotCard.module.css'
 
 export type { BallotScore }
 
@@ -104,18 +105,22 @@ export function BallotCard({
       <Divider />
       {ballot.map((option) => (
         <Fragment key={option.id}>
-          <Group justify="space-between" wrap="nowrap" gap="sm">
-            <div style={{ minWidth: 0 }}>
+          {/* On a phone the stars wrap under a long description; see
+              BallotCard.module.css. */}
+          <div className={classes.row}>
+            <div className={classes.text}>
               <Text fw={500}>{option.name}</Text>
               {option.description && <OptionDescription description={option.description} />}
             </div>
-            <StarRating
-              label={`Score for ${option.name}`}
-              value={values[option.id] ?? 0}
-              onChange={(v) => setScore(option.id, v)}
-              onPointerDown={onScorePointerDown}
-            />
-          </Group>
+            <div className={classes.stars}>
+              <StarRating
+                label={`Score for ${option.name}`}
+                value={values[option.id] ?? 0}
+                onChange={(v) => setScore(option.id, v)}
+                onPointerDown={onScorePointerDown}
+              />
+            </div>
+          </div>
           <Divider />
         </Fragment>
       ))}

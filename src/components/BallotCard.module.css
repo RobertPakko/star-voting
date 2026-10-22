@@ -1,0 +1,38 @@
+/* One option on the ballot: its name and description, and its stars.
+ *
+ * On a phone a description beside the stars is a column a few words wide and
+ * several times taller than they are, so there the row wraps: the stars go onto
+ * a line of their own whenever the option will not fit beside them on one.
+ * The text's basis is its own width, so a short name keeps its stars beside
+ * it; the text then grows into the rest of the row, which leaves the stars'
+ * auto margins nothing to take on a shared line and centres them on a line of
+ * their own.
+ *
+ * At Mantine's `sm` breakpoint and up there is room for both, and the stars
+ * stay to the right of the text however long it is.
+ */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.stars {
+  margin-inline: auto;
+}
+
+@media (min-width: 28em) {
+  .row {
+    flex-wrap: nowrap;
+  }
+
+  .stars {
+    margin-inline: 0;
+  }
+}
