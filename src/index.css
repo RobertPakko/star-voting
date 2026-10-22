@@ -109,3 +109,18 @@ body {
 .mantine-Progress-section {
   transition: width var(--motion-slow) var(--motion-ease);
 }
+
+/*
+ * No hover grey on the calendar's cells under a finger. The library guards
+ * its hover tint with `(hover: hover)`, which Samsung's phones answer yes to,
+ * so a tapped cell keeps `:hover` after the tap — and a cell just rubbed out
+ * is left the grey of a day the poll is not asking about. Out-of-bounds cells
+ * set their grey inline and are untouched; a drag's selection is left alone.
+ */
+@media (pointer: coarse) {
+  .mantine-WeekView-weekViewDaySlot:hover:not([data-drag-selected]),
+  .mantine-DayView-dayViewSlot:hover:not([data-drag-selected]),
+  .mantine-MonthView-monthViewDay:hover:not([data-drag-selected]) {
+    background-color: transparent;
+  }
+}
