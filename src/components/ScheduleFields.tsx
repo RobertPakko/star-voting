@@ -72,6 +72,9 @@ const LENGTHS = MEETING_LENGTHS.map((minutes) => ({
   label: describeLength(minutes),
 }))
 
+/** What a marked cell is drawn in, and so what hovering one previews. */
+const MARKED = 'teal.6'
+
 /** The marked set as a painting, which is the shape `PaintCalendar` speaks. */
 function paintingOf(marked: Bounds): Record<GranuleKey, number> {
   const painting: Record<GranuleKey, number> = {}
@@ -241,7 +244,7 @@ export function ScheduleFields({
       id: `${run.day} ${run.from}`,
       title: view !== 'month' ? '' : daily ? '' : formatTimeRange(run.from, run.to, h24),
       ...runBounds(run),
-      color: 'teal.6',
+      color: MARKED,
       display: view === 'month' ? 'default' : 'background',
       // A month chip's label, in a colour the calendar would pick badly; see
       // `eventBody` in PaintCalendar.
@@ -324,6 +327,7 @@ export function ScheduleFields({
           axis={axisFor(hours, marked, schedule)}
           painting={paintingOf(marked)}
           brush={brush}
+          brushColor={brush ? MARKED : undefined}
           onPaint={paint}
           buildEvents={buildEvents}
           fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}

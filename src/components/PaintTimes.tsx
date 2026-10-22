@@ -270,6 +270,7 @@ export function PaintTimes({
         // `buildEvents`; this is only what a gesture compares against.
         painting={Object.fromEntries([...wanted].map((key) => [key, ADDING]))}
         brush={ADDING}
+        brushColor={COLORS[ADDING]}
         onPaint={paint}
         buildEvents={buildEvents}
         canPaint={canPaint}

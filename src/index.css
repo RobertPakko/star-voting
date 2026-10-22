@@ -124,3 +124,24 @@ body {
     background-color: transparent;
   }
 }
+
+/*
+ * Under a mouse, a hovered cell previews the brush: a faint wash of the colour
+ * a click would paint, or a plain outline while the brush rubs out. The
+ * library's own hover is a grey nearly the grey of a day the poll is not
+ * asking about, so an open cell looked disabled for as long as it was pointed
+ * at. `data-brush` and `--brush` are set by PaintCalendar.
+ */
+@media (hover: hover) and (pointer: fine) {
+  [data-brush='paint'] .mantine-WeekView-weekViewDaySlot:hover:not([data-drag-selected]),
+  [data-brush='paint'] .mantine-DayView-dayViewSlot:hover:not([data-drag-selected]),
+  [data-brush='paint'] .mantine-MonthView-monthViewDay:hover:not([data-drag-selected]) {
+    background-color: color-mix(in srgb, var(--brush) 25%, transparent);
+  }
+  [data-brush='erase'] .mantine-WeekView-weekViewDaySlot:hover:not([data-drag-selected]),
+  [data-brush='erase'] .mantine-DayView-dayViewSlot:hover:not([data-drag-selected]),
+  [data-brush='erase'] .mantine-MonthView-monthViewDay:hover:not([data-drag-selected]) {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px var(--mantine-color-default-border);
+  }
+}

@@ -324,6 +324,7 @@ export function TimeBallotCard({
           axis={axisFor(schedule.window, bounds, schedule)}
           painting={painting}
           brush={Number(rating)}
+          brushColor={Number(rating) > 0 ? colorFor(Number(rating)) : undefined}
           onPaint={apply}
           buildEvents={buildEvents}
           // The ballot is the one screen whose bounds are the whole of the

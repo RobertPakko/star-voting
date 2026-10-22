@@ -173,6 +173,7 @@ export function PaintCalendar({
   axis,
   painting,
   brush,
+  brushColor,
   onPaint,
   buildEvents,
   fillOnDay,
@@ -192,6 +193,11 @@ export function PaintCalendar({
   painting: Record<GranuleKey, number>
   /** What a gesture writes. 0 rubs out and never toggles. Absent when read-only. */
   brush?: number
+  /**
+   * The theme colour (`teal.6`) a stroke with `brush` is drawn in, so a
+   * hovered cell can preview it. Absent while the brush rubs out.
+   */
+  brushColor?: string
   /** Write one value over a set of cells; the caller owns the painting. */
   onPaint?: (keys: GranuleKey[], value: number) => void
   /**
@@ -486,8 +492,19 @@ export function PaintCalendar({
         )}
       </ScheduleHeader>
 
-      {/* Opts out of SmoothHeight: `showView` already holds the page still. */}
-      <div data-own-height>
+      {/* Opts out of SmoothHeight: `showView` already holds the page still.
+          `data-brush` drives the hover preview in index.css. */}
+      <div
+        data-own-height
+        data-brush={readOnly ? undefined : brushColor ? 'paint' : 'erase'}
+        style={
+          brushColor
+            ? ({
+                '--brush': `var(--mantine-color-${brushColor.replace('.', '-')})`,
+              } as CSSProperties)
+            : undefined
+        }
+      >
         {showing === 'month' ? (
           <MonthView
             date={date}
