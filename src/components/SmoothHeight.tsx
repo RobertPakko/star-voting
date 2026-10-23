@@ -9,6 +9,21 @@ import { motionEase, motionMs, prefersReducedMotion } from '../lib/motion'
  */
 const NOTICEABLE_PX = 12
 
+/** What draws a card's frame: its border and background. */
+const CARD = '.mantine-Card-root'
+
+/**
+ * The card a swap put in, when there is one to move: the element that arrived,
+ * or the first thing inside it — *your vote is in* is a stack holding its card
+ * and the banners under it.
+ */
+function frameOf(added: Element | undefined): HTMLElement | null {
+  if (!(added instanceof HTMLElement)) return null
+  if (added.matches(CARD)) return added
+  const first = added.firstElementChild
+  return first instanceof HTMLElement && first.matches(CARD) ? first : null
+}
+
 /**
  * A block whose height moves to its new size rather than jumping to it, when
  * what is inside it is replaced.
@@ -31,19 +46,30 @@ const NOTICEABLE_PX = 12
  * **It is moved before the browser paints.** A mutation is delivered at the
  * end of the task React committed in, ahead of rendering, so the animation is
  * in place for the very first frame of the new card — the new height is never
- * seen and then taken back. The height it moves *from* is the inner block's
- * last measured size, which a `ResizeObserver` keeps current through the
- * changes that are not swaps; it watches the inner block, whose height is its
- * content's, rather than this one, whose height is being animated.
+ * seen and then taken back. The height it moves *from* is the block's last
+ * measured size, which a `ResizeObserver` keeps current.
  *
- * **What is outside it is clipped while it moves**, and only then:
- * `overflow: clip` for the length of the animation, which unlike `hidden`
- * makes no scroll container, so nothing sticky inside it comes unstuck.
+ * **The content changes at once, and the card's frame moves.** What animates
+ * is the height of the card that arrived, with what is inside it clipped to
+ * it: growing, its border moves down over content that is already there;
+ * shrinking, it closes up the empty card under content that is already there.
+ * Either way the reader sees the new card from the first frame, and what is
+ * under it is pushed rather than covered. A clip around the whole block was
+ * tried first and can only fake the grow: a shrink has nothing taller left to
+ * clip, so the new card's edge snapped up and only a gap closed under it.
+ *
+ * Where what arrived is not a card, the block's own height moves instead,
+ * clipped (`overflow: clip`, which unlike `hidden` makes no scroll container,
+ * so nothing sticky inside comes unstuck). That only reads well growing, and
+ * only for what is in the block, which is why it is the fallback: **wrap the
+ * card that swaps, not the list it is in**.
  *
  * Something that manages its own height across a swap can opt out by
  * standing inside `[data-own-height]`; the calendar does, since it already
  * holds the page still across a change of view and two corrections at once
- * would fight.
+ * would fight. A SmoothHeight is marked the same way, so one can stand
+ * inside another: the inner one moves for its own swaps and the outer one
+ * for the rest.
  */
 export function SmoothHeight({
   children,
@@ -66,29 +92,53 @@ export function SmoothHeight({
     if (!box || !content) return
     let last = content.getBoundingClientRect().height
     let running: Animation | null = null
+    // What is being moved and clipped: the arriving card, or this block.
+    let moving: HTMLElement | null = null
+
+    const settle = () => {
+      if (moving) moving.style.overflow = ''
+      moving = null
+    }
 
     const sizes = new ResizeObserver(() => {
-      // Only while nothing is moving: the animation is the record then, and
-      // the mutation that started it has already written the size it is
-      // heading for.
-      if (!running) last = content.getBoundingClientRect().height
+      // While this block is the thing moving, what it holds is already at its
+      // new size, and the animation is the record. A moving card is inside
+      // it, so its size is the size on screen.
+      if (moving !== box) last = content.getBoundingClientRect().height
     })
     sizes.observe(content)
 
     const swaps = new MutationObserver((records) => {
-      const swapped = records.some(
-        (record) =>
-          !(record.target instanceof Element && record.target.closest('[data-own-height]')) &&
-          [...record.addedNodes, ...record.removedNodes].some((node) => node instanceof Element),
+      // `closest` would also find this block's own mark, which is outside it.
+      const ownsHeight = (target: Node) => {
+        const owner = target instanceof Element ? target.closest('[data-own-height]') : null
+        return !!owner && content.contains(owner)
+      }
+      const mine = records.filter((record) => !ownsHeight(record.target))
+      const arrived = mine.flatMap((r) => [...r.addedNodes]).find((n) => n instanceof Element)
+      const swapped = mine.some((record) =>
+        [...record.addedNodes, ...record.removedNodes].some((node) => node instanceof Element),
       )
-      const next = content.getBoundingClientRect().height
       // From wherever it has got to, if it is already on its way somewhere.
-      const from = running ? box.getBoundingClientRect().height : last
+      const from = running && moving === box ? box.getBoundingClientRect().height : last
+      if (swapped) {
+        running?.cancel()
+        running = null
+        settle()
+      }
+      const next = content.getBoundingClientRect().height
       last = next
       if (!swapped || prefersReducedMotion() || Math.abs(next - from) < NOTICEABLE_PX) return
-      running?.cancel()
-      box.style.overflow = 'clip'
-      const move = box.animate([{ height: `${from}px` }, { height: `${next}px` }], {
+
+      const frame = frameOf(arrived)
+      const target = frame && content.contains(frame) ? frame : box
+      // The card ends at its own height and starts short or tall by however
+      // far the whole block moved; the block, at the two heights themselves.
+      const end = target === box ? next : target.getBoundingClientRect().height
+      const start = Math.max(0, end + from - next)
+      moving = target
+      target.style.overflow = 'clip'
+      const move = target.animate([{ height: `${start}px` }, { height: `${end}px` }], {
         duration: motionMs('resize'),
         easing: motionEase(),
       })
@@ -97,7 +147,7 @@ export function SmoothHeight({
         .then(() => {
           if (running !== move) return
           running = null
-          box.style.overflow = ''
+          settle()
           last = content.getBoundingClientRect().height
         })
         .catch(() => undefined)
@@ -108,12 +158,14 @@ export function SmoothHeight({
       sizes.disconnect()
       swaps.disconnect()
       running?.cancel()
-      box.style.overflow = ''
+      settle()
     }
   }, [])
 
   return (
-    <div ref={outer}>
+    // Marked as managing its own height, so a SmoothHeight around this one
+    // leaves the swaps inside it to this one.
+    <div ref={outer} data-own-height>
       <Stack ref={inner} gap={gap}>
         {children}
       </Stack>

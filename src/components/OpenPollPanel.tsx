@@ -15,6 +15,7 @@ import { Ballots, Results, TimeBallotCard, YourBallot } from './deferred'
 import { NameRoster } from './NameRoster'
 import { NoResultsNotice, RevealNote } from './PollNotices'
 import { BallotsSkeleton, QuestionSkeleton, ResultsSkeleton, YourBallotSkeleton } from './Skeletons'
+import { SmoothHeight } from './SmoothHeight'
 import { VoterNameField } from './VoterNameField'
 import { Banners } from './Banners'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
@@ -197,29 +198,33 @@ export function OpenPollPanel({
     )
   }
 
+  // Only the card that swaps moves its height: the roster under it is pushed
+  // down as it grows, rather than sitting inside the clip and being uncovered.
   return (
     <Stack gap="md">
-      {view.voted ? (
-        <Voted
-          pollId={pollId}
-          view={view}
-          isCreator={isCreator}
-          voterName={needsName ? voterName : undefined}
-          onRevised={onChanged}
-          questionStrip={questionStrip}
-          banner={waiting('results')}
-        />
-      ) : (
-        <OpenBallot
-          pollId={pollId}
-          poll={view.poll}
-          options={view.options}
-          voterName={needsName ? voterName : undefined}
-          isCreator={isCreator}
-          onVoted={onFirstVote ?? onChanged}
-          questionStrip={questionStrip}
-        />
-      )}
+      <SmoothHeight>
+        {view.voted ? (
+          <Voted
+            pollId={pollId}
+            view={view}
+            isCreator={isCreator}
+            voterName={needsName ? voterName : undefined}
+            onRevised={onChanged}
+            questionStrip={questionStrip}
+            banner={waiting('results')}
+          />
+        ) : (
+          <OpenBallot
+            pollId={pollId}
+            poll={view.poll}
+            options={view.options}
+            voterName={needsName ? voterName : undefined}
+            isCreator={isCreator}
+            onVoted={onFirstVote ?? onChanged}
+            questionStrip={questionStrip}
+          />
+        )}
+      </SmoothHeight>
 
       {participation}
     </Stack>

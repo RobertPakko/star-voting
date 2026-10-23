@@ -12,7 +12,6 @@ import { OpenPollPanel } from '../components/OpenPollPanel'
 import { preloadCards } from '../components/deferred'
 import { PollHeading } from '../components/PollHeading'
 import { QuestionStrip } from '../components/QuestionStrip'
-import { SmoothHeight } from '../components/SmoothHeight'
 import { PollPageSkeleton, QuestionSkeleton } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
@@ -297,37 +296,36 @@ export function PublicPoll({
         }}
       />
 
-      {/* The question's half: the only part that waits on a crossing. */}
-      <SmoothHeight>
-        {view ? (
-          <OpenPollPanel
-            pollId={pollId}
-            view={view}
-            results={results}
-            ballots={ballots}
-            removed={removedHere.removed}
-            onRestored={removedHere.onRestored}
-            onChanged={reread}
-            onFirstVote={advance}
-            onFirstConfirm={advance}
-            voterName={voterName}
-            questionStrip={questionStrip}
-          />
-        ) : (
-          // `tallied` and the row count are guesses from the question being
-          // left; open polls carry no per-question option counts.
-          <QuestionSkeleton
-            finished={finished}
-            tallied={shell.results_available}
-            rows={shell.options.length}
-            collecting={shell.soliciting}
-            nameField={
-              asksName ? <VoterNameField name={voterName} disabled={done.has(pollId)} /> : undefined
-            }
-            strip={questionStrip}
-          />
-        )}
-      </SmoothHeight>
+      {/* The question's half: the only part that waits on a crossing. The
+          card inside it that swaps moves its own height (OpenPollPanel). */}
+      {view ? (
+        <OpenPollPanel
+          pollId={pollId}
+          view={view}
+          results={results}
+          ballots={ballots}
+          removed={removedHere.removed}
+          onRestored={removedHere.onRestored}
+          onChanged={reread}
+          onFirstVote={advance}
+          onFirstConfirm={advance}
+          voterName={voterName}
+          questionStrip={questionStrip}
+        />
+      ) : (
+        // `tallied` and the row count are guesses from the question being
+        // left; open polls carry no per-question option counts.
+        <QuestionSkeleton
+          finished={finished}
+          tallied={shell.results_available}
+          rows={shell.options.length}
+          collecting={shell.soliciting}
+          nameField={
+            asksName ? <VoterNameField name={voterName} disabled={done.has(pollId)} /> : undefined
+          }
+          strip={questionStrip}
+        />
+      )}
     </Stack>
   )
 }

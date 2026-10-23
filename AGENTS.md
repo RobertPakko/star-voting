@@ -2886,7 +2886,21 @@ kind; the rest answer a question as well.
   arriving.
 - **A card that replaces a card changes height smoothly**
   ([`SmoothHeight`](src/components/SmoothHeight.tsx)), around the question's
-  half of both poll pages. It notices elements going in and out with a
+  half of `PollDetail` and around the vote card of `OpenPollPanel`. It wraps
+  the card that swaps rather than the list the card is in, because everything
+  inside it lands in its new place at once and only the clip moves: the
+  roster under the vote card used to sit inside it and was uncovered by the
+  growing edge on *Edit vote* instead of being pushed down. One inside
+  another is fine — each marks itself `data-own-height`, so the outer one
+  leaves the inner one's swaps alone. **The content changes at once and the
+  card's frame moves**: what animates is the height of the card that arrived,
+  its contents clipped to it, so growing moves its border down over content
+  already there and shrinking closes up the empty card under it. A clip around
+  the whole block could only fake the grow — on *Save changes* the new card's
+  edge snapped up and only a gap closed under it — and holding a copy of the
+  old card over the shrink made the content change at the end of one
+  direction and the start of the other. Where what arrived is not a card, the
+  block's own height moves, clipped, as the fallback. It notices elements going in and out with a
   `MutationObserver` rather than being told a stage, because most of those
   swaps — Edit vote, Confirm options, the editor — are decided inside a card
   where no prop on the wrapper could see them; and since a mutation is
