@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { PREFERS_24_HOUR } from './locale'
 
 /**
  * Whether this browser reads times as `14:30` or as `2:30pm`.
@@ -9,8 +10,10 @@ import { useSyncExternalStore } from 'react'
  * first time on a page can be drawn. A reader who wants it everywhere turns it
  * on everywhere.
  *
- * **Off by default**, so a poll reads `2:30pm` until somebody asks otherwise.
- * It changes how a time is *written* and nothing else: every option is still
+ * **The browser's language is the default** (`PREFERS_24_HOUR`), so a reader
+ * in London sees `14:30` and one in Chicago `2:30pm` without opening a menu.
+ * Only a switch actually flipped is stored, as `on` or `off`; a browser that
+ * never touched it follows its language. It changes how a time is *written* and nothing else: every option is still
  * named in ISO 8601 and every cell of the grid is still keyed by `HH:mm`, so
  * the same poll is the same poll whichever clock is reading it. See
  * `formatTimeOfDay` in `schedule.ts`, which is the one place the two clocks
@@ -21,10 +24,11 @@ const STORAGE_KEY = 'star-voting:24-hour-time'
 
 function read(): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY) === 'on'
+    const stored = localStorage.getItem(STORAGE_KEY)
+    return stored === null ? PREFERS_24_HOUR : stored === 'on'
   } catch {
     // Private browsing, or storage disabled. The default is the default.
-    return false
+    return PREFERS_24_HOUR
   }
 }
 
@@ -68,6 +72,6 @@ export function use24HourTime(): boolean {
   return useSyncExternalStore(
     subscribe,
     () => current,
-    () => false,
+    () => PREFERS_24_HOUR,
   )
 }

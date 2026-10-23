@@ -1,4 +1,5 @@
 import type { DailyWindow, PollSchedule } from './types'
+import { DAY_BEFORE_MONTH } from './locale'
 
 /**
  * Time-poll arithmetic: a painted calendar into options, a painting into
@@ -508,18 +509,26 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * Formatted by hand: any `Intl` formatter taking a `Date` would apply the
  * reader's zone, and the poll's grid is the same for everyone.
  */
-export function formatWindow(name: string, h24: boolean): string {
+export function formatWindow(
+  name: string,
+  h24: boolean,
+  dayFirst: boolean = DAY_BEFORE_MONTH,
+): string {
   const parsed = parseWindowStart(name)
   if (!parsed) return name
 
   const at = toMinutes(parsed.timeOfDay)
-  return at === 0 ? formatDay(parsed.day) : `${formatTimeOfDay(at, h24)}, ${formatDay(parsed.day)}`
+  const day = formatDay(parsed.day, dayFirst)
+  return at === 0 ? day : `${formatTimeOfDay(at, h24)}, ${day}`
 }
 
-/** `Fri Feb 20`. */
-export function formatDay(day: ScheduleDay): string {
+/** `Fri Feb 20`, or `Fri 20 Feb` where the reader's language writes the day first. */
+export function formatDay(day: ScheduleDay, dayFirst: boolean = DAY_BEFORE_MONTH): string {
   const [, month, dayOfMonth] = day.split('-').map(Number)
-  return `${WEEKDAYS[weekdayOf(day)]} ${MONTHS[month - 1]} ${dayOfMonth}`
+  const date = dayFirst
+    ? `${dayOfMonth} ${MONTHS[month - 1]}`
+    : `${MONTHS[month - 1]} ${dayOfMonth}`
+  return `${WEEKDAYS[weekdayOf(day)]} ${date}`
 }
 
 /** 0 for Sunday. Computed in UTC, like `addDays`. */

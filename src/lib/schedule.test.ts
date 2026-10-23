@@ -674,20 +674,25 @@ describe('what a window is called on screen', () => {
   test('reads as a time, in the poll offset and never the reader own', () => {
     // The time leads, which is the order the answer is spoken in and the order
     // that puts the part telling two adjacent options apart first.
-    expect(formatWindow('2026-09-01T14:00:00-07:00', true)).toBe('14:00, Tue Sep 1')
-    expect(formatWindow('2026-09-01T14:00:00-07:00', false)).toBe('2:00pm, Tue Sep 1')
+    expect(formatWindow('2026-09-01T14:00:00-07:00', true, false)).toBe('14:00, Tue Sep 1')
+    expect(formatWindow('2026-09-01T14:00:00-07:00', false, false)).toBe('2:00pm, Tue Sep 1')
     // The same instant with a different offset on it is a different wall
     // clock, and this reads the offset the poll declared rather than converting
     // to the reader's -- which is the whole of one-timezone-per-poll.
-    expect(formatWindow('2026-09-05T09:30:00+01:00', true)).toBe('09:30, Sat Sep 5')
-    expect(formatWindow('2026-09-05T09:30:00+01:00', false)).toBe('9:30am, Sat Sep 5')
+    expect(formatWindow('2026-09-05T09:30:00+01:00', true, false)).toBe('09:30, Sat Sep 5')
+    expect(formatWindow('2026-09-05T09:30:00+01:00', false, false)).toBe('9:30am, Sat Sep 5')
+  })
+
+  test('and writes the day before the month where the reader does', () => {
+    expect(formatWindow('2026-09-01T14:00:00-07:00', true, true)).toBe('14:00, Tue 1 Sep')
+    expect(formatWindow('2026-09-07T00:00:00-07:00', false, true)).toBe('Mon 7 Sep')
   })
 
   test('a window that starts at midnight is a day and no time', () => {
     // Every option of a poll answered in whole days starts at 00:00, and sixty
     // rows carrying the same four useless digits is what this saves.
-    expect(formatWindow('2026-09-07T00:00:00-07:00', true)).toBe('Mon Sep 7')
-    expect(formatWindow('2026-09-07T00:00:00-07:00', false)).toBe('Mon Sep 7')
+    expect(formatWindow('2026-09-07T00:00:00-07:00', true, false)).toBe('Mon Sep 7')
+    expect(formatWindow('2026-09-07T00:00:00-07:00', false, false)).toBe('Mon Sep 7')
   })
 
   test('and takes no schedule, which is what keeps it out of the database', () => {
@@ -940,7 +945,8 @@ describe('which weekday a date falls on', () => {
     expect(weekdayOf('2026-09-14')).toBe(1)
     expect(weekdayOf('2026-09-18')).toBe(5)
     // The same arithmetic the day label is drawn from.
-    expect(formatDay('2026-09-18')).toBe('Fri Sep 18')
+    expect(formatDay('2026-09-18', false)).toBe('Fri Sep 18')
+    expect(formatDay('2026-09-18', true)).toBe('Fri 18 Sep')
   })
 })
 

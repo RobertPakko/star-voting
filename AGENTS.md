@@ -1551,8 +1551,10 @@ calendar's rather than the ballot's: `fillVisible`.
 
 It reaches exactly what is drawn, which is what makes the label honest, and two
 props already set on the grids are what make that true — the month draws only
-its own days (`withOutsideDays={false}`) and both time grids start on Monday
-(`firstDayOfWeek={1}`) — so `visibleRange`, which works the range out, is exact
+its own days (`withOutsideDays={false}`) and every grid starts its week on the
+day `visibleRange` counts from (`firstDayOfWeek={WEEK_STARTS_ON}`, both reading
+one constant; see *Dates are written the reader's way* below) — so
+`visibleRange`, which works the range out, is exact
 rather than approximate and has to stay that way. Out-of-bounds days inside the
 range are left alone, and like every other click on this calendar it **toggles**:
 a stretch that is already exactly what the brush would make it is cleared, which
@@ -1772,7 +1774,7 @@ cannot tell the red end from the green one, and does not depend on that for its
 first reading.
 
 **Every time on screen is on one clock, and the reader picks which.**
-`2:30pm` by default, `14:30` with **24-hour time** on in the gear menu. The
+`2:30pm` or `14:30`, with **24-hour time** in the gear menu to choose. The
 grid was once drawn in one and the create form's two selectors said the other
 beside it, which is one poll described two ways on one screen — so the choice
 applies to all of them together: the selects, the grid's hour column, the
@@ -1783,7 +1785,24 @@ person reads goes through it. The setting is **per browser**
 ([`lib/clock.ts`](src/lib/clock.ts), `star-voting:24-hour-time` in
 `localStorage`) rather than on the account, for the reason the sign-in method
 is: it is a habit of whoever is holding the device, and it needs no migration
-and nothing read before the first time on a page can be drawn.
+and nothing read before the first time on a page can be drawn. Until the
+switch is flipped it follows the browser's language (`PREFERS_24_HOUR`), so
+`en-GB` opens on `14:30` and `en-US` on `2:30pm`; only a flipped switch is
+stored.
+
+**Dates are written the reader's way, and nobody is asked.**
+[`lib/locale.ts`](src/lib/locale.ts) reads the browser's language once and
+answers two more questions from it: which day the calendars start their weeks
+on (`WEEK_STARTS_ON` — Sunday in the US, Monday in most of the world, Saturday
+in parts of the Middle East), and whether a date is written `Fri Sep 18` or
+`Fri 18 Sep` (`DAY_BEFORE_MONTH`). Neither has a switch, unlike the clock: the
+language already answers both for nearly everybody, nobody goes looking for
+"week starts on" in a menu, and the clock is the one of the three people
+commonly set against their region's habit. Like the clock, both are display
+only — the grid is keyed by date and every option is an ISO 8601 instant, so a
+reader in London and one in Chicago are looking at the same poll drawn two
+ways. The week start comes from `Intl.Locale`'s week info where the browser has
+it and from a list of CLDR's regions where it does not (Firefox).
 
 `useBallotOrder` does not apply, and that is the one deliberate exception to
 the argument in [`ballotOrder.ts`](src/lib/ballotOrder.ts). It shuffles because
@@ -1847,8 +1866,9 @@ clock) — the time first, then the weekday, the
 month and the day. That is the order the answer is spoken in, and it is also
 the order that puts the part telling two neighbouring options apart at the
 front of the line: a ranked list of a Saturday's windows differs only in its
-first five characters. Within the date the month leads the day, for the same
-reason it does in speech.
+first five characters. Within the date the day and month come in whichever
+order the reader's language writes them — `Tue Sep 1` in the US, `Tue 1 Sep`
+in Britain — for the same reason: it is the order they would say it in.
 
 The window's **end** is deliberately not shown. It would need the schedule
 back, and every window in a poll is the same length — ten rows each saying

@@ -3,6 +3,7 @@ import { Button, Card, Group, Stack, Text, Title } from '@mantine/core'
 import { DatePicker } from '@mantine/dates'
 import { ArrowRightIcon } from '@phosphor-icons/react'
 import { formatDay, type ScheduleDay } from '../lib/schedule'
+import { DAY_BEFORE_MONTH, WEEK_STARTS_ON } from '../lib/locale'
 // Here rather than in main.tsx, so the stylesheet is split off with the
 // create form, the one page that draws this.
 import '@mantine/dates/styles.css'
@@ -38,15 +39,16 @@ export function DuplicateDates({
       <Card withBorder p="md">
         <Stack gap="sm" align="center">
           <Text size="sm" c="dimmed" ta="center">
-            The poll you are duplicating started on {formatDay(from)}, {from.slice(0, 4)}. Pick a
-            start date for the new poll.
+            The poll you are duplicating started on {formatDay(from)}
+            {DAY_BEFORE_MONTH ? ' ' : ', '}
+            {from.slice(0, 4)}. Pick a start date for the new poll.
           </Text>
           <DatePicker
             value={first}
             onChange={setFirst}
             minDate={today}
             defaultDate={suggested}
-            firstDayOfWeek={1}
+            firstDayOfWeek={WEEK_STARTS_ON}
             aria-label="First day of the new poll"
           />
           <Group justify="flex-end" w="100%">

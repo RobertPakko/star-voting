@@ -26,6 +26,7 @@ import {
   type ScheduleDay,
 } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
+import { DAY_BEFORE_MONTH, WEEK_STARTS_ON } from '../lib/locale'
 import type { DailyWindow, PollSchedule } from '../lib/types'
 
 /**
@@ -524,7 +525,7 @@ export function PaintCalendar({
             getDayProps={(day) => (asks(day) ? {} : readOnly ? outOfBoundsRead : outOfBounds)}
             // No red weekend headings.
             weekendDays={[]}
-            firstDayOfWeek={1}
+            firstDayOfWeek={WEEK_STARTS_ON}
             withOutsideDays={false}
             renderEventBody={eventBody}
           />
@@ -578,8 +579,8 @@ export function PaintCalendar({
               withWeekNumber={false}
               data-paint-calendar={calendarId}
               weekendDays={[]}
-              // Must match `visibleRange`.
-              firstDayOfWeek={1}
+              // Must match `visibleRange`, which reads the same constant.
+              firstDayOfWeek={WEEK_STARTS_ON}
             />
           </>
         )}
@@ -601,17 +602,18 @@ function step(date: string, view: ScheduleViewLevel, by: number): string {
   return dayjs(date).add(by, unit).format('YYYY-MM-DD')
 }
 
-/** `Fri Sep 4`, `Aug 31 – Sep 06`, `September 2026`. */
+/** `Fri Sep 4`, `Aug 31 – Sep 06` (`31 Aug – 06 Sep` day first), `September 2026`. */
 function rangeLabel(date: string, view: ScheduleViewLevel): string {
   if (view === 'day') return formatDay(date)
   if (view === 'month') return dayjs(date).format('MMMM YYYY')
   const { from, to } = visibleRange(date, view)
-  return `${dayjs(from).format('MMM DD')} – ${dayjs(to).format('MMM DD')}`
+  const pattern = DAY_BEFORE_MONTH ? 'DD MMM' : 'MMM DD'
+  return `${dayjs(from).format(pattern)} – ${dayjs(to).format(pattern)}`
 }
 
 /**
  * The first and last dates on screen. Must be exact, since `fillVisible`
- * fills it: relies on `withOutsideDays={false}` and `firstDayOfWeek={1}`.
+ * fills it: relies on `withOutsideDays={false}` and `firstDayOfWeek={WEEK_STARTS_ON}`.
  */
 function visibleRange(date: string, view: ScheduleViewLevel): { from: string; to: string } {
   const on = dayjs(date)
@@ -622,8 +624,9 @@ function visibleRange(date: string, view: ScheduleViewLevel): { from: string; to
       to: on.endOf('month').format('YYYY-MM-DD'),
     }
   }
-  // Monday-first by hand; dayjs's `startOf('week')` is locale-dependent.
-  const back = (on.day() + 6) % 7
-  const monday = on.subtract(back, 'day')
-  return { from: monday.format('YYYY-MM-DD'), to: monday.add(6, 'day').format('YYYY-MM-DD') }
+  // By hand rather than dayjs's `startOf('week')`, whose locale is dayjs's own
+  // and not necessarily the one the grids were told to start on.
+  const back = (on.day() - WEEK_STARTS_ON + 7) % 7
+  const first = on.subtract(back, 'day')
+  return { from: first.format('YYYY-MM-DD'), to: first.add(6, 'day').format('YYYY-MM-DD') }
 }
