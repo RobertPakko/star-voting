@@ -191,7 +191,7 @@ export function QuestionStrip({
               <Badge
                 key={question.key}
                 variant="filled"
-                color={`${color}.4`}
+                color={`${color}.3`}
                 autoContrast
                 maw={220}
                 data-question-key={question.key}

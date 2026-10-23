@@ -250,7 +250,7 @@ export function CollectOptions({
           <Group justify="space-between" wrap="wrap" gap="sm" align="flex-end">
             <Text size="sm" c="dimmed">
               {confirm.confirmed && !dirty
-                ? `You’ve confirmed the ${noun}. Adding more takes that back until you confirm again.`
+                ? `You’ve confirmed the ${noun}`
                 : `Confirm the ${noun} once you’re done.`}
               <br />
               {confirm.opensWhenEveryoneHas ? (
@@ -896,7 +896,7 @@ function OptionFields({
           value={value.description}
           autoFocus={focus === 'description'}
           onChange={(e) => onChange({ ...value, description: e.currentTarget.value })}
-          placeholder="Description (optional)"
+          placeholder="Optional description"
           error={problem?.field === 'description' ? problem.message : null}
         />
       )}

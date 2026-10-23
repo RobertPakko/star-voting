@@ -37,12 +37,9 @@ export function DuplicateDates({
       </Title>
       <Card withBorder p="md">
         <Stack gap="sm" align="center">
-          <Title order={2} size="h4">
-            Pick the new dates
-          </Title>
           <Text size="sm" c="dimmed" ta="center">
-            The poll you copied started on {formatDay(from)}, {from.slice(0, 4)}. Pick the first day
-            of the new poll, and the rest of its days will move with it.
+            The poll you are duplicating started on {formatDay(from)}, {from.slice(0, 4)}. Pick a
+            start date for the new poll.
           </Text>
           <DatePicker
             value={first}
