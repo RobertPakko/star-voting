@@ -40,7 +40,7 @@ import { VoterNameField } from '../components/VoterNameField'
 import { useVoterName } from '../lib/voterName'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
-import { readPollPage, statusFromOpenView } from '../lib/pollPage'
+import { readPollPage, statusFromOpenView, whenRead } from '../lib/pollPage'
 import { useRemovedHere } from '../lib/removedPolls'
 import { openPollViewSchema, parseAnswer, pollStatusSchema } from '../lib/rpcSchemas'
 import { winnerLabel } from '../lib/schedule'
@@ -146,12 +146,24 @@ export function PollDetail({
   // doesn't re-ask `poll_status` for it. See `statusFromOpenView`.
   const retention = useRef<PollStatus['expires_at']>(undefined)
 
+  // Which group `questions` describes, and as of when. Every question's read
+  // carries the whole group's marks, and a read held for a neighbour can be
+  // older than one already drawn -- or than a ballot just cast here -- so the
+  // newest wins rather than the last to land. See `whenRead`.
+  const groupAsOf = useRef<{ group: string; at: number } | null>(null)
+
   const apply = useCallback(
     (page: AccountRead) => {
       setPoll(page.poll)
       setOptions(page.options)
       setStatus(page.status)
-      setQuestions(page.questions)
+      const group = page.poll.group_id ?? page.poll.id
+      const at = whenRead(page)
+      const held = groupAsOf.current
+      if (!held || held.group !== group || at >= held.at) {
+        setQuestions(page.questions)
+        groupAsOf.current = { group, at }
+      }
       setResults(page.results)
       setBallots(page.ballots)
       setInvitees(page.invitees)
@@ -396,8 +408,17 @@ export function PollDetail({
   const onwards = nextUnansweredKey(strip, poll.id)
   const advance = onwards
     ? () => {
-        // Nothing re-reads the question being left, so record its mark here.
+        // Nothing re-reads the question being left, so record its mark here:
+        // in this browser on an open poll, and in the group on an invite poll,
+        // where the next question's held read predates this ballot.
         if (isOpen) (status.soliciting ? rememberConfirmed : rememberAnswered)(poll.id)
+        else {
+          const mark = status.soliciting ? { confirmed: true } : { voted: true }
+          setQuestions((held) =>
+            held.map((question) => (question.id === poll.id ? { ...question, ...mark } : question)),
+          )
+          groupAsOf.current = { group: poll.group_id ?? poll.id, at: performance.now() }
+        }
         navigate(pollPath(onwards))
       }
     : undefined

@@ -26,6 +26,7 @@ import type { OpenPollView, PollRead, PollStatus } from './types'
 export async function readPollPage(
   pollId: string,
 ): Promise<{ page: PollRead | null; error: string | null }> {
+  const startedAt = performance.now()
   const { data, error } = await openPollRpc('poll_page', {
     p_poll_id: pollId,
     p_voter_key: heldVoterKeyFor(pollId) ?? undefined,
@@ -40,7 +41,22 @@ export async function readPollPage(
   // is a union on it.
   const { value, error: shape } = parseAnswer(pollReadSchema, 'poll_page', data)
   if (shape) return { page: null, error: shape }
+  if (value) readStarts.set(value, startedAt)
   return { page: value, error: null }
+}
+
+const readStarts = new WeakMap<PollRead, number>()
+
+/**
+ * When the request behind a read was sent, on `performance.now()`'s clock.
+ *
+ * A read describes the database as it stood when it *started*, which is not
+ * the order reads land in: a question read ahead before a vote can be handed
+ * to the page after it. The group's marks are shared by every question's
+ * read, so the page keeps whichever is newest by this. See `PollDetail`.
+ */
+export function whenRead(page: PollRead): number {
+  return readStarts.get(page) ?? 0
 }
 
 /**
