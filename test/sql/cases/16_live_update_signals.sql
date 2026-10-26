@@ -361,6 +361,22 @@ begin
       tests.user_topic('creator@example.com'),
       tests.user_topic('voter1@example.com')]));
 
+  -- The last vote finishes the poll without closing it, and every question's
+  -- results are out at once -- so every question's page has to hear it, not
+  -- only the one the vote was cast in. What reaches the others is the winner
+  -- being written onto them; see 0091.
+  perform tests.forget_signals();
+  perform tests.cast_ballot(v_questions[1], array[5, 0]);
+
+  perform tests.assert_eq('the vote that finishes a group tells every question',
+    tests.signalled(), tests.sorted(array[
+      tests.poll_topic(v_questions[1]),
+      tests.poll_topic(v_questions[2]),
+      tests.user_topic('creator@example.com'),
+      tests.user_topic('voter1@example.com')]));
+  perform tests.assert_eq('and the question it was cast in still only once',
+    tests.signals(tests.poll_topic(v_questions[1])), 1);
+
   -- ------------------------------------------------------------------
   -- A creator who invited themselves is one reader with one list.
   -- ------------------------------------------------------------------

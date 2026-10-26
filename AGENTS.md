@@ -2312,15 +2312,19 @@ them: invisible in the app, where every RPC is its own transaction, and
 load-bearing in the test suite, where a case is one transaction that never
 commits.
 
-**Settling a winner does not announce itself.** `broadcast_poll_updated` fires
-on any update to a poll row, so the write `settle_winner` makes was a second
-message and a second read of the same poll by every watcher, on top of the one
-the close had already sent — the failure `16_live_update_signals` exists to
-catch. It stays quiet when the winner columns are the only thing that changed —
-and since 0080 when `results_announced_at` or `reminder_sent_at` are, for the
-same reason or a better one — and nothing is lost by that: the settle only ever happens inside a transaction
-that has already announced the change which produced the result, and both
-writes commit together, so the re-read that message triggers sees the winner.
+**Settling a winner announces itself, and that is what reaches the other
+questions.** It was silent for a long time: `broadcast_poll_updated` fires on
+any update to a poll row, so the write `settle_winner` makes was a second
+message to a question that had already been told about the ballot or the close
+that produced it. `announce()` has since made that impossible — a topic is told
+once per transaction — and the silence turned out to be hiding a gap. A poll
+of several questions that finishes on its last vote closes nothing, so that
+vote told its own question and no other, and a reader on question 2 when the
+last ballot landed on question 3 sat on *In progress* until they reloaded. The
+settle writes onto every question in the group, so since
+`0091_results_out_reach_every_question.sql` it is the signal those pages hear.
+`results_announced_at` and `reminder_sent_at` (since 0080) are still quiet:
+nothing on any page draws them.
 
 **`poll_winners()` is still there and nothing calls it.** It reads the column
 now instead of running an election. The app deploys on push while migrations
@@ -6134,9 +6138,8 @@ noticed exactly once.
   one email goes. It was a table of its own, `results_notices`, until 0080,
   on the grounds that a column would widen every `select *` and wake every
   watcher of the poll a second time; the first is a timestamp's worth, and
-  the second is answered the way it already was for the winner columns —
-  `broadcast_poll_updated` stays quiet when only bookkeeping columns moved
-  (see [The winner is kept with the poll](#the-winner-is-kept-with-the-poll)).
+  the second is answered by `broadcast_poll_updated` staying quiet when only this column or the
+  reminder's moved, since no page draws either.
   The reminder to vote keeps its once the same way, and one shape for both is
   easier to follow than a column for one and a table for the other.
 
