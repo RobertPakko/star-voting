@@ -6,8 +6,8 @@ import classes from './PollTags.module.css'
 import { announce } from '../lib/announce'
 
 /**
- * The row of four badges describing a poll, identical on every screen: mode,
- * respondents, ballots (in the order CreatePoll asks), then the count. Both
+ * The row of four badges describing a poll, identical on every screen: the
+ * count, then mode, respondents and ballots (in the order CreatePoll asks). Both
  * states of each setting are always shown, since an absent tag reads as
  * nothing. Every string here is decided here; this is the only place a voter
  * is told what happens to their ballot. See "Poll settings are frozen at
@@ -38,6 +38,7 @@ export function PollTags({
 
   return (
     <Group gap="xs" className={className}>
+      {label && <RollingBadge label={label} />}
       <Badge color={mode === 'open' ? badgeColor.openLink : badgeColor.inviteOnly} variant="light">
         {mode === 'open' ? 'Open link' : 'Invite only'}
       </Badge>
@@ -53,7 +54,6 @@ export function PollTags({
       >
         {showBallots ? 'Ballots published' : 'Ballots private'}
       </Badge>
-      {label && <RollingBadge label={label} />}
     </Group>
   )
 }

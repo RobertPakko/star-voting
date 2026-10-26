@@ -237,6 +237,8 @@ test.describe('the web app manifest', () => {
 
     const files = [
       ...manifest.icons.map((i: { src: string; sizes: string }) => i),
+      // A shortcut with no icon is drawn as a blank square on Android.
+      ...manifest.shortcuts.flatMap((s: { icons: { src: string; sizes: string }[] }) => s.icons),
       ...manifest.screenshots.map((s: { src: string; sizes: string }) => s),
     ]
     for (const { src, sizes } of files) {

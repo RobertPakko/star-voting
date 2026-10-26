@@ -1091,25 +1091,31 @@ function TimesSummary({ options }: { options: PollOption[] }) {
       <RollingBadge
         label={`${options.length} ${options.length === 1 ? 'time option' : 'time options'}`}
       />
-      {first === last ? (
-        <>
-          <Text size="sm" span>
-            on
-          </Text>
-          <RollingBadge label={formatDay(first)} />
-        </>
-      ) : (
-        <>
-          <Text size="sm" span>
-            from
-          </Text>
-          <RollingBadge label={formatDay(first)} />
-          <Text size="sm" span>
-            to
-          </Text>
-          <RollingBadge label={formatDay(last)} />
-        </>
-      )}
+      {/* The range is one item of the row, so a narrow card moves it onto a
+          line of its own whole rather than breaking it after "from X to";
+          it only wraps inside itself where even a line of its own is too
+          narrow. */}
+      <Group gap={6} wrap="wrap">
+        {first === last ? (
+          <>
+            <Text size="sm" span>
+              on
+            </Text>
+            <RollingBadge label={formatDay(first)} />
+          </>
+        ) : (
+          <>
+            <Text size="sm" span>
+              from
+            </Text>
+            <RollingBadge label={formatDay(first)} />
+            <Text size="sm" span>
+              to
+            </Text>
+            <RollingBadge label={formatDay(last)} />
+          </>
+        )}
+      </Group>
     </Group>
   )
 }

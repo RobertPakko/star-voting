@@ -37,13 +37,41 @@
       "name": "New poll",
       "short_name": "New poll",
       "description": "Make a new poll",
-      "url": "./#/polls/new"
+      "url": "./#/polls/new",
+      "icons": [
+        {
+          "src": "shortcuts/new-poll.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "shortcuts/new-poll-maskable.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "maskable"
+        }
+      ]
     },
     {
       "name": "Your polls",
       "short_name": "Your polls",
       "description": "The polls you have made or been invited to",
-      "url": "./#/"
+      "url": "./#/",
+      "icons": [
+        {
+          "src": "shortcuts/your-polls.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "shortcuts/your-polls-maskable.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "maskable"
+        }
+      ]
     }
   ],
   "screenshots": [

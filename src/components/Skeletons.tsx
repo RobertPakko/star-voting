@@ -132,7 +132,7 @@ function PollHeadingShape({ compact = false, title }: { compact?: boolean; title
       </Stack>
       {/* PollTags' four badges. */}
       <Group gap="xs">
-        {[86, 96, 118, 74].map((w, i) => (
+        {[74, 86, 96, 118].map((w, i) => (
           <Skeleton key={i} height={badge} width={w} radius="xl" />
         ))}
       </Group>

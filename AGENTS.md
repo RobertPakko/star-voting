@@ -3084,6 +3084,12 @@ would notice:
   the latter.
 - **`shortcuts`** — *New poll* and *Your polls* — on a long press of the icon.
   *Your polls* is `#/` rather than the start URL, for the reason below.
+  Each carries an icon of its own in `public/shortcuts/` — the app's gradient
+  behind Phosphor's bold `Plus` and `ListBullets`, the glyphs the poll list's
+  own buttons use, as an `any` with the logo's rounded corners and a
+  full-bleed `maskable` — because a shortcut without one is drawn as a blank
+  grey square in Android's long-press menu. They are PNGs drawn once from an
+  SVG; redraw them if the logo's colours change.
 - **`launch_handler`**, `focus-existing`: opening the installed app while it is
   already open brings that window forward rather than opening a second one,
   with its own session and its own socket. A shortcut or a captured link still
@@ -4018,16 +4024,17 @@ parts, always in this order:
 1. the **title**, with where the poll has got to in a badge beside it;
 2. the poll's **description**, when it has one;
 3. **who created it** — *Created by you*, or their email address;
-4. the four badges saying **what kind of poll it is** — **invite only/open
-   link**, then respondents shown/hidden, then ballots published/private, then
-   how many have answered.
+4. the four badges saying **what kind of poll it is** — how many have
+   answered, then **invite only/open link**, then respondents shown/hidden,
+   then ballots published/private.
 
 The order is not a preference. A description is the creator's own words about
 the poll and belongs with the title it extends, above the row of app-written
 badges rather than stranded under it. The three settings inside the row run in
 the order `CreatePoll` asks for them, so the form that sets a poll's terms and
-the row that reports them tell one story in one order; the count comes last of
-the four because it is the only one that is not a setting at all. Two screens
+the row that reports them tell one story in one order; the count comes first
+of the four because it is the only one that is not a setting at all — it is
+the one that moves, and the one a reader scanning the list is looking for. Two screens
 describing one poll differently is two things to learn about a poll instead of
 one.
 
