@@ -6,7 +6,7 @@ import { notifications } from '@mantine/notifications'
 import { PaintTimes } from './PaintTimes'
 import type { PaintedEdit } from './PaintTimes'
 import { RollingBadge } from './PollTags'
-import { formatDay, parseWindowStart } from '../lib/schedule'
+import { describeLength, formatDay, meetingMinutes, parseWindowStart } from '../lib/schedule'
 import { sendDraft } from '../lib/optionWrites'
 import type { DraftHold, OptionsSource } from '../lib/optionWrites'
 import type { PollOption, PollSchedule } from '../lib/types'
@@ -131,7 +131,7 @@ export function TimeList({
           onDraftChange={noteDraft}
         />
       ) : (
-        <TimesSummary options={options} />
+        <TimesSummary options={options} schedule={schedule} />
       )}
       {error && (
         <Text role="alert" c="red" size="sm">
@@ -149,11 +149,12 @@ export function TimeList({
 
 /**
  * What a time poll's list holds, before anybody opens the calendar: how many
- * windows, and the first and last day they fall on. Badges, because the list
- * moves while it is read (somebody else's suggestion landing), and a badge
- * whose words roll over shows that it did; see RollingBadge.
+ * windows, how long each is, and the first and last day they fall on. Badges
+ * for what moves while it is read (somebody else's suggestion landing), since a
+ * badge whose words roll over shows that it did; see RollingBadge. The length
+ * is fixed at creation, so it is plain text.
  */
-function TimesSummary({ options }: { options: PollOption[] }) {
+function TimesSummary({ options, schedule }: { options: PollOption[]; schedule: PollSchedule }) {
   const days = options
     .map((o) => parseWindowStart(o.name)?.day)
     .filter((day) => day !== undefined)
@@ -171,9 +172,10 @@ function TimesSummary({ options }: { options: PollOption[] }) {
   const last = days[days.length - 1]
   return (
     <Group gap={6} wrap="wrap">
-      <RollingBadge
-        label={`${options.length} ${options.length === 1 ? 'time option' : 'time options'}`}
-      />
+      <RollingBadge label={`${options.length} ${options.length === 1 ? 'option' : 'options'}`} />
+      <Text size="sm" span>
+        for {describeLength(meetingMinutes(schedule))}
+      </Text>
       {/* The range is one item of the row, so a narrow card moves it onto a
           line of its own whole rather than breaking it after "from X to";
           it only wraps inside itself where even a line of its own is too

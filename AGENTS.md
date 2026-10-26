@@ -953,7 +953,7 @@ job; other readers can only undo their own unsaved marks, by painting over
 them (every gesture toggles).
 
 **The calendar appears on *Add times*** (*Edit times* for the creator). Until
-then the card shows a summary in badges (`TimesSummary`, e.g. *5 time options
+then the card shows a summary (`TimesSummary`, e.g. *5 options for 2 hours
 from Fri Sep 4 to Sat Sep 5*). Pressing it starts an edit, which withdraws a
 confirmation as opening a text field does. A save, or a *Confirm times* with
 nothing painted, closes the calendar. On a time poll the card says *times*
