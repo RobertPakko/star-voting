@@ -104,21 +104,21 @@ const answered = mark(ANSWERED_KEY)
 const confirmed = mark(CONFIRMED_KEY)
 
 /** Every question this browser has a ballot in. */
-export const answeredQuestions = answered.all
+const answeredQuestions = answered.all
 /** Record that a ballot of this browser's is in for this question. */
 export const rememberAnswered = answered.remember
 /** Forget one: the ballot it stood for is gone. */
 export const forgetAnswered = answered.forget
 
 /** Every question this browser has said it is done adding options to. */
-export const confirmedQuestions = confirmed.all
+const confirmedQuestions = confirmed.all
 /** Record that this browser is done adding to this question's list. */
 export const rememberConfirmed = confirmed.remember
 /** Forget one: the confirmation was taken back, or the poll has moved on. */
-export const forgetConfirmed = confirmed.forget
+const forgetConfirmed = confirmed.forget
 
 /** Both marks, as sets of question ids. */
-export interface QuestionMarks {
+interface QuestionMarks {
   answered: ReadonlySet<string>
   confirmed: ReadonlySet<string>
 }

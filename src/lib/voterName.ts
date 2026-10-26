@@ -32,7 +32,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 const STORAGE_KEY = 'star-voting:voter-name'
 
 /** The remembered name, or '' when there is none and for a browser with no storage. */
-export function rememberedVoterName(): string {
+function rememberedVoterName(): string {
   try {
     return localStorage.getItem(STORAGE_KEY) ?? ''
   } catch {
@@ -42,7 +42,7 @@ export function rememberedVoterName(): string {
 }
 
 /** Remembers what is in the box; an empty box forgets it. */
-export function rememberVoterName(name: string): void {
+function rememberVoterName(name: string): void {
   const trimmed = name.trim()
   try {
     if (trimmed) localStorage.setItem(STORAGE_KEY, trimmed)

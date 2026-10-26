@@ -8,7 +8,7 @@
  * exception, and there the link is copied instead, which is what this button
  * did everywhere before it could share.
  */
-export type ShareOutcome = 'shared' | 'copied' | 'cancelled' | 'failed'
+type ShareOutcome = 'shared' | 'copied' | 'cancelled' | 'failed'
 
 /**
  * Whether this browser has a share sheet to open. Read when the button is
@@ -29,7 +29,7 @@ export function canShareNatively(): boolean {
  * One string arrives as written. The chat apps still find the link in it and
  * draw its preview card; see Link previews in AGENTS.md.
  */
-export function shareMessage(text: string, url: string): string {
+function shareMessage(text: string, url: string): string {
   return `${text}\n\n${url}`
 }
 

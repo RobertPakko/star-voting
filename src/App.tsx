@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Center, Loader } from '@mantine/core'
-import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import { takeDestination } from './lib/shareLink'
 import { SignIn } from './pages/SignIn'
@@ -16,7 +16,7 @@ import {
   GuideSkeleton,
   SettingsSkeleton,
 } from './components/Skeletons'
-import { isPollParam, pollIdFromParam, pollPath } from './lib/pollId'
+import { isPollParam } from './lib/pollId'
 import { refreshAccountPush, useNotificationRoutes } from './lib/push'
 import { useLaunchRoutes } from './lib/launch'
 
@@ -93,9 +93,8 @@ function App() {
       <Route element={<Layout />}>
         {/* Public routes, in front of the auth gate. A poll's address is just
             its id; `PollRoute` turns away segments that aren't shaped like
-            one. `#/polls/<id>` is the pre-rebrand address, still in old emails. */}
+            one. */}
         <Route path=":pollId" element={<PollRoute />} />
-        <Route path="polls/:pollId" element={<OldPollAddress />} />
         <Route
           path="about"
           element={
@@ -134,7 +133,7 @@ function App() {
           <>
             <Route index element={<PollList />} />
             <Route
-              path="polls/new"
+              path="new"
               element={
                 <Suspense fallback={<FormSkeleton />}>
                   <CreatePoll />
@@ -163,9 +162,12 @@ function App() {
       </Route>
 
       {/* The sign-in screen, outside the shell. These one-segment names must
-          be routes of their own, or `:pollId` / `polls/:pollId` would take them. */}
+          be routes of their own, or `:pollId` would take them. */}
       {!session && <Route path="*" element={<SignIn />} />}
-      {!session && <Route path="polls/new" element={<SignIn />} />}
+      {!session && <Route path="new" element={<SignIn />} />}
+      {/* Where the create form was until it moved to `#/new`; kept while
+          installed copies may still hold the old shortcut. */}
+      <Route path="polls/new" element={<OldCreateAddress />} />
       {(!session || anonymous) && <Route path="sign-in" element={<SignIn />} />}
       {!session && <Route path="settings" element={<SignIn />} />}
     </Routes>
@@ -178,10 +180,9 @@ function PollRoute() {
   return param && isPollParam(param) ? <PollPage /> : <NotFound />
 }
 
-/** `#/polls/<id>`, the address every poll had until the rebrand. */
-function OldPollAddress() {
-  const { pollId: param = '' } = useParams<{ pollId: string }>()
-  return <Navigate to={pollPath(pollIdFromParam(param))} replace />
+function OldCreateAddress() {
+  const { search } = useLocation()
+  return <Navigate to={{ pathname: '/new', search }} replace />
 }
 
 export default App

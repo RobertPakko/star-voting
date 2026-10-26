@@ -15,8 +15,8 @@ hash-based routing, deployed to GitHub Pages by
 
 ```
 src/pages/       route components (SignIn, PollList, CreatePoll, PollPage — the route that picks PollDetail or PublicPoll — About, Settings, InstallGuide, Intro, Start, Donate, Contact)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), the create form's drafts and validation (pollForm.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, "Make your own poll" for a reader who may have no session (makePoll.ts), the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
+src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions and the TimeList it draws on a time poll, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
+src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), the create form's drafts and validation (pollForm.ts), how an option list is written and confirmed (optionWrites.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, "Make your own poll" for a reader who may have no session (makePoll.ts), the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
 public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the Start page's two loops (start/), the service worker (see Installing it to a home screen)
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
@@ -124,18 +124,16 @@ renaming any of them is churn nobody sees — and renaming the keys would throw
 away every browser's voter keys, drafts and settings.
 
 **It was STAR Voting, at `https://choicelab.app/star-voting/#/polls/<id>`,
-until October 2026**, and both halves of that address are still answered,
-because every email the app ever sent links to one:
+until October 2026.** Both halves of that address were redirected for a while
+after the rebrand — a page at `site-root/star-voting/` carrying the hash over
+to the root, and a `#/polls/<id>` route — and both are gone now; an old link
+is a 404. What is left of the old name is deliberate:
 
-- [`site-root/star-voting/index.html`](site-root/star-voting/index.html) is a
-  redirect from the old directory to the root that carries the query string
-  and the hash across. It has to be JavaScript — the hash never reaches the
-  server, and a meta refresh drops it.
-- `#/polls/<id>` is a route of its own (`OldPollAddress` in `App.tsx`) that
-  redirects to `#/<id>`. `#/polls/new` is still the create form.
 - `retireOldWorker` (`lib/serviceWorker.ts`) unregisters the service worker
-  that was registered at `/star-voting/`, and `public/sw.js` leaves that path
-  to the network, so the redirect is never cached as the app shell.
+  that was registered at `/star-voting/`, which would otherwise go on serving
+  a cached copy of the old app there. The create form moved from
+  `#/polls/new` to `#/new` after the rest; the old one still redirects, for
+  installed copies holding the old shortcut.
 - The manifest's `id` is still `/star-voting/`, so a browser can take the app
   at `/` for the same installed app; see [What the manifest
   says](#what-the-manifest-says).
@@ -152,8 +150,8 @@ It's served from the custom domain `choicelab.app` rather than the default
 `<username>.github.io/star-voting/` GitHub Pages URL.
 [`site-root/`](site-root) holds what is copied over the build in `dist/` by
 the deploy workflow: `CNAME` (read by GitHub Pages from the published artifact
-to map the domain) and the redirect above. It must never hold an `index.html`
-at its own top level, which would overwrite the app's.
+to map the domain). It must never hold an `index.html`, which would overwrite
+the app's.
 
 DNS for `choicelab.app` needs an `ANAME`/`ALIAS` record (or the four GitHub
 Pages `A` records, plus `AAAA` records for IPv6) pointing at GitHub Pages;
@@ -2326,11 +2324,9 @@ settle writes onto every question in the group, so since
 `results_announced_at` and `reminder_sent_at` (since 0080) are still quiet:
 nothing on any page draws them.
 
-**`poll_winners()` is still there and nothing calls it.** It reads the column
-now instead of running an election. The app deploys on push while migrations
-land on merge, so for a few minutes a browser can be holding the previous
-build; that build asks this function for its badges, and it has to keep
-answering. It can go once that window is well past.
+**`poll_winners()` is gone.** It was kept, reading the column, for browsers
+still holding the build from before it, and `0092_poll_winners_goes.sql`
+dropped it once that window was long past.
 
 ## One read opens a poll
 
@@ -3165,7 +3161,7 @@ which is the reader most likely to want it.
 
 `#/intro` is a twenty-two-second film of the app at work — a poll made, voted
 in and decided — that ends on three buttons: **Learn more**
-(`/about`), **Make your own poll** (`/polls/new`) and **Share this intro**. It
+(`/about`), **Make your own poll** (`/new`) and **Share this intro**. It
 is a link to hand somebody who has never heard of the method, so it is public
 and sits outside the app shell: the film draws the app's header itself, and a
 real one above it would be the header twice. [`pages/Intro.tsx`](src/pages/Intro.tsx)
@@ -3219,8 +3215,8 @@ transparent until they rise in, so nobody tabs onto one they cannot see.
 session is given one without an account on the press — the same
 `continueWithoutAccount` the About page's *Try it yourself* and the sign-in
 screen's **Continue without an account** call — and taken to the create form
-once the session arrives, since `/polls/new` with no session is matched as a
-poll called "new". It used to send them to the sign-in screen first, which was
+once the session arrives, since `/new` with no session is the sign-in
+screen. It used to send them to the sign-in screen first, which was
 a press on a button saying they did not want to sign in, on the one page made
 for people who have never heard of the app.
 
@@ -4217,11 +4213,10 @@ public voting page, which has no account and so could never have called
 the winner out of the `Results` card below the badge, which made the badge
 wait on that card and disappear if it failed.
 
-A browser holding a build newer than the database it is talking to reads
-*Results ready* — the app deploys on push while migrations land on merge, so
-for a few minutes the columns may not exist yet. `winner_settled` is
-`undefined` then rather than false, which is the same as *not told*, and a
-list with no winners named on it is a working list.
+While the columns were new, `winner_settled` was optional in `rpcSchemas.ts`
+and an absent one read as *not told*, for a browser deployed ahead of its
+migration. Long since landed, both are now required; that is the pattern for
+every field a migration adds (see the header of `rpcSchemas.ts`).
 
 **Ten polls to a page, taken in the database.** `list_polls(p_limit,
 p_offset)` returns that page and the total, in one round trip.
@@ -4557,9 +4552,8 @@ affordable: the schema writes poll ids into email bodies, those bodies do not
 expire, and there is no later date at which dropping the long form becomes
 safe. It costs one regex, which is cheaper than the shim `0039` declined.
 
-**And the address dropped `/polls/` in the rebrand**, by the same rule: the
-old one is redirected rather than retired. `#/polls/<id>` — short or long —
-lands on `#/<id>`, and the old directory `/star-voting/` lands on the root;
+**And the address dropped `/polls/` in the rebrand.** `#/polls/<id>` and the
+old directory `/star-voting/` were redirected for a while and no longer are;
 see [Stack and layout](#stack-and-layout). `0088_choicelab.sql` is where the
 emails and push notifications started linking to the new spelling.
 
@@ -4989,11 +4983,8 @@ collecting, the badge beside its title reads `2/5 confirmed` on an invite poll
 and `3 confirmed` on an open one — the same shape as the `3/6 votes` and `3
 votes` it gives way to, out of the same denominator, so a card carrying one
 today and the other next week is counting the same list of people both times.
-It replaces the option count that badge used to show at this stage, which was
-the wrong number for the reason at the top of this section. `turnoutLabel` in
-`PollTags` still falls back to the option count when `confirmed_count` arrives
-undefined, which is a browser running ahead of the migration; a confident zero
-would be a lie where the old number is merely old.
+ It replaces the option count that badge used to show at this stage, which was
+the wrong number for the reason at the top of this section.
 
 That is also why the **Confirm options** button carries no count of its own,
 only what pressing it will do: [turnout is reported in exactly one
@@ -5459,10 +5450,9 @@ directly under the winner — under it because the winner is the news, above
 everything else because everything else is the arithmetic that produced it,
 and yellow rather than the orange the no-winner card wears so that a tie and a
 caveat are never the same colour on one screen.
-`PollResults.options_edited_after_votes` and `.votes_after_reveal` are optional
-in `types.ts` for the reason `expires_at` is: a browser can be a deploy ahead
-of the database, and a missing flag says nothing rather than claiming there was
-no caveat.
+`PollResults.options_edited_after_votes` and `.votes_after_reveal` were
+optional in `types.ts` while they were new, so a browser a deploy ahead of the
+database read a missing flag as nothing said; they are required now.
 
 Neither flag is ever cleared. A poll cannot un-edit a list people have already
 scored, and cannot un-show a tally people have already read.
@@ -6588,14 +6578,9 @@ the list on every device follows, and the poll's own topic hears nothing —
 nothing about the poll changed. A deleted poll takes its rows with it by
 cascade, so nothing here outlives what it names.
 
-**The browser's old ids are handed over once.** A reader who hid polls before
-this shipped comes back to them removed rather than on their list again:
-`migrateHiddenPolls` sends whatever is under the old key as one `remove_polls`
-and deletes the key once that has gone in. Ids that are not on the signed-in
-account's list are skipped rather than refused. That does turn off
-notifications the reader never asked to turn off, for polls they only hid; the
-alternative was a list they had tidied coming back untidied, and the new
-tooltip and the line above the removed list both say what removing means.
+**The browser's old ids were handed over once.** For a while after this
+shipped, `migrateHiddenPolls` sent whatever a browser held under the old key
+as one `remove_polls` and deleted the key; it has since been removed.
 
 Two smaller decisions worth keeping. **Which of the two lists is on screen is
 not remembered**: a look at what has been put away is a thing you do and then

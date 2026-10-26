@@ -12,7 +12,7 @@ import type { SignInMethod } from './signInMethod'
  * in `AuthProvider.tsx`; everything a caller needs is this file, which is
  * why every `useAuth` import still reads `from '../lib/auth'`.
  */
-export interface AuthContextValue {
+interface AuthContextValue {
   session: Session | null
   loading: boolean
   /**

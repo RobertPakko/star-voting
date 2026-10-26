@@ -17,7 +17,7 @@ import { encode } from 'uqr'
  */
 const QUIET_ZONE = 4
 
-export interface QrCode {
+interface QrCode {
   /** Width and height in modules, quiet zone included. */
   size: number
   /** `modules[y][x]` true is a dark module. */

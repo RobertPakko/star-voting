@@ -15,7 +15,7 @@ import { shortPollId } from './pollId'
  * (`push_message` in the schema), and a poll page knows every question of
  * its group, so any question of a poll clears the poll.
  */
-export async function clearPollNotifications(pollIds: string[]): Promise<void> {
+async function clearPollNotifications(pollIds: string[]): Promise<void> {
   if (!('serviceWorker' in navigator) || pollIds.length === 0) return
   try {
     const registration = await navigator.serviceWorker.getRegistration()

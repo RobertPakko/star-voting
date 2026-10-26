@@ -172,7 +172,7 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
         size={size}
         color="blue"
         component={Link}
-        to="/polls/new"
+        to="/new"
         leftSection={<PlusIcon size={18} aria-hidden />}
         style={rise(1)}
       >

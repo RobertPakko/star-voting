@@ -349,7 +349,7 @@ function MenuLink({ to, icon: Glyph, children }: { to: string; icon: Icon; child
  * link is its id, and each of a poll's questions has an address of its own —
  * so all of them answer to one key and moving between them opens nothing.
  * A poll's address is its id alone, so it is recognised by shape
- * (`isPollParam`), which also keeps `/polls/new` -- the create form, and
+ * (`isPollParam`), which also keeps `/new` -- the create form, and
  * genuinely another page -- out of it.
  */
 function pageKey(pathname: string): string {

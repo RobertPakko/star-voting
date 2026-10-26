@@ -427,7 +427,7 @@ function Samples() {
         action="Example result"
       />
       <Sample
-        to="/polls/new"
+        to="/new"
         onClick={tryIt}
         loading={starting}
         error={error}

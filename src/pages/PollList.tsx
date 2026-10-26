@@ -19,7 +19,7 @@ import { useMediaQuery, useReducedMotion } from '@mantine/hooks'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, PlusIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { migrateHiddenPolls, removePolls, restorePolls } from '../lib/removedPolls'
+import { removePolls, restorePolls } from '../lib/removedPolls'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { BackToList } from '../components/BackToList'
 import { Banners } from '../components/Banners'
@@ -150,7 +150,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     // it, so ask separately then.
     let removedTotal: number
     if (rows.length > 0) {
-      removedTotal = rows[0].removed_count ?? 0
+      removedTotal = rows[0].removed_count
     } else {
       const { data: counted } = await supabase.rpc('removed_poll_count')
       removedTotal = typeof counted === 'number' ? counted : 0
@@ -219,11 +219,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
     if (fetched.current === null || fetched.current === `${viewingRemoved}:${page}`) return
     reread()
   }, [page, viewingRemoved, reread])
-
-  // One-time handover of polls hidden by an older, browser-only build.
-  useEffect(() => {
-    if (session) void migrateHiddenPolls()
-  }, [session])
 
   /** Archive or restore. The re-read goes through the live queue, absorbing the echo. */
   const move = async (id: string, remove: boolean) => {
@@ -300,11 +295,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             )}
           </div>
           {!viewingRemoved && (
-            <Button
-              component={Link}
-              to="/polls/new"
-              leftSection={<PlusIcon size={16} aria-hidden />}
-            >
+            <Button component={Link} to="/new" leftSection={<PlusIcon size={16} aria-hidden />}>
               New poll
             </Button>
           )}
@@ -369,9 +360,7 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
                 closed: poll.is_closed,
                 // `undefined` = not settled; null = no winner. A group row is
                 // its first question; the badge withholds it via `inGroup`.
-                winner: poll.winner_settled
-                  ? winnerLabel(poll.winner_name ?? null, h24)
-                  : undefined,
+                winner: poll.winner_settled ? winnerLabel(poll.winner_name, h24) : undefined,
                 inGroup: poll.question_count > 1,
               },
             }

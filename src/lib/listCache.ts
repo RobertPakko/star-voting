@@ -22,7 +22,7 @@ import type { PollListItem } from './types'
  * list may outlive the session that read it, which is also why it is filed
  * against the account.
  */
-export type ListSnapshot = {
+type ListSnapshot = {
   userId: string
   polls: PollListItem[]
   total: number

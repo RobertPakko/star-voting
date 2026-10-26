@@ -65,7 +65,7 @@ export function Start() {
                 />
               </button>
             ) : (
-              <Link to="/polls/new" className={classes.link} data-tone="create">
+              <Link to="/new" className={classes.link} data-tone="create">
                 <LinkFace icon={<PlusIcon aria-hidden />} label="Make your own poll" />
               </Link>
             )}

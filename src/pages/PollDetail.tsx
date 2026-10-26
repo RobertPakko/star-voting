@@ -144,7 +144,7 @@ export function PollDetail({
 
   // Fixed at creation, so carried from the first read; the open poll's tick
   // doesn't re-ask `poll_status` for it. See `statusFromOpenView`.
-  const retention = useRef<PollStatus['expires_at']>(undefined)
+  const retention = useRef<PollStatus['expires_at']>(null)
 
   // Which group `questions` describes, and as of when. Every question's read
   // carries the whole group's marks, and a read held for a neighbour can be
@@ -167,7 +167,7 @@ export function PollDetail({
       setResults(page.results)
       setBallots(page.ballots)
       setInvitees(page.invitees)
-      setYourScores(page.your_scores ?? null)
+      setYourScores(page.your_scores)
       heardRemoved(page.removed)
       retention.current = page.status.expires_at
 
@@ -423,16 +423,13 @@ export function PollDetail({
       }
     : undefined
   const optionList = isOpen ? (view?.options ?? []) : options
-  // Confirming is for invitees of a collecting invite poll (`confirmed` is
-  // undefined against an older database, which offers no button).
+  // Confirming is for invitees of a collecting invite poll.
   const confirmation =
-    !isOpen && status.soliciting && status.invited && status.confirmed !== undefined
+    !isOpen && status.soliciting && status.invited
       ? {
           confirmed: status.confirmed,
           opensWhenEveryoneHas:
-            status.confirmed_count !== undefined &&
-            status.invited_count > 0 &&
-            status.confirmed_count < status.invited_count,
+            status.invited_count > 0 && status.confirmed_count < status.invited_count,
         }
       : undefined
 
@@ -459,8 +456,8 @@ export function PollDetail({
           soliciting: status.soliciting,
           resultsAvailable: status.results_available,
           closed: status.is_closed,
-          // `undefined` = not settled (or an older database); null = no winner.
-          winner: status.winner_settled ? winnerLabel(status.winner_name ?? null, h24) : undefined,
+          // `undefined` = not settled; null = no winner.
+          winner: status.winner_settled ? winnerLabel(status.winner_name, h24) : undefined,
           inGroup: !!poll.group_id,
         }}
       />

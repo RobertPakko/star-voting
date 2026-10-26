@@ -1,5 +1,12 @@
 import { z } from 'zod'
-import type { BallotSheet, OpenPollView, PollRead, PollResults, PollStatus } from './types'
+import type {
+  BallotSheet,
+  OpenPollView,
+  PollRead,
+  PollResults,
+  PollStatus,
+  RankingEntry,
+} from './types'
 
 /**
  * What the app is willing to believe an RPC answered with.
@@ -21,9 +28,12 @@ import type { BallotSheet, OpenPollView, PollRead, PollResults, PollStatus } fro
  * **Unknown keys are stripped, not rejected.** That is the whole of how a
  * browser survives a database ahead of it: a column added by a migration this
  * bundle has never heard of is dropped on the way in and nothing breaks. The
- * other direction — a browser ahead of the database — is what the `.optional()`
- * markers are for, and they mirror the ones in `types.ts` exactly. Making
- * these strict would turn every forward migration into an outage.
+ * other direction — a browser ahead of the database — is what `.optional()`
+ * is for: a field a migration has only just added is optional here, and in
+ * `types.ts`, until that migration has landed, and then made required so the
+ * code reading it stops carrying a branch for its absence. The rest of the
+ * `.optional()`s are fields some readers are genuinely never sent. Making
+ * the objects strict would turn every forward migration into an outage.
  *
  * **The shapes are not written twice.** Each schema is checked against the
  * interface it is for by `satisfies z.ZodType<T>`, so a schema that drifts
@@ -92,8 +102,8 @@ const poll = z.object({
   group_id: z.string().nullable(),
   question_position: z.number().nullable(),
   question_title: z.string().nullable(),
-  kind: pollKind.optional(),
-  schedule: pollScheduleSchema.nullable().optional(),
+  kind: pollKind,
+  schedule: pollScheduleSchema.nullable(),
 })
 
 const groupQuestion = z.object({
@@ -102,7 +112,7 @@ const groupQuestion = z.object({
   question_title: z.string(),
   option_count: z.number(),
   voted: z.boolean(),
-  confirmed: z.boolean().optional(),
+  confirmed: z.boolean(),
 })
 
 const openGroupQuestion = z.object({
@@ -113,13 +123,10 @@ const openGroupQuestion = z.object({
   confirmed: z.boolean().optional(),
 })
 
-/** `poll_group`, which the duplicate form reads to copy a whole group. */
-export const groupQuestionsSchema = z.array(groupQuestion)
-
 const invitee = z.object({
   email: z.string(),
   has_voted: z.boolean().nullable(),
-  has_confirmed: z.boolean().nullable().optional(),
+  has_confirmed: z.boolean().nullable(),
 })
 
 export const pollStatusSchema = z.object({
@@ -130,13 +137,13 @@ export const pollStatusSchema = z.object({
   is_closed: z.boolean(),
   results_available: z.boolean(),
   soliciting: z.boolean(),
-  expires_at: z.string().nullable().optional(),
-  invited: z.boolean().optional(),
-  confirmed: z.boolean().optional(),
-  confirmed_count: z.number().optional(),
-  winner_name: z.string().nullable().optional(),
-  winner_settled: z.boolean().optional(),
-  reminded_at: z.string().nullable().optional(),
+  expires_at: z.string().nullable(),
+  invited: z.boolean(),
+  confirmed: z.boolean(),
+  confirmed_count: z.number(),
+  winner_name: z.string().nullable(),
+  winner_settled: z.boolean(),
+  reminded_at: z.string().nullable(),
 }) satisfies z.ZodType<PollStatus>
 
 export const openPollViewSchema = z.object({
@@ -149,28 +156,28 @@ export const openPollViewSchema = z.object({
     show_ballots: z.boolean(),
     solicit_options: z.boolean(),
     closed_at: z.string().nullable(),
-    created_at: z.string().optional(),
-    group_id: z.string().nullable().optional(),
-    question_position: z.number().nullable().optional(),
-    question_title: z.string().nullable().optional(),
-    kind: pollKind.optional(),
-    schedule: pollScheduleSchema.nullable().optional(),
+    created_at: z.string(),
+    group_id: z.string().nullable(),
+    question_position: z.number().nullable(),
+    question_title: z.string().nullable(),
+    kind: pollKind,
+    schedule: pollScheduleSchema.nullable(),
   }),
   options: z.array(pollOption),
   voted_count: z.number(),
   is_closed: z.boolean(),
   soliciting: z.boolean(),
   results_available: z.boolean(),
-  winner_name: z.string().nullable().optional(),
-  winner_settled: z.boolean().optional(),
+  winner_name: z.string().nullable(),
+  winner_settled: z.boolean(),
   voted: z.boolean(),
   your_name: z.string().nullable(),
-  your_scores: z.record(z.string(), z.number()).nullable().optional(),
+  your_scores: z.record(z.string(), z.number()).nullable(),
   voters: z.array(z.string()).nullable(),
-  confirmed: z.boolean().optional(),
-  your_confirmed_name: z.string().nullable().optional(),
-  confirmed_count: z.number().optional(),
-  confirmations: z.array(z.string()).nullable().optional(),
+  confirmed: z.boolean(),
+  your_confirmed_name: z.string().nullable(),
+  confirmed_count: z.number(),
+  confirmations: z.array(z.string()).nullable(),
 }) satisfies z.ZodType<OpenPollView>
 
 const tiebreakEntry = z.object({
@@ -229,7 +236,7 @@ export const pollResultsSchema = z.object({
     z.object({
       id: z.string(),
       name: z.string(),
-      description: z.string().nullable().optional(),
+      description: z.string().nullable(),
       total_score: z.number(),
       average_score: z.number(),
     }),
@@ -243,8 +250,8 @@ export const pollResultsSchema = z.object({
   invited_count: z.number(),
   mode: pollMode,
   closed_early: z.boolean(),
-  options_edited_after_votes: z.boolean().optional(),
-  votes_after_reveal: z.boolean().optional(),
+  options_edited_after_votes: z.boolean(),
+  votes_after_reveal: z.boolean(),
 }) satisfies z.ZodType<PollResults>
 
 export const rankingSchema = z.array(
@@ -255,9 +262,9 @@ export const rankingSchema = z.array(
     runoff: runoff.nullable(),
     tiebreaks: z.array(tiebreak),
   }),
-)
+) satisfies z.ZodType<RankingEntry[]>
 
-export const ballotSheetSchema = z.object({
+const ballotSheetSchema = z.object({
   voters_named: z.boolean(),
   options: z.array(z.object({ id: z.string(), name: z.string() })),
   ballots: z.array(
@@ -289,8 +296,8 @@ export const pollReadSchema = z.discriminatedUnion('kind', [
     results: pollResultsSchema.nullable(),
     ballots: ballotSheetSchema.nullable(),
     invitees: z.array(invitee).nullable(),
-    your_scores: z.record(z.string(), z.number()).nullable().optional(),
-    removed: z.boolean().optional(),
+    your_scores: z.record(z.string(), z.number()).nullable(),
+    removed: z.boolean(),
   }),
   z.object({
     kind: z.literal('open'),
@@ -298,7 +305,7 @@ export const pollReadSchema = z.discriminatedUnion('kind', [
     questions: z.array(openGroupQuestion),
     results: pollResultsSchema.nullable(),
     ballots: ballotSheetSchema.nullable(),
-    removed: z.boolean().optional(),
+    removed: z.boolean(),
   }),
   z.object({ kind: z.literal('unreadable') }),
 ]) satisfies z.ZodType<PollRead>

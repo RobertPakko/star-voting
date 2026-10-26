@@ -332,7 +332,7 @@ export function CreatorControls({
                 be edited before it exists. */}
             <Button
               variant="light"
-              onClick={() => navigate(`/polls/new?from=${shortPollId(pollId)}`)}
+              onClick={() => navigate(`/new?from=${shortPollId(pollId)}`)}
               leftSection={<CopyIcon size={16} aria-hidden />}
             >
               Duplicate

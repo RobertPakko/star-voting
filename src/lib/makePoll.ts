@@ -14,7 +14,7 @@ import { useAuth } from './auth'
  *
  * The form is only a route once there is a session, so the navigation waits
  * for the session to arrive rather than following the sign-in's promise:
- * `/polls/new` without one is matched as a poll whose id is "new".
+ * `/new` without one is the sign-in screen.
  *
  * `start` is undefined for a reader who already has a session, whose press is
  * an ordinary link to the form.
@@ -26,7 +26,7 @@ export function useMakePoll() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (starting && session) navigate('/polls/new')
+    if (starting && session) navigate('/new')
   }, [starting, session, navigate])
 
   async function start() {

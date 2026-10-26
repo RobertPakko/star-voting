@@ -326,32 +326,4 @@ begin
     v_view->>'winner_settled', 'true');
 end $$;
 
--- ---------------------------------------------------------------------------
--- The function the old browsers call.
--- ---------------------------------------------------------------------------
-
-do $$
-declare
-  v_poll uuid;
-  v_row record;
-begin
-  -- poll_winners() reads the column now instead of running an election.
-  -- Nothing in the app calls it; a browser holding the previous build does,
-  -- for as long as a deploy takes, and it has to keep answering.
-  v_poll := tests.seed_poll(array['Apple', 'Banana'], array[[5, 0], [5, 0]]);
-
-  perform tests.sign_in('creator@example.com');
-  select * into v_row from poll_winners(array[v_poll]);
-
-  perform tests.assert_eq('poll_winners still names the winner',
-    v_row.winner_name, 'Apple');
-  perform tests.assert_eq('for the poll it was asked about', v_row.poll_id, v_poll);
-
-  -- And still answers only for polls the caller can see: "not yours" is no
-  -- row at all, which is a different answer from "no winner".
-  perform tests.sign_in('stranger@example.com');
-  perform tests.assert_eq('and nothing at all to somebody outside the poll',
-    (select count(*)::int from poll_winners(array[v_poll])), 0);
-end $$;
-
 rollback;

@@ -14,7 +14,6 @@ import { useEffect, useRef, useState } from 'react'
 
 /** Where each part of the film starts, in seconds. */
 export const CUES = { Opening: 0, Create: 3, Rate: 8, Decide: 13.5, Close: 19.5 } as const
-export type Cues = typeof CUES
 /** The film's length: the end of the closing part. */
 export const TOTAL = 22
 
@@ -128,7 +127,7 @@ export function keyed<K extends string>(
   return list[list.length - 1][prop]
 }
 
-export interface Shot {
+interface Shot {
   t: number
   z: number
   fx: number

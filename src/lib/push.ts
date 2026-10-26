@@ -65,7 +65,7 @@ export function pushState(): PushState {
   return 'ask'
 }
 
-export function canAskForPush(state: PushState = pushState()): boolean {
+function canAskForPush(state: PushState = pushState()): boolean {
   return state === 'ask' || state === 'granted'
 }
 
@@ -209,7 +209,7 @@ export async function enableAccountPush(userId: string): Promise<void> {
   writeAccount(userId)
 }
 
-export async function disableAccountPush(): Promise<void> {
+async function disableAccountPush(): Promise<void> {
   const subscription = await currentSubscription()
   if (subscription) {
     const { error } = await supabase.rpc('forget_push_subscription', {
@@ -265,19 +265,16 @@ export async function forgetAccountPush(): Promise<void> {
  */
 const WATCHED_KEY = 'star-voting:watched-polls'
 
-const NONE: ReadonlyMap<string, string | null> = new Map()
+const NONE: ReadonlyMap<string, string> = new Map()
 let watched = readWatched()
 const watchers = new Set<() => void>()
 
-function readWatched(): ReadonlyMap<string, string | null> {
+function readWatched(): ReadonlyMap<string, string> {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(WATCHED_KEY) ?? '{}')
-    // An array is an older build's format, with no poll ids: still honoured,
-    // just not revocable from here.
-    const entries: [string, string | null][] = Array.isArray(parsed)
-      ? parsed.filter((key): key is string => typeof key === 'string').map((key) => [key, null])
-      : parsed && typeof parsed === 'object'
-        ? Object.entries(parsed).map(([key, id]) => [key, typeof id === 'string' ? id : null])
+    const entries =
+      parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === 'string')
         : []
     return entries.length > 0 ? new Map(entries) : NONE
   } catch {
@@ -285,10 +282,11 @@ function readWatched(): ReadonlyMap<string, string | null> {
   }
 }
 
-function setWatched(key: string, pollId: string | null, on: boolean) {
-  if (watched.has(key) === on) return
+/** Record a watch (with a poll id) or drop it (with none). */
+function setWatched(key: string, pollId: string | null) {
+  if (watched.get(key) === (pollId ?? undefined)) return
   const next = new Map(watched)
-  if (on) next.set(key, pollId)
+  if (pollId) next.set(key, pollId)
   else next.delete(key)
   watched = next.size > 0 ? next : NONE
   try {
@@ -325,7 +323,7 @@ export async function watchPoll(pollId: string, key: string): Promise<void> {
     ...keysOf(subscription),
   })
   if (error) throw new Error(error.message)
-  setWatched(key, pollId, true)
+  setWatched(key, pollId)
 }
 
 /**
@@ -333,7 +331,7 @@ export async function watchPoll(pollId: string, key: string): Promise<void> {
  * watch), so a reopened poll gets watched again.
  */
 export function forgetWatch(key: string): void {
-  setWatched(key, null, false)
+  setWatched(key, null)
 }
 
 // ---------------------------------------------------------------------------
@@ -363,13 +361,13 @@ export async function disableLinkPush(): Promise<void> {
   const subscription = await currentSubscription()
   await Promise.all(
     [...watched].map(async ([key, pollId]) => {
-      if (subscription && pollId) {
+      if (subscription) {
         await supabase.rpc('open_poll_unwatch', {
           p_poll_id: pollId,
           p_endpoint: subscription.endpoint,
         })
       }
-      setWatched(key, null, false)
+      setWatched(key, null)
     }),
   )
 }

@@ -695,13 +695,6 @@ export type Database = {
       }
       poll_tally: { Args: { p_poll_id: string }; Returns: Json }
       poll_winner_name: { Args: { p_poll_id: string }; Returns: string }
-      poll_winners: {
-        Args: { p_poll_ids: string[] }
-        Returns: {
-          poll_id: string
-          winner_name: string
-        }[]
-      }
       purge_old_polls: { Args: never; Returns: number }
       remove_polls: { Args: { p_poll_ids: string[] }; Returns: number }
       removed_poll_count: { Args: never; Returns: number }

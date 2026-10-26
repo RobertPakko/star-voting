@@ -114,17 +114,12 @@ export function OpenPollPanel({
           isCreator={isCreator}
           voterName={needsName ? voterName : undefined}
           questionStrip={questionStrip}
-          confirm={
-            // No button against a database that doesn't report it.
-            view.confirmed === undefined
-              ? undefined
-              : {
-                  confirmed: view.confirmed,
-                  // An open poll has no participant list, so no confirmation
-                  // can be the last one; its creator ends the stage.
-                  opensWhenEveryoneHas: false,
-                }
-          }
+          confirm={{
+            confirmed: view.confirmed,
+            // An open poll has no participant list, so no confirmation
+            // can be the last one; its creator ends the stage.
+            opensWhenEveryoneHas: false,
+          }}
           onChanged={onChanged}
           onConfirmed={onFirstConfirm ?? onChanged}
         />
@@ -256,8 +251,8 @@ function Voted({
   const { session } = useAuth()
   const [revising, setRevising] = useState<Record<string, number> | null>(null)
   const [fetching, setFetching] = useState(false)
-  // Without `your_scores` (older database), offer no Edit rather than an
-  // empty ballot that would overwrite real scores.
+  // Without scores in hand, offer no Edit rather than an empty ballot that
+  // would overwrite real ones.
   const scores = view.your_scores
 
   // Signed out, only this browser's key reaches the ballot, so the scores in

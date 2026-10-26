@@ -115,9 +115,9 @@ export interface Turnout {
   mode: PollMode
   votedCount: number
   invitedCount: number
-  /** Confirmations, shown while collecting. Undefined only against an older database. */
-  confirmedCount?: number
-  /** Fallback for a missing `confirmedCount`. */
+  /** Confirmations, shown while collecting. */
+  confirmedCount: number
+  /** How many options, which a skeleton standing in for the poll sizes itself by. */
   optionCount: number
   /** Above one, the badge shows the question count instead of a turnout. */
   questionCount?: number
@@ -135,16 +135,12 @@ function turnoutLabel({
   votedCount,
   invitedCount,
   confirmedCount,
-  optionCount,
   questionCount,
 }: Turnout): string {
   if (questionCount !== undefined && questionCount > 1) {
     return `${questionCount} questions`
   }
   if (soliciting) {
-    if (confirmedCount === undefined) {
-      return `${optionCount} ${optionCount === 1 ? 'option' : 'options'}`
-    }
     if (mode === 'open') return `${confirmedCount} confirmed`
     return `${confirmedCount}/${invitedCount} confirmed`
   }

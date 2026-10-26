@@ -43,7 +43,7 @@ import { useEffect, useRef } from 'react'
  */
 
 /** One question's scores so far: option id → score, or a calendar's cell → rating. */
-export type BallotDraft = Record<string, number>
+type BallotDraft = Record<string, number>
 
 /** Which ballot a draft belongs to, and whose. */
 export interface DraftScope {

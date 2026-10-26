@@ -219,13 +219,6 @@ test('a mistyped sample link says so', async ({ page }) => {
   await expect(page).toHaveTitle('Poll not found')
 })
 
-test('a link from before the rebrand still opens its poll', async ({ page }) => {
-  // `#/polls/<id>` was every poll's address, and is in every email ever sent.
-  await page.goto('#/sample-dinner')
-  await expect(page).toHaveURL(/#\/sample-dinner$/)
-  await expect(heading(page)).toHaveText('Movie night')
-})
-
 test('a one-word address that is not a poll is a missing page', async ({ page }) => {
   await page.goto('#/abuot')
   await expect(heading(page)).toHaveText('Page not found')

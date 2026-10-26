@@ -87,7 +87,7 @@ export function granuleKey(day: ScheduleDay, minutes: number): GranuleKey {
   return `${day} ${toTimeOfDay(minutes)}`
 }
 
-export function splitGranule(key: GranuleKey): { day: ScheduleDay; minutes: number } {
+function splitGranule(key: GranuleKey): { day: ScheduleDay; minutes: number } {
   return { day: key.slice(0, 10), minutes: toMinutes(key.slice(11)) }
 }
 

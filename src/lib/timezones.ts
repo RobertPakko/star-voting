@@ -1,11 +1,4 @@
-import {
-  browserOffset,
-  describeOffset,
-  offsetMinutes,
-  toTimeOfDay,
-  viewerZone,
-  zoneOffsetOn,
-} from './schedule'
+import { browserOffset, offsetMinutes, toTimeOfDay, viewerZone, zoneOffsetOn } from './schedule'
 import type { ScheduleDay } from './schedule'
 
 /**
@@ -119,11 +112,6 @@ export function offsetName(offset: string, on: ScheduleDay): string | null {
     if (known.get(zone) === offset) return name
   }
   return null
-}
-
-/** `UTC-07:00 (Pacific Time)`, or `UTC-07:15` where there is nothing to add. */
-export function describeOffsetWith(offset: string, name?: string | null): string {
-  return describeOffset(offset, name)
 }
 
 /**

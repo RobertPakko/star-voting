@@ -291,7 +291,7 @@ export function PublicPoll({
           soliciting: shell.soliciting,
           resultsAvailable: shell.results_available,
           closed: shell.is_closed,
-          winner: shell.winner_settled ? winnerLabel(shell.winner_name ?? null, h24) : undefined,
+          winner: shell.winner_settled ? winnerLabel(shell.winner_name, h24) : undefined,
           inGroup: !!shell.poll.group_id,
         }}
       />

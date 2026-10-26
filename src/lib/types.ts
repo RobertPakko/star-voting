@@ -53,8 +53,8 @@ export interface Poll {
   closed_at: string | null
   mode: PollMode
   /** Undefined reads as an ordinary poll. */
-  kind?: PollKind
-  schedule?: PollSchedule | null
+  kind: PollKind
+  schedule: PollSchedule | null
   /** Participants can see who has responded. */
   show_voters: boolean
   /**
@@ -87,7 +87,7 @@ export interface GroupQuestion {
   /** The signed-in reader has voted in this question. */
   voted: boolean
   /** The signed-in reader has confirmed its options. */
-  confirmed?: boolean
+  confirmed: boolean
 }
 
 export interface OpenGroupQuestion {
@@ -125,25 +125,25 @@ export interface PollStatus {
   /** Still collecting options, so there is no ballot yet. */
   soliciting: boolean
   /** When the poll is purged: six months after creation, never moved. */
-  expires_at?: string | null
+  expires_at: string | null
   /**
    * The reader is on the invite list -- not the same as being able to read
    * the poll (a creator who didn't invite themselves). Decides the confirm button.
    */
-  invited?: boolean
+  invited: boolean
   /** The signed-in reader has confirmed the options. */
-  confirmed?: boolean
+  confirmed: boolean
   /** How many invitees have confirmed. A count names nobody, so it's never hidden. */
-  confirmed_count?: number
+  confirmed_count: number
   /**
    * The settled winner. Two fields for three answers: not settled
    * (`winner_settled` false), settled with nobody (null name), or a name.
    * Settled when the poll gets a result, cleared if it is reopened.
    */
-  winner_name?: string | null
-  winner_settled?: boolean
+  winner_name: string | null
+  winner_settled: boolean
   /** When the poll's one reminder to vote was sent. */
-  reminded_at?: string | null
+  reminded_at: string | null
 }
 
 /**
@@ -175,9 +175,9 @@ export interface AccountRead {
   /** The invite list, when this reader draws a roster (the creator, or a poll showing respondents). */
   invitees: Invitee[] | null
   /** The reader's own scores on a finished private-ballot invite poll. */
-  your_scores?: Record<string, number> | null
+  your_scores: Record<string, number> | null
   /** Whether the reader removed the poll from their list. See lib/removedPolls.ts. */
-  removed?: boolean
+  removed: boolean
 }
 
 /** An open poll to anyone holding the link. */
@@ -188,7 +188,7 @@ export interface OpenRead {
   results: PollResults | null
   ballots: BallotSheet | null
   /** Always false when signed out. */
-  removed?: boolean
+  removed: boolean
 }
 
 /** No such poll, or one this reader is not in -- deliberately indistinguishable. */
@@ -210,7 +210,7 @@ export interface PollListItem extends Omit<Poll, 'created_by' | 'created_by_emai
   /** Total across all pages of the list being read, repeated on every row. */
   total_count: number
   /** How many polls the reader has removed; decides whether the Archived button shows. */
-  removed_count?: number
+  removed_count: number
 }
 
 export interface Invitee {
@@ -218,7 +218,7 @@ export interface Invitee {
   /** Null when the poll hides respondents: show no badge, not "pending". */
   has_voted: boolean | null
   /** What the badge shows instead while collecting options. Null on the same terms. */
-  has_confirmed?: boolean | null
+  has_confirmed: boolean | null
 }
 
 /** Everything the public voting page needs, from one open_poll_view call. */
@@ -233,13 +233,12 @@ export interface OpenPollView {
     show_ballots: boolean
     solicit_options: boolean
     closed_at: string | null
-    /** Unused by the browser; absent on the recorded sample poll. */
-    created_at?: string
-    group_id?: string | null
-    question_position?: number | null
-    question_title?: string | null
-    kind?: PollKind
-    schedule?: PollSchedule | null
+    created_at: string
+    group_id: string | null
+    question_position: number | null
+    question_title: string | null
+    kind: PollKind
+    schedule: PollSchedule | null
   }
   options: PollOption[]
   voted_count: number
@@ -247,32 +246,32 @@ export interface OpenPollView {
   soliciting: boolean
   results_available: boolean
   /** Same terms as `PollStatus`. */
-  winner_name?: string | null
-  winner_settled?: boolean
+  winner_name: string | null
+  winner_settled: boolean
   /** This reader (account, or browser key) has voted. */
   voted: boolean
   your_name: string | null
   /** This reader's own scores, so *Edit vote* needs no extra request. */
-  your_scores?: Record<string, number> | null
+  your_scores: Record<string, number> | null
   /** Who has responded; null when the poll hides them. */
   voters: string[] | null
-  confirmed?: boolean
+  confirmed: boolean
   /** Null on a poll that hides respondents (no name is stored). */
-  your_confirmed_name?: string | null
-  confirmed_count?: number
+  your_confirmed_name: string | null
+  confirmed_count: number
   /** Who has confirmed; null when the poll hides respondents. */
-  confirmations?: string[] | null
+  confirmations: string[] | null
 }
 
-export interface ResultOption {
+interface ResultOption {
   id: string
   name: string
-  description?: string | null
+  description: string | null
   total_score: number
   average_score: number
 }
 
-export interface TiebreakEntry {
+interface TiebreakEntry {
   id: string
   name: string
   value: number
@@ -282,7 +281,7 @@ export interface TiebreakEntry {
  * One head-to-head pair: voters preferring `a`, preferring `b`, and scoring
  * them equally (`ties` decides nothing, but lets a reader reach the turnout).
  */
-export interface Matchup {
+interface Matchup {
   a: string
   a_name: string
   b: string
@@ -362,9 +361,9 @@ export interface PollResults {
   /** Closed by the creator before everyone had voted. */
   closed_early: boolean
   /** The options were edited after ballots were in. Shown as a caveat under the winner. */
-  options_edited_after_votes?: boolean
+  options_edited_after_votes: boolean
   /** A vote was cast or changed after the tally had been shown (via a reopen). */
-  votes_after_reveal?: boolean
+  votes_after_reveal: boolean
 }
 
 /** One voter's scores, keyed by option id. */

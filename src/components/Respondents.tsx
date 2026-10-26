@@ -148,7 +148,7 @@ export function Respondents({
   // explain.
   const showsStatus =
     invitees.length === 0 ||
-    invitees.some((i) => (collecting ? (i.has_confirmed ?? null) !== null : i.has_voted !== null))
+    invitees.some((i) => (collecting ? i.has_confirmed !== null : i.has_voted !== null))
 
   return (
     <Card withBorder>
@@ -157,7 +157,7 @@ export function Respondents({
           // Whether this poll says anything about this person at all: the
           // stage decides which column is being drawn, and a poll that hides
           // its respondents nulls it.
-          const said = (collecting ? (invitee.has_confirmed ?? null) : invitee.has_voted) !== null
+          const said = (collecting ? invitee.has_confirmed : invitee.has_voted) !== null
           const mark = standing(collecting, status.is_closed, invitee)
           return (
             <Group key={invitee.email} justify="space-between" wrap="nowrap" gap="xs">

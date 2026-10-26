@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
 import { relabelRanking } from '../lib/schedule'
+import { parseAnswer, rankingSchema } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
 import { NameList } from './NameList'
@@ -17,7 +18,7 @@ import { voters } from '../lib/plural'
  * BallotsSource, and for the same reason: a session proves the caller's
  * right to an invite poll, the link proves it for an open one.
  */
-export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
+type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
 /**
  * The whole field in placed order, behind a button.
@@ -77,8 +78,10 @@ export function FullRanking({
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
-      if (rpcError) setError(rpcError.message)
-      else setRanking(data as RankingEntry[])
+      if (rpcError) return setError(rpcError.message)
+      const { value, error: shape } = parseAnswer(rankingSchema, 'the ranking', data)
+      if (value) setRanking(value)
+      else setError(shape)
     })
 
     return () => {

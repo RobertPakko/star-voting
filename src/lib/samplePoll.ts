@@ -38,7 +38,7 @@ import type {
  */
 
 /** The three questions of one copy of the sample, keyed by poll id. */
-export interface SampleQuestion {
+interface SampleQuestion {
   view: OpenPollView
   group: OpenGroupQuestion[]
   /** The three a finished poll has and an open one does not. */

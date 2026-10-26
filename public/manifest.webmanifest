@@ -37,7 +37,7 @@
       "name": "New poll",
       "short_name": "New poll",
       "description": "Make a new poll",
-      "url": "./#/polls/new",
+      "url": "./#/new",
       "icons": [
         {
           "src": "shortcuts/new-poll.png",

@@ -32,14 +32,14 @@
  * `settled`, and holding it is what makes two reads in flight impossible to
  * confuse.
  */
-export interface ReadMark {
+interface ReadMark {
   /** Signals received when this read went out. */
   upTo: number
   /** Whether it was carrying an outright demand; see `insisted`. */
   unconditional: boolean
 }
 
-export interface ReadLedger {
+interface ReadLedger {
   /** A broadcast arrived: the poll moved, and nobody has said how. */
   signalled(): void
   /**

@@ -74,6 +74,14 @@ test.describe('the sign-in screen', () => {
     await expect(page.getByRole('button', { name: 'Send sign-in code' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Continue without an account' })).toBeVisible()
   })
+
+  test('stands in front of the create form, at its old address too', async ({ page }) => {
+    await page.goto('#/new')
+    await expect(page.getByRole('button', { name: 'Send sign-in link' })).toBeVisible()
+    await page.goto('#/polls/new')
+    await expect(page).toHaveURL(/#\/new$/)
+    await expect(page.getByRole('button', { name: 'Send sign-in link' })).toBeVisible()
+  })
 })
 
 test.describe('the donate page', () => {

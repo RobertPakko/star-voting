@@ -20,13 +20,9 @@
  * storage by the short form would have orphaned the key of every browser that
  * has already voted.
  *
- * **Old links keep working.** `pollIdFromParam` accepts a full uuid as readily
- * as a short one, so every `#/polls/<uuid>` already pasted into a chat or sent
- * in an invitation email resolves exactly as it did -- by way of the redirect
- * from `/polls/:pollId` to the address `pollPath` spells now. That is not a shim with a
- * date on it: this schema writes poll ids into email bodies, those bodies are
- * permanent, and there is no point at which it becomes safe to stop reading
- * the long form. It costs one regex.
+ * **Both spellings are read.** `pollIdFromParam` accepts a full uuid as
+ * readily as a short one, so a link carrying the long form still opens its
+ * poll. It costs one regex.
  *
  * **The sample's ids are words and stay words.** `sample-dinner` is neither a
  * uuid nor 22 characters, so both directions hand it back untouched -- which
@@ -76,16 +72,6 @@ function toUuid(short: string): string | null {
     hex.slice(16, 20),
     hex.slice(20),
   ].join('-')
-}
-
-/**
- * Whether this is a poll id in the database's own spelling -- a uuid, which a
- * sample's word and a mistyped address are not. For anything about to be
- * handed to Postgres as a `uuid`, where one stray string fails the whole
- * request rather than just itself.
- */
-export function isCanonicalPollId(id: string): boolean {
-  return UUID.test(id)
 }
 
 /**

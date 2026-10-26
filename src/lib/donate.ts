@@ -7,7 +7,7 @@
  * they live here rather than in `.env`, where a value only stays out of the
  * repository if it has to.
  */
-export const EVERY_ORG = {
+const EVERY_ORG = {
   /** Khan Academy, EIN 26-1544963. */
   nonprofit: 'khan-academy',
   /**

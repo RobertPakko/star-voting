@@ -31,8 +31,8 @@ export function registerServiceWorker() {
 /**
  * Takes down the worker registered when the app lived under /star-voting/.
  *
- * Left alone it would go on controlling that path, which is now only a
- * redirect, and go on holding push subscriptions bound to a worker the app no
+ * Left alone it would go on controlling that path, which the site no longer
+ * serves, serving a stale copy of the old app from its cache, and holding push subscriptions bound to a worker the app no
  * longer talks to. Unregistering drops them: a device bound to an account is
  * subscribed again under this worker the next time the app opens signed in
  * (`refreshAccountPush`), and the push services refuse the old endpoints, so
@@ -45,6 +45,6 @@ async function retireOldWorker() {
     const old = new URL('/star-voting/', window.location.origin).href
     await Promise.all(registrations.filter((r) => r.scope === old).map((r) => r.unregister()))
   } catch {
-    // Nothing depends on it; a worker left behind controls only a redirect.
+    // Nothing depends on it; a worker left behind controls only the old path.
   }
 }

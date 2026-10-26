@@ -134,7 +134,7 @@ export function SignIn() {
       // is where a session without an account starts. The one exception is
       // the create form, which is where the intro's *Make your own poll*
       // sends a reader, and a session without an account can make a poll.
-      navigate(location.pathname === '/polls/new' ? '/polls/new' : '/', { replace: true })
+      navigate(location.pathname === '/new' ? '/new' : '/', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not continue without an account.')
       setContinuing(false)

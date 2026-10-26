@@ -764,7 +764,7 @@ export function CreatePoll() {
             />
             {anonymous && (
               <Text size="sm" c="dimmed">
-                <Anchor component={Link} to="/sign-in" state={{ from: '/polls/new' }}>
+                <Anchor component={Link} to="/sign-in" state={{ from: '/new' }}>
                   Sign in
                 </Anchor>{' '}
                 to invite people by email.

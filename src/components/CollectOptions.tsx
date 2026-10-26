@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ActionIcon, Button, Card, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import {
@@ -8,18 +8,14 @@ import {
   PlusIcon,
 } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
-import { supabase } from '../lib/supabase'
-import { PaintTimes } from './PaintTimes'
-import type { PaintedEdit } from './PaintTimes'
-import { openPollRpc } from '../lib/samplePoll'
+import { sendConfirmation, sendDraft, withdrawConfirmation } from '../lib/optionWrites'
+import type { DraftHold, OptionsSource } from '../lib/optionWrites'
+import { TimeList } from './TimeList'
 import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
-import { voterKeyFor } from '../lib/voterKey'
 import type { VoterName } from '../lib/voterName'
 import { DescriptionField, DescriptionToggle } from './DescriptionField'
 import { NameRoster } from './NameRoster'
 import { OptionDescription } from './OptionDescription'
-import { RollingBadge } from './PollTags'
-import { formatDay, parseWindowStart } from '../lib/schedule'
 import css from './CollectOptions.module.css'
 import listRow from './listRow.module.css'
 import { VoterNameField } from './VoterNameField'
@@ -54,28 +50,11 @@ type Focus = { key: string; field: 'name' | 'description' }
 type Problem = { field: 'name' | 'description'; message: string }
 
 /**
- * Which endpoints a list writes through: an invite poll (session), an open
- * poll (link), or the creator correcting a list that is already a ballot.
- */
-export type OptionsSource =
-  | { kind: 'poll'; pollId: string }
-  | { kind: 'open'; pollId: string }
-  | { kind: 'creator'; pollId: string }
-
-/**
- * The unsaved edit a list is holding, so the card's closing button (*Confirm
- * options* or *Done*) can save it first: one press, one save. Resolves to
- * whether the save went through; the list reports its own errors. Null when
- * nothing is outstanding.
- */
-export type DraftHold = { current: (() => Promise<boolean>) | null }
-
-/**
  * How this reader says they are done adding. Absent for the creator's
  * correction and for an invite poll's creator who did not invite themselves
  * (their equivalent is *Open poll*).
  */
-export interface Confirmation {
+interface Confirmation {
   confirmed: boolean
   /**
    * Whether this press could open the poll (an invite poll still waiting on
@@ -315,20 +294,18 @@ export function CollectOptions({
         {questionStrip}
 
         {schedule ? (
-          <>
-            <TimeList
-              source={source}
-              options={options}
-              schedule={schedule}
-              isCreator={isCreator}
-              // Its own save only when the card has no closing button.
-              ownSave={!confirm && !done}
-              draft={draft}
-              footer={footer}
-              onDirtyChange={setDirty}
-              onChanged={onChanged}
-            />
-          </>
+          <TimeList
+            source={source}
+            options={options}
+            schedule={schedule}
+            isCreator={isCreator}
+            // Its own save only when the card has no closing button.
+            ownSave={!confirm && !done}
+            draft={draft}
+            footer={footer}
+            onDirtyChange={setDirty}
+            onChanged={onChanged}
+          />
         ) : (
           <OptionList
             source={source}
@@ -344,25 +321,6 @@ export function CollectOptions({
       </Stack>
     </Card>
   )
-}
-
-function sendConfirmation(source: OptionsSource, voterName: string | null) {
-  return source.kind === 'poll'
-    ? supabase.rpc('confirm_options', { p_poll_id: source.pollId })
-    : openPollRpc('open_poll_confirm_options', {
-        p_poll_id: source.pollId,
-        p_voter_key: voterKeyFor(source.pollId),
-        p_voter_name: voterName,
-      })
-}
-
-function withdrawConfirmation(source: OptionsSource) {
-  return source.kind === 'poll'
-    ? supabase.rpc('unconfirm_options', { p_poll_id: source.pollId })
-    : openPollRpc('open_poll_unconfirm_options', {
-        p_poll_id: source.pollId,
-        p_voter_key: voterKeyFor(source.pollId),
-      })
 }
 
 /** The poll's list and the fields that add to it, apart from this reader's card. */
@@ -481,7 +439,7 @@ function OptionList({
   /** Every draft and correction, checked; null (with every problem marked) if any fail. */
   function checkedDraft(): {
     added: { name: string; description: string }[]
-    corrected: { key: string; name: string; description: string }[]
+    corrected: { id: string; name: string; description: string }[]
   } | null {
     setError(null)
 
@@ -498,12 +456,12 @@ function OptionList({
     }
 
     const fixProblems = new Map<string, Problem>()
-    const corrected: { key: string; name: string; description: string }[] = []
+    const corrected: { id: string; name: string; description: string }[] = []
     for (const o of changed) {
       const e = editing.get(o.id)!
       const result = checkOption(e.name, e.description ?? '', { adding: false, exceptKey: o.id })
       if ('field' in result) fixProblems.set(o.id, result)
-      else corrected.push({ key: o.id, ...result })
+      else corrected.push({ id: o.id, ...result })
     }
 
     setDraftProblems(addProblems)
@@ -577,7 +535,7 @@ function OptionList({
       setBusy(true)
       const { error: rpcError } = await sendDraft(source, {
         added,
-        corrected: corrected.map(({ key, name, description }) => ({ id: key, name, description })),
+        corrected,
         removed: [...dropping],
       })
       setBusy(false)
@@ -804,66 +762,6 @@ function without<V>(map: ReadonlyMap<string, V>, key: string): ReadonlyMap<strin
   return next
 }
 
-/**
- * Send a draft. The creator's correction is one `creator_edit_options`. A
- * list still collecting is two calls, because two parties write it:
- * corrections and removals through the creator's door first (freeing names
- * and room under the ceiling), then suggestions through the endpoint everyone
- * shares. The plural suggestion endpoints skip names already on the list.
- */
-function sendDraft(
-  source: OptionsSource,
-  draft: {
-    added: { name: string; description: string }[]
-    corrected: { id: string; name: string; description: string }[]
-    removed: string[]
-  },
-) {
-  // Null, not '', is what the column holds for no description.
-  const named = (options: { name: string; description: string }[]) =>
-    options.map((o) => ({ name: o.name, description: o.description || null }))
-  const corrected = draft.corrected.map((o) => ({ id: o.id, ...named([o])[0] }))
-
-  if (source.kind === 'creator')
-    return supabase.rpc('creator_edit_options', {
-      p_poll_id: source.pollId,
-      p_options: named(draft.added),
-      p_remove: draft.removed,
-      p_correct: corrected,
-    })
-
-  return applyToCollecting(source, {
-    corrected,
-    removed: draft.removed,
-    added: named(draft.added),
-  })
-}
-
-async function applyToCollecting(
-  source: Exclude<OptionsSource, { kind: 'creator' }>,
-  draft: {
-    corrected: { id: string; name: string; description: string | null }[]
-    removed: string[]
-    added: { name: string; description: string | null }[]
-  },
-) {
-  if (draft.corrected.length > 0 || draft.removed.length > 0) {
-    const { error } = await supabase.rpc('creator_edit_options', {
-      p_poll_id: source.pollId,
-      p_remove: draft.removed,
-      p_correct: draft.corrected,
-    })
-    if (error) return { error }
-  }
-
-  if (draft.added.length === 0) return { error: null }
-
-  const body = { p_poll_id: source.pollId, p_options: draft.added }
-  return source.kind === 'poll'
-    ? supabase.rpc('suggest_options', body)
-    : supabase.rpc('open_poll_suggest_options', body)
-}
-
 /** One option's two fields, controlled: a draft, or a row opened by its pencil. */
 function OptionFields({
   value,
@@ -902,230 +800,6 @@ function OptionFields({
       )}
     </Stack>
   )
-}
-
-/** The list on a time poll: painted on a calendar (`PaintTimes`), saved in one request. */
-function TimeList({
-  source,
-  options,
-  schedule,
-  isCreator,
-  ownSave,
-  draft,
-  footer,
-  onDirtyChange,
-  onChanged,
-}: {
-  source: OptionsSource
-  options: PollOption[]
-  schedule: PollSchedule
-  isCreator: boolean
-  ownSave: boolean
-  draft: DraftHold
-  /** The card's foot, handed the calendar's *Add times*. */
-  footer: (addButton: ReactNode, ruled: boolean) => ReactNode
-  onDirtyChange: (dirty: boolean) => void
-  onChanged: () => void
-}) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  // The painting's difference from the list, as PaintTimes last reported it.
-  const [painted, setPainted] = useState<PaintedEdit | null>(null)
-  // No calendar until *Add times* is pressed, only a line saying what the
-  // list holds (`TimesSummary`): a calendar that looked paintable and was not
-  // read as broken. The creator's correction is already an editor, opened from
-  // *Edit options*, so it starts editing.
-  const [editing, setEditing] = useState(source.kind === 'creator')
-  // Opening the calendar is starting an edit, as opening a text field is.
-  const started = painted !== null || (editing && source.kind !== 'creator')
-
-  const noteDraft = useCallback((edit: PaintedEdit | null) => {
-    setPainted(edit)
-  }, [])
-
-  async function save(add: string[], removeIds: string[], quiet = false): Promise<boolean> {
-    if (busy) return false
-    // Nothing painted: only the calendar to close.
-    if (add.length === 0 && removeIds.length === 0) return landed(add, removeIds, quiet)
-    setError(null)
-    setBusy(true)
-
-    // One call, so the two-option floor is checked where the edit lands.
-    if (source.kind === 'creator') {
-      const { error: rpcError } = await supabase.rpc('creator_edit_options', {
-        p_poll_id: source.pollId,
-        p_options: add.map((name) => ({ name })),
-        p_remove: removeIds,
-      })
-      setBusy(false)
-
-      if (rpcError) {
-        setError(rpcError.message)
-        return false
-      }
-      return landed(add, removeIds, quiet)
-    }
-
-    // Removals first, so a swap cannot trip the option ceiling midway.
-    if (removeIds.length > 0) {
-      const { error: deleteError } = await supabase.from('candidates').delete().in('id', removeIds)
-      if (deleteError) {
-        setBusy(false)
-        setError(deleteError.message)
-        return false
-      }
-    }
-
-    const { error: rpcError } = add.length === 0 ? { error: null } : await sendTimes(source, add)
-    setBusy(false)
-
-    if (rpcError) {
-      setError(rpcError.message)
-      return false
-    }
-
-    return landed(add, removeIds, quiet)
-  }
-
-  /** `quiet` saves are part of a closing press, which notifies and re-reads itself. */
-  function landed(add: string[], removeIds: string[], quiet: boolean) {
-    if (source.kind !== 'creator') {
-      // The calendar goes, and the next one opens on the list as it then is.
-      setEditing(false)
-      setPainted(null)
-    }
-    if (quiet) return true
-
-    notifications.show({
-      message:
-        add.length > 0
-          ? `Added ${add.length} ${add.length === 1 ? 'time' : 'times'}`
-          : `Removed ${removeIds.length} ${removeIds.length === 1 ? 'time' : 'times'}`,
-      color: 'green',
-    })
-    onChanged()
-    return true
-  }
-
-  useEffect(() => {
-    onDirtyChange(started)
-  }, [started, onDirtyChange])
-
-  // Re-registered every render; see DraftHold. Held while the calendar is
-  // open, so the closing press also closes one with nothing painted on it.
-  useEffect(() => {
-    draft.current = started ? () => save(painted?.add ?? [], painted?.removeIds ?? [], true) : null
-
-    return () => {
-      draft.current = null
-    }
-  })
-
-  const addButton = (
-    <Button
-      variant="light"
-      onClick={() => setEditing(true)}
-      disabled={editing || busy}
-      leftSection={
-        isCreator ? <PencilSimpleIcon size={16} aria-hidden /> : <PlusIcon size={16} aria-hidden />
-      }
-    >
-      {/* A creator's gestures take times off as well as putting them on. */}
-      {isCreator ? 'Edit times' : 'Add times'}
-    </Button>
-  )
-
-  return (
-    <Stack gap="sm">
-      {editing ? (
-        <PaintTimes
-          schedule={schedule}
-          options={options}
-          canRemove={isCreator}
-          saving={busy}
-          showSave={ownSave}
-          onSave={save}
-          onDraftChange={noteDraft}
-        />
-      ) : (
-        <TimesSummary options={options} />
-      )}
-      {error && (
-        <Text role="alert" c="red" size="sm">
-          {error}
-        </Text>
-      )}
-      {/* With no closing button on the card, the calendar's own *Save times*
-          stands in for the foot once editing; before that, *Add times* does. */}
-      {ownSave
-        ? !editing && <Group justify="flex-end">{addButton}</Group>
-        : footer(source.kind === 'creator' ? null : addButton, true)}
-    </Stack>
-  )
-}
-
-/**
- * What a time poll's list holds, before anybody opens the calendar: how many
- * windows, and the first and last day they fall on. Badges, because the list
- * moves while it is read (somebody else's suggestion landing), and a badge
- * whose words roll over shows that it did; see RollingBadge.
- */
-function TimesSummary({ options }: { options: PollOption[] }) {
-  const days = options
-    .map((o) => parseWindowStart(o.name)?.day)
-    .filter((day) => day !== undefined)
-    .sort()
-
-  if (days.length === 0) {
-    return (
-      <Text size="sm" c="dimmed">
-        No times suggested yet.
-      </Text>
-    )
-  }
-
-  const first = days[0]
-  const last = days[days.length - 1]
-  return (
-    <Group gap={6} wrap="wrap">
-      <RollingBadge
-        label={`${options.length} ${options.length === 1 ? 'time option' : 'time options'}`}
-      />
-      {/* The range is one item of the row, so a narrow card moves it onto a
-          line of its own whole rather than breaking it after "from X to";
-          it only wraps inside itself where even a line of its own is too
-          narrow. */}
-      <Group gap={6} wrap="wrap">
-        {first === last ? (
-          <>
-            <Text size="sm" span>
-              on
-            </Text>
-            <RollingBadge label={formatDay(first)} />
-          </>
-        ) : (
-          <>
-            <Text size="sm" span>
-              from
-            </Text>
-            <RollingBadge label={formatDay(first)} />
-            <Text size="sm" span>
-              to
-            </Text>
-            <RollingBadge label={formatDay(last)} />
-          </>
-        )}
-      </Group>
-    </Group>
-  )
-}
-
-/** A painting's windows in one request, so a run cannot stop half-inserted. */
-function sendTimes(source: Exclude<OptionsSource, { kind: 'creator' }>, names: string[]) {
-  const body = { p_options: names.map((name) => ({ name })) }
-  if (source.kind === 'poll')
-    return supabase.rpc('suggest_options', { p_poll_id: source.pollId, ...body })
-  return supabase.rpc('open_poll_suggest_options', { p_poll_id: source.pollId, ...body })
 }
 
 /**
