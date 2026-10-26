@@ -5,6 +5,14 @@ reasoning behind behaviour that would otherwise look arbitrary. The
 [README](README.md) is deliberately kept to "what is this and why would I use
 it" — everything technical belongs here.
 
+**This file describes the app as it is, not how it got here.** Write down the
+current rule and, where the obvious alternative is wrong, one or two sentences
+on why — enough that nobody reintroduces it. Leave out "it used to be…",
+removed features, and the story of a change; that is what commit messages and
+`git log` are for. When something changes, rewrite the paragraph rather than
+appending to it. Reasoning that belongs to one component goes in a comment in
+that component, not here.
+
 ## Stack and layout
 
 React 19 + Vite, [Mantine](https://mantine.dev) for UI,
@@ -14,20 +22,26 @@ hash-based routing, deployed to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ```
-src/pages/       route components (SignIn, PollList, CreatePoll, PollPage — the route that picks PollDetail or PublicPoll — About, Settings, InstallGuide, Intro, Start, Donate, Contact)
-src/components/  poll UI pieces (BallotFrame and the two ballots inside it — BallotCard, TimeBallotCard — the calendar all three painting screens share, PaintCalendar, and the two above it, ScheduleFields and PaintTimes, with the pair of time selects both of those draw, HoursFields; VoterNameField, PollNotices, NameRoster, Results, Ballots and the YourBallot that stands in for it where they are not published, the ScheduleBallots both of those draw on a time poll, Respondents, CreatorControls, CollectOptions and the TimeList it draws on a time poll, CoinFlip, Reveal, the ErrorBoundary the whole app sits under, the SmoothHeight a swapped card's height moves in, the PollCards the list's cards move in, the Announcer whose live regions a screen reader is told things through, the PollTitleText that grows as a heading flies between the list and a poll and the BackToList that flies it back, and the pieces of notifications — AppBanner, NotificationSwitches (the gear menu), PushSwitch and LinkPushSwitch, Banners — and, under intro/, the film the intro page plays …)
-src/lib/         supabase client, auth context, which sign-in email this browser asks for, the one read that opens a poll page, how a poll id is spelled in a URL (pollId.ts), share-link/QR/voter-key helpers, badge palette, field limits, per-browser ballot order, a ballot started and not yet sent (ballotDraft.ts), the published ballots as a CSV (ballotCsv.ts), the create form's drafts and validation (pollForm.ts), how an option list is written and confirmed (optionWrites.ts), answered questions, removing a poll from an account's list (removedPolls.ts), what signing in brings along from a session made without an account (carryOver.ts), which way a reader is walking through a poll's questions, what a live page is still owed a read for (readLedger.ts), how a painted calendar becomes a time poll's windows and its scores (schedule.ts), the places a poll can be held in (timezones.ts), which finalist a tied poll's coin comes down on (coinFlip.ts), the About page's sample poll, "Make your own poll" for a reader who may have no session (makePoll.ts), the Donate page's charity and what its fundraiser has raised (donate.ts), service-worker registration and the held install prompt, push subscriptions and the watches on open polls (push.ts) and an account's notification settings (notificationSettings.ts), what to do when a deploy has taken away the chunk the page is asking for (staleBuild.ts), what the tab says (pageTitle.ts), what a screen reader is told that the page did not say by changing (announce.ts), handing a link to somebody (share.ts), the installed app's icon badge (badge.ts) and what it does when it is opened again (launch.ts), the poll heading that flies between its card and its page (headingFlight.ts), the slide between a poll's questions (questionSlide.ts) and the push it shares with the poll list's pages (carousel.ts), the list as it was left, for the walk back to it (listCache.ts), the motion scale as JavaScript reads it (motion.ts), shared types
-public/          served as-is under the app's own directory: the icons, the web app manifest and its screenshots, the Start page's two loops (start/), the service worker (see Installing it to a home screen)
+src/pages/       route components (SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — About, Settings, InstallGuide, Intro, Start, Donate, Contact)
+src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
+                 the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, FullRanking, CoinFlip),
+                 the collecting stage (CollectOptions, TimeList), the poll heading and its tags,
+                 notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
+                 SmoothHeight, PollCards), ErrorBoundary, Announcer, and the intro film under intro/
+src/lib/         the supabase client and auth context, the one read that opens a poll (pollPage.ts),
+                 poll id spelling (pollId.ts), live updates (useLiveStream.ts, readLedger.ts),
+                 time-poll arithmetic (schedule.ts, timezones.ts), drafts, limits, push, motion,
+                 the sample poll, and shared types — each file says what it is for at its top
+public/          served as-is: icons, the web app manifest and its screenshots, the Start page's
+                 loops (start/), the service worker
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 supabase/functions/   Edge Functions: send-push, the half of a push notification Postgres cannot do
-scripts/         squash.sh, which squashes the migrations and replays the above;
-                 sample-poll.sh, which records the About page's sample poll
-test/            tally tests, run against a throwaway Postgres; build-db.sh, which builds one
-                 (the one piece of election logic that is not SQL is tested beside it, in src/lib/schedule.test.ts)
-e2e/             the browser suite: the built app in Chromium, checked with axe (see Tests);
-                 screenshots.capture.ts, which takes the manifest's screenshots;
-                 videos.capture.ts, which records the Start page's loops
+scripts/         squash.sh (squashes the migrations); sample-poll.sh (records the About page's sample poll)
+test/            tally tests run against a throwaway Postgres; build-db.sh builds it
+e2e/             the browser suite; screenshots.capture.ts (the manifest's screenshots);
+                 videos.capture.ts (the Start page's loops)
 ```
 
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
@@ -37,186 +51,124 @@ without writing), `npm run preview`, `npm test`, `npm run test:unit` and
 [What the manifest says](#what-the-manifest-says)), and `npm run videos` (see
 [The Start page](#the-start-page)).
 
-The formatter is configured in `.oxfmtrc.json` to the style the code was
-already written in — no semicolons, single quotes, a hundred columns — and
-skips Markdown, since this file and the README are wrapped by hand and the
-wrapping carries meaning.
+The formatter is configured in `.oxfmtrc.json` — no semicolons, single quotes,
+a hundred columns — and skips Markdown, since this file and the README are
+wrapped by hand.
 
-Everything here is stored and checked out with LF, which
-[`.gitattributes`](.gitattributes) states as `* text=auto eol=lf`. That line
-is not decoration: oxfmt writes LF and *checks* for it, so without it a
-Windows clone under the default `core.autocrlf=true` gets a CRLF working tree,
-`npm run fmt:check` fails on every source file, and `npm run fmt` rewrites all
-of them into a diff `git diff` then shows as empty. Nothing in the repository
-was ever wrong — the committed blobs have always been LF and CI never saw it —
-but it made the formatter unusable on Windows. With the attributes file in
-place `fmt:check` passes everywhere, which is why it is a step in the `app`
-job of [`test.yml`](.github/workflows/test.yml).
+**Line endings.** Everything is stored and checked out with LF, which
+[`.gitattributes`](.gitattributes) states as `* text=auto eol=lf`. oxfmt
+writes and *checks* for LF, so without that line a Windows clone under the
+default `core.autocrlf=true` fails `npm run fmt:check` on every file, and
+`npm run fmt` rewrites all of them into a diff `git diff` shows as empty.
+`fmt:check` is a step in the `app` job of
+[`test.yml`](.github/workflows/test.yml).
 
 **One poll, two pages, one set of components.** A poll is read as an account
 on `PollDetail` and through its link on `PublicPoll`, and an open poll is read
 both ways by its own creator — so nearly everything a poll says about itself
-has two callers reading two different pieces of state, `poll_status` on one
-side and `open_poll_view` on the other. Anything both of them draw lives in
-`src/components/` and takes what differs as a prop, rather than being written
-out on each page:
+has two callers reading two different pieces of state (`poll_status` and
+`open_poll_view`). Anything both draw lives in `src/components/` and takes what
+differs as a prop:
 
-- `BallotCard` is the ballot — the shuffled option rows, the stars, the error
-  line, Cancel and Submit. The two pages keep a small component each
-  (`VoteForm`, `OpenBallot`) holding the one thing that really is different:
-  where the scores go. Those are genuinely two paths, with different grants
-  and different guards, exactly as `submit_ballot` and `open_poll_submit` are
-  two functions over one `replace_scores()`.
-- `PollNotices` holds the sentences about where a poll has got to: what a
-  collecting poll is waiting for, what a poll closed with nothing in it has to
-  show, and when the results come out. The last of those is the two kinds of
-  poll's one real difference at this point — an invite poll unlocks itself,
-  an open poll is closed by its creator — so it takes which of the two it is
-  as a prop and the wording is written once.
-- `NameRoster` is a heading over a card of people, which is how the app
-  answers *who* every time it is asked: who has voted, who has confirmed the
-  options, and the invite list `Respondents` manages.
+- `BallotCard` is the ballot. The two pages keep a small component each
+  (`VoteForm`, `OpenBallot`) holding only where the scores go, because those
+  are genuinely two paths with different grants (`submit_ballot` and
+  `open_poll_submit`, over one `replace_scores()`).
+- `PollNotices` holds the sentences about where a poll has got to; it takes
+  which kind of poll it is as a prop, so the wording is written once.
+- `NameRoster` is how the app answers *who*: who has voted, who has confirmed
+  the options, and the invite list `Respondents` manages.
 
-The rule this is holding up is that a poll cannot describe itself differently
-depending on which door the reader came in by. Copies drift silently — the
-same two sentences about changing your vote had already ended up laid out one
-way on the ballot and another on the card you come back to — and the drift
-always lands where nobody looks.
+The rule: a poll must not describe itself differently depending on which door
+the reader came in by. Copies drift, and the drift lands where nobody looks.
 
-Icons come from [`@phosphor-icons/react`](https://phosphoricons.com), imported
-by name: `<StarIcon size={20} weight="fill" />` rather than a `<path d="…">`
-nobody can read at a glance. Import from the package root — it is ESM and
-marked side-effect-free, so the bundler keeps only the icons actually named,
-and the few dozen the app uses cost a few kB gzipped against a library of
-several thousand. Mind the `Icon` suffix: the bare `Star`/`Sun` exports still
-exist in v2 but are deprecated in favour of `StarIcon`/`SunIcon`.
+**Icons** come from `@phosphor-icons/react`, imported by name from the package
+root (it is tree-shaken). Use the `Icon`-suffixed exports (`StarIcon`); the
+bare names are deprecated.
 
-**A button carries an icon** wherever one says something the word does not
-already — `leftSection`, 16px (14px on `xs` and compact buttons), always
-`aria-hidden` since the label is the name. The same act gets the same glyph
-everywhere: a pencil for *Edit*, a plus for adding, the counter-clockwise
-arrow for anything that puts something back (*Restore*, *Keep*, *Add back to
-your list*), a lock for closing and an open lock for reopening, a tick for
-anything that keeps what was just done (*Done*, *Confirm options*, *Save
-changes*, *Save times*) — the floppy disk it replaced is a picture of a thing
-nobody saves to any more. **Cancel** in a modal or beside a ballot's Submit carries
-none: it is a way out rather than an act, and giving it an icon puts it on
-equal footing with the button that does something.
+**A button carries an icon** wherever it says something the word does not —
+`leftSection`, 16px (14px on `xs` and compact buttons), always `aria-hidden`.
+The same act gets the same glyph everywhere: a pencil for *Edit*, a plus for
+adding, the counter-clockwise arrow for anything that puts something back
+(*Restore*, *Keep*, *Add back to your list*), a lock for closing and an open
+lock for reopening, a tick for anything that keeps what was just done
+(*Done*, *Confirm options*, *Save changes*, *Save times*). **Cancel** carries
+none: it is a way out rather than an act.
 
-The one `<svg>` left in `src/` is the QR code in `ShareQr.tsx`, which is a
-path generated from the share link rather than an icon. `public/favicon.svg`
-is a file the browser fetches, so it has no component to import either.
+The one `<svg>` in `src/` is the QR code in `ShareQr.tsx`, generated from the
+share link. `public/favicon.svg` is fetched by the browser.
 
-Two files exist only to keep a lint rule honest, and the rule is worth the
-split: a module that exports both a component and a hook cannot be
-hot-reloaded without discarding its state, which for the auth context means
-being signed out on every edit. `src/lib/auth.ts` holds the context and
-`useAuth`; `src/lib/AuthProvider.tsx` holds the provider and nothing else.
-Every `useAuth` import still reads `from '../lib/auth'`, which is why the
-split goes that way round.
+**`auth.ts` and `AuthProvider.tsx` are split to keep hot reload working**: a
+module exporting both a component and a hook cannot be hot-reloaded without
+discarding its state, which for the auth context means being signed out on
+every edit. `auth.ts` holds the context and `useAuth`; `AuthProvider.tsx` holds
+the provider.
 
-The app is **ChoiceLab**, served from the root of `choicelab.app` (`base: '/'`
-in `vite.config.ts`), and routes are hash-based, so it works as a GitHub Pages
-site with no SPA-fallback configuration. A poll's link is its id and nothing
-else: `https://choicelab.app/#/<id>`. The repository, the package and the
-`star-voting:` prefix on every `localStorage` key keep the old name, because
-renaming any of them is churn nobody sees — and renaming the keys would throw
-away every browser's voter keys, drafts and settings.
-
-**It was STAR Voting, at `https://choicelab.app/star-voting/#/polls/<id>`,
-until October 2026.** Both halves of that address were redirected for a while
-after the rebrand — a page at `site-root/star-voting/` carrying the hash over
-to the root, and a `#/polls/<id>` route — and both are gone now; an old link
-is a 404. What is left of the old name is deliberate:
+**The app is ChoiceLab**, served from the root of `choicelab.app`
+(`base: '/'`), with hash routing so GitHub Pages needs no SPA fallback. A
+poll's link is `https://choicelab.app/#/<id>`. The repository, the package and
+the `star-voting:` prefix on every `localStorage` key keep the app's old name
+(STAR Voting): renaming the keys would throw away every browser's voter keys,
+drafts and settings. Two other things deliberately still carry it:
 
 - `retireOldWorker` (`lib/serviceWorker.ts`) unregisters the service worker
-  that was registered at `/star-voting/`, which would otherwise go on serving
-  a cached copy of the old app there. The create form moved from
-  `#/polls/new` to `#/new` after the rest; the old one still redirects, for
-  installed copies holding the old shortcut.
-- The manifest's `id` is still `/star-voting/`, so a browser can take the app
-  at `/` for the same installed app; see [What the manifest
+  registered at the old `/star-voting/` path, which would otherwise keep
+  serving a cached copy of the old app. `#/polls/new` still redirects to
+  `#/new`, for installed copies holding the old shortcut.
+- The manifest's `id` is `/star-voting/`; see [What the manifest
   says](#what-the-manifest-says).
 
-**A poll at the top of the address means one segment is a poll's shape.** The
-route is `:pollId`, which outranks the catch-all, so `PollRoute` renders the
-poll only when the segment *is* shaped like one — 22 characters of base64url,
-a uuid, or a `sample-` word (`isPollParam` in `lib/pollId.ts`) — and "page not
-found" otherwise. No page name is any of those shapes. Signed out, `sign-in`
-and `settings` are named routes to the sign-in screen for the same reason: the
-one-segment route would otherwise take them.
+**A one-segment address is a poll only if it is shaped like one.** The route
+is `:pollId`, which outranks the catch-all, so `PollRoute` renders a poll only
+when the segment is 22 characters of base64url, a uuid, or a `sample-` word
+(`isPollParam` in `lib/pollId.ts`), and "page not found" otherwise. No page
+name is any of those shapes. Signed out, `sign-in` and `settings` are named
+routes to the sign-in screen for the same reason.
 
-It's served from the custom domain `choicelab.app` rather than the default
-`<username>.github.io/star-voting/` GitHub Pages URL.
-[`site-root/`](site-root) holds what is copied over the build in `dist/` by
-the deploy workflow: `CNAME` (read by GitHub Pages from the published artifact
-to map the domain). It must never hold an `index.html`, which would overwrite
-the app's.
-
-DNS for `choicelab.app` needs an `ANAME`/`ALIAS` record (or the four GitHub
-Pages `A` records, plus `AAAA` records for IPv6) pointing at GitHub Pages;
-see [GitHub's custom domain
-docs](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site).
-Repo **Settings → Pages** should show the domain once DNS resolves, with
-**Enforce HTTPS** enabled.
+[`site-root/`](site-root) is copied over the build in `dist/` by the deploy
+workflow: `CNAME`, read by GitHub Pages to map the domain. It must never hold
+an `index.html`. DNS for `choicelab.app` needs an `ANAME`/`ALIAS` record (or
+GitHub Pages' four `A` records plus `AAAA`) — see [GitHub's custom domain
+docs](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site)
+— and **Settings → Pages** should show the domain with **Enforce HTTPS** on.
 
 ## One-time setup
 
 ### 1. Supabase
 
-1. Create a project at [supabase.com](https://supabase.com). Recommended
-   project-creation settings: **Enable Data API** on, **Automatically expose new
-   tables** off (the migrations grant API access to exactly the tables and roles
-   they need, so this isn't required), **Enable automatic RLS** on (a safety net
-   for any table added later outside the migrations).
-2. Connect the project to this repo under **Project Settings → Integrations →
-   GitHub**, with `main` as the production branch. The migrations in
-   [`supabase/migrations/`](supabase/migrations) are then applied for you — see
-   [Database migrations](#database-migrations). Nothing needs pasting into the
-   SQL Editor. No dashboard settings need changing for open polls either: the
-   `anon` role's access is granted entirely by the migrations, and is limited to
-   the `open_poll_*` functions (`view`, `submit`, `suggest_option`, `results`,
-   `ballots`) and `send_contact_message` (see [The contact
-   page](#the-contact-page)) — it has no read or write grant on any table.
-3. Under **Project Settings → API**, copy the Project URL and `anon` public key.
-4. The **Email** auth provider is enabled by default — no extra provider
-   setup needed. Two settings under it are not:
+1. Create a project at [supabase.com](https://supabase.com) with **Enable Data
+   API** on, **Automatically expose new tables** off (the migrations grant
+   exactly what they need), and **Enable automatic RLS** on.
+2. Connect it to this repo under **Project Settings → Integrations → GitHub**,
+   with `main` as the production branch. Migrations are then applied for you —
+   see [Database migrations](#database-migrations). The `anon` role's access
+   is granted entirely by the migrations, and is limited to the `open_poll_*`
+   functions and `send_contact_message` — it has no table grants.
+3. Under **Project Settings → API**, copy the Project URL and `anon` key.
+4. The **Email** provider is on by default. Two settings under it are not:
    - **Authentication → Email Templates → Magic Link**: replace the stock
-     template with the one in [Signing in](#signing-in). The stock one can
-     only send a link, and the sign-in screen offers a choice of a link or a
-     code.
-   - **Authentication → Sign In / Providers → Email OTP Length**: whatever it
-     says, `CODE_LENGTH` in `src/lib/signInMethod.ts` has to say too. That is
-     how many boxes the code screen draws, and nothing in the app can ask.
-     Supabase's default is 6; this project uses 8.
+     template with the one in [Signing in](#signing-in), which can send a
+     link or a code.
+   - **Authentication → Sign In / Providers → Email OTP Length** must equal
+     `CODE_LENGTH` in `src/lib/signInMethod.ts` — the number of boxes the code
+     screen draws. This project uses 8.
 5. Under **Authentication → URL Configuration**, set the Site URL to
-   `https://choicelab.app/`, and add your dev URL
-   (`http://localhost:5173/**`) to the allowed redirect URLs.
-
-   **The dev entry is the one that matters**, and the `/**` is the point of
-   it. The code half of the sign-in carries its choice in a query parameter
-   on the redirect address, and Supabase accepts an address either because
-   its scheme and hostname match the Site URL's — which is why production
-   needs no entry of its own, and a `https://choicelab.app/**`
-   alongside it is belt and braces rather than load-bearing — or because it
-   matches a pattern on this list, which is the only way `localhost` gets in.
-   A refused address is not an error and is not visible: see [Why the marker
-   goes missing](#why-the-marker-goes-missing-and-why-it-goes-missing-quietly).
-6. Under **Database → Extensions**, check that `pg_cron` is enabled. The
-   migration that schedules the nightly purge of expired polls enables it
-   itself and shrugs if it cannot, so a project where it was unavailable ends
-   up with the purge defined and never running — see [Polls are deleted after
-   six months](#polls-are-deleted-after-six-months).
+   `https://choicelab.app/` and add `http://localhost:5173/**` to the allowed
+   redirect URLs. **The dev entry matters, and so does the `/**`**: the code
+   sign-in carries its choice in a query parameter on the redirect address,
+   and Supabase accepts an address only if its scheme and host match the Site
+   URL or it matches a listed pattern. A refused address fails silently — see
+   [Why the marker goes
+   missing](#why-the-marker-goes-missing-and-why-it-goes-missing-quietly).
+6. Under **Database → Extensions**, check that `pg_cron` is enabled. Without
+   it the nightly purge is defined and never runs — see [Polls are deleted
+   after six months](#polls-are-deleted-after-six-months).
 7. Under **Authentication → Sign In / Providers**, turn on **Allow anonymous
-   sign-ins**. It is what **Continue without an account** on the sign-in
-   screen calls; with it off that button fails with Supabase's own message
-   and nothing else changes. Two settings beside it are worth a look, since
-   an anonymous account costs nobody an inbox: the rate limit on anonymous
-   sign-ins under **Authentication → Rate Limits** (per IP address), and
-   **CAPTCHA protection** under **Authentication → Attack Protection**. Leave
-   CAPTCHA off for now: once it is on, Supabase demands a token on *every*
-   sign-in, email included, and the sign-in screen has no widget to get one
-   from. See [Polls made without an account](#polls-made-without-an-account).
+   sign-ins** (what **Continue without an account** calls). Check the rate
+   limit on anonymous sign-ins under **Authentication → Rate Limits**. Leave
+   **CAPTCHA protection** off: once on, Supabase demands a token on every
+   sign-in and the sign-in screen has no widget for one. See [Polls made
+   without an account](#polls-made-without-an-account).
 
 ### 2. Local development
 
@@ -229,214 +181,137 @@ npm run dev
 
 ### 3. GitHub Pages deployment
 
-1. Repo **Settings → Pages** → set source to **GitHub Actions**.
+1. Repo **Settings → Pages** → source **GitHub Actions**.
 2. Repo **Settings → Secrets and variables → Actions** → add
    `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-3. Point the custom domain's DNS at GitHub Pages (see above), then push to
-   `main` — the deploy workflow builds and publishes automatically, and
-   GitHub picks up the domain from `site-root/CNAME` in the published
-   artifact.
+3. Point the domain's DNS at GitHub Pages, then push to `main`.
 
 ### 4. Emails
 
-The app sends five, and every one of them goes through
-[Resend](https://resend.com) from inside Postgres, calling Resend's HTTP API
-directly with `pg_net`:
+Every email goes through [Resend](https://resend.com), called from inside
+Postgres with `pg_net`:
 
-- **an invitation**, when an address is added to a poll's invite list
-  (`create_poll` inserting into `invited_voters`, or the creator adding
-  somebody later), through the `send_invite_email` trigger. It is two
-  letters, not one: a poll still collecting its options asks for options,
-  and a poll with a ballot on it asks for a vote;
-- **voting is open**, when a poll that collected its options stops
-  collecting, from `notify_poll_opened`;
-- **the results**, when a poll finishes, from `notify_results_ready` — see
-  [Telling people the results are
-  ready](#telling-people-the-results-are-ready);
-- **a reminder to vote**, when an invite poll's creator presses *Send
-  reminder*, from `send_poll_reminder` — see [Reminding the voters a poll is
-  waiting on](#reminding-the-voters-a-poll-is-waiting-on).
+- **an invitation**, when an address is added to an invite list
+  (`send_invite_email` trigger) — one asking for options if the poll is still
+  collecting them, one asking for a vote otherwise;
+- **voting is open**, when a collecting poll opens (`notify_poll_opened`);
+- **the results**, when a poll finishes (`notify_results_ready`);
+- **a reminder to vote**, when the creator presses *Send reminder*
+  (`send_poll_reminder`);
+- **a contact message**, to the owner (see [The contact
+  page](#the-contact-page)).
 
-The last two go to an open poll's signed-in voters as well as to an invite
-poll's list — see [Open polls you answered while signed
-in](#open-polls-you-answered-while-signed-in).
-
-The senders themselves are in
-`0043_the_emails_a_poll_sends.sql`,
-which is also where the letterhead they share was first written down (its
-footer, with the link to the notification settings, is
-[`0073_settings_link_and_open_poll_follows.sql`](supabase/migrations/0073_settings_link_and_open_poll_follows.sql));
-the triggers
-that call them are in the squashed baseline under
-[`supabase/migrations/`](supabase/migrations). Who hears which of them, and
-who is deliberately told nothing, is [What a poll writes to
+Who hears which is [What a poll writes to
 people](#what-a-poll-writes-to-people).
 
-They all read the same key, and the API key is never
-committed — they read it from Supabase Vault at send time:
+The API key is read from Supabase Vault at send time and never committed. In
+the dashboard's **SQL Editor** (not a migration):
 
-1. In the Supabase dashboard, open the **SQL Editor** on the project (not a
-   migration file — this is a secret, so it doesn't belong in the repo) and
-   run:
-   ```sql
-   select vault.create_secret('re_your_resend_api_key', 'resend_api_key');
-   ```
-   Use a Resend API key scoped to sending only. If the key ever needs
-   rotating, run the same command again with a new value — Vault stores
-   secrets by name, so this updates it rather than creating a duplicate; if
-   `create_secret` complains the name already exists, use
-   `select vault.update_secret(id, 'new_key_value') from vault.secrets where
-   name = 'resend_api_key';` instead.
-2. That's it — no redeploy needed. The next row inserted into
-   `invited_voters` (i.e. the next poll created with invitees) will pick up
-   the key automatically, and so will the next poll to open and the next to
-   finish.
+```sql
+select vault.create_secret('re_your_resend_api_key', 'resend_api_key');
+```
 
-This only works against a real Supabase project: `pg_net` and Vault don't
-exist in the throwaway database `npm test` builds, so `send_poll_email` —
-the one place this app talks to a mailer — checks for the schemas first and
-quietly does nothing if either is missing. The emails are best-effort and
-never block or fail the thing that triggered them.
+Use a key scoped to sending only. To rotate it,
+`select vault.update_secret(id, 'new_key_value') from vault.secrets where name = 'resend_api_key';`.
+No redeploy is needed.
 
-One asymmetry is worth knowing before the key is in place: an invitation is
-sent per insert, so a poll created later still sends its invitations, while
-the others are sent once, when the poll crosses the line — a poll that
-opened or finished before the key existed is never announced.
-Nothing is retried.
+`send_poll_email` is the one place the app talks to a mailer. It checks for
+`pg_net` and Vault first and quietly does nothing without them, which is what
+the throwaway test database has. Emails are best-effort: never retried, and
+never block or fail what triggered them. Invitations are sent per insert;
+the other poll emails are sent once, when the poll crosses the line, so a
+poll that opened or finished before the key existed is never announced.
 
-An account can turn these off from the gear menu in the header — `send_poll_email` asks
-`wants_email` before anything else — and the sign-in email is not one of them.
-Every one of them says so: the letterhead's footer links to `#/settings`,
-because the moment somebody wants that switch is the moment they are reading
-a letter they did not want. That page holds the same two switches as the gear
-menu, and the footer is the only thing that links to it — a link cannot open a
-menu. A reader who is not signed in is sent through the sign-in screen and
-brought back there, like any other link into the app.
-The same moments are also sent as push notifications; see the next step and
-[Push notifications](#push-notifications).
+An account can turn emails off from the gear menu (`send_poll_email` asks
+`wants_email` first). The sign-in email is not affected. Every poll email's
+footer links to `#/settings`, the one page holding the same switches as the
+gear menu — a link cannot open a menu.
 
 ### 5. Push notifications
 
-Optional. A build with no VAPID key has push switched off — no buttons, no
-banner, and the push switch disabled — and the
-database sends nothing while the two Vault secrets below are missing. Every
-step here is manual, because every one of them is a secret or a deployment:
+Optional. A build with no VAPID key has push switched off, and the database
+sends nothing while the two Vault secrets below are missing.
 
-1. **Make a VAPID key pair** on your own machine:
-   ```bash
-   npx web-push generate-vapid-keys
-   ```
-   It prints a public key and a private key, both base64url. Keep the private
-   one out of the repo.
-2. **Make a shared secret** for the database to prove itself to the Edge
-   Function with, e.g. `openssl rand -hex 32`.
-3. **Edge Function secrets** — dashboard → **Edge Functions → Secrets**:
-   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a contact the
-   push services can reach, e.g. `mailto:you@example.com`), and
-   `PUSH_FUNCTION_SECRET` (step 2). `SUPABASE_URL` and
-   `SUPABASE_SERVICE_ROLE_KEY` are provided to every function already.
-4. **Vault** — in the **SQL Editor**, like the Resend key:
+1. **Make a VAPID key pair**: `npx web-push generate-vapid-keys`. Keep the
+   private key out of the repo.
+2. **Make a shared secret**, e.g. `openssl rand -hex 32`.
+3. **Edge Function secrets** (dashboard → **Edge Functions → Secrets**):
+   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (e.g.
+   `mailto:you@example.com`), and `PUSH_FUNCTION_SECRET` (step 2).
+   `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided already.
+4. **Vault**, in the SQL Editor:
    ```sql
    select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/send-push', 'push_function_url');
    select vault.create_secret('<the secret from step 2>', 'push_function_secret');
    ```
-5. **Deploy the function, by hand.** Migrations reach the database through
-   the GitHub integration; Edge Functions do not, and there is deliberately
-   no workflow for them. Deploying from CI would need a Supabase personal
-   access token in the repo's secrets, and that token reaches every project
-   on the account — too much to leave in GitHub for a function that rarely
-   changes. So after any change under `supabase/functions/`, deploy it from
-   a machine:
+5. **Deploy the function by hand.** Edge Functions are not deployed by the
+   GitHub integration, and there is deliberately no workflow: it would need a
+   Supabase personal access token in the repo's secrets, which reaches every
+   project on the account. After any change under `supabase/functions/`:
    ```bash
-   npx supabase login        # opens a browser; nothing to copy or store
+   npx supabase login
    npx supabase functions deploy send-push --project-ref <project-ref> --no-verify-jwt
    ```
-   **JWT verification must be off for this function** (`--no-verify-jwt`,
-   or **Edge Functions → send-push → Enforce JWT verification** in the
-   dashboard): the caller is the database, which holds no user's token, and
-   the function checks the shared secret instead. Merging a change to the
-   function without deploying it leaves the old one running, and nothing
-   says so.
-6. **The app's half** — Actions secret `VITE_VAPID_PUBLIC_KEY` (the public
-   key from step 1), and the same line in `.env` for a local build. The next
-   deploy turns the buttons on.
+   **JWT verification must be off** for this function: the caller is the
+   database, which holds no user token, and the function checks the shared
+   secret instead. A merged change that is not deployed leaves the old
+   function running, silently.
+6. **The app's half**: Actions secret `VITE_VAPID_PUBLIC_KEY`, and the same
+   line in `.env` for a local build.
 
-To check it end to end, open the built site in two browsers: create an open
+To check it end to end: in two browsers on the built site, create an open
 poll in one, turn push on from the gear menu in the other (signed out) and
-vote, then close the poll from the first. `select status_code, content from net._http_response order by
-created desc limit 5;` shows what the function answered — `{"sent":1,…}` —
-and the function's own logs are under **Edge Functions → send-push → Logs**.
+vote, then close the poll from the first.
+`select status_code, content from net._http_response order by created desc limit 5;`
+shows what the function answered, and its logs are under **Edge Functions →
+send-push → Logs**.
 
 **Rotating the VAPID keys** strands every subscription made under the old
-public key. A device bound to an account re-subscribes itself the next time
-the app opens there (`refreshAccountPush`); a watch on an open poll does not,
-and is dropped the first time its push service refuses it.
+key. An account's device re-subscribes the next time the app opens
+(`refreshAccountPush`); a watch on an open poll does not, and is dropped the
+first time its push service refuses it.
 
 ## Database migrations
 
 Schema changes live as SQL files in
-[`supabase/migrations/`](supabase/migrations), named so they sort in the order
-they must run. They are **not** run by hand: Supabase's GitHub integration
-watches this repo, and any new migration file that lands on `main` is applied to
-the project automatically. Adding a schema change means committing the file and
-merging it — check the Supabase dashboard afterwards to confirm the run
-succeeded.
+[`supabase/migrations/`](supabase/migrations), named so they sort in run order.
+Supabase's GitHub integration applies any new file that lands on `main`; check
+the dashboard afterwards to confirm the run succeeded. Run `npm test` before
+merging — it builds a database from these files, so it catches a migration
+that does not apply as well as one that changes a result.
 
-A migration that has already been applied is never re-run, so fixing a mistake
-means adding a new migration rather than editing the old file. Since merging one
-applies it to the live database, run `npm test` first — the suite builds a
-database from these files, so it catches a migration that does not apply as well
-as one that changes a result.
+An applied migration is never re-run, so a mistake is fixed by a new
+migration, not by editing the old file.
+
+**A dropped function takes its grants with it, and a newly created one is
+executable by `PUBLIC`.** Changing a function's argument list or `RETURNS
+TABLE` means drop and recreate (`CREATE OR REPLACE` would add an overload or
+refuse), so restate its grants and its `REVOKE ALL … FROM PUBLIC`. A missing
+revoke is invisible in the schema; where it matters, a case asserts it.
 
 ### Trying one out, and taking it back
 
-Three ways, in the order to reach for them. The first two are how a migration
-is tried; the third is the only way back once one has shipped.
+1. **`npm test`** rebuilds the throwaway database from scratch on every run,
+   so editing a migration and re-running *is* the reversible loop.
+2. **Transactional DDL**, against a database you want to keep (a scratch copy,
+   a Supabase branch):
+   ```sql
+   begin;
+   \i supabase/migrations/<file>.sql
+   -- prove whatever you came to prove
+   rollback;
+   ```
+   Everything these migrations do is transactional in Postgres
+   (`CREATE INDEX CONCURRENTLY` and `ALTER TYPE … ADD VALUE` are not; neither
+   is used).
+3. **Another migration**, once one has shipped. There are no down files: they
+   would be a second copy of every definition, exercised by nothing until the
+   moment they were needed.
 
-**1. `npm test`, which is already the loop.** `test/build-db.sh` drops the
-throwaway database and builds it again from `supabase/migrations/` on every
-run, so editing a migration and re-running the suite *is* the reversible test:
-there is no state to undo. This is the answer nearly every time.
-
-**2. Postgres has transactional DDL.** Against a database you want to keep —
-a scratch copy of production, a Supabase branch — apply the migration inside a
-transaction and throw it away:
-
-```sql
-begin;
-\i supabase/migrations/0055_schedule_polls.sql
--- create a poll, read it back, run the tally, prove whatever you came to prove
-rollback;
-```
-
-`ALTER TABLE`, `CREATE FUNCTION`, `DROP FUNCTION`, `CREATE INDEX` and `GRANT`
-are all transactional in Postgres, so the `rollback` leaves the schema
-byte-identical — function bodies, column list, constraints and ACLs alike.
-(`CREATE INDEX CONCURRENTLY` and `ALTER TYPE … ADD VALUE` are the exceptions;
-neither appears in these migrations.) Nothing in the repo is needed for this,
-and it is the right tool while the SQL is still moving.
-
-**3. Another migration, for one that has already shipped.** Once the
-integration has applied something to the live project a transaction is no
-longer available, and the way back is forward: a new migration, at a fresh
-version, that states the schema you want. There are **no down files** — there
-were, under `supabase/rollback/`, and they are gone.
-
-They were a poor trade. A down file is a second copy of every definition its
-migration replaced, kept in step with a baseline it is not applied alongside
-and exercised by nothing: `npm test` builds forward from `supabase/migrations/`
-and never runs one, so the only time anybody found out whether one worked was
-the moment they needed it to. And what it restored was never the whole story
-anyway — `0055`'s took `polls.kind` and `polls.schedule` with it, and every
-time poll's grid went too. Writing the correction as an ordinary migration
-costs the same care and is checked by the same suite as everything else.
-
-A migration written to *repair* rather than to add — because the live project
-has drifted from what the repo says, as it did at 0056 — is a special case of
-that, and the one place the care is different: it copies its definitions
-verbatim out of the baseline, grants included, and it has to be a no-op on a
-database that is already right. Both are checkable, by fingerprinting the
-schema and comparing:
+A migration that *repairs* drift between the live project and the repo copies
+its definitions verbatim from the baseline, grants included, and must be a
+no-op on a database that is already right. Check both by fingerprinting the
+schema:
 
 ```sql
 select md5(string_agg(x, '|' order by x)) from (
@@ -449,227 +324,105 @@ select md5(string_agg(x, '|' order by x)) from (
     join pg_namespace n on n.oid = t.relnamespace where n.nspname = 'public') s(x);
 ```
 
-Run it against a build of the repo's own migrations and against the schema the
-remote actually has, apply the repair to the second, and the two numbers should
-meet. Run it either side of applying the repair to the first, and the number
-should not move at all.
-[`0058_schedule_options_again.sql`](supabase/migrations/0058_schedule_options_again.sql)
-is the worked example; see *A version number is used once, ever* below for what
-it repairs and why.
+Run it against a build of the repo's migrations and against the live schema;
+after the repair the two should match, and applying the repair to the first
+should not move its number.
 
 ### Squashing
 
-Migration files accumulate, and a long chain of them gets slow to run and hard
-to read. Occasionally collapse the whole history into a single baseline file:
-
-A squash also deletes the files it folded in, so **a migration named anywhere
-in this document below the baseline number is history rather than a path.**
-Those are written as plain names — `0043_the_emails_a_poll_sends.sql` — and
-never linked, because the link would 404 the moment the next squash ran. The
-reasoning they carried is in this file; the schema they built is in the
-baseline.
+Occasionally collapse the history into one baseline:
 
 ```bash
 scripts/squash.sh
 ```
 
-Use the script rather than `npx supabase migration squash --linked` directly.
-The squash replays the migrations into a shadow database and pg_dumps the
-result, so the baseline it writes describes the current schema and nothing
-else. **A statement that does something rather than declaring something does
-not survive it** — a backfill, a one-off `update`, the `cron.schedule()` that
-runs the nightly purge. Those live in
-[`supabase/after-squash.sql`](supabase/after-squash.sql), and the script
-replays that file into a fresh migration on top of the new baseline. Anything
-added there has to be idempotent: it is applied again on every rebuild, on top
-of a database that may already have it.
+Use the script, not `npx supabase migration squash --linked` directly. A
+squash replays the migrations and pg_dumps the result, so **a statement that
+does something rather than declaring something does not survive it** — a
+backfill, a `cron.schedule()`, a policy outside the `public` schema. Those
+live in [`supabase/after-squash.sql`](supabase/after-squash.sql), which the
+script replays into a fresh migration on top of the new baseline; anything
+there must be idempotent. `12_poll_retention` asserts the purge job exists, so
+a squash that drops it fails the suite.
 
-The script also renames the squashed baseline to `<version>_baseline.sql`. The
-squash writes the whole schema into the newest migration file and keeps that
-file's name, which after a run of this script is the replay from the previous
-one; the rename keeps the version prefix, which is the part Supabase's
-migration history is keyed on, and changes only the label after it. It then
-runs `npm test` and prints `supabase migration list` so local and remote
-history can be compared before anything is committed.
+The script renames the baseline to `<version>_baseline.sql` (keeping the
+version prefix, which is what Supabase's history is keyed on), runs
+`npm test`, and prints `supabase migration list`. Commit the result on its
+own, with no other changes.
 
-Commit the result on its own, with no other changes in the same commit, so the
-replacement is easy to review.
-
-This is not a hypothetical: a plain squash silently dropped the purge schedule
-once. `12_poll_retention` now asserts the job exists, so a squash that loses it
-again fails the suite instead of quietly disabling retention.
-
-**The remote's history has to match the directory afterwards, or nothing
-applies again.** Before it runs anything, the integration checks that every
-version the live project has recorded still has a file here, and it refuses
-the whole run if one does not — `Remote migration versions not found in local
-migrations directory`, and nothing else in the log. A squash deletes exactly
-those files. On 2026-09-25 the squash to `0063` left the remote holding
-`0060`–`0063` with no files behind them, every run failed from that moment,
-and three migrations merged the same day (`0065`–`0067`) were folded into the
-next squash's baseline without ever having been applied; `0069` is the repair
-that put them back. So after a squash, and before anything else merges, read
-the `supabase migration list` the script prints, and make the remote's column
-say what the directory says:
+**After a squash, make the remote's history match the directory before
+anything else merges.** The integration refuses every run if the live project
+has recorded a version with no file here (`Remote migration versions not found
+in local migrations directory`), and a squash deletes exactly those files —
+so unrepaired, nothing applies again, and later migrations can be folded into
+the next baseline without ever having been applied. Read the printed
+`supabase migration list` and run:
 
 ```bash
 npx supabase migration repair --status reverted <each version with no file>
 npx supabase migration repair --status applied <the baseline's version>
 ```
 
-Both only edit `supabase_migrations.schema_migrations`; neither runs SQL
-against the schema. Mark the baseline applied only when the live schema really
-is the baseline — which is true only if everything folded into it had been
-applied first, and is exactly what went wrong here.
+Both edit only `supabase_migrations.schema_migrations`. Mark the baseline
+applied only if everything folded into it had been applied first.
+
+A migration named in this file that is older than the baseline no longer
+exists; refer to the behaviour, not the file.
 
 ### A version number is used once, ever
 
-Not once per file — once. The integration records the number in front of a
-migration's name, and a number in `supabase_migrations.schema_migrations` is a
-number that will never be applied again, whatever file is wearing it now.
+The integration records the number in front of a migration's name, and a
+recorded number is never applied again, whatever file wears it later. **A
+number is spent the moment it reaches `main`**: from then on, renumber rather
+than replace, even if you believe the run failed. Before that — on a feature
+branch — a migration can be rewritten, renamed or dropped freely. When unsure,
+`git log origin/main -- supabase/migrations/<file>` says whether it merged and
+`supabase migration list` whether the remote recorded it.
 
-**A migration replaced after it ships does not give its number back.**
-`0056_schedule_day_windows.sql` reached `main`, was applied, and put `0056` in
-that table. The next commit deleted it and added `0056_schedule_options.sql` —
-a different migration at the same number — which the integration skipped as
-already applied. So did `0056_baseline.sql`, the squash, for the same reason: a
-third file at 0056. The squash's rename deliberately keeps the version prefix,
-on the sound assumption that the remote already holds the state that number
-stands for; here it did not, and nothing said so.
-
-Nothing caught it for two weeks. `test/build-db.sh` builds a fresh database
-from every file in the directory, so the suite has always run against the
-schema the repo *claims*, and a version the remote skipped is invisible to it —
-the tests, the front end and the committed SQL all agreed with each other about
-a database that disagreed with all three. What surfaced it was a person trying
-to make a poll: `suggest_options` did not exist on the live project, and
-`create_poll` still carried the refusal that migration lifted.
-
-So: **a number is spent the moment it reaches `main`**, because that is the
-moment the integration applies it — and from then on, renumber rather than
-replace, even if you believe the run failed; the table is the only authority
-on whether it happened, and the cost of a spare number is nothing. **Before
-then it is still yours.** The live project only ever applies what lands on
-`main`, so a migration that exists only on a feature branch can be rewritten,
-renamed or dropped and its number reused by whatever replaces it — `0073` was
-drafted as one migration, rewritten as another and renumbered, and went back
-to `0073` before it merged, which cost nothing. (Supabase *preview* branches,
-where enabled, apply a pull request's migrations to a throwaway database of
-their own; that is not the live project's history and is discarded with the
-branch.) What makes 0056 the cautionary tale is that its first file had
-already merged. If you are not sure whether a number has reached `main`,
-`git log origin/main -- supabase/migrations/<file>` says, and
-`supabase migration list` says whether the remote has recorded it.
-
-When a remote does fall behind, the fix is a *new* migration
-at a fresh number that re-asserts the definitions out of the baseline;
-[`0058_schedule_options_again.sql`](supabase/migrations/0058_schedule_options_again.sql)
-is the worked example, and *Trying one out, and taking it back* above is how
-one is checked.
-
-`supabase migration list`, which the squash script already prints, is what
-would have shown this at the time: local and remote history side by side, with
-0056 present on both and standing for different things.
+`npm test` cannot catch a skipped version: it builds from every file in the
+directory, so it always tests the schema the repo *claims*. If the remote
+falls behind, the fix is a new migration at a fresh number that re-asserts
+the definitions from the baseline, checked as above.
 
 ## Tests
 
 ```bash
-npm test              # every case
+npm test              # every SQL case
 test/run.sh runoff    # only cases whose filename matches "runoff"
 ```
 
-The election logic is the part of this app that can be wrong without looking
-wrong: a bad tie-break produces a plausible winner, not an error. It also lives
-almost entirely in Postgres, so that is where the tests are. `test/run.sh`
-builds a throwaway database from `supabase/migrations/`, runs everything in
-`test/sql/cases/`, and reports each assertion. The building itself is
-`test/build-db.sh`, which is its own script because `scripts/sample-poll.sh`
-needs the same database (see [The About page and its sample
-poll](#the-about-page-and-its-sample-poll)).
+The election logic can be wrong without looking wrong — a bad tie-break
+produces a plausible winner — and it lives almost entirely in Postgres, so
+that is where the tests are. `test/run.sh` builds a throwaway database from
+`supabase/migrations/` (via `test/build-db.sh`, which `scripts/sample-poll.sh`
+also uses), runs everything in `test/sql/cases/`, and reports each assertion.
 
-Requirements are a Postgres server and a superuser role that can create
-databases. `PGHOST`, `PGUSER` and friends are honoured, and with none set it
-falls back to a local cluster. There is no test framework and nothing to `npm
-install`. CI runs the same script against a `postgres` service container
-([`.github/workflows/test.yml`](.github/workflows/test.yml)).
+It needs a Postgres server and a superuser role that can create databases.
+`PGHOST`, `PGUSER` and friends are honoured; with none set it uses a local
+cluster, starting it if it is installed and stopped, and otherwise prints the
+install command for the platform. **Superuser** because every object is owned
+by `postgres`: `test/sql/shim.sql` creates `postgres`, `anon`,
+`authenticated` and `service_role`, and the SECURITY DEFINER functions run as
+`postgres`. CI runs the same script against a `postgres` service container
+([`test.yml`](.github/workflows/test.yml)).
 
-That workflow has a second job, `app`, over the half of the codebase the
-cases above cannot reach: `npm run lint`, `npm run fmt:check`, `npm run
-test:unit`, and then `npm run build`, which is `tsc -b && vite build` and so
-covers the typecheck and the bundle together. It takes no Supabase secrets —
-nothing is being run, only compiled, and a pull request from a fork could not
-see them anyway.
-
-And a third, `browser`, which is the only one that runs the app; see [The
-browser suite](#the-browser-suite) below.
+That workflow has two more jobs. `app` runs `npm run lint`,
+`npm run fmt:check`, `npm run test:unit` and `npm run build` (typecheck plus
+bundle), with no Supabase secrets. `browser` runs the browser suite.
 
 ```bash
-npm run test:unit     # vitest, over four files and nothing else
+npm run test:unit     # vitest
 ```
 
-**`test:unit` is deliberately narrow.** It exists because [schedule
-mode](#a-poll-that-finds-a-time) put a piece of election logic in the browser
-for the first time: a time poll's options are enumerated by the creator's
-browser and its ballot is flattened from a painted calendar into a score per
-option before it is sent, so `src/lib/schedule.ts` can be wrong in exactly the
-way the tally can — plausibly, and with nothing downstream that would notice,
-because the database sees an ordinary poll either way. The SQL suite cannot
-reach it and there was no JS runner in the repo, so one was added for it.
-
-It covers four things, and every one of them is something neither other check
-can see:
-
-- `schedule.test.ts`, the derivation above — pure functions of their
-  arguments, and not a foothold for testing components.
-- `timezones.test.ts`, over the offsets the picker offers and the names hung
-  off them. Two things can go wrong quietly there: a zone id with a typo in it
-  reads fine and silently names nothing, and a caption worked out for the wrong
-  half of the year names the wrong place — `-07:00` is Pacific Time in July and
-  Mountain Time in January, and either answer looks perfectly reasonable on its
-  own.
-- `limits.test.ts`, which reads `supabase/migrations/` and asserts that every
-  number in [`limits.ts`](src/lib/limits.ts) is the number the database
-  actually enforces. That file has always said *change a number here and change
-  it there in the same breath*, and nothing enforced it: when `0055` raised the
-  option ceiling to 500, `MAX_OPTIONS` stayed at 50 for three commits and the
-  create form refused a 210-window calendar the database would have taken. The
-  type checker cannot see SQL and the SQL suite cannot see TypeScript, so this
-  is the only place the two can be compared. It reads the *last* definition of
-  each function across the migrations in order, which is what a database built
-  from them runs, and it goes through `import.meta.glob` rather than `node:fs`
-  so that a test under `src/` is still held to the browser's typing.
-- `supabase/functions/send-push/webpush.test.ts`, over the encryption and
-  signing a push notification is made of. A payload a browser cannot decrypt
-  is dropped by the browser while the push service answers 201, so nothing
-  anywhere says a notification was lost; the test decrypts what the sender
-  encrypts with a second implementation of RFC 8291 written against
-  `node:crypto` rather than WebCrypto, and verifies the VAPID signature the
-  same way. It runs under vitest because the sender is pure WebCrypto, which
-  is the same API in Node as in the Edge Function's Deno.
-- `readLedger.test.ts`, over what a live page is owed a read for and what the
-  read it has just made covers — see [Live updates](#live-updates). The rule is
-  one sentence of ordering and the arithmetic under it is eight lines, and both
-  directions of getting it wrong are silent: cover too much and a page sits
-  showing votes that have been overtaken, cover too little and every press
-  costs a round trip nobody can see. It is a module rather than a closure
-  inside `useLiveStream` precisely so that it can be one — the rest of that
-  hook is sockets, timers and a hidden tab, and none of it is testable without
-  standing all three up.
-
-Getting to a server is `test/build-db.sh`'s job, and it is the same job for
-`scripts/sample-poll.sh`, which arrives through the same file: start the local
-cluster if one is installed and stopped (Debian's or Homebrew's), create a
-role for whoever is running this if the install has none, and otherwise print
-the install-and-start command for the platform rather than a sentence about
-`PGHOST`.
-
-**Superuser, because of who owns the schema.** Every table, function and view
-in the migrations is `ALTER ... OWNER TO "postgres"`, and on a Homebrew or
-Postgres.app cluster the bootstrap superuser is named after you instead. So
-`test/sql/shim.sql` mints `postgres` alongside `anon`, `authenticated` and
-`service_role`, as a superuser: the SECURITY DEFINER functions run as it and
-read tables the shim itself owns, so an ordinary role only moves the failure
-somewhere less legible.
+**`test:unit` is for logic in the browser that can be wrong silently**, which
+neither other suite reaches: the time-poll derivation (`schedule.ts`), the
+timezone captions, `limits.test.ts` (which reads `supabase/migrations/` and
+asserts every number in `limits.ts` is what the database enforces — the type
+checker cannot see SQL and the SQL suite cannot see TypeScript), the push
+encryption in `send-push/webpush.test.ts` (decrypted by an independent
+RFC 8291 implementation, since a payload a browser cannot decrypt is dropped
+while the push service answers 201), `readLedger.ts`, the CSV export, the coin
+flip and similar pure modules. It is not a foothold for component tests.
 
 ### The browser suite
 
@@ -677,61 +430,42 @@ somewhere less legible.
 npm run test:e2e      # Playwright, desktop and phone, axe on every page it opens
 ```
 
-The SQL cases say the tally is right and `test:unit` says the calendar
-arithmetic is; neither had ever opened the app. `e2e/` does, in Chromium,
-against the **built** app under `vite preview` — the build is what ships, and
-the lazy chunks, the base path and the stale-build listener exist only there.
-Every test runs twice, at a desktop size and at a phone's, because the layouts
-differ where it matters: the header wraps, the calendar scrolls sideways, the
-intro is the portrait cut.
+`e2e/` runs the **built** app under `vite preview` in Chromium, because the
+build is what ships (lazy chunks and the stale-build listener exist only
+there). Every test runs at a desktop size and a phone size.
 
-**It needs no database, and that is a choice about what it can reach.** The
-Supabase address it is built with is a closed port, and `e2e/fixtures.ts`
-fails any test whose page so much as asks it something — or logs an error, or
-throws. What a reader can do with no backend is: sign in (as far as the
-screen), read About and the install guide, watch the intro, and walk the About
-page's sample poll, which is answered from a file (see [The About page and its
-sample poll](#the-about-page-and-its-sample-poll)). That last one is most of
-the app — `PublicPoll`, both ballots, the question strip, auto-advance,
-changing a vote, the results, the tie-break panel, the full ranking — so
-voting itself is covered end to end. **What is not:** anything behind an
-account or a write — the poll list, the create form, `PollDetail`, the
-creator's controls, the share button on a real poll. Reaching those needs a
-real Supabase, which means `supabase start` and Docker; GitHub's runners have
-Docker, so that is a job that can be added, but it was not built along with
-this one.
+**It needs no database.** The Supabase address it is built with is a closed
+port, and `e2e/fixtures.ts` fails any test whose page asks it anything, logs
+an error, or throws. What it can reach: the sign-in screen, About, the install
+guide, the intro, the Start page, and the About page's sample poll — which is
+answered from a file and covers `PublicPoll`, both ballots, the question
+strip, auto-advance, changing a vote and the results. **Not covered:**
+anything behind an account or a write — the poll list, the create form,
+`PollDetail`, the creator's controls. Reaching those needs `supabase start`
+and Docker.
 
 **Accessibility is checked on every page it opens**, in both colour schemes,
-with axe at WCAG 2.1 A and AA plus axe's best-practice rules, and any finding
-at any impact fails the test (`expectAccessible`). Interactive states get their
-own check where they draw something new: the settings menu open, the full
-ranking's dialog, a tie-break slid over its round, the card after voting. What
-axe cannot see is anything it cannot reach — the pages above that need an
-account — and anything that is about behaviour rather than markup, such as
-whether an announcement is said at the right moment, which the tests assert
-directly by reading the live region (see [Accessibility](#accessibility)).
+with axe at WCAG 2.1 A and AA plus best-practice rules; any finding fails the
+test (`expectAccessible`). Interactive states that draw something new get
+their own check. Announcements are asserted directly by reading the live
+region.
 
-Locally it needs the Chromium that matches the pinned `@playwright/test`:
-`npx playwright install chromium` once, or point `PLAYWRIGHT_BROWSERS_PATH` at
-one already installed. `playwright-core` is pinned beside it on purpose:
-`@axe-core/playwright` takes it as a peer, and left alone npm installs the
-newest one for it, whose `Page` type is not the runner's and does not
-typecheck. A failure leaves a trace under `test-results/`, which
-`npx playwright show-trace` opens on the page as it was at each step; CI
-uploads them as an artifact.
+Locally it needs the Chromium matching the pinned `@playwright/test`:
+`npx playwright install chromium`, or set `PLAYWRIGHT_BROWSERS_PATH`.
+`playwright-core` is pinned alongside because `@axe-core/playwright` takes it
+as a peer, and an unpinned one does not typecheck. A failure leaves a trace
+under `test-results/` (`npx playwright show-trace`); CI uploads them.
 
-The e2e files are typechecked by `tsc -b` like everything else
-(`tsconfig.e2e.json`), which is not a formality: a misspelt option in
-`test.use` is an object literal with one key too many, and without the check
-it is silently ignored — the intro's tests once waited out the whole film
-because `reducedMotion` had been set where Playwright does not read it.
+The e2e files are typechecked by `tsc -b` (`tsconfig.e2e.json`), which
+catches a misspelt option in `test.use` that would otherwise be silently
+ignored.
 
 ### How a case is written
 
 Cases seed through `create_poll()` and `submit_ballot()` rather than inserting
-rows, so they cannot construct a state the app itself could not produce, and
-each one rolls back at the end. A ballot set is a grid — one row per voter, one
-column per option:
+rows, so they cannot construct a state the app could not produce, and each
+rolls back at the end. A ballot set is a grid — one row per voter, one column
+per option:
 
 ```sql
 v_poll := tests.seed_poll(
@@ -740,416 +474,173 @@ v_poll := tests.seed_poll(
         [0, 1]]);
 ```
 
-Assertions read the tally back **by option name**, never by id or by the
-runoff's `a`/`b` labels. Options that tie on points are ordered by id, which is
-the documented random tie-break, so those labels are not stable between runs.
-`tests.prefers(t, 'Apple')` and friends in `test/sql/helpers.sql` exist to keep
-cases off that ordering.
+Assertions read the tally **by option name**, never by id or the runoff's
+`a`/`b` labels: options that tie on points are ordered by id, so those labels
+are not stable. `tests.prefers(t, 'Apple')` and friends in
+`test/sql/helpers.sql` exist for this.
 
 Expected values are worked out from the STAR rules by hand and written down
-first — they are not copied back out of a passing run, which would only assert
-that the code still does whatever it currently does.
+first — never copied from a passing run.
 
 ### What it does and does not cover
 
-Covered: the score round, finalist selection, both score-round tie-break rules,
-the runoff and its tie-breaks, the genuine-tie result, the full ranking, the
-`create_poll` / `submit_ballot` write path the seeding runs through, the two
-windows in which a poll's option list may move — the collecting stage, and the
-creator's own corrections for as long as the poll is open, including what a
-correction made over votes already cast does to those ballots and the mark it
-leaves on the poll, who may say they are done adding to that list and what
-happens when the last of them does — reopening a closed poll: that the votes
-stay, the winner and the results-ready notice are taken back, that a vote cast
-or changed afterwards marks the poll and the mark reaches the tally, and that
-a poll closed with nothing in it revealed nothing to be late to — the two ways
-a poll runs out of people to wait for, and the two reasons it can be waited on
-after everyone has confirmed, the window in which a voter
-may change their vote and the reveal that closes it, that an open poll's share
-link discloses no email address, its creator's included, and which changes
-announce themselves to which topics for [Live updates](#live-updates) — counts
-as well as topics, since a change that announces itself once per row rather
-than once per statement passes any assertion phrased as "did it say
-anything", and including a poll being deleted, whose lists are told once
-each and whose own topic is told `poll_deleted` rather than `poll_changed`,
-while its cascading rows stay silent, and
-the nightly purge that stays silent through all of it; who may read a
-published ballot sheet and on which of the two terms it unlocks, including
-that the account door and the link door hand back the same sheet on the same
-open poll — and that a page of the poll list is a page of the same list every
-time: that two pages partition it with nothing on both and nothing on neither,
-that the total is of the list rather than the page, and that asking past the
-end lands on the last page there is — and that the list carries an open poll
-the reader's account has voted in or confirmed, in any question of it, and no
-other, without naming who made it, and that every change to such a poll reaches
-that reader's list — a confirmation taken back included; that a poll removed
-from a list leaves the pages it was on rather than a gap in them, is listed
-instead in the removed view, is removed whole by any of its questions, can only
-be removed from one's own list, says so to that account and to nobody else,
-and takes its account out of the audience of every email and push about it
-until it is restored;
-everything about the results-ready
-announcement except the sending — whether a poll has a result at all, who
-would be told and who is deliberately not, and that the notice is made exactly
-once, forgotten when the poll goes back to taking votes and made again when it
-finishes a second time;
-that every function that writes to a poll on the strength of its state takes
-the poll's lock before it reads anything, which is what stops two writers
-deciding on pictures missing each other's work (the races themselves need two
-sessions, and are not in the suite);
-and the same half of the reminder to vote — who is still owed a vote, who of
-them would be reminded, that it is the creator's alone, once per poll through
-a reopen, refused where there is no vote to remind anybody of, and sendable
-whatever anybody removed;
-and the same half of the other emails — which invitation an address is owed at
-each stage a poll goes through, that the creator is owed none, and who hears
-that a poll opened by hand as against one that opened itself, minus in each
-case whoever's own act was what did it; and which of the three readings
-`poll_page` gives each kind of reader — its creator, an invitee, a stranger
-holding an open poll's link, somebody outside an invite poll, and nobody at
-all — along with what the open reading refuses to carry and that a poll which
-does not exist is refused in the same words as one that is simply not yours.
-And the same half of push notifications: who each moment would be pushed to
-and whose browser is left out, the two settings that turn a channel off, the
-endpoints the database refuses, that a watch on an open poll is filed
-against its first question and is gone once the results are out, and that an
-account that has answered an open poll signed in is in its audience on the
-same terms as an invitee. And which share-link ballot and confirmation are a
-reader's: the account's on any device when they are signed in, the browser
-key's when they are not, never another account's through a shared browser's
-key, never claimed after the fact, and never an address on anything a read
-hands back. And what an account made without signing in may do: run an open
-poll as its creator with no address recorded for it, make no invite poll by
-either create path, make twenty polls a day and no more, read no invite poll
-through its empty email claim, put a blank address on no invite list — and
-hand what it made to the account it signs in to, once, by a ticket only it
-could take out, without the move counting as a late vote.
+The SQL suite covers the tally end to end (score round, finalists, every
+tie-break, the runoff, the genuine tie, the full ranking) and the rules around
+it: the write paths, the option-list windows, confirming, reopening, revising,
+the reveal gates on results and ballot sheets, the two readings of an open
+poll, the poll list's paging, removed polls, who each email and push would go
+to, live-update signal counts, the lock every writer takes, anonymous
+accounts and their carry-over, and the retention purge. Each case's file name
+says what it holds.
 
-Not covered: RLS policies and the `auth.jwt()`-gated access rules. The
-`poll_page` case above is the nearest thing and still not an exception to
-this: it drives the shim's stand-in session, so what it pins down is which
-branch that function takes for a given `auth.uid()`, not that Supabase's auth
-would put a real reader on that branch. Nor the
-sending of any email or push: `pg_net` and Vault do not exist in the throwaway
-database, so `send_poll_email` finds no mailer and returns without doing
-anything — the suite can say who *would* have been emailed and never that
-anybody was, exactly as it can for live updates. Nor the
-delivery half of live updates: `test/sql/shim.sql` keeps `realtime.send()`'s
-write to `realtime.messages` and drops the service that fans it out, so the
-suite can say who would have been told and never that anyone was. Everything
-on the browser's side of the socket — `useLiveStream`, the debounce, the
-retry — has no harness at all; this repo's tests are SQL. The shim in
-`test/sql/shim.sql` stands in for Supabase's `auth` schema with a one-row
-session table, which is enough to let the migrations apply and to sign a seeded
-voter in, but it is not Supabase's auth and a passing suite says nothing about
-who is allowed to read a poll. `run.sh` also drops three extensions a stock
-Postgres does not have and the `MAINTAIN` privilege, none of which the tally
-touches. A fourth, `pg_cron`, is not edited out here but guards itself in the
-migration that wants it, so the retention rules are tested on a database with
-no scheduler in it. Everything else is applied verbatim, so the functions under test are
-the ones that ship.
+**Not covered:**
+
+- RLS policies and `auth.jwt()`-gated access. The shim stands in for
+  Supabase's `auth` schema with a one-row session table; a passing suite says
+  which branch a function takes for a given `auth.uid()`, not who Supabase
+  would let read a poll.
+- Sending any email or push: there is no `pg_net` or Vault, so the suite says
+  who *would* be told and never that anybody was.
+- Delivering live updates: the shim keeps `realtime.send()`'s write to
+  `realtime.messages` and drops the fan-out. `useLiveStream` has no harness.
+- `run.sh` drops three extensions a stock Postgres lacks and the `MAINTAIN`
+  privilege, none of which the tally touches. `pg_cron` guards itself, so
+  retention is tested with no scheduler. Everything else is applied verbatim.
 
 ## Live updates
 
 Poll pages hold a websocket and re-read themselves when the database says
-something moved, so votes appear without a reload.
-[`src/lib/useLiveStream.ts`](src/lib/useLiveStream.ts) is the listening half and
-documents its own rules — when it reads, what it does with a hidden tab, why it
-never stops watching a page that is on screen. Those are not repeated here.
-`broadcast_poll_change()` and the triggers around it are the telling half, and
-they are what this section is about. Realtime has to be enabled on the Supabase
-project and nothing else: broadcasting from the database writes to
-`realtime.messages`, which needs no publication changes and no table grants.
-The one thing on the Realtime side that is this repo's is the policy that lets
-clients receive (below), and with it in place **Realtime → Settings → Allow
-public access** can be turned off: nothing uses a public channel.
+something moved. [`src/lib/useLiveStream.ts`](src/lib/useLiveStream.ts) is the
+listening half and documents its own rules. `broadcast_poll_change()` and the
+triggers around it are the telling half. Realtime must be enabled on the
+project and nothing else; broadcasting from the database writes to
+`realtime.messages` and needs no publication or table grants. **Realtime →
+Settings → Allow public access** can be off: nothing uses a public channel.
 
-**A signal, not the data.** Every message is empty. It says a poll changed and
-refuses to say how; whoever hears it re-reads through the same RPC they would
-have called anyway. That is the whole reason this can exist without unpicking
-the access rules — `anon` still has no read grant on any table, and not one
-rule about who may see what had to be restated. Subscribing to row changes
-directly would have meant opening those tables to `anon` and re-deriving every
-rule in this file as an RLS policy: a second copy of the access model to keep
-in step with the first.
+**A signal, not the data.** Every message is `{}`. It says a poll changed;
+whoever hears it re-reads through the same RPC they would have called anyway.
+That is why this needs no change to the access rules — `anon` still has no
+table grants. Subscribing to row changes would have meant re-deriving every
+access rule as an RLS policy.
 
-**Anybody may listen; only the database may speak.** A listener needs next to
-no authorization, because there is next to nothing to authorize: the payload is
-`{}`, and the most anyone gains by guessing a topic is knowing that a poll
-whose id they already held changed at some moment. It is still the RPC, not the
-socket, that decides what comes back. So the one policy on `realtime.messages`
-lets `anon` and `authenticated` receive on any `poll:` topic, and on
-`user:<id>` only as that user.
+**Anybody may listen; only the database may speak.** The one policy on
+`realtime.messages` lets `anon` and `authenticated` receive on any `poll:`
+topic, and on `user:<id>` only as that user. The database sends on
+**private** channels (`announce()` passes `true` to `realtime.send`), clients
+subscribe with `private: true`, and there is no INSERT policy, so no client
+can send — otherwise anybody holding a link could broadcast `poll_deleted` to
+everyone watching it. `broadcast_poll_change(uuid)` is revoked from `PUBLIC`
+for the same reason. The policy lives outside `public`, which a squash does not
+dump, so it is restated in [`after-squash.sql`](supabase/after-squash.sql);
+`46_live_updates_are_received_not_sent` checks the flag and the policies.
 
-Sending is the other half, and for a long time it was open by accident. The
-topics were public channels, and a public channel takes broadcasts from any
-client holding the anon key — so anybody holding a poll's link could send
-`poll_deleted` to everybody watching it, and every one of those pages would say
-the poll had been deleted, since that event is acted on without a read. Since
-`0085_live_updates_are_received_not_sent.sql` the database sends on **private**
-channels (`announce()` passes `true` to `realtime.send`), clients subscribe
-with `private: true`, and there is no INSERT policy, so no client may send at
-all. A private and a public channel of the same name are different channels,
-so a message sent on the old public one reaches nobody. The policy is outside
-the public schema, which a squash does not dump, so it is restated in
-[`supabase/after-squash.sql`](supabase/after-squash.sql); `46_live_updates_are_received_not_sent`
-checks the flag and the policies, though not that the Realtime service honours
-them. The same migration revoked `broadcast_poll_change(uuid)` from `PUBLIC`:
-it had been callable through the API, which is the database sending and so out
-of reach of any channel permission.
-
-There are two: `poll:<id>`, for every page watching one poll, whichever side
-of it they are on; and `user:<id>`, for one person's poll list — every change
-to every poll on it: the polls they made, the polls they are invited to, invites
-included, and the open polls their account has answered through a link (see
-[Open polls you have answered](#open-polls-you-have-answered)). Every page
-watches one of them — except a poll page, which watches its question and the
-questions either side of it; see *The next question is read before it is
-opened* below.
-
-**The list watches its reader, not its rows, and that is what keeps it to one
-request.** It used to subscribe to one topic per poll on the page: a set it
-could not name until it had read the list, so it read to learn its polls,
-subscribed, and read again on subscribing. Two requests to draw one list, and a
-third on every page turn. The circularity was never in the socket, it was in
-the topics. `user:<id>` is known from the session before anything is read.
-
-Widening that topic from "you were invited to something" to "something on your
-list moved" also fixed two things that were quietly wrong: a vote in the
-*second* question of a multi-question poll announced itself on that question's
-topic while the list carries the *first* question's row, so the group's
-"everyone has answered" state moved with nobody listening; and turning a page
-cost a re-subscribe on top of the read.
-
-**Some reads are wasted, and that is the accepted trade.** The topic wakes you
-for any poll you can see while the page in front of you holds ten, so a vote in
-a poll on page four re-reads page one to find it unchanged. The alternative is
-the scheme this replaced. Stated plainly: a poll with forty invitees writes
-forty-one rows to `realtime.messages` per change rather than one. The fan-out to
-*sockets* is unchanged — those forty were each already subscribed to the poll's
-own topic — so what the extra rows buy is one round trip per reader.
+There are two topics: `poll:<id>`, for every page watching one poll; and
+`user:<id>`, for one person's poll list — every change to every poll on it
+(made, invited to, or answered through a link). The list subscribes to its
+reader rather than its rows because `user:<id>` is known from the session
+before anything is read, so the list costs one request rather than read,
+subscribe, read again. The cost is some wasted reads (a vote on page four
+re-reads page one) and one `realtime.messages` row per reader per change.
 
 Four rules govern the telling half:
 
-- **Deletes are announced as loudly as inserts.** A creator correcting the
-  option list takes rows back off, an invitee is withdrawn, a poll is deleted
-  with everything in it. A page told only about arrivals would sit showing a
-  tally that has just been thrown away, which is worse than being slow.
-- **One change, one message — and a change is a transaction.** The triggers
-  are statement-level, so twenty rows leaving in one delete is one message
-  rather than twenty. That is not far enough on its own: `insert_options`
-  checks each option against the list as it stands, so it loops and writes a
-  row at a time, and five windows painted onto a time poll were five
-  statements and so five messages. Every bulk path went through it —
-  `suggest_options`, `open_poll_suggest_options`, `creator_add_options`,
-  `creator_edit_options`, and `create_poll` with its options and its invitees.
-  So `announce()` holds the unit one level up: it remembers the topics it has
-  already sent to in this transaction and drops the repeats. This is safe
-  because a message carries nothing and `realtime.messages` is an ordinary
-  table — nothing reaches a listener before the commit, and every message
-  means only *re-read*, which the reader does once afterwards and sees the
-  whole change. A second message from one transaction was always a wasted
-  round trip rather than news. It is also why the fix belongs there rather
-  than in each writer: the guarantee covers bulk writes nobody has written
-  yet. See `0060_one_signal_per_change.sql`.
-- **A poll on its way out says it has gone — to its own topic, and to the
-  lists it was on.** Its rows are silent — they cascade behind it, and
-  `broadcast_poll_change` returns early when the poll is already gone, which
-  stops a delete broadcasting once per option, invitee and ballot.
+- **Deletes are announced as loudly as inserts.** A page told only about
+  arrivals would sit showing a tally that has been thrown away.
+- **One change, one message — and a change is a transaction.** Triggers are
+  statement-level, and `announce()` also remembers which topics (and events)
+  it has sent to in the current transaction and drops repeats. That covers
+  bulk writes such as `insert_options`, which loops a row at a time. It is
+  safe because nothing reaches a listener before commit, and every message
+  means only *re-read*.
+- **A deleted poll says so.** Its own topic hears `poll_deleted`, the one
+  event that is not a prompt to re-read: a re-read of a deleted poll fails,
+  so `useLiveStream` hands it to the page's `onGone` instead and the page
+  says the poll has been deleted. Pages with no `onGone` (the poll list) just
+  re-read. The lists it was on are told on `user:<id>` by
+  `broadcast_poll_gone`, a **BEFORE** DELETE row trigger, because its audience
+  (`invited_voters`) cascades in the same statement. The cascading rows are
+  silent (`broadcast_poll_change` returns early when the poll is gone). **The
+  nightly purge is silent too**: `purge_old_polls` sets `app.purging_polls`
+  and the trigger stands down.
+- **A changed vote says nothing**, unless the voter's name changed. Nothing a
+  watcher can see before the results unlock is derived from a score, and past
+  the unlock no vote can change. There is no trigger on `scores` and none on
+  `UPDATE` of `ballots`; `open_poll_revise` announces only a changed name.
 
-  Its own topic hears **`poll_deleted`**, the one event that is not a prompt
-  to re-read. It was silent for a long time, for a real reason: a watcher
-  answers a signal by re-reading, a re-read of a poll that has gone *fails*,
-  and the page would retry five times and then give up on it. So somebody
-  with a poll open went on looking at a ballot for a poll that no longer
-  existed. The answer was a message that is the news rather
-  than a knock on the door: `useLiveStream` hands `poll_deleted` to the
-  page's `onGone` instead of reading, and the poll page says the poll has been
-  deleted. A page that passes no `onGone` — the poll list — reads it like any
-  other signal, which is right there: its read simply comes back without the
-  card. `announce()` remembers a topic *and event* as told, so a transaction
-  that changes a poll and then deletes it says both. See
-  `0066_a_deleted_poll_says_so.sql`.
+**One funnel, and a page's own reads go through it.** `useLiveStream` returns
+a `reread`, and every page-initiated read (a vote, a confirmation, a page
+turn) goes through it, so the throttle applies to all of them and a burst
+collapses into one trailing read. A page's own write echoes back as a
+broadcast, and the messages are empty, so the echo cannot be told from
+somebody else's change — but it can be accounted for. A broadcast is sent on
+commit, so **a read that starts after a signal arrives already covers it**; a
+signal that arrives while a read is in flight is not covered and is read for
+when that read lands. [`readLedger.ts`](src/lib/readLedger.ts) is that rule,
+in a module of its own so it can be tested (`readLedger.test.ts`): too
+generous and a page shows overtaken votes, too mean and every press costs a
+round trip. A subscription arriving reads unconditionally, because Realtime
+replays nothing sent while the socket was down.
 
-  The lists hear the announcement the poll owes them, on
-  `user:<id>` — `broadcast_poll_gone`, on a **BEFORE** DELETE row trigger,
-  because the audience is `invited_voters` and those rows go in the same
-  statement. Without it a deleted poll sat on everyone else's list as a card
-  that opens onto *Poll not found*. Deleting a five-question group reaches
-  exactly the lists one question would and tells each of them once, by the
-  rule above: the questions go in one transaction, and a list re-read after it
-  already has all five gone. **The nightly purge is still silent**:
-  it can take hundreds of expired polls in one statement, months after anybody
-  looked, so `purge_old_polls` raises `app.purging_polls` over its own
-  transaction and the trigger stands down.
-- **A vote *changed* says nothing at all.** The one deliberate silence, and the
-  reasoning is in [Changing your vote until the results are
-  out](#changing-your-vote-until-the-results-are-out): nothing a watcher can
-  see before the results unlock is derived from a score, and past the unlock no
-  vote can change. A signal would wake everyone connected to hand them the
-  answer they already had. There is no trigger on `scores` and none on `UPDATE`
-  of `ballots`.
+**There is no live indicator and no connection notice**, and no polling
+fallback. A slow-to-join socket would trip a notice on ordinary page loads,
+and the cost of a stalled socket is only a page catching up late; refreshing
+is the fallback.
 
-**One funnel, and a page's own reads go through it.** A page that has just
-written something wants what it wrote on screen without waiting to be told
-about it, and it used to get that by calling its read directly — beside the
-hook rather than through it. Which made one press two reads of the same poll:
-one because the page asked, and one because the write's own broadcast came back
-to the page that made it. The messages are empty by design, so nothing can tell
-your echo from somebody else's vote.
+**The next question is read before it is opened.** On a multi-question poll,
+`PollPage` holds the question on screen and the ones either side of it, each
+subscribed and read by the same rule as any page. A neighbour's read is a
+`poll_page`, kept in `ahead` and handed to the page as `prefetched` when that
+question is opened, and drawn in a layout effect, so stepping to a neighbour
+shows no skeleton. Each question's topic is held by one `QuestionWatch`
+(`pages/PollPage.tsx`), keyed by the question, so walking from question 2 to 3
+keeps 3's channel and opens 4's. (The Supabase client shares one channel per
+topic, so two owners could not hold it anyway.) A question opened with nothing
+held, or left after its signals went to the page rather than to `ahead`, gets
+a read of its own. A question let go drops its held read.
 
-`useLiveStream` now hands back a `reread`, and every
-page-initiated read goes through it — a vote, a confirmation, a creator's
-action, a turn of the poll list's pages. One queue, so the throttle and the
-chaining apply to all of them, a burst collapses into one trailing read
-whatever mixture it was, and a page's own read can account for signals that
-arrived before it started.
+**An open poll's live tick asks one function.** The creator's page reads an
+open poll both ways, and `open_poll_view` contains everything `poll_status`
+would say, so the page asks for the view and translates it
+(`statusFromOpenView` in `src/lib/pollPage.ts`). Four status fields are
+constants on an open poll: `invited_count` 0, `is_complete` false, `invited`
+false, and `voted`/`confirmed` false — those ask about the account as an
+invitee, and link ballots carry `account_id`, not `voter_id`. `expires_at` is
+carried over from the read that opened the page, since it never changes.
+`36_two_readings_of_one_open_poll` holds the two functions together field by
+field.
 
-**Which it can, because of the order the database does things in.** A broadcast
-is sent when the transaction behind it commits, so it can only reach a browser
-afterwards — and a read that *starts* after it arrives therefore reads a
-database that already holds it. A signal that turns up while a read is in the
-air is not covered, since its commit may fall after that read's snapshot, and
-is read for when the read lands. That is the whole rule, and
-[`readLedger.ts`](src/lib/readLedger.ts) is the whole of it: it was a boolean —
-*something arrived while I was reading* — which could say a read was
-outstanding but never that one had already accounted for it, so every echo cost
-a second read. It is a module of its own because it is the one part of this
-that can be wrong quietly: too generous and a page sits showing votes that have
-been overtaken, too mean and it costs a round trip nobody sees. See
-`readLedger.test.ts`.
-
-A subscription arriving is the exception and reads unconditionally: Realtime
-replays nothing sent while a socket was down, so there is no signal to count
-and nothing a finished read could be said to cover.
-
-**There is no live indicator, and no notice either.** A page that updates
-itself demonstrates that by updating itself. There used to be one notice, for
-a page that had *stopped* — *Not receiving live updates*, asking for a
-refresh — on the grounds that it is the one state a reader cannot work out by
-looking. It went because it was wrong far more often than it was right: a
-socket that was merely slow to join tripped it, so it flashed up on an
-ordinary page load and was gone again a second later, and the cost of the
-case it was for is only a page catching up late, so `useLiveStream` no
-longer tracks connection status at all. There is deliberately no polling
-fallback — refreshing is the fallback.
-
-**The next question is read before it is opened.** On a poll of several
-questions the route (`PollPage`) holds the question on screen and the ones
-either side of it — Previous, Next, and usually the one a ballot carries the
-voter on to — each subscribed and read by the same rule as any page:
-subscribe, read on subscribing, read again on every signal. What a neighbour's
-reads bring back is `poll_page`, the read a poll is opened with, kept in
-`ahead` and handed to the page as `prefetched` the moment that question is
-opened; the page draws it in a layout effect, before the browser paints, so a
-step to a neighbour shows no skeleton at all. The skeleton is what a jump
-further along the strip still gets.
-
-**A crossing hands the subscription over rather than opening another.** Each
-question's topic is held by one `QuestionWatch` (in `pages/PollPage.tsx`), keyed by the
-question, so walking from question 2 to question 3 keeps 3's channel and
-changes only which of them is on screen — and opens 4's. That is the rule
-"subscribe, then read" kept across a crossing: question 3 needs no read on
-arrival, because its channel has been carrying its signals all along and every
-one of them was read. It is also the only way it could be done: the Supabase
-client shares one channel between everything asking for a topic, so two
-owners could not have held it anyway. Signals go where the question's role
-says at the moment each is read — the page's own narrow read while it is on
-screen, a `poll_page` into `ahead` while it is beside it — and two moments get
-a read of their own: a question opened with nothing held for it (its read
-ahead still out, or failed), and a question left after its signals went to
-the page rather than into what is held, so walking back is drawn from a
-current read. The question the poll was arrived at is held from the read that
-opened it, which is a `poll_page` like the rest, so stepping off it untouched
-costs nothing either. Each question's reads go through one funnel, so a
-read ahead still out when the reader arrives lands in order and is drawn when
-it does. A question let go takes its held read with it, since nothing keeps it
-current any more.
-
-The cost is a socket channel and a read per neighbour as a poll is opened, and
-one more each time the reader steps on; nothing is read for a neighbour whose
-held read is still current.
-
-**An open poll's tick asks one function, not two.** Its creator's page is the
-one screen that reads a poll both ways — as an account through `poll_status`,
-and through the link as everybody else does with `open_poll_view` — and on an
-open poll the second contains the first. The counts come from the same
-`count(*) from ballots`, `confirmed_count` from the same
-`poll_confirmed_count()`, the winner from the same two columns, the three
-derived states from the same derivations. So the page asks for the view and
-translates, in `statusFromOpenView` (`src/lib/pollPage.ts`).
-
-Four of the status fields are its own and all four are answered as constants,
-because that is what `poll_status` answers on an open poll: there is no invite
-list, so `invited_count` is 0, `is_complete` needs `invited > 0` and can never
-be true, and `invited` is false. And `voted` and `confirmed` are false *however
-much that account has done through the link* — they ask about the account as an
-invitee, and `open_poll_submit` and `open_poll_confirm_options` both leave
-`voter_id` null, keying what they write by the browser's `voter_key` and, when
-somebody is signed in, by `account_id`, which `poll_status` does not read. What
-this reader has done through the link is in the view, which is where the page
-reads it.
-
-The one field the view genuinely does not carry is `expires_at`, and it is
-carried from the read that opened the page rather than asked for again:
-`created_at` plus the retention window, fixed on the day the poll is made and
-never revised. Nothing in the database holds those two functions together, so
-`36_two_readings_of_one_open_poll` does — field by field, over a poll walked
-through collecting, voting and closed.
-
-One request per page on a first read, and one per change after that: the poll
-list included, and a finished poll included since
-[`poll_page`](#one-read-opens-a-poll) folded its tally and its roster into that
-read. The state badge costs nothing at all; see [The winner is kept with the
-poll](#the-winner-is-kept-with-the-poll).
-
-In `npm run dev` every one of those appears twice: React's `StrictMode` mounts
-each component, unmounts it and mounts it again, so every effect that fetches
-or subscribes runs twice. That is development-only and deliberate — it is what
-catches an effect whose cleanup does not work. Count requests against
-`npm run preview`. Against a real Supabase project each request is also
-preceded by a CORS preflight `OPTIONS`, so the network panel shows two entries
-per call.
-
+In `npm run dev` every request appears twice (`StrictMode`), and against a
+real project each is preceded by a CORS preflight. Count requests against
+`npm run preview`.
 
 ## A poll that finds a time
 
-A poll has a `kind`. `option` is everything above: a list somebody wrote,
-scored 0–5. `time` is a poll looking for a meeting slot — the creator says how
-long the meeting is and where in the world the poll is held, and then **paints
-a calendar** to say which hours of which days are in bounds. Every window of
-that length that fits inside the painting becomes an **option**, and voters
-rate those options by painting the same calendar.
+A poll has a `kind`. `option` is a list somebody wrote, scored 0–5. `time` is
+a poll looking for a meeting slot: the creator says how long the meeting is
+and which UTC offset the poll is held at, then **paints a calendar** to say
+which hours of which days are in bounds. Every window of that length that fits
+inside the painting becomes an **option**, and voters rate the options by
+painting the same calendar.
 
-The trick is that the enumeration happens in the browser at creation, and the
-painting is translated back into a score per option before it is sent. The
-database stores a `time` poll exactly as it stores any other: rows in
-`candidates`, rows in `scores`, one ballot per voter. `poll_tally`,
-`star_round`, `settle_winner`, the RLS policies, the voter-key path, ballot
-revision and the live stream are all untouched, because none of them knows
-what an option means.
+The enumeration happens in the browser at creation, and a voter's painting is
+turned back into a score per option before it is sent. **The database stores
+a time poll exactly as it stores any other** — rows in `candidates` and
+`scores` — so the tally, RLS, the voter-key path, revision and live updates
+are all untouched.
 
-The worked example: a three-hour meeting, Monday to Friday, 08:00–22:00
-painted on each of them. Twenty-three window starts a day at half-hour steps,
-five days, a hundred and fifteen options, each one a three-hour window. A voter
-who can do Tuesday afternoon and nothing else scores the Tuesday afternoon
-windows highly and everything else 0.
+Example: a three-hour meeting, Monday to Friday, 08:00–22:00 painted on each.
+Twenty-three window starts a day at half-hour steps, five days, 115 options.
 
-**One gesture, three screens.** The creator paints which times the poll is
-asking about; a voter paints how good each of them is; and on a poll that
-collects its times, everybody paints which windows to offer. All three are
-[`PaintCalendar`](src/components/PaintCalendar.tsx) — one set of drag handlers,
-one header, one set of rules about what a click on a day heading means. The
-create form used to ask the same question as a row of two dropdowns per day,
-which is the same answer typed out and cannot say "free from nine to eleven
-and again after three".
+**One gesture, three screens.** The creator paints which times the poll asks
+about, a voter paints how good each is, and on a poll that collects its times
+everybody paints which windows to offer. All three are
+[`PaintCalendar`](src/components/PaintCalendar.tsx): one set of drag handlers,
+one header, one set of rules.
 
 ### What is stored
 
-[`0055_schedule_polls.sql`](supabase/migrations/0055_schedule_polls.sql) adds
-two columns to `polls`, tied together by a check constraint the way
-`polls_question_ck` ties the question columns together — `schedule` is null if
-and only if `kind = 'option'`.
+`polls.kind` and `polls.schedule`, tied by a check constraint: `schedule` is
+null if and only if `kind = 'option'`.
 
 ```json
 {
@@ -1160,2617 +651,1112 @@ and only if `kind = 'option'`.
 }
 ```
 
-**Which days and which hours a poll is asking about are not stored at all.**
-They are exactly the cells the options cover, so the browser reads them back
-off the option list (`boundsOf`) and there is one answer rather than two that
-can drift apart. A poll cannot be in a state where its stored bounds and its
-stored options disagree, because there are no stored bounds.
+**Which days and hours a poll asks about are not stored.** They are exactly
+the cells the options cover, so the browser reads them back off the option
+list (`boundsOf`); stored bounds could disagree with the options. Unknown keys
+in a schedule are stored and ignored by `validate_schedule`.
 
-That is what killed `0056_schedule_day_windows.sql`, which added a
-`day_windows` map keyed by date so that a Friday evening and a Saturday
-morning could be different questions. It was never applied, and it is gone:
-the painting says the same thing more exactly — a Wednesday free from nine to
-eleven and again after three is a painting and is not a pair of times — and it
-says it in the one place that cannot disagree with the ballot. The same
-migration added a `timezone_label`, a caption on the offset; that is gone too,
-rather than carrying a second, unverifiable copy of what that number is called
-— every screen that wants the caption works it out from the poll's own dates,
-which cannot drift out of step with the offset beside it. A schedule that still
-carries either key
-from a poll made against a branch that had 0056 is *stored* and *ignored*,
-which is what an unknown key has always been to `validate_schedule`.
+`window` is the one exception, because a grid needs a vertical axis: it is the
+union of every day's hours at creation. Each calendar is drawn on `axisFor` —
+that window **widened** by `spanOf` whatever is painted or offered outside it,
+so a window collected later outside the original hours is still a row on
+every grid. (A window off the axis would be an option nobody can see, rub out,
+or score.)
 
-`window` is the one exception, and only because a grid cannot be drawn without
-a vertical axis to draw it on: it is the union of every day's hours — the
-earliest cell any day asks about and the latest — so a poll whose Friday runs
-18:00–22:00 and whose Saturday runs 09:00–22:00 is drawn on one axis with
-Friday morning greyed out, rather than on two grids or on one that clips
-whichever day it was not built for. `spanOf` computes it on the way out.
+A meeting's length is `desired_slots * granularity`. **Granularity is
+derived** (`granularityFor`): half an hour under a day, a whole day at or above
+one. A window may be longer than a day; `stepGranule` carries a cell into the
+next date.
 
-**It is the axis the poll was *created* with, and every grid widens it to hold
-what the poll now holds.** A list that is collected can outgrow the hours its
-creator first drew — that is the whole point of collecting it — and a window
-outside the axis would be a row the grid does not draw: an option nobody can
-see, nobody can rub out, and, on a ballot that demands a score for every
-option, nobody can score. So `axisFor` is what each of the three calendars is
-drawn between: the pair of times that screen is about, widened by `spanOf` of
-whatever is painted or offered outside it. Recomputing `window` on every
-suggestion would be the other way round, and would be a second stored answer
-of exactly the kind the section above is about.
+**A fixed UTC offset, never a named zone.** A named zone across a DST change
+gives a day 23 or 25 hours and an ambiguous 1am. One poll, one offset;
+`validate_schedule` refuses anything else. A poll running across a clock
+change is an hour off the wall for its later days, and that is the trade.
 
-A meeting's length is not stored either — it is `desired_slots * granularity`.
+**The picker offers offsets, captioned with a place**: `UTC-07:00 (Pacific
+Time)`, or plain `UTC-07:15` where nobody keeps that clock. The caption is
+worked out for the poll's own first day
+([`timezones.ts`](src/lib/timezones.ts)) — `-07:00` is Pacific Time in July
+and Mountain Time in January. Zones are listed in precedence order; within a
+continent this picks the right name. The list is every whole hour from -12:00
+to +14:00 plus every part-hour actually in use that day; an offset a poll is
+already stored at is always kept. The ballot states the offset the same way —
+`All times are UTC-07:00 (Pacific Time)` — derived on the spot rather than
+stored, so it cannot drift. It is in brackets because the ballot line is
+already a run of dotted clauses.
 
-**Granularity is derived, not chosen.** Half an hour under a day, a whole day
-at or above one (`granularityFor`). It used to be a question on the create
-form, and it is not a question anybody has an opinion about: it is a
-consequence of how long the meeting is, and the one thing a creator could do
-with it was pick a combination the enumeration then had to refuse. A meeting
-of a day or more is answered in whole days, because there is no useful sense
-in which somebody is free from 09:00 Tuesday to 09:00 Thursday but not from
-10:00 to 10:00 — and asking at half-hour resolution would multiply a three-day
-poll's options by forty-eight.
+The **opening guess** is this browser's offset on the poll's first day, and
+it follows the dates until the creator picks one (`offsetPicked` in
+`CreatePoll`).
 
-**So a window may be longer than a day**, and `stepGranule` is what makes that
-one rule rather than a special case: a cell plus its granularity, carrying into
-the next date. At day resolution the carry fires on every step; at half-hour
-resolution it fires only on a poll whose painting runs through midnight.
+**An option's name is its window start in full ISO 8601**
+(`2026-09-01T14:00:00-07:00`): unambiguous, unique within the poll (which
+`insert_option`'s duplicate check needs), and sortable. It is formatted for
+reading wherever shown.
 
-**A fixed UTC offset, never a named zone.** A named zone spanning a
-daylight-saving transition gives one day 23 or 25 hours and a 1am that happens
-twice or not at all, which makes the generated option names ambiguous in
-precisely the way declaring a timezone was meant to prevent. One poll, one
-offset; everybody sees the same grid whatever their own clock says, and
-`validate_schedule` refuses anything else. A distributed group pays a
-conversion tax, and that is the trade.
-
-**So the picker offers offsets, and captions them.** One flat list, in order,
-each row `UTC-07:00 (Pacific Time)` — or plain `UTC-07:15` where nobody keeps a
-clock. The offset is what is being chosen and what the poll is; the name is
-there so a creator who does not know they are on `-07:00` can recognise
-*Pacific Time* and pick it. There is one list and one kind of thing in it,
-which the version before this was not: it offered sixty *places* grouped by
-continent and then the offsets separately underneath, so the same choice could
-be made two ways and several rows meant the same thing.
-
-**A caption is worked out for the poll's own dates, and that is the trick that
-makes one name per offset possible.** `-07:00` is Pacific Time in July and
-Mountain Time in January, because the clocks move and the offset does not;
-asking [`timezones.ts`](src/lib/timezones.ts) on the poll's first day gets the
-one that is true while the poll is running.
-
-**The ballot says it too** — `All times are UTC-07:00 (Pacific Time)` — and
-works it out the same way, from the poll's own first day, rather than reading
-anything stored. It said the bare number for a while on the grounds that a
-ballot has no business loading a table of zones to draw a line of text, and
-that was the wrong half of the objection to `timezone_label`: what was wrong
-with a stored caption is that it is a second, unverifiable copy of the offset's
-name, which a poll can carry into a month where it is no longer true. A caption
-derived on the spot cannot drift, is the same in every browser, and costs the
-zone table — thirty-four entries and a memoised `Intl` lookup — inside the
-chunk that already carries the calendar. A voter knows they are in California;
-they do not know they are on `-07:00`, and this line is the only place the poll
-says where it is being held.
-
-It is written in brackets rather than after a dot, because the ballot puts it
-into a line that is already a run of dotted clauses — `· 3 hours behind your
-clock · Mon 14 Sep to Tue 15 Sep` — where one more dot reads as one more clause
-rather than as a caption on the number before it.
-
-The zones behind the names are machinery and not choices: nobody picks one and
-nothing stores one. **Order is precedence** — several zones share an offset on
-any given day and the first that matches names it — which is a judgement rather
-than a fact, and a cheap one to get slightly wrong since the offset is written
-beside it. Within a continent it comes out exactly right, because the zones
-there are on different offsets from each other at any one moment: in July
-`-07:00` reaches Los Angeles first and in January it reaches Denver first.
-
-The list is **every whole hour from -12:00 to +14:00, plus every part-hour
-something is actually on that day**. So `+05:30` and `+05:45` are there because
-India and Nepal are, `-02:30` appears only while Newfoundland is on summer
-time, and the sixty quarter-hours nobody has ever kept a clock on are gone. An
-offset a poll is already stored at is kept whatever the list says, so opening
-or duplicating one never shows an empty box.
-
-The **opening guess** is where this browser is, on the poll's first day, and it
-follows the dates until the creator picks an offset of their own (`offsetPicked`
-in `CreatePoll`). That matters more than it sounds: somebody in Denver
-arranging a July meeting in March is on `-07:00` as they type and `-06:00` when
-it happens, and the old behaviour — read `getTimezoneOffset()` once and store
-it — was an hour out on every option for half the year.
-
-A poll that runs across a clock change where its offset is kept cannot be fixed
-— one poll, one offset — and **the form no longer says so**. It used to:
-`offsetDrift` named the first day the offset's zone moved, and a yellow notice
-under the picker explained it. It confused more than it helped — it warned
-about a choice the creator could not act on, and the grid every voter sees is
-the same either way — so it was taken out, function and all.
-
-**An option's name is its window start, in full ISO 8601:**
-`2026-09-01T14:00:00-07:00`. Unambiguous on its own, unique within the poll
-(which is what `insert_option`'s case-insensitive duplicate check needs), and
-sortable as plain text. It is formatted for reading wherever it is shown; see
-*Reading the results* below.
-
-**Only the two reads a ballot is drawn from carry the new columns**, because
-only they need the grid: `poll_page`'s account branch, which hands back the
-whole row anyway, and `open_poll_view`, which builds its poll object field by
-field and so had to be restated whole. `list_polls`, `poll_status` and
-everything else carrying a `winner_name` were left exactly as they were —
-formatting a timestamp is presentation, and `formatWindow` does it from the
-name alone. That is not a small saving: adding a column to `list_polls` means
-adding it to a `RETURNS TABLE`, which is a new return type, which
-`CREATE OR REPLACE` refuses — so it would be a `DROP`, a hundred and thirty
-lines of unchanged body restated, and the grant again, to relabel one badge.
+**Only the two reads a ballot is drawn from carry `kind` and `schedule`**:
+`poll_page`'s account branch and `open_poll_view`. `list_polls`,
+`poll_status` and the rest do not need them — `formatWindow` works from the
+name alone — and adding a column to a `RETURNS TABLE` means a drop and
+recreate.
 
 ### The derivation
 
-The one piece of real logic, and the only election logic in this app that does
-not live in Postgres. All of it is [`src/lib/schedule.ts`](src/lib/schedule.ts),
-pure and tested by `npm run test:unit`.
+All of it is [`src/lib/schedule.ts`](src/lib/schedule.ts), pure and tested by
+`npm run test:unit` — the only election logic not in Postgres.
 
-**Creation.** From the schedule and the creator's painting, enumerate every
-start such that **every cell the window covers was painted**. That is the whole
-rule, and it is why there is nothing else to say about which times a poll asks
-about: a three-hour meeting on a day painted 09:00–12:00 offers exactly one
-start, painted 09:00–13:00 it offers three, and painted 09:00–10:00 it offers
-none and that day quietly contributes nothing — which the create form says out
-loud rather than leaving to be found on the ballot. A gap in the painting is a
-gap in the options: a creator who paints a morning and an afternoon and leaves
-lunch out is offering no window that spans lunch, which is what they said. Each
-start is one option, sent through the ordinary `create_poll` as an ordinary
-`p_options`.
+**Creation.** Enumerate every start such that **every cell the window covers
+was painted**. A gap in the painting is a gap in the options. A day painted
+too short for one window contributes nothing, and the create form says so.
 
-**Reading the bounds back.** `boundsOf` is the inverse: the cells the options
-cover. A cell no window covers is a cell a voter could paint to no effect — no
-option's score would move — so the cells worth offering are exactly the cells
-the options cover, and the ballot needs nothing stored to know which they are.
-It is lossy at the edges and correctly so: painting a day 09:00–12:30 for a
-three-hour meeting leaves 12:00 covered by the second window, and painting it
-09:00–11:30 leaves nothing covered at all.
+**Reading the bounds back.** `boundsOf` is the cells the options cover. It is
+lossy at the edges, correctly: a cell no window covers is one a voter could
+paint to no effect.
 
-**Voting.** The voter paints a rating per granule. **A window's rating is the
-mean of its granules, rounded — held off both ends of the scale.** A window
-scores 5 only when every granule under it is a 5, and 0 only when every granule
-under it is a 0; everything else lands in 1–4 however lopsided the mean, so the
-two claims that are not matters of degree are still only made when they are
-true. An untouched granule is 0, a real rating meaning unavailable — the same
-reading `BallotCard` already gives an unscored option.
+**Voting.** The voter paints a rating per granule; **a window's score is the
+mean of its granules, rounded, held off both ends**: 5 only if every granule
+is 5, 0 only if every granule is 0, otherwise 1–4. An untouched granule is 0.
+A mean (rather than a minimum) ranks near misses, so a voter whose free
+blocks are all shorter than the meeting still contributes; holding back the 5
+stops a window with an impossible hour in it tying one that works.
 
-It was the minimum of its granules first, and the reason it is not is the
-ordering: **a window somebody can attend most of is genuinely better than one
-they cannot attend at all**, and a minimum cannot say so. Under it, half an
-hour of conflict inside a three-hour window and a diary full of conflict both
-came out 0 — so a voter whose longest free block was shorter than the meeting
-scored *every* option 0 and contributed nothing, which the ballot had to warn
-about before the vote went in. The mean ranks the near misses instead, and the
-warning is gone with the case it warned about. What the minimum was protecting
-against — a window with an impossible hour in it winning — is now the job of
-the 5 being held back: such a window is a 4 at best, and cannot tie with one
-that works.
-
-**Reading a ballot back.** Invert, in two rules. **A 0 vetoes**, because a
-window is only 0 when every granule under it is 0, so a 0 is a promise about
-each of them. **Otherwise a granule takes the highest window covering it**, a 5
-being the mirror promise and the best window over a granule being the closest
-thing to evidence about it there is.
-
-Together they are exact on the paintings people make: a block of one rating at
-least as long as the meeting contains a window made of nothing but itself, and
-an empty stretch that long contains an empty window. **What blurs is anything
-shorter than the meeting**, which is not a choice — the scores do not carry it.
-One busy half hour in a free afternoon lowers every window over it by a step
-and returns as a dip rather than a hole; one free half hour in a busy day
-returns marked but faint. The blur is in the rating rather than the position,
-except within one meeting's length of the ends of the poll's own bounds, where
-there is no room for an empty window to say the times were empty and some of
-the marking smears into them. So re-saving an unedited ballot can move a rating
-a step. That is the cost of storing windows rather than granules, which is what
-lets a time poll be an ordinary poll everywhere else.
+**Reading a ballot back** (`paintingFromScores`). **A 0 vetoes** every granule
+under it; **otherwise a granule takes the highest window covering it**. This
+is exact for blocks at least a meeting long; anything shorter blurs, because
+the scores do not carry it, so re-saving an unedited ballot can move a rating
+a step. That is the cost of storing windows rather than granules.
 
 ### Making one
 
-[`ScheduleFields`](src/components/ScheduleFields.tsx) asks three things — how
-long the meeting is, what a whole-day fill lays down, and which offset it is
-held at — over the same `PaintCalendar` the ballot is voted on.
+[`ScheduleFields`](src/components/ScheduleFields.tsx) asks for the meeting
+length, the hours a whole-day fill lays down, and the offset, over one
+`PaintCalendar`.
 
-**There is one calendar on that form, and there used to be two.** A month
-`DatePicker` picked the days, and the calendar below it painted the hours of
-the days that had been picked. Two calendars for one answer, and the first
-could not help with the second: picking a Thursday said nothing about when on
-Thursday, and a Thursday picked and then left unpainted was a day the poll did
-not ask about at all — a row in one answer that the other quietly contradicted.
-
-So the picker is gone and **a day is in the poll exactly while something is
-painted on it**. Marking a Thursday puts Thursday in; rubbing the last cell off
-it takes Thursday out. `daysOf(marked)` says which days those are — the same
-function the ballot reads them back with — and `ScheduleFields` reports the
-painting and the day list together through one callback, because they are one
-answer and cannot move apart. The calendar is on screen from the start rather
-than appearing once a day has been picked somewhere else: there is nowhere
-else. `canPaint` and `dayInBounds` are both simply true here, which is what
-lets a drag on a day nobody has mentioned be how that day joins the poll —
-the same shape `PaintTimes` already had for the calendar that collects times.
-
-The two time selects stay, and are a *default* rather than the answer: nobody
-wants to drag 09:00–17:00 across ten days, so clicking a day's heading lays
-these down and the drag is there for the days that differ. They are not stored
-and they are not the poll; what is painted is.
-
-**They do not touch what is already painted.** Moving them used to re-fill
-every day whose painting was still exactly the old default, on the grounds that
-such a day was a day nobody had touched — so "the working day starts at eight"
-did not mean re-dragging nine days. That is a guess about intent, and it is
-wrong as often as it is right: a day filled from its heading and then
-deliberately left alone is an answer, and it is indistinguishable from one
-nobody has reached yet. Worse, it is a guess made about days the creator is not
-looking at, so the correction arrives silently and several screens away from
-the select that caused it. The selects now decide what the *next* whole-day
-fill lays down and nothing else; the painting changes when somebody paints.
-
-**And the grid is drawn between them** (`axisFor`), rather than on all
-forty-eight half hours of a day whatever the poll is asking about. A week of
-the working day fits on a phone; a week of the whole day is a form whose bottom
-nobody can see, most of it there so the small hours can be greyed out in it.
-
-The axis is **widened rather than clipped**, which is the half that has to be
-right: a cell painted at seven in the evening and then left off the axis would
-be an answer nobody can see and nobody can rub out, still generating windows on
-the ballot. So narrowing the selects under what is painted narrows the grid as
-far as the painting and no further — and the way to reach an hour outside them
-is to move the select that excludes it, which is also now the only way, since
-the grid has no row for one. That is the trade for the vertical space: the
-selects used to be a default with the whole day still to hand behind them, and
-they are now the range of the day this poll is about.
-
-**A poll cannot ask about a day that has gone.** The calendar's floor is today,
-and the whole of today is in: a day before it is drawn greyed and takes no
-gesture — no drag, no heading, no month cell, and the header's range leaves it
-alone like any other out-of-bounds day — while the arrows stop at the month
-holding it (`earliest`). Nothing downstream would have caught one: the
-enumeration is arithmetic and reads no clock, and a window in the past is a
-perfectly well-formed window, so it is the gesture that puts a day in the poll
-that has to refuse.
-
-**The floor is today on the *poll's* clock, not the reader's** (`todayIn`). A
-creator in Auckland arranging a meeting held at `-07:00` is a day ahead of the
-grid they are painting, and their own calendar would grey out a day the poll
-can perfectly well use. `carryForward` reads the same clock for the same
-reason, so a duplicate never lands on a day the form is about to refuse; the
-browser's own date is still what the offset picker is captioned against, which
-is a question about the reader.
-
-The rest of today is *not* cut off, and that is a choice rather than an
-oversight: a creator marking this afternoon at two is answering a question
-about their own diary, and a floor that crept through the day would rub out
-what they had marked while they were still typing the title.
-
-It is read twice, because a floor is a fact about now and a form is open for a
-while. `ScheduleFields` draws it, and `CreatePoll` reads it again when it
-counts the windows and again when it builds them (`fromDay`) — so a form left
-open across midnight, or moved to an offset already on tomorrow, sends the days
-it may still ask about rather than the ones it could when they were painted.
-The two reads are the same set, so the count the error messages quote is the
-number of options that get made.
-
-**Nothing between eight hours and a whole day is offered as a meeting length.**
-`MEETING_LENGTHS` ran every half hour to 23:30, and every entry past the eighth
-hour was a length nobody has booked a room for — thirty rows of *13 hours*,
-*13 hours 30 minutes* between *8 hours* and *1 day*, all of them in the way of
-*2 hours*. Both ends of the gap are real questions: under eight hours is "how
-long is the meeting", a day or more is "which days are you free", and the
-whole-day granularity already answers the second. In between is neither.
+- **A day is in the poll exactly while something is painted on it.** There is
+  no separate date picker; `daysOf(marked)` gives the days, and
+  `ScheduleFields` reports the painting and the days through one callback.
+- **The two time selects are a default, not the answer.** Clicking a day's
+  heading lays them down; they are not stored, and moving them never changes
+  what is already painted.
+- **The grid is drawn between them** (`axisFor`), widened to hold anything
+  painted outside them, so nothing painted is ever off the grid. To reach an
+  hour outside them, move the select.
+- **A poll cannot ask about a day that has gone.** The floor is today *on the
+  poll's clock* (`todayIn`), not the reader's. Earlier days are greyed and
+  take no gesture, and the arrows stop at the month holding today. The rest of
+  today is not cut off. `CreatePoll` re-reads the floor when it counts and
+  builds the windows (`fromDay`), so a form left open across midnight sends
+  only valid days. `carryForward` uses the same clock.
+- **Meeting lengths** run in half hours up to eight hours, then whole days
+  (`MEETING_LENGTHS`); lengths in between are not real questions.
 
 ### The ballot
 
-[`TimeBallotCard`](src/components/TimeBallotCard.tsx), beside `BallotCard`
-rather than a variant of it: one is a list read top to bottom, the other a grid
-that is scanned. What they have in common is
+[`TimeBallotCard`](src/components/TimeBallotCard.tsx) sits beside
+`BallotCard` rather than being a variant of it; what they share is
 [`BallotFrame`](src/components/BallotFrame.tsx) — the card, the name box, the
-question strip, the error line, Cancel and Submit, and the sending itself. Both
-produce the same `BallotScore[]` for the same `onSubmit`, so both ballot paths,
-`submit_ballot` and `open_poll_submit`, work unchanged.
+question strip, the error line, Cancel and Submit, and the sending. Both
+produce the same `BallotScore[]`, so both ballot paths work unchanged. The
+ballot adds a six-value brush and the offset sentence to `PaintCalendar`.
 
-The calendar under it is [`PaintCalendar`](src/components/PaintCalendar.tsx),
-which the create form and the time-collecting card also draw. What the ballot
-adds to it is the six-value brush and the sentence about the offset, and that
-is now all it adds: it had a button beside those reading *apply 5 to every
-time*, and the calendar's own header does that job better — see *Three views*
-below.
+The calendar is [`@mantine/schedule`](https://mantine.dev), an event calendar
+rather than an availability grid; each gesture is a prop:
 
-The calendar is [`@mantine/schedule`](https://mantine.dev), and it is worth
-being clear about what that is: an event calendar in the Google Calendar mould,
-whose primitive is an event with a start, an end and a colour. It is not an
-availability grid and has no notion of a rated cell. The adaptation is a
-handful of props, and each one is a gesture:
+- `withDragSlotSelect` + `onSlotDragEnd` for a drag, and `onTimeSlotClick` for
+  a single tap (the drag hook ignores a zero-length drag).
+- Painted regions are rendered as **background** events coloured by rating.
+- Out-of-bounds cells are disabled cell by cell through `getTimeSlotProps`.
+- **A day's column heading fills that day**, through `onDateChange`.
+- In the **month view**, `onDayClick` fills a day and a drag fills several.
+- **The range in the header fills everything on screen** (`fillVisible`).
 
-- `withDragSlotSelect` with `onSlotDragEnd` gives the drag, and
-  `onTimeSlotClick` covers a single tap — a plain click is *not* a drag of
-  length zero to that hook (`use-slot-drag-select` refuses one where the start
-  and end index agree), which is why both are wired.
-- Every painted region is rendered back as a **background** event coloured by
-  its rating. Which of the six ratings a gesture applies is the app's own
-  control, because a calendar has nowhere to put one.
-- A cell the poll is not asking about is disabled through `getTimeSlotProps`,
-  now asked cell by cell rather than day by day: a Friday that only starts at
-  six is in bounds for part of itself, and a drag down it from nine marks the
-  evening and leaves the morning alone rather than being refused whole.
-- **A day's column heading fills that day**, through `onDateChange`; see below.
-- In the **month view**, which has no time grid at all, a day *is* the unit:
-  `onDayClick` fills one and a drag across several fills those.
-- **The range in the header fills everything on screen**, which is the one
-  gesture here that is not the library's at all; see below.
+**The header is ours.** `DayView`, `WeekView` and `MonthView` are rendered
+directly with `withHeader={false}` (the `Schedule` wrapper passes props each
+view does not declare down to a `div`), under a row built from the library's
+`ScheduleHeader` pieces: previous, the range, next, and a view switcher. With
+the library's header off, the day heading is the only caller of `onDateChange`
+in the week grid, so `onDateChange={fillDay}` has one meaning.
+`labels={{ weekday: 'Fill the whole day' }}` gives the heading that accessible
+name. Today and the current-time line are off (the grid is on the poll's
+clock, not the reader's). The library's `todayControl` and `viewSelect` classes
+are not used: they hide below 600px.
 
-**Three views, and the header is ours.** `DayView`, `WeekView` and `MonthView`
-are rendered directly rather than through the `Schedule` wrapper — that wrapper
-hands every view the same prop bag, and the props one view does not declare
-(`onDayClick`, `view`) end up on a `div`, which React warns about on every
-render. Each is drawn with `withHeader={false}` above one row of our own:
-previous, the range, next, and a `SegmentedControl` for the three views.
+**The header's range is a control** and fills exactly what it names — the
+month, the week or the day. It is exact because the month draws only its own
+days (`withOutsideDays={false}`) and every grid starts its week on
+`WEEK_STARTS_ON`, the same constant `visibleRange` counts from; keep those in
+step.
 
-**That header is what makes the heading gesture honest.** `onDateChange` is
-fired by four things in a week grid — previous, next, Today, and the day
-heading — and by two in a month. With the library's header off there is exactly
-one caller left in each view: the day heading in the week grid, and nothing at
-all in the other two. So `onDateChange={fillDay}` is a callback with one caller
-and one meaning, rather than a guess about which control fired. The heading's
-accessible name says so as well, through the one label the library exposes on
-it: `labels={{ weekday: 'Fill the whole day' }}` makes a screen reader read
-"Fill the whole day 2026-09-04" instead of "Weekday 2026-09-04".
+**Every gesture toggles**: a stretch already exactly what the brush would make
+it is cleared (`fillCells`, used by strokes, headings and the range alike).
+The `Can't` brush never toggles.
 
-Rebuilding the header rather than bending it is also the smaller change than it
-looks. It was already half turned off — Today hidden because "today" is a week
-the poll is probably not asking about, the current-time line off because "now"
-is in the reader's zone and the grid is in the poll's, Agenda off — and what a
-ballot wants beside it is a brush, an apply-to-everything, and a way back to
-the poll's own dates. Four controls of somebody else's next to four of ours was
-the arrangement worth ending.
+**Changing the view holds the calendar still.** `showView` measures the
+header's top before the switch and a `useLayoutEffect` scrolls by however far
+it moved, so a shorter view does not leave the reader halfway down the page.
+If the document is too short, the calendar is brought to the top instead.
 
-That way back is a **control of the header's own** rather than the link it was.
-The whole row is now built from the library's pieces — `ScheduleHeader` and its
-`Previous`, `Control`, `Next` and `ViewSelect` — which are plain buttons taking
-an ordinary `onClick`, with no navigation context behind them, so using them
-costs nothing and buys a header that *is* the calendar's rather than one
-sitting above it in a different shape. `navigationGroup` comes with them, and
-with it the container query that lets the cluster fill a narrow screen.
+**The time column is sticky** (`STICKY_TIMES`); the library's `weekViewInner`
+is `overflow: hidden`, which has to be opened up or a sticky element has
+nothing to stick to. **It is aligned to the rows** (`hoursColumn`): the library
+draws one box per whole hour from the top of the grid, so on an axis starting
+at, say, 14:30, the column is padded by the partial first hour and cut to the
+grid's height. The day view also restores the first label's top border.
 
-Two of the library's own wrapper classes are deliberately not used:
-`todayControl` and `viewSelect` are `display: none` under 600px, because the
-library swaps in a compact `NativeSelect` we do not render. Ours are plain
-`Group`s for that reason.
+**Touch: sideways scrolls, downwards paints** (`PAN_SIDEWAYS`). The library
+gives every slot `touch-action: none`; `pan-x pinch-zoom` on each slot hands
+the sideways axis back to the browser. Greyed cells get `pan-x pan-y
+pinch-zoom` (`outOfBoundsSlot`), since there is no stroke to keep the
+vertical axis for. When the browser takes a gesture it fires `pointercancel`,
+which the library's drag hook does not listen for, leaving a drag open that
+the next `pointerup` anywhere would commit; `cancelled` sends a synthetic
+`pointerup` on the next frame with a flag that stops it painting.
 
-**The range in the middle of that header is a control**, and it fills what it
-names: *September 2026* answers for September, and the same button on the week
-grid answers for the week and on the day grid for the day. It replaced the
-ballot's *apply 5 to every time*, which was the same idea attached to nothing
-the reader was looking at — it reached the whole poll however much of it was on
-screen, so a fortnight in two halves could be answered in one go or cell by
-cell and nothing in between. All three screens get it, because it is the
-calendar's rather than the ballot's: `fillVisible`.
+**The month gives up its drag on touch** (`withDragSlotSelect={!touch}`): a
+drag across a month uses both axes, so there is none to hand to the browser,
+and seven columns at the library's minimum width overflow a phone. Taps still
+fill a day. `(pointer: coarse)` is read on the first render.
 
-It reaches exactly what is drawn, which is what makes the label honest, and two
-props already set on the grids are what make that true — the month draws only
-its own days (`withOutsideDays={false}`) and every grid starts its week on the
-day `visibleRange` counts from (`firstDayOfWeek={WEEK_STARTS_ON}`, both reading
-one constant; see *Dates are written the reader's way* below) — so
-`visibleRange`, which works the range out, is exact
-rather than approximate and has to stay that way. Out-of-bounds days inside the
-range are left alone, and like every other click on this calendar it **toggles**:
-a stretch that is already exactly what the brush would make it is cleared, which
-is the undo a gesture that large needs.
+**Greyed stretches draw no row lines** (`NO_ROW_LINE`), so a greyed morning
+is one block. The month is left alone: its days draw the outer frame.
 
-**Changing the view holds the calendar still.** The three views are wildly
-different heights — a week of half-hours at the create form's row height is over
-a thousand pixels and the same poll's month is a few hundred — so switching
-between them used to move the page under the reader: the document became
-shorter than the position it was scrolled to, the browser clamped that position,
-and a calendar that filled the screen ended up halfway down it. Nothing scrolled
-on purpose, which is exactly why it read as a fault. So `showView` measures the
-header's own top before the switch and a `useLayoutEffect` scrolls the page by
-however far it moved after it, before the browser paints. Where the document is
-too short to hold the old position there is nowhere to put the reader back, and
-the calendar is brought to the top of the screen instead — the new view whole,
-rather than the part of it the clamp happened to leave on screen.
+**The ballot's arrows walk the poll** (`confine`): they step to the next range
+with a day in bounds and are dead at the ends. The two painting screens are
+unconfined.
 
-**Every gesture toggles**, the strokes included: a stretch that is already
-exactly what the brush would make it is a stretch the gesture is taking back.
-The `Can't` brush never toggles — clearing a cleared day would fill it. The day
-view has no heading and needs none: one drag from the top of the column to the
-bottom is the same gesture and the same result, and it is the view somebody has
-zoomed into to be precise.
+**Every weekday is drawn on every view**; out-of-bounds days are greyed
+(`outOfBounds`) rather than left out, which read as a broken calendar.
 
-The strokes were the exception to that for a while, and there was no argument
-for it: the day heading and the header's range both took a second press back,
-and a drag over what you had just dragged over re-asserted it. So the only way
-out of a stroke was to find the brush that means nothing and lay it over the
-same cells — a two-step undo for a one-step mistake, on the gesture people make
-most. `paint` now goes through the same `fillCells` the two clicks do, which is
-the whole change; the toggle rule is stated once and every gesture obeys it.
+**The month view shows one chip per marked block** (e.g. `09:00–11:00`), at
+the library's own cell height. **A tap on a chip clears what it covers**
+(`onEventClick` → `erase`, via `granulesBetween`, tested against `runBounds`);
+the chip sits over the day, so it is the only thing a second tap can reach.
+Chip text colour comes from `inkFor`, because Mantine's resolver picks
+unreadable ink at the dark end of the ramp.
 
-**The time column stays put while the days scroll under it.** Seven day
-columns will not fit on a phone — the library holds each to a five-rem minimum
-and scrolls the lot sideways — and what left the screen first was the one
-column saying what the rows were, which leaves a grid of unlabelled cells.
-`STICKY_TIMES` pins it, and the awkward line in it is the first: the library's
-`weekViewInner` is `overflow: hidden`, which makes it a scroll container in its
-own right, and a sticky element sticks to the nearest of those — a box that
-never scrolls, so it would not stick at all. Opening it up hands the column
-back to the scroll area that actually moves, and costs nothing: every event
-this calendar draws is positioned inside its own day column, and the rounded
-corner is clipped by `weekViewRoot`, outside the scroll area. The corner above
-the column is pinned with it and given a background, because a transparent
-pane is not a pane.
+**The ratings are a ramp of hue** — red through green, darkening along the
+way — so neighbouring ratings are distinguishable and the ramp survives
+colour blindness.
 
-**And it is lined up with the rows it names** (`hoursColumn`), which it was
-not on an axis that does not start on the hour. The library draws that column
-as one box per whole hour the axis contains, each an hour tall and stacked
-from the top of the grid — which is the same thing as assuming the axis starts
-on one. A poll whose earliest start is 14:30 begins half an hour above its
-first label, so every hour named the row half an hour before it — `15:00`
-against the 14:30 row — and the column ran out of labels before the grid ran
-out of rows, leaving the last hour listed with three half-hours under it
-instead of two. The fix is one declaration for each end of the axis: the
-column is padded at the top by the part of the first hour the axis begins
-inside, which drops every label onto the line where its hour really starts,
-and cut to the height of the rows, so that an axis ending at 17:30 — a `17:00`
-box an hour tall over half an hour of grid — no longer hangs half a row below
-the last row and takes the grid's bottom edge with it. Both ends are computed
-rather than special-cased: an axis that does start and end on the hour gets no
-padding and the height the column already had. The day view needs one line
-more, because it is the view that leaves the first label's top border off on
-the grounds that the header has already drawn one there: pushed down onto its
-own hour, that label has a row under it to be the top of, and gets the border
-back.
+**Times are on one clock, which the reader picks.** *24-hour time* in the gear
+menu applies to every time on screen. `toTimeOfDay` is the key string and
+never changes; `formatTimeOfDay` is the one place the clocks differ. It is per
+browser ([`lib/clock.ts`](src/lib/clock.ts), `star-voting:24-hour-time`) and
+follows the browser's language until flipped (`PREFERS_24_HOUR`).
 
-**On a finger, sideways is the view and downwards is a stroke**
-(`PAN_SIDEWAYS`). The days scrolling sideways is the paragraph above; for a
-long time they could not, because the library gives every paintable slot a
-`data-drag-slot-index` and its stylesheet gives everything holding that
-attribute `touch-action: none`. So the browser did nothing at all with a touch
-that began on the grid: a sideways swipe moved no days, and a downwards one
-painted the column it started in rather than scrolling the page. The only part
-of the calendar that still scrolled was the hour column and the day headings,
-which carry no slots — an escape hatch nobody would guess at.
+**Dates follow the browser's language, with no setting.**
+[`lib/locale.ts`](src/lib/locale.ts) gives `WEEK_STARTS_ON` (from
+`Intl.Locale` week info, or a CLDR region list where the browser lacks it) and
+`DAY_BEFORE_MONTH` (`Fri Sep 18` vs `Fri 18 Sep`). Display only.
 
-`touch-action: pan-x pinch-zoom`, set on every slot through `getTimeSlotProps`,
-hands the sideways axis back to the browser and keeps the other. That is the
-split the grid already means: across is which day, down is what time, and a
-drag down a column is how a stretch of one gets painted. The browser decides
-which of the two a swipe is from its first few pixels and holds that for the
-rest of the gesture, so one that is not quite straight still does one thing
-rather than half of each — and what comes back is a real scroll, with momentum
-and overscroll. `pinch-zoom` rides along because `pan-x` alone is the whole of
-what the browser may do, and a grid nobody can zoom into is a grid somebody
-cannot read. Only touch and pen read any of it; a mouse drag paints exactly as
-it did.
+**Not shuffled.** `useBallotOrder` does not apply: a calendar's order is
+chronological and load-bearing.
 
-**A cell out of bounds needs it too** (`outOfBoundsSlot`), which is the part
-that looks redundant and is not. The library stamps its drag index on every
-slot whether or not the caller will paint one, so a greyed cell is
-`touch-action: none` like any other and a greyed morning is a patch of the
-week the days will not scroll under. Refusing a gesture and refusing to be
-swiped across are different refusals.
-
-**And a greyed cell scrolls downwards as well** (`pan-x pan-y pinch-zoom`).
-A paintable cell keeps the downward axis because a stroke needs it; a greyed
-one has no stroke to keep it for, and with `pan-x` alone a downward swipe on
-it did nothing at all — the page above the calendar scrolled, the open days
-painted, and the greyed ones in between were the one place a finger moved and
-nothing answered. So a greyed day is now part of the page: a swipe that starts
-there scrolls it, and one that starts on a day the poll asks about still
-paints. The browser settles which from the cell the finger lands on and holds
-it for the gesture, so a stroke that runs from an open cell into a greyed one
-is still a stroke, and a scroll that starts on a greyed one is still a scroll;
-any drag the library had opened under that scroll is ended without painting
-by `cancelled`, below. The month's own out-of-bounds days go through
-`getDayProps` and deliberately do *not* share it: with the drag off there on
-touch, a greyed day already scrolls like the rest of the page.
-
-**A greyed stretch draws no row lines** (`NO_ROW_LINE`). Each slot draws its
-own top border, and on a greyed one it is made transparent, so the slot's grey
-shows through it and a greyed morning is one block rather than a column of
-cells that look as if they are waiting to be painted. The edge of the open
-cells is still drawn where they start below it, by their own border; the
-column lines between days stay, since they separate days rather than cells.
-The month is left as it is: its days draw the grid's outer frame too, and a
-greyed day at the edge would take a piece of the frame with it.
-
-**And the drag the browser takes away has to be given an ending**
-(`cancelled`). Letting the browser claim a swipe means `pointercancel`, which
-arrives after `pointerdown` has already opened a drag inside the library and
-after a move or two has already widened it — two of them, measured. The
-library's hook listens for `pointermove` and `pointerup` and for nothing else,
-so a cancelled gesture leaves it holding a drag that never ends: the cells keep
-the border that says they are selected, and the *next* `pointerup` anywhere on
-the page — a tap on Submit, a minute later — closes it and paints the range. A
-stroke nobody made, arriving after they had stopped looking. So the cancel is
-turned into the ending the hook is waiting for: a synthetic `pointerup` on the
-document runs its handler, and a flag read by both drag-end callbacks stops the
-one side effect, since the range it would commit is the swipe that scrolled.
-Sent on the next frame, so a drag opened microseconds earlier has had its
-listeners attached; the flag drops immediately after, because a cancel that
-commits nothing must not disarm the next drag.
-
-**The month gives up its drag on touch instead** (`withDragSlotSelect={!touch}`).
-It cannot make the bargain the two time grids make. There the axes mean
-different things, so one can be handed over and the other kept; a drag across a
-month means neither — Monday the 5th to Friday the 16th sweeps down the weeks
-and across them at once, and it is one range, not two. There is no axis to give
-away that does not cut the gesture in half. So on a finger the drag goes and
-the scrolling comes back, which it has to: seven columns at the library's
-five-and-a-quarter-rem floor is 588px against a phone's ~390, and while the
-days carry a drag slot they carry `touch-action: none` with it. The attribute
-belongs to the drag, so turning the drag off is itself what lets the month
-scroll, and `onDayClick` is wired past it — a tap still fills a day, and a run
-of days is tapped out one at a time or taken whole by the range in the header.
-`(pointer: coarse)` is asked of the device rather than the window, since a
-narrow window on a laptop is still a mouse; it is read during the first render
-(`getInitialValueInEffect: false`) so the month does not mount with a gesture
-it loses a frame later.
-
-**The ballot's arrows walk the poll rather than the calendar** (`confine`).
-They step to the next range that has a day in bounds on it — so a poll about a
-Friday in September and a Friday in November is one press between them rather
-than seven through October — and they are drawn dead at the ends. A voter has
-nothing to say about a week the poll is not asking about, and a press that
-empties the screen and leaves them to work out why is worse than one that does
-not move. The `Back to …` control is still there and is now unreachable from
-the ballot, which is the point; the two painting screens are unconfined and
-must be, since on the create form the bounds *are* the answer and a poll
-collecting its times is asking about days nobody has named yet.
-
-**Every weekday is drawn, on every view.** The ballot used to leave out the
-weekdays its poll had nothing on — a poll about a Friday, a Saturday and a
-Sunday drew three columns instead of seven — by handing the library's own
-`weekendDays`/`withWeekendDays` a list of the columns to drop. It bought width
-on a phone and cost more than it bought: a week missing four of its days, and a
-month whose columns changed as you paged through it, read as a calendar that
-had gone wrong rather than as one that had been tidied. A greyed day is a
-legible "not this one"; an absent day is a puzzle. So the grids are the
-library's own again, seven columns wide, and out-of-bounds days say so by being
-greyed (`outOfBounds`) rather than by being missing.
-
-**The month view gets one chip per marked block**, which is the ordinary thing
-a Mantine month cell holds: a day with two marked stretches shows `09:00–11:00`
-and `14:00–17:00`, and a day answered in whole days shows what it is rated. The
-cell keeps the library's own height and its own `+n more` — a `maxEventsPerDay`
-of ten reserves room for ten and leaves a month of near-empty cells four times
-taller than they need to be.
-
-**And a tap on a chip rubs out what it covers** (`onEventClick` → `erase`),
-which is the way back from the tap that drew it. Filling a day in the month is
-a tap on the day; the chip that appears then sits on top of that day and is the
-only thing a second tap in the same place can reach, so until this the obvious
-undo landed on a control that did nothing — two gestures a finger cannot tell
-apart, one of which worked. The chips live in a layer of their own above the
-day buttons, so the handler never doubles as a day click. It clears rather than
-toggling: the stretch under a chip is by definition painted, so the only thing
-"again" could mean is gone. A chip's bounds are read back into cells by
-`granulesBetween`, which is `runBounds` inverted and tested against it — a tap
-that cleared one cell fewer than its chip covers would leave the chip on screen
-after the reader had asked to be rid of it.
-
-A chip's text colour is chosen here (`inkFor`) rather than left to the
-calendar: Mantine's variant resolver hands it a colour close enough to its own
-background at the dark end of the ramp to be unreadable — `green.9` on
-`green.9`, which is a legible label everywhere except on screen. The painted
-runs in the week and day grids carry no title at all, so this is only ever the
-month. It
-used to get one synthesised line per day instead — `Whole day`, `6–10pm`,
-`4h in 2 blocks` — and all three of those are a summary of an answer rather
-than the answer. `Whole day` was also usually a lie: the poll is rarely asking
-about the small hours, so "the whole day" was nine to five and said so
-nowhere. An untouched day is still drawn as an ordinary empty cell, since the
-thing to click is the day itself rather than a chip sitting on it.
-
-**The ratings are a ramp of hue, not of shade.** They were six blues from
-`blue.2` to `blue.9`, which is a scale you can order and cannot read: a 2 and a
-3 beside each other on a week grid are two rectangles of nearly the same
-colour, and "what did I put here" is the whole question a painted calendar
-answers. Red through green is the ordering everybody already knows, and the
-shades still darken along it — so the ramp survives being seen by somebody who
-cannot tell the red end from the green one, and does not depend on that for its
-first reading.
-
-**Every time on screen is on one clock, and the reader picks which.**
-`2:30pm` or `14:30`, with **24-hour time** in the gear menu to choose. The
-grid was once drawn in one and the create form's two selectors said the other
-beside it, which is one poll described two ways on one screen — so the choice
-applies to all of them together: the selects, the grid's hour column, the
-month chips, the results and the winner badge. `toTimeOfDay` is the string the
-grid is keyed by and every option is named in, and never changes;
-`formatTimeOfDay` is the one place the two clocks differ, and everything a
-person reads goes through it. The setting is **per browser**
-([`lib/clock.ts`](src/lib/clock.ts), `star-voting:24-hour-time` in
-`localStorage`) rather than on the account, for the reason the sign-in method
-is: it is a habit of whoever is holding the device, and it needs no migration
-and nothing read before the first time on a page can be drawn. Until the
-switch is flipped it follows the browser's language (`PREFERS_24_HOUR`), so
-`en-GB` opens on `14:30` and `en-US` on `2:30pm`; only a flipped switch is
-stored.
-
-**Dates are written the reader's way, and nobody is asked.**
-[`lib/locale.ts`](src/lib/locale.ts) reads the browser's language once and
-answers two more questions from it: which day the calendars start their weeks
-on (`WEEK_STARTS_ON` — Sunday in the US, Monday in most of the world, Saturday
-in parts of the Middle East), and whether a date is written `Fri Sep 18` or
-`Fri 18 Sep` (`DAY_BEFORE_MONTH`). Neither has a switch, unlike the clock: the
-language already answers both for nearly everybody, nobody goes looking for
-"week starts on" in a menu, and the clock is the one of the three people
-commonly set against their region's habit. Like the clock, both are display
-only — the grid is keyed by date and every option is an ISO 8601 instant, so a
-reader in London and one in Chicago are looking at the same poll drawn two
-ways. The week start comes from `Intl.Locale`'s week info where the browser has
-it and from a list of CLDR's regions where it does not (Firefox).
-
-`useBallotOrder` does not apply, and that is the one deliberate exception to
-the argument in [`ballotOrder.ts`](src/lib/ballotOrder.ts). It shuffles because
-position on a list is worth points; a calendar's order is chronological and
-load-bearing, and shuffling it would produce a week with Thursday in the
-middle.
-
-**It is loaded lazily**, through
-[`components/deferred.ts`](src/components/deferred.ts) alongside the results
-cards, and its stylesheet is imported inside it rather than in `main.tsx` so
-Vite splits the CSS with the chunk. `@mantine/schedule` and the `rrule` it
-carries are about 139 kB of JS and 79 kB of CSS built — more than everything
-else on a ballot put together, and a poll that chooses an option fetches none
-of it. It grew by a third when the day and month views were added, which is the
-price of the view switcher and is paid only by the ballot that has one. The
-create form pays it too now that it paints, which is why `PaintCalendar` is a
-chunk of its own rather than living inside either of them: `CreatePoll` is
-already lazy, so a reader who never opens either page still fetches nothing.
-
-Which is also why it is **the one ballot with an entrance of its own** (see
-[Motion](#motion)). Every other ballot is in the main bundle and mounts with
-the page, and the page already fades in as a whole — `Layout` wraps the route
-in a `Reveal` — so a second fade there would run over the first. The calendar
-lands after that fade is over, and without one it would be the only thing in
-the app that snaps in. `BallotFrame` takes an `arriving` flag for it, and no
-other caller sets it.
-
-**It wraps the body, not the card**, and that is the whole of the care needed.
-`QuestionSkeleton` stands in for a ballot being fetched by rendering a real
-card holding the *real* name box and the *real* question strip over a
-placeholder body — precisely so neither of them blinks during the wait. Fading
-the card would play a full entrance over two things that had not changed a
-pixel, which is the mistake [Motion](#motion) records against the question
-strip on a crossing between questions. Only the body was ever a placeholder, so
-only the body arrives.
+**Loaded lazily** through [`components/deferred.ts`](src/components/deferred.ts),
+with its stylesheet imported inside it so Vite splits the CSS too.
+`@mantine/schedule` and `rrule` are about 139 kB of JS and 79 kB of CSS,
+fetched only by a time ballot or the create form. Because it arrives after the
+page's own fade, it is **the one ballot with an entrance of its own**
+(`BallotFrame`'s `arriving`), and the entrance wraps the body only — the name
+box and question strip in `QuestionSkeleton` are real and must not fade.
 
 ### Reading the results
 
-The tally is reused exactly as it stands. No calendar heat map of it: an
-option's name *is* its identity, the page already ranks options by score, and a
-ranked list of times is a legible answer. (The ballots under the tally are a
-different matter, and are drawn on the calendar; see *The ballots, on the
-calendar* below.) The only thing wrong with it on a
-time poll is that the names are ISO timestamps — so they are rewritten once, on
-the payload, by `relabelResults` / `relabelRanking` / `relabelSheet`, rather
-than threading a formatter down through the score rows, the tie-break prose,
-`NameList`, the head-to-head matchups, the full ranking and the published
-sheet. Every one of those still just renders `name`.
+The tally is unchanged, and there is no heat map: a ranked list of times is a
+legible answer. Option names are rewritten once on the payload by
+`relabelResults` / `relabelRanking` / `relabelSheet`, so nothing downstream
+needs a formatter. `formatWindow` recognises only the exact shape
+`enumerateWindows` produces and returns anything else untouched, so it is
+applied to every poll unconditionally.
 
-**None of them take a schedule, and no caller has to know which kind of poll it
-is drawing.** `formatWindow` recognises the exact shape `enumerateWindows`
-produces — a full ISO 8601 instant with a numeric offset — and returns anything
-else untouched, so the relabelling is applied to every poll unconditionally and
-an ordinary poll's options come back as they went in. The cost is that an
-option poll whose option is *literally* named `2026-09-01T14:00:00-07:00` gets
-reformatted; it is still the same instant, more legibly, and it is not a poll
-anybody is going to write.
-
-**A window reads `2:00pm, Tue Sep 1`** (or `14:00, Tue Sep 1` on the 24-hour
-clock) — the time first, then the weekday, the
-month and the day. That is the order the answer is spoken in, and it is also
-the order that puts the part telling two neighbouring options apart at the
-front of the line: a ranked list of a Saturday's windows differs only in its
-first five characters. Within the date the day and month come in whichever
-order the reader's language writes them — `Tue Sep 1` in the US, `Tue 1 Sep`
-in Britain — for the same reason: it is the order they would say it in.
-
-The window's **end** is deliberately not shown. It would need the schedule
-back, and every window in a poll is the same length — ten rows each saying
-"– 17:00" four hours after their own start is noise. If the length is wanted on
-the results page it belongs once, in a line above the list, rather than once
-per option.
+**A window reads `2:00pm, Tue Sep 1`** — time first, since that is what tells
+neighbouring windows apart; the date in the reader's own order. The end is not
+shown: every window in a poll is the same length.
 
 ### The ballots, on the calendar
 
-Under the tally an ordinary poll draws either the published sheet or, where
-ballots are private, the reader's own ballot — a grid of every voter against
-every option, or a list of options with stars beside them. On a time poll both
-are correct and neither can be read: the options are a hundred windows, and
-"when could people make it" is a question about a week. So on a time poll
-`Ballots` and `YourBallot` draw [`ScheduleBallots`](src/components/ScheduleBallots.tsx)
-in place of the table and the list.
+On a time poll `Ballots` and `YourBallot` draw
+[`ScheduleBallots`](src/components/ScheduleBallots.tsx) instead of a grid or a
+list:
 
-- **Your ballot is the calendar you painted, read only.** Rebuilt from the
-  scores by the same `paintingFromScores` that fills a ballot back in behind
-  *Edit vote*, so it carries the same blur (see *Reading a ballot back*), and
-  drawn on the ballot's own `PaintCalendar` with `readOnly` set — the library's
-  `mode="static"`, plus a header whose range is a label rather than the control
-  that fills it.
-- **The published sheet is one calendar of everybody's ratings averaged**,
-  cell by cell (`averagePainting`), with a `MultiSelect` over it naming whose
-  ballots go in. Everybody to begin with; *Everyone* and *Clear* beside it,
-  because Mantine's own clear button only appears under a pointer.
-- **An average is shown by colour alone.** It falls between the six ratings,
-  so its block is blended between the two either side (`blendFor` in
-  [`ratings.ts`](src/lib/ratings.ts)) — a 3.4 four tenths of the way from the
-  3's yellow to the 4's teal — and the key is that ramp rather than six
-  swatches. Numbers printed on every block were tried and read as clutter; the
-  exact figure is a hover title instead. The calendar draws any colour that is
-  not a theme shade as a faint tint, so `eventBody` paints the blend itself.
-- **The average is taken over paintings, not over scores**, so that a set of
-  one voter is exactly that voter's own calendar, cell for cell — the two
-  cards cannot draw one person two ways. An unmarked cell is a 0 in the
-  average, as it is on the ballot.
-- **All of it is worked out in the browser, from the sheet already read.**
-  Picking a different set of people costs no request and discloses nothing:
-  anybody holding the sheet could add up any subset of its rows, and the CSV
-  exists so that they can. The download beside the heading is untouched — the
-  same file, of the same rows, whichever way the sheet is drawn.
-- **Fetched only by a time poll.** The calendar comes in its own `lazy()`
-  (`deferred.ts`), not as an import of `Ballots` or `YourBallot`, so an option
-  poll's sheet still fetches a table and nothing of `@mantine/schedule`.
+- **Your ballot** is your painting rebuilt by `paintingFromScores`, on a
+  read-only `PaintCalendar` (`mode="static"`, and a header whose range is a
+  label).
+- **The published sheet** is one calendar of everybody's ratings averaged cell
+  by cell (`averagePainting`), with a `MultiSelect` choosing whose ballots go
+  in, plus *Everyone* and *Clear* buttons. The average is over paintings, so a
+  set of one voter is exactly that voter's calendar.
+- **An average is shown by colour alone**, blended between the two ratings
+  either side (`blendFor` in [`ratings.ts`](src/lib/ratings.ts)); the exact
+  figure is a hover title. `eventBody` paints the blend, since the calendar
+  tints off-theme colours.
+- It is worked out in the browser from the sheet already read, so choosing
+  voters costs no request and discloses nothing new. The CSV download is
+  unchanged.
+- The calendar is its own `lazy()` in `deferred.ts`, so an option poll's sheet
+  fetches none of `@mantine/schedule`.
 
 ### Duplicating one
 
-A duplicate of a time poll is a time poll. That took saying, because for two
-migrations it was not: `CreatePoll`'s prefill copied the title, the settings
-and the option list and knew nothing about `kind` or `schedule`, so
-**"Duplicate" on a time poll produced an *option* poll whose options were sixty
-ISO timestamps** — a real ballot, drawn as a list, that nobody could read and
-the calendar could not score.
+A duplicate of a time poll is a time poll. **Before the form appears,
+[`DuplicateDates`](src/components/DuplicateDates.tsx) asks for the copy's
+first day**, opening on `carryForward`'s answer — the source moved by the
+fewest whole weeks that puts its first day on or after today (none if it is
+still ahead) — and refusing past days. Every cell then moves by the same
+number of days (`startingOn`), so spacing and hours come across whole. Several
+time questions in one poll move together, from the earliest first day among
+them. The offset copies across and sets `offsetPicked`.
 
-Everything in a schedule copies straight across except the painting, and the
-painting is the whole reason anybody duplicates one of these: the point of
-copying last Friday's poll is to ask about a Friday that is still ahead.
-`carryForward` moves it **by whole weeks**, the fewest that puts the first day
-on or after today — none at all when the source poll's dates have not happened
-yet, so duplicating a poll you made this morning gives back the days you picked
-this morning.
+The form **validates `schedule`** with `pollScheduleSchema` instead of casting
+it, since it does arithmetic with it; one that does not parse leaves a time
+poll with no grid and a line saying so.
 
-Whole weeks rather than any other shift, because a painting is an answer about
-*days of the week*: "Friday evenings, Saturday from nine" moved onto a
-Wednesday is that answer given about the wrong day. Every cell moves with the
-day it was painted on, so the copy is the same poll — the same number of
-windows, the same Friday evening, at the same offset.
-
-**And that is only where the picker starts.** A copy of a time poll is nearly
-always about different dates, so before the form appears
-[`DuplicateDates`](src/components/DuplicateDates.tsx) says when the poll being
-copied started and asks for the copy's first day, opening on the whole-weeks
-answer above and refusing a day that has gone. Every painted cell then moves by
-the same number of days (`startingOn`), so the spacing comes across whole —
-pick a Tuesday and the Friday-and-Saturday poll becomes a Tuesday-and-Wednesday
-one, hours unchanged. Several time questions in one poll move together, from
-the earliest first day among them, each from its painting as copied rather
-than from its own carried-forward one, so the gaps between them hold too. The
-"these dates have moved" notice under the calendar only appears now where the
-date step did not run, since a date the creator just picked has not moved on
-its own.
-
-**The offset copies straight across**, and `offsetPicked` is set with it: an
-offset that came from the poll being copied is an answer rather than this
-browser's guess, and the dates that have just moved must not move it.
-
-It is also the one place the form **checks** a column instead of casting it.
-Every other field on that row is trusted, and `schedule` is not, for the reason
-`pollScheduleSchema` exists: it is the payload the form does arithmetic with,
-and a `granularity` that arrived as a string would make every window start
-`NaN` several screens away. One that will not parse leaves a time poll with no
-grid and a line saying so, rather than the list-of-timestamps poll this is all
-here to prevent.
-
-A duplicate of a poll that asks several questions copies each of them as what
-it is, so a group holding a calendar copies as a group holding a calendar. That
-is one query rather than three: every question of a group carries the whole
-invite list, so the row-level security on `polls` lets anybody who can see one
-see its siblings, and `select('*, candidates(*)').eq('group_id', …)` answers
-what `poll_group` plus a second read of `candidates` used to.
+A duplicated group copies each question as what it is, in one query:
+`select('*, candidates(*)').eq('group_id', …)` (RLS lets anybody who can see
+one question see its siblings).
 
 ### Ties, and the poll that elects nobody
 
-Adjacent windows overlap heavily, so their totals and their per-ballot vectors
-are nearly identical and the top two by score are usually neighbours. The
-runoff then compares Tuesday 2pm against Tuesday 3pm rather than against a
-genuinely different time. That much is accepted: if the two best windows are
-two shifted copies of the same slot, that slot is a good answer.
-
-Painting whole days — which the ballot actively encourages — goes one step
-further and gives contiguous windows *identical* score vectors from every
-ballot. In the score round that is fine: `star_round` falls through to
-`v_resolved := 'random'` and orders by candidate id, and among genuinely equal
-windows any pick is a good pick.
-
-**In the runoff it is not fine, and this is the sharp edge of the feature.**
-The runoff has no random fallback. Two finalists with identical vectors are
-level on preference, on points and on five-star votes alike, which is
-`resolved_by: 'unresolved'` — `winner_id` is null, `poll_winner_name` returns
-null, and the poll reports a tie and elects nobody. So a poll where everybody
-paints the same whole days, which is the most natural way to answer one, comes
-back with no answer. `test/sql/cases/32_a_calendar_of_windows_tallies.sql`
-asserts both halves of this: the heavy-but-decidable case settles a winner, and
-the identical case elects nobody.
-
-Giving the runoff a last resort — the same arbitrary-but-stable ordering by
-candidate id that the score round falls back on — would fix it, and would only
-ever fire where there is currently no winner at all. It is a change to the
-tally every poll goes through, so it is not in the migration that adds a poll
-kind.
-
-### Two functions had to be dropped, and took their grants with them
-
-`create_poll` and `insert_poll_row` each gained two defaulted parameters, and
-that cannot be a `CREATE OR REPLACE`: a different argument count is a different
-function, so the old one would have stood beside the new one as an overload
-that makes every existing call ambiguous. Both were dropped and recreated.
-
-**A dropped function takes its grants with it, and a newly created one is
-executable by `PUBLIC`.** 0053 revokes exactly that on both — every internal
-function in this schema has a `REVOKE ALL … FROM PUBLIC` beside it — so
-recreating them without re-revoking would have left `create_poll` reachable by
-`anon` through PostgREST. It is refused on the first line of its own body by
-the `auth.uid() is null` check, so nothing was writable either way; but "an
-internal function is not exposed" and "an internal function is exposed and says
-no" are not the same posture, and this app grants `anon` nothing outside the
-`open_poll_*` functions. `0055` re-revokes both, and
-`test/sql/cases/30_a_poll_that_finds_a_time.sql` asserts it, because a missing
-`REVOKE` is invisible in a schema and identical to never having needed one.
+Adjacent windows overlap, so the top two by score are usually neighbours;
+that is accepted. **Painting whole days gives contiguous windows identical
+score vectors**, which the score round settles randomly (by id) but the
+runoff cannot: it has no random fallback, so two identical finalists are
+`resolved_by: 'unresolved'` and the poll elects nobody.
+`32_a_calendar_of_windows_tallies` asserts both cases. A last-resort ordering
+in the runoff would fix it, but it is a change to every poll's tally and has
+not been made.
 
 ### The option ceiling, and what the tally costs
 
-The ceiling on options was 50 and is now 500, for every poll rather than only
-for the new kind. Fifty was a ceiling on how long a list a person will read to
-the end before scoring any of it, which is the right question to ask of a list
-and the wrong one to ask of a calendar. `MAX_OPTIONS` in
-[`limits.ts`](src/lib/limits.ts) and `insert_option` both say 500 — and
-`insert_poll_row` now says it too, which it never did: that path inserts into
-`candidates` directly and checked nothing, so a poll created over the cap up
-front was accepted while the same poll built one option at a time was refused.
-
-The plan this was built from called for a composite index on
-`scores (ballot_id, candidate_id)`, on the grounds that the tie-break block's
-correlated lookups had only `idx_scores_ballot_id` to go on. **That index
-already exists**: the `UNIQUE (ballot_id, candidate_id)` constraint on `scores`
-is backed by a btree on exactly those columns, and `EXPLAIN` shows the
-tie-break block using it. Adding another would have been a duplicate.
-
-The worst case used to be the tie-break's pair build, quadratic in the tied
-group and multiplied by the ballots: 60 windows × 60 ballots, every window
-tied, was ~2.4 s for `poll_tally` and ~6 s for `poll_ranking`, and
-`settle_winner` runs the tally inside the transaction of the deciding ballot,
-so the last voter to submit waited for it. That cost is gone with
-`0086_simpler_score_round_tie_break.sql`: a tie of three or more is settled on
-five-star votes, which `_round` has already counted, and head-to-head only ever
-compares the one pair a two-way tie is (see [Tie-breaks](#tie-breaks)). What
-is left is linear in the options and the ballots.
+The ceiling is 500 options per poll (`MAX_OPTIONS` in
+[`limits.ts`](src/lib/limits.ts), `insert_option` and `insert_poll_row`). The
+`UNIQUE (ballot_id, candidate_id)` constraint on `scores` already provides the
+index the tie-break lookups use; do not add a duplicate. The tally is linear
+in options and ballots: a tie of three or more is settled on five-star votes,
+and head-to-head only ever compares one pair (see [Tie-breaks](#tie-breaks)).
 
 ### Collecting times, and a calendar among several questions
 
-Three things were refused on a time poll until
-[`0056_schedule_options.sql`](supabase/migrations/0056_schedule_options.sql),
-and one new operation is what unblocks the first of them.
+**A time poll may collect its times.** A voter adding an afternoon adds
+several windows at once, so `insert_options` inserts a list atomically, and
+each way into `candidates` has a plural door onto it: `suggest_options`,
+`open_poll_suggest_options`, `creator_add_options`. **A name already on the
+list is skipped rather than refused** by the plural functions (two voters
+painting overlapping afternoons are not making a mistake); each returns how
+many it added. The singular paths still refuse a duplicate.
 
-**A time poll may collect its times.** `create_poll` refused
-`solicit_options` on one, for a reason that was real: a voter "adding Thursday
-afternoon" adds a handful of options — one per window start — and the
-suggestion path inserted one at a time, so a run that failed halfway left a
-Thursday with morning windows and no afternoon. `insert_options` is that
-insertion made atomic, and the three ways into `candidates` each gain a plural
-door onto it: `suggest_options`, `open_poll_suggest_options`,
-`creator_add_options`.
+The gesture is [`PaintTimes`](src/components/PaintTimes.tsx): the same
+calendar, marking hours you would offer. Days are unconfined. It draws
+`HoursFields`, the same two selects as the create form; they are this reader's
+view and change nothing stored. Taking a window off the list is the creator's
+job; other readers can only undo their own unsaved marks, by painting over
+them (every gesture toggles).
 
-**A name already on the list is skipped rather than refused**, which is the one
-rule the plural functions add. Two voters painting overlapping afternoons are
-not making a mistake and there is nothing the second of them could do about
-being told so; the singular path still refuses a duplicate by name, because
-there the duplicate *is* the whole of what was asked for and the message is the
-answer. Each of them returns how many were actually added, which is what the
-card says on screen.
+**The calendar appears on *Add times*** (*Edit times* for the creator). Until
+then the card shows a summary in badges (`TimesSummary`, e.g. *5 time options
+from Fri Sep 4 to Sat Sep 5*). Pressing it starts an edit, which withdraws a
+confirmation as opening a text field does. A save, or a *Confirm times* with
+nothing painted, closes the calendar. On a time poll the card says *times*
+where a text list says *options*.
 
-The gesture is [`PaintTimes`](src/components/PaintTimes.tsx): the same calendar
-again, marking the hours you would *offer* rather than the hours you are free.
-The days are open — a poll collecting its times is asking about days nobody has
-named yet, so the arrows are the whole of the range. Taking a suggestion off
-the list stays the creator's job, here as everywhere else.
+**The edit is kept as a difference**: `PaintTimes` holds the cells this reader
+marked and rubbed out, and draws the current list with those laid over it, so
+somebody else's later suggestion is never mistaken for a removal. A window
+being taken off is simply not drawn.
 
-**The hours were not open, and are now.** They were the poll's stored `window`,
-full stop, so a group could only ever be asked about the hours its creator had
-already thought of: a poll painted 09:00–17:00 had no way to be offered an
-evening, by anybody, ever — the rows were not on the grid and the reason was
-nowhere on the screen. The card now draws `HoursFields`, the same two selects
-the create form has and for the same two jobs (what the grid is drawn between,
-and what clicking a day's heading lays down), and they are this reader's
-working view rather than anything stored: moving them adds nothing to the poll
-and takes nothing away. What makes that safe is the widening above — the axis
-holds everything already offered, so narrowing the pair hides nothing, and a
-window offered at seven in the evening is drawn on every screen that comes
-after it, the ballot included.
+**A question of a group may be a calendar**: `create_poll_group` reads `kind`
+and `schedule` per question, with the same checks `create_poll` applies.
 
-**And the *Offer* / *Take off* toggle is gone.** It was a mode to be in for a
-gesture that already says which of the two it means: every gesture on this
-calendar toggles, so marking a stretch that is already marked is how anybody
-says "not that after all" — `fillCells` in `PaintCalendar`, the same rule the
-day heading and the header's range have always answered to. The toggle bought
-one case the brush does not cover, a drag across a half-marked stretch, and
-charged a mode for it on every other. What it meant for somebody who may not
-take a window off the list was narrower still — *Undo*, reaching their own
-unsaved marks and stopping there — which is exactly what painting over them
-does, and the line above the calendar now says so in those words.
+**The creator may correct a time poll's options** through
+`creator_add_options` (which takes painted windows), but not
+`creator_add_option`, the typed-name path — a hand-typed name is one the
+calendar cannot draw.
 
-**There is no calendar until *Add times*.** The calendar used to take
-gestures the moment it was drawn, so a reader who had come to look at the
-list was already in an editor with nothing saying so. Then it was drawn read
-only until **Add times** (**Edit times** for the creator, whose gestures can
-take times off as well) was pressed, and a read-only calendar looks exactly
-like one that is broken. So until that press the card says only what the list
-holds — *5 time options from Fri Sep 4 to Sat Sep 5* — as badges
-(`TimesSummary`), which roll over like the count badge's when somebody else's
-suggestion lands; the calendar, the hours selects and the instruction line
-arrive together with the press. Pressing it is starting an edit, so it takes a
-confirmation back as opening a text field does. A save, or a *Confirm times*
-with nothing painted, closes the calendar again, and the next one opens on the
-list as it then stands. The creator's correction of a list that is already a ballot opens
-editing, since *Edit options* was the press that asked for an editor. On a
-time poll the card says *times* where a text list says *options*: *Confirm
-times*, *Times confirmed*.
+### Deliberately not built
 
-**The edit is kept as a difference, not as a copy of the list.** `PaintTimes`
-holds the cells this reader marked and the cells they rubbed out, and draws
-the list as it now stands with those laid over it. It held a copy of the list
-taken on arrival, which read somebody else's later suggestion as a window this
-reader had rubbed out: drawn in the red that meant *coming off*, counted as an
-unsaved edit — enough, since confirmations are taken back on an edit, to
-un-confirm a reader who had touched nothing — and sent as a removal by a
-creator's save. That red is gone too: a window being taken off is simply not
-drawn, because the calendar shows the list as it will be, not the edit that
-gets it there.
-
-**A question of a group may be a calendar.** `create_poll_group` took no kind,
-so every question it made was an ordinary one. It now reads `kind` and
-`schedule` off each question and hands them to the same `insert_poll_row`, with
-the same two checks `create_poll` applies to its own arguments. So the create
-form holds a kind per question rather than one for the poll, and "Movie night"
-can ask *when* and *what* in one sitting — which is what the About page's
-sample now does.
-
-**And the creator may correct a time poll's options.** `creator_add_option`
-still refuses one: it is the typed-name path, and a hand-typed name is one the
-calendar cannot draw and the window rule cannot score. Its plural sibling does
-not, because what it is handed comes from a painted calendar.
-
-That same plural door is what makes *Edit options* one request rather than
-several. The creator's corrections are drafted in the browser and applied on
-**Done** — four corrections used to be four round trips and four re-reads of
-the poll. Everything from here down describes the collecting card too: it
-drafts exactly the same way now, and the press it applies the draft on is
-*Confirm options*.
-
-**Both halves wait for it.** Adding drafts and removing drafts: a row marked
-for removal is struck through with a *Keep* beside it rather than deleted where
-it stands. Removing used to happen immediately — a card where one of its two
-controls applies now and the other waits is a card that has to be explained,
-and the two-option floor cannot be checked honestly against a list that is
-half draft. It is counted against what the save would leave behind.
-
-**A struck row is struck whole.** The description goes through the
-crossing-out with the name: what is leaving is the option, not what it is
-called.
-
-**And *Keep* gives back what the reader last meant, not what the poll last
-held.** Striking a row out used to throw away any correction sitting on it, on
-the reasoning that a correction to a row that is leaving is a correction to
-nothing. True of the row, wrong about the reader: changing your mind twice
-about one option — fix its description, strike it out, keep it after all —
-came back with the description you had just replaced, or with none at all where
-you had just written the first one. The correction is now held for as long as
-the row it is about, and the one place it is dropped is the save, which is the
-one place it can be dropped without also closing the way back.
-
-**And a third half: an option can be corrected in place.** A pencil beside
-the cross turns the row into its two fields where the row is, filled in with
-what is there, and that is all it does. There is no *Save* or *Cancel* on the
-row: there were, and a *Save* beside one option reads as a save to the poll
-when it only ever put the correction into the draft — the same misreading
-the old *Add* invited. What is typed goes in on the press that ends the card,
-several rows may be open at once, and a row opened and left as it was is not
-sent. The cross stays beside the open fields, so an option can still be taken
-off altogether after its pencil has been pressed; striking an open row keeps
-what was typed, and *Keep* gives it back. Before it existed, fixing a typo in a description meant striking the
-option out and typing the whole description again under a new one — and the
-list would not even take that, because the name being retyped was a name
-already on it. The duplicate check is unchanged and deliberately still counts
-struck rows: a name the list visibly holds is taken, and the answer to wanting
-it is to correct the option holding it.
-
-**A correction is an update in place**, sent as `p_correct` in the same
-`creator_edit_options` call as the rest of the draft: the option keeps its id,
-its place on the list, and every score already given to it. There is still no
-UPDATE grant or policy on `candidates`; the function is the door.
-
-It used to travel as a removal and an addition, on the reasoning that removals
-are applied first so an option corrected without being renamed never collides
-with itself, and the only cost was `sort_order`. That was wrong about the cost.
-On a poll with votes in it the removal cascades through
-`scores.candidate_id`, and the "new" option is scored zero on every ballot by
-`fill_scores_for_new_option` — so a creator fixing a typo in a description
-silently zeroed that option for everybody who had voted, and nothing on screen
-said so. `0071_correcting_an_option_keeps_its_scores.sql` added `p_correct`.
-
-Inside the one transaction the order is removals, corrections, additions, so a
-name freed by a removal can be taken by a correction and a name freed by a
-rename can be taken by an addition, which is what the card's duplicate check
-already assumes. The corrections go in as one `UPDATE` and the duplicate-name
-rule is checked afterwards, so two options can swap names in one edit. A time
-poll takes no corrections, for the reason `creator_add_option` refuses one. A
-correction that changes something on a poll with ballots still sets
-`options_edited_after_votes`: the scores are kept on purpose, but they were
-given under the old wording, and whoever reads the result should be told the
-list moved.
-
-**And the two suggestion paths now draft as well.** They used to send each
-edit as it was made — a correction, an addition, a removal, one request each —
-on the grounds that the list belongs to the group and a suggestion should land
-live for everybody watching. One card, one press, one save is the better trade
-and it is now the same on every path; see [Confirming is the
-save](#saying-you-are-done-adding-options) for what that press sends and
-through which doors. A draft is a pair of fields already, and is corrected by
-typing in it.
-
-One request, but for a while not one *edit*: the removals went as a `delete`
-of their own and the additions followed, which is what put the two-option
-floor on a list the creator never asked for. See [The creator can correct the
-options until the poll
-closes](#the-creator-can-correct-the-options-until-the-poll-closes) for
-`creator_edit_options`, which is that same draft applied in one go.
-
-### Deliberately not built yet
-
-- **A calendar heat map of the tally.** Decided against; see above. The
-  ballots under it are on a calendar, which is a different question.
-- **Named timezones, and DST-spanning polls.** Fixed offsets only. A poll
-  running across a clock change is held at one offset for
-  its whole length, so its later days read an hour off the wall wherever it was
-  built from.
-- **Cross-timezone rendering.** One poll, one grid, everyone sees the same one.
-  The reader's own zone buys them one sentence — `offsetFromViewer`, "6 hours
-  behind your clock" — and moves nothing on the calendar.
-- **Typing a time into a time poll.** There is no text box on that ballot's
-  option list and there is not going to be one: `creator_add_option` refuses a
-  time poll, and everything that adds a window comes from a calendar.
-- **A window shorter than half an hour.** `granularityFor` offers half-hours
-  and whole days and nothing between or below. Fifteen-minute resolution
-  doubles every ballot to buy a precision nobody schedules a meeting at.
-
+- **A calendar heat map of the tally.** A ranked list is the answer.
+- **Named timezones and DST-spanning polls.** Fixed offsets only.
+- **Cross-timezone rendering.** Everyone sees one grid; the reader's own zone
+  buys them one sentence (`offsetFromViewer`, "6 hours behind your clock").
+- **Typing a time into a time poll.** Every window comes from a calendar.
+- **Windows shorter than half an hour.**
 
 ## The winner is kept with the poll
 
-A poll whose results are out has taken its last vote *for as long as it stays
-out*, so the option it elected is fixed until the poll is put back to taking
-votes, and running STAR again in the meantime can only ever produce the same
-answer. `polls.winner_name` holds it. `settle_winner()` fills it in when the
-poll crosses the line into having a result and empties it again when the poll
-goes back over that line — **Reopen poll**, or the `reset_poll` this was
-written for and which has since gone — and the three reads that draw the three
-screens carrying the badge —
-`list_polls`, `poll_status`, `open_poll_view` — carry it with them. See
-`0047_the_winner_is_kept_with_the_poll.sql` and
-[Reopening a closed poll](#reopening-a-closed-poll).
+A poll whose results are out has taken its last vote for as long as they stay
+out, so its winner is fixed. `polls.winner_name` and `winner_settled_at` hold
+it. `settle_winner()` fills them in when the poll crosses into having a result
+and clears them when it goes back (**Reopen poll**), and `list_polls`,
+`poll_status` and `open_poll_view` carry them. One election per result rather
+than one per reader, and the badge is final on first paint; nothing about a
+finished poll is cached in the browser.
 
-That is one election per result rather than one per reader, and the badge is
-final on the first paint of every screen it appears on.
+**Two columns, because there are three answers**: settled with a name,
+settled with none (a genuine tie, or closed with no votes), and not settled.
+See `PollStatus` in [`types.ts`](src/lib/types.ts) and `PollStateBadge` in
+[`PollTags.tsx`](src/components/PollTags.tsx).
 
-**It replaced a cache in the browser**, and the reason is worth keeping. The
-answer used to be fetched per tab from `poll_winners()` and remembered in
-`src/lib/settled.ts` for the life of that tab, along with the tally, the full
-ranking and the ballot grid. A settled poll is settled *unless its creator
-puts it back to taking votes* — **Reopen poll** today, `reset_poll` when this
-was written — which can then finish again with a different answer, and
-[nobody is told](#creator-controls). A tab that did it itself threw its own
-copy away; every other tab, on every other device, kept the name of an option
-elected by a tally that had moved on and drew it as a settled green badge
-until it was reloaded. The answer's living in one place, owned by the thing it
-is about, is what closes that: a reopen anywhere reaches everywhere on the
-next read.
+**What settles it**: a poll closing, a ballot leaving, an invitee being
+removed (three triggers), and the last ballot arriving — which is **a call at
+the end of `submit_ballot` and `open_poll_submit`, not a trigger**. Both insert
+the ballot row before its scores, so an `AFTER` trigger on `ballots` would
+elect a winner from a tally whose deciding ballot had no scores.
+`25_the_winner_kept_with_the_poll` guards this. A deferred constraint trigger
+would fix the ordering but leave the invariant broken within the transaction,
+which the test suite (one transaction per case) would see.
 
-Nothing in the browser is held on to now: `Results`, `Ballots` and
-`FullRanking` each read on every draw.
-
-**Two columns, because there are three answers** — settled with a name,
-settled with none, and not settled at all. Why that distinction matters and how
-the browser draws each is in `PollStatus` in [`src/lib/types.ts`](src/lib/types.ts)
-and `PollStateBadge` in [`src/components/PollTags.tsx`](src/components/PollTags.tsx).
-The pair is `winner_settled_at` and `winner_name`; null is a real answer, since
-a genuine tie elects nobody and so does a poll closed before anyone voted.
-
-**What settles it, and the one that could not be a trigger.** The events are
-the set `notify_results_ready` already reconciles the results-are-in email on,
-because it is the same question: a poll closing, the last ballot arriving, a
-ballot going away, and an invitee being removed — which can carry an invite
-poll over the line by lowering the number of people it is waiting for. Three
-are triggers, in the shapes of the notify triggers beside them.
-
-The fourth is the last ballot, and it is a call at the end of `submit_ballot`
-and `open_poll_submit` rather than a trigger, because the obvious
-implementation is quietly wrong. Both functions insert the ballot row first
-and its scores afterwards, in separate statements, so an `AFTER` trigger on
-`ballots` runs *between* the two and would elect a winner from a tally whose
-newest ballot had no scores on it. The ballot that opens the gate is precisely
-the last one, so that mistake would get the deciding vote of every invite poll
-wrong, silently and only there. `25_the_winner_kept_with_the_poll` guards it
-with three ballots where the third one changes the answer.
-
-Deferring the trigger to commit does fix the ordering — a constraint trigger
-sees the whole transaction — and it was tried. What it also does is leave
-`results_available` true and the winner unsettled for the rest of the
-transaction, so the invariant holds only between statements and not within
-them: invisible in the app, where every RPC is its own transaction, and
-load-bearing in the test suite, where a case is one transaction that never
-commits.
-
-**Settling a winner announces itself, and that is what reaches the other
-questions.** It was silent for a long time: `broadcast_poll_updated` fires on
-any update to a poll row, so the write `settle_winner` makes was a second
-message to a question that had already been told about the ballot or the close
-that produced it. `announce()` has since made that impossible — a topic is told
-once per transaction — and the silence turned out to be hiding a gap. A poll
-of several questions that finishes on its last vote closes nothing, so that
-vote told its own question and no other, and a reader on question 2 when the
-last ballot landed on question 3 sat on *In progress* until they reloaded. The
-settle writes onto every question in the group, so since
-`0091_results_out_reach_every_question.sql` it is the signal those pages hear.
-`results_announced_at` and `reminder_sent_at` (since 0080) are still quiet:
-nothing on any page draws them.
-
-**`poll_winners()` is gone.** It was kept, reading the column, for browsers
-still holding the build from before it, and `0092_poll_winners_goes.sql`
-dropped it once that window was long past.
+**Settling announces itself**: `settle_winner` writes every question in the
+group, and that broadcast is how a reader on question 2 learns the poll
+finished when the last vote landed on question 3. `results_announced_at` and
+`reminder_sent_at` changing announce nothing; no page draws them.
 
 ## One read opens a poll
 
-A poll page used to be assembled from four requests and, on an open poll, a
-fifth behind them — `open_poll_view` could not be asked for until the first four
-came back, because nothing before them said the poll was open. Worse was the
-reader nobody had designed for: somebody signed in, holding the link to an open
-poll that is not theirs. Every address went to the account reading first, so
-they spent a round trip on four queries that row-level security answered with
-nothing, got handed to the public reading, and started again. Three round trips
-and a discarded render to open a poll that was public all along.
-
 `poll_page(p_poll_id, p_voter_key)`, wrapped by
-[`src/lib/pollPage.ts`](src/lib/pollPage.ts), answers the question the route is
-actually asking — *what may this reader see here* — and returns the page with
-it. It is tagged `account` / `open` / `unreadable`; why a tagged union rather
-than one flat shape is in `PollRead` in [`src/lib/types.ts`](src/lib/types.ts),
-and how the route spends the answer is in `PollPage` in
-[`src/pages/PollPage.tsx`](src/pages/PollPage.tsx). What belongs here is why it is allowed to exist
-at all, and the one gate that had to be fixed before it could.
+[`src/lib/pollPage.ts`](src/lib/pollPage.ts), answers *what may this reader
+see here* and returns the page with it, tagged `account` / `open` /
+`unreadable` (see `PollRead` in [`types.ts`](src/lib/types.ts) and `PollPage`
+in [`PollPage.tsx`](src/pages/PollPage.tsx)). One request opens any poll,
+including a signed-in reader holding the link to somebody else's open poll.
 
-**Nothing here is a new privilege.** Each branch returns what the caller could
-already have asked for one request at a time, from the functions that already
-decide it: `poll_status`, `poll_group`, `open_poll_view`, `open_poll_group`,
-`get_poll_results`, `open_poll_results`, `poll_ballots`, `open_poll_ballots` and
-`poll_invitees` are called rather than reimplemented, so there is one copy of
-every rule. The visibility test is `is_poll_creator` / `is_invited_to_poll` — the
-same two functions `polls_select` is written in terms of — rather than a third
-hand-written copy of `created_by = auth.uid() or exists (...)`.
+**Nothing here is a new privilege.** Each branch calls the functions that
+already decide access — `poll_status`, `poll_group`, `open_poll_view`,
+`open_poll_group`, `get_poll_results`, `open_poll_results`, `poll_ballots`,
+`open_poll_ballots`, `poll_invitees`, `poll_ballot_scores`, `poll_is_removed` —
+and visibility is `is_poll_creator` / `is_invited_to_poll`, the same functions
+`polls_select` uses. One copy of every rule.
 
-**It does not replace them.** This is the *first* read. The live tick stays
-deliberately narrow — `poll_status` alone on an invite poll, plus
-`open_poll_view` on an open one — because a poll's title, its terms and the
-questions it asks are frozen at creation.
+**It does not replace the narrow reads.** The live tick is still `poll_status`
+alone on an invite poll (plus `open_poll_view` on an open one), because title,
+terms and questions are frozen at creation.
 
-**What the page draws rides along with it.** `results`, `ballots`,
-`invitees` and — on an invite poll that keeps its ballots private — the
-reader's own `your_scores` travel on the read, gated on exactly the condition
-the cards are rendered behind, so a poll still taking votes pays nothing: STAR
-does not run. Null on any of them means "ask for yourself", not "there is
-none" — `results_available` is still the only thing that says whether a result
-exists. That is what keeps the cards right where no `poll_page` read is in
-hand: a poll that finishes while somebody is watching, a crossing between two
-questions, and the About page's sample.
+**What the page draws rides along**: `results`, `ballots`, `invitees`,
+`your_scores` (on an invite poll with private ballots) and `removed`, each
+gated on exactly the condition its card is rendered behind, so a poll still
+taking votes does not run STAR. **Null means "ask for yourself", not "there is
+none"** — `results_available` alone says whether a result exists — which is
+what keeps the cards right where no `poll_page` read is in hand (a poll that
+finishes while watched, a crossing, the sample).
+`44_your_ballot_on_the_page` holds the conditions.
 
-**And so does whether the reader removed the poll** (`removed`, on both
-readings), for the card they are left waiting on; see [Removing a poll from
-your list](#removing-a-poll-from-your-list). Both it and `your_scores` were
-requests of their own, made by their cards once `poll_page` had come back,
-until [`0083_your_ballot_on_the_page.sql`](supabase/migrations/0083_your_ballot_on_the_page.sql)
-— which is what a finished private-ballot invite poll cost on top of the one
-read, and a page left at *your vote is in* too. Each calls the function its
-card used to (`poll_ballot_scores`, `poll_is_removed`), so the rule is still
-written once. `44_your_ballot_on_the_page` holds the conditions.
+**One gate over results and ballot sheets.** `poll_results_revealed` is
+group-wide: a finished question inside an unfinished poll reveals nothing,
+because early answers would steer late ones. Both ballot-sheet functions
+refuse under it too, since a sheet of every ballot is the result in another
+form.
 
-**One gate over all three, and it was a real hole.** `poll_results_revealed` is
-group-wide on purpose — a poll of five questions that revealed question one's
-result while question three was still taking votes would let the early answers
-steer the late ones — but both ballot-sheet functions asked `poll_gate_open` of
-their own question and no other. So a finished question inside an unfinished
-poll handed out every ballot cast in it while `get_poll_results` on that same
-question refused, and a sheet of every ballot *is* that question's result in
-the form it can be recomputed from. The pages never asked, because both cards
-render behind `results_available` — but these are functions any participant may
-call. Both now refuse under `poll_results_revealed`: the same per-question
-condition they already applied, and-ed across the group, so it can only refuse
-where they used to answer, and on a poll of one question nothing moves. The
-wording stays each function's own; what is refused there is the sheet, not the
-tally.
-
-**The cost is `FIRST_READ_MS`.** The route subscribes and reads on `SUBSCRIBED`,
-which is what closes the window between a snapshot and a live socket rather
-than paying a second read for it — but on a network that blocks websockets
-nothing ever reports `SUBSCRIBED`, so the poll waits for that floor before it
-appears. The poll list has always paid this; the poll page now does too.
-
+**The cost is `FIRST_READ_MS`.** The route subscribes and reads on
+`SUBSCRIBED`; on a network that blocks websockets that never comes, so the
+poll waits for that floor before reading.
 
 ## Waiting
 
-A live page is the second read onwards; the first has nothing to show, and
-every one of those used to be the same spinner in an empty column — the same
-mark whether what was coming was a poll list, a ballot or a tally.
+The first read of a page has nothing to show, so
 `src/components/Skeletons.tsx` draws the shape of the page instead, and states
-the four rules that keep the shapes from becoming a lie. They are not repeated
-here. What belongs here is the two things those rules were learned from:
+its own rules. Two lessons behind them:
 
-**A condition in the source is not the same thing as a case that happens.**
-The runoff card is written behind `results.runoff && results.finalists.length
-=== 2` and cannot fail on a poll with a tally at all — every question is held
-to at least two options, so `star_round` always fills both finalist slots. It
-was left out of `ResultsSkeleton` for years on the strength of that condition,
-and the tally grew by a third every time the wait ended.
+- **A condition in the source is not the same as a case that happens.** The
+  runoff card is conditional in code but always present on a tally (every
+  question has at least two options), so `ResultsSkeleton` includes it.
+- **A shape that guesses at nothing should not exist.** A skeleton survives
+  only if something is still reachable holding nothing.
 
-**A shape that guesses at nothing should not exist.** `RosterSkeleton` was
-deleted rather than improved: once [`poll_page`](#one-read-opens-a-poll)
-carried the roster, `Respondents` stopped fetching its own copy and the wait
-it stood in for stopped existing. `ResultsSkeleton` and `BallotsSkeleton`
-survive the same test because both are still reachable holding nothing.
+The app's boot, before the session is known, is the one spinner.
 
-The one wait that is still a spinner is the app's own boot, before the session
-is known — at that point there is no page to draw the shape of.
-
-**One wait, one shape.** A finished poll opened at its link used to go through
-three: the route's skeleton, then — the read back, the page drawn — a results
-skeleton under the real heading while the tally's chunk was fetched (and held
-up to 300ms more by React's reveal throttle), then for a frame the card's own
-skeleton, of a different row count, while it took the tally it had been handed
-in an effect. Two fixes, both in the shape of rules: **a read is not drawn
-until the code for the cards it will draw is in** (`preloadCards` in
-[`components/deferred.ts`](src/components/deferred.ts), awaited by every
-`poll_page` read before it is drawn, and started for the questions read ahead);
-and **a card handed its data starts from it** (`useState(initial)`, never an
-effect). The first needs the cards to be `deferred()` rather than `lazy()`:
-`lazy()` suspends on its first render however long ago the chunk arrived, and
-`deferred()` hands a fetched chunk to `use` already settled.
-`a finished poll goes from one skeleton straight to its results` in the browser
-suite counts the shapes, frame by frame.
+**One wait, one shape.** **A read is not drawn until the code for the cards
+it will draw is in** (`preloadCards` in
+[`deferred.ts`](src/components/deferred.ts), awaited by every `poll_page`
+read), and **a card handed its data starts from it** (`useState(initial)`,
+never an effect). The first needs the cards to be `deferred()` rather than
+`lazy()`: `lazy()` suspends on first render however long ago the chunk
+arrived, while `deferred()` hands a fetched chunk to `use` already settled.
+`a finished poll goes from one skeleton straight to its results` in the
+browser suite counts the shapes.
 
 ### When a wait ends badly
 
-Everything above is about a wait that ends. The one that does not is a render
-that throws, and what React does with an error that reaches the root uncaught
-is unmount the tree: not an error screen but an empty `#root`, which is the one
-state this app can be in where a reader cannot tell a broken page from a slow
-one. Every shape in `Skeletons.tsx` exists to stop a wait looking like a
-failure; a blank page is a failure that looks like a wait.
-
-[`components/ErrorBoundary.tsx`](src/components/ErrorBoundary.tsx) is what
-stands there instead, and it says the two things
-[`NotFound`](src/pages/NotFound.tsx) says: what happened, and that the reader
-is not stuck. The way out is a refresh, because for everything this stands to
-catch a fresh page is the only thing that clears it — the code already loaded
-is in a state this page cannot get out of. It promises no more than that: the
-second sentence says that a refresh which does not help means the fault is at
-our end, rather than leaving somebody refreshing a page that is never going to
-come good.
-
-**Above the router rather than inside it.** A boundary per route would keep the
-header up and look better, and would also be a boundary that is part of what
-broke — `Layout` and the router are the two things most worth surviving an
-error in. This one sits directly under `MantineProvider`, so the card is themed
-and nothing else in the app is outside it. It does not reset on navigation:
-there is nothing to go back to that has not already failed once, and a boundary
-that clears itself flickers the app back through the thing that threw.
-
-The error it will meet most often is the one
-[a deploy leaves behind](#a-deploy-takes-the-old-build-with-it) when the reload
-for it has already been spent.
-
+An uncaught render error unmounts the tree, leaving an empty `#root` that
+looks like a slow page.
+[`ErrorBoundary.tsx`](src/components/ErrorBoundary.tsx) says what happened and
+offers a refresh, and that a refresh which does not help means the fault is
+ours. It sits **above the router**, directly under `MantineProvider`, so it is
+themed and `Layout` and the router are inside it; it does not reset on
+navigation. Its most common catch is [a stale build](#a-deploy-takes-the-old-build-with-it)
+whose reload has already been spent.
 
 ## Accessibility
 
-Held to WCAG 2.1 AA, and checked by axe on every page the browser suite opens
-(see [The browser suite](#the-browser-suite)). The first time that ran it
-found something on every page, nearly all of it in one of the four places
-below — which is why each is now decided in one place rather than at the call
-sites, where it had drifted.
+Held to WCAG 2.1 AA and checked by axe on every page the browser suite opens.
+The rules below are decided in one place each, not at call sites.
 
-**Contrast is the theme's job.** Three of Mantine's defaults fall under 4.5:1
-for ordinary text, and each is fixed once, in `main.tsx`:
+**Contrast is the theme's job** (`main.tsx`):
 
-- **Filled colours are shade 8** in both schemes (`primaryShade`), where the
-  light scheme drew shade 6: white on `blue.6` is 3.55:1, on `blue.8` it is 5.
-  Their text is white. Orange, green and yellow are too light for white at
-  any shade worth using, so where one of those is filled — the open question
-  in `QuestionStrip`, the orange confirm buttons in `CreatorControls` — it is
-  drawn at shade 4 of the same colour with `autoContrast`, which gives it dark
-  text at 11:1 or better. Black on a light tint reads as a choice; black on a
-  mid-tone, which is what a global `autoContrast` did for a while, reads as a
-  mistake. Every colour comes from Mantine's palette: an off-palette shade
-  was tried for these and taken back out. The cost of shade 8 is that filled
-  things are a step darker in the light scheme than Mantine's default. Where
-  a filled colour carries no text there is nothing to fix, and the score
-  round's also-ran bars keep the grey they had (`--muted-bar` in Results.module.css).
-- **Dimmed text** — every caption and secondary line in the app — is a grey of
-  its own in each scheme (`cssVariablesResolver`), the lightest that clears
-  4.5 on every surface dimmed text is put on, the calendar's greyed day
-  headings included.
-- **Light badges and subtle buttons** take their colour's shade 9 as text, on
-  shade 1 and, under the pointer, shade 2 — which for most of the palette is
-  short of 4.5. Each is shade 9 taken towards black just far enough to clear
-  it on the hover shade, so it is still recognisably its colour.
+- **Filled colours are shade 8** in both schemes (`primaryShade`), with white
+  text. Orange, green and yellow are too light for white at any useful shade,
+  so where one is filled (the open question in `QuestionStrip`, the orange
+  confirm buttons) it is shade 4 with `autoContrast` (dark text). Colours come
+  from Mantine's palette only. The score round's also-ran bars use
+  `--muted-bar`.
+- **Dimmed text** is a grey of its own per scheme (`cssVariablesResolver`),
+  the lightest that clears 4.5:1 on every surface it appears on.
+- **Light badges and subtle buttons** take their colour's shade 9 darkened
+  just enough to clear 4.5:1 on the hover shade.
 
-And one that is not about colour values: **a link set into a sentence is
-underlined** (`.mantine-Anchor-root[data-inherit]` in index.css). In the dark
-scheme the link blue is 1.5:1 against the text around it, and colour alone is
-not allowed to be what marks it.
+**A link inside a sentence is underlined**
+(`.mantine-Anchor-root[data-inherit]` in index.css): colour alone may not mark
+it.
 
-**One `h1` per page, and no skipped levels.** The page's own title is the
-`h1` — a poll's title, *Your polls*, *New poll* — drawn at the `h2` size it
-always was, and the headings over cards are `h2`s at the `h4` size. The
-wordmark in the header is no longer a heading at all: it was an `h3` that
-began every page's outline before the page did. The two screens drawn outside
-the app shell, the sign-in card and the intro, are each a `<main>` of their
-own, since the shell is what provides one everywhere else.
+**One `h1` per page, no skipped levels.** The page's title is the `h1` (drawn
+at `h2` size); headings over cards are `h2`s at `h4` size. The header wordmark
+is not a heading. The sign-in card and the intro, outside the app shell, are
+each their own `<main>`.
 
-**Every page names its tab** (`usePageTitle`): the poll's own title on a poll,
-a word or two elsewhere, and nothing after it — the favicon already says which
-site this is, and a tab is too narrow to spend on it. A poll's title is set by
-`PollHeading` alone, so the two readings of a poll cannot name it differently.
+**Every page names its tab** (`usePageTitle`): the poll's title, or a word or
+two, with no site suffix. A poll's title is set by `PollHeading` alone.
 
-**What changes without a page load is said aloud** (`announce`, and the two
-live regions `Announcer` mounts at the root). A screen reader is told nothing
-when a single-page app moves, and this one moves a great deal on its own:
+**What changes without a page load is announced** (`announce`, and the two
+live regions `Announcer` mounts):
 
-- a change of page announces the new page's title, which is what a reader
-  would have heard had it loaded;
-- moving between the questions of a poll announces *Question 2 of 3: …*,
-  which matters most when answering one carries the voter on by itself;
-- on a poll's own page, its state and its count are announced when they move
-  — *The results are in: Taco bar won*, *4 of 6 votes* — but not on arrival,
-  and not on the poll list, where ten polls announcing each other would be
-  noise;
-- a copied link, a poll removed from or restored to the list.
+- a change of page announces the new title;
+- moving between questions announces *Question 2 of 3: …*;
+- on a poll's own page, its state and count when they change (not on arrival,
+  and not on the poll list);
+- a copied link, a poll removed or restored.
 
-Two kinds of news already announced themselves and were left alone: a toast
-(Mantine's are `role="alert"`), and the connection notice, which is an
-`Alert`. Every red error line is `role="alert"` too, and a create form refused
-on submit moves focus to the first field that is wrong, which is how a screen
-reader finds out anything was.
+Toasts are already `role="alert"`, as is every red error line. A create form
+refused on submit moves focus to the first invalid field.
 
-**The question strip says in words what its colours say**: each question
-carries a hidden *(answered)* or *(not answered)*, and the open one is
-`aria-current`.
+**The question strip says in words what its colours say**: each question has a
+hidden *(answered)* or *(not answered)*, and the open one is `aria-current`.
 
 ## Motion
 
-Nothing in the app moved at all until it was given a scale to move on. The
-rule that decides what gets to: **an animation has to answer a question the
-reader would otherwise have to work out.** A star draining back to zero says a
-score was cleared rather than a tap missed; a bar growing to its length makes
-the comparison the page exists for happen on screen; a page fading in says the
-last one has been left. Anything that would only be pleasant is not in.
+**An animation has to answer a question the reader would otherwise have to
+work out.** A star draining to zero says a score was cleared rather than a tap
+missed; a bar growing makes the comparison happen on screen; a page fading in
+says the last one was left. Anything merely pleasant is out, with the narrow
+exception under [Smaller movements](#smaller-movements).
 
-The scale is five durations and one curve, declared on `:root` in
-`src/index.css`: `--motion-fast` (120ms) for feedback on a press,
-`--motion-base` (200ms) for something arriving or leaving, `--motion-resize`
-(320ms) for a card changing height around a swap — it was `base` until it
-was noticed that a box growing by a few hundred pixels in 200ms is over
-before anybody sees it move — `--motion-slow`
-(500ms) for the results bars and the runoff's half pie, which are the things
-meant to be watched rather than merely not-jarring, and `--motion-travel`
-(450ms) for something crossing the screen to a place of its own — a poll's
-heading flying between its card and its page, and a question sliding in beside
-the one it replaced. Durations are picked from those and never written by
-hand, so a dozen small animations read as one app rather than as a dozen
-opinions. Animations started from JavaScript with `Element.animate` read the
-same properties off the document (`lib/motion.ts`) rather than restating them.
-The two exceptions are `main.tsx`, where Mantine's transition durations reach
-it as numbers rather than as CSS, and the runoff chart in `Results.tsx`, which
-animates through a chart library and takes its 500ms the same way; both say
-so.
+The scale is five durations and one curve on `:root` in `src/index.css`:
+`--motion-fast` (120ms) for feedback on a press, `--motion-base` (200ms) for
+something arriving or leaving, `--motion-resize` (320ms) for a card changing
+height, `--motion-slow` (500ms) for things meant to be watched (results bars,
+the runoff chart), and `--motion-travel` (450ms) for something crossing the
+screen (the heading flight, a question's slide). Durations are always picked
+from these. JavaScript reads them off the document (`lib/motion.ts`); the
+exceptions are Mantine's transition durations in `main.tsx` and the runoff
+chart in `Results.tsx`, which take numbers and say so.
 
-A reader who has asked their system for less motion gets none of it, said in
-three places because there are three kinds of motion to say it about: one rule
-over the whole stylesheet in `index.css`, `respectReducedMotion` in the theme
-for Mantine's own components, and `prefersReducedMotion` (`lib/motion.ts`) or
-`useReducedMotion` wherever motion is asked for from JavaScript — the heading's
-flight, a question's slide, the poll list's smooth scroll — and is therefore
-out of CSS's reach.
+**Reduced motion turns all of it off**, in three places for three kinds of
+motion: one rule over the stylesheet in `index.css`, `respectReducedMotion`
+in the theme for Mantine, and `prefersReducedMotion` / `useReducedMotion`
+wherever motion is started from JavaScript.
 
-`src/components/Reveal.tsx` is the entrance everything arrives by — a skeleton
-filling in, a page opening, a winner appearing — for the reason `BallotCard` is
-one component: three copies of a fade drift, and motion drifts faster than
-wording because nobody can diff it.
+`src/components/Reveal.tsx` is the one entrance everything arrives by.
 
-Six things this cost more than one attempt to get right:
+Rules learned the hard way:
 
-**A control must never make the reader wait to see the thing they just did.**
-The stars were swept in both directions at first, the fill running left to
-right the way they are read. It measured beautifully and felt broken: the star
-at the end of a left-to-right sweep is the star the finger is on, so pressing
-the fourth star lit the three to its left first and began changing the one
-actually under the finger 90ms later. Filling is immediate now and only
-emptying is swept — emptying is the direction that needed the help, since
-pressing the star already picked is how a score goes back to 0 and doing it
-between two frames was indistinguishable from a tap that missed. The wipe runs
-left to right for the same reason it exists: the first star is filled whenever
-there is anything to clear, so starting there means the control answers on the
-frame of the press whatever score was being cleared.
-
-**A transition takes its delay from the state the element is arriving at, so
-that is where the delay has to live.** The first version of the sweep announced
-a direction on the group and let one rule count forwards and another backwards.
-Telling every star its new delay in the same frame as the colour that delay is
-meant to hold back is not something a browser reliably honours: Chrome took the
-new delay for some stars and the old one for others, and the sweep came out
-scattered. The delays hang off `.star` and `.star[data-filled]` instead, so
-each star takes its timing from its own destination and nothing has to know
-which way the score moved. See `StarRating.module.css`.
-
-**Wrapping content in an entrance puts a box around it, and a box inside a
-`Stack` stops being spaced by that stack.** `Reveal` is a `div`, and where the
-thing it wraps was several elements a fragment had flattened into a stack, they
-came out of it: the rule under the question strip on a poll showing its results
-went from sitting in its own air to pressed against the card below. Wrap one
-element, never several — the box then stands exactly where the element stood.
-
-**Mounting again is not the same as being different, and only the second one
-earns an entrance.** Walking between the questions of a poll re-mounts the card
-under the question strip, and [the strip is inside that
-card](#a-poll-can-ask-more-than-one-question) — so an entrance on that card
-played in full over a strip that had not changed a pixel, and the navigation
-appeared to reload itself every time it was used. The strip belongs to the poll
-rather than to the question, exactly as the heading above it does, and this
-page keeps both still across a crossing on purpose; an animation does not get
-an exemption from that because React happened to rebuild the DOM underneath it.
-So a crossing does not replay an entrance. What it does instead is below, in
-[A question slides along a row](#a-question-slides-along-a-row): the question's
-half — and only that — slides out one side and in from the other.
-
-**A transition needs the browser to have *painted* the value it starts from.**
-The results bars are rendered at nothing and then at their real lengths, and
-one `requestAnimationFrame` between the two was not enough: React's effect runs
-after the commit but the frame may not have been drawn, so both widths landed
-in one paint and the browser drew the bars full length and transitioned
-nothing. Two frames is what makes the empty bar real. See `Results.tsx`.
-
-**A page's entrance is keyed by which page it is, not by the address.** Every
-question of a poll has an address of its own, and [the poll pages go to real
-trouble](#a-poll-can-ask-more-than-one-question) to keep a crossing between two
-of them mounted so the heading and the strip do not blink. Keying the route's
-fade on `pathname` would have thrown all of that away and re-mounted the poll
-on every step through it, which is why `Layout` keys on `pageKey()` instead.
+- **A control must never make the reader wait to see what they just did.**
+  Stars fill instantly; only emptying is swept, left to right, so the first
+  star answers on the frame of the press.
+- **A transition takes its delay from the state it is arriving at**, so the
+  sweep delays hang off `.star` and `.star[data-filled]` rather than a
+  direction on the group (`StarRating.module.css`).
+- **`Reveal` is a box, and a box inside a `Stack` is spaced as one item.**
+  Wrap one element, never several.
+- **Mounting again is not being different.** A crossing between questions
+  re-mounts the card under the strip, but the strip has not changed, so a
+  crossing does not replay an entrance; only the question's half slides (see
+  below).
+- **A transition needs the start value to have been painted.** The results
+  bars wait two animation frames between empty and full (`Results.tsx`).
+- **The route's entrance is keyed by `pageKey()`, not `pathname`**, so walking
+  between questions does not re-mount the poll.
 
 ### A poll's heading flies between the list and its page
 
-Opening a poll from the list flies its heading from the card to the top of the
-poll's page ([`lib/headingFlight.ts`](src/lib/headingFlight.ts)), and the
-page's **Your polls** control flies it back down onto its card — as do the
-browser's own back and forward buttons. Every part of
-the heading travels to its own counterpart: the title grows into the page's
-title, and the state badge, the description, who made it and the row of tags
-each move to where the page draws them. It passes the rule at the top of this
-section on the question it answers — *is this the poll I tapped?*, asked of a
-page that has just replaced ten cards that look alike — and it is also how the
-page **waits**:
+Opening a poll from the list flies its heading from the card to the top of
+the poll's page ([`lib/headingFlight.ts`](src/lib/headingFlight.ts)); the
+page's **Your polls** control, and the browser's back and forward buttons, fly
+it back. Each part — title, state badge, description, creator, tags — flies to
+its own counterpart. It answers *is this the poll I tapped?*, and it is also
+how the page waits:
 
-1. The press takes off: the card's heading is measured, part by part, and the
-   navigation goes.
-2. The poll's page starts **blank**, with only the heading in the air. It is
-   laid out, invisibly, so the heading has somewhere to aim for, and the poll
-   is read underneath exactly as it always is — subscribe, then read.
-3. When the heading lands, whatever has arrived fades in under it: the poll,
-   if the read is back, and **no skeleton is ever drawn**; its skeleton, if
-   not.
-4. A skeleton that has gone up stays up for at least `SKELETON_MIN_MS`
-   (`pages/PollPage.tsx`), however soon the read lands after it, because a shape replaced
-   a few frames after it appeared is a flicker rather than a wait. The read
-   that comes back first is held, rather than the skeleton hurried away.
+1. The press measures the card's heading, part by part, and navigates.
+2. The poll's page starts blank with only the heading in the air; it is laid
+   out invisibly so the heading has somewhere to aim, and the poll is read
+   underneath as usual.
+3. When the heading lands, whatever has arrived fades in: the poll if the
+   read is back (no skeleton is ever drawn), its skeleton if not.
+4. A skeleton that has gone up stays for at least `SKELETON_MIN_MS`
+   (`pages/PollPage.tsx`), so it never flickers.
 
-Five things it took:
+How it works:
 
-- **It is copies, not a View Transition.** It was one, and that could not do
-  the second half of the job: a view transition freezes the page while the new
-  one is prepared and then animates between two *pictures*, so nothing can load
-  during it and nothing on the page answers a press. Each part flies as a
-  fixed-position copy of the part it is flying to, placed where that part is,
-  then animated backwards from where it took off (FLIP) with `Element.animate`
-  — which also says the moment it lands. The page under it is live the whole
-  time.
-- **The page has a heading to land on before it has read the poll.** The card
-  hands over everything its heading is drawn from in the navigation's state
-  (`heading`), and the skeleton draws a real `PollHeading` from it
-  (`PollPageSkeleton`'s `heading`). The title, the description, the creator and
-  the three terms are frozen at creation; the state and the count are what the
-  live list said a moment ago, and the read replaces them if they have moved.
-  So the poll is named, on screen and in the tab, from the press. On landing
-  each copy moves onto its real counterpart if the two disagree and fades out
-  over it once what arrived has faded in; a part the real page does not draw —
-  the creator, on a poll read through its link — fades where it landed.
-- **The parts are found by the marks `PollHeading` puts on them**
-  (`data-heading`, `data-heading-row`, `data-heading-part`), so the two ends
-  need only both be a `PollHeading` — compact on the card, full size on the
-  page. The card is narrower than the page and its description is a size
-  smaller, so a description can wrap differently at the two ends; the copy is
-  of the page's, scaled down at the start, and the lines either side of it can
-  brush past it mid-flight.
-- **It is the words of the title that fly, not the title's box**
-  (`PollTitleText`). The box is as wide as its share of the row and the words
-  are not, so flying the box would scale a short title by the space around it.
-- **The page's own entrance stands down for it.** The flight *is* the page's
-  entrance, so the page it lands on stops `Layout`'s rise before the first
-  paint (`stillEntrances`, which finds it by `Reveal`'s `data-reveal`), and
-  what arrives under the heading fades without one (`Reveal`'s `rise`). Both
-  halves matter for the same reason: a page still rising when the flight
-  measures where to land is a landing aimed a few pixels low. The way back
-  onto the list did exactly that for a while — the list rose as it arrived,
-  and the heading came down, stopped, and stepped up into place.
+- **Copies, not a View Transition**, because a view transition freezes the
+  page while the next one is prepared, so nothing could load during it. Each
+  part flies as a fixed-position copy of its destination, animated backwards
+  from where it took off (FLIP) with `Element.animate`.
+- **The page has a heading to land on before it has read the poll**: the card
+  passes everything the heading is drawn from in navigation state
+  (`heading`), and `PollPageSkeleton` draws a real `PollHeading` from it. On
+  landing each copy moves onto its real counterpart if they disagree and fades
+  out once the page has faded in.
+- **Parts are found by `PollHeading`'s marks** (`data-heading`,
+  `data-heading-row`, `data-heading-part`), so both ends need only be a
+  `PollHeading`, compact on the card.
+- **The title's words fly, not its box** (`PollTitleText`), so a short title
+  is not scaled by the space around it.
+- **The page's own entrance stands down** (`stillEntrances`, finding
+  `Reveal`'s `data-reveal`; `Reveal`'s `rise`), so the landing is not aimed at
+  a page still rising.
+- **`scrollbar-gutter: stable`** on `html` stops the content shifting when a
+  long page lands under a short one.
 
-**And the page keeps room for a scrollbar it has not got yet**
-(`scrollbar-gutter: stable` on `html`, in index.css). The page the heading
-flies over is short and the poll that lands under it is long, so where
-scrollbars take up room the content shifted left by half of one at the moment
-of landing, and the title was seen to arrive and then step sideways. Every page
-that grew past the window while it loaded did the same, unremarked.
+**`BackToList` is on every poll page of a reader who has a list.** It lands
+on the card of the group's first question and goes *to* the list rather than
+back through history. It only flies when there is a cached list to land on.
 
-**The way back is on every poll page of a reader who has a list**
-(`BackToList`). It was only on a poll opened from the list for a while, on the
-grounds that a poll reached from a link had never been on a list from the
-reader's side of it — true, and beside the point: the wordmark was the only
-other way to the list, and not everybody thinks to press a wordmark. Always
-being there also keeps the top of the page one shape, which the skeleton and
-the flight both depend on. It lands on the card of the group's first question,
-which is the row the list draws for the whole poll, and it goes *to* the list
-rather than back through history, because three questions walked are three
-entries between the reader and the list. It only flies where there is a list
-kept from earlier in the visit for it to land on (below).
-
-**The browser's buttons fly too, and are the harder half.** A press on a card
-or on the way back can measure the heading before the address moves. The back
-and forward buttons move the address first, and the page being left hears
-about it only as it is taken down. That is still early enough: a layout
-effect's cleanup runs while the old page is in the document, so it can measure
-its heading then (`departing`) — the poll's page when the address has moved on
-to the list, the list when it has moved on to a poll whose card is on screen.
-What it cannot do is reach the page being opened before it renders, because
-that page has rendered already by the time the old one is taken down; so both
-ends look for their flight in a layout effect on mount, before the first
-paint, as well as while rendering.
-
-Three things stop a departure from flying. A flight already on its way — the
-press launched it. A browser that drew its own transition for the step, as a
-swipe back on a phone does: it says so on the `popstate` it fires
-(`hasUAVisualTransition`), which a listener in `headingFlight.ts` hears ahead
-of the router, and two animations of one step is one too many. Browsers that
-do not report it get both on a swipe. And a heading scrolled out of sight,
-which would fly in from beyond the edge of the window. The list takes a
-returning flight only from its own way back or from the back button
-(`returnFlight`): the wordmark is somebody asking for the list as it is now,
-which is drawn fresh and has no card waiting.
+**Browser back and forward fly too.** The address moves first, so the page
+being left measures its heading in a layout effect's cleanup (`departing`),
+and both ends look for their flight in a layout effect on mount. A departure
+does not fly when a flight is already under way, when the browser drew its
+own transition (`hasUAVisualTransition` on `popstate`, heard ahead of the
+router), or when the heading is scrolled out of sight. The list takes a
+returning flight only from its own way back or the back button
+(`returnFlight`), not from the wordmark.
 
 **The list comes back as it was left** ([`lib/listCache.ts`](src/lib/listCache.ts)):
-the same page of it, the same rows, scrolled where it was, so the heading has a
-card to land on at once. Every read of the list leaves a snapshot, and leaving
-the list records the scroll. Only a return draws from it — the way back, or
-the browser's back button. Arriving
-any other way is somebody asking for the list as it is now. The list still
-subscribes and reads as it always has, so the kept rows are only ever on
-screen for the moment that takes. A card that is no longer there — removed,
-deleted — leaves the heading nowhere to land, and nothing flies.
+same page, same rows, same scroll, so the heading has a card to land on. Only
+a return draws from it; the list still subscribes and reads as usual. If the
+card is gone, nothing flies.
 
-Skipped for a reader who has asked for less motion, and where there is no
-`Element.animate`; both get the navigation they always had, the skeleton
-included.
+Skipped under reduced motion and where there is no `Element.animate`.
 
 ### A question slides along a row
 
-Walking between the questions of a poll pushes the question being left out to
-one side and the question being opened in from the other — the next one from
-the right, the previous one from the left — so the questions read as a row
-being walked along rather than as pages swapped in place
+Moving between questions pushes the old question out one side and the new one
+in from the other — next from the right, previous from the left
 ([`lib/questionSlide.ts`](src/lib/questionSlide.ts)). `QuestionStrip` drives
-it, because the strip is what knows which question was open and which is
-opening, and because what slides is defined by it: **everything after the
-strip and its rule, which is the question's half and nothing else.** The strip
-itself is the poll's and stays exactly still, which is the rule above about a
-crossing not replaying anything over a strip that has not changed — and so is
-the rule under it, which `QuestionStrip` draws itself and marks
-`data-question-rule` for the slide to step over. While each page drew that
-rule as one more thing after the strip, it slid with the question. Where the
-strip stands outside a card — over a finished question's tally — it and its
-tally are wrapped in a stack of their own, so that what follows it is still
-only the question.
+it. **What slides is everything after the strip and its rule**: the strip and
+the rule under it (which `QuestionStrip` draws and marks
+`data-question-rule`) stay still. Where the strip stands over a finished
+question's tally, the two are wrapped in their own stack.
 
-**It is a push the whole width of the box.** It used to move a third of the
-way, with both questions fading across each other in one place, which read as
-the content flickering rather than as anything moving: two things
-half-visible in the same spot is a crossfade whatever the transform says. Now
-the two travel together, edge to edge, each clipped to the box the question is
-drawn in — the card, or the column over a finished question — so one leaves
-through its edge as the other comes in through the opposite one. A card clips
-by itself; in a column each arriving piece carries a `clip-path` that is drawn
-back exactly as far as the piece is pushed forward, so the edge it enters
-through stands still. The copy leaving stays nearly opaque until late, and
-does fade at the end, because the question arriving may be shorter and a copy
-at full strength below it would sit over whatever the page draws there.
-
-**The question being left is a copy.** React has taken it out of the page by
-the time the next one is drawn, so the strip copies what stands after it as it
-unmounts — a layout effect's cleanup, which runs while the page being left is
-still in the document — and the copy slides away over the page, clipped to the
-box it was in. Only an unmount copies: a strip that stays mounted across a
-crossing is cleaned up after what stood beside it may already have been
-replaced, and its question slides in without one going out.
-
-**One slide in, however many times the question is redrawn.** A crossing
-usually puts up the question's skeleton and then the question, and each of
-those is a new strip with new things after it — and `Results` puts its banner
-and its rounds up when its own read lands, as siblings of the strip, without
-the strip rendering at all. So the strip joins whatever stands after it on
-every render, and for the length of the crossing a `MutationObserver` on the
-box joins anything added there without one. Every piece, and the copy leaving,
-is started from the one moment the crossing began on the animation timeline
-(`timelineNow`), so they move as one row whatever order they arrived in. They
-were placed by `performance.now()` once, which is not the clock animations run
-on, and a piece that joined late drifted from its neighbours.
-
-The tally under a finished question has no card around it, which is also why
-`AppShell.Main` is `overflow-x: clip`: a block sliding in from past the
-right-hand edge would otherwise widen the page while it did. `clip` rather
-than `hidden`, which would make it a scroll container and break everything
-sticky inside it.
-
-**Nothing under the question is drawn while a crossing reads it.** On
-`PollDetail` the voters, the published ballots or the reader's own, the
-creator's controls and the retention line all wait for `showing`. They sit
-under a block whose height is not known until the read lands — a ballot of
-some number of rows, a tally, or the notice a question nobody answered puts up
-— and drawn during the wait they were pushed down the page a moment later.
-
-**What the stand-in claims is what the page knows about the question being
-opened, and a guess from its neighbour where it knows nothing.** It is mostly
-not seen: the questions either side of the one on screen are read ahead (see
-[Live updates](#live-updates)), so it is a jump further along the strip that
-waits. On an invite poll a good deal is known — the strip carries each
-question's option count, and results out with nobody having closed the poll
-means every question has a tally (see `tallied` on `QuestionSkeleton`).
-
-What is left is a poll that was closed, and every open poll, where a question
-nobody reached before the close really does end in the notice. That used to
-claim only the one card both
-endings share, which was certain and also nearly always wrong-looking: an
-empty card under the strip for the length of the read, on a page that then
-grew a tally four times its height. Now it takes the question being left as
-the guess — the tally if that one had a tally, and on the share-link reading
-its option count too — because one poll's questions are put to the same people
-at the same time and nearly always end alike. A miss costs a skeleton the
-wrong shape for one read, which is the only thing the certain version ever
-bought. Nothing is remembered per question to do better: it was, for a day,
-and it was a page of bookkeeping for a skeleton the read-ahead means hardly
-anybody sees.
-
-**A crossing is one read.** `PublicPoll` reads a question it is crossing to
-through `poll_page`, the read it opens a poll with, rather than
-`open_poll_view`: on a finished question the first carries the tally and the
-second does not, so the narrow read made a crossing two round trips — the
-view, and then the tally `Results` had to fetch for itself, drawn as a second
-skeleton of its own. `PollDetail` has always read a crossing whole. The
-narrow reads are for the question already on screen.
+- **A push the whole width of the box**, both questions edge to edge, clipped
+  to the box the question is drawn in (the card, or in a column a `clip-path`
+  on each arriving piece). The leaving copy fades late, in case the new
+  question is shorter.
+- **The leaving question is a copy**, taken in a layout effect's cleanup as
+  the strip unmounts. A strip that stays mounted across a crossing does not
+  copy.
+- **One slide in, however many times the question is redrawn.** The strip
+  joins whatever follows it on every render, and a `MutationObserver` joins
+  anything added during the crossing. Every piece is started from the same
+  moment on the animation timeline (`timelineNow`), so they move as one.
+- `AppShell.Main` is `overflow-x: clip` (not `hidden`, which would break
+  sticky children) so a block sliding in does not widen the page.
+- **On `PollDetail`, nothing under the question is drawn during a crossing**
+  (they wait for `showing`), since the question's height is unknown until the
+  read lands.
+- **The stand-in guesses from what is known.** Neighbours are read ahead, so
+  only a jump further along waits. On an invite poll the strip knows each
+  question's option count, and `tallied` says whether every question has a
+  tally. Otherwise the question being left is the guess.
+- **A crossing is one read**: `PublicPoll` reads the question it is crossing
+  to through `poll_page`, which carries the tally, rather than
+  `open_poll_view`, which does not.
 
 ### Smaller movements
 
-The rule at the top of this section — an animation has to answer a question
-the reader would otherwise have to work out — admits one exception, made on
-purpose: a movement that is only decoration may stay if it makes the app read
-as one made thing, and costs the reader nothing. The first of these is that
-kind; the rest answer a question as well.
+One movement is pure decoration, allowed because it makes the app read as one
+thing and costs nothing: **the open question's highlight crossfades**
+(`fadeMarks`) in step with the slide. The rest answer a question:
 
-- **The open question's highlight crossfades** (`fadeMarks` in
-  [`questionSlide.ts`](src/lib/questionSlide.ts)). On a crossing the badge
-  being left loses its fill as the badge being opened gains it, over the
-  slide's own length. Decoration, said plainly: the strip already re-colours
-  the right badge and the slide already says which way the reader went. What
-  it buys is the strip changing with the rest of the crossing instead of in a
-  blink above a page that travels. It was a copy of the badge travelling along
-  the row for a while, and that was taken out: on a narrow screen the badges
-  wrap and stack, and the copy cut across them diagonally. A fade goes nowhere,
-  so it is the same whatever shape the row is in.
 - **Confirming the options turns the button green**
-  (`CollectOptions.module.css`). *Confirm options* and *Options confirmed*
-  are one button changing in place, its fill fading from blue to green and
-  the tick popping as it lands, rather than two buttons swapped between
-  frames — which read as a different control appearing, not this one
-  answering the press. The fade runs back the other way when an edit takes
-  the confirmation back, which is the change a reader most needs to notice.
-  The pop is counted from changes seen while the card is on screen, so a page
-  opened already confirmed does not play it.
-- **A count rolls over** (`roll` in `PollTags.module.css`). When the count
-  badge's words change, the old ones go up and out of the pill as the new come
-  up into it, under the highlight that was already there. A number changing
-  between two frames is noticed only by somebody staring at it; one that rolls
-  is seen to change.
-- **Progress bars grow** (`.mantine-Progress-section` in `index.css`), at the
-  scale's slow step instead of Mantine's tenth of a second. The one that moves
-  while somebody watches is under *your vote is in*, where it is a vote seen
-  arriving.
+  (`CollectOptions.module.css`): one button changing in place, with a tick
+  pop counted only from changes seen while on screen; it fades back when an
+  edit withdraws the confirmation.
+- **A count rolls over** (`roll` in `PollTags.module.css`) when the count
+  badge's words change.
+- **Progress bars grow** at `--motion-slow` (`.mantine-Progress-section` in
+  `index.css`).
 - **A card that replaces a card changes height smoothly**
   ([`SmoothHeight`](src/components/SmoothHeight.tsx)), around the question's
-  half of `PollDetail` and around the vote card of `OpenPollPanel`. It wraps
-  the card that swaps rather than the list the card is in, because everything
-  inside it lands in its new place at once and only the clip moves: the
-  roster under the vote card used to sit inside it and was uncovered by the
-  growing edge on *Edit vote* instead of being pushed down. One inside
-  another is fine — each marks itself `data-own-height`, so the outer one
-  leaves the inner one's swaps alone. **The content changes at once and the
-  card's frame moves**: what animates is the height of the card that arrived,
-  its contents clipped to it, so growing moves its border down over content
-  already there and shrinking closes up the empty card under it. A clip around
-  the whole block could only fake the grow — on *Save changes* the new card's
-  edge snapped up and only a gap closed under it — and holding a copy of the
-  old card over the shrink made the content change at the end of one
-  direction and the start of the other. Where what arrived is not a card, the
-  block's own height moves, clipped, as the fallback. It notices elements going in and out with a
-  `MutationObserver` rather than being told a stage, because most of those
-  swaps — Edit vote, Confirm options, the editor — are decided inside a card
-  where no prop on the wrapper could see them; and since a mutation is
-  delivered before the browser paints, the new height is never seen and then
-  taken back. The calendar opts out (`data-own-height`): it already holds the
-  page still across a change of view, and two corrections at once would fight.
-- **The poll list closes up and turns** ([`PollCards`](src/components/PollCards.tsx)).
-  Within a page, cards are measured at every commit and drawn from where they
-  were (FLIP), so a removed poll fades where it stood while the cards under it
-  slide up, and one that arrives fades in where it lands. A page turn pushes
-  the row along with the same push the questions use
-  ([`carousel.ts`](src/lib/carousel.ts)), its copy pinned to the document
-  because the list scrolls to its top as its page changes. The cards are keyed
-  by the page their rows are of — set in the same render as the rows, since new
-  rows drawn under the old key would read as every card moving at once.
-- **The answer card pulses as it arrives** (`landed` in `Results.module.css`):
-  it fades in and a ring of its own colour spreads from it once, alongside the
-  bars and the half pie drawing themselves in. One pulse and nothing else. It
-  used to also scale up past full size and rise from below, at slightly
-  different moments, which read as the card twitching. It was also kept for
-  results that came out while the reader watched (`useResultsLanding`, now
-  gone), and plays on every opening now, since a pulse this small is part of
-  the tally's entrance rather than a fuss.
-- **A new poll's title flies from the form** (`launchTitleFlight`). Creating a
-  poll hands its page the whole heading — it is exactly what was just sent —
-  and the title flies from the field it was typed into, or from the Create
-  button when the field has been scrolled away, to the top of the page it now
-  names.
+  half of `PollDetail` and the vote card of `OpenPollPanel`. Content changes at
+  once and the card's frame moves, its contents clipped to it; elsewhere the
+  block's height moves, clipped. Swaps are detected with a `MutationObserver`
+  (delivered before paint), since most are decided inside a card.
+  `data-own-height` lets an inner one, or the calendar, opt out.
+- **The poll list closes up and turns** ([`PollCards`](src/components/PollCards.tsx)):
+  FLIP within a page, so a removed card fades while the rest slide up; a page
+  turn uses the question slide's push ([`carousel.ts`](src/lib/carousel.ts)).
+  Cards are keyed by the page their rows are of, set in the same render as
+  the rows.
+- **The answer card pulses once as it arrives** (`landed` in
+  `Results.module.css`): a fade and one ring.
+- **A new poll's title flies from the form** (`launchTitleFlight`) — from the
+  title field, or from the Create button if the field is scrolled away.
 
 ## A deploy takes the old build with it
 
-[`deploy.yml`](.github/workflows/deploy.yml) builds the site and uploads the
-whole of `dist/` as the Pages artifact, and publishing that artifact replaces
-what was there. Nothing of the build before it is kept, so the moment a deploy
-lands every hashed filename the previous build used stops resolving.
+Each deploy replaces the whole Pages artifact, so every hashed filename of the
+previous build stops resolving. A tab loaded before the deploy keeps asking
+for those names until it reloads — which on a phone or the installed app can
+be days. The first lazy chunk it reaches for (usually `Results`, the first
+time a poll finishes) 404s, GitHub Pages answers with HTML, and React
+unmounts the tree.
 
-That is invisible to a reader who loads the page afterwards, and it is the
-whole of the problem for one who loaded it before. The hashed names are written
-into the `index.html` their tab is running: the results cards and the calendar
-from [`components/deferred.ts`](src/components/deferred.ts), the create form
-and the About page from the `lazy` calls in [`App.tsx`](src/App.tsx), and the
-sample poll's data from [`samplePoll.ts`](src/lib/samplePoll.ts). Until that
-tab loads the page again it is holding names that are gone, and nothing makes
-it load the page again. **The window is not the minute the deploy takes** — it
-is however long the tab stays open, which on a phone, or in the installed app
-that is never really closed, is days.
+**[`lib/staleBuild.ts`](src/lib/staleBuild.ts) reloads the page** on
+`vite:preloadError`, which Vite dispatches for any failed dynamic import or
+split stylesheet, so new `lazy()` calls are covered automatically. The page is
+fetched network-first, so the reload gets the current build; hash routing
+keeps the address. Not live under `vite dev`.
 
-Nothing is wrong until the tab reaches for one of them, which is why it reads
-as intermittent: the chunks are fetched once each and mostly early, so the one
-that is still unspent when a deploy lands is usually `Results`, asked for the
-first time a poll on screen finishes. Then the import 404s — GitHub Pages
-answers with its own HTML, which is not a module — and because a rejected
-`lazy()` throws during render with no error boundary over it, React unmounts
-the whole tree. The reader gets a blank page and the console gets `Failed to
-fetch dynamically imported module`.
-
-**[`lib/staleBuild.ts`](src/lib/staleBuild.ts) reloads the page when that
-happens.** A reload is what the reader would have done and the only thing that
-does fix it: the page is fetched network-first (see below), so it comes back
-naming the build that exists. Hash routing carries the address through, so they
-land back on the page they were opening and the import is tried again against
-the new files. The same reload is also the right answer to the rarer version of
-this, a file that is genuinely there but was not served because an edge had not
-caught up yet.
-
-It listens for `vite:preloadError`, which Vite's build dispatches on the window
-when a dynamic import — or a stylesheet split out with one — cannot be loaded.
-That is one listener for every split above and any added later, which is why it
-is there rather than an error boundary at each `Suspense`: a new `lazy()` call
-is covered without anybody remembering to cover it. The event is dispatched
-only by the built app, so none of this is live under `vite dev`.
-
-**The part to be careful with is the loop**, and it is worth understanding
-before changing anything here. A reload that does not fix the import puts the
-tab straight back where it was, so reloading on every failure is a page that
-reloads forever. Nothing on the page can tell a stale build from a broken one
-except the clock: a reload and the retry after it are a page load apart, so a
-second failure within `LOOP_WINDOW_MS` is treated as the loop and left alone,
-while one an hour later is the next deploy and gets its own reload. The marker
-is written to `sessionStorage` — per tab, because a second tab hitting the same
-dead chunk is a second reader who should get their own reload — and **a marker
-that cannot be written means no reload at all**, since a reload nothing
-recorded is one whose repeat cannot be recognised.
-
-The second failure is not reloaded for, and that is the case
-[`ErrorBoundary`](src/components/ErrorBoundary.tsx) exists to cover — see
-[When a wait ends badly](#when-a-wait-ends-badly). It catches the throw and
-offers the reader the refresh, rather than the blank page that used to be the
-end of it.
+**The loop guard:** a reload that does not fix the import would reload
+forever. A second failure within `LOOP_WINDOW_MS` of a recorded reload is left
+alone (and caught by `ErrorBoundary`); one later is the next deploy. The
+marker is in `sessionStorage`, per tab, and **if it cannot be written, there
+is no reload at all**.
 
 ## Installing it to a home screen
 
-The app is installable: Android and desktop Chrome offer to add it, iOS
-takes it through Share → Add to Home Screen, and either way it opens in its
-own window with no browser chrome around it. Three things have to be true
-for that, and they are the three files below.
+The app is installable on Android, desktop Chrome and iOS (Share → Add to
+Home Screen), opening standalone. Three files:
 
-- **[`public/manifest.webmanifest`](public/manifest.webmanifest)** — the
-  name, the icons, and `display: standalone`. `start_url` and `scope` are
-  written as `./`, which resolves against the manifest's own URL: the
-  manifest sits in the app's own directory, so the scope is that directory
-  without the base being spelled out a third time.
-  Hash-based routing means every address in the app is inside that scope
-  already, so a share link opens in the installed window rather than
-  bouncing out to the browser.
-- **[`public/sw.js`](public/sw.js)** — a service worker, because the install
-  prompt is only offered for a page that has one, and because a push
-  notification is delivered to one (see [Push
-  notifications](#push-notifications)). What it caches is the
-  shell: the HTML, the hashed bundle and stylesheet, the icons. What it will
-  not touch is anything off-origin, which is every read of a poll — a cached
-  answer about a poll is a *wrong* answer, a closed poll drawn as still
-  collecting or a vote shown as cast that never left the phone. So offline
-  gets you the app saying it cannot reach the server, which is the honest
-  version, and not a stale poll.
-- **[`index.html`](index.html)** — the `<link rel="manifest">`, and the
-  `apple-` tags beside it. Safari only started reading the manifest's
-  `display` and icons in 16.4 and still takes the home-screen *name* from
-  `apple-mobile-web-app-title`, so those tags are not redundant with the
-  manifest; they are the iOS half of it.
+- **[`public/manifest.webmanifest`](public/manifest.webmanifest)**: name,
+  icons, `display: standalone`, and `start_url` / `scope` of `./` (relative to
+  the manifest). With hash routing every address is in scope, so a share link
+  opens in the installed window.
+- **[`public/sw.js`](public/sw.js)**: required for the install prompt and for
+  push. It caches the shell (HTML, hashed bundle and stylesheet, icons) and
+  **never anything off-origin** — a cached poll read is a wrong poll read.
+  Offline shows the app saying it cannot reach the server. **It leaves video
+  alone**: videos are fetched in byte ranges, and Safari will not play a whole
+  cached file handed to a range request.
+- **[`index.html`](index.html)**: `<link rel="manifest">` and the `apple-`
+  tags, which iOS still needs (it takes the home-screen name from
+  `apple-mobile-web-app-title`).
 
-`src/lib/serviceWorker.ts` registers the worker, and only in the built app:
-`vite dev` serves modules straight from source, and a worker caching those
-hands you the previous edit on the next reload. `npm run build && npm run
-preview` is therefore the only way to see any of this working — including in
-DevTools under Application → Manifest and → Service Workers, which is where
-Chrome will also tell you *why* it thinks the app is not installable.
+`src/lib/serviceWorker.ts` registers the worker in the built app only — a
+worker caching dev-server modules serves the previous edit. Use
+`npm run build && npm run preview`, and DevTools → Application to see why
+Chrome thinks the app is or is not installable.
 
 **Bump `VERSION` in `sw.js` whenever that file changes.** The cache is named
-after it, and the new worker throws away every cache that is not its own on
-activate. Nothing else needs bumping for a deploy: the bundle and stylesheet
-carry a content hash in their names, so a new build simply asks for files the
-old cache does not have, and the page itself is fetched network-first because
-it is the one file whose name never changes and it is what names the current
-bundle.
+after it and the new worker deletes every other cache on activate. Nothing
+else needs bumping: hashed assets have new names, and the page itself is
+fetched network-first.
 
 ### What the manifest says
 
-Past the minimum an install needs, four things, each for something a reader
-would notice:
-
-- **`id`** fixes the app's identity, so that a later change to `start_url`
-  makes the same app open somewhere else rather than a second app. It is
-  `/star-voting/`, which is exactly what the identity already was (the
-  resolved start URL), so nothing installed before it was added became a
-  different app — and it stayed `/star-voting/` when the app moved to the
-  root, which is that change to `start_url` happening. **Leave it alone:**
-  it is an identifier, not an address, and changing it makes every
-  installed copy a stranger to the app it was installed from.
-
-  Whether a copy installed at the old address follows the app to the root
-  is the browser's business. Chromium re-reads the manifest of an installed
-  app and takes a new `start_url` and `scope` under the same `id`; a browser
-  that does not opens the old start URL, gets the redirect, and shows the
-  root outside its window until the app is installed again. iOS keeps a home
-  screen icon pointing at the address it was added from, so it always does
-  the latter.
-- **`shortcuts`** — *New poll* and *Your polls* — on a long press of the icon.
-  *Your polls* is `#/` rather than the start URL, for the reason below.
-  Each carries an icon of its own in `public/shortcuts/` — the app's gradient
-  behind Phosphor's bold `Plus` and `ListBullets`, the glyphs the poll list's
-  own buttons use, as an `any` with the logo's rounded corners and a
-  full-bleed `maskable` — because a shortcut without one is drawn as a blank
-  grey square in Android's long-press menu. They are PNGs drawn once from an
-  SVG; redraw them if the logo's colours change.
-- **`launch_handler`**, `focus-existing`: opening the installed app while it is
-  already open brings that window forward rather than opening a second one,
-  with its own session and its own socket. A shortcut or a captured link still
-  has to go somewhere, so the launch is also handed to the page, which routes
-  there itself (`useLaunchRoutes` in [`lib/launch.ts`](src/lib/launch.ts)) —
-  except a launch with no route in it, which is the icon: tapping the icon
-  means *show me the app*, and throwing away the poll somebody had open to
-  land them on their list is the one thing a native app never does. Chromium
-  reads all of this; Safari reads none of it. It does not affect a tapped
-  notification, which the service worker routes; see [Push
-  notifications](#push-notifications).
-- **`screenshots`**, which turn Chromium's install prompt from a line of text
-  into a sheet with pictures in it — the narrow ones on a phone, the wide ones
-  on a desktop, and each kind is shown only where there is at least one of it.
-  They are of the About page's sample poll and are made by
-  `npm run screenshots` ([`e2e/screenshots.capture.ts`](e2e/screenshots.capture.ts)),
-  so they can be taken again whenever the pages they show change shape. The
-  sizes in the manifest are checked against the files by the browser suite: a
-  screenshot whose declared size is wrong is silently left out.
+- **`id` is `/star-voting/`. Leave it alone.** It is an identifier, not an
+  address; changing it makes every installed copy a stranger to the app.
+  Whether a copy installed at the old path follows the app to the root is up
+  to the browser (Chromium does; iOS keeps the address it was added from).
+- **`shortcuts`** — *New poll* and *Your polls* (`#/`) — each with an icon in
+  `public/shortcuts/` (the app's gradient behind Phosphor's bold `Plus` and
+  `ListBullets`, as rounded `any` and full-bleed `maskable` PNGs). Without an
+  icon Android draws a grey square. Redraw them if the logo's colours change.
+- **`launch_handler: focus-existing`**: opening the app while it is open
+  brings that window forward. The launch is handed to the page, which routes
+  itself (`useLaunchRoutes` in [`lib/launch.ts`](src/lib/launch.ts)) — except
+  a launch with no route (the icon), which leaves the open page alone.
+  Chromium only. Notification taps are routed by the service worker.
+- **`screenshots`**, for Chromium's richer install sheet, taken from the
+  sample poll by `npm run screenshots`
+  ([`e2e/screenshots.capture.ts`](e2e/screenshots.capture.ts)). The browser
+  suite checks the declared sizes against the files, since a wrong size is
+  silently ignored.
 
 ### The icons
 
 `public/icon-192.png`, `icon-512.png`, `icon-maskable-512.png` and
-`apple-touch-icon.png` (180px), all the same mark as `public/logo.png`: the
-star of `favicon.svg` on the diagonal gradient from `#7d14ff` to `#47bfff`.
-They are separate files rather than one scaled by the browser because each is
-a different shape of the same drawing, and getting that wrong is visible on
-somebody's home screen:
+`apple-touch-icon.png` (180px) are the star of `favicon.svg` on a diagonal
+gradient from `#7d14ff` to `#47bfff`, as in `public/logo.png`:
 
-- the two `any` icons have the logo's rounded corners, and are transparent
-  outside them;
-- the **maskable** one is square and full-bleed, because Android crops it to
-  whatever shape the launcher uses — a circle, a squircle, a rounded square —
-  and anything relying on its own corners loses them. Only the middle 80% is
-  guaranteed to survive, so the star is drawn a little smaller than in the
-  others to sit inside that circle;
-- the **apple-touch-icon** is square and opaque: iOS applies its own rounded
-  mask, so baked-in corners get rounded twice, and transparency is composited
-  onto black.
+- the two `any` icons have rounded corners and are transparent outside them;
+- the **maskable** one is square and full-bleed with the star inside the
+  middle 80%, since Android crops it to the launcher's shape;
+- the **apple-touch-icon** is square and opaque: iOS applies its own mask and
+  composites transparency onto black.
 
 ### The colour of the status bar
 
-Installed, the app has no browser chrome, and the strip behind the status bar
-is drawn in `<meta name="theme-color">` — it is part of the app rather than
-part of the browser, so left at a default it is a white bar across the top of
-a dark app. It cannot be the media-query form of the tag either, because that
-follows the OS and the theme menu is free to disagree with the OS. The inline
-script in `index.html` sets it from the stored choice before first paint,
-alongside the Mantine colour-scheme attribute it was already setting, and
-`src/components/ThemeColorMeta.tsx` keeps it in step afterwards. Both write
-`--mantine-color-body` for the scheme being shown, spelled out, since a
-`<meta>` takes a colour and not a custom property.
+Installed, the strip behind the status bar is `<meta name="theme-color">`. It
+cannot use the media-query form, because the app's theme menu can disagree
+with the OS. The inline script in `index.html` sets it from the stored choice
+before first paint, and `ThemeColorMeta.tsx` keeps it in step, both writing
+the `--mantine-color-body` value for the scheme spelled out.
 
 ### The install button
 
-`src/components/InstallButton.tsx` in the header, which is the whole of the
-"easily" in installing this on a phone: without it, installing is an item in
-a menu nobody opens. Chromium hands over its `beforeinstallprompt` event —
-which is the only handle on the install dialog, and arrives on its own
-schedule, often before React has mounted, so `src/lib/installPrompt.ts`
-catches it at module scope and holds it.
-
-The button is absent far more often than it is there: on iOS, which has no
-such API; in an already-installed window; and in any browser that has not
-made up its mind. That is why it draws nothing at all rather than
-instructions for a menu the reader may not have — and why it sits next to the
-theme menu rather than in a leading position, where a control that comes and
-goes would leave a visible gap. It is also absent from the sign-in screen,
-which has no header by design; a voter arriving on a share link sees it,
-which is the reader most likely to want it.
+`InstallButton.tsx` in the header. Chromium's `beforeinstallprompt` arrives on
+its own schedule, often before React mounts, so `src/lib/installPrompt.ts`
+catches and holds it at module scope. The button draws nothing where there is
+no prompt (iOS, an installed window, an undecided browser), and sits beside
+the theme menu so its absence leaves no gap. The sign-in screen has no header
+and so no button.
 
 ## The intro
 
-`#/intro` is a twenty-two-second film of the app at work — a poll made, voted
-in and decided — that ends on three buttons: **Learn more**
-(`/about`), **Make your own poll** (`/new`) and **Share this intro**. It
-is a link to hand somebody who has never heard of the method, so it is public
-and sits outside the app shell: the film draws the app's header itself, and a
-real one above it would be the header twice. [`pages/Intro.tsx`](src/pages/Intro.tsx)
-is the page; the film is under [`components/intro/`](src/components/intro).
+`#/intro` is a 22-second film of the app at work — a poll made, voted in and
+decided — ending on **Learn more** (`/about`), **Make your own poll** (`/new`)
+and **Share this intro**. It is public and outside the app shell (the film
+draws the header itself). [`pages/Intro.tsx`](src/pages/Intro.tsx) is the
+page; the film is under [`components/intro/`](src/components/intro). It was
+ported from a motion-design tool's scene list; the cue times are `CUES` in
+`motion.ts`, marking Opening, Create, Rate, Decide and Close.
 
-**It was designed elsewhere and ported**, from a motion-design tool whose
-export was a scene list driving one composition. What came across is the
-choreography, line for line; what did not is the tool's player — its
-timeline, export hooks and tweak panel. The cue times are `CUES` in
-`motion.ts`, and the five sections they mark are Opening, Create, Rate,
-Decide and Close.
-
-**Every frame is a function of one number**, `T`, the seconds since the film
-started. Nothing mounts or unmounts as it plays and nothing is animated by
-CSS, so the page's clock is a `requestAnimationFrame` loop adding to `T`, and
-**Skip** is `T = TOTAL`. That is also all reduced motion takes: a reader who
-has asked for less starts on the last frame, buttons and all, and is offered
-nothing to watch again. The clock caps a step at a tenth of a second, so a tab
-brought back from the background carries on rather than jumping to the end.
-
-**Two films, chosen by the window's shape.** A landscape cut at 1920×1080 —
-the steps down the left, the app in a browser window on the right — and a
-portrait cut at 1080×1920, with the steps as numbered dots across the top and
-the app at phone width with taps instead of a cursor. The page draws whichever
-is larger in the window, which is the portrait one exactly when the window is
-taller than wide, and scales it to fit; rotating a phone swaps the cut without
-restarting the clock.
-
-**The film is drawn, not rendered from the real components.** `AppScreens.tsx`
-is the header, the create form and the poll page as fixed drawings in the
-app's light colours, because the film has to play identically for everybody
-and the real components read the session, the database and the colour scheme.
-Nothing keeps them in step with `CreatePoll`, `BallotCard` or `Results`; if one
-of those changes shape enough to show, so should the drawing. The camera and
-the cursor find their marks by measuring `data-tg` elements in those drawings
-(`useTargets`), so moving something inside a drawing moves the camera with it.
-
-**It stays light in dark mode**, as a video would: it is a recording of the
-app, and the page takes the film's background so the letterboxing disappears.
-The buttons over it are chosen to look the same in both schemes — a filled
-button in the app's own filled blue, and `white` buttons with the film's border —
-since Mantine's other variants take their colours from the scheme.
-
-**The buttons are drawn at the page's size, over the film rather than inside
-it.** A button scaled down with a film drawn 1920 pixels wide would be too small
-to press on a phone. They sit in the space under the closing wordmark that the
-opening tagline used (`FILMS[…].actions`), and are hidden rather than merely
-transparent until they rise in, so nobody tabs onto one they cannot see.
-
-**Make your own poll works signed out, and asks nothing.** A reader with no
-session is given one without an account on the press — the same
-`continueWithoutAccount` the About page's *Try it yourself* and the sign-in
-screen's **Continue without an account** call — and taken to the create form
-once the session arrives, since `/new` with no session is the sign-in
-screen. It used to send them to the sign-in screen first, which was
-a press on a button saying they did not want to sign in, on the one page made
-for people who have never heard of the app.
-
-**Share this intro** opens the device's share sheet where there is one and
-copies the link otherwise. Every intro link draws the same preview card as
-every other link — see [Link previews](#link-previews).
+- **Every frame is a function of `T`**, the seconds since the start. Nothing
+  mounts or unmounts as it plays and nothing animates through CSS; a
+  `requestAnimationFrame` loop advances `T` (capped at a tenth of a second per
+  step, so a backgrounded tab resumes rather than jumping). **Skip** is
+  `T = TOTAL`; reduced motion starts on the last frame.
+- **Two cuts, by window shape**: landscape at 1920×1080 (steps down the left,
+  the app in a browser window) and portrait at 1080×1920 (numbered dots, the
+  app at phone width, taps instead of a cursor). Rotating swaps cuts without
+  restarting.
+- **The film is drawn, not rendered from real components.**
+  `AppScreens.tsx` holds fixed drawings in the app's light colours, so the
+  film plays identically for everybody. Nothing keeps them in step with
+  `CreatePoll`, `BallotCard` or `Results`; update the drawings when those
+  change visibly. The camera and cursor find marks by measuring `data-tg`
+  elements (`useTargets`).
+- **It stays light in dark mode**, as a video would; the page takes the film's
+  background. The buttons are styled to look the same in both schemes.
+- **The buttons are drawn at page size, over the film**, in the space under
+  the closing wordmark (`FILMS[…].actions`), hidden (not just transparent)
+  until they rise in.
+- **Make your own poll asks nothing**: a reader with no session gets one
+  without an account (`continueWithoutAccount`) and is taken to the create
+  form.
+- **Share this intro** opens the share sheet where there is one and copies
+  the link otherwise.
 
 ## The Start page
 
-`#/start` is the intro for somebody who will not sit through the intro: the
-logo, and six circles turning slowly round it, and nothing else. Three go
-somewhere — **Make your own poll**, **See a sample poll**, **See a sample
-result** — and three show something — **Choose a place** and **Choose a time**,
-each a few seconds of the app in use, and **Make it easy**, the benefits
-rolling through one at a time. Each loop's caption is a pill drawn in the
-opposite scheme to the page, like the poll list's pager, so it stands out
-against a recording that is mostly white. They alternate round the ring, and each side
-puts a loop beside the sample nearest to it. The logo in the middle goes to
-About. [`pages/Start.tsx`](src/pages/Start.tsx) is all of it.
+`#/start` is the intro for somebody who will not sit through it: the logo,
+and six circles turning slowly round it. Three go somewhere — **Make your own
+poll**, **See a sample poll**, **See a sample result** — and three show
+something: **Choose a place** and **Choose a time** (a few seconds of the app
+in use each) and **Make it easy** (the benefits, one at a time). Loop captions
+are pills in the opposite scheme to the page. The logo goes to About.
+[`pages/Start.tsx`](src/pages/Start.tsx) is all of it.
 
-**Nothing links to it.** It is an address to hand out — a poster, a bio, a QR
-code — and like the intro it sits outside the app shell and is reachable
-signed in or out. *Make your own poll* behaves as it does on the intro and
-About (`useMakePoll`): a reader with no session is given one without an
-account on the press.
-
-**Every size is a fraction of one square**, as large as the screen allows,
-so the arrangement is the same shape everywhere. The three circles that show
-something are larger than the three that go somewhere, which orbit further
-out to leave them room; the numbers in `Start.module.css` are chosen so
-every circle reaches the square's edge and no two circles touch at any point
-of the turn. On a phone that makes the
-benefits circle about 145 pixels across, which is why **the benefits are a
-word or two each** and must stay that way.
-
-**The turn is one revolution every eight minutes** — a couple of pixels a
-second where the circles are — and stops while the pointer is over the ring
-or focus is inside it. Each circle turns back the other way at the same rate,
-so its face stays upright. **Firefox gets no turn at all**
-(`@supports (-moz-appearance: none)`): with the two videos clipped to circles
-under the rotating ring it locked up the whole browser after a minute or so,
-and carrying the circles round without rotating anything — a transform that
-turned and turned back, then a motion path — cured the lockup and made the
-videos flicker instead. Reduced motion stops the turn, holds the benefits
-still between changes, and shows each loop's poster (its last frame) rather
-than playing it. Playwright will not click an element that is moving, and axe
-takes ten seconds and more over a page that is, so the browser suite visits
-this page with reduced motion.
-
-**The loops are recorded from the sample poll**, by `npm run videos`
-([`e2e/videos.capture.ts`](e2e/videos.capture.ts)), into `public/start/`
-as an mp4 and a poster each, and committed. Like the manifest's screenshots
-they need no database, so they can be recorded again by anybody whenever the
-ballot or the calendar changes shape — which nothing will remind you to do.
-The script takes frames from Chromium's screencast rather than Playwright's
-own video, whose bitrate blurs text, and needs `ffmpeg` on the PATH; it
-draws a fingertip on the page, since headless Chromium draws no pointer, and
-hides the header and the toasts. The sample's first question is about food,
-so for *Choose a place* its options are renamed to places as the recorded
-data reaches the page (`PLACES`): only the labels change, and the tally is
-still the one STAR recorded. The frames are square and the circle crops
-their corners, so what matters in each is kept to the middle.
-
-**The service worker leaves video alone.** A video is fetched in byte
-ranges, and a whole file from the cache handed to a range request is a video
-Safari will not play.
+- **Nothing links to it**: it is an address to hand out (a poster, a bio, a
+  QR code). It sits outside the app shell, reachable signed in or out. *Make
+  your own poll* uses `useMakePoll`.
+- **Every size is a fraction of one square**, as large as the screen allows.
+  The numbers in `Start.module.css` are chosen so every circle reaches the
+  square's edge and no two touch at any point of the turn. On a phone the
+  benefits circle is about 145px across, so **each benefit is a word or two**.
+- **One revolution every eight minutes**, paused while the pointer is over
+  the ring or focus is in it; each circle counter-rotates to stay upright.
+- **Firefox gets no turn at all** (`@supports (-moz-appearance: none)`): with
+  videos clipped to circles under a rotating ring it locks up the browser, and
+  every alternative made the videos flicker.
+- **Reduced motion** stops the turn, holds the benefits between changes, and
+  shows each loop's poster instead of playing it. The browser suite visits the
+  page with reduced motion, since Playwright will not click moving elements.
+- **The loops are recorded from the sample poll** by `npm run videos`
+  ([`e2e/videos.capture.ts`](e2e/videos.capture.ts)) into `public/start/` (an
+  mp4 and a poster each) and committed. Re-record them when the ballot or
+  calendar changes shape; nothing reminds you. The script uses Chromium's
+  screencast (Playwright's own video blurs text), needs `ffmpeg` on the PATH,
+  draws a fingertip, and hides the header and toasts. For *Choose a place* the
+  food options are renamed to places as the data reaches the page (`PLACES`);
+  the tally is unchanged. Frames are square and cropped to a circle, so keep
+  what matters in the middle.
 
 ## The donate page
 
-`#/donate` asks readers who find the site useful to give to a charity —
-Khan Academy — rather than to the site, whose running costs are paid for out
-of pocket. (It was to be The Conservation Fund, which is not yet set up on
-Every.org to take a fundraiser.) It is public, like About, and reached from the gear menu, where
-it took the place of *View intro*: About already links to the intro, and a
-reader who has found the gear has met the app.
+`#/donate` asks readers to give to Khan Academy rather than to the site. It is
+public and reached from the gear menu.
 
-**The donate button goes to Every.org**, to a fundraiser of the site's own for
-the charity (`EVERY_ORG` in [`lib/donate.ts`](src/lib/donate.ts)), because
-a fundraiser there can say what it has raised and from how many people, and
-the charity's own donation form cannot. The page reads both from Every.org's
-partner API — `GET partners.every.org/v0.2/nonprofit/<slug>/fundraiser/<slug>/raised`
-with the *publishable* key, which answers any origin — once, on arrival.
-`raised` and `goalAmount` come back in cents, as strings. The goal is drawn
-as a bar under the total, and where `goalType` is `AUTOMATIC` it is one of
-Every.org's "smart milestones", which moves up each time it is reached — so
-the page calls it the next milestone rather than a goal. With no fundraiser or no key set,
-the button gives to the charity on Every.org directly and the page draws no
-count, and a count that fails to arrive is left out rather than waited on.
-Everything in `EVERY_ORG` is public — it is in the link, or made for a browser
-to send — which is why it is in the source rather than in `.env`. The browser
-suite answers the API itself (`e2e/fixtures.ts`).
+**The button goes to an Every.org fundraiser** (`EVERY_ORG` in
+[`lib/donate.ts`](src/lib/donate.ts)), because a fundraiser can report what it
+has raised and from how many people. The page reads that once, from
+`GET partners.every.org/v0.2/nonprofit/<slug>/fundraiser/<slug>/raised` with
+the *publishable* key. `raised` and `goalAmount` come back as strings, in
+cents. The goal is a bar; where `goalType` is `AUTOMATIC` it is a moving
+"smart milestone", so the page calls it the next milestone. With no
+fundraiser or key, the button gives to the charity directly and no count is
+drawn; a count that fails is left out. Everything in `EVERY_ORG` is public, so
+it is in source rather than `.env`. The browser suite answers the API itself
+(`e2e/fixtures.ts`).
 
-The charity's logo is `public/khan-academy.png`, a 192px copy of the one
-Every.org shows (the nonprofit API's `logoUrl`), kept in the repository so the
-page asks nobody else for it. It is opaque white around the mark, which is why
-it is drawn as a rounded tile: a tile reads as meant on a dark card, where a
-white square would not. Changing the charity means changing that file, the
-name and description on the page, and `EVERY_ORG`.
+The logo is `public/khan-academy.png` (192px, from Every.org's `logoUrl`), kept
+locally and drawn as a rounded tile because it is opaque white. Changing the
+charity means changing that file, the page's name and description, and
+`EVERY_ORG`.
 
-The signature under the note is set in Caveat, the one typeface in the app
-that is not the system's. It is not loaded from Google Fonts: the file in
-`src/assets/fonts/` is Caveat cut down to the five characters of "— Rob"
-(Google Fonts' `text=` parameter does the cut), three kilobytes, fetched only
-by the stylesheet of the `Signature` component the donate and contact pages
-share, with the font's licence beside it. A signature
-with any other letter in it falls back to a system cursive for that letter, so
-changing it means cutting the font again — the comment in
-`Signature.module.css` says how.
+**The signature** under the note is Caveat, cut to the five characters of
+"— Rob" (three kilobytes, in `src/assets/fonts/` with its licence) and loaded
+only by the `Signature` component the donate and contact pages share. Any
+other character falls back to a system cursive; `Signature.module.css` says
+how to recut it.
 
-**The tax note was checked, and should be checked again before it is
-changed.** From 2026 a US taxpayer who does not itemize can deduct up to
-$1,000 of *cash* gifts to charity ($2,000 filing jointly), and gifts to a
-donor-advised fund are excluded by name. Every.org is a 501(c)(3) public
-charity — it began as a private foundation, which is why older listings and
-its early filings say 990-PF, and the IRS confirmed the change in October
-2025 — and its terms say an ordinary donation is a contribution to Every.org
-itself; only its optional DAF accounts, funded with "Giving Credits", are a
-donor-advised fund. So a gift through the button by card, bank, PayPal or
-Venmo counts, and one of stock or crypto, or paid out of a DAF, does not. The
-note under the card says the first half and leaves the second to "cash": it
-used to spell out the exceptions, and read as a riddle to everybody they did
-not apply to — and a gift out of a DAF was deducted when the fund was paid
-into, so the giver already knows. If Every.org's terms or the rule change,
-that note is the thing on the page that becomes untrue.
+**The tax note was checked; check it again before changing it.** From 2026 a
+US taxpayer who does not itemize can deduct up to $1,000 of *cash* gifts to
+charity ($2,000 jointly), excluding gifts to donor-advised funds. Every.org is
+a 501(c)(3) public charity, and an ordinary donation through it is a
+contribution to Every.org (only its optional DAF accounts are a DAF). So a
+card, bank, PayPal or Venmo gift counts; stock, crypto or a DAF gift does not.
+The note says the first half and leaves the rest to the word "cash". If
+Every.org's terms or the rule change, this note becomes untrue.
 
 ## The contact page
 
-`#/contact` is a reply address and a message, under a note signed the way the
-donate page's is (`Signature`) and a link to GitHub's new-issue form for
-anybody who would rather file one. Public, like About and Donate, and reached from
-the gear menu, which lists its pages as About, Contact, Donate, and then *App
-installation* for as long as the app is not installed here.
+`#/contact` is a reply address and a message, under a signed note, with a
+link to GitHub's new-issue form. Public, reached from the gear menu, which
+lists About, Contact, Donate, and *App installation* while the app is not
+installed.
 
 **A message is a row and an email, and nothing in the app reads it back.**
-`send_contact_message` (`0084_contact_messages.sql`) emails it to the owner
-(`send_contact_email`, a fixed address, with the sender's address as Reply-To
-so that answering is pressing Reply) and puts it in
-`contact_messages`, which has row-level security on, no policies and no
-grants — so only the service role sees it, which is how it is read: from the
-dashboard,
+`send_contact_message` emails it to the owner (`send_contact_email`, with the
+sender's address as Reply-To) and stores it in `contact_messages`, which has
+RLS on, no policies and no grants. Read it from the dashboard:
 
 ```sql
 select created_at, email, message from contact_messages order by created_at desc;
 ```
 
-**`anon` may call it**, which makes it the one function `anon` holds that is
-not an `open_poll_*` one. The reader most likely to have met a bug is a voter
-holding a link, and asking them to sign in to report it is asking them not to.
-What the grant can do is add a row nobody it can reach will read. The bounds on
-it are in the function: the two lengths `limits.ts` carries for the form, the
-same address shape `invited_voters_email_ck` asks for, five messages a day per
-session, and ten an hour from everybody together — the last being the
-only bound there is on a caller with no session, and there to stop a script
-filling the table and the owner's inbox, and spending the Resend key every
-poll email shares, rather than to stop anybody real. It was a hundred until
-0085: enough for one script to use up a free tier's day of sending in an hour,
-after which every invitation and result would have gone nowhere, silently. `45_contact_messages` covers all of it but the send. The address is
-filled in from the account where there is one, since that is where a reply
-would go. The email is best-effort like every other this app sends (see
-[Emails](#4-emails)): silent where the Resend key is missing, sent once, never
-failing the message — so the table is the record and the email only the
-notice of it.
+**`anon` may call it** — the one non-`open_poll_*` function `anon` holds —
+because the reader most likely to hit a bug is a voter holding a link. The
+bounds are in the function: the lengths in `limits.ts`, the address shape
+`invited_voters_email_ck` uses, five messages a day per session, and ten an
+hour from everybody together. The last is the only bound on a caller with no
+session, and is low so a script cannot use up the Resend key every poll email
+shares. The address is filled in from the account where there is one. The
+email is best-effort; the table is the record. `45_contact_messages` covers it.
 
 ## Link previews
 
-Paste a poll's link into Signal, Messenger or an SMS app and the app draws a
-card under it from the Open Graph tags in [`index.html`](index.html): the
-title, the intro's byline — *Group decisions, made simple.* — and `logo.png`. Messenger and Facebook fetch the
-page from their own servers; Signal and iMessage fetch it from the sender's
-phone. Either way it is a plain HTTP fetch that runs no JavaScript.
+Chat apps draw a card from the Open Graph tags in [`index.html`](index.html):
+the title, the byline *Group decisions, made simple.*, and `logo.png` as a
+`summary` card (opaque, since some clients composite transparency onto black).
+The crawler runs no JavaScript.
 
-**Every poll link gets the same card, and that is the hash routing, not a
-choice.** A link is `https://choicelab.app/#/<id>`, and the part after `#` never
-leaves the browser: it is not in the request a crawler makes, so GitHub Pages
-serves the one `index.html` whatever poll the link names. Nothing static can
-tell two polls apart. A card per poll needs something that runs on the
-request and can see the id, which means the id moving out of the fragment
-into the path, and a server answering that path.
+**Every poll link gets the same card**: the part after `#` never leaves the
+browser, so GitHub Pages serves one `index.html` for every poll. A card per
+poll would need the id in the path and a server answering it.
 
-**There is deliberately no `og:url`.** It declares the page's canonical
-address, and Facebook both groups shares under it and, in places, links the
-card to it. Here that would be the app root with the fragment gone, so a
-poll link would open on the poll list.
+**There is no `og:url`**: it would be the app root with the fragment gone, so
+Facebook would group and link every poll share to the poll list.
 
-The image is the square logo with a `summary` card, which the chat apps draw
-as a small thumbnail beside the text. It is opaque on purpose: several
-clients composite a transparent image onto black. A crawler caches what it
-fetched, Facebook's for weeks; after changing any of this,
-[Facebook's Sharing Debugger](https://developers.facebook.com/tools/debug/)
-is how to make it read the page again.
+Crawlers cache; Facebook's for weeks. Use [Facebook's Sharing
+Debugger](https://developers.facebook.com/tools/debug/) to refresh it.
 
 ## Push notifications
 
-A poll tells its people about three moments — being invited, voting opening,
-the results being ready — and for a long time it could only do that by email.
-Push is the same three moments on a second channel, and it closes the one gap
-email never could: **an open poll's voters gave no address**, so the only way
-they ever found out a result was to keep opening the link.
-[`0072_push_notifications.sql`](supabase/migrations/0072_push_notifications.sql)
-is the database half, [`supabase/functions/send-push`](supabase/functions/send-push)
-the sending half, [`src/lib/push.ts`](src/lib/push.ts) the browser's, and
-`push` / `notificationclick` at the foot of [`public/sw.js`](public/sw.js) the
-part that runs while the app is closed. Setup is [step 5](#5-push-notifications).
+Push sends the same moments as email — being invited, voting opening, the
+results, a reminder — on a second channel, and it is the only channel that
+reaches an open poll's voters who gave no address. The database half is in
+the baseline,
+[`supabase/functions/send-push`](supabase/functions/send-push) is the sending
+half, [`src/lib/push.ts`](src/lib/push.ts) the browser's, and `push` /
+`notificationclick` at the foot of [`public/sw.js`](public/sw.js) the part
+that runs while the app is closed. Setup is [step 5](#5-push-notifications).
 
 **No new rules about who is told.** Every push goes to exactly the people the
-matching email goes to, decided by the same `poll_email_audience` and
-`poll_results_audience`, from inside the same `notify_poll_opened`,
-`notify_results_ready` and invitation trigger — so *nobody is told what they
-just did* holds on both channels by construction, and the once-only claim on
-`polls.results_announced_at` covers both. The suite asks `poll_push_targets` who would be
-pushed, exactly as case 23 asks the audience functions who would be emailed.
+matching email goes to, from the same `poll_email_audience` /
+`poll_results_audience`, called from the same triggers, so *nobody is told
+what they just did* and the once-only claims hold on both channels.
+`poll_push_targets` is what the suite asks.
 
-**Two doors, one subscription per browser** — and a third way into a poll's
-audience that is not a subscription at all. A browser has one push endpoint
-whoever is using it, and it reaches the database one of two ways:
+**A browser reaches the database one of two ways:**
 
-- **Bound to an account** (`push_subscriptions`, through
-  `save_push_subscription`) — by turning on the push switch in the header's
-  gear menu, which is the one place an account does it. It hears every poll that
-  account is in, for as long as the account wants push.
-  An endpoint belongs to one account at a time, and **signing out forgets it**
-  (`forgetAccountPush`, before the session goes): a shared browser left bound
-  is the next person's phone buzzing with the last person's polls.
-- **Watching one open poll** (`poll_push_watches`, through `open_poll_watch`)
-  — for a reader who is **not signed in**, filed by the page on every open
-  poll they vote in or confirm the options of, once they have turned push on
-  from the same gear menu (`LinkPushSwitch`). Signed out, that menu holds
-  that one switch; it is a flag in this browser's `localStorage`, since there
-  is no account to keep it on, and the page files a watch wherever it finds
-  an answered poll that is not watched yet — at the vote, or for a poll
-  answered before the switch went on, the next time it is opened. Turning it
-  off takes back every watch this browser filed (`disableLinkPush`), which is
-  why the mirror keeps the poll id each was filed through. The creator's own
-  poll files none: they are the one who opens and closes it. A signed-in
-  reader files none either: they are in the poll's audience through the
-  account on their ballot (below). One watch covers the poll's opening and its
-  results alike, since it is filed once for the whole group and lasts until
-  the results go out.
+- **Bound to an account** (`push_subscriptions`, via
+  `save_push_subscription`), by turning on the push switch in the gear menu.
+  It hears every poll the account is in while the account wants push. An
+  endpoint belongs to one account at a time, and **signing out forgets it**
+  (`forgetAccountPush`, before the session goes), so a shared browser does not
+  buzz with the last person's polls.
+- **Watching one open poll** (`poll_push_watches`, via `open_poll_watch`), for
+  a reader who is **not signed in** and has turned on the gear menu's link
+  switch (`LinkPushSwitch`, a flag in `localStorage`). The page files a watch
+  on every open poll they vote in or confirm — at the time, or the next time
+  an earlier-answered poll is opened. Turning the switch off takes back every
+  watch this browser filed (`disableLinkPush`), which is why the local mirror
+  keeps each poll id. The creator's own poll files none, and a signed-in
+  reader files none (their account is in the audience through their ballot;
+  see [below](#open-polls-you-answered-while-signed-in)). One watch per group
+  covers opening and results.
 
-  This was a **Notify me** button per poll until it was folded into the gear:
-  two places to turn on one thing, depending on whether you had signed in,
-  meant two different banners pointing at them. What it cost is per-poll
-  choice — a reader holding a link now hears about every open poll they
-  answer, or none.
+**A watch records nothing about who asked** — no voter key, account, name or
+timestamp, since a watch made in the same second as a ballot would join the
+two. It is filed against the group's first question and **deleted when the
+results are announced** (or the poll closes with nothing to announce), so no
+endpoint keeps a record of the polls a browser was in. The local mirror is
+dropped then too. Because a watch has no address, `poll_push_targets` leaves
+out the actor by dropping their own *browser* where it is bound to their
+account.
 
-**A watch records nothing about who asked.** No voter key, no account, no
-name, and deliberately no timestamp: a watch made in the same second as a
-ballot would be the join between a ballot and a browser that the per-question
-`voter_key` exists to prevent. It is filed against the group's first
-question, like every notice, and **deleted when the results are announced** —
-or when the poll closes with nothing to announce. One-shot, because an
-endpoint left on the row of every open poll a browser ever answered would be a
-record of which polls that browser was in. The browser mirrors its watches in
-`localStorage` only so it knows which polls are already watched and can take
-them back; that mirror is dropped when the poll finishes.
+**Settings are an account's.** `notification_settings` holds `email` and
+`push` flags; no row means both on. An address with no account is always
+emailed (the invitation is its only way to hear of the poll). Watches ignore
+account settings — a watch is its own explicit ask.
 
-The one person a watch can leave out is the actor. A watch has no address for
-`poll_email_audience` to drop, so `poll_push_targets` drops the actor's own
-*browser* instead, where it is bound to their account — the creator pressing
-Close on the phone they are watching on.
+**Push is one switch, about the device in the reader's hand** (`PushSwitch`).
+It is on when the account's push is on *and* this device is bound. Turning it
+on asks permission, binds this device and turns the account's push on (which
+is also how a second device is added); turning it off turns the account's push
+off everywhere. Devices stay bound, so turning it back on anywhere restores
+them all. Where this device cannot take push, it is disabled with one line
+saying why.
 
-**Settings are an account's, and say which channels.** `notification_settings`
-holds an `email` and a `push` flag, and no row means both on, so nothing
-changed for anybody who never opens the menu. `send_poll_email` asks
-`wants_email` before anything else, which covers all four letters in one
-place; an address with no account is always emailed, since the invitation is
-the only way it could hear of the poll. The sign-in email is not a
-notification and is never affected. Watches ignore the account settings — a
-watch is its own explicit ask.
+**The database decides, the function encrypts.** A push must be encrypted to
+each browser's key (RFC 8291) and signed with the VAPID key (RFC 8292), which
+pgcrypto cannot do. `send_push` hands the message and every target to the
+Edge Function in one `pg_net` request; the function checks the shared secret,
+encrypts, sends, and reports endpoints that answered 404/410 to
+`forget_push_endpoints` (callable only by `service_role`). It reads no tables
+and makes no decisions. It is written against WebCrypto, which also lets it be
+tested under vitest.
 
-**Push is one switch, and it answers for the device in the reader's hand**
-(`PushSwitch`). It was two for a while — an account-wide switch and a "this
-device" control with its own button under it — because a subscription can
-only be made by the browser it belongs to. Two controls for one question read
-as two questions, so they were folded together: the switch is on when the
-account's push is on *and* this device is bound; turning it on asks for
-permission, binds this device and turns the account's push on, which is also
-how a second device is added; turning it off turns the account's push off,
-which stops it everywhere. Devices stay bound through that, so turning it back
-on anywhere brings them all back. Where the device cannot take a push at all,
-the switch is disabled and the line under it says why.
+**An endpoint is checked twice against the four push services** (Google,
+Mozilla, Apple, Microsoft) — `push_subscription_valid` on the way in,
+`isPushEndpoint` before the `fetch` — since it arrives from any browser and
+would otherwise make the function POST anywhere.
 
-**The database decides, the function encrypts.** A push has to be encrypted to
-each browser's key (RFC 8291) and signed with the app's VAPID key (RFC 8292),
-and pgcrypto has neither ECDH nor ECDSA. So `send_push` hands the message and
-every target to the Edge Function in one `pg_net` request, and the function is
-deliberately dumb: check the shared secret, encrypt, send, and report the
-endpoints the push services answered 404 or 410 for to
-`forget_push_endpoints`, which only `service_role` may call. It reads no tables
-and makes no decisions. It is written against WebCrypto rather than the
-`web-push` package because that package is Node's `crypto` underneath, which
-is also what lets it be tested under vitest.
+**What a notification says** (`push_message`): the poll's title as the title,
+one sentence for the moment. Its `tag` is the poll, so a second notification
+replaces the first. Tapping it opens the poll, in an existing app window
+without a reload where there is one (`useNotificationRoutes`).
 
-**An endpoint is checked twice against the four push services** — Google's,
-Mozilla's, Apple's, Microsoft's — by `push_subscription_valid` on the way in
-and `isPushEndpoint` before the one `fetch`. The endpoint arrives from any
-browser holding a link, and unchecked it would make the function POST
-wherever somebody liked.
+**The tap also leaves a note**, because an iPhone launching the installed app
+from a notification opens the start page regardless, and a backgrounded
+window can resume without the posted message. `notificationclick` writes the
+poll's hash into its own cache (`star-voting-open`, spared by the version
+sweep); the app reads and deletes it on start and on returning to the
+foreground. It expires after two minutes and is acted on once.
 
-**What a notification says.** `push_message` writes it: the poll's title as the
-title — a notification has a line of its own for it, unlike an email subject
-an inbox truncates — and one sentence for the moment. Its `tag` is the poll, so
-a second notification about the same poll replaces the first, and tapping it
-opens the poll: in the app window that is already open where there is one,
-routed without a reload (`useNotificationRoutes`), otherwise in a new one.
+**Asking is always a press.** Nothing asks for permission on its own; the
+gear menu is the one place that can. Elsewhere the app only says it can
+notify (the push banner).
 
-**The tap leaves a note, because neither way of saying where to go is
-reliable on its own.** An iPhone launching the installed app from a
-notification opens the start page whatever address `openWindow` asked for,
-and a window found asleep in the background can resume without the message
-it was posted. So `notificationclick` first writes the poll's hash into a
-cache of its own (`star-voting-open`, spared by the version sweep), and the
-app reads and deletes it when it starts and whenever it comes back to the
-foreground, as well as acting on the message. The note is stamped and ignored
-after two minutes, so a tap nobody's app picked up cannot move somebody days
-later, and it is deleted whichever way it is acted on, so one tap moves the
-reader once.
+**iPhone and iPad need the app installed first**: Safari gives push only to a
+Home Screen app opened from there. In a Safari tab `pushState` is
+`needs-install`, the switch is disabled with a line saying so, and the banner
+links to [`InstallGuide`](src/pages/InstallGuide.tsx) at `#/app` — public,
+opened on the reader's own device type, linked from About. The installed app
+has its own storage, so a reader signs in again inside it, with a code (a link
+opens Safari); the guide says so.
 
-**Asking is always a press.** A permission prompt nobody asked for is ignored
-or blocked, and Safari will not show one at all, so nothing in the app asks on
-its own. The one place that can ask is the gear menu, signed in or not — the install
-guide used to carry the Settings switch as well, and polls answered through a
-link had a Notify me of their own, and more copies of one control were more
-places to look;
-everywhere else the app only *says* it can notify — the push banner in
-`Banners`, below. It says nothing where there is nothing to do: no key in the
-build, no push in the browser, a reader who already said no or already said
-yes.
+**The icon's badge counts polls with unread news**, derived rather than
+stored: notifications are tagged by poll, so the count of notifications still
+showing is the count of such polls. The service worker sets it whenever that
+changes (`updateBadge`); opening a poll closes its notifications
+([`lib/badge.ts`](src/lib/badge.ts)), on any question and again on returning
+to the foreground. Shown by desktop Chromium and installed iPhone apps;
+Android ignores the number.
 
-**iPhone and iPad need the app installed first.** Safari gives the push APIs
-only to a site added to the Home Screen and opened from there, so in a Safari
-tab `pushState` is `needs-install`, the push switch is disabled with a line
-saying so, and the banner's link is the guide — which says how to install and where to turn
-notifications on afterwards, but does not do it. The installed app also keeps
-its own storage, so a signed-in reader signs in again inside it — with a code,
-since a sign-in link opens Safari rather than the app; the guide says both.
-That guide is [`InstallGuide`](src/pages/InstallGuide.tsx) at `#/app`: public,
-opened on the reader's own kind of device with the other two beside it, and
-linked from the About page's list of features.
+Not done:
 
-**The installed app's icon carries a count** of the polls with news the reader
-has not opened. It is counted rather than kept: a notification's tag is its
-poll, so the notifications still showing are one per such poll, and the
-service worker sets the badge to however many there are whenever that changes
-— a push arriving, one tapped or swiped away (`updateBadge` in
-`public/sw.js`). The page supplies the other half of *unread*: opening a poll
-is reading it, so its page closes its own notifications and the badge counts
-again ([`lib/badge.ts`](src/lib/badge.ts)) — any question of the poll, since
-the notifications are filed against the first, and again whenever the page
-comes back to the foreground. A count held in storage beside the
-notifications would be a second answer to one question, and the two would
-drift the first time either was missed. It was proposed as *polls waiting on
-your vote*; that is a question only the database can answer, and a badge that
-is set only while the app is open and is wrong the moment a vote is cast on
-another device is worse than this one. Chromium on the desktop and an
-installed iPhone app show it; Android draws its own dot for notifications and
-ignores the number; elsewhere it does nothing.
-
-What it does not do:
-
-- **Deliver while nobody is looking, on a computer.** Desktop browsers receive
-  pushes only while they are running. Phones do not have that limit.
-- **Follow a rotated endpoint on a watch.** Push services occasionally replace
-  a browser's endpoint without telling the site. An account's device is
-  re-saved every time the app opens under it (`refreshAccountPush`), so it
-  catches up; a watch has nobody to re-save it and is dropped the first time
-  the old endpoint is refused. There is no `pushsubscriptionchange` handler,
-  because the service worker holds no account to send the new one under.
-- **Retry.** Like the emails, a push is best-effort and sent once.
+- **Delivery while a desktop browser is closed.** Phones have no such limit.
+- **Following a rotated endpoint on a watch.** An account's device is
+  re-saved on every app open (`refreshAccountPush`); a watch is dropped the
+  first time its old endpoint is refused. There is no
+  `pushsubscriptionchange` handler, since the worker holds no account.
+- **Retries.** Best-effort, sent once.
 
 ### Open polls you answered while signed in
 
-A watch is the right shape for somebody holding a link and nothing else, and
-the wrong one for somebody signed in: their account already says which
-channels it hears on, on every device it is bound to, and an open poll they
-voted in was the one kind of poll that setting could not reach. So **an
-account that answers an open poll is part of its audience**, simply because
-its ballot or its confirmation says so: since
-[`0074`](supabase/migrations/0074_open_ballots_follow_the_account.sql) a
-share-link ballot cast signed in carries the account, and `poll_email_audience`
-reads those accounts through `poll_answering_accounts` — every question of the
-group, so answering question 3 is being in the poll. They are emailed and
-pushed about the poll opening and its results exactly as an invitee is, by the
-same functions, under the same two settings, minus whoever acted. There is
-nothing to press and nothing for the browser to file. The creator's own ballot
-puts nobody new in the audience: the creator is in it already, and is left out
-of the moments that were their own doing by the rule every poll uses.
+**An account that answers an open poll is in its audience.** A share-link
+ballot or confirmation cast signed in carries the account (see [An open
+ballot cast signed in follows the
+account](#an-open-ballot-cast-signed-in-follows-the-account)), and
+`poll_email_audience` reads those accounts through `poll_answering_accounts`,
+over every question in the group. They are emailed and pushed about the poll
+opening and its results exactly as an invitee is, under their own settings,
+minus whoever acted — and told again if the poll is reopened and finishes a
+second time. Nothing is filed by the browser.
 
-**It was a separate record for a day, and that is worth knowing.**
-`0073_settings_link_and_open_poll_follows.sql` added `poll_follows`: a row the
-browser filed in a request of its own when a signed-in reader answered,
-carrying nothing that joined it to the ballot, and deleted once the results
-went out so that no account kept a list of the open polls it had answered.
-`0074` was written alongside it and put the account on the ballot itself, for
-the reasons in [An open ballot cast signed in follows the
-account](#an-open-ballot-cast-signed-in-follows-the-account) — and once the
-ballot carries the account, the follow records nothing the ballot does not,
-and was the weaker copy: filed by the browser as a best effort, so a failed
-request was a voter nobody told. [`0076_one_way_into_an_open_poll.sql`](supabase/migrations/0076_one_way_into_an_open_poll.sql)
-dropped it and pointed the audience at the ballots. The one behaviour that
-moved: a follower was forgotten once the results went out, and an account that
-answered is now told again if the poll is reopened and finishes a second time,
-as an invitee always was — its ballot is still there, which is the reason an
-invitee is.
-
-**The switches are a menu, not a page.** `NotificationSwitches` is two
-switches — *Email notifications* and *Push notifications* — with no line under
-either, drawn in a popover off the gear in the header (`Layout`). It used to
-be a Settings page, which was a lot of page for two switches and took the
-reader off the poll they were in the middle of; the popover opens where they
-are, and reads the account's settings only when it is opened. The `/settings`
-route is still there with the same component on it, for the one caller that
-cannot open a menu: the footer of every email. Nothing inside the app links to
-it, and the gear stands down on it the way its About link does on About.
-
-A push switch that cannot be turned on — an iPhone outside the installed app,
-a browser that said no, a browser with no push — is disabled with one short
-line under it saying which, and *See how* linking to the install guide. That
-is the only line either switch ever carries: a switch that works needs no
-words, so the menu is two lines for everybody it works for, and a greyed-out
-switch with no reason is the one thing in it that would leave somebody stuck.
-Following the link closes the menu (`Layout` closes it on any change of
-route).
+**The switches are a menu.** `NotificationSwitches` — *Email notifications*
+and *Push notifications* — is a popover off the gear in the header (`Layout`),
+reading the account's settings only when opened. `/settings` holds the same
+component for the email footer's link; nothing in the app links to it.
+A push switch that cannot be turned on is disabled with one line and *See
+how*, linking to the install guide. `Layout` closes the menu on any route
+change.
 
 **Two banners, in three places** (`Banners.tsx`): one saying where the push
-switch is, one saying the site installs as an app. They appear together on
-the poll list, under the card after confirming the options, and under *your
-vote is in* — the moments a reader is waiting on everybody else — the same for
-every reader, signed in or holding a link, on invite polls and open polls
-alike. Not on the sign-in screen, where they used to be: the one thing that
-page should ask of a reader is to sign in.
-
-They are one shape (`Banner`), so they cannot drift apart: the sentence, a
-*Learn more* button onto the install guide, and *Don't show again*. **The ×
-closes it for now** — gone from this page, back the next time — and **Don't
-show again closes it for good** in this browser. A reader who has not made up
-their mind wants the first; one who has wants the second, and a single ×
-meaning "forever" made the undecided close it without reading.
+switch is, one saying the site installs as an app. They appear on the poll
+list, under the card after confirming the options, and under *your vote is
+in* — the moments a reader is waiting on others — for every reader alike, and
+not on the sign-in screen. Both are one shape (`Banner`): a sentence, *Learn
+more* onto the install guide, and *Don't show again*. **The × closes it for
+now; *Don't show again* for good**, in this browser.
 
 - **The push banner** goes the moment push is on here (`usePushHere`, from
-  local mirrors — the account's binding and setting, or the link switch — so
-  it costs no request, and live, so flipping the switch takes it away). It
-  shows where the browser can be asked, and on an iPhone in a Safari tab too,
-  where the gear's switch is disabled with a line saying to install first;
-  nothing where the browser said no or has no push.
-- **The install banner** says nothing about notifications — the banner beside
-  it does — and shows to anybody outside the installed app, since it does not
-  depend on push.
-- **Under a poll a signed-in reader removed from their list**, a third comes
-  first and the push banner stands down: the poll will not notify them
-  whatever the switch says, so it says that, with a way to put the poll back.
-  It is not a `Banner` — it has no *Learn more* and no *Don't show again*,
-  because it is a fact about this poll rather than advice to be done with. See
-  [Removing a poll from your list](#removing-a-poll-from-your-list).
-
-The install banner used to be shown under the card only where the browser
-could not be asked for push — it stood in for Notify me on an iPhone — so on
-any desktop browser, incognito included, a voter never saw it.
+  local mirrors, live, with no request). It shows wherever the browser can be
+  asked, including an iPhone Safari tab; not where the browser said no or
+  has no push.
+- **The install banner** shows to anybody outside the installed app.
+- **Under a poll the reader removed from their list**, a third notice comes
+  first and the push banner stands down: the poll will not notify them, with
+  a way to put it back. It is not a `Banner` — it is a fact about this poll,
+  so it has no *Learn more* or *Don't show again*. See [Removing a poll from
+  your list](#removing-a-poll-from-your-list).
 
 ## Signing in
 
-Email, and nothing else: no passwords, no providers, no account to create
-before there is one — or no account at all, for a reader who only wants to
-run an open poll; see [Polls made without an
-account](#polls-made-without-an-account). What arrives in the inbox is one of
-two things, and the reader picks which on the sign-in screen before it is
-sent.
+Email, with no passwords and no providers — or no account at all; see [Polls
+made without an account](#polls-made-without-an-account). The reader chooses
+what arrives before it is sent:
 
-- **A link.** One tap and they are signed in. The default, and the easier of
-  the two whenever it works.
-- **A code.** Six digits, typed back into the window that asked for them.
+- **A link** (the default): one tap and they are signed in.
+- **A code**, typed back into the window that asked.
 
-The second exists because the first depends on something the reader does not
-control: that the tap lands back in *this* window. Two ordinary situations
-where it does not. An email client that opens links in a webview of its own
-signs them in inside that webview — a browser that is gone the moment the
-message is closed, leaving the one they started in signed out. And an
-installed copy of this app is a separate window with its own storage, which a
-link from an inbox has no way to reach; see [Installing it to a home
-screen](#installing-it-to-a-home-screen). Neither is detectable from here and
-neither is rare, so the choice is offered rather than guessed at.
+The code exists because a link depends on the tap landing back in *this*
+window, and two ordinary situations break that: an email client opening links
+in its own webview, and an installed copy of the app, which has separate
+storage. Neither is detectable, so the choice is offered. `verifyOtp` returns
+the session on the same request, in the same window.
 
-A code has none of that exposure, because nothing navigates: `verifyOtp`
-answers with the session on the same request, in the window that asked. That
-is the whole of its advantage, and it costs six digits of typing.
-
-**The choice is remembered per browser, not per account** —
-`star-voting:sign-in-method` in `localStorage`, in `src/lib/signInMethod.ts`.
-Whether a tap comes back to the window that asked is a fact about this device
-and this email client; the same person on their laptop is usually better off
-with the link they get there. Storing it against the account would also mean
-reading it before there is a session to read it from, which is the one thing
-a sign-in screen cannot do.
+**The choice is remembered per browser** (`star-voting:sign-in-method` in
+`src/lib/signInMethod.ts`): whether a tap comes back is a fact about this
+device and email client, and it is needed before there is a session.
 
 ### How the choice reaches the mailer
 
-Supabase renders **one** template for both. `signInWithOtp` has no argument
-for choosing between them: the same request sends whichever email the *Magic
-Link* template draws, and it draws whichever of `{{ .ConfirmationURL }}` and
-`{{ .Token }}` it mentions. Both are always minted — a link and a code are
-two ways of redeeming one OTP — so the template is the only thing that
-decides which of them the reader is shown.
-
-The one part of the request that is ours to set and reaches the template is
-the redirect address, as `{{ .RedirectTo }}`. So that is what carries it:
-`redirectFor` in `src/lib/AuthProvider.tsx` appends `?method=code` on the
+Supabase renders **one** template for both, the *Magic Link* template, and
+`signInWithOtp` has no argument to choose between them; a link and a code are
+both minted every time. The template decides which to show, and the one part
+of the request that reaches it is the redirect address (`{{ .RedirectTo }}`).
+So `redirectFor` in `src/lib/AuthProvider.tsx` appends `?method=code` on the
 code path, and the template branches on exactly that. The marker is
-`CODE_METHOD_MARKER`, and it is one constant precisely because it has to
-match a string pasted into a dashboard — a template looking for the old
-marker sends a link to everybody and says nothing about it.
+`CODE_METHOD_MARKER`; it must match the string in the dashboard template.
 
-Every deployment's own address must appear in the template's `or`, which is
-why it is a hand-edited file rather than something this repo can apply for
-you: Go templates have `eq` and no substring test, so each origin the app is
-served from is a term of its own. The two below are production and the dev
-server.
+Go templates have `eq` and no substring test, so **every origin the app is
+served from is a term of its own** in the template's `or`.
 
 ### Why the marker goes missing, and why it goes missing quietly
 
-On the code path nothing is ever tapped, so where the redirect address
-*points* does not matter. That it is **recognised** does, and the rule is
+On the code path nothing is tapped, but the redirect address must still be
+**accepted**, by
 [`IsRedirectURLValid`](https://github.com/supabase/auth/blob/master/internal/utilities/request.go):
-an address is accepted if its scheme and hostname match the Site URL's, or
-if it matches a pattern on the allowed redirect list. The query string is
-not part of that test either way.
+its scheme and host match the Site URL's, or it matches a pattern on the
+allowed redirect list. Production matches the Site URL; **`localhost` gets in
+only through the `http://localhost:5173/**` entry**.
 
-Which means production needs nothing added for this: `https://choicelab.app/…`
-already shares a scheme and hostname with the Site URL, marker or no marker.
-**The dev server is the case that needs the list entry** — `localhost` is not
-`choicelab.app`, so `http://localhost:5173/?method=code` gets in
-only by matching `http://localhost:5173/**`.
+A refused address is silent. `GetReferrer` falls back to the request's
+`Referer` (the app root, without the marker) and then the Site URL, so
+`{{ .RedirectTo }}` becomes the page the reader was on, the template's `eq`
+fails, and everybody gets a link.
 
-And when it does not get in, nothing anywhere says so. `GetReferrer` next to
-that function falls back, in order, to the request's own `Referer` header and
-then to the Site URL — and the `Referer` on a sign-in request is the page
-that made it, which is the app root *without the marker*. So a missing list
-entry does not produce an error, or a redirect somewhere surprising, or any
-sign at all: `{{ .RedirectTo }}` quietly becomes the address the reader was
-already on, the template's `eq` fails against it, and everybody is sent a
-link. The symptom is the feature not working; there is nothing to read.
-
-**The diagnostic is the template itself.** Nothing in the app can see any of
-this, so when a code does not arrive, put
+**To diagnose**, put this at the top of the Magic Link template and send
+yourself a code:
 
 ```html
 <p>RedirectTo: [{{ .RedirectTo }}] &mdash; Token: [{{ .Token }}]</p>
 ```
 
-at the top of the Magic Link template and send yourself one. What comes back
-names the fault: the Site URL or the app root means the address was refused
-and the list entry is missing; the right address with the branch still not
-taken means the `eq` term does not match it character for character; the
-literal text `{{ .RedirectTo }}` means the variable is not being rendered at
-all.
+The Site URL or app root means the address was refused (missing list entry);
+the right address with the branch not taken means the `eq` term does not
+match it exactly; the literal text `{{ .RedirectTo }}` means the variable is
+not being rendered.
 
 ### The Magic Link template
 
@@ -3860,3354 +1846,1394 @@ to the `or` for every origin the app is served from.
 </html>
 ```
 
-**Check both halves after pasting it**, by signing in each way once. A
-template whose branch never matches is not an error anywhere — it sends a
-link to a reader who asked for a code, and the code screen they are looking
-at has nothing to type into it.
+**Check both halves after pasting it** by signing in each way once. A template
+whose branch never matches is not an error anywhere: it sends a link to a
+reader looking at a code screen.
 
 ### Polls made without an account
 
-**Continue without an account**, on the sign-in screen, is Supabase's
-anonymous sign-in: a real session, a real `auth.users` row, and no email
-address. The reader lands on a poll list of their own and can make open polls
-and run them — close, reopen, edit the options, delete — exactly as an account
-does, because every one of those rules is written as `created_by =
-auth.uid()` and an anonymous account has a `uid`. Nothing about the creator's
-side of a poll had to learn a new case. What it is not is signed in to an
-*account*, and the app says so in the places that differ: the header's corner
-says **Sign in** rather than offering a sign-out (`/sign-in` is the sign-in
-screen at an address of its own, since this reader's `/` is their list), the
-poll list carries a line saying the polls live in this browser, and the create
-form offers invite polls disabled, with the reason under them. `anonymous` in
-`useAuth` is how a component asks.
+**Continue without an account** is Supabase's anonymous sign-in: a real
+session and `auth.users` row with no email. The reader gets their own poll
+list and can make and run open polls — close, reopen, edit options, delete —
+because every creator rule is `created_by = auth.uid()`. The app marks the
+differences: the header says **Sign in** (`/sign-in` is the sign-in screen at
+its own address, since this reader's `/` is their list), the poll list says
+the polls live in this browser, and the create form shows invite polls
+disabled with the reason. `anonymous` in `useAuth` is how a component asks.
 
-**Signing in brings the polls along.** Signing in replaces the anonymous
-session, and the account may well exist already, so nothing follows by itself.
-Before the sign-in email goes out, the browser takes out a ticket while it can
-still prove it is the anonymous account (`begin_account_carry_over`), and the
-first tab to see the account's session hands it back
-(`finish_account_carry_over`): the polls it made, the ballots and
-confirmations it cast through links — except in a poll the account had
-already answered, where the account's own ballot stands and the anonymous one
-stays where it was — and its removed polls. The ticket is random, held only in
-this browser's `localStorage`, spent once, and good for a day. A sign-in link
-opened in a different browser cannot redeem it; the polls then stay with the
-anonymous session here until this browser signs in too. See
+**Signing in brings the polls along.** Before the sign-in email goes out, the
+browser takes out a ticket while it can still prove it is the anonymous
+account (`begin_account_carry_over`); the first tab to see the account's
+session redeems it (`finish_account_carry_over`), moving the polls it made,
+its link ballots and confirmations (except in a poll the account had already
+answered, where the account's ballot stands), and its removed polls. The
+ticket is random, held only in this browser's `localStorage`, single-use and
+good for a day, so a link opened in another browser cannot redeem it. See
 [`lib/carryOver.ts`](src/lib/carryOver.ts).
 
-**Losing the session is losing the polls**, and that is the trade: there is no
-address to send a way back to. Clearing the site's data, a private window
-closing, or another device is a list nobody can reach, and polls nobody can
-close — they still run, and are purged at six months like any other. The line
-on the poll list exists to say this before it happens.
+**Losing the session is losing the polls** — there is no address to send a
+way back to. The polls keep running and are purged at six months. The line on
+the poll list says this up front.
 
 #### What an anonymous session can reach
 
-Supabase's advice when turning this on is to review every policy, because an
-anonymous session holds the `authenticated` role like anybody signed in. This
-is that review, done for 0079. The question at every door is what a reader
-with a `uid` and **an empty email claim** — `"email": ""`, which is what an
-anonymous token carries — can do that one with no session could not.
+An anonymous session holds the `authenticated` role with an **empty email
+claim** (`"email": ""`). At each door:
 
-- **Tables.** `polls`, `candidates` and `ballots` are read by `created_by =
-  auth.uid()`, by the invite list, or by `voter_id`; an anonymous account
-  reaches its own polls and nothing else. `invited_voters` is read where
-  `email` matches the claim — which an empty claim would match against an
-  empty address, and a creator can insert into that table directly through
-  its grant and policy, past the checks the create paths make. 0079 deletes
-  any blank row and puts the address rule on the table (`invited_voters_email_ck`),
-  so it holds whichever way a row arrives. Every other table is RLS-on with no
-  policies and no grants, and the new `account_carry_overs` is the same.
-- **Functions granted to `authenticated`.** Every one that reads or writes a
-  poll decides through the same two tests — creator by `uid`, invitee by the
-  email claim — so the empty claim makes an anonymous account the creator of
-  its own polls and an invitee of none. `poll_page` hands it `unreadable` for
-  an invite poll, which the route turns into the sign-in screen with the poll
-  remembered, since the invitation may well be the account's. Settings, push
-  subscriptions and removed polls are keyed by `uid` and harmless.
-- **The one hole: email.** An invite poll writes to every address on its
-  list, from this app's domain, through its Resend key, and an anonymous
-  account costs nobody an inbox — so letting one make an invite poll would make
-  this app a way to send mail to anyone. `guard_anonymous_polls`, a trigger on
-  `polls`, refuses one by every path that makes a poll; `guard_invitee_changes`
-  already refused an invite list on an open poll. The same trigger caps an
-  anonymous account at twenty polls a day, a group counting once. That bounds
-  one session, not a script minting sessions: Supabase's rate limit and CAPTCHA
-  are what bound those (setup step 7).
-- **An address nobody has.** `polls.created_by_email` was `NOT NULL`, filled
-  from the claim — an empty string for an anonymous creator, which the email
-  audience would then have tried to write to. It is null now.
-- **Push.** A poll's devices are chosen by address (`poll_push_targets`), so an
-  anonymous account's own binding would reach nothing; it uses the link's
-  switch and files watches, as a reader who is signed out does. A watch
-  ignores account settings, so removing a poll from an anonymous list does not
-  silence a watch already filed on it — the one place the removed-poll banner
-  promises a little more than it delivers there.
-- **Unchanged, and noted.** `anon` and `authenticated` hold `TRUNCATE`,
-  `TRIGGER`, `REFERENCES` and `MAINTAIN` on every table, from Supabase's
-  default privileges. None of them is reachable through the Data API, which
-  only ever issues reads, writes and function calls, so none is reachable by
-  anybody holding the public key, anonymous or not.
+- **Tables.** `polls`, `candidates` and `ballots` are read by `created_by`,
+  the invite list, or `voter_id`, so an anonymous account reaches only its own
+  polls. `invited_voters` is read where `email` matches the claim, which an
+  empty claim would match against a blank address, so the table carries
+  `invited_voters_email_ck` and no blank address can exist however a row
+  arrives. Every other table has RLS on with no policies and no grants,
+  including `account_carry_overs`.
+- **Functions.** Every poll function decides creator by `uid` and invitee by
+  email claim, so an anonymous account is creator of its own polls and invitee
+  of none. `poll_page` returns `unreadable` for an invite poll, which the
+  route turns into the sign-in screen with the poll remembered.
+- **Email is the one real hole.** An anonymous account costs nobody an inbox,
+  so letting it make an invite poll would let anyone send mail from this
+  domain. `guard_anonymous_polls`, a trigger on `polls`, refuses one by every
+  path, and caps an anonymous account at twenty polls a day (a group counts
+  once). That bounds one session; Supabase's rate limit bounds a script
+  minting sessions (setup step 7). `guard_invitee_changes` already refuses an
+  invite list on an open poll.
+- **`polls.created_by_email` is null** for an anonymous creator, so the email
+  audience never tries to write to an empty address.
+- **Push.** Devices are chosen by address, so an anonymous account uses the
+  link switch and files watches. Watches ignore account settings, so removing
+  a poll from an anonymous list does not silence a watch already filed — the
+  one place the removed-poll notice promises slightly more than it delivers.
+- **Default privileges.** `anon` and `authenticated` hold `TRUNCATE`,
+  `TRIGGER`, `REFERENCES` and `MAINTAIN` from Supabase's defaults; none is
+  reachable through the Data API.
 
-`mark_votes_after_reveal` was narrowed in the same migration: it treated any
-update to a ballot as a vote, and moving a ballot to the account its voter
-signed in to is an update that is not one.
-
-`41_polls_without_an_account` covers all of the above that the suite can see.
+`mark_votes_after_reveal` ignores the carry-over's ballot updates, which move
+a ballot without being a vote. `41_polls_without_an_account` covers what the
+suite can see.
 
 ## Behaviour worth preserving
 
-These are decisions, not accidents. Changing any of them changes a promise the
-app makes to the people voting in it.
+These are decisions, not accidents. Changing one changes a promise the app
+makes to the people voting.
 
 ### Poll settings are frozen at creation
 
-Each poll fixes four things when it is created, and none can be changed
-afterwards: `authenticated` has no `UPDATE` grant on the `polls` table at all.
-A poll's terms are settled the moment it exists. Everything that *does* move
-afterwards moves through a `SECURITY DEFINER` function with its own rules —
-`close_poll`, `reopen_poll`, `finalize_options`, `creator_add_option` — never
-through a write from the client.
+Each poll fixes four things at creation — who can vote, whether respondents
+are shown, whether ballots are published, and where the options come from —
+and `authenticated` has no `UPDATE` grant on `polls`. Everything that moves
+afterwards moves through a `SECURITY DEFINER` function with its own rules
+(`close_poll`, `reopen_poll`, `finalize_options`, `creator_edit_options`, …).
 
-Three of the four are surfaced by `PollTags` (`src/components/PollTags.tsx`)
-— always those three, always in the same order and the same words, whichever
-way each one is set, on the poll list, the poll page and the public voting
-page alike. A tag that appeared only for one of its two states made its
-absence carry meaning, and nobody reads an absence. Showing both states of
-each means the terms of a poll can be taken in at a glance and compared
-between polls.
+**`PollTags`** (`src/components/PollTags.tsx`) shows three of the four —
+always both states, always in the same order and words — on the list, the
+poll page and the public page. An absent tag carries no meaning anybody reads.
+**Where the options came from is not shown**: it matters only while the poll
+is collecting, and then the state badge (*Collecting options*) and the card
+itself say so.
 
-**Where the options came from is the one that is not shown.** It is frozen
-like the other three and still true long after the poll ends, but it is the
-one setting nobody scans for, and the row it was in had grown past what
-anybody reads — five tags under a title is a row that gets skipped whole,
-which costs the two tags that tell a voter what happens to their ballot. It
-is stated in full while it matters, by the state badge reading *Collecting
-options* and by the stage itself: a card that is a list with a box to add to
-it is a poll taking its options from the people reading it, and it says so
-better than the line of prose that used to sit under it — which is why that
-line is gone.
+**Every state has its own colour**, from `src/lib/badgeColors.ts`, which holds
+every badge colour in the app (badges from different files land side by side,
+so choosing at the call site is how two meanings end up one colour). Add a key
+there before adding a badge.
 
-`Collecting options` and `Closed` used to be appended to the same row as
-neutral tags. They are not settings, they are where the poll has *got to* —
-see [The poll's high-level details](#the-polls-high-level-details).
-
-**Every state has its own colour**, not one colour per setting: with every
-tag always present, a colour shared across a pair told you which question was
-being answered but not what the answer was, leaving the text to carry the
-whole tag. Colours come from `src/lib/badgeColors.ts`, which holds every badge colour
-in the app in one place — badges from different files land side by side on a
-poll list card, so choosing at the call site is exactly how two unrelated
-meanings end up the same colour. Add a key there before adding a badge.
-
-The wording is deliberately not symmetrical. Respondents are **shown** or
-**hidden** — hiding them lists nobody at all, which is not the same as listing
-them anonymously — while ballots are **published** or **private**. An anonymous
-ballot is the two tags in combination: respondents hidden, ballots published.
-Changing any of these strings means changing them in `PollTags` alone, which is
-the point of it existing — the turnout wording included, which is why the count
-badge takes the numbers and builds its own label rather than being handed one.
+The wording is deliberately not symmetrical: respondents are **shown** or
+**hidden** (hidden lists nobody), ballots are **published** or **private**.
+An anonymous ballot is the combination respondents hidden + ballots
+published. Change these strings in `PollTags` alone, including the count
+badge's turnout wording.
 
 ### The poll's high-level details
 
-**One poll looks like one thing wherever it is read.** The card on the list,
-the poll's own page and the public voting page share a heading, and share it
-literally: `PollHeading` (`src/components/PollHeading.tsx`) is the one
-component all three render, because three hand-written copies of one layout is
-three things to keep in step and they had already fallen out of it. Four
-parts, always in this order:
+**One poll looks like one thing wherever it is read.** The list card, the
+poll page and the public page all render `PollHeading`
+(`src/components/PollHeading.tsx`), in this order:
 
-1. the **title**, with where the poll has got to in a badge beside it;
-2. the poll's **description**, when it has one;
-3. **who created it** — *Created by you*, or their email address;
-4. the four badges saying **what kind of poll it is** — how many have
-   answered, then **invite only/open link**, then respondents shown/hidden,
-   then ballots published/private.
+1. the **title**, with the state badge beside it;
+2. the **description**, if any;
+3. **who created it** — *Created by you* or their email;
+4. the badges: **the count**, then invite only/open link, respondents
+   shown/hidden, ballots published/private.
 
-The order is not a preference. A description is the creator's own words about
-the poll and belongs with the title it extends, above the row of app-written
-badges rather than stranded under it. The three settings inside the row run in
-the order `CreatePoll` asks for them, so the form that sets a poll's terms and
-the row that reports them tell one story in one order; the count comes first
-of the four because it is the only one that is not a setting at all — it is
-the one that moves, and the one a reader scanning the list is looking for. Two screens
-describing one poll differently is two things to learn about a poll instead of
-one.
+The description is the creator's words and belongs with the title. The three
+settings run in the order `CreatePoll` asks them. The count is first because
+it is the one that moves and the one a reader scans for. `compact` is the list
+card's size.
 
-`compact` is the list card — the same four parts at smaller sizes, because a
-page title inside a link among nine others shouts.
+**The public page omits who created the poll.** Every email address the app
+displays is shown only to people already in that poll; a share link goes
+anywhere, so `open_poll_view()` does not return the creator's address at all.
+(An open poll's roster shows names voters typed, not addresses.) It does show
+the winner in the badge.
 
-**The public voting page draws three of the four, and the one it leaves out is
-who created the poll.** That is the only place this heading is knowingly
-incomplete, and the reason is worth writing down because the layout argument
-points the other way.
-
-Every email address this app displays anywhere is displayed to somebody who
-is already in the poll it belongs to: an invite poll's roster is read by its
-invitees, and nobody else can see the poll at all. **A share link has no such
-boundary.** It goes wherever it is forwarded, to people who never signed in
-and never will. Publishing the creator's address to all of them would be the
-first time the app told an address to somebody outside the poll, and matching
-three headings is not worth being that exception. `open_poll_view()` does not
-return the column, so there is nothing there to leak by accident.
-
-An open poll's roster is no counter-example: those names are typed into the
-ballot by the voters themselves, not addresses the app knows about anybody.
-
-**The winner's name is a different kind of thing, and this page does name
-it** — in the badge, like everywhere else a single-question poll is read. It
-was never withheld here: the tally under the heading has always named it in
-full. What was missing was the name *in the badge*, because that came from
-`poll_winners()` and that function answers only to an account, so the badge
-read *Results ready* next to a result sitting right underneath it. (A poll of
-several questions is the one that still reads *Results ready* here, and on
-every other screen with it; see the table below.)
-
-**It arrives on `open_poll_view`, the read that draws the page.** It used to be
-taken out of the tally the `Results` card below the badge fetched for itself,
-because that card carries `winner_id` and the option names and this page could
-not ask a function that wants an account. That worked, and it made the badge a
-dependent of a card several inches below it: it appeared when that card
-appeared, and if that card failed there was no badge at all. The poll's own
-row carries the answer now (see [The winner is kept with the
-poll](#the-winner-is-kept-with-the-poll)), so the same read that draws the
-heading draws the badge beside it, with no account and no second request.
-
-**Nothing on the badge waits.** *Results ready* is a real state — it means
-"finished, and nothing is going to tell this page what it decided", which is
-true of a poll of several questions, of a browser talking to a database older
-than the columns that carry the winner, and of a read that failed. It is not a
-loading state, and it was once used as one: every finished poll drew *Results
-ready* for the hundred milliseconds its winner was in flight and then rewrote
-itself into a name, so every load of every finished poll flickered through a
-state that was true for nobody. The fix at the time was a third input,
-`awaitingWinner`, and a badge that drew nothing while it was set.
-
-That input is gone, because the thing it was waiting for no longer arrives
-late. `list_polls`, `poll_status` and `open_poll_view` each carry
-`winner_name` and `winner_settled` beside the `results_available` the badge
-already reads, so every state the badge can draw is decided by the read that
-drew the page. There is no in-flight case left to hold it back — and no way
-for the name and the state beside it to be a step out of sync, since they came
-from the same row.
-
-**The badge and the title share a row, sixty/forty.** Two earlier attempts came
-apart on a phone. Left free to give, the title took min-content and wrapped one
-or two characters at a time down the side of a badge holding 220px of a 330px
-card; pinned so the badge could not shrink, the row had to wrap and the badge
-dropped onto a line of its own — a lot of vertical space for a word or two, and
-it read as a second thing rather than as part of the heading.
-
-So the split is stated rather than negotiated, in a `Flex` that never wraps:
-the title's flex *basis* is 60% and the badge's ceiling is 40%. The slack goes
-to whoever needs it, which is the half that matters — the badge is only as wide
-as its text, so *In progress* asks for a fifth of the row rather than two
-fifths, and the title grows into everything left over. Sixty is a floor, not a
-serving. Past the ceiling it is the title that gives, wrapping inside its own
-share, because a wrapped title is still readable and an elected option
-ellipsised to two letters is not an answer at all.
-
-**Only the badge carrying a poll's own text takes the ceiling.** Every other
-state — *Collecting options* is the longest — is a fixed phrase the app wrote
-and knows the length of, and keeps its width. Capping those at the same share
-would ellipsise the app's own label to make room for a title, on exactly the
-screens narrow enough for 40% to bite. The share answers "how much of the
-heading may a poll's own text take", which is the only place the question is
-really asked, so it lives on that one badge (`maw="40%"`, against the row)
-rather than in a box around all of them.
-
-Three decisions hold that shape:
-
-- **Where the options came from is not in the row**, alone of the four
-  settings — see above.
-- **No badge in the row carries approval.** Both settings of both switches
-  are the creator's to make, so neither state of a pair may look like the
-  right answer. Ballots published/private was teal against pink until it read
-  as green against red — a tick for publishing and a cross for not — and is
-  now two greens, one hue family for one question, like the other two pairs.
-  Approval belongs to the progress colours (`done`, `outstanding`), which are
-  about getting somewhere rather than about a choice.
-- **The count stays after the poll closes.** It used to be replaced by
-  *Results ready* at exactly the moment it stopped being a moving number and
-  became a permanent fact about the poll. While a poll is collecting options
-  it counts options instead, because turnout is zero and stays zero until the
-  list is settled.
-- **"Vote pending" is gone.** It answered a question about the reader rather
-  than about the poll, which is what the rest of the row is for.
-
-The count is on every one of those screens, including the public voting page
-and including before the reader has voted — see [Whether respondents are
-shown](#whether-respondents-are-shown) for why it is the roster that waits and
-not the number.
-
-The state badge says *Collecting options*, *In progress*, *Closed*, or **the
-option that won**. A finished poll naming its winner is the answer the whole
-poll was for, and the reason anybody opens one again months later.
-
-Two things it deliberately does not do. It does not prefix the name with
-*Winner:* — the badge is green, it sits where every other poll's state sits,
-and the polls around it read *In progress*; a label naming the question is
-only worth its room when the answer alone would be ambiguous. And it does not
-collapse the three finished outcomes into one:
+**The state badge says** *Collecting options*, *In progress*, *Closed*, or
+**the option that won** — with no *Winner:* prefix. The three finished
+outcomes are distinct:
 
 | Badge | Means |
 | --- | --- |
 | the option's name | STAR elected it |
 | *Tied — no winner* | the election ran and settled nothing — see [Tie-breaks](#tie-breaks) |
-| *Results ready* | finished, and this page has not been told which of the two |
+| *Results ready* | finished, and this screen has no winner to name |
 
-That last row is a real state rather than a fallback. It is what a poll of
-several questions reads, and what a browser talking to a database older than
-the columns carrying the winner reads, and what a read that failed leaves
-behind. It must never read as *Tied*, which would be a wrong answer where this
-is only a missing one — which is why the answer travels as a name *and* a
-`winner_settled` flag rather than as a name alone.
+*Results ready* is a real state, never a loading state: it is what a poll of
+several questions reads, and what a failed read leaves. It must never read as
+*Tied*, which is why the answer travels as `winner_name` *and*
+`winner_settled`. Every state the badge can draw is decided by the read that
+drew the page (`list_polls`, `poll_status`, `open_poll_view` all carry the
+winner columns), so nothing waits.
 
-**A poll of several questions takes that row deliberately, on every screen.**
-It has an answer per question and none to put beside the poll's title, so the
-badge names none of them; the question a reader opens names its own, in the
-green banner over its tally, a few inches under the badge that declined to.
-`PollStateBadge` decides that from `inGroup` rather than trusting each caller
-to pass no winner, because a caller could not keep it. A group's row on the
-poll list **is** its first question, so `list_polls` hands that card the first
-question's `winner_name` like any other row — as it must, since it is one
-query and the row is a poll. Withholding it in the badge, in one place, is
-what stops one poll read two ways from saying two different things, which is
-the failure this file's first paragraph is about. (The rule was earned the
-harder way: the browser used to file what a `Results` card read under the
-*question's* id, so opening a group's first question and walking back to the
-list handed its card the very name the list had never asked for.)
+**A poll of several questions reads *Results ready* on every screen.** It has
+one winner per question and none for the poll; each question's winner is in
+the green banner over its tally. `PollStateBadge` decides this from `inGroup`
+rather than trusting callers, because `list_polls` hands a group's card its
+first question's `winner_name` like any other row.
 
-The name is a column on the poll, filled in by `settle_winner()` when the poll
-finished. It runs `poll_winner_name()`, which runs the same `star_round()` the
-results page runs — so the badge and the tally cannot disagree about who won,
-because there is one implementation of the method and this is a second caller
-of it. See [The winner is kept with the
-poll](#the-winner-is-kept-with-the-poll) for how it is kept true.
+**The badge and the title share a row, sixty/forty**, in a `Flex` that never
+wraps: the title's basis is 60%, and only the badge carrying the poll's own
+text (a winner's name) has `maw="40%"`. The app's own fixed labels keep their
+width. Past that ceiling it is the title that wraps.
 
-**It is a column on `list_polls()`, and the argument that kept it off is worth
-recording because it was right about the wrong thing.** Running STAR is not
-free, and the list re-reads itself whenever anything on it moves; a column
-that *computed* the winner would have re-run every finished poll's election on
-every one of those reads, for an answer that cannot change. So the winner was
-a second request instead — `poll_winners()`, asked for the finished polls on
-the page being looked at, once per poll per tab, with a cache in the browser
-to make it once rather than once per read.
+Row decisions:
 
-What that got wrong is that the answer being fixed is a fact about the
-*poll*, not about the reader looking at it. Held per tab, it had to be
-re-derived by every tab and could not be corrected in any of them: a poll put
-back to taking votes elsewhere left the name of an option elected by a tally
-that had moved on, on every other screen in the world, until it was reloaded.
-Held on the row, it is derived once and correct everywhere. `list_polls()` is
-still one cheap `STABLE` query with no election in it — reading a column off a
-row it has already fetched is not one.
+- **No badge in the row carries approval.** Both states of each setting are
+  the creator's choice, so each pair is one hue family. Approval colours
+  (`done`, `outstanding`) are for progress.
+- **The count stays after the poll closes.** While collecting options it
+  counts confirmations instead (turnout is zero until there is a ballot).
+- **Nothing in the row is about the reader** (no "vote pending").
 
-So the cost is one election per *result*, rather than one per poll per tab. It
-stops growing with the number of people looking, which is a stronger property
-than the one the old design bought.
+The count is on every screen, before the reader votes too; see [Whether
+respondents are shown](#whether-respondents-are-shown).
 
-**Every screen reads it off the row that drew it**, and that includes the
-public voting page, which has no account and so could never have called
-`poll_winners()` at all: `open_poll_view` carries it. That page used to take
-the winner out of the `Results` card below the badge, which made the badge
-wait on that card and disappear if it failed.
+**The winner is a column, and `list_polls()` reads it**; nothing on the list
+runs an election. See [The winner is kept with the
+poll](#the-winner-is-kept-with-the-poll).
 
-While the columns were new, `winner_settled` was optional in `rpcSchemas.ts`
-and an absent one read as *not told*, for a browser deployed ahead of its
-migration. Long since landed, both are now required; that is the pattern for
-every field a migration adds (see the header of `rpcSchemas.ts`).
+`winner_settled` and every other field a migration adds are required in
+`rpcSchemas.ts` once landed; see the header of that file for the pattern.
 
 **Ten polls to a page, taken in the database.** `list_polls(p_limit,
-p_offset)` returns that page and the total, in one round trip.
+p_offset, p_removed)` returns the page and the total in one round trip. The
+page is taken *before* the per-poll aggregates run (the invited, voted and
+option counts, and the group-wide `bool_and`s), so only ten polls pay for
+them; the total is a count over everything visible. **`polls.created_by` is
+indexed** — Postgres does not index foreign keys, and without it the "mine"
+half of the visibility test scanned every user's polls.
 
-It used to return everything and let the browser slice it, defended on the
-grounds that a poll history is "a number in the tens". The flaw in that was
-never the row count — it was that the expensive half of `list_polls()` is a
-set of correlated subqueries run *per poll* (the invited, voted and option
-counts, plus a `bool_and` pass over every question in a group for each of
-`voted`, `is_complete` and `is_closed`). Reading the list whole paid that for
-every poll you had ever been invited to in order to draw ten. So the page is
-taken before the aggregates run: `page` slices `visible`, and `tallied` reads
-from `page`. What still costs one pass over everything visible is the total,
-which is a count and cannot be anything else.
-
-**The index matters more than the paging did.** `polls.created_by` had a
-foreign key and no index, and Postgres does not create one for a foreign key —
-so the "mine" half of the visibility test had nothing to use, an `OR` with an
-unindexable side cannot become a bitmap union, and the planner was left
-scanning `polls` in full, every user's polls included, to answer a question
-about one person's. That was the only cost here that grew with *other
-people's* data, and paging could never have touched it: the filter runs before
-the page is taken. `0036` adds the index.
-
-**Asking past the end lands on the last page there is**, and the clamp is in
-the database. The browser derives its page count from the same total, so the
-page it claims to be showing and the page it was handed cannot drift apart —
-and an empty answer means an empty list rather than a page number that
-overshot. A poll deleted from page three still leaves the reader on page
-three, or on the last page if that was it.
-
-**Paging is ordered by `created_at desc, id desc`.** Offset paging is only
-correct over a total order — two rows that compare equal may come back either
-way round, and then a row lands on two pages or on none, silently. In the app
-polls are created one at a time and their timestamps differ, so the tiebreak is
-insurance; nothing *enforces* that they differ. In the suite it is
-load-bearing, because a case is one transaction and every poll a case creates
-shares a `created_at` to the microsecond — which is why
-`20_paging_the_poll_list` can assert that two pages partition the list at all.
-
-**Both arguments are required, and there is no "all of them" mode.** A default
-page size in the database would be a second copy of `PAGE_SIZE` to keep in step
-with the browser's, and an unlimited mode would be the whole-list read this
-change exists to stop being the normal path.
+**Asking past the end lands on the last page**, clamped in the database, and
+the browser derives its page count from the same total. **Ordering is
+`created_at desc, id desc`**: offset paging needs a total order, and in the
+suite every poll a case creates shares a `created_at`
+(`20_paging_the_poll_list`). **Both arguments are required**; a default page
+size would be a second copy of `PAGE_SIZE`.
 
 ### Option descriptions
 
-An option can carry a description as well as a name: a caveat, a couple of
-lines of detail, a link to whatever is being voted on. It is optional and
-nearly always absent, and `0019` is the migration that gave `create_poll`
-somewhere to put the text. The column itself predates that by a long way:
-`candidates.description` and both ballots' rendering of it were written first,
-and nothing had ever been able to fill it in.
+An option can carry an optional description: a caveat, some detail, a link.
 
-**Every screen has the same `+` and `−`, and what differs is only which way
-round a row starts.** `DescriptionToggle`, beside each option's `×`, shows the
-field or takes it away, on the create form and in `CollectOptions` — the box on
-a poll collecting its options, and the creator's own correction of a settled
-list — alike. The two screens used to disagree: the form had the toggle and
-`CollectOptions` drew the field on every row unconditionally, so the same
-control was a button in one place and simply absent in the other.
+**Every screen has the same `+` and `−`** (`DescriptionToggle`, beside each
+option's `×`), on the create form and in `CollectOptions` alike. Where a row
+starts:
 
-Where a row starts is decided by what it is:
+- **A create-form row starts closed**, since the form lays out many rows.
+- **A new option in `CollectOptions` starts open** (one option at a time).
+- **An option opened by its pencil starts as it is**: with its description if
+  it has one.
 
-- **A row of the create form starts closed.** The form lays out a dozen rows
-  at once, and a description under every one of them would bury the list the
-  creator is trying to read.
-- **A new option in `CollectOptions` starts open.** *Add option* there is one
-  option at a time, so the field costs two rows of a card with nothing else in
-  it, and making the most useful thing a suggestion can carry wait behind a
-  `+` is a press for nothing. The `−` is for whoever has nothing to say.
-- **An option opened by its pencil starts the way it is.** One with a
-  description shows it; one without shows only its name, as the create form
-  would, rather than an empty box asking to be filled in on a row somebody
-  opened to fix a typo.
+A field the `+` just showed takes focus; one that arrives with its row does
+not. The field is indented under its option with an elbow drawn to it
+(`DescriptionField.module.css`), opens two rows tall and grows, and its
+placeholder names its option (*Option 2 description*).
 
-A field the `+` has just shown takes the cursor, because it was asked for; a
-field that arrives with its row does not, so *Add option* and the pencil still
-put the cursor in the name.
+Rules:
 
-The field it opens says what it is by its shape. It is indented under the
-option it belongs to, with an elbow drawn from the bottom of the name field
-across to its left edge (`DescriptionField.module.css`) — indenting alone reads as an
-unrelated field that happens to be narrower, and the elbow is the shape a file
-tree already uses for "belongs to the thing above". It opens two rows tall
-rather than one, because a field the same height as the name above it looks
-like another one-line answer, and it grows from there instead of scrolling.
-Its placeholder names its option — *Option 2 description* — so a form with
-several of them open cannot be misread.
+- **Descriptions pair with options by position** (a second array to
+  `create_poll`), so dropping a blank option must drop its description slot
+  too. `CreatePoll` filters the pairs and `create_poll` aggregates both
+  columns in one pass; neither filters one array alone.
+- **Hidden means gone**: collapsing the field discards its text, and "no
+  description" is `null`, so a poll never carries a description its creator
+  cannot see.
+- **They belong to the ballot.** Both ballots show them under the option's
+  name. The score round shows one dimmed mark beside options that have one,
+  opening a popover (a tooltip cannot be opened on a phone); `poll_tally`
+  carries the text, on the same terms as the results. The full ranking and
+  ballot grid do not.
+- **URLs become links**: `OptionDescription` turns `http(s)://` and `www.`
+  runs into anchors as React elements, never parsed HTML, so a description
+  cannot produce a `javascript:` link.
 
-Four things hold it together:
+**An option name may be 150 characters and its description 900.** The bound
+exists because the suggestion path lets a whole group write to `candidates`.
+`insert_option` is the one place both are applied; `src/lib/limits.ts`
+carries the same numbers for the form.
 
-- **Descriptions are paired with options by position, and filtered with them.**
-  They travel to `create_poll` as a second array, so dropping a blank option row
-  without dropping its slot in that pairing would slide every later description
-  one option up — not an error anywhere, just the wrong text under the wrong
-  name. `CreatePoll` filters the pairs and `create_poll` aggregates both
-  columns in one pass, and neither ever filters one array alone.
-- **Hidden means gone.** In the create form, collapsing the field discards what
-  was in it rather than remembering it, so a poll can never carry a description
-  its creator can no longer see. It is also why "no description" is `null`
-  rather than an empty string there: the same value collapses the field and
-  means there is nothing to store. `CollectOptions` holds it the same way,
-  so taking a description away from an option already on the poll is a
-  correction like any other: it goes in on the press that ends the card, and
-  the option comes back without one.
-- **They belong to the ballot, and are folded away everywhere else.** Both
-  ballots show one under the option's name, because that is where the detail is
-  a voting aid. The results do not: a paragraph beside a bar of points is noise
-  at the point where the decision has already been made. But it is also the
-  only record of what the option *was*, and it used to vanish from the app
-  entirely the moment a poll closed — so the score round carries one dimmed
-  mark beside the options that have a description, and nothing at all beside
-  the ones that don't, opening it in a popover. A popover rather than a
-  tooltip, because a tooltip on a phone is a thing that cannot be opened. The
-  full ranking and the published ballot grid still name options and nothing
-  more — `poll_ranking` does not return a description at all.
-
-  The text reaches the results through `poll_tally`, which carries a
-  `description` on each option in the score-round list (`0023`). No new access
-  comes with it: descriptions travel with the results, on the same terms, to
-  the people the results already reach.
-- **URLs in them are links.** Pointing at something else is most of the reason
-  to write a description at all, and a link nobody can click is one the reader
-  has to select and copy. `OptionDescription` turns `http(s)://` and bare
-  `www.` runs into anchors as React elements — no HTML is ever parsed out of
-  the text, and the `href` is either the matched URL or `https://` glued onto
-  the `www.` form, so a description cannot produce a `javascript:` link.
-
-**An option name may be 150 characters and its description 900**, and they
-were 100 and 500 until
-`0037`. Both were chosen
-when suggestions were the only way into `candidates`, and both turned out to
-be a size smaller than what people write: 100 was a *label's* length rather
-than an option's — real options carry a subtitle, an author, a year, a
-"(vegetarian)", and a writer eight characters over the line was being asked to
-abbreviate the thing being voted on so that the ballot read worse — and 500
-was one paragraph of description where people were writing two. The reason for
-a ceiling is unchanged and is not about taste: the suggestion path lets a whole
-group write to this table, so every field it can reach needs a bound.
-`insert_option` is the one place either is applied, because both the creator's
-path and the suggestion path arrive there; `src/lib/limits.ts` carries the same
-numbers for the form, which is where a writer is told which field is too long
-and by how much.
-
-Like everything else about a poll, a description is fixed at creation; the
-options of a poll with votes in it cannot change at all
-(`guard_options_frozen`). Duplicating a poll copies the descriptions with the
-options, which is the only way to get a nearly-identical poll with the
-explanations intact.
+Duplicating a poll copies the descriptions.
 
 ### Who can vote
 
 |  | **Invited people** | **Anyone with the link** |
 | --- | --- | --- |
 | Access | Email addresses on the invite list | An unguessable link — the poll's id |
-| Voter signs in | Yes, magic link | No — but may, and then their ballot follows them between devices |
-| Results unlock | When everyone invited has voted, or when the creator closes the poll | Only when the creator closes the poll |
+| Voter signs in | Yes | No — but may, and then their ballot follows them between devices |
+| Results unlock | When everyone invited has voted, or the creator closes the poll | Only when the creator closes the poll |
 | One vote each | Enforced — one ballot per account | **Not** enforced |
 
-An open poll cannot tell its voters apart. Anyone the link reaches can vote, and
-one person can vote more than once from another browser or after clearing site
-data. The app stores a random key in `localStorage` (see `src/lib/voterKey.ts`)
-to stop accidental double-submits, but that is a convenience, not a guard. Open
-polls are for picking a movie; invite polls are for anything where the outcome
-matters.
+An open poll cannot tell its voters apart: one person can vote again from
+another browser or after clearing site data. The random key in
+`localStorage` (`src/lib/voterKey.ts`) stops accidental double-submits and is
+not a guard. Open polls are for picking a movie; invite polls for anything
+where the outcome matters. Results stay hidden until they unlock in both
+modes.
 
 ### An open ballot cast signed in follows the account
 
-A share-link ballot used to be identified by that browser's key and nothing
-else, so it was a fact about a browser: vote on the laptop, open the link on the
-phone, and the phone found a blank ballot, a question strip with nothing ticked,
-and no way to change the vote already cast. A reader who is signed in has
-something better to go on than a browser, so
-[`0074_open_ballots_follow_the_account.sql`](supabase/migrations/0074_open_ballots_follow_the_account.sql)
-records the account on what they cast through the link — `ballots.account_id`,
-and `option_confirmations.account_id` one stage earlier — and every `open_poll_*`
-door finds a reader's ballot by it. The phone is told the vote is in, is handed
-the ballot to change, ticks the questions the laptop answered, and has the poll
-on its list — see [Open polls you have answered](#open-polls-you-have-answered).
+A share-link ballot or confirmation cast while signed in records the account
+(`ballots.account_id`, `option_confirmations.account_id`), and every
+`open_poll_*` function finds a reader's ballot by it. So another device is
+told the vote is in, can change it, sees the strip's ticks, and has the poll
+on its list (see [Open polls you have
+answered](#open-polls-you-have-answered)).
 
-**Who "you" are on an open poll**, said once in `open_ballot_of` and
-`open_confirmation_of` and asked by every function that needs it:
+**Who "you" are on an open poll**, defined once in `open_ballot_of` and
+`open_confirmation_of`:
 
-- **Signed in:** the ballot carrying your account; failing that, the ballot this
-  browser's key cast while nobody was signed in, which is still yours because
-  this browser cast it. A key another *account* voted with reaches nothing — the
-  next person signed in on a shared browser casts their own ballot, and it goes
-  in without the key, since a key cannot be on two ballots in one question.
-- **Signed out:** the ballot this browser's key cast, as it always was —
-  including one cast signed in, so the laptop that voted still says so after
-  signing out.
+- **Signed in:** the ballot carrying your account; failing that, the ballot
+  this browser's key cast while nobody was signed in. A key another *account*
+  voted with reaches nothing, so the next person on a shared browser casts
+  their own ballot (without the key, since a key cannot be on two ballots in
+  one question).
+- **Signed out:** the ballot this browser's key cast, including one cast
+  signed in.
 
-**Nothing is claimed after the fact.** A ballot cast signed out stays unlinked
-when its voter signs in, even when they change it there. A ballot carries an
-account if and only if it was cast by one, which is a rule a voter can predict.
+**Nothing is claimed after the fact**: a ballot cast signed out stays
+unlinked even when changed after signing in. A ballot carries an account if
+and only if it was cast by one.
 
-**A new column rather than `voter_id`**, because `voter_id` means *an invitee's
-ballot* all over the schema: the rosters and the published sheet join it to
-`auth.users` for an email address, `ballots_select_own` grants on it, and
-`poll_status` answers an open poll's `voted` as false because an open ballot
-never carries one — which `statusFromOpenView` relies on. `account_id` is read
-by the open-poll functions and `poll_group` and by nothing else, so no address
-can reach a roster or a sheet through it; a check constraint says a row carries
-one or the other.
+**A separate column rather than `voter_id`**, because `voter_id` means *an
+invitee's ballot* everywhere — rosters and sheets join it to `auth.users` for
+an address, `ballots_select_own` grants on it, and `statusFromOpenView`
+relies on open ballots not carrying it. `account_id` is read only by the
+open-poll functions and `poll_group`, never returned, and a check constraint
+says a row carries one or the other.
 
-**The strip's ticks come from the server where it can answer them.**
-`open_poll_group` carries `voted` and `confirmed` per question for a reader who
-is signed in, and `poll_group` counts the account's link ballots too, for the
-creator's own page. Signed out it carries neither, for the reason it never did —
-see [A poll can ask more than one question](#a-poll-can-ask-more-than-one-question)
-— and the browser's own record stands in. `useQuestionMarks` in
-[`src/lib/questionMarks.ts`](src/lib/questionMarks.ts) draws a mark where either
-says so, and lets each read of a single question correct both, since a
-confirmation can be taken back after the group was read.
+**The strip's ticks come from the server for a signed-in reader**
+(`open_poll_group` carries `voted` and `confirmed` per question; `poll_group`
+counts the account's link ballots for the creator's page). Signed out, the
+browser's own record stands in. `useQuestionMarks`
+([`questionMarks.ts`](src/lib/questionMarks.ts)) shows a mark where either
+says so, and each single-question read corrects both.
 
-**Edit vote reads the ballot again when signed in.** Signed out, the scores the
-page already holds are the only copy anything could have changed. Signed in,
-another device may have changed them since, and a changed vote announces
-nothing (see [Changing your vote](#changing-your-vote-until-the-results-are-out)),
-so opening the copy in hand could hand the voter an old ballot to overwrite a
-newer one with. That press asks first, as an invite ballot's always has.
+**Edit vote re-reads the ballot when signed in**, since another device may
+have changed it and a changed vote announces nothing.
 
-**What it costs.** An open poll that hides its respondents used to be the
-stronger of the two anonymity guarantees. That is now true of a ballot cast
-signed out and not of one cast signed in — see [Whether ballots are
-published](#whether-ballots-are-published).
+**Cost**: a ballot cast signed in is stored with an account on it, so it is
+no longer as anonymous as one cast signed out (see [Whether ballots are
+published](#whether-ballots-are-published)).
 
-`39_an_open_ballot_follows_the_account` covers all of the above, and cases that
-stand in several strangers behind their own keys now `tests.sign_out()` first,
-since one signed-in session is one account and one account has one ballot per
-question. So does `scripts/sample-poll.sql`, for its nine voters.
-
-Results stay hidden until they unlock in both modes, so nobody ever votes
-knowing how it is going.
+`39_an_open_ballot_follows_the_account` covers this. Cases (and
+`scripts/sample-poll.sql`) that stand in several strangers call
+`tests.sign_out()` first, since one signed-in account has one ballot per
+question.
 
 ### A poll's link is its id
 
-**One address, `#/<id>`, for every poll and every reader of it.** There
-were two: open polls lived at `#/p/<share token>` and everything else at
-`#/polls/<id>`, so an open poll's creator was permanently looking at an
-address that was not the one to hand out. Copying what was in front of them
-sent the recipient to a sign-in screen and then to *poll not found* — a
-failure with no clue in it, arrived at by doing the obvious thing.
+**One address, `#/<id>`, for every poll and every reader.** There is no
+separate share token: the id is from the same random generator, so a token
+bought no entropy, and the creator could always see the id anyway. The set of
+people who can reach an open poll is whoever holds the link.
 
-**The token and the id were the same thing twice.** `insert_poll_row` minted
-the token as `replace(gen_random_uuid()::text, '-', '')`: 122 bits from the
-same generator that fills the primary key. Neither was guessable and neither
-was more unguessable than the other, so the separation never bought entropy.
-It bought exactly one thing, and it is the thing that was given up here.
+**What this gives up**, plainly:
 
-**What did not change: who can reach an open poll.** For an open poll the id
-was never the wider of the two. `polls_select` is `created_by = auth.uid() or
-is_invited_to_poll(id)` and an open poll has no invitees, so its creator was
-the only person who could learn the id without holding the link — and
-`open_poll_view` has always returned the id to anyone presenting the token.
-The set of people who can vote in a poll is the set it was.
+- **A leaked link cannot be replaced.** The id is a primary key referenced
+  everywhere; the only answer is to duplicate the poll and lose its votes.
+- **A primary key travels where a secret should not.** Poll emails already
+  link to `#/<id>` (invite polls only). Anything that logs, exports or
+  reports a poll id is handling an open poll's capability — think twice
+  before adding one.
 
-**What was given up, plainly.** Two things, and neither is hypothetical:
+**The route decides what the reader may see** (`PollPage`):
 
-- **A leaked link can no longer be replaced.** The id is referenced by
-  `candidates`, `ballots`, `invited_voters` and `polls.group_id`, so there is
-  no rotating it. "I pasted my poll link in the wrong channel, send me a new
-  one" now has no answer but to duplicate the poll and lose its votes. With a
-  separate token that was an `UPDATE`.
-- **A primary key travels where a single-purpose secret does not.** This
-  schema already writes poll ids into email bodies — every email this app
-  sends links to `#/<id>`. Those only go to invite polls, so nothing
-  leaks today; but the pattern is established,
-  and every future thing that logs, exports, or reports an id is now handling
-  a ballot rather than a row number. That is the standing cost of the merge
-  and the reason to think twice before adding the next one.
-
-**Deployed links broke.** There was no compatibility shim: `0039` drops the
-column, so an `#/p/<token>` link already out in the world has nothing left to
-resolve against. That was a deliberate call, taken while the polls in flight
-were few enough to be worth less than the shim.
-
-**One address means the route has to decide what the reader may see**, since
-the URL no longer says. `PollPage` (`pages/PollPage.tsx`) asks one question and reads the
-answer off the reply:
-
-1. **A sample id?** Render `PublicPoll` and stop, whoever is reading. The
-   About page's sample is answered from a file in this browser and is not a
-   row anywhere, so there is no account reading of it to try — and `polls.id`
-   is a `uuid`, so asking the table about `sample-host` does not come back
-   empty, it errors. See [The About page and its sample
-   poll](#the-about-page-and-its-sample-poll).
-2. **Everything else: `poll_page`**, which answers *what may this reader see
-   here* and hands back the page along with the answer. `account` renders
-   `PollDetail`, `open` renders `PublicPoll`, and `unreadable` is a poll that
-   does not exist or an invite poll this reader is not on the list for —
-   deliberately the same answer for both, so the read cannot be used to find
-   out which ids are real. See [One read opens a
+1. **A sample id** renders `PublicPoll` for anybody; it is answered from a
+   file and is not a uuid, so it must never reach the database. See [The
+   About page and its sample poll](#the-about-page-and-its-sample-poll).
+2. **Everything else asks `poll_page`**: `account` renders `PollDetail`,
+   `open` renders `PublicPoll`, `unreadable` means the poll does not exist
+   *or* is an invite poll this reader is not on — deliberately the same
+   answer, so ids cannot be probed. See [One read opens a
    poll](#one-read-opens-a-poll).
-3. **Refused and signed out?** Offer the sign-in screen rather than a dead
-   end. The visitor may be on an invite poll's list — every invitation email
-   links to exactly this address — so where they were headed is stashed
-   through `rememberDestination` and the magic link brings them back to it.
-   Signed in and refused, the link really is dead, and `PublicPoll` says so.
+3. **Refused and signed out**: the sign-in screen, with the destination
+   stashed by `rememberDestination`, since the reader may be on the invite
+   list. Signed in and refused, `PublicPoll` says the link is dead.
 
-**The id is spelled short in the URL.** A uuid the way Postgres writes it is
-36 characters carrying 122 random bits — about three and a half bits per
-character, because hex spends four bits on every six its alphabet could hold
-and then adds four hyphens. The same sixteen bytes in base64url are 22
-characters:
-
-```
-3a2697f9-dd9d-4b24-8519-4837d9da6c22   36
-OiaX-d2dSySFGUg32dpsIg                 22   the same bits
-```
-
-Nothing is traded for the fourteen characters that go. This matters because
-for an open poll the link *is* the capability, so the entropy is the guard —
-and the entropy is untouched. A shorter *id* would have been a different
-change and a worse one; this is a shorter *spelling* of the same id.
-
-**One spelling in URLs, the other everywhere else.** `polls.id` is still a
-`uuid`, every `p_poll_id uuid` still takes one, and every id the app holds in
-a variable, compares, or keys storage by is canonical. `src/lib/pollId.ts` is
-the only place the two meet: `pollPath` converts on the way into a URL and
-`pollIdFromParam` converts on the way out of a route parameter. It could not
-have been done the other way round — `voterKeyFor` names a `localStorage`
-entry after a poll id, so keying by the short form would have orphaned the key
-of every browser that has already voted, and `questionsCovered` tells a
-crossing between questions from an arrival at a different poll by comparing
-ids, which two spellings loose in the app would quietly break.
-
-**Old links keep working, and permanently.** `pollIdFromParam` reads a full
-uuid as readily as a short one, so every `#/polls/<uuid>` already pasted into
-a chat resolves as it did. Unlike `0039` this is not a break that was judged
-affordable: the schema writes poll ids into email bodies, those bodies do not
-expire, and there is no later date at which dropping the long form becomes
-safe. It costs one regex, which is cheaper than the shim `0039` declined.
-
-**And the address dropped `/polls/` in the rebrand.** `#/polls/<id>` and the
-old directory `/star-voting/` were redirected for a while and no longer are;
-see [Stack and layout](#stack-and-layout). `0088_choicelab.sql` is where the
-emails and push notifications started linking to the new spelling.
-
-`0062` gives Postgres the same encoding as `short_poll_id`, so the link in an
-invitation email is spelled the way the app spells it. The sample's ids are
-words rather than uuids and both directions hand them back untouched — which
-is the point of them being words, since those links are meant to be read
-aloud.
+**The id is spelled short in URLs**: the uuid's sixteen bytes in base64url
+are 22 characters instead of 36, with the same entropy. `polls.id` stays a
+`uuid`, and every id the app holds, compares or keys storage by is canonical;
+`src/lib/pollId.ts` is the only place the two meet (`pollPath` on the way out,
+`pollIdFromParam` on the way in). Keying storage by the short form would
+orphan every browser's voter keys. **`pollIdFromParam` accepts a full uuid
+too, permanently**, since poll ids are in email bodies that do not expire.
+Postgres has the same encoding in `short_poll_id`, so email links match. The
+sample's ids are words, passed through untouched.
 
 ### Whether respondents are shown
 
-- **Shown** — everyone in the poll can see who has responded and who hasn't,
-  while voting is still open. Invite polls list the invited email addresses;
-  open polls ask each voter for a name and list those. Useful when you want to
-  know whose vote you are still waiting on.
-- **Hidden** — only the number of votes is shown, to everyone including the
-  creator.
+- **Shown** — everyone in the poll sees who has responded, from the moment
+  the poll exists: invited addresses on an invite poll, names voters type on
+  an open poll.
+- **Hidden** — only the number of votes, to everyone including the creator.
 
-This controls *who responded*, never *how they voted*.
+This controls *who responded*, never *how they voted*. **One setting decides,
+with no second rule about when.** Watching a roster fill reveals arrival
+order; the setting opts into that, and the place arrival order is kept away
+from ballots is the published sheet's hash ordering (see [Whether ballots are
+published](#whether-ballots-are-published)).
 
-**A poll that shows its respondents shows them, and there is no second rule
-about when.** One setting decides, and it is the setting stated on the tag
-beside the title; everyone in the poll reads the roster from the moment the
-poll exists, whatever stage it is at and whether or not they have voted
-themselves.
-
-It was not always this. The roster used to be held back until you had voted,
-on the reasoning that watching it fill up is a live feed of the *arrival
-order* — names attached to the moment each one arrived, which is what the
-published ballots work to keep off the record by sorting themselves on
-`md5(id)` rather than on time. The roster itself is alphabetical (`order by
-lower(voter_name)`), so the leak was in watching it grow rather than in reading
-it once, and withholding it until you voted narrowed that window without
-closing it: a voter still saw everyone who arrived after them. What it bought
-was a partial fix to a leak the *setting* already opts into; what it cost was
-one card behaving three different ways depending on who was reading it, how far
-through they were, and whether the results were out — and, once the collecting
-stage grew a roster of its own, a rule about ballots being applied to a card
-that was answering a question about options. The trade came out the other way
-round, so the embargo is gone and the two exemptions that used to soften it
-(the creator, and a poll whose results are out) are gone with it: there is
-nothing left for them to be exemptions from.
-
-The setting is what a poll promises and it is on screen before anybody votes,
-so nothing here is discovered after the fact. The one guarantee this does
-weaken is the arrival-order one, and the place that guarantee is actually kept
-is the ballot ordering — see [Whether ballots are
-published](#whether-ballots-are-published), which is why that ordering is a
-hash rather than a nicety.
-
-A bare count leaks neither half. It names nobody, and it says nothing about
-any ballot — so it is on every screen a poll appears on, before you vote and
-after. What a poll keeps from its voters is how it is **going**, and turnout
-is not that: the standings stay sealed until the results unlock, in both
-modes, and no count moves them. The poll list has shown `3/6 voted` for polls
-you had not voted in since long before this was written down, which is the
-app's actual position on whether the number is secret.
+**A bare count leaks nothing**, so it is on every screen, before and after
+voting. What a poll keeps from its voters is how it is *going*, and the
+standings stay sealed until the results unlock.
 
 **What the roster answers changes with the stage; who may read it does not.**
-While a poll is still collecting its options nobody can vote, so the badge
-beside each name says *Confirmed* or *Pending* rather than *Voted* or
-*Pending* — see [Saying you are done adding
-options](#saying-you-are-done-adding-options). The heading over it says
-*Voters* throughout, because it is one card about one set of people and
-renaming it halfway through the poll would read as two.
+While collecting options, its badges say *Confirmed* / *Pending*; while
+voting, *Voted* / *Pending*; after the poll has closed, **Did not vote**, in
+the closed colour (`badgeColor` in `badgeColors.ts`) — *Pending* would be a
+reminder for a ballot nobody can now cast. The heading says *Voters*
+throughout. `Respondents` reads `status.soliciting` for the stage.
 
-**Turnout is reported in exactly one place on any screen**, and that place is
-the count badge in the poll's header — the same badge, in the same position,
-on the list and on the poll's own page. One fact stated twice reads as two
-facts that happen to agree, which is why the results no longer open with "6 of
-6 invited voters participated", why neither roster carries a count of its own,
-and why the **Confirm options** button says what pressing it will do rather
-than how many people have already pressed it. The badge counts confirmations
-while the poll is collecting its options and votes once it is taking them; it
-is the same badge counting the same list of people either way.
+**Turnout is stated in exactly one place on any screen**: the count badge in
+the header. It counts confirmations while collecting and votes after, over
+the same people. So the results do not restate turnout, no roster has a count
+of its own, and **Confirm options** says what pressing it does rather than how
+many have pressed it.
 
-That leaves the roster answering *who* and nothing else, and it means a poll
-that hides its respondents renders no card at all for anyone but its creator:
-the header has already said how many voted, and the *Respondents hidden* tag
-beside it has already said why nobody is named underneath. The creator still
-gets the list, because for them it is the invite list they manage rather than
-a roster of who voted — and on a hidden poll it comes back with no per-person
-status, which the card says in a line.
+So the roster answers only *who*, and a poll that hides respondents renders
+no roster card for anyone but its creator — for whom it is the invite list
+they manage, shown without per-person status on a hidden poll (the card says
+so).
 
 ### Whether ballots are published
 
-- **Not published** (the default) — results come back only as an aggregate
-  tally. Nobody, the creator included, can read an individual ballot through the
-  API.
-- **Published** — once the results unlock, every ballot is readable as a grid:
-  one row per voter, one column per option, with the column totals matching the
-  score round. The poll becomes auditable — anyone in it can check the
-  arithmetic instead of trusting it.
-
-This is independent of who-responded, and all four combinations are useful:
+- **Not published** (the default) — results are an aggregate tally only.
+  Nobody, the creator included, can read an individual ballot.
+- **Published** — once the results unlock, every ballot is readable as a grid
+  (one row per voter, one column per option, column totals matching the score
+  round), so anyone in the poll can check the arithmetic.
 
 |  | **Ballots not published** | **Ballots published** |
 | --- | --- | --- |
 | **Respondents hidden** | Fully private | Anonymous ballots — a verifiable tally that names nobody |
 | **Respondents shown** | A roster of who voted, totals only | Fully auditable — every ballot, with a name on it |
 
-Four rules hold the published setting together:
+Rules:
 
 - **Ballots unlock on exactly the same terms as the results** — completion or
-  close, never earlier. A published poll is still a secret ballot while it is
-  running, so no vote is ever cast knowing how it is going.
-- **The creator gets no exception.** Hiding ballots is a promise made to the
-  people who voted, not an access level, so an unpublished poll's ballots are
-  unreadable by everybody.
-- **Your own is not one of them.** An unpublished poll's results now carry
-  *your ballot* — the one this reader wrote, on the results of the poll they
-  wrote it in. It is not an exception to the rule above and not a hole in it:
-  `poll_ballot_scores` reads the caller's own scores and nobody else's, at any
-  stage of any poll, and is the same function *Edit vote* has always filled the
-  ballot back in from. All that changed is that it is now asked one stage
-  later, on a page where the reader used to be able to see everybody's votes
-  added together and none of their own. `YourBallot` draws it, in the place the
-  published grid would have stood and only there — a poll that publishes its
-  ballots is already showing this one, on a grid with everybody else's, so the
-  two are exclusive and `PollDetail` picks between them. It arrives on
-  `poll_page` as `your_scores`, on the same terms as the tally, and the card
-  asks `poll_ballot_scores` itself only where no such read is in hand.
+  close, never earlier.
+- **The creator gets no exception.** Hiding ballots is a promise to voters,
+  not an access level.
+- **Your own ballot is not one of them.** On an invite poll with private
+  ballots, the results show the reader's own ballot (`YourBallot`), read by
+  `poll_ballot_scores` — the caller's own scores only, the same function
+  *Edit vote* uses. It arrives on `poll_page` as `your_scores`. It replaces
+  the grid, which would already include it on a published poll. Share-link
+  ballots are not shown this way.
+- **The door does not change the terms.** `poll_ballots` (account) and
+  `open_poll_ballots` (link) apply the same three rules: may see the poll,
+  publishes ballots, results out. On an open poll both return the same sheet;
+  the creator's page draws it once. The "not unlocked yet" line reads *until
+  everyone has voted* or *until the poll is closed* by whether there is an
+  invite list.
+- **The grid downloads as CSV** (`lib/ballotCsv.ts`): the same rows, gated
+  the same way, in the order the database returned them, and **no totals
+  line** — the totals are the claim the file lets somebody test. It has a
+  **UTF-8 BOM** (or Excel misreads non-ASCII names) and **a leading
+  apostrophe on any field starting `=`, `+`, `-` or `@`**, because names and
+  options are typed by anyone holding the link and would otherwise run as
+  formulas. Both are tested in `ballotCsv.test.ts`.
+- **Voters are told before they vote**: `PollTags` sits above both ballots,
+  so whether scores are published and whether a name is attached is readable
+  before anything is sent.
+- **Anonymous ballots are ordered by a hash of their row id**, never by
+  submission time. Since the roster shows arrival order on a poll with
+  respondents shown, submission order would reattach names to ballots.
 
-  The invite side is the whole of it, because that is the side with an account
-  to ask under. A ballot cast through a share link is identified by a
-  `voter_key` minted per question precisely so one browser's cannot be joined;
-  `open_poll_view` already hands that browser its own scores back, and what
-  that page should do with them afterwards is a separate question and is not
-  answered yet.
-- **The route in is not one of the terms.** `poll_ballots` reads the sheet for
-  an account and `open_poll_ballots` reads it for a link, and they apply the
-  same three rules: who may see the poll, whether it publishes ballots, and
-  whether the results are out. `poll_ballots` used to refuse an open poll on
-  top of those — *its ballots are read through that link* — which read like
-  a rule and was not one. The only account that reaches an open poll through
-  that function is its creator's, since an open poll has no invite list; the
-  reveal gate for a poll with nobody on that list is `closed_at`, which is
-  exactly what the link's own function checks; and the creator's poll page
-  called it anyway, so the one screen showing an open poll's ballots showed
-  the grid and then that sentence in red underneath. The refusal is gone
-  (`0046`), the page stops asking for a second copy of a grid `OpenPollPanel`
-  has already drawn, and the "not unlocked yet" sentence now picks between the
-  two wordings the app already had — *until everyone has voted* for a poll
-  with an invite list, *until the poll is closed* for one without.
-- **The grid can be taken away as a file.** A poll's ballots being readable is
-  only half of auditing it: a sheet with fifty voters on it can be read and
-  cannot be *added up*, which is the whole of what checking a STAR result
-  means. So the grid's heading carries a small download beside it
-  (`lib/ballotCsv.ts`) handing over the same rows as a CSV — the same sheet,
-  gated in the database on exactly the terms it is gated on there, so nothing
-  new is disclosed and there is no second endpoint to keep in step. The file
-  is the rows the grid draws, in the order the database answered with, and
-  **no totals line**: the totals are the claim the file exists to let somebody
-  test, and a claim written into the evidence is a row every tool that opens
-  it would have to be told to ignore.
-
-  Two details in that file are not about CSV. A **UTF-8 byte-order mark**,
-  because without one Excel reads the file in its machine's legacy code page
-  and every voter whose name is not plain ASCII opens misspelled. And a
-  **leading apostrophe on any field starting `=`, `+`, `-` or `@`**, because
-  those open a formula in every spreadsheet and both text columns here — the
-  voters' names and the options' — were typed by whoever holds the poll's
-  link. A file this app hands somebody to open in Excel must not be a way to
-  run something in it. Both are tested in `ballotCsv.test.ts`.
-
-- **Voters are told before they vote.** Whether the scores will be published,
-  and whether a name will be attached, is on screen and readable before
-  anything is sent — nothing about a ballot can be discovered only after it is
-  cast. This is `PollTags`' job: both pages that carry a ballot put the tags
-  above it, so the terms are stated where the ballot is cast rather than in a
-  settings summary elsewhere.
-
-  This used to be a boxed `Alert` under the submit button as well, spelling the
-  same two facts out in sentences. It was removed once the tags covered both
-  states of all four settings: the alert restated what the tags already said,
-  and a warning that repeats the label six inches above it trains people to
-  skip both. The requirement is that the voter can read the terms before
-  submitting, not that they are said twice.
-- **Anonymous ballots are ordered by a hash of their row id, never by submission
-  time.** This matters, and it matters more than it used to: on an open poll
-  that shows respondents, names appear in the voter list as people vote, and
-  since the roster is no longer [held back until you have
-  voted](#whether-respondents-are-shown) anyone refreshing the page while
-  voting is open learns the arrival order. Handing ballots back in submission
-  order would re-attach those names to ballots the poll deliberately left
-  unnamed. This ordering is now the whole of what keeps them apart.
-
-One honest caveat about "anonymous": it describes what the app publishes, not
-what the database forgets. An open poll that hides respondents genuinely never
-stores a name — `open_poll_submit` discards one whatever the client sends. An
-invite poll always stores the voter's account id, because that is how it
-enforces one ballot each; hiding is a policy applied over data that still
-exists, and anyone with direct database access could undo it. The stronger
-guarantee needs an open poll **voted in signed out**: a ballot cast through the
-link while signed in carries the account too, so that it can follow its voter
-to another device (see [An open ballot cast signed in follows the
-account](#an-open-ballot-cast-signed-in-follows-the-account)), and is then in
-the database with an account on it exactly as an invite ballot is. Nothing reads
-it out to anybody — no function returns `account_id` — but it is there.
+**"Anonymous" describes what the app publishes, not what the database
+forgets.** An open poll that hides respondents never stores a name —
+`open_poll_submit` discards one. An invite ballot always stores the voter's
+account (that is how one-ballot-each is enforced), and so does a link ballot
+cast signed in. No function returns either, but they are there. The strongest
+guarantee is an open poll voted in signed out.
 
 ### Where the options come from
 
-Two answers, and the second one gives a poll a stage it did not have before.
+- **From the creator** (the default) — written in the create form.
+- **From respondents** — the poll opens as a list. Everyone in it can add
+  options, nobody can vote, until the list is opened for voting; from then the
+  poll is like any other.
 
-- **From the creator** (the default) — the options are written in the create
-  form and exist the moment the poll does. This is every poll the app made
-  until `0020`.
-- **From respondents** — the poll opens as a list rather than a ballot.
-  Everyone in it can add options, nobody can vote, and it stays that way until
-  the creator finalizes the list. Voting opens then, and from that point the
-  poll is indistinguishable from any other: same ballot, same tally, same
-  rules about who may see what.
+`solicit_options` is the frozen setting; `options_finalized_at` is the state,
+set once. A poll is **collecting** when it solicits options, is not finalized
+and is not closed — derived, never stored.
 
-`solicit_options` is the setting and is frozen like the other three; it says
-where the options came from, which is still worth reading long after the poll
-has closed. `options_finalized_at` is the *state*, and moves exactly once. A
-poll is **collecting** when it solicits options, has not been finalized, and
-has not been closed — derived in the database rather than stored, the same way
-`is_closed` is derived from `closed_at`, so the two can never disagree.
+The promise is that **everyone who votes scores the same list**:
 
-The one promise this stage makes is that **everyone who votes scores the same
-list**, and every rule under it is holding that up:
+- **Nobody votes while the list is growing** — both submit paths refuse.
+- **Nobody suggests once it is finalized.**
+- **Only the creator finalizes, into a real ballot of at least two options**
+  (a soliciting poll may start with none). The button is **Open poll** in
+  `CreatorControls`. A group opens all its questions at once, so the floor is
+  checked on every question first and the refusal names the short one; the
+  button is disabled with the same reason from `poll_group`'s option counts.
+- **Everyone suggests through a function, the creator included**
+  (`suggest_options`, `open_poll_suggest_options`): invitees have no `INSERT`
+  grant on `candidates` and `anon` has none anywhere, and one path keeps the
+  rules in one place.
+- **Suggestions carry no name.** Who suggested what would be a third
+  disclosure question the tags do not answer.
 
-- **Nobody votes while the list is growing.** Both `submit_ballot` and
-  `open_poll_submit` refuse, so a page left open across the transition cannot
-  slip an early ballot in — and an early ballot would be answering a different
-  question from everyone else's.
-- **Nobody suggests once it is finalized.** The finalized list is the one every
-  voter is scoring, so it cannot grow underneath them. After the first vote
-  `guard_options_frozen` holds it there for good, exactly as on any other poll.
-- **Only the creator finalizes, and only into a real ballot.** Two options
-  minimum — the same floor `create_poll` puts on a poll whose creator wrote the
-  options, applied at the point the list becomes a ballot instead. A soliciting
-  poll may therefore be created with no options at all; seeding a few is a head
-  start, not a requirement. The button that does it is **Open poll**, and it is
-  in `CreatorControls` with the rest of the lifecycle — see [Creator
-  controls](#creator-controls).
-- **Everyone suggests through a function, the creator included.** An invitee
-  has no `INSERT` grant on `candidates` and `anon` has no grant on any table, so
-  `suggest_options` (invite polls) and `open_poll_suggest_options` (open polls)
-  are the only ways in. One path means the rules are stated once, and the
-  creator's list cannot be built under rules nobody else's is — the same reason
-  the creator votes in their own open poll through the `anon` RPC. It is the
-  *plural* pair the browser asks now, because a reader's whole draft goes in as
-  one list; the singular two still exist and still refuse a duplicate by name,
-  which is the one rule that differs between them. See [Confirming is the
-  save](#saying-you-are-done-adding-options).
-- **Suggestions carry no name.** Who suggested what is a third disclosure
-  question on top of *who responded* and *how they voted*, and the poll's tags
-  answer neither of those about the option list. Storing a name nothing
-  displays would only be a leak waiting to happen.
+The stage is drawn by `CollectOptions` (`src/components/CollectOptions.tsx`)
+in place of the ballot, **built the way the ballot is built**: name field,
+question strip, list, then the button that ends your part. The creator also
+gets a pencil and an `×` on each row; opening the poll is in
+`CreatorControls`.
 
-Two caps exist on the suggestion path and nowhere else, because this is the
-only field in the app a whole group can write to rather than the poll's creator
-alone: 100 characters on a name, 500 on a description, and 50 options in a
-poll. None is near what a real suggestion needs, and the last one is really
-about the ballot — a list nobody will read to the end is not one anybody can
-score honestly.
-
-The stage is surfaced by `CollectOptions` (`src/components/CollectOptions.tsx`)
-in place of the ballot, on all three pages that can carry one, and **built the
-way the ballot is built**: the name field at the top, the strip of the poll's
-other questions under it, the list itself, and what happens next beside the
-button that ends your part in it. It is the ballot's stage, at the ballot's
-address, in the ballot's place on the page, so a reader who has done one should
-recognise the other rather than meet a second layout with the same parts in a
-different order. Everyone sees the same list, the same box to add to it, and
-the same button to say they are done with it — see [Saying you are done adding
-options](#saying-you-are-done-adding-options), which is where that button comes
-from and why it belongs in this card rather than beside the poll's other
-controls. The creator additionally gets a pencil and a
-`×` on each row, which sit beside the list they act on rather than in
-`CreatorControls`, the same way the invite controls sit inside `Respondents`.
-Ending the stage is the other way round — that is something the creator does
-to the *poll*, so **Open poll** is in `CreatorControls`.
-
-**Opening a poll for voting is still one-way.** **Reopen poll** does not put a
-finalized list back to collecting: what it promises is the same poll taking
-votes again, and the list everyone was shown is part of the same poll. A poll
-closed while it was still collecting does reopen collecting, because that is
-the stage it was in.
+**Opening a poll for voting is one-way.** Reopening a closed poll reopens
+voting, not collecting — unless it was closed while still collecting.
 
 ### Saying you are done adding options
 
-The collecting stage reported one number and it was the wrong one. "Seven
-options" is seven people with an idea each or one person with seven, and
-neither is distinguishable from a poll nobody has opened — so the only way to
-end the stage was to guess when the list had stopped moving, and the person
-guessing was the one who could least afford to be wrong about it. **Confirm
-options** is the missing half: one press per person saying they have looked and
-have nothing more to add. `0041` adds it.
+**Confirm options** is one press per person saying they have nothing more to
+add. It means "I have had my say", not "I approve this list": a later
+suggestion does not un-confirm anybody, so one late idea cannot keep a poll
+collecting for ever.
 
-**It says "I have had my say", not "I approve this list".** That is
-deliberately the weaker of the two readings, and it is what makes the signal
-stable: a suggestion arriving after somebody confirmed does not un-confirm
-them, so one late idea cannot keep a poll collecting for ever. The promise that
-**everyone who votes scores the same list** is kept where it always was, by the
-moment the list is finalized — this changes nothing about it and is not a
-second mechanism for it.
+- **A confirmation is per question**, like a ballot. The strip marks a
+  question confirmed, and confirming moves the reader to the next list they
+  owe, as a first ballot does. `poll_group` returns `confirmed` per question
+  on the invite side; the open side answers it from the browser.
+- **Only invitees confirm**, refused in the same words as `submit_ballot`, so
+  "3 of 6" means what it says. A creator who did not invite themselves
+  confirms by pressing **Open poll**; one who did confirms like anyone else
+  (`poll_status.invited` says which).
+- **Confirming keeps the list on screen**: the button becomes **Options
+  confirmed** (green, disabled) and the list stays live with *Add option*.
+- **Starting an edit takes the confirmation back.** Pressing *Add option* or
+  *Add times*, or (as creator) opening or striking a row, withdraws it on the
+  server (`unconfirm_options`, `open_poll_unconfirm_options`) at the press,
+  and the button reverts to **Confirm options**. It shows loading until the
+  re-read confirms the withdrawal; a confirm pressed meanwhile waits for it.
+  The name field stays visible, disabled while confirmed, so the card does not
+  jump.
+- **An invite poll opens itself when the last invitee confirms**
+  (`open_options_when_all_confirmed`). That function **returns rather than
+  raises** on every reason not to open — it runs inside somebody else's
+  confirmation — and the creator still has **Open poll**, which explains.
+  **Removing an invitee runs the same check**; their confirmation leaves with
+  them.
+- **An open poll never opens itself**: no participant list, so no number of
+  confirmations means the stage is over.
+- **A share link asks for a name to confirm**, as for a ballot
+  (`open_poll_confirm_options` refuses without one) — except on a poll that
+  hides respondents, which stores no name and shows a count. The name is
+  offered back from `lib/voterName.ts`.
+- **Who has confirmed is read under the roster setting**, through the same
+  column of `poll_invitees`, from the start.
+- **The count is in the count badge** — `2/5 confirmed`, or `3 confirmed` on
+  an open poll. The button carries no count; its line *the poll opens for
+  voting as soon as everyone has confirmed* is dropped once everyone has.
+- **A confirmation announces itself like a vote**; the one that opens the
+  poll announces twice (roster, then list becoming a ballot).
+  `16_live_update_signals` asserts both.
+- **The opening is also an email**; see [What a poll writes to
+  people](#what-a-poll-writes-to-people).
+- **Nothing un-confirms anybody else.**
 
-**A confirmation is per question, like a ballot**, because a question is a poll
-here and each one carries a list to have a say about. Opening is the act that
-spans the group, so the poll opens itself only when every invitee has confirmed
-every question in it.
+**Confirming is the save.** Everything in the card is a draft until the press
+that ends it, and that press saves the draft first. Each list hands what it is
+holding to the card (`DraftHold` in `CollectOptions`), and the press applies it
+and then confirms; if the save is refused, nothing is confirmed and the error
+appears on the field or under the list. Drafted rows look like saved rows, and
+there is no count of pending changes: the list is the count.
 
-**So the stage carries the question strip, and the strip marks it.** A poll of
-five questions collects five lists, and the card that collects them had no way
-between them at all — the strip arrived with the ballot, one stage too late,
-which left the other four lists reachable only by going back to the poll list
-and in. It is the same strip in the same place inside the card, and pressing
-*Confirm options* moves the reader to the next list they still owe exactly as a
-first ballot moves them to the next question. `0042` gives `poll_group` the
-flag it draws the mark from — `confirmed` per question, beside the `voted` it
-already returned — and the open side answers it from the browser for the reason
-it answers `voted` from the browser; see [A poll can ask more than one
-question](#a-poll-can-ask-more-than-one-question). The badge means *this
-question is behind you*, and which of the two facts makes that true is whichever
-stage the poll is in.
+Which press ends the card:
 
-**Only invitees confirm, exactly as only invitees vote.** `submit_ballot`
-refuses anybody off the list and `confirm_options` refuses them in the same
-words, which is what keeps the roster complete: everyone who *can* confirm is
-on it, so a page can render "3 of 6" and mean it. A creator who did not invite
-themselves adds options like anyone else and says they are done by pressing
-**Open poll**, which was always their version of this. One who invited
-themselves is an invitee like any other and confirms with everybody else —
-`poll_status` returns `invited` to tell the page which of the two it is looking
-at, since being able to *read* a poll is not the same question.
+- ***Confirm options*** wherever this reader has a say in the stage;
+- ***Done*** on the creator's correction to a list that is already a ballot
+  (it saves and closes the editor, or leaves it open with the reason);
+- **a *Save options* / *Save times* of the list's own** only where the card
+  ends in neither — a soliciting poll's creator who did not invite themselves.
 
-**Confirming does not take the list away.** The card stays exactly as it was —
-the list, live as other people's suggestions arrive, and *Add option* — and
-only its button changes: **Options confirmed**, green and disabled. Hiding the
-list behind a *you're done* card, as the ballot hides behind *your vote is
-in*, was the wrong analogy: a vote is a private act with nothing to watch
-afterwards, and the list is a shared thing still growing, which is exactly
-what a confirmed reader is waiting on.
+**There is no *Add* button between the field and the list**, and a typed
+option stays an editable field (with a × and a rule under it) until the card
+is saved — a row that looks saved must be saved. The card starts with **no**
+field; **Add option**, beside the ending button, opens one and focuses it.
+Empty list, no field: *Nothing suggested yet*. A blank field is never sent;
+filled ones are all checked on the ending press, each problem on its own field
+(two drafts with one name mark the later).
 
-**Starting an edit takes the confirmation back.** The moment a confirmed
-reader presses *Add option* or *Add times*, or (as a creator) opens or strikes
-a row, the card withdraws their confirmation on the server
-(`unconfirm_options`, `open_poll_unconfirm_options`) — on the press, not on
-the first character typed, since opening the field is already the decision —
-and the button goes back to **Confirm options**, which saves the edit and
-confirms again. It is drawn loading while the withdrawal is in flight, until
-the re-read says it landed. A field opened and left blank is closed by that
-press rather than left behind to withdraw the confirmation a second time. A reader
-part-way through adding to the list is not done adding, and the roster and the
-count say so for as long as they are — a confirmation left standing would also
-let the poll open itself under an edit nobody had sent. Discarding the field
-leaves them unconfirmed; one press puts it back. The withdrawal is sent once
-per edit, and a confirmation pressed while it is still in flight waits for it,
-so the two cannot land in the wrong order.
+**One press, up to two requests, split by who writes** (`sendDraft` in
+`CollectOptions`). Correcting a list that is already a ballot is one
+`creator_edit_options`. A collecting list sends the creator's corrections and
+removals through `creator_edit_options` (one transaction), then the
+suggestions through the plural suggestion door everybody shares — corrections
+first, so the option ceiling cannot be hit part-way through a swap.
+`35_the_whole_list_in_one_press` covers both, including that the plural doors
+carry descriptions.
 
-The name field stays on the card throughout, **disabled while confirmed**
-rather than hidden, so withdrawing and confirming do not move the card up and
-down under the reader.
-
-That card used to carry **Edit options**, which withdrew the confirmation and
-handed back the list. With the list never taken away there is nothing to hand
-back, and *Edit* was the wrong word for a non-creator who can only add, so it
-went.
-
-**A poll with participants opens itself when the last one confirms.** That is
-the whole point of collecting the signal, and `open_options_when_all_confirmed`
-is the whole of it. Two things about that function matter more than what it
-does:
-
-- **It returns rather than raises on every reason not to open.** It runs inside
-  somebody else's confirmation, and neither that person nor the person being
-  removed from an invite list asked for the poll to open. The case this is
-  really about is the two-option floor: a group whose questions do not all
-  clear it would otherwise fail one person's button for a rule about a question
-  they were not looking at. The creator still has **Open poll**, which names
-  the short question and says why.
-- **Taking somebody off the invite list runs the same check**, because that is
-  the other way a poll runs out of people to wait for — "we are waiting on
-  Bob, and Bob is not coming". Their confirmation leaves with them, so
-  re-inviting somebody asks again rather than counting an answer they gave to
-  another list.
-
-**An open poll opens itself never.** It has no participant list, so there is no
-set of people who could all have confirmed; anyone holding the link can confirm
-and no number of them means the stage is over. Its creator ends it, as before.
-
-**A share link asks for a name, because it has nothing else to go on.** An
-invite poll knows who is confirming from the session and annotates the invite
-list it already draws. Behind a link there is no account, so a bare count would
-answer *how many* when the question being asked is *who* —
-`open_poll_confirm_options` demands one and refuses without it, in the same
-words and the same order `open_poll_submit` demands one for a ballot. A poll
-that **hides its respondents** is the exception and keeps the promise
-[Whether ballots are published](#whether-ballots-are-published) makes for it:
-no field, no name stored whatever the client sends, and a count. The name is
-offered back from `lib/voterName.ts` like a ballot's, so confirming and then
-voting is one name typed once.
-
-**Who reads it is the roster question, answered by the roster's setting.** Who
-has confirmed is the same disclosure as who has voted — a list of names — so
-it is decided by the same setting, through the same column of
-`poll_invitees`, and read by everyone in the poll from the moment there is
-anything to read. There
-is no second rule about when, here or on the voter roster: needing one for this
-card is what finally settled that the other card should not have one either.
-See [Whether respondents are shown](#whether-respondents-are-shown) for the
-embargo that used to be there and why it went.
-
-**The badge answers the question the poll is asking; the heading does not
-change.** `Respondents` draws *Confirmed*/*Pending* while the poll is
-collecting and *Voted*/*Pending* afterwards, off `status.soliciting` rather
-than an idea of its own — nobody can vote yet, so a column of *Pending* would
-be answering a question nobody asked. The heading over it stays *Voters*
-throughout: it is one card about one set of people, and renaming it halfway
-through the poll would read as two cards rather than as one card keeping up.
-
-**And once the poll has closed it says *Did not vote*.** *Pending* is a
-reminder, and a reminder is only honest while there is something to be
-reminded of: after the close that ballot is not late, it is never coming.
-Nobody can cast it and the creator cannot chase it, so the roster has stopped
-being a list of who to wait for and become a record of what happened. It
-carries the poll's own closed colour rather than the orange of something
-outstanding, which is the same fact said one level up — see `badgeColor` in
-`src/lib/badgeColors.ts`. The collecting stage needs no such reading: a poll
-is soliciting only while `closed_at` is null, so the two cannot both be true.
-
-**The count is in the count badge, and nowhere else.** While a poll is
-collecting, the badge beside its title reads `2/5 confirmed` on an invite poll
-and `3 confirmed` on an open one — the same shape as the `3/6 votes` and `3
-votes` it gives way to, out of the same denominator, so a card carrying one
-today and the other next week is counting the same list of people both times.
- It replaces the option count that badge used to show at this stage, which was
-the wrong number for the reason at the top of this section.
-
-That is also why the **Confirm options** button carries no count of its own,
-only what pressing it will do: [turnout is reported in exactly one
-place](#whether-respondents-are-shown), and a line under the button restating
-the badge six inches above it would be the same fact arriving twice looking
-like two. The sentence it does carry — *the poll opens for voting as soon as
-everyone has confirmed* — is a rule rather than a number, it is the one thing
-about the button that the button cannot show, and it is dropped once everyone
-*has* confirmed, since a poll that stayed put there is one this line cannot
-explain and must not promise.
-
-**A confirmation announces itself as loudly as a vote**, and the one that opens
-the poll announces twice: once for the roster moving, once for the option list
-becoming a ballot. Both are worth hearing, and `16_live_update_signals` asserts
-both counts — a page told nothing would be offering a box to suggest options to
-a poll that had started taking votes.
-
-**The poll opening is also an email**, and the last confirmation is what sends
-it: everybody in the poll is told that voting has started, the creator
-included, because the poll opened without them touching it — everybody except
-whoever confirmed last, who watched it open. Pressing **Open poll** instead
-sends the same letter to everybody but the creator, who pressed it — see
-[What a poll writes to people](#what-a-poll-writes-to-people).
-
-**What the button does not do is un-confirm anybody else.** There is no
-"the list changed, please look again" round trip, and adding that would be a
-poll that can never open: every confirmation would invite one more suggestion.
-
-**Confirming is the save.** The card holds things this reader has not sent
-yet — an afternoon painted on a time poll's calendar, an option typed into
-its fields — and pressing *I have nothing more to add* while one of
-them is still sitting there is not a mistake to warn about. It is the press
-that should put it in: confirming a list is saying *the list in front of me is
-the one I mean*, and what is in front of them includes what they just drew. It
-was two buttons for one intention — **Save times** and then **Confirm
-options** — and a reader who pressed only the second confirmed a list without
-the thing they had spent the last minute painting.
-
-So each list leaves what it is holding where the card can reach it (`DraftHold`
-in `CollectOptions`), and *Confirm options* applies it and then confirms: one
-press, whether or not there was anything outstanding, and nothing confirmed if
-the save is refused — a list the server would not take is not the list they
-were saying yes to. The failure is reported where the reader was looking, on
-the field or under the list, by the list itself.
-
-**And *Done* is the save, for the same reason.** The creator correcting a list
-that is already a ballot has nothing to confirm — the list is already a ballot,
-and there is nobody left to be done adding to it — so their way out of the
-editor is *Done* rather than *Confirm options*. It was two presses for the
-same one intention: **Save changes** and then **Done**, with a line of orange
-under the list to say which of them was the one that kept anything. Now *Done*
-puts in whatever the editor is holding and closes it only if that went in; a
-save the server refuses leaves the editor open with the edit still in it, and
-the reason under the list.
-
-Both halves of that streamlining are the same move: the way out of the card is
-the save, so there is nothing outstanding for the card to warn about. Which is
-why the warning is gone, and why the drafted rows are drawn exactly like the
-saved ones rather than dimmed — the dimming marked a difference only a separate
-Save button could act on. The count beside it (*2 to add, 1 to remove*, and the
-calendar's *N times on the list*) went with them: the list is the count, and a
-line under it saying the same thing in numbers was a second reading of what was
-already on screen.
-
-**And now the whole of the card waits for that press, on every path.** For a
-while only two things did — the painted calendar, and the option sitting in the
-box unadded — while on a poll still collecting its options every *other* edit
-went straight out: one request per option typed, per row corrected, per row
-struck out. The reasoning was real and it was the wrong trade. That list does
-belong to the group, and a suggestion landing live for everybody watching is
-half of what the collecting stage is for; what it cost was a card whose
-*Confirm options* meant something different from the *Done* three lines of code
-away. Four typed options were four round trips and four re-reads of the poll,
-striking a row out deleted it before the reader had decided anything, and there
-was no way to change your mind about any of it. So the two cards are now one
-card: **every edit is a draft, and the press that ends the card is the save.**
-
-Which press that is depends on what the card ends in, and the list and the
-calendar answer to the same rule:
-
-- ***Confirm options***, wherever this reader has a say in the stage.
-- ***Done***, on the creator's correction to a list that is already a ballot.
-- **A *Save options* / *Save times* of the list's own**, only where the card
-  ends in neither — a soliciting poll's creator who did not invite themselves,
-  who confirms nothing — because there it is the only way anything reaches the
-  poll at all.
-
-**There is no *Add*, and a typed option stays a field until that press.**
-There was one, between the box and the list: it took what was typed and drew
-it as a row of the list, and nothing had left the browser. People pressed it,
-saw their option on the list, and took the row for a saved option — which is
-exactly what a row that looks like every other row says — and left without
-pressing *Confirm options*. The row was a lie about where the option was. So
-what is typed now stays in the text field it was typed into, still editable,
-with a × to discard it and a rule under it like any row of the list. The card
-starts with **no** field: **Add option**, beside the button that ends the
-card, opens one and puts the cursor in it. A blank field sitting there on
-arrival left a creator who had only come to correct or strike an option
-wondering whether it would be added as it stood; with no field until one is
-asked for, the question does not come up. A list with nothing on it and
-nothing being typed says *Nothing suggested yet* until then. For a day the next field opened by itself the moment the last
-one was typed into, and a field appearing under your typing is a field you
-did not ask for; a button is somewhere to look for "one more", and sits beside
-the press that sends them all. A blank field is room, not an
-option, and is never sent; every filled one is checked on the press that ends
-the card, all at once, with each problem marked on its own field — two drafts
-with one name mark the later, as the create form does.
-
-**One press, but not always one request, and the split is who is writing.**
-`sendDraft` in `CollectOptions` is where it is decided. The creator's
-correction to a list that is already a ballot is one `creator_edit_options`, as
-it was. A list still being *collected* is up to two, because two different
-people write it: the corrections and removals are the creator's alone and go
-through `creator_edit_options`, in one transaction so that a rename cannot
-leave the option deleted and not come back; the suggestions are everybody's and
-go through the plural suggestion door every reader in the poll shares, the
-creator included. Corrections go first, so the option ceiling cannot be met
-part-way through a swap. `35_the_whole_list_in_one_press` is the case over
-both, and the two things it is really pinning down are that the plural
-endpoints carry a typed option's *description* — they existed for a painted
-calendar, whose windows have a name and nothing else — and that
-`creator_edit_options` applies a removal to a list that is still collecting,
-where the browser used to send a bare delete per row.
-
-**A name the list already holds is skipped rather than refused** on the way in
-now, which is the plural doors' one rule the singular pair did not have, and it
-is the right one for a press that means a whole list: the card checks
-duplicates as they are typed, so the only way to reach it is for somebody else
-to have suggested the same name since — and there is nothing the second of them
-could do about being told so.
-
-What is paid for it is that a suggestion is no longer live to the rest of the
-group the instant it is typed: it lands when its author says they are done
-adding. That is the same deal the painted calendar has always had, and the
-sentence beside the button has always said what to do about it.
+A name already on the list is skipped by the plural doors; the card checks
+duplicates as you type, so only a concurrent suggestion reaches that.
+Suggestions land when their author ends the card, not as they are typed.
 
 ### The creator can correct the options until the poll closes
 
-Separate from where the options came from, and deliberately blind to it: a
-poll's creator can add and remove options for as long as the poll is **open**.
-Before that existed, a typo in an option was permanent the moment the ballot
-was — the fix was to duplicate the poll and send a new link out, which costs
-everyone who already had the old one.
+A poll's creator can add, remove and correct options for as long as the
+poll's results are not out — not closed, and not an invite poll everybody has
+answered (which reveals without closing) — regardless of where the options
+came from. **The promise that everyone scores the same list is then kept by
+being stated**: see [The two caveats on a result](#the-two-caveats-on-a-result).
 
-**The window used to be exactly "no ballots".** The reasoning was that the
-option list promises that *everyone who votes scores the same list*, and a
-poll nobody has voted in has nobody who has scored anything — so changing it
-there changes no answer anybody has given. True, and too strict to be the
-whole rule: the poll where a typo actually gets noticed is the one people have
-started voting in, and "duplicate it and tell nine people the link has moved"
-is a worse answer than an honest one. `0063` opens the window to the whole of
-the poll's open life and makes the poll say what went through it — see
-[The two caveats on a result](#the-two-caveats-on-a-result). What has not
-moved is the promise itself: it is now *kept by being stated* rather than by
-being enforced.
+**A late edit lands on the ballots already in.** An added option is scored 0
+on every existing ballot, written down by `fill_scores_for_new_option`: *one
+score per option per ballot* is an invariant the schema reads rather than
+checks (`replace_scores` would refuse to revise a short ballot, the sheet and
+CSV assume a full grid). A removed option's scores cascade away.
 
-Nothing else enters into it. Not `solicit_options`, which says where the list
-came from and is frozen either way; not `options_finalized_at`, which is a
-stage. Closing the poll ends it, because a closed poll is a result rather than
-a ballot.
+**`guard_options_frozen`** refuses any change to `candidates` on a poll with
+ballots, from any path, *except* the creator's own correction, which declares
+itself with the transaction-local `app.editing_options` naming the poll. So a
+bare delete through the `candidates_delete` policy, or a late suggestion, is
+still refused.
 
-**A late edit lands on the ballots that are already in.** An option added to a
-poll with votes in it is scored zero on every ballot already cast, written
-down rather than inferred: `fill_scores_for_new_option` inserts the rows on
-the `candidates` insert. *One score per option per ballot* is an invariant the
-rest of the schema reads rather than checks — `replace_scores` counts the rows
-it moved and refuses a ballot it could only half-rewrite, `poll_ballots`
-publishes a grid and the CSV is that grid — so a ballot left un-scored on the
-new option would have been a ballot nobody could revise again for the rest of
-the poll's life. Removing an option takes its scores with it, which the
-`ON DELETE CASCADE` on `scores.candidate_id` has always done.
+- **`creator_add_option()`** is the creator's typed-name door (no `INSERT`
+  grant exists). Refused on a time poll.
+- **`insert_option()`** is the one place an option's field rules are applied
+  (name, description, duplicates, the ceiling), granted to nobody.
+- **The two-option floor applies to the list an edit leaves behind.**
+  `creator_edit_options()` takes removals, corrections and additions and
+  applies them in one transaction — removals, then corrections (one `UPDATE`,
+  duplicate rule checked afterwards, so two options can swap names), then
+  additions — with the floor checked at the end. A refused edit leaves the
+  poll as it was. A bare `delete` is still judged a row at a time, since that
+  grant is direct. A collecting list may be pruned to nothing; the floor is
+  applied when it opens.
+- **A correction is an update in place** (`p_correct`): the option keeps its
+  id, position and every score already given. Treating it as remove + add
+  would zero that option on every ballot. Time polls take no corrections.
 
-`guard_options_frozen` still draws a line on every write to `candidates` from
-any path at all: a poll with ballots in it takes no change *except* through
-the creator's own correction, which says so in `app.editing_options` — the
-same transaction-local marker the two-option floor already stepped aside for.
-A bare `delete` through the `candidates_delete` policy, or a suggestion
-arriving late, meets the rule exactly as it always did.
+**The card never enforces the floor itself**, and the × is never disabled;
+*Done* sends the draft, and a list below two comes back with *A poll needs at
+least two options* and the draft intact.
 
-What `0028` added on top:
+**Every row is a draft until *Done*.** Struck rows are struck through whole
+(name and description) with **Keep** beside them; removal waits like
+everything else. Keep restores whatever the reader last meant, including a
+correction made before striking; corrections are dropped only by the save. A
+pencil turns a row into its two fields in place, with no per-row Save or
+Cancel; several can be open at once; a row opened and left unchanged is not
+sent. The duplicate check counts struck rows: a name the list visibly holds is
+taken.
 
-- **`creator_add_option()`**, because `authenticated` has no `INSERT` grant on
-  `candidates` and `suggest_option` only serves a poll that is still
-  collecting. Removing one needed nothing new: the `candidates_delete` policy
-  already allowed the creator and the trigger already bounded it.
-- **`insert_option()`**, the field rules for one option — name, description,
-  duplicates, the 50-option ceiling — lifted out of `add_suggested_option` so
-  both ways in apply exactly the same ones. Granted to nobody: both callers
-  are `SECURITY DEFINER` and reach it having already decided this caller may
-  write to this poll.
-- **The two-option floor, on the delete.** A list still being collected may be
-  pruned to nothing, because `finalize_options` applies the floor when it
-  becomes a ballot; a list that already *is* a ballot has no later checkpoint,
-  so the floor is applied to the delete itself. Otherwise correcting an option
-  list could leave a live poll with one option and no election in it.
+**Edit options** in `CreatorControls` swaps the ballot for the editor. With
+votes already in, a modal first says how many votes are on the list, that the
+results will carry a note, and what a late edit does to those ballots (added
+option scored 0, removed option's scores gone), with **Duplicate** offered
+beside it. The same sentence sits under the editor beside **Done**. Closing the
+poll takes the button away.
 
-**A correction is one edit, and the floor is a rule about where it lands.**
-The card drafts the whole of it — some options going, some coming — and
-applied it as two requests: a `delete` on the rows being dropped, and then
-`creator_add_options`. Which put the poll through a list nobody had asked for
-and nobody ever saw, and the floor above was applied to *that*: a poll of two
-options, corrected to drop one and add two, was refused with *A poll needs at
-least two options* on its way to three.
-[`0059_editing_options_in_one_go.sql`](supabase/migrations/0059_editing_options_in_one_go.sql)
-adds **`creator_edit_options()`**, which takes both halves and applies them in
-one transaction, and moves the floor to the end of it — counted against what
-the edit leaves behind, which is the list the creator actually asked for and
-the only one anybody is offered.
-
-The trigger still judges a bare `delete` a row at a time, because that grant
-is one the browser holds directly and the guard is the whole of what stands
-behind it. What it steps aside for is a delete inside an edit that has said
-so: `creator_edit_options` names the poll it is mid-edit on in
-`app.editing_options`, transaction-local and held across both halves of the
-edit, exactly as `purge_old_polls` sets `app.purging_polls` for
-`broadcast_poll_gone`. The flag names a poll rather than being a bare *on*, so
-an edit of one list cannot lift the floor off another in the same transaction.
-Since `0063` the same marker is what lifts the *has votes* refusal, and
-`creator_add_option` and `creator_add_options` set it too: one marker, one
-meaning — the creator's own correction, in flight, on this poll.
-
-**The card does not enforce the floor, and the cross never greys out.** It
-used to disable every row's remove once the draft would leave two, which made
-the crosses flick between enabled and disabled as a list crossed three — a
-rule shown on a control whose only job is to mark a row. The draft may strike
-as many rows as it likes; *Done* sends it, and `creator_edit_options` refuses
-a list below two with *A poll needs at least two options*, shown under the
-list with the draft still intact.
-
-A refusal now also leaves the poll exactly as it was. The two-request version
-deleted the rows before the additions were refused, so the card had to throw
-that half of the draft away and the creator was left standing part-way through
-a correction they had made in one press.
-
-The creator reaches it from **Edit options** in `CreatorControls`, and it
-replaces the ballot while it is open — they are two readings of one list, and
-the editor is the reading that is being changed.
-
-**The button is offered for as long as the act is, and what changes is what
-is said on the way in.** With no votes cast it opens the editor directly.
-With votes cast it opens a modal first, which says how many votes are already
-on the list as it stands, that the results will carry a note saying the
-options were edited after voting started, and what a late edit does to those
-ballots — an added option scored zero, a removed option's scores gone with it.
-**Duplicate** is offered beside it, because a fresh poll on a fresh link is
-still the right answer for some corrections; it is a button in that modal
-rather than an instruction to go and find one.
-
-The same sentence is repeated under the editor itself, where **Done** is: the
-creator may have opened the card several minutes ago, and the line that
-matters is the one in front of them while they type.
-
-Closing the poll does take the button away, and that is not the same problem:
-a poll that closes rewrites this whole block and the page under it at once, so
-nothing about it vanishes quietly.
-
-**What it does not promise is that nobody is looking at the old list.**
-Someone with the ballot already on screen picks the correction up when the
-change is announced, and a submit inside that window is refused rather than
-filed:
-`submit_ballot` and `open_poll_submit` both demand a score for every option,
-and both reject an id that is not on the poll — so a stale ballot fails
-whether the list got longer, got shorter, or had one option swapped for
-another at the same length. Being told to try again is the safe half of that
-trade; the unsafe half would be a ballot silently scoring an option nobody
-showed the voter.
+**A voter with the old list on screen** is refused on submit, not filed: both
+submit paths demand a score for every option and reject an id not on the
+poll.
 
 ### Changing your vote until the results are out
 
-A ballot used to be final the second it was cast. Nothing about this app
-needed it to be: while the results are still sealed nobody has learned
-anything from anybody's vote, so a voter changing their mind steers nothing
-and is worth what it costs them to click twice. **Change my vote** sits on the
-card you come back to after voting, on both kinds of poll.
+**Change my vote** is on the card you come back to after voting, on both
+kinds of poll. **The window is "the results are not out", not "the poll is
+open"**: an invite poll reveals itself when its last invitee votes, without
+closing, and re-scoring against a visible result is the one thing a revision
+must never allow.
 
-**The window is "the results are not out". It is not "the poll is still
-open",** and that difference is the whole design rather than a quibble about
-wording. An invite poll reveals itself the moment its last invitee votes, with
-nobody closing anything — see [Who can vote](#who-can-vote) — so a window
-phrased on `closed_at` would be wide open on a poll whose tally, ranking and
-winner are already on screen for everyone in it. Every voter could then go
-back and re-score against the result. That is the one thing a revision must
-never be able to do, and it is the only way this feature could have harmed an
-election that the old rule protected.
+That rule is `poll_results_revealed(polls)`, written once and used by
+`revise_ballot`, `open_poll_revise`, `poll_status`, `open_poll_view` and
+`assert_results_readable` — so the results opening and revisions closing are
+one event. `guard_invitee_changes` draws its line in the same place.
+(`open_results_poll_id` is deliberately separate: its two conditions carry
+their own messages, and the compound half is unreachable on an open poll.)
 
-It is also not a new line. `guard_invitee_changes` has always drawn it in this
-exact place — an invitee may be added until the results are out, not until the
-poll is closed — so the two features now rest on one rule rather than two that
-agree by coincidence. `0032` writes that rule down once, as
-`poll_results_revealed(polls)`, taking a poll row the way `poll_expires_at()`
-does. `revise_ballot` and `open_poll_revise` refuse on it; `poll_status` and
-`open_poll_view` — which is where the screen offering the button learns
-whether the results are out — now answer from it instead of from their own
-copy; and so does `assert_results_readable`, the gate `0031` had just lifted
-out of the four callers that were each repeating it. That is the same argument
-carried one function further: the rule it was lifted out of is the rule this
-feature needs, so the results opening and the revisions closing are one event
-rather than two that coincide. Two copies that agree today are a button that
-offers something the database will refuse tomorrow.
+**On an invite poll the window shuts for everyone the instant the last
+invitee votes**, so the last voter never gets one. The wait card says "until
+everyone invited has voted" for that reason.
 
-`open_results_poll_id` is deliberately left out of it. Its body is not a copy
-of this rule but two independent conditions in a chosen order, each with its
-own message, and on an open poll the compound half of the rule — the
-completion that unlocks an invite poll — is not reachable at all.
+**A vote is replaced, never withdrawn.** Every revision updates the existing
+scores; the ballot row never moves, so turnout, completion and the roster are
+untouched and a reveal cannot be undone. There is no "take my vote back".
 
-The cost is worth stating plainly: **on an invite poll the window shuts for
-everyone the instant the last invitee votes**, so the person who votes last
-never gets one. There is no way to give them one that does not hand somebody a
-tally to score against, and the wait card says "until everyone invited has
-voted" rather than "until voting closes" precisely so it is not making a
-promise it breaks for whoever is last through the door.
+**A revision announces nothing** unless an open poll's voter name changed:
+nothing a watcher can see before the reveal depends on scores. Two
+conditions are enforced:
 
-**A vote is replaced and never withdrawn.** Every revision is an `update` of
-the scores already on the ballot; the ballot row itself never moves. So
-turnout does not change, an invite poll cannot be pushed back below the
-completion that revealed it, and `is_complete`, the respondent roster and the
-invitee guards see nothing at all. A delete would undo a reveal, and a reveal
-in this app is one-way — [the winner kept with the
-poll](#the-winner-is-kept-with-the-poll) is settled once on exactly that
-promise, and never recomputed. There is no "take my vote back" button and
-there is deliberately no function behind one.
+- **A revision changes scores and, on an open poll, the voter's name — and
+  nothing else.** The name box is disabled once the vote is in and re-enabled
+  by *Edit vote*, starting from `your_name`; `open_poll_revise` calls
+  `broadcast_poll_change` only when the name moved.
+- **It updates in place, never delete-and-insert**, which would fire two
+  spurious signals and change the ballot id.
 
-**Nothing broadcasts, and that is the finding rather than an omission.** Every
-trigger in [Live updates](#live-updates) exists because something on
-somebody's screen went stale. Nothing here does: what a watcher can see before
-the reveal is the turnout, the completion and the roster of who has answered,
-all read off `ballots` rows that an `update` does not move — and everything
-derived from `scores` is behind the reveal, past which no revision can happen.
-A signal would wake every subscriber to re-read a poll and hand each of them
-the answer they already had, which is the cost that section is written to
-avoid rather than a freshness it is written to buy. There is still no trigger
-on `scores`, and `ballots` still has triggers on `INSERT` and `DELETE` only.
+`replace_scores()` is the scoring half shared by both paths, and also checks
+that the payload names each option **once** (otherwise a ballot could keep an
+old score on another option and look complete).
 
-Two conditions hold that up, and both are enforced rather than assumed:
+**Reading your own ballot back**: an open poll's arrives inside
+`open_poll_view` as `your_scores` (by `voter_key`, or the account), so signed
+out *Edit vote* costs no request; signed in it re-reads. An invite poll's
+comes from `poll_ballot_scores()` on the press (`authenticated` cannot read
+`scores` directly).
 
-- **A revision changes scores, and on an open poll the voter's name, and
-  nothing else.** The name was refused for a long time, on the grounds that
-  it is on a roster other people are already reading. That is true and is
-  why a name that changes is *announced* — `open_poll_revise` calls
-  `broadcast_poll_change` when the name moved and only then — not a reason
-  to keep a misspelling on the roster for good. The box stays on the card
-  disabled once the vote is in and is enabled again by *Edit vote*, starting
-  from the name the ballot carries (`your_name`), so correcting it is part of
-  changing the vote. A revision that leaves the name alone, or passes none,
-  is as silent as it always was. See
-  [`0090_a_changed_vote_can_change_its_name.sql`](supabase/migrations/0090_a_changed_vote_can_change_its_name.sql).
-- **It updates in place and never deletes and re-inserts the ballot.** The
-  lazy version is invisible at the RPC boundary and would fire
-  `ballots_broadcast_delete` and then `ballots_broadcast_insert`: two spurious
-  signals for the no-op this is careful not to send, a new ballot id, and a
-  moment in which withdrawal is representable.
-
-`replace_scores()` is the scoring half, shared by both paths the way
-`ballot_sheet()` is shared by the two ways of reading a poll's ballots.
-It checks what `submit_ballot` checks and one thing more: that the payload
-names each option **once**. That check does no work on an insert-only path and
-real work here — a ballot sent two scores for one option would keep its old
-score on another and go in looking complete, which is a half-rewritten ballot
-rather than a rejected one.
-
-Reading your own ballot back is two different cheap things rather than one
-uniform one. An open poll's arrives inside `open_poll_view` as `your_scores`,
-reached with the same `voter_key` that had to be held to cast it — or, for a
-reader signed in, with the account that cast it — so the panel already has it
-and, signed out, changing a vote costs no request until there is a changed vote
-to send. Signed in, *Edit vote* reads it again first, because another device
-may have changed it since; see [An open ballot cast signed in follows the
-account](#an-open-ballot-cast-signed-in-follows-the-account). An invite poll's comes from `poll_ballot_scores()`, asked for
-only when somebody presses the button, because almost nobody does and a poll
-page should still cost what it always did to open. `authenticated` has no read
-of `scores` anywhere, which is why that is a function at all.
-
-**The open-poll trade is the one this feature actually costs.** `voter_key`
-was a dedupe token: holding it proved nothing except that this browser had
-voted, and `src/lib/voterKey.ts` says as much. It is now also what hands a
-ballot back, so on a shared browser the next person sees the previous one's
-scores filled in where they used to see "your vote is in" — unless that next
-person is signed in, when a key another account voted with hands back nothing.
-The key is per-poll, in that browser's `localStorage`, and never leaves it; open
-polls already promise less than invite polls do, and this is inside what they
-promise rather than a new hole in it.
+**The open-poll cost**: `voter_key` now hands a ballot back, so on a shared
+browser the next signed-out person sees the previous one's scores. The key is
+per poll, in `localStorage`, and never leaves the browser; a signed-in next
+person gets nothing from another account's key.
 
 ### Reopening a closed poll
 
-Closing used to be one-way. The only path back was **Reset**, which bought the
-open poll by deleting every vote in it — so a creator who closed a poll an
-hour early, or who closed the wrong one of two, had a choice between losing
-nine people's ballots and starting a different poll on a different link. That
-is the button `0063` removes, and `reset_poll` goes out of the schema with
-it.
+`reopen_poll()` clears `closed_at` on **every question in the group**, keeps
+every ballot, and is the creator's alone. Everything a reopened poll must
+forget is already handled by triggers that reconcile rather than assume:
 
-`reopen_poll()` is the third thing that moves `closed_at`, and it moves it back
-to null for **every question in the group at once**, exactly as `close_poll`
-sets it. It keeps every ballot. It refuses a poll that is not closed, and it is
-the creator's alone.
+- `settle_winner` clears the winner of any question that no longer has a
+  result, and elects again on the next finish;
+- `notify_results_ready` clears `results_announced_at`, so a second finish is
+  announced;
+- `broadcast_poll_updated` makes every page re-read.
 
-**Everything a reopened poll has to forget, it already forgets**, and that is
-not luck: closing and reopening are the same column moving, and the triggers on
-that column were written to reconcile rather than to assume.
+**Full turnout cannot be undone**: `poll_gate_open` reveals an invite poll
+everyone has answered, closed or not, so reopening one changes nothing
+visible. **Reopen poll** is offered only when `is_closed && !is_complete`.
 
-- `settle_winner` takes the winner back off a poll that is taking votes again —
-  it asks `poll_results_revealed` of every question and clears the answer of
-  any that no longer has one. A poll that finishes a second time is elected
-  again, from the votes it has then. See [The winner is kept with the
-  poll](#the-winner-is-kept-with-the-poll).
-- `notify_results_ready` clears the poll's `results_announced_at`, so the second
-  finish is announced like the first. See [Telling people the results are
-  ready](#telling-people-the-results-are-ready).
-- `broadcast_poll_updated` wakes every page holding the poll, which re-reads
-  and puts the results back under their gate.
-
-**The one state it cannot undo is full turnout.** `poll_gate_open` reveals an
-invite poll whose every invitee has voted, closed or not — see [Who can
-vote](#who-can-vote) — so clearing `closed_at` on such a poll leaves its
-results exactly where they were. The database allows it and changes nothing
-visible, which is the worst of both, so `CreatorControls` does not offer the
-button there: **Reopen poll** wants `is_closed && !is_complete`. The way to
-take more votes on a poll everyone has already answered has always been a new
-poll.
+There is no reset that deletes votes; **Duplicate** is the honest way to start
+again.
 
 ### The two caveats on a result
 
-Two of this app's rules were relaxed at once — an option list may be corrected
-with ballots already in it, and a closed poll may take votes again — and both
-of them can move a tally that somebody has already read. Neither is a mistake
-and neither is refused; what they are is **something the reader of the result
-is owed**, so the poll records that it happened and the results page says so.
-
-Two booleans on `polls`, and a third behind them:
+A correctable option list and a reopenable poll can both move a tally
+somebody has read. Neither is refused; **the poll records it and the results
+say so**:
 
 | column | means |
 | --- | --- |
-| `options_edited_after_votes` | the option list was corrected while the poll already held ballots |
+| `options_edited_after_votes` | the option list was changed (in fact, not just resent) while the poll held ballots |
 | `votes_after_reveal` | a vote was cast or changed after this question had shown its tally |
-| `reopened_after_reveal` | internal: this question was reopened *having* shown its tally, which is what makes the next vote a late one |
+| `reopened_after_reveal` | internal: this question was reopened having shown its tally, which makes the next vote a late one |
 
-The third exists because `poll_results_revealed` is computed from `closed_at`
-and turnout rather than stored, so it goes false the moment the poll reopens
-and cannot answer "was it ever out" afterwards. `reopen_poll` asks it once,
-before it lifts the close, and writes the answer down.
+The third exists because `poll_results_revealed` is computed, so after a
+reopen it cannot say "was it ever out"; `reopen_poll` records the answer
+before lifting the close.
 
-**Flags, not a log.** What a reader needs before acting on a result is that
-there is a caveat on it; *which* option was renamed and *whose* vote moved are
-not things this app could truthfully add. The ballots are secret, and a
-revision overwrites scores in place precisely so that no history of them
-exists — see `ballots.revised_at`. A count of late votes would be the same
-promise half-broken.
-
-**Raised where every door passes.** `votes_after_reveal` is set by
-`ballots_mark_late_votes`, a row trigger on `ballots`: the two submit paths
-insert a row and the two revise paths stamp `revised_at` on one, so a trigger
-on the table catches all four and any fifth somebody adds later.
-`options_edited_after_votes` is set by the three creator functions that write
-options, and only when the edit actually moved something — the option card
-sends the whole list on every save, so most of what arrives is the list as it
-already stands.
-
-**Carried by the tally, not by the poll read.** Both flags travel inside
-`poll_tally`'s json, which means `get_poll_results` and `open_poll_results`
-serve them through the two gates they already have, and everyone who can read
-the result reads the caveat with it. `Results` draws each as a yellow card
-directly under the winner — under it because the winner is the news, above
-everything else because everything else is the arithmetic that produced it,
-and yellow rather than the orange the no-winner card wears so that a tie and a
-caveat are never the same colour on one screen.
-`PollResults.options_edited_after_votes` and `.votes_after_reveal` were
-optional in `types.ts` while they were new, so a browser a deploy ahead of the
-database read a missing flag as nothing said; they are required now.
-
-Neither flag is ever cleared. A poll cannot un-edit a list people have already
-scored, and cannot un-show a tally people have already read.
+- **Flags, not a log.** Which option changed or whose vote moved is not
+  something the app can truthfully say: ballots are secret and revisions
+  overwrite in place.
+- **`votes_after_reveal` is raised by `ballots_mark_late_votes`**, a row
+  trigger on `ballots`, which catches every submit and revise path.
+  `options_edited_after_votes` is set by the creator's option functions, only
+  when something actually changed.
+- **Carried inside `poll_tally`**, so they reach exactly the readers of the
+  result. `Results` draws each as a yellow card under the winner (yellow, not
+  the tie's orange).
+- **Never cleared.**
 
 ### A ballot started is kept until it goes in
 
-A ballot's scores lived in the card and nowhere else, so anything that took the
-card down took them with it: a refresh, a phone throwing a background tab
-away, and — the one people met most — a step to another question of the same
-poll and back, which [replaces the question's
-half](#a-poll-can-ask-more-than-one-question) and with it the card. A voter
-halfway down a long list came back to a blank ballot. So
-[`lib/ballotDraft.ts`](src/lib/ballotDraft.ts) writes every score a first
-ballot is given to `localStorage` (`star-voting:ballot-drafts`) as it is given,
-and both ballots — `BallotCard`'s scores, `TimeBallotCard`'s painting — open
-with it when they mount again.
+A ballot's scores are written to `localStorage`
+(`star-voting:ballot-drafts`, [`lib/ballotDraft.ts`](src/lib/ballotDraft.ts))
+as they are given, and both ballots reopen with them on remount — after a
+refresh, a discarded tab, or a step to another question and back.
 
-- **Only before the ballot goes in.** The server's answer always wins: a
-  reader who has voted is shown *your vote is in*, never a ballot, and *Edit
-  vote* opens with the scores the server hands back (`initial`) and reads and
-  writes no draft at all. A draft is deleted the moment its ballot is
-  accepted; a refused submit keeps it.
-- **Ten polls, the newest kept.** A poll of several questions is filed under
-  its group and counts once. Writing a draft makes its poll the newest, and
-  the eleventh drops whichever was touched longest ago — which is also what
-  happens to a draft left behind by a ballot cast on another device, since
-  nothing here ever reads it again.
-- **Filed against whoever wrote it** — the signed-in account, or nobody — and
-  read back only by the same, so a half-filled invite ballot on a shared
-  browser is not the next account's to find.
-- **Narrowed to the ballot as it now is.** A creator's correction can take
-  options off or put new ones on; an option gone is dropped from the draft,
-  one added starts at 0, and a calendar keeps only the cells the poll still
-  asks about. That is also why the remount on a correction (`refreshKey`)
-  rebuilds the ballot rather than emptying it.
-- **The calendar keeps its painting, not its scores**, because scores read
-  back into a painting blur (see *Reading a ballot back*), and an unsent
-  ballot should come back exactly as it was left.
-- **The About page's sample keeps its drafts in memory**, for the life of the
-  visit like its ballots, and `PollPage` forgets both on its way out.
+- **Only before the ballot goes in.** The server always wins: *Edit vote*
+  opens with the server's scores (`initial`) and touches no draft. A draft is
+  deleted when its ballot is accepted, kept when refused.
+- **Ten polls, newest kept**, a group counting once.
+- **Filed against whoever wrote it** (the account, or nobody) and read back
+  only by the same.
+- **Narrowed to the ballot as it now is**: removed options dropped, new ones
+  at 0, calendar cells outside the poll dropped. That is why a correction's
+  remount (`refreshKey`) keeps the draft.
+- **The calendar keeps its painting, not its scores**, which would blur.
+- **The sample keeps drafts in memory**, and `PollPage` forgets them on the
+  way out.
 
-The voter's name is not part of it, because it needs nothing of its own:
-`star-voting:voter-name` is written as the box is typed in rather than when a
-ballot goes in, so a refresh brings back whatever was typed. It used to wait
-for a successful submit, so that a refused name was not offered back on the
-next poll — but the server refuses a name only for being blank, and an
-emptied box forgets the name rather than storing it. Nothing in a draft reaches the server or is trusted by it; the worst a stale
-one can do is fill in a score the voter can see and change before sending.
+The voter's name (`star-voting:voter-name`) is saved as it is typed; an
+emptied box forgets it. A draft is never trusted by the server.
 
 ### The order the options come in
 
-Every ballot shuffles its options, and shuffles them the same way for any one
-browser every time it is opened. `src/lib/ballotOrder.ts` holds it, and
-`BallotCard` — the one ballot both kinds of poll are scored on — is the only
-thing that uses it.
+`BallotCard` shuffles its options, the same way for one browser every time
+(`src/lib/ballotOrder.ts`). Position on a list is worth points, so a fixed
+order hands the first-typed option an advantage; per-browser shuffling stops
+it always landing on the same option, and stability keeps the ballot usable
+on reload or revision.
 
-Ballot order is not neutral. An option at the top of a list is read first and
-read most carefully, and scores better for it than the same option would
-halfway down, so a poll that shows every voter one fixed list hands whatever
-its creator happened to type first an advantage that has nothing to do with
-the option. Shuffling per browser does not remove that advantage; it stops it
-always landing on the same option.
+One seed in `localStorage` is hashed with each option's id, so a new option
+slots in without reordering the rest and each poll gets an unrelated order.
+Storage that refuses falls back to a per-tab seed. The hash is FNV-1a **with
+murmur3's avalanche finisher**, which is load-bearing: plain FNV over
+same-seed inputs gives measurably uneven first places (24% vs 17% on five
+options); with it, every option is within 19.8–20.2%.
 
-Per browser rather than per render is what keeps it usable. A voter who
-reloads, or who comes back to change their vote, finds the ballot where they
-left it — and a list that reshuffled on every paint would be fair by exactly
-the same argument and impossible to fill in.
-
-What is stored is a single seed in `localStorage`, not the running order of
-any one poll. The order is derived by hashing that seed with each option's id,
-so nothing has to be invalidated when the list moves: a creator correcting the
-options, or a soliciting poll taking one more suggestion, slots the new option
-into the order the rest already have. One seed also covers every poll on its
-own, because option ids are unique to their poll — the same browser gets an
-unrelated order in the next poll without needing a key per poll to remember it
-by. Storage that refuses falls back to a per-tab seed, as `voterKey.ts` does.
-
-The hash is FNV-1a finished with murmur3's avalanche step, and the finisher
-earns its keep. Every option is hashed as the same seed followed by a
-different id, and FNV alone leaves two such hashes differing by close to a
-fixed XOR pattern — enough to sort with, but not evenly, because comparing
-XOR-related numbers favours whichever id carries that pattern in its high
-bits, in the same direction for every browser. Measured over 200k seeds on a
-five-option poll, plain FNV put one option first 24% of the time and another
-17%, against the 20% each the shuffle exists to deliver; with the avalanche
-the same measurement comes back inside 19.8–20.2%.
-
-It is display only. A ballot is sent as a score per option id and read back by
-id — `submit_ballot` checks the length of the list and then looks up every
-`candidate_id` in it — so the order it travels in means nothing to anyone.
-`BallotCard` is the only caller, which is the same statement as before it was
-extracted: there is one ballot on screen and it is shuffled, whichever kind of
-poll's RPC the scores end up going to. Nothing else in the app is shuffled: results are ordered by score, the
-published ballot sheet has an ordering of its own that is deliberately not
-arrival order, and the creator's option editor shows the list in the order
-they typed it, which is the thing being edited.
+Display only — ballots are sent and read by option id. Nothing else is
+shuffled: results are by score, the published sheet by hash, the creator's
+editor in typed order, a calendar chronologically.
 
 ### Scoring an option
 
-The stars on a ballot are `src/components/StarRating.tsx`, not Mantine's
-`Rating`, and the difference is entirely about phones. Mantine's control sets
-the score from `touchstart`, working out which star was meant from the
-finger's x coordinate against the row's bounding box, and then the click the
-browser synthesises afterwards applies the tap a second time — a click
-Mantine tries to swallow with a `preventDefault` in `touchend`, which
-browsers honour unevenly. On a touch screen that produced two things nobody
-could reproduce on a desktop, both reported as *scoring one option changed
-another*:
+The stars are `src/components/StarRating.tsx`, not Mantine's `Rating`.
+Mantine sets the score on `touchstart` from the finger's x coordinate, so a
+finger landing on a row to **scroll** scores it, and its synthesised click can
+apply the tap twice (clearing it). Ours is a button per score on one event
+path (`click`): a swipe scrolls and changes nothing. The buttons are padded
+past the 20px star, and the group is a radio group (one tab stop, arrow keys).
 
-- A finger that lands on a star row only to **scroll** scores that option on
-  the way past. Scrolling down the ballot to reach option 2 could therefore
-  rewrite option 1 — and since pressing the star that is already picked
-  clears an option back to 0, landing on it wiped that score outright.
-- Where the synthesised click is not swallowed, the same tap both sets the
-  score and, running into the clear again, takes it back to 0.
-
-So the ballot draws its own stars: a button per score, one event path
-(`click`), and no coordinate arithmetic — a star says which score it is. A
-swipe that starts on the stars scrolls the page and changes nothing. The
-buttons carry padding around the star so the target is bigger than the 20px
-it draws, which is the other half of being right on a phone, and the group is
-a radio group to a screen reader — one tab stop, arrow keys between the
-scores.
-
-0 is a real score rather than the absence of one, and pressing the star
-already picked is the only way back to it, which is what the line above the
-options tells the voter.
+0 is a real score; pressing the star already picked returns to it, which the
+line above the options says.
 
 ### What a form checks before it sends
 
-Every form in the app used to fail the same way: one red line, in one place,
-naming the first thing that was wrong. On the create form that place is under
-the submit button — the furthest point on the page from most of the answers —
-so *Add at least two options* left the reader to go and find which two, and
-fixing it earned them the next message rather than the poll.
+Errors sit on the field they belong to, every rule is checked in one pass, and
+they appear **on the first submit and clear as each field is fixed**.
+`CreatePoll` computes the full error set every render and shows it once
+`showErrors` is set.
 
-Errors now sit on the field they belong to, as Mantine's error state, and
-every rule is checked in one pass so all of them appear at once. When they
-appear is the other half of it: **on the first submit, and cleared as each
-field is corrected**. A field that goes red while you are still typing in it
-is telling you off for being halfway through, and one that stays red after
-you have fixed it is worse. `CreatePoll` does this by computing the whole
-error set on every render and showing it only once `showErrors` is set, which
-is also why fixing a field needs no second press.
+`src/lib/limits.ts` holds every length, and the option name, description and
+count limits are the database's own (`insert_option`). The create form also
+refuses two options differing only in case, marking the later one. Title and
+poll description lengths are the form's alone.
 
-`src/lib/limits.ts` holds every length in one place, and three of them are
-not the form's own idea. `add_suggested_option` has capped a suggested option
-at 100 characters, its description at 500, and a poll at 50 options since
-options could be suggested at all — limits written for the one field a whole
-group can write to, but they answer the same question the create form asks:
-how long is a label on a ballot, and how long is the note under it. The form
-applies them so that two paths into `candidates` cannot disagree about what
-fits. The duplicate-name check is the same story: `add_suggested_option`
-refuses a name already on the list, case-insensitively, because two options
-differing only in case are one option to everybody scoring the ballot. The
-create form now refuses the pair too, marking the *later* row — the earlier
-one keeps the name, so it is not the one that has to change.
-
-A title and a poll's description are bounded by the form alone; nothing in
-the database bounds either, and neither limit is a security measure.
-
-None of this is trusted and none of it is relied on. **The database is still
-what decides**, and anything it refuses for a reason not listed here comes
-back the way it always did — as the error under the form. What the checks buy
-is being told which box is wrong instead of being told no.
+None of this is relied on: **the database decides**, and anything it refuses
+for another reason appears as the error under the form.
 
 ### Creator controls
 
-On the poll page, the creator gets a **Manage poll** block holding everything
-they do to the *poll*:
+The creator's **Manage poll** block holds everything done to the *poll*:
 
-- **Open poll** — on a poll collecting its options, and only there: finalizes
-  the list and lets people vote. One-way. Disabled until the list has the two
-  options an election needs, with the reason on a tooltip.
-- **Edit options** — on any poll that has a ballot and whose results are not
-  out: not closed, and not an invite poll everybody has answered, which shows
-  its results without closing (`0089_option_edits_end_at_the_results.sql`). It
-  swaps the ballot for the option list so it can be corrected; with votes
-  already in the poll it puts a modal in front of that saying what the
-  correction will cost. The way back out of the editor is **Done**, under the
-  list itself, which saves the correction and then closes the editor, and this
-  button is not offered while that list is up: finishing with something
-  belongs beside the thing, not in a block further down the page. See [The
-  creator can correct the options until the poll
-  closes](#the-creator-can-correct-the-options-until-the-poll-closes).
-- **Close voting** — reveals results using the votes cast so far.
-- **Reopen poll** — puts a closed poll back to taking votes, keeping every
-  ballot in it, and puts the results back out of sight until it closes again.
-  Offered only on a poll that is closed *and* not at full turnout, since an
-  invite poll everyone has answered is revealed by its turnout rather than by
-  its close and reopening one would change nothing on screen. See [Reopening a
-  closed poll](#reopening-a-closed-poll).
-- **Send reminder** — on an invite poll that is taking votes: emails and
-  pushes everyone still owed a vote, once per poll, and then stays on the
-  block disabled, reading *Reminder sent*. See [Reminding the voters a poll is
-  waiting on](#reminding-the-voters-a-poll-is-waiting-on).
-- **Duplicate** — opens the create form prefilled from this poll (options,
-  invitees, all four settings). Nothing is created until submit, so the copy
-  can be edited first, and the original is untouched.
-- **Delete poll** — removes the poll and every vote cast, permanently.
+- **Open poll** — on a collecting poll only; finalizes the list. One-way.
+  Disabled, with the reason in a tooltip, until there are two options.
+- **Edit options** — while the results are not out (see [The creator can
+  correct the options until the poll
+  closes](#the-creator-can-correct-the-options-until-the-poll-closes)). The
+  way out is **Done** under the list itself, so this button is hidden while
+  the editor is open.
+- **Close voting** — reveals results from the votes so far.
+- **Reopen poll** — on a closed poll that is not at full turnout; see
+  [Reopening a closed poll](#reopening-a-closed-poll).
+- **Send reminder** — on an invite poll taking votes; once per poll, then
+  disabled as *Reminder sent*. See [Reminding the voters a poll is waiting
+  on](#reminding-the-voters-a-poll-is-waiting-on).
+- **Duplicate** — opens the create form prefilled (options, invitees,
+  settings). Nothing is created until submit.
+- **Delete poll** — removes the poll and every vote, permanently.
 
-**There is no Reset.** It deleted every vote in the poll, and it existed
-because the two things a creator actually wanted — a correctable option list
-and a poll that would take votes again — were otherwise unreachable. Both are
-reachable now without paying for them in other people's votes, so the button
-that charged that price is gone. What is left of "start again" is
-**Duplicate**, which is honest about being a different poll. `reset_poll` is
-dropped from the database too, in the same migration: a granted RPC that
-empties a poll is not a thing to leave lying behind a button that no longer
-exists.
+Open, close, reopen, remind and delete confirm in a modal, and **the modal is
+where the consequences are spelled out** — the buttons carry no explanatory
+text.
 
-Open, close, reopen, remind and delete all confirm in a modal first, and **the modal
-is where what the button will do is spelled out** — none of them carries a
-paragraph of explanation out beside it. A block of six buttons each with its
-own sentence is a block nobody reads, and the sentence that matters is the one
-in front of you at the moment you are deciding, not the one you scrolled past
-on the way to the button.
+**The share link** (`ShareLink.tsx`) sits in the same block with **Share**
+and **QR code**, since the link must go out before anyone votes. Open polls
+also offer it on the thank-you card.
 
-The **share link** sits in the same block (`src/components/ShareLink.tsx`),
-with **Share** and a **QR code** beside it. Handing the poll out is something
-the creator does to the poll, not something a voter needs while scoring
-options, and keeping it here means it is never withheld — the link has to go
-out before anyone, the creator included, has voted. Open polls also offer it on
-the thank-you card once you have voted, where passing it on is a reasonable
-thing to want.
+**Share opens the device's share sheet** ([`lib/share.ts`](src/lib/share.ts))
+with one string: a sentence for the poll's stage (*Vote in "Movie night"*,
+*Help choose the options for …*, *See the results of …*), a blank line, and
+the link. The link goes in the text rather than as `url`, because apps join
+the two inconsistently. Without a share sheet the button says **Copy** and
+copies the bare link. The intro's share goes through the same helper.
 
-**Share opens the device's share sheet** — where Messages and the group chat
-already are — and was a Copy button until the share sheet was everywhere that
-matters ([`lib/share.ts`](src/lib/share.ts)). What it sends is one string: a
-sentence saying what the link is for at the stage the poll is at (*Vote in
-“Movie night”*, *Help choose the options for …*, *See the results of …*), a
-blank line, and the link. The link travels inside the text rather than as the
-share's `url`, because given both, every app joins them its own way and the
-same press arrives looking different depending on where it went; the chat
-apps still find the link in the text and draw its card. Where there is no
-share sheet — Firefox on the desktop — the button says **Copy** and copies the
-bare link, since a *Share* that silently copies is a button that did
-something other than it said, and a pasted link is wanted on its own. The
-intro's *Share this intro* goes through the same helper, under *Check out STAR
-Voting!*.
-
-**The label and the caption span the row, not the box.** They were the text
-field's own `label` and `description` once, which put them inside a field
-sharing a no-wrap row with two buttons: the field is the part of that row that
-gives, so on a phone it was squeezed to a few words wide and the caption — a
-full sentence — unspooled down the column. Nothing in the caption was ever
-only about the box, either. *Anyone with this link can vote without signing
-in* is as true of the link **Share** sends and of the one the QR code carries;
-the three are one control for handing the poll out, and the sentence is about
-the link rather than about the widget it happens to be printed in. So an
-`Input.Wrapper` holds the whole row, the label still reaches the box through
-`htmlFor` — hence the generated id, since this renders on the creator's page
-and inside the open-poll panel alike — and the sentence gets the width it was
-written for.
-
-**The box has a floor of 14rem, and the row wraps to keep it.** Moving the
-caption out was not the end of the squeeze: the box was still the part of a
-no-wrap row that gave, and beside **Share** and **QR code** on a phone it was
-a box showing `https://` and nothing else. It does not need the whole address
-— it is there to be selected, and to say which link this is — but it needs
-enough to be recognisably a link. So where the box and both buttons will not
-fit at that width, the buttons drop onto a line of their own under it.
+**The label and caption span the whole row**, not just the text box: an
+`Input.Wrapper` holds the box and buttons, and the label reaches the box
+through `htmlFor` (hence a generated id). The caption is about the link, which
+all three controls hand out. **The box has a 14rem floor**, and the buttons
+wrap below it rather than squeeze it.
 
 ### A poll can ask more than one question
 
 A multi-question poll is **several ordinary polls that know they belong
-together**. `group_id` says which set a poll is part of, `question_position`
-says where in it, and `question_title` is what that one question asks; the
-poll's own `title`, description, mode and settings are the same on every row.
-All three columns move together or not at all (`polls_question_ck`), and like
-every other poll setting they are frozen at creation — `authenticated` still
-has no `UPDATE` grant on the table.
+together**: `group_id` names the set, `question_position` the place in it,
+`question_title` what that question asks. Title, description, mode and
+settings are the same on every row. The three columns move together or not at
+all (`polls_question_ck`) and are frozen at creation.
 
-**Nothing about the election changed.** `poll_tally`, `star_round` and
-`poll_ranking` take a poll id and count the ballots against it; a question is
-a poll, so they were not touched, and neither were their tests. That is the
-whole reason for this shape rather than a `questions` table under `polls`,
-which would have moved two foreign keys and rewritten every one of those
-functions to reach a poll through one more hop, for no difference in what a
-voter sees.
+**Nothing about the election changed**: `poll_tally`, `star_round` and
+`poll_ranking` take a poll id, and a question is a poll. That is why this is
+a column on `polls` rather than a `questions` table.
 
-Three things are true of the set rather than of one question, and each is one
-existing rule widened rather than a second rule to keep in step:
+Three things belong to the set:
 
-1. **One invitation.** Every question carries the whole invite list, because
-   that list is what the row-level security on its options and ballots reads.
-   `trg_send_invite_email` therefore fires for the first question only —
-   through a `WHEN` clause calling `poll_is_first_question`, so the trigger
-   holds the rule about who gets told and the function stays about the letter.
-   A five-question poll sends one email per person, and it links to question 1.
-2. **One reveal.** `poll_results_revealed()` was already the single place
-   deciding whether a poll has shown its tally; `poll_status`, `open_poll_view`,
-   `assert_results_readable` and both revision paths all read it. It now asks
-   the *gate* of every question in the group, so question 1's result cannot be
-   read while question 5 is still taking votes — the same promise a
-   single-question poll makes, applied to the unit the voter thinks in.
-   **"Has anyone answered" stays per question**, so a poll closed with nobody
-   having reached question 5 still shows question 1's result, and question 5
-   says it took no votes.
-3. **One lifecycle.** `close_poll` and `reopen_poll` walk the group, and the
-   Delete button removes every question. The creator acts on the poll, not on
-   the question they happen to be looking at.
+1. **One invitation.** Every question carries the whole invite list (RLS on
+   options and ballots reads it), and `trg_send_invite_email` fires for the
+   first question only, via a `WHEN` clause calling `poll_is_first_question`.
+   One email per person, linking to question 1.
+2. **One reveal.** `poll_results_revealed()` asks the *gate* of every question
+   in the group, so no question's result is readable while another is taking
+   votes. **"Has anyone answered" stays per question**: a poll closed before
+   anyone reached question 5 shows question 1's result and says question 5
+   took no votes.
+3. **One lifecycle.** `close_poll`, `reopen_poll`, `finalize_options` and
+   Delete act on the whole group.
 
-**Ballots, voter keys and voter names stay per question**, and this is the
-part most likely to look like an oversight. A voter gets one ballot and one
-`voter_key` per question, because `voterKeyFor()` is scoped to one poll — and
-a question is a poll — which is what stops one browser's ballots being joined
-to each other; see `src/lib/voterKey.ts`. The continuity a voter actually
-notices is the name, and that lives in the browser instead
-(`src/lib/voterName.ts`): typed once, offered back on the next question,
-never linked on the server. `open_poll_group` accordingly returns the sibling
-ids and **no "answered" flag to a reader who is signed out**; `poll_group` does
-return one, because an invite ballot carries an account and nothing has to be
-linked to find it. So does `open_poll_group` for a reader who is signed in, for
-the same reason: their link ballots carry their account, which has already
-joined them — see [An open ballot cast signed in follows the
-account](#an-open-ballot-cast-signed-in-follows-the-account).
+**Ballots, voter keys and voter names stay per question.** A voter gets one
+ballot and one `voter_key` per question (`voterKeyFor()` is per poll), so one
+browser's ballots cannot be joined on the server. The name is carried in the
+browser (`src/lib/voterName.ts`), never linked on the server.
+`open_poll_group` therefore returns no answered flags to a signed-out reader;
+`poll_group` does (an invite ballot carries an account), and so does
+`open_poll_group` for a signed-in reader. The cost: nobody can tell whether
+the people who answered question 2 are the ones who answered question 1.
 
-**The tick a voter is owed comes from the browser, for the same reason the
-name does.** That rule about `open_poll_group` is a rule about *the server*,
-and it was read for a while as a rule about the reader: `answered` arrived
-undefined on every open poll, so the question strip marked nothing on the
-public route — and nothing on the creator's own page either, since
-`poll_group` matches ballots on `voter_id` and an open poll's carry no
-account. A voter who had answered three of five questions was shown a strip
-that said they had answered none, which is not the promise being kept, it is
-the promise being kept against the one person it was never about.
-`open_poll_group`'s own comment already said where the answer lives — *the
-browser already knows which questions it has answered; it is the one place
-entitled to* — so `src/lib/questionMarks.ts` is that place, alongside the
-remembered name and read the same way: written on a ballot going in, never
-sent anywhere, and load-bearing for nothing. Being wrong about it colours a
-badge. It cannot let anybody vote twice, read a sealed result, or reach a poll
-they hold no link to; the server decides all three from the key it is shown,
-on every call.
+**For a signed-out reader the ticks come from the browser**
+(`src/lib/questionMarks.ts`): written when a ballot or confirmation goes in,
+never sent anywhere, and load-bearing for nothing — the server decides every
+vote and read from the key. Two marks, stored separately because they are
+true at different stages: answered (a ballot) and confirmed (while
+collecting). A read that comes back *not voted* or *not confirmed* erases the
+mark. Both are keyed by poll id.
 
-That record is **the fallback now, not the answer**, for anybody signed in:
-their ticks come from the server with the group, on whichever device they
-answered, and the browser's record fills in only the questions this browser
-answered signed out. A browser's record could only ever speak for that browser,
-which is exactly what made a question answered on the laptop read as
-outstanding on the phone.
-
-**It holds two marks now, and they are the same mark one stage apart.** The
-strip marks the question a reader has finished with, and while the poll is
-still collecting its options that is the confirmation rather than the ballot —
-so `poll_group` answers both on the invite side (`0042` adds the second) and
-the browser answers both on the open side, where a confirmation is identified
-by the same per-question key a ballot is and is just as deliberately
-unlinkable. They are stored under separate keys because they are true at
-different times: a poll still collecting takes no ballots and a poll taking
-ballots collects nothing, so one key holding both would mean a question
-confirmed before the poll opened reading afterwards as a ballot nobody cast.
-
-A record is **erased as well as written**: a creator who clears the poll's
-votes leaves a browser holding a ballot that no longer exists, and a
-confirmation is withdrawn when its reader starts adding to the list, so a read that comes
-back *not voted* — or *not confirmed* — takes the record with it rather than
-letting a stale tick outlive it. Both are keyed by poll id, which is all a
-question has — the answered mark used to take two entries, the share token the
-public route knew a question by and the poll id the creator's page knew it by,
-and it does not any more for the same reason those two pages are now one
-address.
-
-What this costs, knowingly: nobody can tell whether the six people who
-answered question 2 are among the eight who answered question 1. That is an
-aggregate over other people on an anonymous poll, which is exactly the
-correlation the key scoping exists to prevent, so losing it is the feature
-working rather than a gap.
-
-**Collecting options is one stage for the whole poll.** Each question gathers
-its own list, because a suggestion lands in `candidates` against a poll id and
-that is what a question is — so `suggest_option` and friends never changed.
-But `finalize_options` opens every question at once, for the same reason
-closing does: a poll half-opened would take votes on some questions while
-others were still gathering.
-
-The floor of two options is therefore checked against **every** question
-before **any** is opened, and the refusal names the question that is short —
-on a poll of five, "add two options" leaves the creator to work out which one.
-The creator's *Open poll* button applies the same rule from the option counts
-`poll_group` returns, so it is disabled with the reason rather than offered
-and turned down. A poll asking one question has no name to give and raises
-exactly the message it always did.
+**Collecting options is one stage for the whole poll**: each question gathers
+its own list, but `finalize_options` opens them all at once (see [Where the
+options come from](#where-the-options-come-from)).
 
 **Writing one.** `CreatePoll` holds a list of `QuestionDraft`s whether or not
-the poll asks more than one — a single-question poll is one entry whose title
-is never read — so every rule about an option list is written once and applied
-to every list there is. Turning the switch on puts that list behind a strip of
-tabs, one per question. Laid out all at once it was a form that grew with the
-poll: five questions of five options each is fifty fields in one scroll, with
-no way to see the shape of what is being asked and no way back from question
-four to question one except past everything in between. The tabs are also the
-shape the poll wears once it exists — `QuestionStrip`, on the voting side — so
-a creator lays the poll out the way their voters will walk through it.
+the poll asks more than one, so every option-list rule is written once. With
+*Multiple questions* on, the questions sit behind tabs — the same shape
+`QuestionStrip` gives voters.
 
-Three things keep the tabs from hiding anything:
+- **`+` is the last tab.** It is never selected: pressing it makes a question
+  and opens that. One `onChange` tells them apart by a sentinel value.
+- **Removing a question is a named button at the foot of that question**,
+  opposite *Add option* — not an `×` near the title field, where it would read
+  as "clear this field" and sit beside the option rows' own `×`. Removing one
+  of two questions leaves a single-question poll keeping the other; turning
+  *Multiple questions* off keeps question 1.
+- **Enter in an option field moves to the next option's name**, creating one
+  at the end; Shift+Enter breaks a line in a description.
+- **Every question is validated on every submit**; a tab with a problem is
+  marked, and a failed submit opens the first.
+- **Questions are keyed, not indexed**, so removing one does not shift what a
+  tab shows. Keys never leave the form; `create_poll_group` takes questions in
+  order.
 
-- **A `+` is the last tab**, rather than a button under the strip. Adding a
-  question *is* adding a tab, and the strip is where a reader already looks to
-  see how many there are. It is never the selected tab: the open tab is only
-  ever a question's key, so pressing `+` makes a question and opens that
-  instead. One `onChange` handles both, telling them apart by a sentinel value
-  no question key can collide with.
-- **Removing a question does not live in the strip, and is named rather than
-  drawn.** It sits at the foot of the question it removes, opposite *Add
-  option*. It was a bare red `×` beside the title field before, which put the
-  control that discards a whole question — its title, its options, their
-  descriptions — inside the row for editing that question's *title*, where the
-  nearest reading of it was "clear this field"; and it sat a few pixels from
-  the option rows' own `×`, which discards one line. Two buttons that destroy
-  different amounts should not look alike and should not sit together. The
-  asymmetry with `+` is real and is the lesser cost: a remove control in the
-  strip is either a button nested inside a tab's button, or a tab that is not
-  a question. What the two controls actually share is not a row — it is that
-  each sits beside what it acts on, `+` beside the tabs it adds to and this
-  beside the question it ends. **Removing one of two questions leaves a poll
-  of one**: the form goes back to a single question, keeping whichever was
-  not removed. That is the difference from turning *Multiple questions* off,
-  which always keeps question 1.
-- **Enter in an option's name or description goes to the next option's
-  name**, making one at the end of the list, so a list is typed without
-  reaching for *Add option*. Shift+Enter still breaks a line in a description.
-- **Every question is validated on every submit**, on screen or not; the tabs
-  changed what is rendered, not what is checked.
-- **A tab whose question has something wrong with it is marked**, and a submit
-  that fails opens the first of them. Validating a question nobody can see is
-  only worth doing if the reader is told where to look, and "press Create,
-  watch nothing happen" is what the mark and the jump exist to prevent.
-- **A question is identified by a key rather than by its position.** Removing
-  question 2 of four slides 3 and 4 down one, and a tab holding the number
-  would quietly be looking at a different question afterwards. The key never
-  leaves the form: `create_poll_group` takes the questions in order.
+**On screen.** The poll list shows position 1 only (`list_polls`), and the
+count badge reads *N questions* on the list, the poll page and the public
+page alike — turnouts differ per question, and one poll should not read two
+ways. `PollDetail` counts `poll_group`, `PublicPoll` counts `open_poll_group`,
+and a poll with no group counts as one. On the public page the group arrives
+after the poll, so until then there is **no badge** rather than a turnout
+that changes. The state badge reads *Results ready* (see [The poll's
+high-level details](#the-polls-high-level-details)). `QuestionStrip` renders
+nothing below two questions.
 
-**On screen.** The poll list shows position 1 and hides the rest
-(`list_polls`), with the count badge reading *N questions* instead of a
-turnout — the turnouts come apart the moment somebody answers three of five,
-and the first question's number would read like the whole. **So does the
-poll's own page, and the public one**: the badge is a fact about the poll
-rather than about the screen it is on, and a poll that said *5 questions* on
-the card and *2/7 votes* the moment it was opened was two different polls to
-learn instead of one. `PollDetail` counts `poll_group` and `PublicPoll`
-counts `open_poll_group`, which is the same count `list_polls` takes; a poll
-with no group asks one question and both fall back to that rather than to
-zero. The public page's group arrives in a read behind the poll, so until it
-lands there is **no badge** rather than a turnout that rewrites itself into
-*5 questions* a moment later — the rule the winner badge used to need for the
-same reason, before its answer started arriving with the page. Its
-state badge reads *Results ready* rather than naming a winner, on all three
-screens alike, because there is one winner per question and none for the
-poll; each question's own is in the green banner over its tally. See [The
-poll's high-level details](#the-polls-high-level-details).
-`QuestionStrip` carries the walking between them, and renders nothing at all
-below two questions, so every existing poll looks exactly as it did.
+**Answering a question opens the next one owed**, automatically, on three
+conditions:
 
-**Answering a question opens the next one owed.** There was a card at the foot
-of the page offering to — *Next question: …*, with a button — and it was one
-press and a scroll standing between a voter and the thing they had already
-decided to do. A voter working through five questions wants the sixth screen to
-be question 2, every time; asking them five times is four presses that answer a
-question nobody was asking. So the card is gone and the page moves by itself, on
-three conditions, each of which is a case where moving would be wrong:
+- **A first ballot only.** `OpenPollPanel` takes `onFirstVote` separately from
+  `onChanged`; a revision never advances.
+- **To a question still outstanding** (`nextUnansweredKey` in
+  `src/lib/nextQuestion.ts`), searching forward and then wrapping round, so a
+  voter who started at question 3 is taken back to question 1.
+- **Only while something is owed**; otherwise the page re-reads into *your
+  vote is in*.
 
-- **A first ballot only.** Changing a vote is a deliberate trip back to a
-  question already behind you, and carrying you forward again undoes the trip
-  you just made. `OpenPollPanel` takes `onFirstVote` separately from
-  `onChanged` for exactly this, and the revision path never calls it.
-- **To a question still outstanding**, which is not the same as the next one
-  along — `nextUnansweredKey` in `src/lib/nextQuestion.ts` decides. The two
-  agree for anybody working a poll front to back, which is nearly everybody;
-  they come apart for the voter who jumped into the middle from the strip, and
-  for them "the next one" is a ballot already cast. **The search rounds**:
-  forward from the question just answered, then wrapping to the ones before
-  it, so a voter who started at question 3 is taken back to question 1 rather
-  than stranded on the last question with two unanswered ones behind them. The
-  card that used to offer the way on is gone, so stopping at the end would be
-  a dead end — the strip says what is outstanding but does not act.
-- **Only while something is owed.** Every other question answered leaves the
-  voter where they are, and the page does what a single-question poll always
-  has: re-reads itself into *your vote is in*.
+The list it chooses from is the list the strip is drawn from, and the question
+just answered is excluded by key (no read has confirmed it yet). Advancing
+replaces the re-read. **A read that lands late is dropped** (`onScreen`): the
+ballot's own broadcast can start a read of the question just left, which must
+not be drawn under the next one's address.
 
-**And the results coming out goes back to question 1**
-([`lib/resultsLanding.ts`](src/lib/resultsLanding.ts)). The ballot that
-reveals a poll is usually the last one on the last question, so the reader
-was left on question 3's tally with nothing saying questions 1 and 2 had
-results too. Only the moment of the reveal moves anybody — the read before it
-said sealed, the read after says out, both of the same group — so a reader who
-opens a finished poll at question 3, or walks there afterwards, stays where
-they asked to be.
+**The results coming out go back to question 1**
+([`lib/resultsLanding.ts`](src/lib/resultsLanding.ts)), since the revealing
+ballot is usually on the last question. Only the moment of the reveal moves
+anybody.
 
-**Every stage a reader can be left standing in carries the strip**, on both
-readings, because a poll of several questions that offers no way to the others
-is a dead end wherever it happens. Two of them used not to.
+**Every stage a reader can be left in carries the strip**, on both readings,
+including *your vote is in* and the end of the poll (the tally, and the notice
+a question with no ballots puts up). There the strip sits **above** the block
+rather than inside a card, so a tally that fails to load cannot take the
+navigation with it. The strip is built once per page and passed to every
+branch. **On a poll that has stopped taking votes it marks nothing**: both
+pages pass `answered` as `undefined`, which it draws in one neutral colour.
 
-The first is the one a voter sees most: *your vote is in*. Answering question
-3 of five lands there, and the invite side's card was the one card in the app
-that did not carry it — so a voter who had just answered was left with two
-questions still owed and nothing on screen saying so. The open side's `Voted`
-had carried it all along; `Waiting` in `PollDetail` is that card's twin and
-now does too.
+**A crossing between two questions replaces the question, not the poll.**
+Moving between questions changes the route's parameter, not the route, so the
+page stays mounted. The poll's half — heading, terms, strip, name box — stays
+on screen; **the question's half** — what it asks and the ballot — is replaced,
+showing `QuestionSkeleton` until the read for *this* question lands. (Keeping
+everything would show the previous question's ballot under the new address;
+keying the route on the parameter would blink the strip.)
 
-The second is the end of the poll, and it was missing from *both* readings:
-the tally, and the notice a question closed with nothing in it puts up. That
-is the stage a poll is read in for the rest of its life — months later, by
-somebody who came back for the answer — and question 1's result was a page
-with no way to question 2's. Here the strip sits **above** the block rather
-than inside a card, which is the one place it does: there is no one card for
-it to be inside, and putting it inside `Results` would have meant a tally
-still loading, or a read of it that failed, taking the way out of the question
-with it.
+The strip and the name box are drawn *inside* the card the question's half
+replaces, so both are handed to the stand-in and drawn there for real:
 
-The strip is built once per page and passed to every branch, which is what
-stops six places from being handed six different lists.
+- **The strip** is the `questionStrip` node the ballot takes (built once
+  beside `strip` in `PublicPoll`, as in `PollDetail`). Its links stay live.
+  It is placed as the page will place it: inside the card wherever there is
+  one card, above the block on a finished question (the stand-in is told
+  `finished`). Under it, the stand-in draws as much of the ending as is
+  certain (`tallied`): **results out with no `closed_at` means every invitee
+  answered every question**, so every question has a tally and the whole
+  tally shape is drawn. Otherwise it draws the one card both endings share.
+  An open poll passes no `tallied`. Invite polls know each question's
+  `option_count` from the strip; the share-link reading uses the default.
+- **The name box** is `VoterNameField`, with state held by the *page*
+  (`useVoterName`), so it survives the crossing with what was typed. It is on
+  every question still taking answers; on an answered one it is disabled and
+  shows the ballot's name until *Edit vote*.
 
-**On a poll that has stopped taking votes it marks nothing.** The badges are
-coloured *done* or *outstanding* by whether this reader has answered each
-question, and once the poll is closed or its results are out that is a
-distinction about a ballot nobody can still cast — with *outstanding* in
-particular reading as a nudge towards one the poll would now refuse. So both
-pages hand the strip an `answered` of `undefined` at that point, which is the
-third thing `QuestionStrip` already knew how to be told (the first two being
-the server's answer on an invite poll and the browser's on an open one) and
-which it draws in one neutral colour. Which question is open, and where the
-others are, is the whole of what a finished poll's strip is for.
+Both sit outside the stand-in's `Loading` wrapper, which hides its contents
+from screen readers.
 
-The list it chooses from is the list the strip is drawn from — both pages build
-it once and pass it to both — so a voter is only ever carried to a question the
-strip in front of them shows as outstanding. That is a construction rather than
-a promise the two have to keep separately. The question just answered is
-excluded by key rather than by its flag, because the choice is made as the
-ballot goes in and no read has yet come back to say so.
-
-Advancing replaces the re-read rather than joining it. The page being left is
-left at once, and a read of the question being left would land after the next
-question had loaded.
-
-**And a read that lands late is dropped.** Not asking is not enough: the
-ballot's own broadcast comes back to the question it was cast in, and could
-start that question's read in the moment before the page moved on. When it
-landed it was drawn under the next question's address, which is how answering
-question 2 could leave question 3 saying *your vote is in*, a ballot nobody
-had cast. Both pages now check, once a read is back, that it is still about
-the question on screen (`onScreen`), and throw it away if not. The question
-left behind loses nothing by it: the route holds it ready for the walk back
-and reads it again for that (see [Live updates](#live-updates)).
-
-**A crossing between two questions replaces the question, not the poll.** A
-question is a poll of its own at an address of its own, so moving between two
-of them changes the route's *parameter* and not the route, and React keeps the
-page mounted across that with everything it was holding. Two opposite mistakes
-are available here and the first draft of this made the second one:
-
-- **Keep it all** and the question being left goes on rendering under the
-  address of the question being opened — the previous question's options, or
-  its *your vote is in*, beneath the next question's title, for as long as the
-  read takes. That is what the page did before auto-advance, and auto-advance
-  turned it from something you saw on the occasional *Next* click into
-  something you saw on every vote.
-- **Throw it all away** — by keying the route on its parameter, so the
-  crossing is a mount — and the question strip goes with it, blinking out and
-  back at the exact moment a reader is using it to navigate. Measurably: two
-  frames, one of them a bare page with no strip at all.
-
-Neither is necessary, because the page is two things and only one of them
-changes. **The poll's own half — the heading, its terms, the strip, the name
-box — is the same for every question in the group**, so it stays on screen.
-**The question's half — what it asks and the ballot answering it — is
-replaced**, and shows `QuestionSkeleton` until the read for *this* question
-lands.
-
-The last two are the awkward ones, because they belong to the poll's half and
-are drawn *inside* the card the question's half replaces. Going with that card,
-the strip greyed out and came back at the exact moment a reader was using it to
-navigate — the thing this stand-in exists to prevent — and the name box did
-worse: it vanished, and took whatever had been typed into it with it, because
-the state was inside the card. **So both are handed to the stand-in and drawn
-there for real**, in the places the ballot draws them:
-
-- **The strip** is the `questionStrip` node the ballot already takes, so
-  `PublicPoll` builds it once beside `strip` rather than inline in the panel's
-  prop, as `PollDetail` already did. Nothing about it moves or changes colour
-  across a crossing except the badge marking which question is open, which has
-  already moved because the address has, and the tags' colours when the read
-  lands and says which questions are behind the reader. Its links stay live, so
-  a reader who crossed to the wrong question can cross straight back without
-  waiting for the ballot they did not want.
-
-  It has to be *placed* the way the page places it, too, and that depends on
-  the stage: inside the card wherever there is one card — the option list, the
-  ballot, the card a voter comes back to — and above the block where there is
-  not, which is the tally and the notice a question nobody answered puts up.
-  So the stand-in is told the same fact the branches go on, as `finished`, and
-  a crossing between two questions of a poll that is over no longer boxes the
-  strip up for the length of the read and lets it out again.
-
-  What it draws under the strip is as much of the ending as the page can be
-  sure of, which is a second fact it is told: `tallied`. A finished question
-  has a tally if anybody answered it and the notice a question nobody
-  answered puts up if not, and that is about the question being opened rather
-  than about the poll — but it is still answerable from the question being
-  left, because of how a question stops taking votes. `poll_gate_open` opens
-  on one of two things: the poll was closed, or every invitee answered that
-  question. Results need every question in the group gated open, and closing
-  is one act over all of them — `close_poll` writes one timestamp — so
-  **results out with no `closed_at` means every question was answered by
-  everyone invited**, and every one of them has a tally, the one being opened
-  included. `results_available && !is_closed` is that, and on a poll it holds
-  for the stand-in draws the whole tally: the banner, the score round and the
-  runoff, the same three cards `Results` is about to fill.
-
-  A poll closed early is what it is false for, honestly: closing settles the
-  group at whatever it had, so a question nobody got to really does end in
-  that notice, and the shape falls back to the one bordered card holding one
-  line that both endings share. An open poll is always in that case, since
-  its questions have no invite list to have finished and `poll_gate_open` has
-  nothing but `closed_at` to go on — so `PublicPoll` passes no `tallied` at
-  all. Either way `Results` puts `ResultsSkeleton` up the moment it lands and
-  that is the same shape again, so the wait continues rather than starting
-  over.
-
-  The row count travels the same way and splits the same two ways: the invite
-  strip carries an `option_count` per question, so a crossing knows exactly
-  how many bars its score round and how many rows its ballot will have, and
-  `open_poll_group` deliberately carries no such thing, so the share-link
-  reading keeps the default.
-- **The name box** is `VoterNameField`, whose state the *page* holds with
-  `useVoterName` — see `lib/voterName.ts`. A name is not a fact about a
-  question; it is what this person is called, which is the whole reason that
-  file carries it from one question to the next. Held in the page, which
-  survives a crossing, it is one field that goes on standing there with what
-  was typed still in it. **It is on every question still taking answers**,
-  answered or not: it used to be only on a ballot not yet cast, so the strip
-  under it jumped up and down as a reader walked between answered and
-  unanswered questions. On a question already answered it is disabled and
-  shows the name the ballot carries — *Your vote is in* draws it too — and
-  *Edit vote* enables it again. The stand-in draws it disabled on the same
-  terms, from the browser's own record of what it has answered.
-
-Both sit outside the stand-in's `Loading` wrapper, which hides what it holds
-from screen readers: a real link or a real input in there would be one nothing
-could reach, announced to nobody and still in the tab order.
-
-Each page draws the line with one value. `PublicPoll` holds its read as
-`{ pollId, view }` rather than a bare view, so `view` is that pair only when
-the id matches the address and `shell` falls back to the last read of a
-*sibling* question — established by the strip's own list holding both ids.
-`PollDetail` keeps `loadedFor` beside its state and gates on `showing`. Both
-fall back to the whole-page skeleton when the address names a poll they hold
-no group for, which is a page load rather than a crossing. `open_poll_group`
-answers the same list for every question in a group, so crossing between them
-also costs no request at all.
+Each page draws the line with one value: `PublicPoll` holds `{ pollId, view }`
+and falls back to the last read of a *sibling* question (per the strip's own
+list); `PollDetail` keeps `loadedFor` and gates on `showing`. With no group
+held for the address, both show the whole-page skeleton.
 
 ### Telling people the results are ready
 
-An invitation was the only thing this app ever emailed, which meant it
-announced the one moment nobody was waiting for and stayed silent through the
-one everybody was. A poll's results unlock on their own — when the last invitee
-votes, or when the creator closes it — and the only way to find out used to be
-to keep opening the poll. The people most likely to miss it are the ones who
-voted early, which is to say the ones who cared enough to answer first.
-`notify_results_ready` and the four triggers that call it, in the squashed
-baseline under [`supabase/migrations/`](supabase/migrations), are the whole of
-it.
+`notify_results_ready` and the four triggers calling it (a ballot arriving, a
+ballot leaving, an invitee leaving, `closed_at` moving) email and push when a
+poll's results unlock. It is idempotent: it re-derives whether the poll has a
+result and reconciles the notice with that, so no trigger needs to know what
+the others did.
 
-The delivery half is the invitation's, deliberately: `pg_net` posting to
-Resend with the key read from Vault at send time, best-effort, never blocking
-or failing whatever triggered it — see [Emails](#4-emails). What is new is that
-this is a **transition** rather than an insert, and a transition has to be
-noticed exactly once.
+- **Once per poll**, filed against the group's first question.
+- **The claim is a column**, `polls.results_announced_at`, set only where
+  null; a second concurrent ballot waits on the row lock and finds it set.
+  `broadcast_poll_updated` ignores changes to it.
+- **Reopening takes the notice back**, so a second finish is announced.
+- **`poll_results_ready()` is not `poll_results_revealed()`.** The email is
+  about the poll, so the ballot test is asked of the group: at least one ballot
+  somewhere, and every question's gate open.
+- **Every invitee is told**, voted or not, deduplicated and lowercased.
+- **The creator is told only if the poll finished on its own** (`closed_at`
+  null). An open poll only ends by being closed, so it tells only the
+  accounts that answered it.
+- **Nor is whoever's ballot ended it** — read off the token, since the
+  notifier runs in that ballot's transaction.
+- **One request per address**, so invitees never see each other's addresses.
+- **The email does not name the winner**: a group has several, and an email
+  cannot be unread by somebody who wanted to see the tally first.
 
-- **Once per poll, not once per question.** A group's questions unlock
-  together, so five questions are one result and one email, pointing at
-  question 1 — the same rule and the same landing place as the invitation.
-
-- **The claim is a column, set only where it is null.**
-  `polls.results_announced_at`, on the group's first question, *is* the
-  once-only rule: two ballots landing in the same instant both run `update
-  polls set results_announced_at = now() where … and results_announced_at is
-  null`, the second waits on the first's row lock and then finds it set, and
-  one email goes. It was a table of its own, `results_notices`, until 0080,
-  on the grounds that a column would widen every `select *` and wake every
-  watcher of the poll a second time; the first is a timestamp's worth, and
-  the second is answered by `broadcast_poll_updated` staying quiet when only this column or the
-  reminder's moved, since no page draws either.
-  The reminder to vote keeps its once the same way, and one shape for both is
-  easier to follow than a column for one and a table for the other.
-
-- **Reopening takes the notice back.** A poll put back to taking votes by
-  `reopen_poll` can finish again with a different answer; that is a second
-  result, and the people in it are told about it. So
-  anything that puts a poll back to taking votes clears the column, and
-  being announced is a property of the poll *being* finished rather than of it
-  having once been finished.
-
-- **`poll_results_ready()` is not `poll_results_revealed()`**, and the
-  difference is the one that matters to an inbox. The latter answers about one
-  question: *this* question has taken a ballot, and every question in its group
-  has stopped. A poll closed before anybody reached question 5 has results for
-  question 1 and none for question 5 — right on the page, wrong in an email,
-  where there is one result and it is the poll's. So the ballot test is asked
-  of the group: at least one ballot somewhere in it, and every question's gate
-  open.
-
-- **Every invitee is told**, deduplicated and lowercased, and not just the ones
-  who voted: an invitee who did not vote is still in the poll — it finished
-  around them, and the result is a decision they are subject to.
-
-- **The creator is told only if the poll finished on its own.** A poll ends one
-  of two ways: the last invitee votes, or somebody closes it — and only the
-  creator can close it. Telling them the news they just made themselves is an
-  email whose entire content they already have, so `closed_at` is the test:
-  set means closed by hand, and the creator comes off the list — as an invitee
-  too, on a poll they invited themselves to, since the reason they need no
-  email does not stop applying because they are also on the invite list. That
-  rule outgrew this email — see [What a poll writes to
-  people](#what-a-poll-writes-to-people) — so `poll_results_audience` now
-  says it in terms of `poll_email_audience`, which is the same sentence with
-  "finished on its own" left to the caller. An
-  open poll only ever ends by being closed, so its audience is empty and it
-  sends nothing at all: its voters gave no addresses, and the one person it
-  could have written to is the person who closed it.
-
-- **Nor is whoever's own ballot ended it.** A poll that finished on its own
-  finished because somebody pressed Submit, and that person is watching the
-  page turn into the results as the letter goes out. They come off the list
-  the same way the creator does and for the same reason, and the address is
-  read off the token: `notify_results_ready` runs inside the transaction that
-  crossed the line, so whoever is signed in is whoever crossed it. Nobody
-  signed in is nobody dropped — an open poll's voters sign nothing.
-
-- **One request per address.** Resend would take the whole list in one `to`,
-  and that would show every invitee every other invitee's address — precisely
-  what a poll with respondents hidden promises not to do. The fan-out is the
-  price of the promise.
-
-- **The email does not name the winner.** A poll of several questions has one
-  winner per question and no single one to name; an email cannot be un-read by
-  somebody who wanted to see the tally first; and the link is one tap from the
-  answer either way.
-
-`notify_results_ready()` is the whole rule in one function, called from four
-triggers — a ballot arriving, a ballot leaving, an invitee leaving, and
-`closed_at` moving — and idempotent by construction, so none of them has to
-know what the others have done. It re-derives whether the poll has a result and
-reconciles `results_announced_at` with that answer; called on a poll nothing has
-changed about, it does nothing. Nothing is needed for an invitee *arriving*,
-because `guard_invitee_changes` already refuses to widen the list of a poll
-whose results are out.
-
-The claim comes before the send, so a mailer that is not configured leaves a
-poll marked announced with no email behind it — the same bargain the invitation makes.
-Releasing the claim on a failed send was the alternative, and it would turn
-every transient Resend outage into a duplicate on the next vote.
-
-`test/sql/cases/21_results_ready_notices.sql` covers everything but the send
-itself: whether a poll has a result, who would be told for each of the two ways
-a poll can end and who is left out of each — the creator who closed it, the
-voter whose ballot ended it, in whatever case their address arrives — that the
-notice appears exactly once when the poll crosses the line, that reopening
-takes it back and a second finish announces again, and that a group is one
-notice filed against question 1.
+Nothing is needed for an invitee *arriving*: `guard_invitee_changes` refuses
+to widen the list once results are out. The claim comes before the send, so a
+missing mailer leaves a poll marked announced with nothing sent; releasing the
+claim on failure would turn a Resend outage into duplicates.
+`21_results_ready_notices` covers everything but the send.
 
 ### Writers take turns
 
-Every function that reads a poll's state and then writes on the strength of it
-takes a lock on the poll first — `lock_poll`, on the group's first question, so
-a poll of several questions is one queue — and holds it to the commit.
-[`0081_one_writer_at_a_time.sql`](supabase/migrations/0081_one_writer_at_a_time.sql)
-put it at the top of every such function, and
-`43_one_writer_at_a_time` fails if one is added without it.
+Every function that reads a poll's state and then writes on the strength of
+it calls `lock_poll` first — on the group's first question, so a group is one
+queue — holding it to commit. `43_one_writer_at_a_time` fails if one is added
+without it.
 
-**Without it, two transactions could each decide on a picture missing the
-other's write.** Under READ COMMITTED a statement sees only what had committed
-when it began, and every one of these was reproduced with two real sessions
-before the lock went in:
+Under READ COMMITTED, two concurrent transactions each see only what had
+committed when their statement began, so without the lock: the last two
+invitees voting together each saw one vote outstanding and neither settled
+the winner; the last two confirmations never opened the poll; a vote beside
+**Close** went in after the winner was settled; a vote beside an option being
+added missed its zero score. All were reproduced with two sessions.
 
-- the last two invitees voting together each saw one vote still to come, so
-  neither settled the winner or sent the results — a fully voted poll reading
-  *Results ready* with nobody told;
-- the last two confirmations each saw one still to come, so the poll never
-  opened itself;
-- a vote beside **Close** went into a poll that had just closed, after the
-  winner was settled without it — and `settle_winner` never revisits a settled
-  question, so the badge named one option and the tally another for good;
-- a vote beside an option being added missed the zero score
-  `fill_scores_for_new_option` writes for every ballot it can see, leaving a
-  ballot short an option and impossible to revise.
+**The lock** is `FOR NO KEY UPDATE`, **taken before the function reads
+anything** (a lock after a read locks a stale picture). The second writer
+waits and then sees the first's work, carrying on correctly or being refused
+in its usual words. `NO KEY` avoids blocking foreign-key checks on inserted
+child rows; it does conflict with the `UPDATE`s of `close_poll` and
+`reopen_poll`. **Reads take nothing and wait for nothing.**
 
-The same reasoning covers the ones not staged: a suggestion beside **Open
-poll**, a revision beside the vote that reveals the results, an invitee taken
-off the list while their ballot goes in.
-
-**What the lock is.** `FOR NO KEY UPDATE`, taken as the function's first
-statement, before it reads anything — a lock taken after a read is a lock on a
-stale picture, which is the thing the case checks. The second writer waits for
-the first to commit, and its statements after the lock see what the first did,
-so it either carries on correctly or is refused in the words it would always
-have used (*This poll has been closed…*, *Must submit a score for every
-option*). `NO KEY` rather than a plain `FOR UPDATE` so it does not also block
-the foreign-key checks of rows being inserted under the poll; it does conflict
-with the `UPDATE`s `close_poll` and `reopen_poll` make, which is what puts them
-in the queue too. **Reads take nothing and wait for nothing**: no page, list
-or live tick is ever held up by it, only a second write to the same poll, and
-that for as long as the first takes to commit.
-
-**The two tables the browser writes directly** — invitees added or removed,
-options deleted — are queued by the guard triggers already standing in front
-of them, and the three reconcilers (`settle_winner`, `notify_results_ready`,
-`open_options_when_all_confirmed`) lock as well, so a writer added later
-without the lock still cannot have them decide on a stale picture.
+The tables the browser writes directly (invitees, option deletes) are queued
+by their guard triggers, and the three reconcilers (`settle_winner`,
+`notify_results_ready`, `open_options_when_all_confirmed`) lock as well.
 
 ### What a poll writes to people
 
-The results email came second, and by arriving it showed what was wrong with
-the first one. An invitation is worded for a poll you can vote in, and it is
-sent when the poll is created — which on a poll that collects its options is
-the one stage where there is nothing to vote on. It also went to the creator,
-who wrote it. So a poll had four moments in it and wrote about one and a half
-of them, in a letter whose subject line — *You're invited to vote* — is how
-bulk mail opens, which is how Gmail read it.
-`0043_the_emails_a_poll_sends.sql`
-is the four letters and the two rules that decide them.
+- **The invitation says which stage the poll is at**: `poll_invite_kind`
+  answers `options` while collecting and `vote` once there is a ballot, read
+  when the address is added.
+- **Nobody is told what they just did.** The creator gets no invitation (even
+  if they invited themselves), no "voting is open" for their own Open poll,
+  and no results email for their own Close. The invitee whose confirmation
+  opened the poll, or whose ballot finished it, is left out too.
+- **Nobody is told about a poll they removed from their list** (see [Removing
+  a poll from your list](#removing-a-poll-from-your-list)), except by being
+  invited again.
+- **The rule is one function**: `poll_email_audience(poll, include_creator,
+  actor)` — every invitee plus the creator, deduplicated and lowercased, minus
+  the creator when the flag says they already know, minus the actor's address
+  wherever it appears, minus removers, plus accounts that answered an open
+  poll signed in. `poll_results_audience` passes `closed_at is null`;
+  `notify_poll_opened` takes the flag from which opener called it.
+- **The actor is read off the token** (`lower(auth.jwt() ->> 'email')`), since
+  the notifiers run in the transaction that caused them; null drops nobody.
+  The flag stays anyway, to distinguish a deliberate act from a threshold
+  being crossed. The audience takes the actor as a parameter, so tests can ask
+  it directly.
+- **Removing an invitee is the creator acting**, and can open or finish a
+  poll; the same rule covers it.
+- **Opening is announced once** by construction: `options_finalized_at` is
+  written once. `open_options_when_all_confirmed` announces only when its
+  update actually opened something.
+- **One letterhead, one mailer, one button.** `poll_email_html` is the card,
+  `send_poll_email` the only Resend caller, and every email's button says
+  **Open poll**. Its footer links to `#/settings`. Sent per address.
+- **Subjects are short, plain and fixed**, without the poll's title
+  (*You've been added to a new poll*, *Voting is now open for your poll*,
+  *Results are available for your poll*); the first line of the body names
+  the poll (*Vote now for X*, …). The bodies say what happened and stop.
+- **A group is one letter per person at every stage**, addressed about
+  question 1.
+- **An open poll writes only to the accounts that answered it signed in**,
+  with no special case: it has no invite list, never opens itself, and only
+  ends by being closed.
 
-- **The invitation says which stage the poll is at**, because that is what
-  the person reading it can act on. `poll_invite_kind` answers `options`
-  while the poll is still collecting them and `vote` once there is a ballot,
-  and it reads the poll at the moment the address is added — so somebody
-  invited to a soliciting poll on Monday is asked for options, and somebody
-  added to the same poll after it opens is asked for a vote.
-
-- **Nobody is told what they just did**, and *they* is whoever acted, not the
-  creator. The creator set the poll up, so an invitation is `none` for them —
-  including on a poll they invited themselves to, which the create form offers
-  with a checkbox, since the reason they need no email does not stop applying
-  because they ticked a box. A poll opened with their own Open poll button, or
-  closed with their own Close button, is not news to them either. And the two
-  transitions nobody presses a button for — the poll opening because the last
-  invitee confirmed, and finishing because the last invitee voted — are news
-  to everybody in the poll *except that invitee*, who has just watched the
-  thing the letter describes. Both were sent to them until
-  `0049_nobody_is_told_what_they_just_did.sql`,
-  which is where the rule stopped being about the creator.
-
-- **Nobody is told about a poll they removed from their list.** The audience
-  leaves out every account with a row in `removed_polls` for the poll, whatever
-  it was in the poll as — see [Removing a poll from your
-  list](#removing-a-poll-from-your-list). Invitations are the exception, and
-  cannot be reached any other way than by being invited again.
-
-- **The rule is one function, and the caller supplies the answer.**
-  `poll_email_audience(poll, include_creator, actor)` is every invitee plus the
-  creator, deduplicated and lowercased, minus the creator when the flag says
-  they already know and minus the actor's address wherever it appears — as an
-  invitee, as the creator, or as a creator who invited themselves.
-  `poll_results_audience` is that with `closed_at is null` passed in, and
-  `notify_poll_opened` takes the flag from which of the two openers called it.
-  Nothing on the poll row records *how* it opened, and adding a column to
-  record it would widen every `select *` the app makes for bookkeeping nothing
-  on screen reads — the same argument that made the results notice a row of
-  its own. What the two callers know, they say.
-
-- **The actor is read off the token; the flag is not redundant.** Both
-  notifiers run inside the confirmation, the ballot, the removal or the button
-  press that caused the transition, so `lower(auth.jwt() ->> 'email')` in
-  `notify_poll_opened` and `notify_results_ready` *is* the person who caused
-  it, and null — an open poll's anonymous voter, the nightly purge — drops
-  nobody. That makes the flag redundant in both places that pass it today,
-  since the creator's own button and their own Close are the creator acting,
-  and it stays anyway: it says the transition was somebody's deliberate act
-  rather than a threshold being crossed, which a deadline closing a poll from
-  a cron job with no session behind it would need to say differently. The
-  audience itself takes the address as a parameter rather than reading the
-  token, so that the one function this rule lives in answers the same way
-  whoever is asking — including the tests, which ask it directly.
-
-- **Taking somebody off the invite list is the creator acting too.** A removal
-  is the third thing that can open a poll (nobody left to confirm) and the
-  other thing that can finish one (nobody left to vote), and only the creator
-  can do it — so a poll that opens or finishes because of one writes to its
-  invitees and not to them. Nothing special-cases it: it is the same address
-  rule, applied to the same session.
-
-- **Opening needs no notice, and finishing does.** `options_finalized_at`
-  is written once and nothing puts it back — reopening a poll reopens voting,
-  not the option list — so the two functions that open a poll are the two
-  openings there are, and each writes once. `open_options_when_all_confirmed`
-  still has to check: it runs inside every confirmation and every invitee
-  removal on a soliciting poll, so it announces only where its update actually
-  opened something, and a second call after the poll is open writes to nobody.
-
-- **One letterhead, one mailer, one button.** `poll_email_html` is the card —
-  a heading, a sentence, and the button onto the poll with the link repeated
-  under it — and `send_poll_email` is the only place this app talks to
-  Resend: it reads the key from Vault, builds the link, and returns quietly
-  where there is no mailer. Four copies of a table layout would have been
-  four places for a padding value to drift. The button went the same way in
-  `0044_one_button.sql`: it had
-  been named after each letter — *Add options*, *Cast your ballot*, *See the
-  results* — which read as four different doors onto the one page all four
-  open, so it says **Open poll** in every email and the letter's subject is
-  the sentence above it. The fan-out is per address for the reason it always
-  was: one request with every invitee in the `to` would show each of them all
-  the others, which is what a poll with its respondents hidden promises not
-  to do.
-
-- **Subjects name the letter; they do not sell it, and they do not carry the
-  poll's title.** *You're invited to vote* is how bulk mail opens. The four
-  subjects are now short, plain and fixed — *You've been added to a new
-  poll*, *Voting is now open for your poll*, *Results are available for your
-  poll* — and the poll is named in the first line of the body instead:
-  *Choose options for X*, *Vote now for X*, *Options have been finalized and
-  voting is now open for X*, *Results are available for X*. A title is as
-  long as its author made it and an inbox truncates, so the part of a subject
-  that is always read would otherwise have been spent on a title that might
-  not be. The bodies got the same shortening: the results email described the
-  scores, the runoff and the full ranking to somebody one tap from all three,
-  and now says that results are available and stops.
-
-- **A poll of several questions is one letter per person at every stage.**
-  Every question in a group is a poll row carrying the whole invite list, so
-  five questions are five `invited_voters` rows per person — and the
-  invitation trigger fires for question 1 alone, which is what makes them one
-  letter. The other two are addressed about question 1 as well and take the
-  group's audience once: opening is a single statement over every question in
-  the group, and finishing is one notice, kept on the first. Nothing
-  in a group announces itself per question.
-
-- **An open poll writes only to the accounts that answered it**, and needs no
-  special case to. It has no invite list, so there is nobody to invite; it
-  never opens itself, so its opening is always its creator's own doing; and it
-  only ever ends by being closed, by the one person who would have been told.
-  What is left is the voters who answered it signed in — see [Open polls you
-  answered while signed in](#open-polls-you-answered-while-signed-in) — who
-  are in `poll_email_audience`, through the account on their ballots, beside
-  the invitees an invite poll would have.
-
-`test/sql/cases/23_who_the_emails_go_to.sql` covers both decisions and neither
-send: which invitation each address is owed at each stage and that the creator
-is owed none; who is in the audience for a poll opened by hand against one
-that opened itself, and which one person each of those leaves out — the
-creator who pressed the button, the invitee whose confirmation opened it, and
-the creator again where opening it was their own removal; and the three things
-that keep a poll of several questions to one letter per person — the
-invitation naming question 1 alone, the audience taken once for the group, and
-a poll that has opened not opening again. The sending is untestable here for
-the reason it always was — there is no `pg_net` in the throwaway
-database — so the suite can say
-who *would* have been written to and never that anybody was.
+`23_who_the_emails_go_to` covers the decisions; no send is testable.
 
 ### Reminding the voters a poll is waiting on
 
-An invite poll waits on its invitees, and the only thing its creator could do
-about one who had not voted was write to them by hand — from outside the app,
-to an address the app already had. **Send reminder** in *Manage poll* does it
-from inside: every invitee still owed a vote is emailed and pushed, on the same
-letterhead and through the same `send_poll_email` and `push_poll` as every
-other moment, under their own two settings.
-[`0080_a_reminder_to_vote.sql`](supabase/migrations/0080_a_reminder_to_vote.sql)
-is all of it, and `42_a_reminder_to_vote` covers everything but the send.
+**Send reminder** emails and pushes every invitee still owed a vote, on the
+standard letterhead and under their own settings. `42_a_reminder_to_vote`
+covers all but the send.
 
-- **Once per poll, ever.** A button that writes to other people's inboxes on
-  demand is a way to pester them, so it has a ceiling, and the ceiling is the
-  smallest one that is still useful. The rule is `polls.reminder_sent_at`,
-  set only where it is null — the same claim `results_announced_at` makes
-  (see [Telling people the results are
-  ready](#telling-people-the-results-are-ready)) — and `broadcast_poll_updated`
-  ignores it, since nothing changed for anybody but the creator. It is kept on
-  the group's first question, so a poll of five questions has one reminder,
-  whichever question it was pressed on, and **reopening does not give it
-  back** — the column is never cleared. A second press is refused in words.
-- **Only an invite poll that is taking votes.** An open poll has nobody's
-  address to remind; a poll still collecting its options has nothing to vote
-  on (its own stage has *Confirm options* for that, and no reminder); and a
-  poll that is closed or whose results are out has no vote left to cast. Nor
-  one waiting on nobody but its own creator, who would be reminding
-  themselves.
-- **Still owed a vote means any question.** Every question of a group carries
-  the whole invite list and a ballot is per question, so an invitee halfway
-  through a poll is reminded — `poll_outstanding_invitees`.
-- **Nobody who removed the poll is reminded**, and that is not a rule of its
-  own: `poll_reminder_audience` is `poll_email_audience` narrowed to the
-  outstanding, so the removal rule and *nobody is told what they just did* are
-  stated where they always were. The creator is left out too — they are the
-  one sending it.
-- **Whether it can be sent never depends on removals.** The check that there
-  is somebody to remind runs before removals are taken away, so a creator
-  cannot learn that everybody left by watching the button refuse — a reminder
-  that reaches nobody still spends the poll's one reminder. Nor does it say
-  how many it reached, which would be the same leak as a number.
-- **The page learns it from `poll_status`**, as `reminded_at`. Adding a field
-  to a `RETURNS TABLE` is a new return type, so 0080 drops and recreates the
-  function with its grant restated; an older browser strips the field and a
-  newer one against an older database reads it as not sent, which the
-  database refuses anyway. The press itself sets the button to *Reminder sent*
-  at once rather than waiting on the re-read, and sends no live signal:
-  nothing anybody else is looking at changed.
+- **Once per poll, ever**: `polls.reminder_sent_at`, set only where null, on
+  the group's first question, never cleared (not even by reopening). A second
+  press is refused. `broadcast_poll_updated` ignores it.
+- **Only an invite poll taking votes**, and not one waiting on nobody but its
+  creator.
+- **Owed a vote on any question** (`poll_outstanding_invitees`).
+- **`poll_reminder_audience` is `poll_email_audience` narrowed to the
+  outstanding**, so removers and the creator are left out by the usual rules.
+- **Whether it can be sent ignores removals**, and it does not say how many it
+  reached, so a creator cannot learn who removed the poll.
+- **The page learns it from `poll_status.reminded_at`**; the press sets the
+  button to *Reminder sent* at once and sends no live signal.
 
 ### Removing a poll from your list
 
-A poll history only grows. A poll cannot be left and an invite cannot be
-declined — being in a poll is what lets you read its result months later — so
-`list_polls` answers with every poll a reader has ever been in, and the only
-thing that takes one off that list on its own is the six-month sweep below.
-**Removing is the reader's own housekeeping over that list**: the poll goes off
-their list and they stop being told about it, and nothing else happens. It is
-still theirs, still readable at its own address, still answerable, still
-counted in its turnout, and nobody else — its creator included — learns
-anything. [`0077_removing_a_poll_from_your_list.sql`](supabase/migrations/0077_removing_a_poll_from_your_list.sql)
-is all of it on the database's side and
-[`src/lib/removedPolls.ts`](src/lib/removedPolls.ts) on the browser's.
+**On screen this is archiving**; the database and code say *removed*
+(`removed_polls`, `remove_polls`). Removing is the reader's own housekeeping:
+the poll leaves their list and stops notifying them, and nothing else changes.
+It is still readable, answerable and counted, and nobody else — the creator
+included — can find out. On the browser's side it is
+[`src/lib/removedPolls.ts`](src/lib/removedPolls.ts).
 
-**On screen it is called archiving**, as a mail client would call it; the
-database and the code still say *removed* (`removed_polls`, `remove_polls`),
-because renaming a table to relabel a button is a migration for nothing.
-
-Each card carries an archive box at its bottom right, alongside the badges,
-whose tooltip says what it costs: *Archive: move it off your list and stop
-notifications about it*. **Archived**, at the top left of the list in place of
-its *Your polls* heading — which says nothing the page does not, and stays for
-a screen reader — opens
-the poll list's own address with `?archived` on it, which swaps the list for
-the archived polls, each with a **Restore**. It is drawn only while there is
-something archived.
+Each card has an archive box at its bottom right (tooltip: *Archive: move it
+off your list and stop notifications about it*). **Archived**, at the top left
+in place of the visually hidden *Your polls* heading, opens the list's address
+with `?archived` — the archived polls, each with **Restore** — and is drawn
+only while something is archived. It carries no count (`removed_count` decides
+only whether it is drawn; it rides on every row like `total_count`, and an
+empty main list asks `removed_poll_count()` instead). The archived view has no
+*New poll*; its way back is `BackToList`. The list is keyed on the query.
 
 **The pager is a pill floating at the foot of the screen** (`.pager` in
-`PollList.module.css`): `position: sticky`, so the list scrolls under it and
-it settles under the last card at the end, and drawn in the opposite colour
-scheme to the page's — dark on a light page, light on a dark one — so it reads
-as a control laid over the list rather than as one more card in it. Its
-colours are stated in that stylesheet rather than borrowed by putting
-`data-mantine-color-scheme` on it, because Mantine writes its control styles
-against every ancestor carrying that attribute, and a light pill inside a dark
-page matched the dark rule too. It sat at the top of the list for a day, which
-meant scrolling back up to turn a page; before that it was a full-width bar at
-the foot with the Archived button beside it, two unrelated controls in one
-strip. The page size stays ten rather than however
-many cards would fit, because cards are not one height and a page
-size that moved with the window would move the reader's page on every
-rotation. The archived list has no *New poll*, since a new poll goes
-on the other list, and its way back is `BackToList` — the same *Your polls*
-every poll page carries, in the same place, because it is the same act. The
-list is keyed on the query, so each list starts from its own skeleton.
-Restoring the last one leaves the reader on an empty view saying so, with the
-way back above it.
+`PollList.module.css`, `position: sticky`), in the opposite colour scheme to
+the page. Its colours are stated in that stylesheet, not by setting
+`data-mantine-color-scheme` on it, because Mantine's control styles match any
+ancestor carrying that attribute. **The page size is fixed at ten**, since
+cards are not one height.
 
-**Answering a removed poll does not bring it back, and the poll says so.** A
-reader can remove a poll and still vote in it or confirm its options, and then
-they would wait for a result nobody is going to tell them about. So the card
-they land on — *your vote is in*, or the one after confirming the options —
-reads `removed` off the `poll_page` that opened the page (asking
-`poll_is_removed` itself only where it has no such read) and, where it is,
-puts a banner above the others
-(`Banners`, with the poll's id): the poll is off your list and you won't hear
-about it, with **Add back to your list** beside it. The push banner stands down
-while it is there, since turning push on would not reach a poll the account has
-asked to hear nothing about. Voting does not restore it by itself because
-removal was the reader's own choice, and taking part is not obviously a change
-of mind — a creator removes their own open poll and still votes in it.
+**Answering a removed poll does not restore it**, and the card the reader
+lands on says so: `removed` from `poll_page` (or `poll_is_removed`) puts a
+notice above the banners with **Add back to your list**, and the push banner
+stands down.
 
-**It used to be *hiding*, and it lived in the browser.** An eye on each card,
-ids in `localStorage` under `star-voting:hidden-polls`, and no row anywhere, on
-the argument that hiding is a fact about a screen and a table is a disclosure.
-Two things were wrong with it, and both came from where it lived:
+**It is stored in the database** so it pages correctly and follows the
+account across devices. `removed_polls` has RLS on, no policies and no grants;
+only `list_polls`, the functions that write and count it, `poll_is_removed`
+(the caller's own rows) and `poll_email_audience` read it.
 
-- **The page was taken before anything was hidden.** `list_polls` paged over
-  every poll and the browser filtered afterwards, so hiding the ten polls on
-  page one left an empty page with a pager under it still offering more. The
-  database could not page around what it had not been told.
-- **The list is the account's and hiding was the browser's.** Since
-  [`0075`](#open-polls-you-have-answered) the list is the same on every device,
-  and a poll hidden on the laptop was back on the phone.
+**It stops the notifications**: `poll_email_audience` leaves out every
+account that has removed the poll, in any role. Restoring puts it back.
+Invitations do not ask (a re-invitation is news).
 
-And the table is not a disclosure, which was the argument for keeping it out:
-`removed_polls` has row-level security on, no policies and no grants, and the
-only things that read it are `list_polls`, the functions that write and count
-it, `poll_is_removed` (the caller's own rows only), and
-`poll_email_audience`. Nobody can find out who has removed a
-poll.
+**It is not leaving**: an invitee stays on the list and can vote; a creator
+still manages the poll.
 
-**It stops the notifications, because that is what a reader taking a poll off
-their list wants**, and it is also what makes *remove* the right word rather
-than *hide*: hiding something you are still being emailed about is a list that
-disagrees with your inbox. `poll_email_audience` — the one function every email
-and every push about a poll opening or finishing takes its audience from; see
-[What a poll writes to people](#what-a-poll-writes-to-people) — leaves out
-every account that has removed the poll, whichever way it was in it: invitee,
-creator, or an account that answered an open poll through its link. Restoring
-puts it back. **Invitations do not ask**, and cannot need to: a poll cannot be
-removed before its reader is in it, so the only way to reach that case is to be
-taken off an invite list and put back on, and a re-invitation is news.
+**The page closes up**: `list_polls` splits removed from not *before* taking
+the total and the page, so a page is always full and the pager counts what it
+can show. `p_removed` defaults to false.
 
-**What it is not is leaving.** An invitee who removed a poll is still on its
-invite list and can still vote in it; a creator who removed their own still
-manages it from its page. Leaving would be a statement *to* the poll — a roster
-changing, a turnout's denominator moving — and this is a statement about one's
-own list, which is why nothing about it is visible to anybody else.
+**A group is removed whole**: removal is filed against the list's row for the
+group (`poll_list_row`) whichever question was passed.
 
-**The page closes up.** `list_polls(p_limit, p_offset, p_removed)` splits the
-reader's polls into removed and not *before* the total and the page are taken,
-so a page is always full of the list it is a page of, and the pager counts
-exactly what it can show. That does mean removing a poll pulls the next one up
-from page two, which is the trade the browser-side version was written to
-avoid, and it was the wrong way round: a poll's place on a list moving because
-something before it went is how every list with a delete in it behaves, and a
-page that goes blank while the pager says there is more is how none of them do.
-`p_removed` defaults to false, so a browser still on the previous build calls
-it with two arguments and gets the list without the removed polls.
+**Both directions announce themselves on the reader's `user:<id>`**; the
+poll's own topic hears nothing.
 
-**The button carries no count.** It could — `removed_count` is counted by the
-database from the polls still on the reader's list — but a number in a button
-label reads as clutter, and the list it opens is the count. What the count is
-for is whether the button is drawn at all. It rides on every row the way
-`total_count` does, which leaves the list with nothing on it, whose reader
-most needs the way back, with no row to carry it; so that read, and only that
-one, asks `removed_poll_count()` as well.
-
-**A group is removed whole.** The list shows a poll of several questions as its
-first question, and a removal is filed against that row (`poll_list_row`)
-whichever question it was handed, so a caller cannot put half a poll away.
-
-**Both directions announce themselves on the reader's `user:<id>` topic**, so
-the list on every device follows, and the poll's own topic hears nothing —
-nothing about the poll changed. A deleted poll takes its rows with it by
-cascade, so nothing here outlives what it names.
-
-**The browser's old ids were handed over once.** For a while after this
-shipped, `migrateHiddenPolls` sent whatever a browser held under the old key
-as one `remove_polls` and deleted the key; it has since been removed.
-
-Two smaller decisions worth keeping. **Which of the two lists is on screen is
-not remembered**: a look at what has been put away is a thing you do and then
-stop doing. And **the card is not the anchor**: a control inside a link is
-invalid HTML and presses both, so the heading is the link and its `::after`
-covers the card. The whole card is still one thing to click and one thing to
-tab to, with the cross beside it as the second stop.
+Which list is open is not remembered. **The card is not an anchor** (a
+control inside a link is invalid HTML): the heading is the link and its
+`::after` covers the card.
 
 ### Open polls you have answered
 
-An open poll made by somebody else used to be on nobody's list: `list_polls`
-answered with the polls you made and the polls you were invited to, and an
-open poll has no invite list. So a poll you had voted in three times was
-reachable only by the link it arrived by, wherever that link had got to. Now
-**an open poll your account has voted in or confirmed is on your list**, among
-the rest, by date, counted by the pager and removed by the same cross — on every
-device you sign in on.
+**An open poll your account has voted in or confirmed is on your list**,
+among the rest by date, on every device. `list_polls` reads the
+`account_id` on ballots and confirmations in any question of the group; the
+row is the group's first question. A poll merely opened, or answered signed
+out, is not listed — the database records no "opened", and the polls worth
+coming back to are the ones you took part in.
 
-**The database knows, because the ballot says so.** Since
-[`0074`](supabase/migrations/0074_open_ballots_follow_the_account.sql) a
-ballot or a confirmation cast through a link while signed in carries the
-account (see [An open ballot cast signed in follows the
-account](#an-open-ballot-cast-signed-in-follows-the-account)), and
-[`0075_answered_open_polls_on_the_list.sql`](supabase/migrations/0075_answered_open_polls_on_the_list.sql)
-has `list_polls` read it: an open poll is on the list when the account has a
-row in any question of it. The row is the group's first question whichever
-question was answered, like every group on the list.
+**The list tells nobody more than the link does.** A row on the list only
+because it was answered carries null `created_by` and `created_by_email`, so
+the card has no *Created by* line. `37_answered_open_polls_on_the_list` holds
+this, and that a ballot cast signed out lists nothing.
 
-**It used to be the browser's, and that is what was given up.** From `0065`
-until `0075` the browser remembered every open poll it had opened
-(`src/lib/openedPolls.ts`, now gone) and handed the ids in as `p_open_ids`,
-on the grounds that a row saying *this account opened that poll* would be a
-join the per-question voter key exists to prevent. It made the list a fact
-about a browser — opened on the phone was not on the laptop's list — and it
-is the account on the ballot that removes the objection: once the voter has
-chosen to answer signed in, the database already holds the join, for a reason
-they asked for, and listing the poll tells it nothing new. What still is not
-recorded is *opening* one, so **a poll you only opened, or answered signed
-out, is not on the list**. That is the whole of the trade, and it is the
-right way round: the polls worth coming back to are the ones you took part
-in, and the ones you did not are a link in a chat.
+**The cards are live on the reader's own topic.** `broadcast_poll_change`
+and `broadcast_poll_gone` tell the `user:<id>` of every account that answered
+any question of the poll (`poll_answering_accounts`), beside its creator and
+invitees. `broadcast_polls_emptied` tells accounts whose own rows are leaving
+(a confirmation taken back, which takes the poll off their list). So every
+page watches one topic per question, and `useLiveStream` takes one topic; a
+poll page holds up to three `useLiveStream`s through its `QuestionWatch`es.
 
-**The list tells nobody more than the link does.** Answering a poll through
-its link already meant holding the link, so listing it discloses nothing
-`open_poll_view` would not. A row that is on the list only because it was
-answered carries a null `created_by` and `created_by_email`, so the card has
-no *Created by* line — the same silence as the link's own page, for [the same
-reason](#the-polls-high-level-details). `37_answered_open_polls_on_the_list`
-holds that, and that a ballot cast signed out lists nothing.
-
-**`p_open_ids` is gone, and an older build still gets a list.** A different
-argument list is a different function, so `list_polls` was dropped and
-recreated with its grant restated. A browser still on the previous build
-calls it with the ids, gets `PGRST202`, and asks again without them — which
-it has always done — so it draws the new list rather than none.
-
-**The cards are live on the reader's own topic, and nothing else.** The list
-listens on `user:<id>` (see [Live updates](#live-updates)). For as long as the
-database could not tell an open poll's voters from anybody else, that topic
-said nothing about the open polls on the list, so the page watched a
-`poll:<id>` per such poll as well — and because a topic joined after the read
-leaves a gap, it had to work out which could be on a page *before* reading it,
-from creation dates the browser stored beside each id, and check the guess
-after every read. All of that is gone. `broadcast_poll_change` and
-`broadcast_poll_gone` now tell the `user:<id>` of every account with a ballot
-or a confirmation in the poll's group (`poll_answering_accounts`), beside its
-creator and its invitees, so a vote in any question of an open poll you
-answered reaches your list on the one topic it was already watching. And
-`broadcast_polls_emptied` tells the accounts whose own rows are leaving, which
-is how a confirmation taken back — the only reason the poll was on that list —
-takes it off every screen showing the list, though by then that account is no
-longer anybody `broadcast_poll_change` can find.
-
-That left every page in the app watching exactly one topic, so
-`useLiveStream` takes one again: the machinery for reading once when the last
-of several channels had joined, and for a page turn that changed the topic
-set, went with the page that needed it. A poll page now holds up to three —
-its question and the two beside it, read ahead (see [Live
-updates](#live-updates)) — and does it as three `useLiveStream`s, one per
-`QuestionWatch`, rather than by teaching the hook several topics again.
-
-**What it costs:** a poll with many signed-in voters writes a message per
-voter's list on every change, as a poll with many invitees always has; see
-*Some reads are wasted* in [Live updates](#live-updates). The fan-out to
-sockets is unchanged — each of those voters' lists was the only place they
-would have heard it.
+Cost: one message per answering account's list per change, as with invitees.
 
 ### Polls are deleted after six months
 
-Nothing in this app had ever removed a poll it was not told to remove, so
-every poll ever created was still in the database and the storage bill only
-went one way. The app is free and promises nobody a permanent record; what it
-does promise instead is a rule that is written down, applied to every poll
-alike, and visible on the poll itself before it comes due.
-The schema half of it is in the squashed baseline and the scheduling half in
-[`supabase/after-squash.sql`](supabase/after-squash.sql):
+Every poll is deleted six months after it was **created**. The schema half is
+in the baseline and the scheduling half in
+[`after-squash.sql`](supabase/after-squash.sql):
 
-- `poll_retention_window()` is the period, and the only place the number is
-  written down. `poll_expires_at(polls)` is when one poll goes.
-- **The clock runs from `created_at`, and nothing moves it** — not a vote,
-  not the option list being settled, not the creator closing the poll. Dating
-  it from the poll's last activity instead was written and then rejected: an
-  open poll takes votes from anyone holding its link and nobody has to close
-  it, so "six months since something happened" is a window one stray vote
-  reopens and a forgotten poll never reaches — which is the exact poll this
-  exists to clear out. Creation is a date every poll has, that nothing can
-  move, and that its creator can read off the page on the day they make it.
-  A poll that has to outlive its six months gets **Duplicate**, which the
-  creator already has.
-- `purge_old_polls()` deletes every expired poll and returns how many went. It
-  deletes the `polls` row and nothing else: every table hanging off a poll is
-  `ON DELETE CASCADE`, which is what the creator's own **Delete poll** button
-  already relies on, so there is one definition of what deleting a poll means.
-  It is also the one delete that says nothing to anybody — a deleted poll
-  otherwise announces itself to the lists it was on, and this one can take
-  hundreds at once in the small hours, about polls nobody was waiting on. It
-  raises `app.purging_polls` over its own transaction and the delete trigger
-  stands down; see [Live updates](#live-updates).
-- **pg_cron runs it nightly**, as the job `purge-old-polls`. The extension
-  only exists on a real Supabase project, so both the `create extension` and
-  the `cron.schedule` sit in `DO` blocks that degrade to a notice. They live in
-  [`supabase/after-squash.sql`](supabase/after-squash.sql) rather than in the
-  baseline, because scheduling is not schema and a squash would drop it — see
-  [Squashing](#squashing). The throwaway database `npm test` builds has no
-  scheduler, but `test/sql/shim.sql` stands in a `cron` schema so the schedule
-  lands somewhere a case can assert on.
+- `poll_retention_window()` is the only place the period is written;
+  `poll_expires_at(polls)` is when one poll goes.
+- **The clock runs from `created_at`, and nothing moves it.** Measuring from
+  last activity would let one stray vote on an open poll keep a forgotten
+  poll alive forever. A poll that must outlive six months gets
+  **Duplicate**.
+- `purge_old_polls()` deletes expired `polls` rows and relies on
+  `ON DELETE CASCADE`, the same definition **Delete poll** uses. It sets
+  `app.purging_polls`, so it announces nothing.
+- **pg_cron runs it nightly** as `purge-old-polls`. Both
+  `create extension` and `cron.schedule` sit in `DO` blocks that degrade to a
+  notice where pg_cron is missing; `test/sql/shim.sql` stands in a `cron`
+  schema so `12_poll_retention` can assert the job.
 
-If the job is ever missing on the live project — pg_cron not enabled when the
-migration ran is the likely reason — enabling it and scheduling it is the
-whole fix, and nothing else needs redeploying:
+If the job is missing on the live project, this is the whole fix:
 
 ```sql
 create extension if not exists pg_cron;
 select cron.schedule('purge-old-polls', '17 4 * * *', 'select public.purge_old_polls()');
 ```
 
-`select * from cron.job_run_details order by start_time desc limit 10;` says
-whether it has been running, and `select purge_old_polls();` runs it by hand.
+`select * from cron.job_run_details order by start_time desc limit 10;` shows
+whether it runs, and `select purge_old_polls();` runs it by hand.
 
-The date reaches the app as `expires_at` on `poll_status()` — which the poll
-page already asks for on every live read — rather than as a column on the
-`polls` select. The app deploys on push and its migrations apply on merge, so a
-browser can be a few minutes ahead of the database: an extra RPC column it
-does not know about is `undefined` and says nothing, where a select naming a
-column that does not exist yet fails outright and takes the poll page with it.
-
-`RetentionNote` (`src/components/RetentionNote.tsx`) is the line at the foot
-of the poll page, **shown to the poll's creator and to nobody else**. It used
-to be shown to everyone the poll admits, on the grounds that an invitee's
-ballot goes on the same day — but a retention date is a thing to *act* on, and
-the only act there is belongs to the creator: **Duplicate**, which nobody else
-has a button for. For a respondent it was a deadline about somebody else's
-poll with nothing on the other end of it, on a page they had come to in order
-to vote or to read a result. The policy itself is still public, on the
-[About](src/pages/About.tsx) page, which is where somebody who wants the rule
-rather than this poll's date will look.
-
-It is quiet for almost all of a poll's life and becomes an orange warning in
-the last month, when there is still time to act on it — which is also when it
-names Duplicate. An automatic deletion is only fair if it was never a surprise,
-which is the whole reason the date is on the poll from the day it is created —
-and why it is the same date on the last day as on the first.
-
-The public voting page carries no date, and `open_poll_view` no expiry: it
-answers to a link rather than to an account, and it is read once by someone
-who came to vote. It does carry `created_at`, since
-`0067_open_poll_view_says_when.sql`, which the poll list used to need and
-nothing now reads — see [Open polls you have
-answered](#open-polls-you-have-answered). The policy is on the [About](src/pages/About.tsx)
-page, which is public, and on the poll page its creator uses.
+The date reaches the app as `expires_at` on `poll_status()`. **`RetentionNote`**
+(`src/components/RetentionNote.tsx`) shows it at the foot of the poll page,
+**to the creator only** — the only act available (Duplicate) is theirs. It is
+quiet until the last month, then an orange warning naming Duplicate. The
+policy itself is public on the [About](src/pages/About.tsx) page.
+`open_poll_view` carries no expiry.
 
 ### The QR code
 
-`ShareQr` (`src/components/ShareQr.tsx`) encodes the same link `ShareLink`
-shows, for handing a poll to a room holding phones rather than keyboards. It
-grants exactly what the link grants — on an open poll the code *is* the
-capability, so putting one on a projector puts the poll in front of everyone
-who can see the screen, and the modal says so.
+`ShareQr` (`src/components/ShareQr.tsx`) encodes the share link, for a room of
+phones. It grants exactly what the link grants — on an open poll, putting it on
+a projector puts the poll in front of the room, and the modal says so.
+Generated in the browser with `uqr` via `src/lib/qr.ts`, which fixes four
+things:
 
-Generated in the browser from `uqr`, the only runtime dependency added for it,
-via `src/lib/qr.ts`. Four things there are fixed rather than left to the caller,
-because each produces a code that looks right and scans badly:
+- **Error correction M**, not the default L, so a printed, photographed code
+  still scans.
+- **A four-module quiet zone** (uqr's default of one is below spec).
+- **Black on white in both schemes**, on its own white plate.
+- **The PNG is drawn module by module** at a whole number of pixels each, so
+  no boundary is anti-aliased to grey.
 
-- **Error correction M, not the default L.** L saves a few modules and gives up
-  the tolerance that lets a code survive being printed, taped to a wall and
-  photographed at an angle.
-- **A four-module quiet zone.** The margin is part of the symbol — scanners use
-  it to find the edge. uqr defaults to one module, below spec.
-- **Black on white always, in both colour schemes.** A QR code has to be
-  dark-on-light, so the modal puts it on its own white plate rather than
-  inverting it in dark mode.
-- **The PNG is drawn module-by-module on a canvas**, at a whole number of
-  pixels each, rather than scaling the SVG. A module boundary landing on a half
-  pixel gets anti-aliased to grey, and a blurred boundary is the one thing that
-  reliably breaks a scan.
-
-It is behind a button rather than inline: most polls are shared by pasting a
-link, and a code big enough to scan is too big to sit in the manage block
-unasked.
+It is behind a button; a scannable code is too big to sit in the block.
 
 ### Results and the full ranking
 
-Results show the winner, then the automatic runoff between the two finalists,
-then every option's score-round total, each round with any tie-break it had to
-resolve. On a
-poll that publishes its ballots, the grid of every ballot cast follows
-underneath, with column totals to check the score round against; on an invite
-poll that does not, the reader's *own* ballot follows there instead — see
-[Whether ballots are published](#whether-ballots-are-published) — and the
-participation card is last — it is where turnout is stated, and the results
-no longer state it themselves (see [Whether respondents are
-shown](#whether-respondents-are-shown)). The one thing they do still say
-about the count is that voting was closed early, which is the one thing that
-card cannot: it explains why the numbers are smaller than they were going to
-be.
+The results show the winner, then the runoff between the two finalists, then
+every option's score-round total, each round with its tie-break if it needed
+one. On a poll that publishes its ballots, the ballot grid follows (with
+column totals); on an invite poll that does not, the reader's own ballot.
+The participation card is last and is where turnout is stated; the results
+say only that voting was closed early, when it was.
 
-**See the full ranking** (on polls with more than two options) opens the whole
-field in placed order. STAR itself only names a winner, so the rest comes from
-running the method again on the options left standing: the winner steps out, the
-two highest scorers remaining go to a runoff for the next place, and so on down
-the list. Scores are absolute sums rather than transferable votes, so
-eliminating an option never changes anyone else's total — the score order is
-fixed, and each round is just the next runoff down it.
+**See the full ranking** (three or more options) opens the whole field in
+placed order. STAR names only a winner, so the rest comes from running it
+again on what is left: the winner steps out, the two highest remaining scorers
+go to a runoff for the next place, and so on. Score totals are absolute, so
+the score order is fixed and each round is the next runoff down it.
 
-**It is a request of its own, made when the button is pressed.** The ladder
-used to ride along inside `poll_tally`, which meant every reader of every
-result paid for a round per option whether or not they ever opened the modal —
-and that ladder is far and away the most expensive thing this app asks a
-database for. Against the test database on random polls, each call in its own
-transaction as it is in production, median of five after a warm-up:
+**It is a separate request, made when the button is pressed**
+(`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the
+ladder is the most expensive thing the app asks the database for and most
+readers never open it. `poll_tally` runs the head round and stops. Opening the
+modal re-runs the head round (first place is part of the ranking), and the
+modal has a loading state; whether the button appears is decided from the
+option count the tally already carries.
 
-| options | voters | one call (old) | winner only | the ladder |
-| ------: | -----: | -------------: | ----------: | ---------: |
-|       4 |     20 |        20.4 ms |      6.4 ms |    15.9 ms |
-|      10 |    100 |        48.3 ms |      8.4 ms |    48.3 ms |
-|      20 |    200 |       190.4 ms |     11.7 ms |   187.0 ms |
-|      50 |    200 |       526.6 ms |     19.4 ms |  541.9 ms |
+**The gate is one function, not four**: both ranking functions call the same
+`assert_results_readable` / `open_results_poll_id` as the results functions,
+since the ranking discloses more than the tally. `17_ranking_is_gated` holds
+each refusal.
 
-The ranking was 58% of the JSON on the smallest of those and 77% on the
-largest. `poll_winner_name()` had already drawn this line for the poll list
-— "a list row wants none of that" — and `0031` draws the same one for the
-results page: `poll_tally` runs the head round and stops, and `poll_ranking`
-is asked for separately by `FullRanking`.
+The modal states two consequences:
 
-Two things follow, and neither is free:
-
-- **Opening the modal costs more than the old single call did**, not less.
-  First place is part of the ranking, so `poll_ranking` runs the head round
-  again rather than being handed it. The trade is 4–18% more for the readers
-  who ask, against 69–96% less for the readers who don't — and it is paid once
-  per opening, since nothing about a finished poll is held in the browser any
-  more ([The winner is kept with the
-  poll](#the-winner-is-kept-with-the-poll)). The overhead is worst in relative
-  terms on the smallest polls,
-  where one round is a large fraction of the work and the whole thing is over
-  in milliseconds anyway.
-- **The modal has a loading state now**, where it used to draw instantly from
-  data already on screen. The button itself does not: whether it appears is
-  decided by the option count the tally already carries, so it never waits on a
-  request to find out whether it should exist.
-
-**The gate is one function, not four.** `get_poll_ranking` and
-`open_poll_ranking` answer on exactly the terms `get_poll_results` and
-`open_poll_results` do, and they do it by calling the same
-`assert_results_readable` / `open_results_poll_id` those two now call. The
-ranking discloses *more* than the tally — every placing, every runoff below the
-headline one — so it must not be readable on easier terms, and a visibility
-rule written out four times is four places for it to drift.
-`test/sql/cases/17_ranking_is_gated.sql` holds each refusal to both.
-
-Two consequences, which the modal states rather than hides:
-
-- **The runner-up of the headline runoff is often not second.** It still has to
-  beat the third-highest scorer, and it can lose that. An option can lead on
-  points and place third.
-- **Most pairs of options never meet.** Ordering n options takes n−1 runoffs,
-  out of n(n−1)/2 possible pairings — a ladder, not a round-robin. Where two
-  options did face each other the loser is always placed below the winner, but
-  that guarantee covers only those pairs. Elsewhere an option can be preferred
-  to one placed above it, and it takes no Condorcet cycle for that to happen: an
-  option scoring too low to reach the first runoff enters the ladder below
-  options it would have beaten. Only first place is what STAR itself produces.
+- **The headline runoff's loser is often not second**: it still has to beat
+  the third-highest scorer.
+- **Most pairs never meet.** n options take n−1 runoffs out of n(n−1)/2
+  pairings. Where two met, the loser is placed lower; elsewhere an option can
+  be preferred to one placed above it. Only first place is STAR's own output.
 
 #### The page stops at ten rows, or twenty
 
-Two of the lists on a results page have no natural ceiling, and a schedule
-poll reaches both. The scoring round is a row per option, and an option there is
-a half-hour window: a working week of them is over a hundred rows, and
-`MAX_OPTIONS` allows five hundred. A five-star tie-break is a row per option
-in the tied group, and windows tie at the top score readily -- thirty of them
-level is thirty lines of working. Either one buries the runoff card, the full-ranking button and the
-published ballots under a document nobody scrolls to the end of, in front of
-a reader who came for the name in the green card at the top.
+**The scoring round shows ten rows** ([`SCORING_ROWS_MAX`](src/lib/resultsRows.ts)),
+since a time poll can have hundreds of options and every reader scrolls past
+this list to reach the rest. It cannot lose a finalist: `poll_tally` orders by
+total and lifts a tie-break winner above those it tied with, so the finalists
+are the first two rows. **The tie-break's lists stop at twenty**
+([`RESULTS_ROWS_MAX`](src/lib/resultsRows.ts)), as does the sentence naming
+who tied (`NameList`'s `max`, "and 28 others"). `capRows` cuts and `count`
+words the remainder; `TallyShape` draws the same ten. The full ranking is
+always available on any poll long enough to be cut, and the line under a cut
+list says so.
 
-So both stop and say what they left out. **The scoring round stops at ten**
-([`SCORING_ROWS_MAX`](src/lib/resultsRows.ts)): every reader scrolls past it
-to reach the runoff, and ten still shows where the scores drop off behind the
-leaders. It cannot lose a finalist, because `poll_tally` orders by total and
-lifts a tie-break winner above the options it tied with, so the finalists are
-always the first two rows. It is a browser-only number on purpose, so changing
-it is a deploy rather than a migration. **The tie-break's lists stop at twenty**
-([`RESULTS_ROWS_MAX`](src/lib/resultsRows.ts)): the five-star step's list, and the names
-in the sentence saying who tied (`NameList`'s `max`, which counts the rest as
-"and 28 others" rather than naming them). Those are folded away behind a button
-(see *Each round carries its own tie-break* below), so they get the longer
-cap. `capRows` makes the cut and `count` words the remainder; `TallyShape`
-draws the scoring round to the same ten, so the shape standing in for a long
-tally is not four screens taller than the tally.
-
-**Nothing is hidden by it.** The whole field in placed order is behind the
-button underneath, and any poll long enough to be cut short has that button --
-it appears from three options up. The line under a cut-short score round says
-so.
-
-**The cut is in the browser, not in `poll_tally`.** The tally's option list is
-not only the score round. `FullRanking` reads its names out of it and names
-every place down to last, so a payload that stopped at twenty would leave the
-modal drawing places it could not label -- and the option count it decides
-whether to offer a button at all from would be a count of the rows the page
-drew. The rows are a few hundred bytes that are already in hand; what was long
-was the page.
-
-It also ends an animation that had grown into a wait. The score bars are
-staggered 40ms apart (`Results.module.css`), which is a reading of the ranking
-over ten options and five and a half seconds of bars still arriving over a
-hundred and thirty-seven.
+**The cut is in the browser, not in `poll_tally`**: `FullRanking` reads every
+option's name out of the tally, and the option count decides whether to offer
+the button. The cut also bounds the bars' 40ms stagger
+(`Results.module.css`).
 
 #### The runoff comes first
 
-The runoff is drawn straight under the winner and the scoring round under
-that, which is the opposite of the order STAR runs them in. It was the other
-way round, and readers kept arriving at a winner who was not the option at the
-top of the scores: the first thing under the green card was a list whose
-leader had often *lost*, and the card that explained why came second. The
-runoff is what elects the winner, so it is the card that belongs next to the
-name it elected; the scoring round is how the two finalists in it were chosen,
-which is the question a reader asks next. `TallyShape` in `Skeletons.tsx`
-waits in the same order, and so does the intro film's drawing of the results.
+The runoff is drawn straight under the winner and the scoring round below it
+— the opposite of the order STAR runs them — because the runoff elects the
+winner, and a reader seeing a score-round leader who lost needs the
+explanation next to the name. `TallyShape` and the intro film's drawing follow
+the same order.
 
 #### Each round carries its own tie-break
 
-The page has two rounds, **Runoff** and **Scoring**, and each is a heading over
-one card ([`RoundCard`](src/components/RoundCard.tsx)). The tie-break a round
-needed is not on the page until somebody asks for it: a **Show tie-break**
-button sits at the right of that round's heading, and pressing it slides a
-panel holding the tie-break across the round's card. The scoring round's
-panel holds the ties broken to fill the runoff. The runoff's holds how a level
-runoff was settled: the higher scoring total, then five-star votes, named in
-the order they are tried and marked *Decisive* or *Still tied*, the same shape
-as the scoring round's.
-**The card never changes height**: it stays the round's height and a longer
-tie-break scrolls inside the panel, because a card growing to fit pushed the
-rest of the page down at the press of a button about one card.
+Two rounds, **Runoff** and **Scoring**, each a heading over one card
+([`RoundCard`](src/components/RoundCard.tsx)). A round's tie-break is behind a
+**Show tie-break** button at the right of its heading, which slides a panel
+over the round's card. The scoring round's panel holds the ties broken to fill
+the runoff; the runoff's holds how a level runoff was settled (total score,
+then five-star votes, each marked *Decisive* or *Still tied*). **The card
+never changes height**: a longer tie-break scrolls inside it. The hidden side
+is `inert`.
 
-The tie-break used to be a card of its own between the two rounds, always
-open, and on a wide tie it was the longest thing on the page. It is the
-working behind a result rather than the result, so it now belongs to the round
-it settled and stays closed until asked for. It slides *over* the round
-rather than opening *under* it because it is a second reading of the same
-round, not more page. The hidden side is `inert`, so a keyboard cannot tab into a panel that is
-off the card and a screen reader does not read both sides.
-
-**The runoff is drawn as half a pie** (`RunoffChart`, on `@mantine/charts`):
-one finalist's voters from the left and the other's from the right, with each
-name written under its own end of the arc. **Two slices at most**: voters who
-scored both finalists the same took neither side and do not decide the runoff,
-so they are counted in a line under the chart rather than drawn in it. The one
-exception is a runoff nobody took a side in, which is drawn as a single grey
-slice of voters who scored them equally, since an empty space would not be a
-truthful picture of it. A runoff only ever compares two options, and the top of the arc
-is the halfway mark, so who won is visible before any number is read. It is a
-full pie whose centre sits on the bottom edge of a box half its height, so the
-half that is never drawn takes no room. It sweeps in, as the scoring bars grow,
-except under reduced motion: the chart animates from JavaScript, so the
-stylesheet rule in `index.css` cannot reach it and the component asks
-`useReducedMotion` itself. The chart's stylesheet is imported in `Results.tsx`
-rather than `main.tsx`, so it is split off with the results chunk and a reader
-filling in a ballot never fetches it.
+**The runoff is half a pie** (`RunoffChart`, on `@mantine/charts`): one
+finalist's voters from the left, the other's from the right, names under each
+end, so the winner is visible before any number. **At most two slices**: voters
+who scored both finalists the same are counted in a line under it, except in a
+runoff nobody took a side in, drawn as one grey slice. It is a full pie centred
+on the bottom edge of a half-height box. It sweeps in except under reduced
+motion (it animates from JavaScript, so it checks `useReducedMotion`). Its
+stylesheet is imported in `Results.tsx`, so ballots never fetch it.
 
 ### Tie-breaks
 
-Documented for readers on the `/about` page (`src/pages/About.tsx`) and
-implemented in the migrations. A score-round tie between **two** options goes to
-the one preferred by more voters head-to-head, then to the one given five stars
-on the most ballots, then randomly; a tie between **three or more** goes
-straight to the five-star count, then randomly. These are the rules the STAR
-Voting project publishes and [BetterVoting](https://docs.bettervoting.com/help/ties.html)
-runs. A runoff tie goes to the higher total score, then to the
-five-star count, and if the options are level on all three the election has no
-winner — the app reports the tie rather than inventing a result. If you change a
-rule, change the SQL, the About page and the cases in `test/sql/cases/`
-together; they are a set.
+Documented for readers on [`/about`](src/pages/About.tsx) and implemented in
+the migrations. A score-round tie between **two** options goes to the one more
+voters preferred head-to-head, then the one with more five-star ballots, then
+random (by id); a tie of **three or more** goes straight to five-star counts,
+then random. These are the STAR Voting project's published rules, as
+[BetterVoting](https://docs.bettervoting.com/help/ties.html) runs them. A
+runoff tie goes to the higher total score, then to five-star counts; if still
+level, there is no winner and the app reports the tie. **Change a rule in the
+SQL, the About page and `test/sql/cases/` together.**
 
-**Head-to-head was once tried on a tie of any size**, as a round-robin: every
-tied option paired with every other, ordered by pairs won. It was dropped in
-`0086` for two reasons. The cost was quadratic in the tied group, and a time
-poll ties dozens of identical windows without trying (see [The option ceiling,
-and what the tally costs](#the-option-ceiling-and-what-the-tally-costs)). And
-the explanation was a round-robin a reader had to follow to see why their
-option went out. Ties of three or more are rare in real polls, so the answers
-it changes are rare; the five-star count is one number per option, already in
-hand.
+Head-to-head is not tried on ties of three or more: a round-robin is quadratic
+in the tied group (time polls tie dozens of windows) and hard for readers to
+follow.
 
-**A head-to-head tie-break is reported as the comparison it is**, not as the
-score it keeps. The step still carries a win count per option (`results`), and
-when the pair itself is level that count is zero on both sides — a true and
-unreadable statement of a tie. So `star_round` sends the pair (`steps[].matchups`,
-always exactly one: the two options, the voters who preferred each, and the
-voters who scored them the same), and `Results.tsx` renders it in the words the
-runoff uses for the same arithmetic — "3 voters preferred each, 2 scored them
-equally". It stays an array because recorded payloads, the About page's sample
-among them, were written when it could hold many.
+**A head-to-head step is reported as the comparison it is.** `star_round`
+sends the pair in `steps[].matchups` (always one: both options, voters
+preferring each, voters scoring them equally), and `Results.tsx` words it as
+the runoff does — "3 voters preferred each, 2 scored them equally". It is an
+array because recorded payloads, including the sample, use that shape.
 
-**The rules are named in order, not numbered** — *First rule: Head-to-head
-preference*, *Second rule: Five-star votes*, or for a larger tie *First rule:
-Five-star votes* alone. A tie settled by its first rule
-showed a lone "1." over a list with nothing after it, which read as the rest
-of the list having gone missing; "First rule" says the same thing about order
-and is still true when it is the only rule there was any need to try.
+**Rules are named in order, not numbered**: *First rule: Head-to-head
+preference*, *Second rule: Five-star votes*.
 
-The counts ride along in the payload rather than being fetched when a reader
-expands something: they are a few integers over a poll whose results that
-reader is already holding. `TiebreakStep` is a union on `rule` rather than one
-shape with an optional `matchups`, so a head-to-head step cannot be read
-without them — they are what that rule counted, not an extra it might carry.
-There is deliberately no fallback for a browser holding this code against an
-older `star_round`: the app deploys on push and the migration applies on the
-same merge, so that window is minutes long, and a branch nothing reaches after
-them is worse than the window is.
+The counts ride in the payload. `TiebreakStep` is a union on `rule`, so a
+head-to-head step cannot be read without its matchup.
 
 ### Settling a tie with a coin
 
-A poll that elects nobody is the correct output of the method and no use at all
-to the people who ran it. Every rule is spent by the time the card says **No
-winner** — the two finalists are level on preference, on points and on
-five-star ballots alike — so there is nothing left to compute, and what the
-group wants at that point is not a better tally but a fair way to stop. The
-card carries a **Flip a coin** button, and the modal behind it names one of the
-two.
+When the card says **No winner**, every rule is spent. It carries **Flip a
+coin**, whose modal names one finalist.
 
-**It is not part of the election, and the page is careful not to let it look
-like one.** `winner_id` is still null, `poll_winner_name` still returns null,
-the poll list still shows the poll as having settled nothing, and the modal
-says in as many words that the election is still tied. Nothing is written
-anywhere. The coin decides who buys the pizza, not who won.
+**It is not part of the election**: `winner_id` stays null, the poll list
+still shows a tie, the modal says so, and nothing is written.
 
-**Every reader gets the same side.** This is the whole of the design problem: a
-draw made in each browser is a different answer per reader, which is strictly
-worse than no answer — two people close the page believing two different
-options won, and neither has any way to find out the other saw something else.
-So nothing is drawn at the moment of asking. `src/lib/coinFlip.ts` seeds a hash
-on the poll's id and its two finalists' — sorted, so the order the tally
-happened to list them in cannot matter — and reads one bit off it. The side is
-therefore a function of the tie itself, identical on every device, on the night
-and a week later.
+**Every reader gets the same side.** A per-browser draw would give different
+readers different answers. `src/lib/coinFlip.ts` hashes the poll id and the
+two finalists' ids (sorted) and reads one bit — stable on every device, with no
+write, no race and no new grant, and the sample poll works too. It cannot be
+rigged: the ids are uuids Postgres minted, and the option list is fixed long
+before a tie is foreseeable. The hash is FNV-1a with murmur3's avalanche, which
+is load-bearing (raw FNV's lowest bit is the parity of the input bytes).
+`coinFlip.test.ts` asserts stability and fairness.
 
-That is the shape the score round's own last resort already has: it reports
-`resolved_by: 'random'` and in fact orders by candidate id, arbitrary and
-stable. Deriving rather than storing buys all of the coordination — nobody has
-to have flipped first and there is no race over who did, no write, no new
-grant on either read path, and the About page's sample poll, which is a
-recording with no rows behind it, draws the coin like anything else. Arbitrary
-is not riggable either: every id in the seed is a uuid Postgres minted, and
-the creator cannot touch the option list once a ballot is in, which is well
-before anyone could know a tie was coming.
-
-The hash is FNV-1a followed by murmur3's final avalanche, and the avalanche is
-load-bearing: the low bits of a raw FNV hash are barely mixed — the last step
-multiplies by an odd constant, which leaves the lowest bit as the parity of the
-bytes that went in — and one bit is the entire answer here.
-`src/lib/coinFlip.test.ts` asserts both halves of what the feature claims: that
-the side never moves (same call, either order of finalists, different poll ids
-giving different sides) and that it is fair to within three standard deviations
-over two thousand ties.
-
-The coin itself turns, which is a deliberate exception to [Motion](#motion)'s
-rule that nothing animates merely to be pleasant. The question it answers is
-whether the name under it was *decided* or *drawn*: a poll that elected nobody
-followed by a card stating a name reads as a verdict reached by some rule the
-reader missed, and the value of a coin is entirely in being seen to be a coin.
-It is the one animation given twice `--motion-slow`, because a coin has to
-leave the hand, turn and settle, and it ends on a whole number of turns —
-which is what decides which name it is showing when it stops. A reader who has
-asked for less motion gets the resting frame, and the result is stated in text
-below the coin either way.
+**The coin turns** — the exception to the Motion rule, because the point is to
+be seen to be a coin. It takes twice `--motion-slow` and ends on a whole
+number of turns. Reduced motion shows the resting frame; the result is also
+stated in text.
 
 ### The About page and its sample poll
 
-The [About](src/pages/About.tsx) page is public, and the people who most need
-it arrived from a share link and have never heard of the method. It is in
-three parts, and only one of them is a tab:
+The [About](src/pages/About.tsx) page is public and is in three parts: the
+sentence saying what this is, **the two sample links**, and the procedure,
+the site's features and the case for STAR behind `Procedure` / `Site features`
+/ `Benefits` tabs. What every reader needs on arrival is not tabbed.
 
-- the sentence saying what this is,
-- **the two sample links**,
-- the procedure, the site's features and the case for STAR, behind
-  `Procedure` / `Site features` / `Benefits` tabs.
-
-The three tabbed parts are reference rather than argument: nobody reads all
-three in order, and stacked one after another they made a page long enough
-that the sample links scrolled away from the paragraph that says why you would
-want them. What is *not* tabbed is what every reader needs on arrival.
-
-**Each tab carries its own footnotes, numbered from 1.** The procedure's two
-are the tie-break rules; the case for STAR has three caveats of its own; the
-site's features have none. One shared list has to be readable from whichever
-tab is open, so it sat under all of them and made every reader of the
-procedure scroll past three notes about an argument they had not read yet.
-Nothing is cross-referenced between the tabs, so there is nothing to lose by
-splitting it. If you move a note from one tab to the other, renumber the
-`<Footnote n={…} />` markers in both: they are written down rather than
-derived, because they sit inside prose.
+**Each tab numbers its own footnotes from 1.** The `<Footnote n={…} />`
+markers are written by hand inside prose; renumber both tabs when moving a
+note.
 
 #### The sample poll is a recording, not rows
 
 `/#/sample-dinner` is a three-question poll ("Movie night") still taking
-votes; `/#/sample-result-dinner` is the same poll after nine people
-finished it. Its questions ask more of the reader as they go — a bare list, the
-same list with a paragraph under each option, and then a **calendar**, so both
-of this app's ballots are on the one sample. The calendar is last for that
-reason: it is the most to take in, and a reader arriving at it has already seen
-what a score round and a runoff are. It asks about a Friday evening and a
-Saturday daytime, because two days that are not the same question is the thing
-a grid shows and a list cannot. Neither exists in Supabase. Both are answered in the browser from
+votes; `/#/sample-result-dinner` is the same poll after nine people finished
+it. Its questions ask progressively more — a bare list, a list with
+descriptions, then a calendar (a Friday evening and a Saturday daytime) — so
+both ballots are shown. Neither exists in Supabase: both are answered from
 [`src/lib/samplePollData.ts`](src/lib/samplePollData.ts), which
-`scripts/sample-poll.sh` generates by building a throwaway database from the
-migrations (the same one `npm test` uses, and with the same requirements),
-creating the poll in it **through the app's own write path**
-(`create_poll_group`, `open_poll_submit`, `close_poll`), and recording what
-`open_poll_view`, `open_poll_results`, `open_poll_ranking` and
-`open_poll_ballots` answer about it.
+`scripts/sample-poll.sh` generates by building the throwaway database, making
+the poll **through the app's own functions** (`create_poll_group`,
+`open_poll_submit`, `close_poll`), and recording what `open_poll_view`,
+`open_poll_results`, `open_poll_ranking` and `open_poll_ballots` answer.
 
-Two rules, and everything else here follows from them.
+- **Nothing about the sample is computed in the browser.** Every number came
+  from `star_round()` and `poll_ranking()`. To change what it shows, change
+  the ballots in [`scripts/sample-poll.sql`](scripts/sample-poll.sql) and
+  regenerate.
+- **Nothing about the sample is in the database**, where it would be purged
+  at six months and votable by anyone holding the link.
 
-**Nothing about the sample is computed in the browser.** Every tally,
-tie-break, runoff and placing in that file came out of `star_round()` and
-`poll_ranking()`. A TypeScript reimplementation of STAR for the sample would
-be a second answer to the only question this app exists to answer, free to
-disagree with the first — and it would disagree silently, since the page it
-renders looks equally plausible either way. To change what the sample shows,
-change the ballots in [`scripts/sample-poll.sql`](scripts/sample-poll.sql) and
-run `scripts/sample-poll.sh`; whatever STAR then makes of them is what the
-page shows.
-
-**Nothing about the sample is in the database.** Rows there would be deleted
-by the nightly retention purge six months after they were created (see [Polls
-are deleted after six months](#polls-are-deleted-after-six-months)), and until
-then anyone holding the link could vote in the poll the About page promises to
-explain, which would move the tie-break out from under the explanation. A file
-has neither problem, and a sample poll is content: it belongs with the page
-that links to it.
-
-The generator pins what would otherwise churn — option ids, group ids and the
-closing timestamp are all derived from the readable name each question is
-recorded under, and the poll ids simply *are* that name — so regenerating the
-file produces a diff only where the poll actually changed.
+The generator pins ids and timestamps from each question's readable name, so
+regenerating changes the file only where the poll changed. It keeps a
+`sample.link` table for the run, mapping the real uuids to the readable names
+substituted into the recording.
 
 #### How the pages know
 
-They do not. `PublicPoll` renders a sample id exactly as it renders a real
-one, because every open-poll call goes through `openPollRpc` in
-[`src/lib/samplePoll.ts`](src/lib/samplePoll.ts) and that function is the only
-thing in the app that decides what answers it. A real poll id is a v4 UUID, so
-the `sample-` prefix cannot collide with one — which is also why the sample's
-ids are words: a poll's id is its link, and these two links are meant to be
-read in an address bar and said out loud. They are ids the `polls` table would
-refuse, which is safe precisely because the sample never reaches it.
+They do not. Every open-poll call goes through `openPollRpc` in
+[`src/lib/samplePoll.ts`](src/lib/samplePoll.ts), the only thing that decides
+what answers it. The `sample-` prefix cannot collide with a uuid, and the ids
+are words so the links can be read aloud.
 
-**One thing outside that file has to recognise a sample id: the router.**
-`PollPage` in [`src/pages/PollPage.tsx`](src/pages/PollPage.tsx) sends a sample id straight to
-`PublicPoll` instead of offering it to the account reading first. Every other
-address is offered to `PollDetail` and falls back when row-level security
-returns nothing (see [A poll's link is its id](#a-polls-link-is-its-id)), but a
-sample id has no row for that read to miss — `select * from polls where id =
-'sample-host'` does not come back empty, it errors on the cast, and
-`invalid input syntax for type uuid: "sample-host"` is what a signed-in reader
-got where the sample should have been. The `sample-` prefix has to be checked
-before anything puts one of these ids in front of the database, which is why
-`isSampleId` is exported rather than private to `openPollRpc`.
+**The router must also recognise a sample id**: `PollPage` sends it straight
+to `PublicPoll`, because asking the database about `sample-host` errors on the
+uuid cast. `isSampleId` is exported for that. An unknown `sample-` id gets
+`PublicPoll`'s *poll not found*, not the sign-in screen.
 
-It is the one address with nothing to fall back to, and deliberately so: a
-`sample-` id no question is recorded under is a mistyped sample link and
-nothing else, so it gets `PublicPoll`'s own *poll not found* rather than the
-sign-in screen a signed-out reader is offered for a poll they might turn out
-to be invited to.
-
-This never came up under the two routes that preceded one address per poll:
-`#/p/:token` went to the public reading and nowhere else, so the sample could
-not reach `PollDetail` however it was linked.
-
-`scripts/sample-poll.sql` therefore keeps a `sample.link` table of its own for
-the length of a run, standing in for the `public_token` column that used to
-hold those words. The poll is built and voted through the real functions
-against real uuids; the readable name is substituted into the recorded text
-afterwards, which is where the ids were already being made deterministic.
-
-Three consequences worth knowing:
-
-- **The data is `import()`ed**, not bundled. It is forty-odd kilobytes of
-  recorded JSON and most readers never open the sample.
-- **The open copy takes a vote**, and behaves afterwards exactly as a real poll
-  does — your vote is in, you can change it, you are on the roster. The ballot
-  goes nowhere else, which the poll's own description says in the first line a
-  voter reads.
-- **And the vote lasts as long as the visit that cast it.** It used to be kept
-  in `localStorage`, on the reasoning that a sample which forgets is a sample
-  unlike the real thing. It reads the other way round: a real poll is voted in
-  once, and the sample is a thing people come back to — from a talk, from the
-  About page, to show somebody. A reader returning wants the ballot they came
-  to try, not the one they filled in weeks ago behind a *your vote is in* they
-  have to find their way past. So the ballots live in a module-level map in
-  `samplePoll.ts` and `PollPage` clears them (`forgetSampleBallots`) on its way
-  off the poll routes — enough memory to walk the three questions and keep the
-  roster right while that happens, and none by the next arrival. The strip's
-  ticks go with them: a sample question is marked answered exactly where that
-  map holds a ballot, and a tick outliving its ballot would leave a reader on a
-  blank ballot under a strip saying they had finished.
-- **Its last ballot leads to the finished copy.** The About page offers the two
-  side by side and the pair is the point — the same poll before and after it
-  was decided — so a reader who has just scored all three questions is taken to
-  the result rather than left on *your vote is in*, which is a true sentence
-  and a dead end. It is `PublicPoll`'s ordinary "next question you owe" rule
-  (`nextUnansweredKey`) with one more step on the end for the sample alone; a
-  revision does not move anybody, as on any poll.
-- **The sample is never watched.** Subscribing is also what triggers every
-  other poll's first read (see [Live updates](#live-updates)), so `PublicPoll`
-  reads the sample itself, once. There is nothing on the other end of a
-  subscription to a file.
-- **The About page's sample links open in this tab.** They used to open a new
-  one; see `Samples` there for why they no longer do. Its links off the site
-  still get their own tab.
+- **The data is `import()`ed**, not bundled.
+- **The open copy takes a vote** and behaves like a real poll afterwards; the
+  vote goes nowhere, as the poll's description says.
+- **The vote lasts for the visit.** Ballots live in a module-level map in
+  `samplePoll.ts`, and `PollPage` clears them (`forgetSampleBallots`) on
+  leaving the poll routes, so a returning reader gets a fresh ballot. The
+  strip's ticks go with them.
+- **Its last ballot leads to the finished copy**: `nextUnansweredKey` plus one
+  step for the sample alone. A revision moves nobody.
+- **The sample is never subscribed to**; `PublicPoll` reads it once.
+- **The About page's sample links open in this tab**; see `Samples` there.
+  Links off the site open a new tab.
