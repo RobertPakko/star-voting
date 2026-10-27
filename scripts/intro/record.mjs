@@ -10,10 +10,10 @@
 // for a covered window.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { attach, deleteGroup, deleteTitled, pause, SITE, stranger, tokenOf } from './lib.mjs'
 
-const OUT = process.argv[2] ?? 'intro-take'
+const OUT = resolve(process.argv[2] ?? 'intro-take')
 const STOP = process.argv[3]
 const W = 1280
 const H = 800
@@ -132,6 +132,12 @@ rmSync(OUT, { recursive: true, force: true })
 mkdirSync(dir, { recursive: true })
 const rec = new Recorder(page, dir)
 await rec.start()
+// A take that fails leaves a picture of where it stopped.
+process.on('uncaughtException', async (error) => {
+  console.error(error)
+  await page.screenshot({ path: join(OUT, 'failed.png') }).catch(() => {})
+  process.exit(1)
+})
 
 /** Where the pointer is, so each move glides from there. */
 let at = { x: W * 0.75, y: H * 0.9 }
@@ -275,8 +281,12 @@ await pause(600)
 if (done('collect')) await finish()
 
 // ── Rate the options ──────────────────────────────────────────────────────
-// The name typed to confirm is still in its box.
+// Confirming moved the page on to the next list, so the poll opened there:
+// back to the films by the question strip. The name typed to confirm is
+// still in its box.
 rec.mark('rate')
+await click(page.getByRole('link', { name: /Which movie\?/ }).first(), { settle: 600 })
+await page.getByRole('radiogroup', { name: 'Score for Alien' }).waitFor()
 await scrollTo(page.getByLabel('Your name'), 150)
 await pause(300)
 for (const [name, stars] of [
