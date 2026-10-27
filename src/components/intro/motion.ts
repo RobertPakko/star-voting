@@ -13,8 +13,10 @@ import sections from './sections.json'
  * AGENTS.md.
  */
 
-/** When the footage starts: after the logo has arrived and flown into it. */
-export const FOOTAGE = 3.1
+/** When the logo, having arrived, has flown into place in the header. */
+export const LANDED = 3.1
+/** When the footage starts: the screen faded in around the landed logo. */
+export const FOOTAGE = 3.6
 
 /**
  * The recorded sections, each starting where the last ended. Their lengths
@@ -31,7 +33,7 @@ export const SECTIONS = sections.reduce<
 /** When the footage ends and the logo comes back out of it. */
 export const CLOSE = SECTIONS[SECTIONS.length - 1].end
 /** The film's length: the closing settled. */
-export const TOTAL = CLOSE + 2.6
+export const TOTAL = CLOSE + 3.1
 
 export const FONT =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'

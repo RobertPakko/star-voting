@@ -11,7 +11,6 @@ import {
   EyeSlashIcon,
   GiftIcon,
   LightningIcon,
-  ListNumbersIcon,
   PauseIcon,
   PlayIcon,
   QrCodeIcon,
@@ -25,48 +24,19 @@ import { COL } from './motion'
  * each a fact a newcomer might be weighing the site on, in a few words.
  */
 const FEATURES: { icon: Icon; title: string; text: string }[] = [
-  { icon: GiftIcon, title: 'Free', text: 'No ads, no plans, no limits on voters.' },
-  {
-    icon: LightningIcon,
-    title: 'Fast',
-    text: 'Results the moment the poll closes, live as votes arrive.',
-  },
-  {
-    icon: EnvelopeSimpleIcon,
-    title: 'No passwords',
-    text: 'Sign in with your email — or vote with just the link.',
-  },
-  {
-    icon: BellIcon,
-    title: 'Notifications',
-    text: 'Email and push when voting opens and when results are in.',
-  },
-  {
-    icon: DeviceMobileIcon,
-    title: 'Any device',
-    text: 'Phone, tablet or computer, and installable as an app.',
-  },
-  {
-    icon: EyeSlashIcon,
-    title: 'Private or open',
-    text: 'Keep ballots secret, or publish them so anyone can check.',
-  },
-  {
-    icon: ListNumbersIcon,
-    title: 'Several questions',
-    text: 'Ask about the film and the night in one poll.',
-  },
+  { icon: GiftIcon, title: 'Free', text: 'No ads, no limits.' },
+  { icon: LightningIcon, title: 'Fast', text: 'Results the moment you close.' },
+  { icon: EnvelopeSimpleIcon, title: 'No passwords', text: 'Sign in with just your email.' },
+  { icon: BellIcon, title: 'Notifications', text: 'By email and push.' },
+  { icon: DeviceMobileIcon, title: 'Any device', text: 'Phone, tablet or computer.' },
+  { icon: EyeSlashIcon, title: 'Private or public', text: 'Secret or published ballots.' },
   {
     icon: ArrowCounterClockwiseIcon,
-    title: 'Change your mind',
-    text: 'Edit your vote any time before the results are out.',
+    title: 'Change your vote',
+    text: 'Until the results are out.',
   },
-  { icon: QrCodeIcon, title: 'QR codes', text: 'Put the poll on a screen for the whole room.' },
-  {
-    icon: ScalesIcon,
-    title: 'Fair',
-    text: 'STAR voting, with every tie-break shown and explained.',
-  },
+  { icon: QrCodeIcon, title: 'QR codes', text: 'Share with a whole room.' },
+  { icon: ScalesIcon, title: 'Fair', text: 'STAR voting, ties explained.' },
 ]
 
 /** How long each feature is shown before the next. */
@@ -124,7 +94,7 @@ export function Features({ shown, style }: { shown: boolean; style?: CSSProperti
           radius="md"
           p="sm"
           bg="#fff"
-          style={{ flex: 1, minHeight: 92, borderColor: COL.border, overflow: 'hidden' }}
+          style={{ flex: 1, minHeight: 72, borderColor: COL.border, overflow: 'hidden' }}
           aria-live={turning ? 'off' : 'polite'}
         >
           <div style={{ display: 'grid' }}>

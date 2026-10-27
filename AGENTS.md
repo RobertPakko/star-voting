@@ -1438,7 +1438,9 @@ the film is under [`components/intro/`](src/components/intro).
   videos at the same moment without restarting.
 - **The logo's flights land on the footage's own header logo**, whose
   position the recorder writes to `footage.json`, so the film reads as the
-  app opening and closing.
+  app opening and closing. **There is only ever one logo**: the screen fades
+  in around the landed logo (`LANDED` to `FOOTAGE`) and out from around it
+  before it flies, and never moves while the two overlap.
 - **It stays light in dark mode**, as a video would; the page takes the film's
   background. The buttons are styled to look the same in both schemes.
 - **Fully transparent parts are hidden outright** (`seen` in `Film.tsx`), so

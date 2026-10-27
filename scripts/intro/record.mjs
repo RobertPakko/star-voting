@@ -457,7 +457,7 @@ const night = (i) => (name) => {
 for (const [i, scores] of MOVIE_VOTES.entries()) {
   await people[i].vote(movieQ, scores)
   await people[i].vote(nightQ, night(i))
-  await pause(1100)
+  await pause(650)
 }
 await pause(800)
 if (done('votes')) await finish()

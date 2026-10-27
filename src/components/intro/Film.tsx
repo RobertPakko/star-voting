@@ -6,6 +6,7 @@ import {
   FILMS,
   FONT,
   FOOTAGE,
+  LANDED,
   footageSrc,
   headerLogo,
   lerp,
@@ -43,41 +44,42 @@ export function Film({
   const home = headerLogo(shape)
   const closing = T >= CLOSE
 
-  // The screen arrives as the logo flies into it — once the wordmark has
-  // gone, so the two never overlap — and leaves as it flies out.
-  const screenO = p01(T, 2.45, 3.0) * (1 - p01(T, CLOSE + 0.15, CLOSE + 0.65))
-  const screenY = tween(T, 2.45, 3.0, 40, 0) + tween(T, CLOSE + 0.15, CLOSE + 0.65, 0, 24)
-  const screenS = 1 - 0.04 * p01(T, CLOSE + 0.15, CLOSE + 0.65)
+  // The logo lands first and the screen fades in around it, so there is only
+  // ever one logo: the flying one sits exactly over the footage's own until
+  // the screen is whole. The close is the same backwards — the screen fades
+  // from around the logo, and then it flies. Neither moves the screen, which
+  // would pull the footage's logo out from under the flying one.
+  const screenO = p01(T, LANDED, FOOTAGE) * (1 - p01(T, CLOSE, CLOSE + 0.5))
 
   let logo
   if (!closing) {
-    const f = p01(T, 2.3, FOOTAGE, MOTION.draw)
+    const f = p01(T, 2.3, LANDED, MOTION.draw)
     const pop = tween(T, 0.15, 0.75, 0.6, 1, MOTION.pop)
     const drift = 1 + 0.03 * p01(T, 0, 2.3, Easing.linear)
     logo = {
       x: lerp(film.logo.x, home.x, f),
       y: lerp(film.logo.y, home.y, f),
       size: lerp(film.logo.size * pop * drift, home.size, f),
-      // Gone the moment it lands: from there it is the footage's own.
+      // Handed to the footage's own once the screen is whole.
       o: p01(T, 0.15, 0.45) * (T < FOOTAGE ? 1 : 0),
-      glow: 1 - p01(T, 2.3, 3.0),
+      glow: 1 - p01(T, 2.3, LANDED),
     }
   } else {
-    const f = p01(T, CLOSE, CLOSE + 0.8, MOTION.draw)
+    const f = p01(T, CLOSE + 0.5, CLOSE + 1.3, MOTION.draw)
     const to = film.closing.logo
     logo = {
       x: lerp(home.x, to.x, f),
       y: lerp(home.y, to.y, f),
       size:
-        lerp(home.size, to.size, f) * (1 + 0.02 * p01(T, CLOSE + 0.8, CLOSE + 2.6, Easing.linear)),
+        lerp(home.size, to.size, f) * (1 + 0.02 * p01(T, CLOSE + 1.3, CLOSE + 3.1, Easing.linear)),
       o: 1,
       glow: f,
     }
   }
   const wordO = closing
-    ? p01(T, CLOSE + 0.6, CLOSE + 1.1)
+    ? p01(T, CLOSE + 1.1, CLOSE + 1.6)
     : p01(T, 0.4, 0.9) * (1 - p01(T, 2.15, 2.45))
-  const wordY = closing ? tween(T, CLOSE + 0.6, CLOSE + 1.1, 16, 0) : tween(T, 0.4, 0.9, 16, 0)
+  const wordY = closing ? tween(T, CLOSE + 1.1, CLOSE + 1.6, 16, 0) : tween(T, 0.4, 0.9, 16, 0)
   const tagO = closing ? 0 : p01(T, 0.75, 1.25) * (1 - p01(T, 2.1, 2.4))
   const tagY = tween(T, 0.75, 1.25, 12, 0)
 
@@ -105,7 +107,6 @@ export function Film({
           height: screen.h + bar,
           opacity: screenO,
           visibility: seen(screenO),
-          transform: `translateY(${screenY}px) scale(${screenS})`,
           ...(shape === 'landscape'
             ? {
                 borderRadius: 14,

@@ -146,7 +146,7 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
     }
   }
 
-  const start = CLOSE + 1.15
+  const start = CLOSE + 1.65
   const rise = (i: number): CSSProperties => {
     const a = start + i * 0.15
     const o = p01(T, a, a + 0.45)
