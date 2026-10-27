@@ -5,5 +5,5 @@
   { "name": "times", "caption": "Rate times", "seconds": 6 },
   { "name": "votes", "caption": "Watch votes", "seconds": 4.5 },
   { "name": "decide", "caption": "Get results", "seconds": 9.5 },
-  { "name": "list", "caption": "See your polls", "seconds": 3 }
+  { "name": "list", "caption": "See your polls", "seconds": 5 }
 ]
