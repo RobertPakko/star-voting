@@ -1,28 +1,40 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Button, Group, Stack, Text, UnstyledButton, VisuallyHidden } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
 import { BookOpenIcon, CheckIcon, PlusIcon, ShareNetworkIcon } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
-import { LandscapeFilm } from '../components/intro/Landscape'
-import { PortraitFilm } from '../components/intro/Portrait'
-import { COL, CUES, FILMS, p01, tween, TOTAL, type FilmShape } from '../components/intro/motion'
+import { Features } from '../components/intro/Features'
+import { Film } from '../components/intro/Film'
+import {
+  CLOSE,
+  COL,
+  FILMS,
+  FOOTAGE,
+  p01,
+  tween,
+  TOTAL,
+  type FilmShape,
+} from '../components/intro/motion'
 import { useMakePoll } from '../lib/makePoll'
 import { shareLink } from '../lib/share'
 import { announce } from '../lib/announce'
 
 /**
- * The intro: a twenty-two-second film of a poll being made, voted in and
- * decided, ending on the three things a newcomer might do next.
+ * The intro: a film of the app at work — a poll made, its options gathered,
+ * rated, voted in and decided — ending on the things a newcomer might do
+ * next and a carousel of what the film had no time for.
  *
  * It is a page of its own, outside the app shell, because it is a film of the
- * app rather than a page in it — the film draws the app's header itself, and
+ * app rather than a page in it — the footage has the app's header in it, and
  * a real one above it would be the same header twice. It is reachable signed
  * in or out, since the reader it is for has usually never signed in. See "The
  * intro" in AGENTS.md.
  */
 export function Intro() {
   const reducedMotion = useReducedMotion(false, { getInitialValueInEffect: false })
-  const T = useFilmClock(reducedMotion)
+  const video = useRef<HTMLVideoElement>(null)
+  const follow = useCallback((t: number) => followVideo(video.current, t), [])
+  const T = useFilmClock(reducedMotion, follow)
   const { width, height } = useWindowSize()
 
   // Whichever shape draws the film larger in this window, which comes to the
@@ -48,9 +60,9 @@ export function Intro() {
       <VisuallyHidden>
         <h1>ChoiceLab</h1>
         <p>
-          A short animation: somebody creates a poll, everyone rates the options from zero to five
-          stars, and the two highest-scoring options meet in an automatic runoff to decide the
-          winner.
+          A short video of the app: somebody makes a poll asking which movie to watch and which
+          night, friends suggest films, everyone rates the films from zero to five stars and marks
+          the nights that suit them, and closing the poll shows the winner of each.
         </p>
       </VisuallyHidden>
       <div
@@ -66,7 +78,7 @@ export function Intro() {
           pointerEvents: 'none',
         }}
       >
-        {shape === 'portrait' ? <PortraitFilm T={T.value} /> : <LandscapeFilm T={T.value} />}
+        <Film T={T.value} shape={shape} video={video} />
       </div>
 
       <Actions
@@ -99,8 +111,9 @@ export function Intro() {
 
 /**
  * The three ways on from the film, rising in one after another once the logo
- * and the wordmark have settled. Hidden rather than merely transparent until
- * then, so nobody tabs onto a button they cannot see.
+ * and the wordmark have settled, with the features under them. Hidden rather
+ * than merely transparent until then, so nobody tabs onto a button they
+ * cannot see.
  *
  * They are drawn at the page's own size rather than the film's, which is why
  * they sit over it instead of inside it: a button scaled down with a film
@@ -133,7 +146,7 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
     }
   }
 
-  const start = CUES.Close + 1.15
+  const start = CLOSE + 1.15
   const rise = (i: number): CSSProperties => {
     const a = start + i * 0.15
     const o = p01(T, a, a + 0.45)
@@ -209,10 +222,15 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
     </Text>
   )
 
+  const features = (
+    <Features shown={T >= start + 0.45} style={{ ...rise(3), marginTop: portrait ? 8 : 20 }} />
+  )
+
   return portrait ? (
     <Stack gap="sm" align="stretch" maw={320} mx="auto" style={style}>
       {buttons}
       {failed}
+      {features}
     </Stack>
   ) : (
     <Stack gap="xs" style={style}>
@@ -220,18 +238,55 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
         {buttons}
       </Group>
       {failed}
+      {features}
     </Stack>
   )
 }
 
 /**
+ * Keeps the footage and the film's clock together. While the footage is on,
+ * the video is the clock: the film follows its playhead, so a video that
+ * stops to buffer holds the film rather than the film running on without it.
+ * A clock that has moved somewhere the video is not — a skip, a replay, the
+ * other shape's video taking over on a rotation — seeks the video to it.
+ * Outside the footage it rests on its first or last frame and the film keeps
+ * its own time. A video that will not play (autoplay refused) leaves the film
+ * to run on its own past a still picture.
+ */
+function followVideo(v: HTMLVideoElement | null, t: number): number | null {
+  if (!v) return null
+  const end = CLOSE - FOOTAGE
+  const at = t - FOOTAGE
+  if (at < 0 || at >= end) {
+    if (!v.paused) v.pause()
+    const rest = at < 0 ? 0 : Math.max(0, end - 0.05)
+    if (Math.abs(v.currentTime - rest) > 0.1) v.currentTime = rest
+    return null
+  }
+  if (v.dataset.refused) return null
+  if (Math.abs(v.currentTime - at) > 0.5) {
+    v.currentTime = at
+    return t
+  }
+  if (v.ended) return null
+  if (v.paused)
+    void v.play().catch(() => {
+      v.dataset.refused = 'true'
+    })
+  // Buffering: hold the film where the video is.
+  return FOOTAGE + v.currentTime
+}
+
+/**
  * The film's clock: seconds since it started, stopping at the end and holding
  * the last frame. A reader who has asked for less motion starts on that frame.
+ * `follow` may take the time from somewhere else for a while (the footage;
+ * see `followVideo`), and returns null to let the clock run on its own.
  *
  * A hidden tab gets no animation frames, and the step is capped so that
  * coming back to one carries on from where it was rather than leaping ahead.
  */
-function useFilmClock(reducedMotion: boolean) {
+function useFilmClock(reducedMotion: boolean, follow: (t: number) => number | null) {
   const [value, setValue] = useState(() => (reducedMotion ? TOTAL : 0))
   const playing = value < TOTAL
 
@@ -245,11 +300,11 @@ function useFilmClock(reducedMotion: boolean) {
     let id = requestAnimationFrame(function step(now) {
       const dt = last === null ? 0 : Math.min((now - last) / 1000, 0.1)
       last = now
-      setValue((t) => Math.min(TOTAL, t + dt))
+      setValue((t) => Math.min(TOTAL, follow(t) ?? t + dt))
       id = requestAnimationFrame(step)
     })
     return () => cancelAnimationFrame(id)
-  }, [playing])
+  }, [playing, follow])
 
   return {
     value,

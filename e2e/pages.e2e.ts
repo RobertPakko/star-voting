@@ -184,6 +184,32 @@ test.describe('the intro', () => {
     await page.getByRole('link', { name: 'Learn more' }).click()
     await expect(page).toHaveURL(/#\/about$/)
   })
+
+  test('fetches no footage when it opens on its last frame', async ({ page }) => {
+    const fetched: string[] = []
+    page.on('request', (r) => {
+      if (/\/intro\/.*\.mp4/.test(r.url())) fetched.push(r.url())
+    })
+    await page.goto('#/intro')
+    await expect(page.getByRole('link', { name: 'Learn more' })).toBeVisible()
+    await page.waitForTimeout(500)
+    expect(fetched).toEqual([])
+  })
+
+  test('steps through the features by hand, and holds still', async ({ page }) => {
+    await page.goto('#/intro')
+    const features = page.getByRole('region', { name: 'What else ChoiceLab does' })
+    await expect(features.getByText('Free', { exact: true })).toBeVisible()
+    // Less motion asked for: no turning, so nothing to pause.
+    await expect(features.getByRole('button', { name: /Pause|Play/ })).toHaveCount(0)
+    await features.getByRole('button', { name: 'Next feature' }).click()
+    await expect(features.getByText('Fast', { exact: true })).toBeVisible()
+    await expect(features.getByText('Free', { exact: true })).toBeHidden()
+    await features.getByRole('button', { name: 'Previous feature' }).click()
+    await features.getByRole('button', { name: 'Previous feature' }).click()
+    await expect(features.getByText('Fair', { exact: true })).toBeVisible()
+    await expectAccessible(page, 'the features')
+  })
 })
 
 test.describe('the Start page', () => {

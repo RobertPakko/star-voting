@@ -1,23 +1,38 @@
 // Records the intro's app footage in the capture browser (browser.mjs), as
 // the signed-in test account, on the live site: one poll made, filled by
-// scripted strangers, decided, and followed back to the poll list. Writes an
-// mp4 and the time each section starts (sections.json) to the output folder,
-// then deletes the poll it made.
+// scripted strangers, decided, and followed back to the poll list. Writes
+// `<shape>.mp4`, a poster of its first frame, and `<shape>.json` (where the
+// header's logo sits, for the film's opening and closing flights) to the
+// output folder, then deletes the poll it made.
 //
-//   node scripts/intro/record.mjs <out dir> [stop after section]
+//   node scripts/intro/record.mjs <out dir> [--portrait] [--publish] [stop after section]
+//
+// Landscape is a desktop browser at 1280×800; --portrait is a phone at
+// 390×844. Each section is sped up, or held on its last frame, to the length
+// src/components/intro/sections.json gives it, so the two cuts share one
+// timeline and the film can swap between them mid-play. --publish copies the
+// take into public/intro/ and its logo position into
+// src/components/intro/footage.json.
 //
 // The window has to stay visible while it records: Edge stops drawing frames
 // for a covered window.
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { attach, deleteGroup, deleteTitled, pause, SITE, stranger, tokenOf } from './lib.mjs'
 
-const OUT = resolve(process.argv[2] ?? 'intro-take')
-const STOP = process.argv[3]
-const W = 1280
-const H = 800
-const SCALE = 1.5
+const args = process.argv.slice(2)
+const flags = new Set(args.filter((a) => a.startsWith('--')))
+const [out, STOP] = args.filter((a) => !a.startsWith('--'))
+const OUT = resolve(out ?? 'intro-take')
+const SHAPE = flags.has('--portrait') ? 'portrait' : 'landscape'
+const PHONE = SHAPE === 'portrait'
+const W = PHONE ? 390 : 1280
+const H = PHONE ? 844 : 800
+const SCALE = PHONE ? 3 : 1.5
+/** The size the video is encoded at: the phone's frames halved, which is plenty for a phone. */
+const ENCODE = PHONE ? { w: 780, h: 1688 } : { w: 1920, h: 1200 }
+const SECTIONS = JSON.parse(readFileSync('src/components/intro/sections.json', 'utf8'))
 
 /** Frames from Chromium's screencast, each with the moment it was drawn. */
 class Recorder {
@@ -34,7 +49,7 @@ class Recorder {
       width: W,
       height: H,
       deviceScaleFactor: SCALE,
-      mobile: false,
+      mobile: PHONE,
     })
     this.cdp.on('Page.screencastFrame', (f) => {
       const file = join(this.dir, `${String(this.frames.length).padStart(5, '0')}.png`)
@@ -61,66 +76,125 @@ class Recorder {
     this.marks.push({ name, frame: this.frames.length })
     console.log('section', name)
   }
-  /** Holds the last frame, writes the mp4 and when each section starts. */
-  async save(holdMs) {
+  /**
+   * Writes the mp4, each section fitted to its length in sections.json: sped
+   * up evenly when it ran long, held on its last frame when it ran short.
+   * Sections not reached (a take stopped early) keep their own pace.
+   */
+  async save() {
     await this.cdp.send('Page.stopScreencast').catch(() => {})
-    const lines = []
-    const starts = []
-    let t = 0
-    this.frames.forEach((f, i) => {
-      for (const m of this.marks)
-        if (m.frame === i) starts.push({ name: m.name, at: +t.toFixed(3) })
+    const lengths = this.frames.map((f, i) => {
       const next = this.frames[i + 1]
-      const cut = this.cuts.has(i + 1)
-      const d = next && !cut ? Math.max(next.at - f.at, 1 / 60) : cut ? 1 / 30 : holdMs / 1000
-      lines.push(`file '${f.file.replaceAll('\\', '/')}'`, `duration ${d.toFixed(4)}`)
-      t += d
+      if (!next) return 1 / 30
+      // A pause in the recording is a cut, not a wait.
+      return this.cuts.has(i + 1) ? 1 / 30 : Math.max(next.at - f.at, 1 / 60)
     })
+    this.marks.forEach((m, k) => {
+      const target = SECTIONS.find((s) => s.name === m.name)?.seconds
+      const end = this.marks[k + 1]?.frame ?? this.frames.length
+      if (!target || end <= m.frame) return
+      const raw = lengths.slice(m.frame, end).reduce((a, b) => a + b, 0)
+      if (raw > target) for (let i = m.frame; i < end; i++) lengths[i] *= target / raw
+      else lengths[end - 1] += target - raw
+    })
+    const lines = this.frames.flatMap((f, i) => [
+      `file '${f.file.replaceAll('\\', '/')}'`,
+      `duration ${lengths[i].toFixed(4)}`,
+    ])
     lines.push(lines[lines.length - 2])
     const list = join(this.dir, 'list.txt')
     writeFileSync(list, lines.join('\n'))
+    const scale = `scale=${ENCODE.w}:${ENCODE.h}:flags=lanczos`
     execFileSync('ffmpeg', [
       ...['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list],
-      ...['-vf', 'fps=30,format=yuv420p', '-c:v', 'libx264', '-preset', 'slow', '-crf', '24'],
-      ...['-movflags', '+faststart', '-an', join(OUT, 'landscape.mp4')],
+      ...['-vf', `${scale},fps=30,format=yuv420p`, '-c:v', 'libx264', '-preset', 'slow'],
+      ...['-crf', '24', '-movflags', '+faststart', '-an', join(OUT, `${SHAPE}.mp4`)],
     ])
-    writeFileSync(
-      join(OUT, 'sections.json'),
-      JSON.stringify({ length: +t.toFixed(3), starts }, null, 2),
-    )
+    execFileSync('ffmpeg', [
+      ...['-y', '-loglevel', 'error', '-i', this.frames[0].file, '-vf', scale],
+      ...['-q:v', '3', join(OUT, `${SHAPE}.jpg`)],
+    ])
+    const length = lengths.reduce((a, b) => a + b, 0)
+    console.log('length', length.toFixed(2), 's')
   }
 }
 
 /**
- * A desktop pointer, since the screencast draws none, and the header's
- * account address hidden (it is the test account's).
+ * A pointer, since the screencast draws none — an arrow on the desktop, and on
+ * the phone a fingertip that is there only while it presses — and the
+ * header's account address hidden (it is the test account's).
  */
 async function dress(page) {
-  await page.evaluate(() => {
+  await page.evaluate((phone) => {
     if (document.getElementById('capture-pointer')) return
     const ptr = document.createElement('div')
     ptr.id = 'capture-pointer'
-    ptr.innerHTML =
-      '<svg width="22" height="28" viewBox="0 0 22 28"><path d="M2 2 L2 23 L7.5 17.5 L11.5 26 L15 24.5 L11 16 L19 16 Z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>'
-    ptr.style.cssText =
-      'position:fixed;left:-40px;top:-40px;pointer-events:none;z-index:2147483647;transform-origin:2px 2px;transition:transform 100ms;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))'
+    if (phone) {
+      ptr.style.cssText =
+        'position:fixed;left:-60px;top:-60px;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;' +
+        'background:rgba(30,30,40,.28);border:2px solid rgba(255,255,255,.9);box-shadow:0 1px 6px rgba(0,0,0,.3);' +
+        'pointer-events:none;z-index:2147483647;opacity:0;transform:scale(1.3);transition:opacity 160ms,transform 160ms'
+    } else {
+      ptr.innerHTML =
+        '<svg width="22" height="28" viewBox="0 0 22 28"><path d="M2 2 L2 23 L7.5 17.5 L11.5 26 L15 24.5 L11 16 L19 16 Z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>'
+      ptr.style.cssText =
+        'position:fixed;left:-40px;top:-40px;pointer-events:none;z-index:2147483647;transform-origin:2px 2px;transition:transform 100ms;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))'
+    }
     document.documentElement.appendChild(ptr)
+    const offset = phone ? 0 : 2
     addEventListener(
       'mousemove',
       (e) => {
-        ptr.style.left = e.clientX - 2 + 'px'
-        ptr.style.top = e.clientY - 2 + 'px'
+        ptr.style.left = e.clientX - offset + 'px'
+        ptr.style.top = e.clientY - offset + 'px'
       },
       true,
     )
-    addEventListener('mousedown', () => (ptr.style.transform = 'scale(.85)'), true)
-    addEventListener('mouseup', () => (ptr.style.transform = ''), true)
+    addEventListener(
+      'mousedown',
+      () => {
+        ptr.style.transform = phone ? 'scale(1)' : 'scale(.85)'
+        if (phone) ptr.style.opacity = '1'
+      },
+      true,
+    )
+    addEventListener(
+      'mouseup',
+      () => {
+        ptr.style.transform = phone ? 'scale(1.3)' : ''
+        if (phone) ptr.style.opacity = '0'
+      },
+      true,
+    )
     const style = document.createElement('style')
     style.textContent = '.mantine-Notifications-root{display:none!important}'
     document.head.appendChild(style)
     for (const el of document.querySelectorAll('header *'))
       if (el.children.length === 0 && el.textContent?.includes('@')) el.style.visibility = 'hidden'
-  })
+    // The address anywhere else (the create form's "Include me as a voter")
+    // reads as a stand-in, however often React draws it again.
+    let email = null
+    try {
+      const key = Object.keys(localStorage).find((k) => /^sb-.*-auth-token$/.test(k))
+      email = JSON.parse(localStorage.getItem(key)).user.email
+    } catch {
+      // Not signed in: nothing to hide.
+    }
+    if (!email) return
+    const swap = (node) => {
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+      for (let n = node.nodeType === 3 ? node : walker.nextNode(); n; n = walker.nextNode())
+        if (n.nodeValue.includes(email))
+          n.nodeValue = n.nodeValue.replaceAll(email, 'you@example.com')
+    }
+    swap(document.body)
+    new MutationObserver((changes) => {
+      for (const c of changes) {
+        if (c.type === 'characterData') swap(c.target)
+        c.addedNodes.forEach(swap)
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true })
+  }, PHONE)
 }
 
 const { page } = await attach()
@@ -162,38 +236,59 @@ async function type(locator, text) {
 /**
  * Glides the page until `locator` is comfortably on screen — its top at `top`
  * when given, otherwise only if it is near an edge — easing in and out the way
- * a trackpad does, rather than the jump Playwright makes before a click.
+ * a trackpad does, rather than the jump Playwright makes before a click. An
+ * element off to the side in a box that scrolls sideways (the week calendar
+ * on a phone) is brought in by scrolling that box at the same time.
  */
 async function scrollTo(locator, top) {
   await locator.waitFor()
-  const b = await locator.boundingBox()
-  let dy = 0
-  if (top !== undefined) dy = b.y - top
-  else if (b.y < 80) dy = b.y - H * 0.3
-  else if (b.y + b.height > H - 60) dy = b.y + b.height - H * 0.65
-  if (Math.abs(dy) < 2) return
-  await page.evaluate(
-    (dy) =>
-      new Promise((done) => {
-        const from = window.scrollY
-        const to = Math.max(
+  const moved = await locator.evaluate(
+    (el, { top, H }) => {
+      const b = el.getBoundingClientRect()
+      let dy = 0
+      if (top !== null) dy = b.top - top
+      else if (b.top < 80) dy = b.top - H * 0.3
+      else if (b.bottom > H - 60) dy = b.bottom - H * 0.65
+      let box = el.parentElement
+      while (
+        box &&
+        !(box.scrollWidth > box.clientWidth + 1 && getComputedStyle(box).overflowX !== 'visible')
+      )
+        box = box.parentElement
+      let dx = 0
+      if (box && box !== document.documentElement && box !== document.body) {
+        const r = box.getBoundingClientRect()
+        if (b.left < r.left + 8 || b.right > r.right - 8)
+          dx = b.left + b.width / 2 - (r.left + r.width / 2)
+      }
+      if (Math.abs(dy) < 2 && Math.abs(dx) < 2) return false
+      return new Promise((done) => {
+        const fromY = window.scrollY
+        const toY = Math.max(
           0,
-          Math.min(from + dy, document.documentElement.scrollHeight - innerHeight),
+          Math.min(fromY + dy, document.documentElement.scrollHeight - innerHeight),
         )
-        const ms = Math.min(1100, 380 + Math.abs(to - from) * 0.7)
+        const fromX = box ? box.scrollLeft : 0
+        const toX = box ? Math.max(0, Math.min(fromX + dx, box.scrollWidth - box.clientWidth)) : 0
+        const ms = Math.min(
+          1100,
+          380 + Math.max(Math.abs(toY - fromY), Math.abs(toX - fromX)) * 0.7,
+        )
         const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
         const start = performance.now()
         const step = (now) => {
           const t = Math.min(1, (now - start) / ms)
-          window.scrollTo({ top: from + (to - from) * ease(t), behavior: 'instant' })
+          window.scrollTo({ top: fromY + (toY - fromY) * ease(t), behavior: 'instant' })
+          if (box && dx) box.scrollLeft = fromX + (toX - fromX) * ease(t)
           if (t < 1) requestAnimationFrame(step)
-          else done()
+          else done(true)
         }
         requestAnimationFrame(step)
-      }),
-    dy,
+      })
+    },
+    { top: top ?? null, H },
   )
-  await pause(150)
+  if (moved) await pause(150)
 }
 /** A Mantine select, set without the pointer (only ever off camera). */
 async function pick(label, option) {
@@ -213,6 +308,8 @@ await page.reload()
 await page.getByText('Find a time').first().waitFor()
 await dress(page)
 await page.mouse.move(at.x, at.y)
+// Where the film's logo lands and takes off from: the header's own.
+const logo = await page.locator('header img').first().boundingBox()
 await rec.resume()
 rec.mark('make')
 await pause(500)
@@ -324,6 +421,8 @@ async function stroke(cells, from, to) {
 }
 const brush = (n) => click(page.getByText(String(n), { exact: true }).first(), { settle: 150 })
 await firstCell.waitFor()
+// On a phone the week is wider than the screen: Friday and Saturday into view.
+await scrollTo(firstCell)
 await brush(5)
 await stroke(await column('2026-10-31'), 0, 5)
 await brush(3)
@@ -399,11 +498,34 @@ await click(page.getByRole('link', { name: 'Your polls' }).first())
 await pause(2500)
 await finish()
 
-/** Writes the take, leaves a still of the last frame, and deletes the poll. */
+/**
+ * Writes the take, leaves a still of the last frame, deletes the poll, and
+ * with --publish puts the take where the film reads it.
+ */
 async function finish() {
-  await rec.save(800)
+  await rec.save()
   await page.screenshot({ path: join(OUT, 'last.png') })
   if (groupId) await deleteGroup(token, groupId)
+  // In the viewport's own pixels; the film scales them to the screen it draws.
+  const meta = {
+    w: W,
+    h: H,
+    logo: { x: logo.x + logo.width / 2, y: logo.y + logo.height / 2, size: logo.width },
+  }
+  writeFileSync(join(OUT, `${SHAPE}.json`), JSON.stringify(meta, null, 2) + '\n')
+  if (flags.has('--publish')) {
+    mkdirSync('public/intro', { recursive: true })
+    for (const ext of ['mp4', 'jpg'])
+      copyFileSync(join(OUT, `${SHAPE}.${ext}`), `public/intro/${SHAPE}.${ext}`)
+    const file = 'src/components/intro/footage.json'
+    let all = {}
+    try {
+      all = JSON.parse(readFileSync(file, 'utf8'))
+    } catch {
+      // The first take published.
+    }
+    writeFileSync(file, JSON.stringify({ ...all, [SHAPE]: meta }, null, 2) + '\n')
+  }
   console.log('wrote', OUT)
   process.exit(0)
 }

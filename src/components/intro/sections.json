@@ -1,0 +1,9 @@
+[
+  { "name": "make", "caption": "Make a poll", "seconds": 8.5 },
+  { "name": "collect", "caption": "Gather ideas from everyone", "seconds": 7.5 },
+  { "name": "rate", "caption": "Rate the options", "seconds": 5 },
+  { "name": "times", "caption": "Rate the times", "seconds": 6 },
+  { "name": "votes", "caption": "Watch the votes come in", "seconds": 6.5 },
+  { "name": "decide", "caption": "Get a decision", "seconds": 9.5 },
+  { "name": "list", "caption": "See your polls in one place", "seconds": 3 }
+]

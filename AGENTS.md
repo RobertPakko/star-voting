@@ -33,8 +33,8 @@ src/lib/         the supabase client and auth context, the one read that opens a
                  poll id spelling (pollId.ts), live updates (useLiveStream.ts, readLedger.ts),
                  time-poll arithmetic (schedule.ts, timezones.ts), drafts, limits, push, motion,
                  the sample poll, and shared types — each file says what it is for at its top
-public/          served as-is: icons, the web app manifest and its screenshots, the Start page's
-                 loops (start/), the service worker
+public/          served as-is: icons, the web app manifest and its screenshots, the intro's
+                 footage (intro/), the Start page's loops (start/), the service worker
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 supabase/functions/   Edge Functions: send-push, the half of a push notification Postgres cannot do
@@ -1404,39 +1404,99 @@ and so no button.
 
 ## The intro
 
-`#/intro` is a 22-second film of the app at work — a poll made, voted in and
-decided — ending on **Learn more** (`/about`), **Make your own poll** (`/new`)
-and **Share this intro**. It is public and outside the app shell (the film
-draws the header itself). [`pages/Intro.tsx`](src/pages/Intro.tsx) is the
-page; the film is under [`components/intro/`](src/components/intro). It was
-ported from a motion-design tool's scene list; the cue times are `CUES` in
-`motion.ts`, marking Opening, Create, Rate, Decide and Close.
+`#/intro` is a film of the app at work, about fifty seconds: the logo
+arrives and flies into the header of a recording of the real app, which makes
+a poll, gathers films from friends, rates them, paints a calendar, watches the
+votes arrive, closes the poll for both results and goes back to the poll list;
+then the logo flies back out and the page ends on **Learn more** (`/about`),
+**Make your own poll** (`/new`), **Share this intro**, and a carousel of what
+the film had no time for. It is public and outside the app shell (the footage
+has the header in it). [`pages/Intro.tsx`](src/pages/Intro.tsx) is the page;
+the film is under [`components/intro/`](src/components/intro).
 
-- **Every frame is a function of `T`**, the seconds since the start. Nothing
-  mounts or unmounts as it plays and nothing animates through CSS; a
-  `requestAnimationFrame` loop advances `T` (capped at a tenth of a second per
-  step, so a backgrounded tab resumes rather than jumping). **Skip** is
-  `T = TOTAL`; reduced motion starts on the last frame.
-- **Two cuts, by window shape**: landscape at 1920×1080 (steps down the left,
-  the app in a browser window) and portrait at 1080×1920 (numbered dots, the
-  app at phone width, taps instead of a cursor). Rotating swaps cuts without
-  restarting.
-- **The film is drawn, not rendered from real components.**
-  `AppScreens.tsx` holds fixed drawings in the app's light colours, so the
-  film plays identically for everybody. Nothing keeps them in step with
-  `CreatePoll`, `BallotCard` or `Results`; update the drawings when those
-  change visibly. The camera and cursor find marks by measuring `data-tg`
-  elements (`useTargets`).
+- **The footage is a recording, not a drawing**, made on the live site by
+  [`scripts/intro/record.mjs`](scripts/intro/record.mjs) and committed to
+  `public/intro/` (an mp4 and a poster per shape). Re-record when the create
+  form, the collecting card, either ballot, the results or the list change
+  visibly; nothing reminds you. See [Recording the
+  intro](#recording-the-intro).
+- **One section at a time.** `sections.json` names each section, gives its
+  caption and its length in the film; the film draws the caption and a bar per
+  section above the footage. Nothing pans or zooms.
+- **Every frame is a function of `T`**, the seconds since the start, with
+  nothing animated through CSS. A `requestAnimationFrame` loop advances `T`
+  (capped at a tenth of a second per step), **except while the footage plays,
+  when `T` follows the video's playhead** (`followVideo` in `Intro.tsx`): a
+  video that stops to buffer holds the film with it. A clock that has moved
+  where the video is not — **Skip** (`T = TOTAL`), **Watch again**, a rotation
+  handing over to the other shape's video — seeks the video to it. Reduced
+  motion starts on the last frame and fetches no footage; a video that will
+  not play leaves the film running past a still.
+- **Two cuts, by window shape, on one timeline**: landscape at 1920×1080 (a
+  browser window) and portrait at 1080×1920 (a phone). The recorder fits each
+  section of both to the length `sections.json` gives it, so rotating swaps
+  videos at the same moment without restarting.
+- **The logo's flights land on the footage's own header logo**, whose
+  position the recorder writes to `footage.json`, so the film reads as the
+  app opening and closing.
 - **It stays light in dark mode**, as a video would; the page takes the film's
   background. The buttons are styled to look the same in both schemes.
-- **The buttons are drawn at page size, over the film**, in the space under
-  the closing wordmark (`FILMS[…].actions`), hidden (not just transparent)
-  until they rise in.
+- **Fully transparent parts are hidden outright** (`seen` in `Film.tsx`), so
+  axe does not measure the contrast of a caption nobody can see.
+- **The buttons and the carousel are drawn at page size, over the film**, in
+  the space under the closing wordmark (`FILMS[…].actions`; higher on the
+  tall shape, where three stacked buttons and the carousel must fit), hidden
+  (not just transparent) until they rise in.
+- **The carousel** ([`Features.tsx`](src/components/intro/Features.tsx))
+  turns every four seconds from the moment it rises in, and stops for the
+  pointer, for focus, for **Pause** and for either arrow; under reduced
+  motion it does not turn and has no pause. Paused, the card is a live region.
+  Each feature is a word and a sentence a newcomer might be weighing the site
+  on; keep them true.
 - **Make your own poll asks nothing**: a reader with no session gets one
   without an account (`continueWithoutAccount`) and is taken to the create
   form.
 - **Share this intro** opens the share sheet where there is one and copies
   the link otherwise.
+
+### Recording the intro
+
+The footage is the real app on `choicelab.app`, driven by Playwright in Edge
+signed in as a test account, with a poll filled by scripted strangers calling
+the open-poll functions with the public anon key. Edge rather than
+Playwright's own Chromium, which some Windows machines block. Nothing here
+needs Docker.
+
+```bash
+node scripts/intro/browser.mjs                       # leave running; sign in once
+node scripts/intro/seed.mjs                          # once per account: the list's example polls
+node scripts/intro/record.mjs test-results/intro-landscape --publish
+node scripts/intro/record.mjs test-results/intro-portrait --portrait --publish
+```
+
+- **The capture browser keeps its own profile** in `.capture-profile/`
+  (gitignored, and ignored by Vite's watcher, which crashes on its locked
+  files). It holds the test account's session; sign in with a code.
+- **The window must stay visible while recording**: Edge stops drawing
+  frames for a covered window.
+- **A take makes one poll, "Movie night", and deletes it** at the end, and
+  deletes any left by a take that crashed. The example polls stay.
+- **Frames come from the screencast** (Playwright's own video blurs text) and
+  are put together by `ffmpeg`, on the PATH. A cut in the recording (the
+  selects set off camera, the reload that shows the results fresh) is a cut,
+  not a wait. Each section is then sped up evenly or held on its last frame to
+  its length in `sections.json`.
+- **The page is dressed for the camera**: an arrow, or on the phone a
+  fingertip shown only while pressing; toasts hidden; the account's address
+  hidden in the header and shown as *you@example.com* elsewhere.
+- **Every scroll is a glide on camera.** A click near the edge scrolls the
+  element into view first, easing, sideways too where a box scrolls (the week
+  calendar on a phone); Playwright's own jump before a click is never used.
+- **The second question's windows are scored differently by each stranger**,
+  since identical score vectors tie the runoff (see [Ties, and the poll that
+  elects nobody](#ties-and-the-poll-that-elects-nobody)).
+- Node on Windows sometimes dies at exit with a libuv assertion; run the take
+  again.
 
 ## The Start page
 
@@ -3108,8 +3168,7 @@ the button. The cut also bounds the bars' 40ms stagger
 The runoff is drawn straight under the winner and the scoring round below it
 — the opposite of the order STAR runs them — because the runoff elects the
 winner, and a reader seeing a score-round leader who lost needs the
-explanation next to the name. `TallyShape` and the intro film's drawing follow
-the same order.
+explanation next to the name. `TallyShape` follows the same order.
 
 #### Each round carries its own tie-break
 

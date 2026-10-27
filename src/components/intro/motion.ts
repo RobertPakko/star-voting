@@ -1,21 +1,37 @@
-import { useEffect, useRef, useState } from 'react'
+import footage from './footage.json'
+import sections from './sections.json'
 
 /**
- * The arithmetic the intro film is drawn with: its timeline, its three
- * curves, the poll it tells the story of, and the measuring that points the
- * camera and the cursor at things.
+ * The arithmetic the intro film is drawn with: its timeline, its curves, and
+ * where things sit in each of its two shapes.
  *
- * Every frame of the film is a pure function of one number, `T`, the seconds
- * since it started — nothing mounts or unmounts as it plays, and nothing is
- * animated by CSS. That is what lets a reader skip to the end, and a reader who
- * has asked for less motion start there: the last frame is simply `T = TOTAL`.
- * See "The intro" in AGENTS.md.
+ * Every frame of the film is a function of one number, `T`, the seconds since
+ * it started. While the footage plays, the video is the clock — `T` follows
+ * its playhead, so a video that stops to buffer holds the film with it — and
+ * outside the footage the film runs on its own. Skipping is `T = TOTAL`, and
+ * a reader who has asked for less motion starts there. See "The intro" in
+ * AGENTS.md.
  */
 
-/** Where each part of the film starts, in seconds. */
-export const CUES = { Opening: 0, Create: 3, Rate: 8, Decide: 13.5, Close: 19.5 } as const
-/** The film's length: the end of the closing part. */
-export const TOTAL = 22
+/** When the footage starts: after the logo has arrived and flown into it. */
+export const FOOTAGE = 3.1
+
+/**
+ * The recorded sections, each starting where the last ended. Their lengths
+ * are the ones the recording was fitted to (scripts/intro/record.mjs), so
+ * both videos share this timeline.
+ */
+export const SECTIONS = sections.reduce<
+  { name: string; caption: string; start: number; end: number }[]
+>((list, s) => {
+  const start = list.length ? list[list.length - 1].end : FOOTAGE
+  return [...list, { name: s.name, caption: s.caption, start, end: start + s.seconds }]
+}, [])
+
+/** When the footage ends and the logo comes back out of it. */
+export const CLOSE = SECTIONS[SECTIONS.length - 1].end
+/** The film's length: the closing settled. */
+export const TOTAL = CLOSE + 2.6
 
 export const FONT =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
@@ -27,53 +43,65 @@ export const FONT =
  */
 export const COL = {
   text: '#000',
-  dimmed: '#868e96',
   gray7: '#495057',
   border: '#dee2e6',
-  inputBorder: '#ced4da',
+  track: '#dee2e6',
   blue: '#228be6',
-  blueDark: '#1c7ed6',
-  violet: '#7950f2',
-  gray6: '#868e96',
-  track: '#e9ecef',
-  starOff: '#dee2e6',
-  star: '#fab005',
-  green: '#40c057',
-  red: '#fa5252',
+  chrome: '#f1f3f5',
   bg: '#f8f9fa',
 }
-export const BADGE = {
-  grape: ['#f3d9fa', '#ae3ec9'],
-  cyan: ['#c5f6fa', '#0c8599'],
-  lime: ['#e9fac8', '#66a80f'],
-  orange: ['#ffe8cc', '#e8590c'],
-  green: ['#d3f9d8', '#2f9e44'],
-} as const
-export type BadgeColor = keyof typeof BADGE
-
-export const OPTIONS = ['Spirited Away', 'Honeyland', 'The Matrix', 'Knives Out']
-export const MY_SCORES = [4, 2, 3, 5]
-export const TALLY = [
-  { name: 'Knives Out', pts: 38, fin: true },
-  { name: 'Spirited Away', pts: 33, fin: true },
-  { name: 'The Matrix', pts: 27, fin: false },
-  { name: 'Honeyland', pts: 14, fin: false },
-]
-export const VOTERS = ['Alex', 'Sam', 'Priya', 'Jordan', 'Mei', 'Luis', 'Noor', 'Ben', 'Dana']
-export const RUNOFF = { a: 'Knives Out', b: 'Spirited Away', pa: 6, pb: 3 }
-/** When each of the four rows of stars is clicked: the stars and the cursor both keep to it. */
-export const starClicks = (R: number) => [R + 1.15, R + 1.75, R + 2.35, R + 2.95]
 
 /**
- * The film's two shapes, in their own pixels, and how far down each the
- * calls to action start: the space under the closing wordmark, where the
- * opening's tagline stood, is left empty for them.
+ * The film's two shapes, in their own pixels: the opening's logo and
+ * wordmark, the closing's (higher on the tall shape, where three stacked
+ * buttons and the features have to fit under it), where the calls to action
+ * start under the closing wordmark, the caption and progress above the
+ * footage, and the screen the footage plays on — a browser window on the wide
+ * shape, a phone on the tall one.
  */
 export const FILMS = {
-  landscape: { w: 1920, h: 1080, actions: 670 },
-  portrait: { w: 1080, h: 1920, actions: 1180 },
+  landscape: {
+    w: 1920,
+    h: 1080,
+    logo: { x: 960, y: 400, size: 168 },
+    word: { top: 520, size: 92 },
+    tag: { top: 650, size: 42 },
+    closing: { logo: { x: 960, y: 400, size: 168 }, word: 520 },
+    actions: 670,
+    progress: { top: 52, width: 720 },
+    caption: { top: 84, size: 50 },
+    // The video's own 1280×800, scaled to fit under the caption.
+    screen: { x: 301, y: 226, w: 1318, h: 824 },
+    bar: 46,
+  },
+  portrait: {
+    w: 1080,
+    h: 1920,
+    logo: { x: 540, y: 820, size: 240 },
+    word: { top: 990, size: 110 },
+    tag: { top: 1150, size: 52 },
+    closing: { logo: { x: 540, y: 470, size: 220 }, word: 620 },
+    actions: 790,
+    progress: { top: 104, width: 640 },
+    caption: { top: 140, size: 58 },
+    // A 390×844 phone screen, in a bezel.
+    screen: { x: 189, y: 300, w: 702, h: 1519 },
+    bar: 0,
+  },
 } as const
 export type FilmShape = keyof typeof FILMS
+
+/** Where the app's own header logo is on the screen, in film pixels. */
+export function headerLogo(shape: FilmShape) {
+  const { screen } = FILMS[shape]
+  const shot = footage[shape]
+  const k = screen.w / shot.w
+  return {
+    x: screen.x + shot.logo.x * k,
+    y: screen.y + shot.logo.y * k,
+    size: shot.logo.size * k,
+  }
+}
 
 type Ease = (t: number) => number
 export const Easing = {
@@ -107,133 +135,9 @@ export function tween(
 }
 export const p01 = (T: number, a: number, b: number, ease?: Ease) => tween(T, a, b, 0, 1, ease)
 
-/** A value moved through a list of keyframes, on the drawing curve. */
-export function keyed<K extends string>(
-  T: number,
-  list: ({ t: number } & Record<K, number>)[],
-  prop: K,
-) {
-  if (T <= list[0].t) return list[0][prop]
-  for (let i = 0; i < list.length - 1; i++) {
-    const k0 = list[i]
-    const k1 = list[i + 1]
-    if (T <= k1.t)
-      return lerp(
-        k0[prop],
-        k1[prop],
-        MOTION.draw(clamp((T - k0.t) / Math.max(k1.t - k0.t, 1e-6), 0, 1)),
-      )
-  }
-  return list[list.length - 1][prop]
-}
-
-interface Shot {
-  t: number
-  z: number
-  fx: number
-  fy: number
-}
-
-/**
- * Camera keyframes with each focus point pulled inside the page at that
- * keyframe's own zoom. The clamp has to happen here, before the curve, and
- * not only on the value it produces: a shot aimed past the page's edge would
- * otherwise sit pinned to that edge for most of a move and cross the short
- * distance it really travels in the few fastest frames of the curve, which
- * is a snap rather than a pan. Between two clamped shots the bound moves with
- * 1/z, which is convex, so the interpolated focus stays inside it.
- */
-export function framed(shots: Shot[], win: { w: number; h: number }, vw: number, vh: number) {
-  return shots.map((s) => {
-    const hw = win.w / (2 * s.z)
-    const hh = win.h / (2 * s.z)
-    return {
-      ...s,
-      fx: clamp(s.fx, hw, Math.max(hw, vw - hw)),
-      fy: clamp(s.fy, hh, Math.max(hh, vh - hh)),
-    }
-  })
-}
-
-/** How much of `text` has been typed by `T`, typing from `a` to `b`. */
-export const typed = (T: number, text: string, a: number, b: number) =>
-  text.slice(0, Math.round(clamp((T - a) / (b - a), 0, 1) * text.length))
-
-/** A press: up from 0 to 1 and back over `len` seconds from `at`. */
-export const press = (T: number, at: number, len = 0.25) =>
-  T >= at && T <= at + len ? Math.sin((Math.PI * (T - at)) / len) : 0
-
-export function arcPath(cx: number, cy: number, r: number, a0: number, a1: number) {
-  const rad = (d: number) => (d * Math.PI) / 180
-  const x0 = cx + r * Math.cos(rad(a0))
-  const y0 = cy - r * Math.sin(rad(a0))
-  const x1 = cx + r * Math.cos(rad(a1))
-  const y1 = cy - r * Math.sin(rad(a1))
-  return `M${cx},${cy} L${x0},${y0} A${r},${r} 0 0 1 ${x1},${y1} Z`
-}
-
-export interface Target {
-  x: number
-  y: number
-  w: number
-  h: number
-}
-export type Targets = Record<string, Target>
-
-/**
- * Where every `data-tg` element under `root` sits, in the root's own
- * unscaled coordinates — so it is right whatever the camera and the fit to
- * the window are doing to it when it is asked.
- */
-export function measure(root: HTMLElement | null): Targets | null {
-  if (!root) return null
-  const rr = root.getBoundingClientRect()
-  const s = rr.width / root.offsetWidth || 1
-  const out: Targets = {}
-  root.querySelectorAll<HTMLElement>('[data-tg]').forEach((el) => {
-    const r = el.getBoundingClientRect()
-    out[el.dataset.tg!] = {
-      x: (r.left - rr.left) / s + r.width / s / 2,
-      y: (r.top - rr.top) / s + r.height / s / 2,
-      w: r.width / s,
-      h: r.height / s,
-    }
-  })
-  return out
-}
-
-/** A measured target, or a guess at it before the first measurement. */
-export const pt = (m: Targets | null, k: string, fx: number, fy: number): Target =>
-  m?.[k] ?? { x: fx, y: fy, w: 0, h: 0 }
-
 /** The logo, served from the app's own directory. */
 export const LOGO_SRC = `${import.meta.env.BASE_URL}logo.png`
 
-/**
- * The measured targets of the two app pages, taken once they are laid out and
- * again once fonts have settled. The pages never change shape as the film
- * plays — only what is typed into them and how opaque they are — so a
- * measurement taken at the start holds for the whole of it.
- */
-export function useTargets() {
-  const create = useRef<HTMLDivElement>(null)
-  const poll = useRef<HTMLDivElement>(null)
-  const [targets, setTargets] = useState<{ A: Targets | null; B: Targets | null }>({
-    A: null,
-    B: null,
-  })
-  useEffect(() => {
-    let live = true
-    const run = () => {
-      if (live) setTargets({ A: measure(create.current), B: measure(poll.current) })
-    }
-    run()
-    void document.fonts?.ready.then(run)
-    const id = setTimeout(run, 900)
-    return () => {
-      live = false
-      clearTimeout(id)
-    }
-  }, [])
-  return { create, poll, ...targets }
-}
+/** A recorded video and the still of its first frame, served from public/intro/. */
+export const footageSrc = (shape: FilmShape, ext: 'mp4' | 'jpg') =>
+  `${import.meta.env.BASE_URL}intro/${shape}.${ext}`
