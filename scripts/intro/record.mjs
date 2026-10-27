@@ -217,10 +217,6 @@ await rec.resume()
 rec.mark('make')
 await pause(500)
 await type(page.getByPlaceholder('A title for your poll'), 'Movie night')
-await type(
-  page.getByPlaceholder('Optional additional details'),
-  'Pick a film, then a night to watch it.',
-)
 await click(page.getByText('Anyone with the link'))
 await click(page.getByText('Show voter names'))
 await click(page.getByText('Solicit options from voters'))
@@ -230,13 +226,18 @@ await type(page.getByPlaceholder('What is this question asking?'), 'Which movie?
 await click(page.getByRole('tab', { name: 'Question 2' }), { settle: 400 })
 await type(page.getByPlaceholder('What is this question asking?'), 'Which night?')
 await click(page.getByText('Find a time'), { settle: 1500 })
-await rec.cut()
 // The selects are set off camera: they are slow to watch and say little.
+// Opening one scrolls the page, so it is put back before recording resumes
+// and the way down to the calendar is seen.
+await rec.cut()
+const keptY = await page.evaluate(() => window.scrollY)
 await pick('Length', '2 hours')
 await pick('Earliest start', '6:00pm')
 await pick('Latest end', '11:00pm')
-await scrollTo(page.getByRole('button', { name: /^Fill the whole day/ }).first(), 160)
+await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), keptY)
+await pause(200)
 await rec.resume()
+await scrollTo(page.getByRole('button', { name: /^Fill the whole day/ }).first(), 160)
 await pause(300)
 for (const day of ['2026-10-30', '2026-10-31'])
   await click(page.getByRole('button', { name: `Fill the whole day ${day}` }), { settle: 450 })
@@ -270,10 +271,6 @@ for (const [i, [name, description]] of FILMS.entries()) {
   await people[i].confirm(movieQ)
   await pause(1700)
 }
-// We have had our say too, under the name we will vote with; then the poll
-// opens.
-await type(page.getByLabel('Your name'), 'Rob')
-await click(page.getByRole('button', { name: 'Confirm options' }), { settle: 1100 })
 await click(page.getByRole('button', { name: 'Open poll' }).first(), { settle: 500 })
 await click(page.getByRole('dialog').getByRole('button', { name: 'Open poll' }))
 await page.getByRole('button', { name: 'Submit vote' }).waitFor()
@@ -281,14 +278,8 @@ await pause(600)
 if (done('collect')) await finish()
 
 // ── Rate the options ──────────────────────────────────────────────────────
-// Confirming moved the page on to the next list, so the poll opened there:
-// back to the films by the question strip. The name typed to confirm is
-// still in its box.
 rec.mark('rate')
-await click(page.getByRole('link', { name: /Which movie\?/ }).first(), { settle: 600 })
-await page.getByRole('radiogroup', { name: 'Score for Alien' }).waitFor()
-await scrollTo(page.getByLabel('Your name'), 150)
-await pause(300)
+await type(page.getByLabel('Your name'), 'Rob')
 for (const [name, stars] of [
   ['Alien', 5],
   ['Nomadland', 3],
@@ -304,12 +295,12 @@ await pause(900)
 if (done('rate')) await finish()
 
 // ── Rate the times ────────────────────────────────────────────────────────
-await rec.cut()
 const firstCell = page.locator('[data-drag-slot-group="2026-10-30"]:not([disabled])').first()
-await scrollTo(page.getByText(/All times are/), 70)
 rec.mark('times')
-await rec.resume()
-await pause(400)
+// Low enough that the brush beside this line is clear of the top edge, or
+// pressing it would scroll the page back again.
+await scrollTo(page.getByText(/All times are/), 150)
+await pause(300)
 /** The paintable cells under a day's heading, top to bottom. */
 const column = (day) =>
   page.evaluate(
@@ -342,12 +333,9 @@ await pause(1200)
 if (done('times')) await finish()
 
 // ── Votes come in ─────────────────────────────────────────────────────────
-await rec.cut()
 const roster = page.getByRole('heading', { name: 'Voters' }).first()
-await roster.waitFor()
-await scrollTo(roster, 200)
 rec.mark('votes')
-await rec.resume()
+await scrollTo(roster, 200)
 await pause(700)
 const MOVIE_VOTES = [
   { Alien: 5, Nomadland: 2, Airplane: 3 },
@@ -376,11 +364,9 @@ await pause(800)
 if (done('votes')) await finish()
 
 // ── A decision ────────────────────────────────────────────────────────────
-await rec.cut()
 const close = page.getByRole('button', { name: 'Close poll' }).first()
-await scrollTo(close, 400)
 rec.mark('decide')
-await rec.resume()
+await scrollTo(close, 400)
 await pause(300)
 await click(close, { settle: 500 })
 await click(page.getByRole('dialog').getByRole('button', { name: 'Close poll' }), { settle: 300 })
@@ -397,10 +383,18 @@ await page
   .waitFor({ timeout: 60_000 })
 await rec.resume()
 await pause(3400)
+// Then the night it chose, on the second question's tally.
+await click(page.getByRole('link', { name: /Which night\?/ }).first())
+await page
+  .getByText(/^Winner: .*Sat/)
+  .first()
+  .waitFor()
+await pause(3400)
 if (done('decide')) await finish()
 
 // ── Back to the list ──────────────────────────────────────────────────────
 rec.mark('list')
+await scrollTo(page.getByRole('link', { name: 'Your polls' }).first(), 150)
 await click(page.getByRole('link', { name: 'Your polls' }).first())
 await pause(2500)
 await finish()
