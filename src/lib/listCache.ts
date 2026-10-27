@@ -1,4 +1,8 @@
+import { supabase } from './supabase'
 import type { PollListItem } from './types'
+
+/** Polls to a page of the list; `list_polls` is always asked for this many. */
+export const PAGE_SIZE = 10
 
 /**
  * The poll list as it was last drawn, kept for the walk back to it.
@@ -39,6 +43,35 @@ export function readListSnapshot(userId: string | undefined): ListSnapshot | nul
 
 export function writeListSnapshot(next: Omit<ListSnapshot, 'scrollY'>) {
   snapshot = { ...next, scrollY: snapshot?.userId === next.userId ? snapshot.scrollY : 0 }
+}
+
+/**
+ * Makes sure the way back from a poll has a list to land on: when nothing is
+ * kept, or what is kept is the first page and this poll is not on it (one
+ * made since, or reached by its link), page one is read now, in the
+ * background, while the reader is on the poll. Without it the heading has no
+ * card to fly back to, and the list arrives as a skeleton. The new copy starts
+ * at the top, where a poll missing from the old one will be.
+ */
+export async function keepListFor(userId: string, pollId: string) {
+  const held = readListSnapshot(userId)
+  if (held && (held.page !== 1 || held.polls.some((poll) => poll.id === pollId))) return
+  const { data, error } = await supabase.rpc('list_polls', {
+    p_limit: PAGE_SIZE,
+    p_offset: 0,
+    p_removed: false,
+  })
+  const rows = (data as PollListItem[] | null) ?? []
+  // Somebody else's list by now, or nothing worth keeping.
+  if (error || rows.length === 0 || readListSnapshot(userId) !== held) return
+  snapshot = {
+    userId,
+    polls: rows,
+    total: rows[0].total_count,
+    removedCount: rows[0].removed_count,
+    page: 1,
+    scrollY: 0,
+  }
 }
 
 /** How far down the list was, written as the reader leaves it. */

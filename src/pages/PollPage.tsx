@@ -24,7 +24,7 @@ import {
   stillEntrances,
   type FlightRun,
 } from '../lib/headingFlight'
-import { readListSnapshot } from '../lib/listCache'
+import { keepListFor, readListSnapshot } from '../lib/listCache'
 import type { PollHeadingProps } from '../components/PollHeading'
 import { motionMs } from '../lib/motion'
 import { BackToList } from '../components/BackToList'
@@ -199,6 +199,14 @@ export function PollPage() {
 
   // The list card the way back lands on: the group's first question.
   const listRow = (covering && firstQuestionOf(covering)) || pollId
+  // Something for the way back to land on; see `keepListFor`. Once the
+  // poll is read, so it is asked about the group's first question.
+  const userId = session?.user.id
+  const readable = !!covering && !refused && !sample
+  useEffect(() => {
+    if (userId && readable && listRow) void keepListFor(userId, listRow)
+  }, [userId, readable, listRow])
+
   const leaving = useRef({ listRow, userId: session?.user.id })
   leaving.current = { listRow, userId: session?.user.id }
 

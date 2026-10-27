@@ -300,13 +300,20 @@ export function PollDetail({
 
   // The one read handler, for signals and the page's own writes alike. A
   // crossing to another question shows up as `readQuestion` not matching.
+  // The creator of a collecting poll of several questions reads the whole
+  // page on every tick: *Open poll* is gated on every question's option count,
+  // which only `poll_group` carries, and a suggestion to any question can
+  // change it.
+  const groupMayMove =
+    !!poll?.group_id && !!status?.soliciting && poll.created_by === session?.user.id
+
   const onRead = useCallback(async () => {
-    if (wholePage.current || readQuestion.current !== pollId) {
+    if (wholePage.current || groupMayMove || readQuestion.current !== pollId) {
       wholePage.current = false
       return load()
     }
     return refresh()
-  }, [pollId, load, refresh])
+  }, [pollId, load, refresh, groupMayMove])
 
   // A crossing remounts nothing, so drop a half-changed ballot from the last question.
   useEffect(() => {

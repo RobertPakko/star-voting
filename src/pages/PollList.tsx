@@ -43,12 +43,9 @@ import {
   stillEntrances,
   type Flight,
 } from '../lib/headingFlight'
-import { readListSnapshot, writeListScroll, writeListSnapshot } from '../lib/listCache'
+import { PAGE_SIZE, readListSnapshot, writeListScroll, writeListSnapshot } from '../lib/listCache'
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
-
-/** Polls per page. `list_polls()` pages in the database, before its per-poll aggregates. */
-const PAGE_SIZE = 10
 
 /**
  * The poll list, or with `?archived` the archived polls. Keyed on which, so

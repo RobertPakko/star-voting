@@ -38,7 +38,8 @@ public/          served as-is: icons, the web app manifest and its screenshots, 
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 supabase/functions/   Edge Functions: send-push, the half of a push notification Postgres cannot do
-scripts/         squash.sh (squashes the migrations); sample-poll.sh (records the About page's sample poll)
+scripts/         squash.sh (squashes the migrations); sample-poll.sh (records the About page's sample poll);
+                 intro/ (records the intro's app footage on the live site; record.mjs says how)
 test/            tally tests run against a throwaway Postgres; build-db.sh builds it
 e2e/             the browser suite; screenshots.capture.ts (the manifest's screenshots);
                  videos.capture.ts (the Start page's loops)
@@ -1228,8 +1229,11 @@ returning flight only from its own way back or the back button
 
 **The list comes back as it was left** ([`lib/listCache.ts`](src/lib/listCache.ts)):
 same page, same rows, same scroll, so the heading has a card to land on. Only
-a return draws from it; the list still subscribes and reads as usual. If the
-card is gone, nothing flies.
+a return draws from it; the list still subscribes and reads as usual. **A poll
+page reads the first page of the list in the background** when nothing is kept
+or the kept first page lacks this poll (`keepListFor`) — a poll just made, a
+poll reached by its link, a tab reloaded — so the way back from those flies
+too. If the card is gone, nothing flies.
 
 Skipped under reduced motion and where there is no `Element.animate`.
 
