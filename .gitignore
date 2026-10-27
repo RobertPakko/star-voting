@@ -34,3 +34,6 @@ supabase/.temp/
 # Playwright
 test-results/
 playwright-report/
+
+# The intro recording's signed-in browser profile
+.capture-profile/
