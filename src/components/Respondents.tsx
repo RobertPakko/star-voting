@@ -4,6 +4,8 @@ import { UserPlusIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
+import { useArrivals } from '../lib/useArrivals'
+import arrival from './badgeArrival.module.css'
 import type { Invitee, PollStatus } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -150,6 +152,15 @@ export function Respondents({
     invitees.length === 0 ||
     invitees.some((i) => (collecting ? i.has_confirmed !== null : i.has_voted !== null))
 
+  // Who has answered this stage's question, so a badge turning to *Voted* or
+  // *Confirmed* while the card is read can say so (`badgeArrival.module.css`).
+  // Keyed by the stage as well, so opening the poll starts the count again
+  // rather than carrying confirmations over as if they were votes.
+  const answeredKeys = invitees
+    .filter((i) => (collecting ? i.has_confirmed : i.has_voted) === true)
+    .map((i) => answerKey(collecting, i.email))
+  const answering = useArrivals(answeredKeys)
+
   return (
     <Card withBorder>
       <Stack gap="xs">
@@ -166,7 +177,16 @@ export function Respondents({
               </Text>
               <Group gap="xs" wrap="nowrap">
                 {said && (
-                  <Badge size="sm" variant="light" color={mark.color}>
+                  <Badge
+                    size="sm"
+                    variant="light"
+                    color={mark.color}
+                    className={
+                      answering.has(answerKey(collecting, invitee.email))
+                        ? arrival.arriving
+                        : undefined
+                    }
+                  >
                     {mark.label}
                   </Badge>
                 )}
@@ -251,6 +271,11 @@ export function Respondents({
  * poll is only soliciting while `closed_at` is null, so the two cannot both
  * be true. See poll_status.
  */
+/** One invitee's answer to the stage's question, as `useArrivals` tracks it. */
+function answerKey(collecting: boolean, email: string): string {
+  return `${collecting ? 'confirmed' : 'voted'}:${email}`
+}
+
 function standing(
   collecting: boolean,
   isClosed: boolean,

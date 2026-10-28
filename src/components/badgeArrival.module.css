@@ -1,0 +1,54 @@
+/* A name landing in a roster while it is read: somebody has just voted, or
+ * just confirmed the options. Shared by the two rosters, `NameRoster` (names
+ * joining) and `Respondents` (an invitee's badge turning to *Voted* or
+ * *Confirmed*), for the reason `listRow` is shared: it is one event, and it
+ * should look like one wherever it happens. Only arrivals seen on screen get
+ * it; see `useArrivals`.
+ *
+ * **Two movements, for two questions.** The pop says *something changed*, and
+ * is over in the time anything else takes to arrive. The badge's colours
+ * inverting and fading back says *which one*, and lasts long enough to be
+ * found by a reader who looked up a moment late — in a roster of fifteen, a
+ * pop alone is over before anybody has found where it was.
+ *
+ * Inverted rather than filled. White on a filled green falls short of 4.5:1,
+ * which is why the theme draws no filled green with white text (main.tsx),
+ * whereas the light badge's own text colour as a background, under the page's
+ * own background as text, is the pairing that badge was already checked at,
+ * turned over.
+ * The colours are the badge's own variables, so a badge of any colour
+ * highlights in its own.
+ *
+ * No `to` frame on `glow`: it fades back to whatever the badge is at rest,
+ * which is Mantine's to say, not this file's. */
+.arriving {
+  animation:
+    pop var(--motion-base) var(--motion-ease),
+    glow var(--motion-slow) var(--motion-ease);
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  60% {
+    transform: scale(1.1);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Held at full strength for the pop, so the two movements read as one
+   arrival rather than a pop and then, separately, a fade. */
+@keyframes glow {
+  from,
+  40% {
+    background-color: var(--badge-color);
+    color: var(--mantine-color-body);
+  }
+}

@@ -1283,6 +1283,14 @@ thing and costs nothing: **the open question's highlight crossfades**
   edit withdraws the confirmation.
 - **A count rolls over** (`roll` in `PollTags.module.css`) when the count
   badge's words change.
+- **A name lands in a roster** (`badgeArrival.module.css`): a voter or
+  confirmation joining `NameRoster`, or an invitee's badge in `Respondents`
+  turning to *Voted* or *Confirmed*, pops in with its colours inverted and
+  fading back, so the reader can find who just answered. Only changes seen on
+  screen count (`useArrivals`), never the first read. A name joining
+  `NameRoster` goes on the end (`useArrivalOrder`) rather than into its
+  alphabetical place, which would shift everyone after it; a fresh read is
+  alphabetical again.
 - **Progress bars grow** at `--motion-slow` (`.mantine-Progress-section` in
   `index.css`).
 - **A card that replaces a card changes height smoothly**
