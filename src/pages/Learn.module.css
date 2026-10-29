@@ -1,0 +1,60 @@
+/* The example election on /why-star, drawn as a grid of emoji: one row per
+ * candidate, one column per voter. Sized to fit a phone's card without
+ * scrolling (nine emoji columns, a name and a total); the wrapper scrolls if
+ * a large text setting outgrows that. */
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  border-collapse: collapse;
+  margin-inline: auto;
+  font-size: var(--mantine-font-size-sm);
+}
+
+.table th,
+.table td {
+  padding: 1px 2px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.table thead th {
+  color: var(--mantine-color-dimmed);
+  font-weight: 400;
+  font-size: var(--mantine-font-size-xs);
+}
+
+.table th[scope='row'] {
+  text-align: start;
+  padding-inline-end: var(--mantine-spacing-xs);
+}
+
+.table .total {
+  text-align: start;
+  padding-inline-start: var(--mantine-spacing-xs);
+}
+
+.emoji {
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+
+/* A phone's card is about 320px across: nine columns of emoji at the size
+   above come to about 370. */
+@media (max-width: 36em) {
+  .table th,
+  .table td {
+    padding-inline: 0;
+  }
+
+  .emoji {
+    font-size: 0.9375rem;
+  }
+}
+
+/* A candidate knocked out of an instant runoff. */
+.out {
+  color: var(--mantine-color-dimmed);
+  text-decoration: line-through;
+}
