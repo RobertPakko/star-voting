@@ -111,6 +111,20 @@ export function isPollParam(param: string): boolean {
   return SHORT.test(param) || UUID.test(param) || param.startsWith('sample-')
 }
 
+/**
+ * Which page an address is, as opposed to which poll.
+ *
+ * Every poll is one page — the address carries the poll's id because a poll's
+ * link is its id, and each of a poll's questions has an address of its own —
+ * so all of them answer to one key and moving between them opens nothing.
+ * A poll's address is its id alone, so it is recognised by shape
+ * (`isPollParam`), which also keeps `/new` -- the create form, and
+ * genuinely another page -- out of it.
+ */
+export function pageKey(pathname: string): string {
+  return isPollParam(pathname.slice(1)) ? '/:pollId' : pathname
+}
+
 /** The in-app path of a poll, which is the one place its address is spelled. */
 export function pollPath(pollId: string): string {
   return `/${shortPollId(pollId)}`

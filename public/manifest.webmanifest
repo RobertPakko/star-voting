@@ -57,7 +57,7 @@
       "name": "Your polls",
       "short_name": "Your polls",
       "description": "The polls you have made or been invited to",
-      "url": "./#/",
+      "url": "./#/polls",
       "icons": [
         {
           "src": "shortcuts/your-polls.png",

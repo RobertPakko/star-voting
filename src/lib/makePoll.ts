@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 
 /**
- * "Make your own poll" from a page anybody can reach — About, the intro, the
- * Start page — where the reader may well have no session.
+ * "Make your own poll" from a page anybody can reach — the home page, the
+ * intro — where the reader may well have no session.
  *
  * It reads the same to everybody, because anybody can make a poll: a reader
  * with no session is given one without an account on the press, as "Continue

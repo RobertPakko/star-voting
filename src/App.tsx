@@ -5,15 +5,17 @@ import { useAuth } from './lib/auth'
 import { takeDestination } from './lib/shareLink'
 import { SignIn } from './pages/SignIn'
 import { Layout } from './components/Layout'
+import { ScrollToTop } from './components/ScrollToTop'
 import { PollList } from './pages/PollList'
 import { PollPage } from './pages/PollPage'
 import { NotFound } from './pages/NotFound'
+import { Home } from './pages/Home'
 import {
-  AboutSkeleton,
   ContactSkeleton,
   DonateSkeleton,
   FormSkeleton,
   GuideSkeleton,
+  LearnSkeleton,
   SettingsSkeleton,
 } from './components/Skeletons'
 import { isPollParam } from './lib/pollId'
@@ -26,7 +28,9 @@ import { useLaunchRoutes } from './lib/launch'
  * least afford to keep waiting. Each waits behind its page's skeleton.
  */
 const CreatePoll = lazy(() => import('./pages/CreatePoll').then((m) => ({ default: m.CreatePoll })))
-const About = lazy(() => import('./pages/About').then((m) => ({ default: m.About })))
+const WhatIsStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhatIsStar })))
+const WhyStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhyStar })))
+const Features = lazy(() => import('./pages/Learn').then((m) => ({ default: m.Features })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
 const InstallGuide = lazy(() =>
   import('./pages/InstallGuide').then((m) => ({ default: m.InstallGuide })),
@@ -34,15 +38,14 @@ const InstallGuide = lazy(() =>
 const Donate = lazy(() => import('./pages/Donate').then((m) => ({ default: m.Donate })))
 const Contact = lazy(() => import('./pages/Contact').then((m) => ({ default: m.Contact })))
 const Intro = lazy(() => import('./pages/Intro').then((m) => ({ default: m.Intro })))
-const Start = lazy(() => import('./pages/Start').then((m) => ({ default: m.Start })))
 
 function App() {
   const { session, anonymous, loading } = useAuth()
   const navigate = useNavigate()
 
-  // The magic link lands on the root, so go where SignIn stashed. Only for a
-  // real account: the stash is usually an invite poll an anonymous session
-  // couldn't open anyway.
+  // The magic link lands on the root, which is the home page, so go where
+  // SignIn stashed. Only for a real account: the stash is usually an invite
+  // poll an anonymous session couldn't open anyway.
   useEffect(() => {
     if (!session || anonymous) return
     const destination = takeDestination()
@@ -67,110 +70,120 @@ function App() {
   }
 
   return (
-    <Routes>
-      {/* Outside the shell: the film draws its own header. */}
-      <Route
-        path="intro"
-        element={
-          <Suspense
-            fallback={<div style={{ position: 'fixed', inset: 0, background: '#f8f9fa' }} />}
-          >
-            <Intro />
-          </Suspense>
-        }
-      />
+    <>
+      <ScrollToTop />
+      <Routes>
+        {/* Outside the shell: the film draws its own header. */}
+        <Route
+          path="intro"
+          element={
+            <Suspense
+              fallback={<div style={{ position: 'fixed', inset: 0, background: '#f8f9fa' }} />}
+            >
+              <Intro />
+            </Suspense>
+          }
+        />
 
-      {/* Outside the shell; nothing links to it. */}
-      <Route
-        path="start"
-        element={
-          <Suspense fallback={null}>
-            <Start />
-          </Suspense>
-        }
-      />
-
-      <Route element={<Layout />}>
-        {/* Public routes, in front of the auth gate. A poll's address is just
+        <Route element={<Layout />}>
+          {/* Public routes, in front of the auth gate. A poll's address is just
             its id; `PollRoute` turns away segments that aren't shaped like
             one. */}
-        <Route path=":pollId" element={<PollRoute />} />
-        <Route
-          path="about"
-          element={
-            <Suspense fallback={<AboutSkeleton />}>
-              <About />
-            </Suspense>
-          }
-        />
-        <Route
-          path="app"
-          element={
-            <Suspense fallback={<GuideSkeleton />}>
-              <InstallGuide />
-            </Suspense>
-          }
-        />
-        <Route
-          path="donate"
-          element={
-            <Suspense fallback={<DonateSkeleton />}>
-              <Donate />
-            </Suspense>
-          }
-        />
-        <Route
-          path="contact"
-          element={
-            <Suspense fallback={<ContactSkeleton />}>
-              <Contact />
-            </Suspense>
-          }
-        />
+          <Route index element={<Home />} />
+          <Route path=":pollId" element={<PollRoute />} />
+          <Route
+            path="star"
+            element={
+              <Suspense fallback={<LearnSkeleton />}>
+                <WhatIsStar />
+              </Suspense>
+            }
+          />
+          <Route
+            path="why-star"
+            element={
+              <Suspense fallback={<LearnSkeleton />}>
+                <WhyStar />
+              </Suspense>
+            }
+          />
+          <Route
+            path="features"
+            element={
+              <Suspense fallback={<LearnSkeleton />}>
+                <Features />
+              </Suspense>
+            }
+          />
+          <Route
+            path="app"
+            element={
+              <Suspense fallback={<GuideSkeleton />}>
+                <InstallGuide />
+              </Suspense>
+            }
+          />
+          <Route
+            path="donate"
+            element={
+              <Suspense fallback={<DonateSkeleton />}>
+                <Donate />
+              </Suspense>
+            }
+          />
+          <Route
+            path="contact"
+            element={
+              <Suspense fallback={<ContactSkeleton />}>
+                <Contact />
+              </Suspense>
+            }
+          />
 
-        {/* Any session, including one without an account. */}
-        {session && (
-          <>
-            <Route index element={<PollList />} />
-            <Route
-              path="new"
-              element={
-                <Suspense fallback={<FormSkeleton />}>
-                  <CreatePoll />
-                </Suspense>
-              }
-            />
-            {/* Linked from email footers, which went to an account. */}
-            <Route
-              path="settings"
-              element={
-                anonymous ? (
-                  <Navigate to="/sign-in" replace state={{ from: '/settings' }} />
-                ) : (
-                  <Suspense fallback={<SettingsSkeleton />}>
-                    <Settings />
+          {/* Any session, including one without an account. */}
+          {session && (
+            <>
+              <Route path="polls" element={<PollList />} />
+              <Route
+                path="new"
+                element={
+                  <Suspense fallback={<FormSkeleton />}>
+                    <CreatePoll />
                   </Suspense>
-                )
-              }
-            />
-            {/* Where a code redeemed on the sign-in screen leaves an account. */}
-            {!anonymous && <Route path="sign-in" element={<Navigate to="/" replace />} />}
-            {/* Signed out, the catch-all is the sign-in screen instead. */}
-            <Route path="*" element={<NotFound />} />
-          </>
-        )}
-      </Route>
+                }
+              />
+              {/* Linked from email footers, which went to an account. */}
+              <Route
+                path="settings"
+                element={
+                  anonymous ? (
+                    <Navigate to="/sign-in" replace state={{ from: '/settings' }} />
+                  ) : (
+                    <Suspense fallback={<SettingsSkeleton />}>
+                      <Settings />
+                    </Suspense>
+                  )
+                }
+              />
+              {/* Where a code redeemed on the sign-in screen leaves an account. */}
+              {!anonymous && <Route path="sign-in" element={<Navigate to="/polls" replace />} />}
+            </>
+          )}
+          <Route path="*" element={<NotFound />} />
+        </Route>
 
-      {/* The sign-in screen, outside the shell. These one-segment names must
-          be routes of their own, or `:pollId` would take them. */}
-      {!session && <Route path="*" element={<SignIn />} />}
-      {!session && <Route path="new" element={<SignIn />} />}
-      {/* Where the create form was until it moved to `#/new`; kept while
+        {/* The sign-in screen, outside the shell, standing in for every page
+          that needs a session. These one-segment names must be routes of
+          their own, or `:pollId` would take them. */}
+        {!session && <Route path="polls" element={<SignIn />} />}
+        {!session && <Route path="new" element={<SignIn />} />}
+        {/* Where the create form was until it moved to `#/new`; kept while
           installed copies may still hold the old shortcut. */}
-      <Route path="polls/new" element={<OldCreateAddress />} />
-      {(!session || anonymous) && <Route path="sign-in" element={<SignIn />} />}
-      {!session && <Route path="settings" element={<SignIn />} />}
-    </Routes>
+        <Route path="polls/new" element={<OldCreateAddress />} />
+        {(!session || anonymous) && <Route path="sign-in" element={<SignIn />} />}
+        {!session && <Route path="settings" element={<SignIn />} />}
+      </Routes>
+    </>
   )
 }
 

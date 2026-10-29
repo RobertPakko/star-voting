@@ -183,7 +183,7 @@ export function CreatorControls({
       return
     }
     notifications.show({ message: 'Poll deleted', color: 'green' })
-    navigate('/')
+    navigate('/polls')
   }
 
   const canClose = !status.is_closed && !status.is_complete && status.voted_count > 0

@@ -1,0 +1,52 @@
+/* The home page's tiles: an icon and a word or two, two to a row on every
+ * screen. A tile is a link the size of a card, so it answers the pointer the
+ * way a poll list card does (PollList.module.css): it lifts by a pixel and
+ * settles back under a press, behind `hover: hover` so a tap on a phone does
+ * not leave it stuck up. */
+
+.tile {
+  width: 100%;
+  height: 100%;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .tile {
+    transition:
+      transform var(--motion-fast) var(--motion-ease),
+      box-shadow var(--motion-fast) var(--motion-ease);
+  }
+
+  .tile:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--mantine-shadow-sm);
+  }
+
+  .tile:active {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+
+.body {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+}
+
+.icon {
+  flex: none;
+}
+
+.title {
+  min-width: 0;
+}

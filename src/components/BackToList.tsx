@@ -32,7 +32,7 @@ export function BackToList({ listId }: { listId?: string }) {
   return (
     <Button
       component={Link}
-      to="/"
+      to="/polls"
       variant="subtle"
       color="gray"
       size="compact-sm"

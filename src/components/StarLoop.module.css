@@ -1,0 +1,109 @@
+/* The home page's ballot loop. See StarLoop.tsx: every size here is a pixel on
+ * the fixed stage, which is scaled as a whole to the width of its box. */
+
+.box {
+  --loop-card: #ffffff;
+  --loop-border: #e5e7eb;
+  --loop-rule: #eef0f3;
+  --loop-ink: #14161a;
+  --loop-empty: #e4e6ea;
+  --loop-star: #f59008;
+  --loop-band: rgba(245, 144, 8, 0.07);
+  --loop-shadow: 0 24px 60px -28px rgba(20, 22, 26, 0.22);
+
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1280 / 648;
+  /* The card sits as far from the bottom as from the top, and its shadow spills
+     past the box rather than padding it, so the space round it is even. */
+  overflow: visible;
+}
+
+[data-mantine-color-scheme='dark'] .box {
+  --loop-card: var(--mantine-color-dark-6);
+  --loop-border: var(--mantine-color-dark-4);
+  --loop-rule: var(--mantine-color-dark-5);
+  --loop-ink: var(--mantine-color-dark-0);
+  --loop-empty: var(--mantine-color-dark-4);
+  --loop-band: rgba(245, 144, 8, 0.1);
+  --loop-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.6);
+}
+
+.stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.card {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 2px solid var(--loop-border);
+  border-radius: 28px;
+  background: var(--loop-card);
+  box-shadow: var(--loop-shadow);
+}
+
+.highlight {
+  position: absolute;
+  right: 14px;
+  left: 14px;
+  border-radius: 18px;
+  background: var(--loop-band);
+}
+
+.row {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 2px solid var(--loop-rule);
+}
+
+.row[data-first] {
+  border-top: none;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.label {
+  color: var(--loop-ink);
+  font-size: 42px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.description {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--loop-rule);
+}
+
+.stars {
+  display: flex;
+}
+
+.slot {
+  position: relative;
+}
+
+.slot svg {
+  position: absolute;
+  inset: 0;
+}
+
+.empty {
+  fill: var(--loop-empty);
+  stroke: var(--loop-empty);
+}
+
+.filled {
+  fill: var(--loop-star);
+  stroke: var(--loop-star);
+}

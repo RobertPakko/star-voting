@@ -5,14 +5,14 @@ import { test, expect, expectAccessible, setColorScheme } from './fixtures'
  * accessibility in both colour schemes, and the pieces of each that work
  * without a database.
  */
-const PAGES: { path: string; title: string; name: string; still?: boolean }[] = [
-  { path: '#/', title: 'Sign in', name: 'the sign-in screen' },
-  { path: '#/about', title: 'About', name: 'About' },
+const PAGES: { path: string; title: string; name: string }[] = [
+  { path: '#/', title: 'ChoiceLab', name: 'the home page' },
+  { path: '#/sign-in', title: 'Sign in', name: 'the sign-in screen' },
+  { path: '#/star', title: 'What is STAR?', name: 'What is STAR?' },
+  { path: '#/why-star', title: 'Why use STAR?', name: 'Why use STAR?' },
+  { path: '#/features', title: 'App features', name: 'App features' },
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
   { path: '#/intro', title: 'ChoiceLab', name: 'the intro' },
-  // Held still for axe, which takes ten seconds and more over a page that
-  // never stops turning; the markup is the same either way.
-  { path: '#/start', title: 'ChoiceLab', name: 'the Start page', still: true },
   { path: '#/donate', title: 'Donate', name: 'the donate page' },
   { path: '#/contact', title: 'Contact', name: 'the contact page' },
   { path: '#/sample-dinner', title: 'Movie night', name: 'a ballot' },
@@ -23,10 +23,9 @@ const PAGES: { path: string; title: string; name: string; still?: boolean }[] = 
 
 for (const scheme of ['light', 'dark'] as const) {
   test.describe(`${scheme} scheme`, () => {
-    for (const { path, name, still } of PAGES) {
+    for (const { path, name } of PAGES) {
       test(`${name} is accessible`, async ({ page }) => {
         await setColorScheme(page, scheme)
-        if (still) await page.emulateMedia({ reducedMotion: 'reduce' })
         await page.goto(path)
         await expect(page.getByRole('heading', { level: 1 })).toBeAttached()
         // Past every entrance: a fade caught halfway is a colour axe would
@@ -38,9 +37,9 @@ for (const scheme of ['light', 'dark'] as const) {
 
     test('the settings menu is accessible open', async ({ page }) => {
       await setColorScheme(page, scheme)
-      await page.goto('#/about')
+      await page.goto('#/')
       await page.getByRole('button', { name: 'Settings' }).click()
-      await expect(page.getByRole('link', { name: 'Donate' })).toBeVisible()
+      await expect(page.getByRole('dialog')).toBeVisible()
       await page.waitForTimeout(300)
       await expectAccessible(page, 'the settings menu')
     })
@@ -56,18 +55,101 @@ test.describe('page titles', () => {
   }
 
   test('a change of page is announced, and its title with it', async ({ page }) => {
-    await page.goto('#/about')
-    await expect(page).toHaveTitle('About')
-    await page.getByRole('button', { name: 'Settings' }).click()
-    await page.getByRole('link', { name: 'App installation' }).click()
+    await page.goto('#/')
+    await expect(page).toHaveTitle('ChoiceLab')
+    await page.getByRole('link', { name: /^App features/ }).click()
+    await expect(page).toHaveTitle('App features')
+    await expect(page.locator('[data-announcer="polite"]')).toHaveText('App features')
+  })
+})
+
+test.describe('the home page', () => {
+  test('has a tile for every page, two to a row', async ({ page }) => {
+    await page.goto('#/')
+    await expect(
+      page.getByRole('heading', { name: 'Better group decisions', level: 1 }),
+    ).toBeVisible()
+    const tiles = page.getByRole('main').locator('a, button')
+    await expect(tiles).toHaveCount(12)
+    const tops = await tiles.evaluateAll((els) =>
+      els.map((el) => Math.round(el.getBoundingClientRect().top)),
+    )
+    for (let i = 0; i < tops.length; i += 2) expect(tops[i + 1]).toBe(tops[i])
+    expect(tops[2]).toBeGreaterThan(tops[0])
+    // Not installed here, so the slot offers installing rather than the code.
+    await expect(page.getByRole('link', { name: /^App code/ })).toHaveCount(0)
+    await page.getByRole('link', { name: /^Install app/ }).click()
     await expect(page).toHaveTitle('Install the app')
-    await expect(page.locator('[data-announcer="polite"]')).toHaveText('Install the app')
+  })
+
+  test('is where the logo goes, and every page leads back to it', async ({ page }) => {
+    for (const path of [
+      '#/star',
+      '#/why-star',
+      '#/features',
+      '#/contact',
+      '#/donate',
+      '#/app',
+      '#/sample-dinner',
+      '#/sign-in',
+      '#/no-such-page',
+    ]) {
+      await page.goto(path)
+      await page.getByRole('link', { name: 'Back to homepage' }).click()
+      await expect(page, path).toHaveURL(/#\/$/)
+    }
+    await page.goto('#/donate')
+    await page
+      .getByRole('banner')
+      .getByRole('link', { name: /ChoiceLab/ })
+      .click()
+    await expect(page).toHaveURL(/#\/$/)
+  })
+
+  test('opens the page a tile leads to at its top', async ({ page }) => {
+    // A long page, its code already fetched, so nothing short stands in for it
+    // while it loads (which would clamp the scroll and hide the fault).
+    await page.goto('#/why-star')
+    await expect(page).toHaveTitle('Why use STAR?')
+    await page.getByRole('link', { name: 'Back to homepage' }).click()
+    const tile = page.getByRole('link', { name: /^Why STAR/ })
+    await tile.evaluate((el) => el.scrollIntoView({ block: 'start' }))
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+    await tile.click()
+    await expect(page).toHaveTitle('Why use STAR?')
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+  })
+
+  test('opens the sample poll and its result', async ({ page }) => {
+    await page.goto('#/')
+    await page.getByRole('link', { name: /^Example poll/ }).click()
+    await expect(page).toHaveURL(/#\/sample-dinner$/)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Movie night')
+    await page.goBack()
+    await page.getByRole('link', { name: /^Example result/ }).click()
+    await expect(page).toHaveURL(/#\/sample-result-dinner$/)
+  })
+
+  test('holds its ballot still under reduced motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('#/')
+    const frame = () => page.locator('main [aria-hidden]').first().innerHTML()
+    const first = await frame()
+    await page.waitForTimeout(1000)
+    expect(await frame()).toBe(first)
+  })
+
+  test('leaves the settings menu to settings', async ({ page }) => {
+    await page.goto('#/')
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(page.getByRole('dialog').getByRole('link')).toHaveCount(0)
   })
 })
 
 test.describe('the sign-in screen', () => {
   test('offers a link or a code, and a way past it', async ({ page }) => {
-    await page.goto('#/')
+    await page.goto('#/sign-in')
     await expect(page.getByRole('heading', { name: 'ChoiceLab', level: 1 })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Send sign-in link' })).toBeVisible()
     await page.getByText('Email a code').click()
@@ -75,7 +157,9 @@ test.describe('the sign-in screen', () => {
     await expect(page.getByRole('button', { name: 'Continue without an account' })).toBeVisible()
   })
 
-  test('stands in front of the create form, at its old address too', async ({ page }) => {
+  test('stands in front of the poll list and the create form', async ({ page }) => {
+    await page.goto('#/polls')
+    await expect(page.getByRole('button', { name: 'Send sign-in link' })).toBeVisible()
     await page.goto('#/new')
     await expect(page.getByRole('button', { name: 'Send sign-in link' })).toBeVisible()
     await page.goto('#/polls/new')
@@ -85,29 +169,21 @@ test.describe('the sign-in screen', () => {
 })
 
 test.describe('the donate page', () => {
-  test('is reached from the settings menu, and gives through Every.org', async ({ page }) => {
-    await page.goto('#/about')
-    await page.getByRole('button', { name: 'Settings' }).click()
-    await page.getByRole('link', { name: 'Donate' }).click()
+  test('is reached from the home page, and gives through Every.org', async ({ page }) => {
+    await page.goto('#/')
+    await page.getByRole('link', { name: /^Donate/ }).click()
     await expect(page).toHaveTitle('Donate')
     await expect(page.getByRole('link', { name: 'Donate', exact: true })).toHaveAttribute(
       'href',
       /^https:\/\/www\.every\.org\/khan-academy(\/f\/[^#]+)?#donate$/,
     )
-    // Nothing links a page to itself from the menu.
-    await page.getByRole('button', { name: 'Settings' }).click()
-    await expect(page.getByRole('link', { name: 'About', exact: true })).toBeVisible()
-    await expect(page.locator('a[href="#/donate"]')).toHaveCount(0)
   })
 })
 
 test.describe('the contact page', () => {
-  test('is in the settings menu, in its place among the pages', async ({ page }) => {
-    await page.goto('#/donate')
-    await page.getByRole('button', { name: 'Settings' }).click()
-    const pages = page.getByRole('dialog').getByRole('link')
-    await expect(pages).toHaveText(['About', 'Contact', 'App installation'])
-    await pages.getByText('Contact').click()
+  test('is reached from the home page', async ({ page }) => {
+    await page.goto('#/')
+    await page.getByRole('link', { name: /^Contact/ }).click()
     await expect(page).toHaveTitle('Contact')
   })
 
@@ -119,24 +195,6 @@ test.describe('the contact page', () => {
     await expect(page.getByLabel('Your email address')).toBeFocused()
     await page.getByLabel('Your email address').fill('reader@example.com')
     await expect(page.getByText('Enter an email address so I can reply')).toHaveCount(0)
-  })
-})
-
-test.describe('About', () => {
-  test('its tabs switch, and its sample links open the sample', async ({ page }) => {
-    await page.goto('#/about')
-    await page.getByRole('tab', { name: 'Site features' }).click()
-    await expect(page.getByRole('tab', { name: 'Site features' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-    await expectAccessible(page, 'the features tab')
-    await page
-      .getByRole('link', { name: /sample/i })
-      .first()
-      .click()
-    await expect(page).toHaveURL(/#\/sample-/)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Movie night')
   })
 })
 
@@ -179,10 +237,10 @@ test.describe('the intro', () => {
 
   test('ends on its three ways on', async ({ page }) => {
     await page.goto('#/intro')
-    await expect(page.getByRole('link', { name: 'Learn more' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Back to homepage' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Make your own poll' })).toBeVisible()
-    await page.getByRole('link', { name: 'Learn more' }).click()
-    await expect(page).toHaveURL(/#\/about$/)
+    await page.getByRole('link', { name: 'Back to homepage' }).click()
+    await expect(page).toHaveURL(/#\/$/)
   })
 
   test('fetches no footage when it opens on its last frame', async ({ page }) => {
@@ -191,7 +249,7 @@ test.describe('the intro', () => {
       if (/\/intro\/.*\.mp4/.test(r.url())) fetched.push(r.url())
     })
     await page.goto('#/intro')
-    await expect(page.getByRole('link', { name: 'Learn more' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Back to homepage' })).toBeVisible()
     await page.waitForTimeout(500)
     expect(fetched).toEqual([])
   })
@@ -212,45 +270,12 @@ test.describe('the intro', () => {
   })
 })
 
-test.describe('the Start page', () => {
-  // Held still: a circle on its slow turn is never "stable" to Playwright,
-  // which will not click one until it stops moving.
-  test.use({ contextOptions: { reducedMotion: 'reduce' } })
-
-  test('goes to the sample poll, the sample result and About', async ({ page }) => {
-    await page.goto('#/start')
-    await page.getByRole('link', { name: 'See a sample poll' }).click()
-    await expect(page).toHaveURL(/#\/sample-dinner$/)
-    await page.goBack()
-    await page.getByRole('link', { name: 'See a sample result' }).click()
-    await expect(page).toHaveURL(/#\/sample-result-dinner$/)
-    await page.goBack()
-    await page.getByRole('link', { name: 'About ChoiceLab' }).click()
-    await expect(page).toHaveURL(/#\/about$/)
-  })
-
-  test('offers a poll without signing in, and both loops are there to play', async ({
-    page,
-    request,
-  }) => {
-    await page.goto('#/start')
-    await expect(page.getByRole('button', { name: 'Make your own poll' })).toBeVisible()
-    for (const src of await page
-      .locator('video')
-      .evaluateAll((vs) =>
-        vs.flatMap((v) => [(v as HTMLVideoElement).src, (v as HTMLVideoElement).poster]),
-      )) {
-      expect((await request.get(src)).ok(), src).toBe(true)
-    }
-  })
-})
-
 test.describe('the web app manifest', () => {
   test('names the app, its shortcuts and screenshots, and every file it names exists', async ({
     page,
     request,
   }) => {
-    await page.goto('#/about')
+    await page.goto('#/')
     const href = await page.locator('link[rel="manifest"]').getAttribute('href')
     expect(href).toBeTruthy()
     const manifestUrl = new URL(href!, page.url()).href

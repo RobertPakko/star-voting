@@ -4,7 +4,7 @@ import {
   Card,
   Divider,
   Group,
-  SimpleGrid,
+  Paper,
   Skeleton,
   Stack,
   Switch,
@@ -499,8 +499,9 @@ export function PollListSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <Loading>
       <Stack maw={720} mx="auto" gap="md">
+        {/* *Back to homepage* (a compact button), and *New poll*. */}
         <Group justify="space-between">
-          <Bar kind="title" width={124} />
+          <Skeleton height={26} width={150} radius="sm" />
           <Skeleton height={control} width={96} radius="md" />
         </Group>
         <Stack gap="md">
@@ -693,52 +694,30 @@ function SignatureShape() {
   )
 }
 
-/** The About page down to its tab strip (the panels differ in length). */
-export function AboutSkeleton() {
+/** The pages in Learn.tsx: a title, a paragraph, and the first of their cards (each has five or more). */
+export function LearnSkeleton() {
   return (
     <Loading>
-      <Stack maw={720} mx="auto" gap="md">
-        <Bar kind="page" width={96} />
-
+      <Stack maw={720} mx="auto" gap="sm">
+        <Box mb="xs">
+          <Bar kind="page" width={200} />
+        </Box>
         <Stack gap={0}>
-          {['100%', '100%', '72%'].map((w, i) => (
+          {['100%', '64%'].map((w, i) => (
             <Bar key={i} kind="name" width={w} />
           ))}
         </Stack>
-
-        {/* `SampleCard` in About.tsx. */}
-        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
-          {Array.from({ length: 3 }, (_, i) => (
-            <Card key={i} withBorder radius="md" p="lg">
-              <Stack gap="sm">
-                <Skeleton height={42} width={42} radius="md" />
-                <Stack gap={4}>
-                  <Bar kind="name" width="70%" />
-                  <Stack gap={0}>
-                    <Bar kind="line" width="95%" />
-                    <Bar kind="line" width="60%" />
-                  </Stack>
-                </Stack>
-                <Skeleton height={control} mt="xs" radius="md" />
+        {Array.from({ length: 5 }, (_, i) => (
+          <Paper key={i} withBorder p="md" radius="md">
+            <Stack gap={4}>
+              <Bar kind="name" width={140} />
+              <Stack gap={0}>
+                <Bar kind="line" width="95%" />
+                <Bar kind="line" width="55%" />
               </Stack>
-            </Card>
-          ))}
-        </SimpleGrid>
-
-        {/* *Watch intro*. */}
-        <Divider label={<Skeleton height={26} width={118} radius="sm" />} />
-
-        {/* `Tabs.List grow`. */}
-        <Stack gap={0}>
-          <Group gap={0} wrap="nowrap">
-            {Array.from({ length: 3 }, (_, i) => (
-              <Box key={i} style={{ flex: 1, padding: '10px 16px' }}>
-                <Skeleton height={text.name.bar} radius="sm" />
-              </Box>
-            ))}
-          </Group>
-          <Skeleton height={1} radius={0} />
-        </Stack>
+            </Stack>
+          </Paper>
+        ))}
       </Stack>
     </Loading>
   )

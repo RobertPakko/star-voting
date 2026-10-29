@@ -186,7 +186,7 @@ export function Film({
           transform: `translateY(${tagY}px)`,
         }}
       >
-        Group decisions, made simple.
+        Better group decisions
       </div>
     </div>
   )

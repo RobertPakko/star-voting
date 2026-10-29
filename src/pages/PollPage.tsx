@@ -27,6 +27,7 @@ import {
 import { keepListFor, readListSnapshot } from '../lib/listCache'
 import type { PollHeadingProps } from '../components/PollHeading'
 import { motionMs } from '../lib/motion'
+import { BackToHome } from '../components/BackToHome'
 import { BackToList } from '../components/BackToList'
 import { Reveal } from '../components/Reveal'
 import { preloadCards } from '../components/deferred'
@@ -271,11 +272,14 @@ export function PollPage() {
     pollId && !sample && covering && !refused ? [pollId, ...questionsCovered(covering)] : [],
   )
 
-  const back = session ? (
+  // The list is one step nearer home, so a reader who has one goes there;
+  // anybody else, and anybody on the sample (reached from the home page), goes
+  // home. See BackToHome.
+  const back = (
     <Box maw={720} mx="auto">
-      <BackToList listId={listRow} />
+      {session && !sample ? <BackToList listId={listRow} /> : <BackToHome />}
     </Box>
-  ) : null
+  )
 
   // In flight: laid out (so the heading has a target) but hidden. Watchers
   // sit at the same place in the tree in both returns so landing doesn't
@@ -328,9 +332,11 @@ export function PollPage() {
         />
       )
 
-    // Refused: to the sign-in screen (outside the shell). An anonymous session
-    // has no email, so no invite poll will admit it either.
-    if (refused && !session) return <Navigate to="/" replace />
+    // Refused: to the sign-in screen (outside the shell), carrying the poll as
+    // where to go once signed in. An anonymous session has no email, so no
+    // invite poll will admit it either.
+    if (refused && !session)
+      return <Navigate to="/sign-in" replace state={{ from: location.pathname }} />
     if (refused && anonymous) return <Navigate to="/sign-in" replace />
 
     // An open poll to an outsider, or a signed-in reader's "not found".
@@ -473,7 +479,7 @@ function firstQuestionOf(page: PollRead): string | undefined {
 /** Whether the address is the poll list itself (not the archived view, which has no cards to land on). */
 function onTheList(): boolean {
   const path = window.location.hash.replace(/^#/, '')
-  return path === '' || path === '/'
+  return path === '/polls'
 }
 
 /** A poll deleted while open, as its topic said. */
@@ -490,7 +496,7 @@ function PollDeleted({ signedIn }: { signedIn: boolean }) {
       {signedIn && (
         <Button
           component={Link}
-          to="/"
+          to="/polls"
           variant="light"
           leftSection={<ArrowLeftIcon size={16} aria-hidden />}
         >

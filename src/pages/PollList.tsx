@@ -21,6 +21,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { removePolls, restorePolls } from '../lib/removedPolls'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
+import { BackToHome } from '../components/BackToHome'
 import { BackToList } from '../components/BackToList'
 import { Banners } from '../components/Banners'
 import { PollHeading, type PollHeadingProps } from '../components/PollHeading'
@@ -249,9 +250,12 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
 
   if (error) {
     return (
-      <Text role="alert" c="red" ta="center">
-        {error}
-      </Text>
+      <Stack maw={720} mx="auto" gap="md">
+        <div>{viewingRemoved ? <BackToList /> : <BackToHome mb={0} />}</div>
+        <Text role="alert" c="red" ta="center">
+          {error}
+        </Text>
+      </Stack>
     )
   }
 
@@ -267,36 +271,54 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
         </Box>
       )}
       <Stack maw={720} mx="auto" gap="md">
-        {/* Once there are archived polls, the Archived button replaces the
-            visible heading (the heading stays for screen readers). */}
-        <Group justify="space-between" gap="sm">
-          <div>
-            {!viewingRemoved && removedCount > 0 ? (
-              <>
-                <VisuallyHidden>
-                  <Title order={1}>Your polls</Title>
-                </VisuallyHidden>
-                <Button
-                  component={Link}
-                  to="/?archived"
-                  variant="default"
-                  leftSection={<ArchiveIcon size={16} aria-hidden />}
-                >
-                  Archived
-                </Button>
-              </>
-            ) : (
-              <Title order={1} size="h2">
-                {viewingRemoved ? 'Archived polls' : 'Your polls'}
-              </Title>
-            )}
-          </div>
-          {!viewingRemoved && (
-            <Button component={Link} to="/new" leftSection={<PlusIcon size={16} aria-hidden />}>
-              New poll
-            </Button>
-          )}
-        </Group>
+        {/* The list's own row: the way home on the left, and on the right
+            Archived (once there are archived polls) beside New poll — which
+            together say what this page is, so its heading is there for screen
+            readers only. Where the row is too narrow for all three, the pair
+            on the right drops below and keeps to the right. The archived view
+            keeps a visible heading, under its way back to the list. */}
+        {viewingRemoved ? (
+          <Title order={1} size="h2">
+            Archived polls
+          </Title>
+        ) : (
+          <Group justify="space-between" gap="sm">
+            <VisuallyHidden>
+              <Title order={1}>Your polls</Title>
+            </VisuallyHidden>
+            <BackToHome mb={0} />
+            <Group gap="sm" ml="auto">
+              {/* Just the box on a phone, where the word would push the pair
+                  onto a line of its own. */}
+              {removedCount > 0 && (
+                <>
+                  <Button
+                    component={Link}
+                    to="/polls?archived"
+                    variant="default"
+                    leftSection={<ArchiveIcon size={16} aria-hidden />}
+                    visibleFrom="xs"
+                  >
+                    Archived
+                  </Button>
+                  <ActionIcon
+                    component={Link}
+                    to="/polls?archived"
+                    variant="default"
+                    size="lg"
+                    aria-label="Archived"
+                    hiddenFrom="xs"
+                  >
+                    <ArchiveIcon size={16} aria-hidden />
+                  </ActionIcon>
+                </>
+              )}
+              <Button component={Link} to="/new" leftSection={<PlusIcon size={16} aria-hidden />}>
+                New poll
+              </Button>
+            </Group>
+          </Group>
+        )}
 
         {anonymous && !viewingRemoved && (
           <Alert color="yellow" variant="light">

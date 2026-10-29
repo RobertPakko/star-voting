@@ -2,10 +2,10 @@ import { test, expect, expectAccessible, setColorScheme } from './fixtures'
 import type { Page } from '@playwright/test'
 
 /**
- * The About page's sample poll, walked through the way a voter walks through a
+ * The sample poll, walked through the way a voter walks through a
  * real one: the same `PublicPoll`, the same ballots, the same results cards,
- * answered from a file rather than the database (see "The About page and its
- * sample poll" in AGENTS.md). Which makes it the one route through the whole
+ * answered from a file rather than the database (see "The sample poll" in
+ * AGENTS.md). Which makes it the one route through the whole
  * of voting that needs no backend, and what these tests use to say voting
  * still works.
  */

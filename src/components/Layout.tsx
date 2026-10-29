@@ -1,106 +1,57 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import {
-  ActionIcon,
-  AppShell,
-  Button,
-  Divider,
-  Group,
-  Modal,
-  Popover,
-  Stack,
-  Text,
-} from '@mantine/core'
-import {
-  BookOpenIcon,
-  DownloadSimpleIcon,
-  EnvelopeSimpleIcon,
-  GearIcon,
-  HeartIcon,
-  SignInIcon,
-  SignOutIcon,
-  type Icon,
-} from '@phosphor-icons/react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { ActionIcon, AppShell, Box, Group, Popover, Stack, Text } from '@mantine/core'
+import { GearIcon } from '@phosphor-icons/react'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { BackToHome } from './BackToHome'
 import { ClockSwitch } from './ClockSwitch'
 import { InstallButton } from './InstallButton'
 import { NotificationSwitches } from './NotificationSwitches'
-import { isInstalledApp } from '../lib/push'
-import { isPollParam } from '../lib/pollId'
+import { pageKey } from '../lib/pollId'
 import { LinkPushSwitch } from './PushSwitch'
 import { Reveal } from './Reveal'
 import { ThemeToggle } from './ThemeToggle'
 
 /**
  * The app shell, wrapped around every page except the sign-in screen;
- * including the ones reachable without an account (the public voting page
- * and `/about`). A voter who arrives from a share link is looking at the
+ * including the ones reachable without an account (the home page and the
+ * public voting page). A voter who arrives from a share link is looking at the
  * same site as everyone else and should see the same header: the earlier
  * signed-out version was a small wordmark inline with the content, which
  * read as part of the poll rather than as the site around it.
  *
- * Only the right-hand group changes with the session. The wordmark links
- * to `/` either way; the poll list signed in, the sign-in screen signed
- * out; which is where a wordmark in the top-left is expected to go. A
- * session made without an account has a poll list, so its wordmark goes
- * there too, and its corner says Sign in rather than offering a sign-out
- * that would strand every poll it made.
- *
- * The pages that are not polls — About, the contact form, the donate page and
- * the install guide — are links in the gear menu rather than in the header. About
- * was a link of its own up here once, and the row is one control shorter on a
- * phone without it. Each is dropped from the menu while it is what's on
- * screen: a link to the page you are already reading is a dead end that
- * still asks to be read, and its absence is the plainest way to say you have
- * arrived.
+ * The wordmark links to `/`, the home page, for everybody; the home page is
+ * where every other page is linked from, signing in and out included, so the
+ * right-hand group is only settings: the install button, the gear (the
+ * notification switches and the clock), and the theme menu. Every page but
+ * the home page and the poll pages gets *Back to homepage* above it here; a
+ * poll page draws its own way back (see PollPage).
  */
 export function Layout() {
-  const { session, anonymous, signOut } = useAuth()
+  const { session, anonymous } = useAuth()
   // Signed in to an account, as opposed to signed in without one: the email
-  // shown, the email switch in the gear, and signing out are an account's.
+  // shown and the email switch in the gear are an account's.
   const account = session && !anonymous ? session : null
   const { pathname, search } = useLocation()
-  const navigate = useNavigate()
   const onSettings = pathname === '/settings'
-  // The gear menu, held here so that following any of its links — About, the
-  // install guide — closes it rather than leaving it open over the page it
-  // went to. The search is watched as well as the path, so that any address
-  // differing only in its query closes it too.
+  // The gear menu, held here so that any change of page closes it rather than
+  // leaving it open over the page it went to (a switch's *See how* goes to the
+  // install guide). The search is watched as well as the path, so that any
+  // address differing only in its query closes it too.
   const [menuOpen, setMenuOpen] = useState(false)
   useEffect(() => setMenuOpen(false), [pathname, search])
   // How far the menu is slid right from under the gear, so that its right edge
   // sits on the page's own right gutter rather than on the gear's. Measured on
-  // opening, because what stands to the gear's right — the theme menu and
-  // sign-out — is the header's business and could change.
+  // opening, because what stands to the gear's right — the theme menu — is the
+  // header's business and could change.
   const controls = useRef<HTMLDivElement>(null)
   const gear = useRef<HTMLButtonElement>(null)
   const [menuShift, setMenuShift] = useState(0)
-  // The page the menu was opened on, which is the one its links leave out.
-  // Not the address as it is now: following a link closes the menu, and the
-  // menu fades out over the next page — so filtered on the current address it
-  // swapped one link for another in the moment before it went.
-  const [menuPage, setMenuPage] = useState(pathname)
   function toggleMenu() {
-    if (!menuOpen) setMenuPage(pathname)
     const edge = controls.current?.getBoundingClientRect().right
     const own = gear.current?.getBoundingClientRect().right
     if (edge !== undefined && own !== undefined) setMenuShift(Math.max(0, edge - own))
     setMenuOpen((open) => !open)
-  }
-  // Signing out asks first. It is an icon now, and an icon a thumb can brush
-  // on the way to the theme menu is not one that should end a session on its
-  // own: on a phone, getting back in means a trip to the inbox.
-  const [confirmingSignOut, setConfirmingSignOut] = useState(false)
-
-  // Off the poll and back to the front door, rather than left standing where
-  // the session used to admit them. A page that was rendering the account
-  // reading of a poll holds that read until something asks again, and nothing
-  // does: the route re-reads on a live signal, not on the session changing.
-  // Leaving the address is what makes signing out look like signing out.
-  async function handleSignOut() {
-    setConfirmingSignOut(false)
-    await signOut()
-    navigate('/', { replace: true })
   }
 
   return (
@@ -149,15 +100,15 @@ export function Layout() {
                 them: two switches do not earn a page, and the reader is
                 usually in the middle of a poll. The /settings page still
                 exists, for the emails' footer to link to, and the gear stands
-                down there the way its own About link does on About. Signed out it
-                holds one switch, push for this browser, which is how a reader
-                holding a link turns on notifications for the open polls they
-                answer — the same place an account does it, so every banner
-                pointing at it can say the same thing.
+                down there, since it would open what is already on screen.
+                Signed out it holds one switch, push for this browser, which is
+                how a reader holding a link turns on notifications for the open
+                polls they answer — the same place an account does it, so every
+                banner pointing at it can say the same thing.
 
-                No tooltip, here or on sign-out: a hover label under a button
-                that opens a menu lands on top of the menu it opened. The
-                aria-label still names it. The menu is as wide as its switches
+                No tooltip: a hover label under a button that opens a menu
+                lands on top of the menu it opened. The aria-label still names
+                it. The menu is as wide as its switches
                 and slid right to meet the page's edge (see menuShift), rather
                 than hanging off the gear towards the middle of the page. */}
             {!onSettings && (
@@ -198,108 +149,14 @@ export function Layout() {
                         <ClockSwitch />
                       </>
                     )}
-                    <Divider />
-                    {/* Pages rather than switches, so they sit under the
-                        switches and apart from them. All are links: the menu
-                        closes on any change of address, and each is a word or
-                        two. The method first, then the two ways of talking
-                        back, and installing last, since it is the one that
-                        comes and goes. The archived polls are not here: they
-                        are a button on the poll list, beside the pager. */}
-                    {menuPage !== '/about' && (
-                      <MenuLink to="/about" icon={BookOpenIcon}>
-                        About
-                      </MenuLink>
-                    )}
-                    {/* The intro is not here: About links to it, and a reader
-                        who has found the gear has already met the app. */}
-                    {menuPage !== '/contact' && (
-                      <MenuLink to="/contact" icon={EnvelopeSimpleIcon}>
-                        Contact
-                      </MenuLink>
-                    )}
-                    {menuPage !== '/donate' && (
-                      <MenuLink to="/donate" icon={HeartIcon}>
-                        Donate
-                      </MenuLink>
-                    )}
-                    {!isInstalledApp() && menuPage !== '/app' && (
-                      <MenuLink to="/app" icon={DownloadSimpleIcon}>
-                        App installation
-                      </MenuLink>
-                    )}
                   </Stack>
                 </Popover.Dropdown>
               </Popover>
             )}
             <ThemeToggle />
-            {/* One slot, two states. Signed out this is an offer rather than a
-                gate — voting on an open poll needs no account — but it has to
-                be visible to be taken. Signed in it is the way back off a
-                shared device, which is the case this app actually has: a link
-                pasted into a family thread is opened on somebody else's phone,
-                and without this the first account to sign in there owns the
-                app for good. Signed in it is an icon, like its neighbours:
-                with the settings gear beside it the row ran out of room on a
-                phone, and leaving is not what anybody came to do. Signed out
-                it is an icon too, for the same room, and like the sign-out
-                icon it carries its name in an aria-label: a link with only an
-                aria-hidden glyph in it has no name at all. */}
-            {account ? (
-              <ActionIcon
-                variant="outline"
-                color="gray"
-                size="lg"
-                aria-label="Sign out"
-                onClick={() => setConfirmingSignOut(true)}
-              >
-                <SignOutIcon size={18} aria-hidden />
-              </ActionIcon>
-            ) : (
-              <ActionIcon
-                component={Link}
-                to={anonymous ? '/sign-in' : '/'}
-                state={anonymous ? { from: pathname + search } : undefined}
-                variant="outline"
-                size="lg"
-                aria-label="Sign in"
-              >
-                <SignInIcon size={16} aria-hidden />
-              </ActionIcon>
-            )}
           </Group>
         </Group>
       </AppShell.Header>
-      <Modal
-        opened={confirmingSignOut}
-        onClose={() => setConfirmingSignOut(false)}
-        title={<Text fw={600}>Sign out?</Text>}
-        centered
-      >
-        <Stack gap="md">
-          <Text size="sm">
-            {session?.user.email ? (
-              <>
-                You are signed in as <strong>{session.user.email}</strong>. To sign back in you will
-                need a new link or code from your inbox.
-              </>
-            ) : (
-              'To sign back in you will need a new link or code from your inbox.'
-            )}
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setConfirmingSignOut(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleSignOut()}
-              leftSection={<SignOutIcon size={16} aria-hidden />}
-            >
-              Sign out
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
       {/* Clipped sideways, because a question slides in from beside the one
           it replaced (see QuestionStrip) and a block sliding in from past the
           right-hand edge would otherwise widen the page for as long as it
@@ -319,6 +176,11 @@ export function Layout() {
             page's entrance, so the page stops this rise itself before the
             first paint. See `stillEntrances` in lib/headingFlight.ts. */}
         <Reveal key={pageKey(pathname)}>
+          {showsBackToHome(pathname) && (
+            <Box maw={720} mx="auto">
+              <BackToHome />
+            </Box>
+          )}
           <Outlet />
         </Reveal>
       </AppShell.Main>
@@ -326,32 +188,12 @@ export function Layout() {
   )
 }
 
-/** One of the gear menu's links to a page. */
-function MenuLink({ to, icon: Glyph, children }: { to: string; icon: Icon; children: ReactNode }) {
-  return (
-    <Button
-      component={Link}
-      to={to}
-      variant="subtle"
-      color="gray"
-      justify="flex-start"
-      leftSection={<Glyph size={18} aria-hidden />}
-    >
-      {children}
-    </Button>
-  )
-}
-
 /**
- * Which page an address is, as opposed to which poll.
- *
- * Every poll is one page — the address carries the poll's id because a poll's
- * link is its id, and each of a poll's questions has an address of its own —
- * so all of them answer to one key and moving between them opens nothing.
- * A poll's address is its id alone, so it is recognised by shape
- * (`isPollParam`), which also keeps `/new` -- the create form, and
- * genuinely another page -- out of it.
+ * Whether this page takes its way home from the shell: every page but the
+ * home page itself, a poll (which draws its own way back), and the poll list
+ * (which draws it in a row with its own buttons; its archived view goes back
+ * to the list, which leads home in turn).
  */
-function pageKey(pathname: string): string {
-  return isPollParam(pathname.slice(1)) ? '/:pollId' : pathname
+function showsBackToHome(pathname: string): boolean {
+  return pathname !== '/' && pathname !== '/polls' && pageKey(pathname) !== '/:pollId'
 }

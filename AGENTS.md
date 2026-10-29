@@ -22,35 +22,34 @@ hash-based routing, deployed to GitHub Pages by
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ```
-src/pages/       route components (SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — About, Settings, InstallGuide, Intro, Start, Donate, Contact)
+src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
                  results and ballots (Results, Ballots, YourBallot, ScheduleBallots, FullRanking, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
-                 SmoothHeight, PollCards), ErrorBoundary, Announcer, and the intro film under intro/
+                 SmoothHeight, PollCards), the ways back (BackToHome, BackToList), the home page's
+                 ballot loop (StarLoop), ErrorBoundary, Announcer, and the intro film under intro/
 src/lib/         the supabase client and auth context, the one read that opens a poll (pollPage.ts),
                  poll id spelling (pollId.ts), live updates (useLiveStream.ts, readLedger.ts),
                  time-poll arithmetic (schedule.ts, timezones.ts), drafts, limits, push, motion,
                  the sample poll, and shared types — each file says what it is for at its top
 public/          served as-is: icons, the web app manifest and its screenshots, the intro's
-                 footage (intro/), the Start page's loops (start/), the service worker
+                 footage (intro/), the service worker
 supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 supabase/functions/   Edge Functions: send-push, the half of a push notification Postgres cannot do
-scripts/         squash.sh (squashes the migrations); sample-poll.sh (records the About page's sample poll);
+scripts/         squash.sh (squashes the migrations); sample-poll.sh (records the sample poll);
                  intro/ (records the intro's app footage on the live site; record.mjs says how)
 test/            tally tests run against a throwaway Postgres; build-db.sh builds it
-e2e/             the browser suite; screenshots.capture.ts (the manifest's screenshots);
-                 videos.capture.ts (the Start page's loops)
+e2e/             the browser suite; screenshots.capture.ts (the manifest's screenshots)
 ```
 
 Scripts: `npm run dev`, `npm run build` (`tsc -b && vite build`),
 `npm run lint` (oxlint), `npm run fmt` (oxfmt; `npm run fmt:check` reports
 without writing), `npm run preview`, `npm test`, `npm run test:unit` and
 `npm run test:e2e` (see [Tests](#tests)), `npm run screenshots` (see
-[What the manifest says](#what-the-manifest-says)), and `npm run videos` (see
-[The Start page](#the-start-page)).
+[What the manifest says](#what-the-manifest-says)).
 
 The formatter is configured in `.oxfmtrc.json` — no semicolons, single quotes,
 a hundred columns — and skips Markdown, since this file and the README are
@@ -123,8 +122,8 @@ drafts and settings. Two other things deliberately still carry it:
 is `:pollId`, which outranks the catch-all, so `PollRoute` renders a poll only
 when the segment is 22 characters of base64url, a uuid, or a `sample-` word
 (`isPollParam` in `lib/pollId.ts`), and "page not found" otherwise. No page
-name is any of those shapes. Signed out, `sign-in` and `settings` are named
-routes to the sign-in screen for the same reason.
+name is any of those shapes. Signed out, `polls`, `new`, `settings` and
+`sign-in` are named routes to the sign-in screen for the same reason.
 
 [`site-root/`](site-root) is copied over the build in `dist/` by the deploy
 workflow: `CNAME`, read by GitHub Pages to map the domain. It must never hold
@@ -437,8 +436,8 @@ there). Every test runs at a desktop size and a phone size.
 
 **It needs no database.** The Supabase address it is built with is a closed
 port, and `e2e/fixtures.ts` fails any test whose page asks it anything, logs
-an error, or throws. What it can reach: the sign-in screen, About, the install
-guide, the intro, the Start page, and the About page's sample poll — which is
+an error, or throws. What it can reach: the home page, the sign-in screen, the
+three explainer pages, the install guide, the intro, and the sample poll — which is
 answered from a file and covers `PublicPoll`, both ballots, the question
 strip, auto-advance, changing a vote and the results. **Not covered:**
 anything behind an account or a write — the poll list, the create form,
@@ -1366,7 +1365,7 @@ fetched network-first.
   address; changing it makes every installed copy a stranger to the app.
   Whether a copy installed at the old path follows the app to the root is up
   to the browser (Chromium does; iOS keeps the address it was added from).
-- **`shortcuts`** — *New poll* and *Your polls* (`#/`) — each with an icon in
+- **`shortcuts`** — *New poll* and *Your polls* (`#/polls`) — each with an icon in
   `public/shortcuts/` (the app's gradient behind Phosphor's bold `Plus` and
   `ListBullets`, as rounded `any` and full-bleed `maskable` PNGs). Without an
   icon Android draws a grey square. Redraw them if the logo's colours change.
@@ -1416,7 +1415,7 @@ and so no button.
 arrives and flies into the header of a recording of the real app, which makes
 a poll, gathers films from friends, rates them, paints a calendar, watches the
 votes arrive, closes the poll for both results and goes back to the poll list;
-then the logo flies back out and the page ends on **Learn more** (`/about`),
+then the logo flies back out and the page ends on **Back to homepage** (`/`),
 **Make your own poll** (`/new`), **Share this intro**, and a carousel of what
 the film had no time for. It is public and outside the app shell (the footage
 has the header in it). [`pages/Intro.tsx`](src/pages/Intro.tsx) is the page;
@@ -1508,45 +1507,54 @@ node scripts/intro/record.mjs test-results/intro-portrait --portrait --publish
 - Node on Windows sometimes dies at exit with a libuv assertion; run the take
   again.
 
-## The Start page
+## The home page
 
-`#/start` is the intro for somebody who will not sit through it: the logo,
-and six circles turning slowly round it. Three go somewhere — **Make your own
-poll**, **See a sample poll**, **See a sample result** — and three show
-something: **Choose a place** and **Choose a time** (a few seconds of the app
-in use each) and **Make it easy** (the benefits, one at a time). Loop captions
-are pills in the opposite scheme to the page. The logo goes to About.
-[`pages/Start.tsx`](src/pages/Start.tsx) is all of it.
+`/` is the front door for everybody, signed in or not: **Better group
+decisions** over *using STAR voting*, a ballot being scored, one sentence, and
+twelve tiles in pairs — the intro and a new poll, signing in (or out) and the
+reader's polls, what STAR is and why use it, the sample poll and its result,
+installing the app (the code, once it is installed) and the features, contact
+and donate. [`pages/Home.tsx`](src/pages/Home.tsx)
+is the page.
 
-- **Nothing links to it**: it is an address to hand out (a poster, a bio, a
-  QR code). It sits outside the app shell, reachable signed in or out. *Make
-  your own poll* uses `useMakePoll`.
-- **Every size is a fraction of one square**, as large as the screen allows.
-  The numbers in `Start.module.css` are chosen so every circle reaches the
-  square's edge and no two touch at any point of the turn. On a phone the
-  benefits circle is about 145px across, so **each benefit is a word or two**.
-- **One revolution every eight minutes**, paused while the pointer is over
-  the ring or focus is in it; each circle counter-rotates to stay upright.
-- **Firefox gets no turn at all** (`@supports (-moz-appearance: none)`): with
-  videos clipped to circles under a rotating ring it locks up the browser, and
-  every alternative made the videos flicker.
-- **Reduced motion** stops the turn, holds the benefits between changes, and
-  shows each loop's poster instead of playing it. The browser suite visits the
-  page with reduced motion, since Playwright will not click moving elements.
-- **The loops are recorded from the sample poll** by `npm run videos`
-  ([`e2e/videos.capture.ts`](e2e/videos.capture.ts)) into `public/start/` (an
-  mp4 and a poster each) and committed. Re-record them when the ballot or
-  calendar changes shape; nothing reminds you. The script uses Chromium's
-  screencast (Playwright's own video blurs text), needs `ffmpeg` on the PATH,
-  draws a fingertip, and hides the header and toasts. For *Choose a place* the
-  food options are renamed to places as the data reaches the page (`PLACES`);
-  the tally is unchanged. Frames are square and cropped to a circle, so keep
-  what matters in the middle.
+- **It is the one page that links to the others.** The header's wordmark goes
+  here; the header's right-hand group holds only settings (install, the gear's
+  switches, the theme), and the gear menu holds no pages. Signing in and out is
+  a tile, not a header control: nobody does it mid-poll.
+- **Every other page leads back to it.** `Layout` draws **Back to homepage**
+  (`BackToHome`, drawn exactly as `BackToList`) above every page in the
+  shell but the home page, the polls, and the poll list — which draws it in
+  one row with *Archived* (just its icon on a phone) and *New poll* together
+  on the right, its heading kept for screen readers; the archived view goes
+  back to the list.
+  A poll draws its
+  own: **Your polls** for a reader with a list (the list is one step nearer
+  home and leads back here), **Back to homepage** for anybody else and on the
+  sample. The sign-in screen and the intro, outside the shell, carry their
+  own.
+- **Two tiles to a row on every screen**, so each is an icon and a word or
+  two, and lifts by a pixel under the pointer as a poll list card does. A
+  whole tile is the link; *New poll* without a session and *Sign
+  out* are buttons (`useMakePoll`; a confirming modal).
+- **The poll list is `/polls`.** Signed out, `/polls`, `/new`,
+  `/settings` and `/sign-in` are the sign-in screen; it stashes where to go
+  next (the poll a refused reader came from, or `/polls` from its own
+  address), since a magic link lands on `/`.
+- **The ballot is [`StarLoop`](src/components/StarLoop.tsx)**: four options,
+  three voters, eighteen seconds round. Like the intro, every frame is a
+  function of `T` advanced by `requestAnimationFrame`, drawn on a fixed
+  1280×648 stage scaled to its box; it stops while out of sight, and under
+  reduced motion it is one still frame of a filled-in ballot. Decorative
+  (`aria-hidden`): the sentence under it says what it shows.
+- **The explainers are three pages** — `/star`, `/why-star`, `/features` —
+  in [`pages/Learn.tsx`](src/pages/Learn.tsx), one lazy chunk. Each numbers
+  its own footnotes from 1; the `<Footnote n={…} />` markers are written by
+  hand inside prose. *App features* links the install guide.
 
 ## The donate page
 
 `#/donate` asks readers to give to Khan Academy rather than to the site. It is
-public and reached from the gear menu.
+public and reached from the home page.
 
 **The button goes to an Every.org fundraiser** (`EVERY_ORG` in
 [`lib/donate.ts`](src/lib/donate.ts)), because a fundraiser can report what it
@@ -1583,9 +1591,7 @@ Every.org's terms or the rule change, this note becomes untrue.
 ## The contact page
 
 `#/contact` is a reply address and a message, under a signed note, with a
-link to GitHub's new-issue form. Public, reached from the gear menu, which
-lists About, Contact, Donate, and *App installation* while the app is not
-installed.
+link to GitHub's new-issue form. Public, reached from the home page.
 
 **A message is a row and an email, and nothing in the app reads it back.**
 `send_contact_message` emails it to the owner (`send_contact_email`, with the
@@ -1608,7 +1614,7 @@ email is best-effort; the table is the record. `45_contact_messages` covers it.
 ## Link previews
 
 Chat apps draw a card from the Open Graph tags in [`index.html`](index.html):
-the title, the byline *Group decisions, made simple.*, and `logo.png` as a
+the title, the byline *Better group decisions*, and `logo.png` as a
 `summary` card (opaque, since some clients composite transparency onto black).
 The crawler runs no JavaScript.
 
@@ -1714,7 +1720,7 @@ notify (the push banner).
 Home Screen app opened from there. In a Safari tab `pushState` is
 `needs-install`, the switch is disabled with a line saying so, and the banner
 links to [`InstallGuide`](src/pages/InstallGuide.tsx) at `#/app` — public,
-opened on the reader's own device type, linked from About. The installed app
+opened on the reader's own device type, linked from *App features*. The installed app
 has its own storage, so a reader signs in again inside it, with a code (a link
 opens Safari); the guide says so.
 
@@ -1930,8 +1936,8 @@ reader looking at a code screen.
 session and `auth.users` row with no email. The reader gets their own poll
 list and can make and run open polls — close, reopen, edit options, delete —
 because every creator rule is `created_by = auth.uid()`. The app marks the
-differences: the header says **Sign in** (`/sign-in` is the sign-in screen at
-its own address, since this reader's `/` is their list), the poll list says
+differences: the home page's tile says **Sign in** (`/sign-in`, where the
+sign-in screen is reachable with a session), the poll list says
 the polls live in this browser, and the create form shows invite polls
 disabled with the reason. `anonymous` in `useAuth` is how a component asks.
 
@@ -2231,7 +2237,7 @@ people who can reach an open poll is whoever holds the link.
 
 1. **A sample id** renders `PublicPoll` for anybody; it is answered from a
    file and is not a uuid, so it must never reach the database. See [The
-   About page and its sample poll](#the-about-page-and-its-sample-poll).
+   sample poll](#the-sample-poll).
 2. **Everything else asks `poll_page`**: `account` renders `PollDetail`,
    `open` renders `PublicPoll`, `unreadable` means the poll does not exist
    *or* is an invite poll this reader is not on — deliberately the same
@@ -2995,8 +3001,8 @@ included — can find out. On the browser's side it is
 [`src/lib/removedPolls.ts`](src/lib/removedPolls.ts).
 
 Each card has an archive box at its bottom right (tooltip: *Archive: move it
-off your list and stop notifications about it*). **Archived**, at the top left
-in place of the visually hidden *Your polls* heading, opens the list's address
+off your list and stop notifications about it*). **Archived**, at the top
+beside *New poll*, opens the list's address
 with `?archived` — the archived polls, each with **Restore** — and is drawn
 only while something is archived. It carries no count (`removed_count` decides
 only whether it is drawn; it rides on every row like `total_count`, and an
@@ -3098,8 +3104,7 @@ whether it runs, and `select purge_old_polls();` runs it by hand.
 The date reaches the app as `expires_at` on `poll_status()`. **`RetentionNote`**
 (`src/components/RetentionNote.tsx`) shows it at the foot of the poll page,
 **to the creator only** — the only act available (Duplicate) is theirs. It is
-quiet until the last month, then an orange warning naming Duplicate. The
-policy itself is public on the [About](src/pages/About.tsx) page.
+quiet until the last month, then an orange warning naming Duplicate.
 `open_poll_view` carries no expiry.
 
 ### The QR code
@@ -3202,7 +3207,7 @@ stylesheet is imported in `Results.tsx`, so ballots never fetch it.
 
 ### Tie-breaks
 
-Documented for readers on [`/about`](src/pages/About.tsx) and implemented in
+Documented for readers on [`/star`](src/pages/Learn.tsx) and implemented in
 the migrations. A score-round tie between **two** options goes to the one more
 voters preferred head-to-head, then the one with more five-star ballots, then
 random (by id); a tie of **three or more** goes straight to five-star counts,
@@ -3210,7 +3215,7 @@ then random. These are the STAR Voting project's published rules, as
 [BetterVoting](https://docs.bettervoting.com/help/ties.html) runs them. A
 runoff tie goes to the higher total score, then to five-star counts; if still
 level, there is no winner and the app reports the tie. **Change a rule in the
-SQL, the About page and `test/sql/cases/` together.**
+SQL, *What is STAR?* and `test/sql/cases/` together.**
 
 Head-to-head is not tried on ties of three or more: a round-robin is quadratic
 in the tied group (time polls tie dozens of windows) and hard for readers to
@@ -3250,16 +3255,9 @@ be seen to be a coin. It takes twice `--motion-slow` and ends on a whole
 number of turns. Reduced motion shows the resting frame; the result is also
 stated in text.
 
-### The About page and its sample poll
+### The sample poll
 
-The [About](src/pages/About.tsx) page is public and is in three parts: the
-sentence saying what this is, **the two sample links**, and the procedure,
-the site's features and the case for STAR behind `Procedure` / `Site features`
-/ `Benefits` tabs. What every reader needs on arrival is not tabbed.
-
-**Each tab numbers its own footnotes from 1.** The `<Footnote n={…} />`
-markers are written by hand inside prose; renumber both tabs when moving a
-note.
+The home page's *Example poll* and *Example result* tiles open it.
 
 #### The sample poll is a recording, not rows
 
@@ -3308,5 +3306,5 @@ uuid cast. `isSampleId` is exported for that. An unknown `sample-` id gets
 - **Its last ballot leads to the finished copy**: `nextUnansweredKey` plus one
   step for the sample alone. A revision moves nobody.
 - **The sample is never subscribed to**; `PublicPoll` reads it once.
-- **The About page's sample links open in this tab**; see `Samples` there.
-  Links off the site open a new tab.
+- **The home page's sample tiles open in this tab**; links off the site open a
+  new tab.

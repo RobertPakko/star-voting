@@ -4,7 +4,7 @@ import { test, type Page } from '@playwright/test'
  * The pictures the web app manifest offers an install dialog: `npm run
  * screenshots` writes them to public/screenshots/, and they are committed.
  *
- * Taken of the About page's sample poll, which is answered from a file and
+ * Taken of the sample poll, which is answered from a file and
  * needs no database, so they can be taken again by anybody, any time the
  * pages they show change shape. Light scheme, no motion, and the phone shots
  * at a phone's pixel density, since that is what an install sheet on a phone

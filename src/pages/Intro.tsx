@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Button, Group, Stack, Text, UnstyledButton, VisuallyHidden } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
-import { BookOpenIcon, CheckIcon, PlusIcon, ShareNetworkIcon } from '@phosphor-icons/react'
+import { ArrowLeftIcon, CheckIcon, PlusIcon, ShareNetworkIcon } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 import { Features } from '../components/intro/Features'
 import { Film } from '../components/intro/Film'
@@ -170,14 +170,14 @@ function Actions({ T, portrait, style }: { T: number; portrait: boolean; style: 
 
   const buttons = [
     <Button
-      key="learn"
+      key="home"
       {...quiet}
       component={Link}
-      to="/about"
-      leftSection={<BookOpenIcon size={18} aria-hidden />}
+      to="/"
+      leftSection={<ArrowLeftIcon size={18} aria-hidden />}
       style={rise(0)}
     >
-      Learn more
+      Back to homepage
     </Button>,
     !makePoll ? (
       <Button

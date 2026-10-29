@@ -1,6 +1,4 @@
-import { Link } from 'react-router-dom'
-import { Button, Stack, Text, Title } from '@mantine/core'
-import { ArrowLeftIcon } from '@phosphor-icons/react'
+import { Stack, Text, Title } from '@mantine/core'
 import { usePageTitle } from '../lib/pageTitle'
 
 /**
@@ -11,10 +9,8 @@ import { usePageTitle } from '../lib/pageTitle'
  * an empty body -- a header, and nothing under it saying why -- which reads
  * as a page that failed to load rather than as an address that isn't one.
  *
- * It says the same two things the poll pages' "poll not found" card says: what
- * happened, and that the reader is not stuck. The way out is the poll list,
- * because that is what `/` is to somebody signed in, and because a link back
- * to a page that exists is the only useful thing this page has to offer.
+ * It says what happened; the way out is *Back to homepage* above it, which
+ * the shell draws on every page but the home page and the polls.
  *
  * Inside the shell rather than bare, unlike the sign-in screen: there is
  * somewhere else to go from here, and the header is how you get there.
@@ -29,14 +25,6 @@ export function NotFound() {
       <Text c="dimmed" ta="center">
         This poll may have been deleted.
       </Text>
-      <Button
-        component={Link}
-        to="/"
-        variant="light"
-        leftSection={<ArrowLeftIcon size={16} aria-hidden />}
-      >
-        Back to your polls
-      </Button>
     </Stack>
   )
 }

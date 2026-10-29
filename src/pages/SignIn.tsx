@@ -14,6 +14,7 @@ import {
   Title,
 } from '@mantine/core'
 import { useAuth } from '../lib/auth'
+import { BackToHome } from '../components/BackToHome'
 import { rememberDestination } from '../lib/shareLink'
 import {
   CODE_LENGTH,
@@ -48,11 +49,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * `/sign-in`, and is told that what they made comes with them — see
  * lib/carryOver.ts.
  *
- * The About link is offered on the form and nowhere else. Somebody waiting on
- * an email has a minute to spare and may well not know what STAR voting is,
- * but this card is not a route and following a link away from it would throw
- * away the address the code they are waiting for belongs to — and Supabase
- * will not send another for a minute.
+ * *Back to homepage* sits above the card on the form and nowhere else: this
+ * card is often not a route of its own, and following a link away from it
+ * while a code is on its way would throw away the address the code belongs
+ * to — and Supabase will not send another for a minute.
  */
 export function SignIn() {
   usePageTitle('Sign in')
@@ -89,8 +89,11 @@ export function SignIn() {
       // this; a code goes nowhere and keeps the route it was asked from, but
       // the hand-off on the other side is the same one either way, so this
       // is not worth making conditional.
-      if (!anonymous) rememberDestination(location.pathname)
-      else if (from) rememberDestination(from)
+      // At its own address, the screen a reader chose to come to, it sends
+      // them on to their list rather than back to itself.
+      if (from) rememberDestination(from)
+      else if (!anonymous)
+        rememberDestination(location.pathname === '/sign-in' ? '/polls' : location.pathname)
       rememberSignInMethod(method)
       await signInWithEmail(trimmed, method)
       // The address the email actually went to, which is the one to name on
@@ -134,7 +137,7 @@ export function SignIn() {
       // is where a session without an account starts. The one exception is
       // the create form, which is where the intro's *Make your own poll*
       // sends a reader, and a session without an account can make a poll.
-      navigate(location.pathname === '/new' ? '/new' : '/', { replace: true })
+      navigate(location.pathname === '/new' ? '/new' : '/polls', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not continue without an account.')
       setContinuing(false)
@@ -150,7 +153,12 @@ export function SignIn() {
   return (
     // The main landmark, since this card is drawn outside the app shell.
     <Center component="main" h="100vh">
-      <Stack gap="md" w={360} maw="100%">
+      <Stack gap={0} w={360} maw="100%">
+        {!sent && (
+          <div>
+            <BackToHome />
+          </div>
+        )}
         <Paper withBorder shadow="sm" p="xl" radius="md" w="100%">
           <Stack align="center" gap="md">
             {/* Decorative: the title beside it already names the app, and this
@@ -266,7 +274,7 @@ export function SignIn() {
                     open poll and give no address; or, for one who already
                     took it, the way back to what they were doing. */}
                 {anonymous ? (
-                  <Anchor component={Link} to={from ?? '/'} size="sm">
+                  <Anchor component={Link} to={from && from !== '/' ? from : '/polls'} size="sm">
                     {from && from !== '/' ? 'Go back' : 'Back to your polls'}
                   </Anchor>
                 ) : (
@@ -282,11 +290,6 @@ export function SignIn() {
                     </Button>
                   </Stack>
                 )}
-                {/* Shown either way: someone who has just requested a link has a
-              minute to spare, and may have no idea what ChoiceLab is. */}
-                <Anchor component={Link} to="/about" size="sm">
-                  What is ChoiceLab?
-                </Anchor>
               </>
             )}
           </Stack>
