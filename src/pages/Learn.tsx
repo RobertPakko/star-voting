@@ -244,10 +244,7 @@ export function WhyStar() {
         The voters&rsquo; ratings of each option are shown below:
       </Text>
       <Card withBorder p="sm">
-        <Stack gap="sm">
-          <OptionKey ratings={RATINGS} />
-          <EmojiTable caption="Each voter's rating of each option" rows={ratingRows(RATINGS)} />
-        </Stack>
+        <EmojiTable caption="Each voter's rating of each option" rows={ratingRows(RATINGS)} />
       </Card>
 
       <Stack gap="md" mt="md">
@@ -298,9 +295,10 @@ export function WhyStar() {
               is cut from the competition and its votes are re-allocated according to the
               voters&rsquo; next preference. In our example tacos now win. Though this doesn&rsquo;t
               capture that all sushi fans would prefer pizza to tacos. This is an example of how
-              Instant Runoff Voting is vulnerable to the &ldquo;center squeeze&rdquo; effect, where
-              an option that has broad support is still eliminated from the running if it
-              doesn&rsquo;t have enough ballots where it is the first preference.
+              Instant Runoff Voting is vulnerable to the &ldquo;
+              <Ext href="https://en.wikipedia.org/wiki/Center_squeeze">center squeeze</Ext>&rdquo;
+              effect, where an option that has broad support is still eliminated from the running if
+              it doesn&rsquo;t have enough ballots where it is the first preference.
             </Text>
             <EmojiTable
               caption="First preferences, before anything is eliminated"
@@ -321,12 +319,14 @@ export function WhyStar() {
             <Text size="sm">
               <Ext href="https://en.wikipedia.org/wiki/Score_voting">Score voting</Ext> resolves the
               center squeeze effect by taking into account all support from all voters. But score
-              voting incentivizes &ldquo;bullet voting&rdquo;, which is to give your favorite option
-              the maximum score and give all other options the minimum score. Taco fans are
-              incentivized to exaggerate their preference of tacos relative to pizza, as they
-              don&rsquo;t want to help pizza get enough stars to beat tacos and win, even if they
-              honestly feel that it&rsquo;s a decent option. With perfectly rational voters voting
-              strategically, score voting can regress into plurality voting.
+              voting incentivizes &ldquo;
+              <Ext href="https://en.wikipedia.org/wiki/Bullet_voting">bullet voting</Ext>&rdquo;,
+              which is to give your favorite option the maximum score and give all other options the
+              minimum score. Taco fans are incentivized to exaggerate their preference of tacos
+              relative to pizza, as they don&rsquo;t want to help pizza get enough stars to beat
+              tacos and win, even if they honestly feel that it&rsquo;s a decent option. With
+              perfectly rational voters voting strategically, score voting can regress into
+              plurality voting.
             </Text>
             <EmojiTable
               caption="Each voter's honest scores"

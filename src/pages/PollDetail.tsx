@@ -523,7 +523,6 @@ export function PollDetail({
                 />
                 {confirmation?.confirmed && (
                   <Banners
-                    moment="opening"
                     pollId={poll.id}
                     removed={removedHere.removed}
                     onRestored={removedHere.onRestored}
@@ -740,7 +739,7 @@ function Waiting({
           </Group>
         </Stack>
       </Card>
-      <Banners moment="results" pollId={pollId} removed={removed} onRestored={onRestored} />
+      <Banners pollId={pollId} removed={removed} onRestored={onRestored} />
     </Stack>
   )
 }

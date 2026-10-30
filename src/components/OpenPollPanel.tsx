@@ -82,11 +82,10 @@ export function OpenPollPanel({
   const { session, anonymous } = useAuth()
   const signedIn = !!session && !anonymous
 
-  function waiting(stage: 'opening' | 'results') {
-    return canWatch ? (
-      <Banners moment={stage} pollId={pollId} removed={removed} onRestored={onRestored} />
-    ) : null
-  }
+  // The creator runs the poll, and the sample is reached from the home page.
+  const banners = canWatch ? (
+    <Banners pollId={pollId} removed={removed} onRestored={onRestored} />
+  ) : null
 
   // With link push on, file a watch on any answered poll not yet watched --
   // at the vote, or on the next visit for one answered earlier. Failures are
@@ -126,7 +125,7 @@ export function OpenPollPanel({
 
         {view.confirmations && <Confirmations names={view.confirmations} />}
 
-        {view.confirmed && waiting('opening')}
+        {view.confirmed && banners}
       </Stack>
     )
   }
@@ -206,7 +205,7 @@ export function OpenPollPanel({
             voterName={needsName ? voterName : undefined}
             onRevised={onChanged}
             questionStrip={questionStrip}
-            banner={waiting('results')}
+            banner={banners}
           />
         ) : (
           <OpenBallot

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Button,
@@ -33,6 +33,7 @@ import {
 import { useAuth } from '../lib/auth'
 import { useMakePoll } from '../lib/makePoll'
 import { isInstalledApp } from '../lib/push'
+import { noteHomeVisited } from '../lib/homeVisit'
 import { pollPath } from '../lib/pollId'
 import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID } from '../lib/samplePoll'
 import { APP_TITLE, usePageTitle } from '../lib/pageTitle'
@@ -58,6 +59,8 @@ export function Home() {
   const { start: makePoll, starting, error } = useMakePoll()
   // Signing out asks first: getting back in means a trip to the inbox.
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
+  // A reader who has been here needs no banner pointing here; see HomeBanner.
+  useEffect(noteHomeVisited, [])
 
   return (
     <Stack maw={720} mx="auto" gap="lg">

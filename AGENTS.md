@@ -1524,8 +1524,9 @@ is the page.
 - **Every other page leads back to it.** `Layout` draws **Back to homepage**
   (`BackToHome`, drawn exactly as `BackToList`) above every page in the
   shell but the home page, the polls, and the poll list — which draws it in
-  one row with *Archived* (just its icon on a phone) and *New poll* together
-  on the right, its heading kept for screen readers; the archived view goes
+  one row with *Archived* and *New poll* together on the right (each down
+  to its icon, Archived first, only when the row is measured too narrow for
+  the words), its heading kept for screen readers; the archived view goes
   back to the list.
   A poll draws its
   own: **Your polls** for a reader with a list (the list is one step nearer
@@ -1715,12 +1716,12 @@ foreground. It expires after two minutes and is acted on once.
 
 **Asking is always a press.** Nothing asks for permission on its own; the
 gear menu is the one place that can. Elsewhere the app only says it can
-notify (the push banner).
+notify (the gear menu's own lines).
 
 **iPhone and iPad need the app installed first**: Safari gives push only to a
 Home Screen app opened from there. In a Safari tab `pushState` is
-`needs-install`, the switch is disabled with a line saying so, and the banner
-links to [`InstallGuide`](src/pages/InstallGuide.tsx) at `#/app` — public,
+`needs-install`, the switch is disabled with a line saying so, and *See
+how* links to [`InstallGuide`](src/pages/InstallGuide.tsx) at `#/app` — public,
 opened on the reader's own device type, linked from *App features*. The installed app
 has its own storage, so a reader signs in again inside it, with a code (a link
 opens Safari); the guide says so.
@@ -1762,24 +1763,20 @@ A push switch that cannot be turned on is disabled with one line and *See
 how*, linking to the install guide. `Layout` closes the menu on any route
 change.
 
-**Two banners, in three places** (`Banners.tsx`): one saying where the push
-switch is, one saying the site installs as an app. They appear on the poll
-list, under the card after confirming the options, and under *your vote is
-in* — the moments a reader is waiting on others — for every reader alike, and
-not on the sign-in screen. Both are one shape (`Banner`): a sentence, *Learn
-more* onto the install guide, and *Don't show again*. **The × closes it for
-now; *Don't show again* for good**, in this browser.
+**One banner, under a poll** (`Banners.tsx`): *Interested in this app?*,
+pointing at the home page, under the card after confirming the options and
+under *your vote is in* — the moments a reader is waiting on others. It is
+drawn only in a browser that has never opened the home page
+([`lib/homeVisit.ts`](src/lib/homeVisit.ts), written by `Home`): somebody
+who came in by a link they were sent. Installing and push are not advertised
+in passing; the home page and the gear menu say both. **The × closes it for
+now; *Don't show again* (or a visit home) for good**, in this browser. Never
+on the sample, which is reached from the home page.
 
-- **The push banner** goes the moment push is on here (`usePushHere`, from
-  local mirrors, live, with no request). It shows wherever the browser can be
-  asked, including an iPhone Safari tab; not where the browser said no or
-  has no push.
-- **The install banner** shows to anybody outside the installed app.
-- **Under a poll the reader removed from their list**, a third notice comes
-  first and the push banner stands down: the poll will not notify them, with
-  a way to put it back. It is not a `Banner` — it is a fact about this poll,
-  so it has no *Learn more* or *Don't show again*. See [Removing a poll from
-  your list](#removing-a-poll-from-your-list).
+**Under a poll the reader removed from their list**, a notice comes first:
+the poll will not notify them, with a way to put it back. It has no *Don't
+show again* — it is a fact about this poll. See [Removing a poll from your
+list](#removing-a-poll-from-your-list).
 
 ## Signing in
 
@@ -3019,8 +3016,7 @@ cards are not one height.
 
 **Answering a removed poll does not restore it**, and the card the reader
 lands on says so: `removed` from `poll_page` (or `poll_is_removed`) puts a
-notice above the banners with **Add back to your list**, and the push banner
-stands down.
+notice above the banner with **Add back to your list**.
 
 **It is stored in the database** so it pages correctly and follows the
 account across devices. `removed_polls` has RLS on, no policies and no grants;

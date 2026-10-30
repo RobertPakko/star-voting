@@ -23,7 +23,6 @@ import { removePolls, restorePolls } from '../lib/removedPolls'
 import { userTopic, useLiveStream } from '../lib/useLiveStream'
 import { BackToHome } from '../components/BackToHome'
 import { BackToList } from '../components/BackToList'
-import { Banners } from '../components/Banners'
 import { PollHeading, type PollHeadingProps } from '../components/PollHeading'
 import { Reveal } from '../components/Reveal'
 import { PollListSkeleton } from '../components/Skeletons'
@@ -274,50 +273,14 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
         {/* The list's own row: the way home on the left, and on the right
             Archived (once there are archived polls) beside New poll — which
             together say what this page is, so its heading is there for screen
-            readers only. Where the row is too narrow for all three, the pair
-            on the right drops below and keeps to the right. The archived view
-            keeps a visible heading, under its way back to the list. */}
+            readers only. The archived view keeps a visible heading, under its
+            way back to the list. */}
         {viewingRemoved ? (
           <Title order={1} size="h2">
             Archived polls
           </Title>
         ) : (
-          <Group justify="space-between" gap="sm">
-            <VisuallyHidden>
-              <Title order={1}>Your polls</Title>
-            </VisuallyHidden>
-            <BackToHome mb={0} />
-            <Group gap="sm" ml="auto">
-              {/* Just the box on a phone, where the word would push the pair
-                  onto a line of its own. */}
-              {removedCount > 0 && (
-                <>
-                  <Button
-                    component={Link}
-                    to="/polls?archived"
-                    variant="default"
-                    leftSection={<ArchiveIcon size={16} aria-hidden />}
-                    visibleFrom="xs"
-                  >
-                    Archived
-                  </Button>
-                  <ActionIcon
-                    component={Link}
-                    to="/polls?archived"
-                    variant="default"
-                    size="lg"
-                    aria-label="Archived"
-                    hiddenFrom="xs"
-                  >
-                    <ArchiveIcon size={16} aria-hidden />
-                  </ActionIcon>
-                </>
-              )}
-              <Button component={Link} to="/new" leftSection={<PlusIcon size={16} aria-hidden />}>
-                New poll
-              </Button>
-            </Group>
-          </Group>
+          <ListRow archived={removedCount > 0} />
         )}
 
         {anonymous && !viewingRemoved && (
@@ -328,8 +291,6 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
             </Text>
           </Alert>
         )}
-
-        {!viewingRemoved && <Banners />}
 
         {actionError && (
           <Text role="alert" c="red" size="sm">
@@ -471,6 +432,114 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
         )}
       </Stack>
     </Reveal>
+  )
+}
+
+/**
+ * How far the list's row has had to give way: 0 is both buttons in words, 1
+ * is Archived down to its box, 2 is New poll down to its plus as well.
+ */
+type Squeeze = 0 | 1 | 2
+
+/**
+ * The list's row, giving up words only where they do not fit. Each squeeze is
+ * laid out unseen at its natural width, and the row takes the first that fits
+ * its own width — measured rather than a breakpoint, since what fits depends
+ * on whether Archived is there and on the font. If not even the boxes fit,
+ * the pair drops below and keeps to the right.
+ */
+function ListRow({ archived }: { archived: boolean }) {
+  const row = useRef<HTMLDivElement>(null)
+  const trials = useRef<(HTMLDivElement | null)[]>([])
+  const [squeeze, setSqueeze] = useState<Squeeze>(0)
+
+  useLayoutEffect(() => {
+    const el = row.current
+    if (!el) return
+    const fit = () => {
+      const i = trials.current.findIndex((t) => t && t.offsetWidth <= el.clientWidth)
+      setSqueeze(i === -1 ? 2 : (i as Squeeze))
+    }
+    fit()
+    // The trials too, so a web font arriving late is measured again.
+    const observer = new ResizeObserver(fit)
+    observer.observe(el)
+    for (const t of trials.current) if (t) observer.observe(t)
+    return () => observer.disconnect()
+  }, [archived])
+
+  return (
+    <Box pos="relative">
+      <Group ref={row} justify="space-between" gap="sm">
+        <VisuallyHidden>
+          <Title order={1}>Your polls</Title>
+        </VisuallyHidden>
+        <BackToHome mb={0} />
+        <ListActions archived={archived} squeeze={squeeze} />
+      </Group>
+      <Box
+        inert
+        aria-hidden
+        pos="absolute"
+        top={0}
+        left={0}
+        w={0}
+        h={0}
+        style={{ overflow: 'hidden', visibility: 'hidden' }}
+      >
+        {([0, 1, 2] as const).map((s) => (
+          <Group
+            key={s}
+            ref={(t) => {
+              trials.current[s] = t
+            }}
+            gap="sm"
+            wrap="nowrap"
+            w="max-content"
+          >
+            <BackToHome mb={0} />
+            <ListActions archived={archived} squeeze={s} />
+          </Group>
+        ))}
+      </Box>
+    </Box>
+  )
+}
+
+function ListActions({ archived, squeeze }: { archived: boolean; squeeze: Squeeze }) {
+  return (
+    <Group gap="sm" ml="auto" wrap="nowrap">
+      {archived &&
+        (squeeze >= 1 ? (
+          <ActionIcon
+            component={Link}
+            to="/polls?archived"
+            variant="default"
+            size="lg"
+            aria-label="Archived"
+          >
+            <ArchiveIcon size={16} aria-hidden />
+          </ActionIcon>
+        ) : (
+          <Button
+            component={Link}
+            to="/polls?archived"
+            variant="default"
+            leftSection={<ArchiveIcon size={16} aria-hidden />}
+          >
+            Archived
+          </Button>
+        ))}
+      {squeeze >= 2 ? (
+        <ActionIcon component={Link} to="/new" variant="filled" size="lg" aria-label="New poll">
+          <PlusIcon size={16} aria-hidden />
+        </ActionIcon>
+      ) : (
+        <Button component={Link} to="/new" leftSection={<PlusIcon size={16} aria-hidden />}>
+          New poll
+        </Button>
+      )}
+    </Group>
   )
 }
 

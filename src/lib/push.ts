@@ -461,29 +461,3 @@ export function useNotificationRoutes(): void {
     }
   }, [navigate])
 }
-
-// ---------------------------------------------------------------------------
-// Banners dismissed for good
-// ---------------------------------------------------------------------------
-
-const BANNER_KEY = 'star-voting:app-banner-dismissed'
-
-/** The install banner. */
-export function appBannerDismissed(): boolean {
-  return readFlag(BANNER_KEY)
-}
-
-export function dismissAppBanner(): void {
-  writeFlag(BANNER_KEY, true)
-}
-
-/** The banner saying where the push switch is (`Banners`). */
-const NOTIFY_HINT_KEY = 'star-voting:notify-hint-dismissed'
-
-export function notifyHintDismissed(): boolean {
-  return readFlag(NOTIFY_HINT_KEY)
-}
-
-export function dismissNotifyHint(): void {
-  writeFlag(NOTIFY_HINT_KEY, true)
-}
