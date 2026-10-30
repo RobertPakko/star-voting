@@ -80,9 +80,9 @@ export function StarLoop() {
 }
 
 const STAGE_W = 1280
-const STAGE_H = 648
+const STAGE_H = 600
 const CARD_X = 40
-const CARD_Y = 24
+const CARD_Y = 0
 const CARD_W = 1200
 const ROW_H = 150
 const PAD = 56

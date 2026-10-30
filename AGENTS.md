@@ -1543,7 +1543,7 @@ is the page.
 - **The ballot is [`StarLoop`](src/components/StarLoop.tsx)**: four options,
   three voters, eighteen seconds round. Like the intro, every frame is a
   function of `T` advanced by `requestAnimationFrame`, drawn on a fixed
-  1280×648 stage scaled to its box; it stops while out of sight, and under
+  1280×600 stage scaled to its box; it stops while out of sight, and under
   reduced motion it is one still frame of a filled-in ballot. Decorative
   (`aria-hidden`): the sentence under it says what it shows.
 - **The explainers are three pages** — `/star`, `/why-star`, `/features` —

@@ -13,9 +13,9 @@
 
   position: relative;
   width: 100%;
-  aspect-ratio: 1280 / 648;
-  /* The card sits as far from the bottom as from the top, and its shadow spills
-     past the box rather than padding it, so the space round it is even. */
+  aspect-ratio: 1280 / 600;
+  /* The card fills the box from top to bottom, and its shadow spills past the
+     box rather than padding it, so the page's own gaps are the space round it. */
   overflow: visible;
 }
 
