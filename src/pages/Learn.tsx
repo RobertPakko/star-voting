@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import {
   Anchor,
   Box,
@@ -8,15 +7,17 @@ import {
   Image,
   List,
   Paper,
+  SimpleGrid,
   Stack,
   Text,
+  ThemeIcon,
   Title,
   VisuallyHidden,
 } from '@mantine/core'
 import { ArrowDownIcon } from '@phosphor-icons/react'
 import { RoundCard } from '../components/RoundCard'
+import { SITE_FEATURES } from '../components/siteFeatures'
 import { usePageTitle } from '../lib/pageTitle'
-import { CODE_URL } from '../lib/sourceCode'
 import vseByStrategy from '../assets/why-star/vse-by-strategy.png'
 import winnerDistribution from '../assets/why-star/winner-distribution.webp'
 import classes from './Learn.module.css'
@@ -800,105 +801,21 @@ export function Features() {
         This site is designed to be a simple, easy-to-use platform for creating and responding to
         polls using STAR voting. It includes features such as:
       </Text>
-      <Cards items={FEATURES} />
-    </Stack>
-  )
-}
-
-/** One bordered entry on the features page: a name and the paragraph under it. */
-interface Entry {
-  name: string
-  body: ReactNode
-}
-
-const FEATURES: Entry[] = [
-  {
-    name: 'Optional authentication',
-    body: (
-      <>
-        Use the seamless sign-in system to authenticate your voters, or skip it to allow anyone with
-        the link to vote.
-      </>
-    ),
-  },
-  {
-    name: 'Clear procedures',
-    body: (
-      <>
-        Voters won't be left wondering why one option was picked over another. Every step and every
-        tie-breaker is explained in detail so voters can understand the result.
-      </>
-    ),
-  },
-  {
-    name: 'Real-time results',
-    body: <>No need to ever refresh; all updates are streamed to your browser in real-time.</>,
-  },
-  {
-    name: 'Flexible configuration',
-    body: (
-      <>
-        Build polls with multiple questions, solicit options from voters, find a time with
-        schedule-based polls, choose whether voters / ballots are visible, and more.
-      </>
-    ),
-  },
-  {
-    name: 'Convenient notifications',
-    body: (
-      <>
-        The site can let you know when results are ready, when a poll that's soliciting options has
-        opened for voting, or when you've been invited to a new poll; either via email or with push
-        notifications.
-      </>
-    ),
-  },
-  {
-    name: 'Trustworthy design',
-    body: (
-      <>
-        Voters can't update their votes after the poll closes, creators can't change options after
-        votes have been cast, and results are inaccessible until the poll is over. The system is
-        designed to ensure that polls can't be tampered with unfairly, even by their creator.
-      </>
-    ),
-  },
-  {
-    name: 'Open-source code',
-    body: (
-      <>
-        This site is an <Ext href={CODE_URL}>open-source</Ext> project. It is free to use and it
-        does not contain ads, trackers, or any other monetization scheme.
-      </>
-    ),
-  },
-  {
-    name: 'Installable app',
-    body: (
-      <>
-        Add ChoiceLab to your phone&rsquo;s home screen or your computer&rsquo;s app list, and it
-        opens in a window of its own.{' '}
-        <Anchor component={Link} to="/app" inherit>
-          See how
-        </Anchor>
-        .
-      </>
-    ),
-  },
-]
-
-/** The bordered list the features page is made of. */
-function Cards({ items }: { items: Entry[] }) {
-  return (
-    <Stack gap="sm">
-      {items.map((item) => (
-        <Paper key={item.name} withBorder p="md" radius="md">
-          <Stack gap={4}>
-            <Text fw={700}>{item.name}</Text>
-            <Text size="sm">{item.body}</Text>
-          </Stack>
-        </Paper>
-      ))}
+      <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm" verticalSpacing="sm">
+        {SITE_FEATURES.map((f) => (
+          <Paper key={f.title} withBorder p="md" radius="md">
+            <Group gap="sm" wrap="nowrap" align="flex-start">
+              <ThemeIcon variant="light" size={44} radius="xl">
+                <f.icon size={24} aria-hidden />
+              </ThemeIcon>
+              <Stack gap={4}>
+                <Text fw={700}>{f.title}</Text>
+                <Text size="sm">{f.text}</Text>
+              </Stack>
+            </Group>
+          </Paper>
+        ))}
+      </SimpleGrid>
     </Stack>
   )
 }

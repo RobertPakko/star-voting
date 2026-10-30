@@ -1460,8 +1460,10 @@ the film is under [`components/intro/`](src/components/intro).
   turns every four seconds from the moment it rises in, and stops for the
   pointer, for focus, for **Pause** and for either arrow; under reduced
   motion it does not turn and has no pause. Paused, the card is a live region.
-  Each feature is a word and a sentence a newcomer might be weighing the site
-  on; keep them true.
+  Its features are the ones `/features` draws as tiles, from one list
+  ([`siteFeatures.tsx`](src/components/siteFeatures.tsx)), so each must read
+  in the carousel's small card: a title and a sentence or two a newcomer
+  might be weighing the site on. Keep them true.
 - **Make your own poll asks nothing**: a reader with no session gets one
   without an account (`continueWithoutAccount`) and is taken to the create
   form.

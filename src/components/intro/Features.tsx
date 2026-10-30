@@ -1,43 +1,16 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { ActionIcon, Group, Paper, Stack, Text, ThemeIcon } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
-import {
-  ArrowCounterClockwiseIcon,
-  BellIcon,
-  CaretLeftIcon,
-  CaretRightIcon,
-  DeviceMobileIcon,
-  EnvelopeSimpleIcon,
-  EyeSlashIcon,
-  GiftIcon,
-  LightningIcon,
-  PauseIcon,
-  PlayIcon,
-  QrCodeIcon,
-  ScalesIcon,
-  type Icon,
-} from '@phosphor-icons/react'
+import { CaretLeftIcon, CaretRightIcon, PauseIcon, PlayIcon } from '@phosphor-icons/react'
+import { SITE_FEATURES as FEATURES } from '../siteFeatures'
 import { COL } from './motion'
 
 /**
- * What the film has no time to show, one at a time under the calls to action:
- * each a fact a newcomer might be weighing the site on, in a few words.
+ * The film is light in both schemes, so a link in a feature takes the light
+ * scheme's anchor colour rather than the dark one, which is unreadable on the
+ * white card.
  */
-const FEATURES: { icon: Icon; title: string; text: string }[] = [
-  { icon: GiftIcon, title: 'Free', text: 'No ads, no limits.' },
-  { icon: LightningIcon, title: 'Fast', text: 'Results the moment you close.' },
-  { icon: EnvelopeSimpleIcon, title: 'No passwords', text: 'Sign in with just your email.' },
-  { icon: BellIcon, title: 'Notifications', text: 'By email and push.' },
-  { icon: DeviceMobileIcon, title: 'Any device', text: 'Phone, tablet or computer.' },
-  { icon: EyeSlashIcon, title: 'Private or public', text: 'Secret or published ballots.' },
-  {
-    icon: ArrowCounterClockwiseIcon,
-    title: 'Change your vote',
-    text: 'Until the results are out.',
-  },
-  { icon: QrCodeIcon, title: 'QR codes', text: 'Share with a whole room.' },
-  { icon: ScalesIcon, title: 'Fair', text: 'STAR voting, ties explained.' },
-]
+const LIGHT_ANCHOR = { '--mantine-color-anchor': '#1971c2' } as CSSProperties
 
 /** How long each feature is shown before the next. */
 const DWELL_MS = 4000
@@ -94,7 +67,13 @@ export function Features({ shown, style }: { shown: boolean; style?: CSSProperti
           radius="md"
           p="sm"
           bg="#fff"
-          style={{ flex: 1, minHeight: 72, borderColor: COL.border, overflow: 'hidden' }}
+          style={{
+            flex: 1,
+            minHeight: 72,
+            borderColor: COL.border,
+            overflow: 'hidden',
+            ...LIGHT_ANCHOR,
+          }}
           aria-live={turning ? 'off' : 'polite'}
         >
           <div style={{ display: 'grid' }}>
