@@ -8,6 +8,12 @@
 export const voters = (n: number) => `${n} ${n === 1 ? 'voter' : 'voters'}`
 
 /**
+ * A score, as the stars it is made of rather than "points", so a reader can
+ * see that an option's total is the stars its ballots gave it.
+ */
+export const stars = (n: number) => `${n} ${n === 1 ? 'star' : 'stars'}`
+
+/**
  * "1 option", "23 pairs" -- a count and the thing it counts, agreeing.
  *
  * For the lines that say what a list left out, where the number is whatever

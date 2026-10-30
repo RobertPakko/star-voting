@@ -27,11 +27,23 @@ import classes from './Learn.module.css'
  * home-page tile of its own, so each is one short page rather than a tab of a
  * longer one. Public, because the people who most need them are the ones who
  * arrived from a share link and have never heard of the method.
- *
- * Each page numbers its own footnotes from 1; see `Footnotes`.
+ */
+
+/**
+ * STAR, one step at a time, for a reader who has never met it: each step a
+ * heading over a card, as on `WhyStar`, worked through one small election
+ * (`DINNER`) in the same emoji tables. The example is deliberately one where
+ * the score leader loses the runoff, since that is the step a newcomer would
+ * otherwise not see the point of.
  */
 export function WhatIsStar() {
   usePageTitle('What is STAR?')
+  const finalists = finalistsOf(DINNER)
+  const [first, second] = finalists
+  const runoff = pluralityRows(DINNER, finalists, true)
+  const winner = runoff.find((row) => row.won)?.name
+  const loser = finalists.find((name) => name !== winner)
+  const undecided = votersOf(DINNER).filter((voter) => !favoriteOf(DINNER, voter, finalists))
   return (
     <Stack maw={720} mx="auto" gap="sm">
       <Title order={1} mb="xs">
@@ -42,10 +54,169 @@ export function WhatIsStar() {
         stands for &ldquo;Score Then Automatic Runoff&rdquo;. It combines{' '}
         <Ext href="https://en.wikipedia.org/wiki/Score_voting">score voting</Ext> with{' '}
         <Ext href="https://en.wikipedia.org/wiki/Instant-runoff_voting">ranked choice voting</Ext>{' '}
-        algorithms. The following procedure is used to resolve an election:
+        algorithms. Voters give every option a score, the two options with the most stars go to a
+        runoff, and whichever of those two is preferred by more voters wins.
       </Text>
-      <Cards items={STEPS} />
-      <Footnotes notes={PROCEDURE_NOTES} />
+      <Text>
+        Let&rsquo;s walk through it one step at a time, with an example: six friends choosing where
+        to have dinner.
+      </Text>
+
+      <Stack gap="md" mt="md">
+        <RoundCard title="Step 1: Options defined">
+          <Stack gap="sm">
+            <Text size="sm">
+              First, decide what is being voted on. The options can be anything: candidates for a
+              position, places to eat, films to watch, or times to meet. There can be as many as you
+              like, as long as there are at least two. Our six friends are choosing between three
+              options:
+            </Text>
+            <OptionKey ratings={DINNER} />
+          </Stack>
+        </RoundCard>
+
+        <RoundCard title="Step 2: Votes cast">
+          <Stack gap="sm">
+            <Text size="sm">
+              Each voter gives every option a score from 0 to 5 stars, where 0 is the worst and 5 is
+              the best. A score is not a ranking: you can give several options the same number of
+              stars, and you don&rsquo;t have to use every number. A good way to start is to give
+              your favourite 5 stars and the option you like least 0, then score the rest by how
+              much you like them in between. Here is the first friend&rsquo;s ballot:
+            </Text>
+            <Ballot ratings={DINNER} voter={0} />
+            <Then>Everyone&rsquo;s ballots, side by side</Then>
+            <EmojiTable
+              caption="How many stars each friend gave each restaurant"
+              rows={ratingRows(DINNER)}
+              rowLabel="Restaurant"
+            />
+            <Text size="xs" c="dimmed" ta="center">
+              Each column is one friend&rsquo;s ballot, and each number is how many stars they gave.
+            </Text>
+          </Stack>
+        </RoundCard>
+
+        <RoundCard title="Step 3: Scores tallied">
+          <Stack gap="sm">
+            <Text size="sm">
+              Once voting has closed, the stars each option received are added up across every
+              ballot. This is the scoring round, and it measures how much support each option has
+              across the whole group, not only how many people put it first: an option that
+              everybody likes can beat one that a few people love and the rest can&rsquo;t stand.
+            </Text>
+            <EmojiTable
+              caption="Each restaurant's stars, added up"
+              rows={ratingRows(DINNER, true)}
+              rowLabel="Restaurant"
+              totalLabel="Score"
+            />
+            <Text size="xs" c="dimmed" ta="center">
+              For example, {first} gets {DINNER[first].join(' + ')} = {sum(DINNER[first])} stars.
+            </Text>
+          </Stack>
+        </RoundCard>
+
+        <RoundCard title="Step 4: Finalists determined">
+          <Stack gap="sm">
+            <Text size="sm">
+              The two options with the highest scores become the finalists, and every other option
+              is out. Here {first} ({sum(DINNER[first])} stars) and {second} ({sum(DINNER[second])}{' '}
+              stars) go through to the runoff, and{' '}
+              {optionsOf(DINNER)
+                .filter((option) => !finalists.includes(option))
+                .map((option) => `${option} (${sum(DINNER[option])} stars)`)
+                .join(' and ')}{' '}
+              is eliminated.
+            </Text>
+            <EmojiTable
+              caption="The restaurants by score; the top two are the finalists"
+              rows={finalistRows(DINNER)}
+              rowLabel="Restaurant"
+              totalLabel="Score"
+            />
+            <Text size="sm">
+              Taking two finalists, rather than simply declaring the highest score the winner, is
+              what sets STAR apart from plain score voting. The scores find the options with the
+              broadest support; the runoff then checks which of the two the group actually prefers.
+            </Text>
+          </Stack>
+        </RoundCard>
+
+        <RoundCard title="Step 5: Winner resolved">
+          <Stack gap="sm">
+            <Text size="sm">
+              Last comes the automatic runoff. Nobody votes again: every ballot already says which
+              finalist its voter prefers, because it is the one they gave more stars to. Each ballot
+              counts as one vote for that finalist, however big or small the difference between the
+              two scores, and the finalist with more votes wins. A voter who gave both finalists the
+              same score has no preference between them, so their ballot counts for neither.
+            </Text>
+            <EmojiTable
+              caption="The runoff: each friend's vote goes to the finalist they gave more stars"
+              rows={runoff}
+              rowLabel="Restaurant"
+              totalLabel="Votes"
+            />
+            {undecided.map((voter) => (
+              <Text key={voter} size="xs" c="dimmed" ta="center">
+                The {ORDINALS[voter]} friend <span aria-hidden>{VOTER_FACES[voter]}</span> gave{' '}
+                {first} and {second} {DINNER[first][voter]} stars each, so their ballot counts for
+                neither.
+              </Text>
+            ))}
+            <Text size="sm">
+              The winner is {winner}, even though {loser} had more stars. Two friends loved {loser},
+              but more of the group preferred {winner} to it, and in the runoff every voter counts
+              the same. This is also why you can score honestly: giving your second choice a few
+              stars never takes anything away from your favourite, because if both reach the runoff,
+              your whole vote goes to the one you scored higher.
+            </Text>
+          </Stack>
+        </RoundCard>
+
+        <RoundCard title="Ties">
+          <Stack gap="sm">
+            <Text size="sm">
+              In the rare event of a tie, STAR has rules to settle it. Ties are uncommon because a
+              score is a total over every ballot, and two options seldom land on exactly the same
+              number of stars. A tie only matters where it decides something: who reaches the
+              runoff, or who wins it.
+            </Text>
+            <Text size="sm" fw={700}>
+              A tie for a place in the runoff
+            </Text>
+            <Text size="sm">When two options are tied, the place goes to:</Text>
+            <List type="ordered" size="sm" spacing={4} withPadding>
+              <List.Item>
+                the one more voters prefer head-to-head, meaning more ballots gave it more stars
+                than the other;
+              </List.Item>
+              <List.Item>if that is level too, the one given 5 stars on more ballots;</List.Item>
+              <List.Item>if they are still level, one of the two, chosen at random.</List.Item>
+            </List>
+            <Text size="sm">
+              When three or more options are tied, the head-to-head step is skipped: the places go
+              to the options given 5 stars on the most ballots, and any tie left after that is
+              settled at random.
+            </Text>
+            <Text size="sm" fw={700}>
+              A tie in the runoff
+            </Text>
+            <Text size="sm">When both finalists get the same number of votes, the winner is:</Text>
+            <List type="ordered" size="sm" spacing={4} withPadding>
+              <List.Item>the finalist with the higher score from the scoring round;</List.Item>
+              <List.Item>
+                if their scores are level too, the one given 5 stars on more ballots.
+              </List.Item>
+            </List>
+            <Text size="sm">
+              If the finalists are level on all three, the election has no winner. This site says
+              so, and offers to flip a coin to settle it, which is not part of the election.
+            </Text>
+          </Stack>
+        </RoundCard>
+      </Stack>
     </Stack>
   )
 }
@@ -68,12 +239,15 @@ export function WhyStar() {
         Why use STAR?
       </Title>
       <Text>
-        Let&rsquo;s look at an example with 9 voters and 3 candidates: Alice, Bob, and Charlie. In
-        this example, Bob and Alice support similar policies, while Charlie is an outlier. The
-        voters&rsquo; ratings of each candidate are shown below:
+        Let&rsquo;s look at an example with 9 voters choosing between 3 options for dinner: pizza,
+        tacos, and sushi. In this example, pizza and tacos are similar, while sushi is an outlier.
+        The voters&rsquo; ratings of each option are shown below:
       </Text>
       <Card withBorder p="sm">
-        <EmojiTable caption="Each voter's rating of each candidate" rows={ratingRows()} />
+        <Stack gap="sm">
+          <OptionKey ratings={RATINGS} />
+          <EmojiTable caption="Each voter's rating of each option" rows={ratingRows(RATINGS)} />
+        </Stack>
       </Card>
 
       <Stack gap="md" mt="md">
@@ -82,13 +256,13 @@ export function WhyStar() {
             <Text size="sm">
               The most common way of voting is by{' '}
               <Ext href="https://en.wikipedia.org/wiki/First-past-the-post_voting">plurality</Ext>,
-              also known as &ldquo;First Past the Post&rdquo;. In our example Alice and Bob, who are
-              similar, split the vote, which results in a win for Charlie and his policies that 5 of
-              the 9 voters disagree with.
+              also known as &ldquo;First Past the Post&rdquo;. In our example pizza and tacos, which
+              are similar, split the vote, which results in a win for sushi, an option that 5 of the
+              9 voters rated 0.
             </Text>
             <EmojiTable
               caption="Who each voter votes for under plurality voting"
-              rows={pluralityRows(CANDIDATES, true)}
+              rows={pluralityRows(RATINGS, OPTIONS, true)}
               totalLabel="Votes"
             />
           </Stack>
@@ -99,16 +273,16 @@ export function WhyStar() {
             <Text size="sm">
               <Ext href="https://en.wikipedia.org/wiki/Approval_voting">Approval voting</Ext> solves
               our vote splitting problem, but it&rsquo;s a pretty coarse representation of
-              preference. In our example above, there&rsquo;s a three-way tie: each candidate is
+              preference. In our example above, there&rsquo;s a three-way tie: each option is
               approved by 4 voters.
             </Text>
             <EmojiTable
-              caption="Which candidates each voter approves of"
+              caption="Which options each voter approves of"
               rows={approvalRows()}
               totalLabel="Votes"
             />
             <Text size="xs" c="dimmed" ta="center">
-              Each voter approves of the candidates they rated {APPROVES_FROM} or more.
+              Each voter approves of the options they rated {APPROVES_FROM} or more.
             </Text>
           </Stack>
         </RoundCard>
@@ -120,23 +294,23 @@ export function WhyStar() {
                 Instant Runoff Voting
               </Ext>{' '}
               (IRV, also known as Ranked Choice Voting) prevents the vote splitting problem in a
-              different way. Rather than the two voters for Bob having their votes wasted, Bob is
-              cut from the competition and his votes are re-allocated according to the voters&rsquo;
-              next preference. In our example Alice now wins. Though this doesn&rsquo;t capture that
-              all of Charlie&rsquo;s voters would prefer Bob to Alice. This is an example of how
+              different way. Rather than the two voters for pizza having their votes wasted, pizza
+              is cut from the competition and its votes are re-allocated according to the
+              voters&rsquo; next preference. In our example tacos now win. Though this doesn&rsquo;t
+              capture that all sushi fans would prefer pizza to tacos. This is an example of how
               Instant Runoff Voting is vulnerable to the &ldquo;center squeeze&rdquo; effect, where
-              a candidate who has broad support is still eliminated from the running if they
-              don&rsquo;t have enough ballots where they are the first preference.
+              an option that has broad support is still eliminated from the running if it
+              doesn&rsquo;t have enough ballots where it is the first preference.
             </Text>
             <EmojiTable
-              caption="First preferences, before anyone is eliminated"
-              rows={pluralityRows(CANDIDATES, false)}
+              caption="First preferences, before anything is eliminated"
+              rows={pluralityRows(RATINGS, OPTIONS, false)}
               totalLabel="Votes"
             />
-            <Then>Bob has the fewest votes, so he is eliminated</Then>
+            <Then>Pizza has the fewest votes, so it is eliminated</Then>
             <EmojiTable
-              caption="Votes after Bob's are moved to each voter's next preference"
-              rows={pluralityRows(IRV_SURVIVORS, true)}
+              caption="Votes after the pizza votes are moved to each voter's next preference"
+              rows={pluralityRows(RATINGS, IRV_SURVIVORS, true)}
               totalLabel="Votes"
             />
           </Stack>
@@ -147,16 +321,16 @@ export function WhyStar() {
             <Text size="sm">
               <Ext href="https://en.wikipedia.org/wiki/Score_voting">Score voting</Ext> resolves the
               center squeeze effect by taking into account all support from all voters. But score
-              voting incentivizes &ldquo;bullet voting&rdquo;, which is to give your favorite
-              candidate the maximum score and give all other candidates the minimum score.
-              Alice&rsquo;s fans are incentivized to exaggerate their preference of Alice relative
-              to Bob, as they don&rsquo;t want to help Bob get enough points to beat Alice and win,
-              even if they honestly feel that he&rsquo;s a decent candidate. With perfectly rational
-              voters voting strategically, score voting can regress into plurality voting.
+              voting incentivizes &ldquo;bullet voting&rdquo;, which is to give your favorite option
+              the maximum score and give all other options the minimum score. Taco fans are
+              incentivized to exaggerate their preference of tacos relative to pizza, as they
+              don&rsquo;t want to help pizza get enough stars to beat tacos and win, even if they
+              honestly feel that it&rsquo;s a decent option. With perfectly rational voters voting
+              strategically, score voting can regress into plurality voting.
             </Text>
             <EmojiTable
               caption="Each voter's honest scores"
-              rows={ratingRows(true)}
+              rows={withWinner(ratingRows(RATINGS, true))}
               totalLabel="Score"
             />
             <Then>Everyone bullet votes</Then>
@@ -176,12 +350,12 @@ export function WhyStar() {
               </Ext>{' '}
               (STAR) voting combines IRV and score voting to mitigate both the &ldquo;center
               squeeze&rdquo; effect and the &ldquo;bullet voting&rdquo; incentive. The first round
-              tallies scores to find candidates with broad support, and the second round establishes
-              relative preference between the finalists. In this example Alice&rsquo;s voters are
-              incentivized to vote honestly, since they know that their vote will still go entirely
-              to Alice in the runoff, but they still want to prevent Charlie from becoming a
-              finalist. Charlie&rsquo;s fans have their preference for Bob relative to Alice
-              captured, even though their preferred candidate wasn&rsquo;t a finalist.
+              tallies scores to find options with broad support, and the second round establishes
+              relative preference between the finalists. In this example taco fans are incentivized
+              to vote honestly, since they know that their vote will still go entirely to tacos in
+              the runoff, but they still want to prevent sushi from becoming a finalist. Sushi fans
+              have their preference for pizza relative to tacos captured, even though their
+              preferred option wasn&rsquo;t a finalist.
             </Text>
             <EmojiTable
               caption="Each voter's scores, totalled; the two highest become finalists"
@@ -189,13 +363,13 @@ export function WhyStar() {
               totalLabel="Score"
             />
             <Text size="xs" c="dimmed" ta="center">
-              {STAR_FINALISTS[0]} and {STAR_FINALISTS[1]} have the two highest scores, so they are
-              the finalists.
+              The two highest scores belong to {STAR_FINALISTS[0]} and {STAR_FINALISTS[1]}, so they
+              are the finalists.
             </Text>
             <Then>Each voter backs whichever finalist they scored higher</Then>
             <EmojiTable
               caption="The runoff between the two finalists"
-              rows={pluralityRows(STAR_FINALISTS, true)}
+              rows={pluralityRows(RATINGS, STAR_FINALISTS, true)}
               totalLabel="Votes"
             />
           </Stack>
@@ -285,16 +459,39 @@ function Figure({ src, alt, credit }: { src: string; alt: string; credit: ReactN
   )
 }
 
-const CANDIDATES = ['Alice', 'Bob', 'Charlie'] as const
-type Candidate = (typeof CANDIDATES)[number]
+/** One row per option, one column per voter: a whole example election. */
+type Ratings = Record<string, number[]>
 
-/** One row per candidate, one column per voter: the whole example. */
-const RATINGS: Record<Candidate, number[]> = {
-  Alice: [0, 0, 0, 0, 2, 4, 5, 5, 5],
-  Bob: [2, 2, 2, 2, 5, 5, 4, 4, 2],
-  Charlie: [5, 5, 5, 5, 0, 0, 0, 0, 0],
+/**
+ * `/star`'s example. The score leader (sushi) loses the runoff, and the last
+ * friend scores both finalists the same, so every rule of the runoff shows.
+ */
+const DINNER: Ratings = {
+  pizza: [2, 3, 0, 5, 1, 0],
+  tacos: [0, 1, 4, 4, 5, 4],
+  sushi: [5, 5, 3, 2, 3, 4],
 }
-const VOTERS = RATINGS.Alice.map((_, voter) => voter)
+
+/**
+ * `/why-star`'s example, over the same three options: pizza and tacos are
+ * alike, sushi is not. Pizza is the broadly liked option few put first.
+ */
+const RATINGS: Ratings = {
+  pizza: [2, 2, 2, 2, 5, 5, 4, 4, 2],
+  tacos: [0, 0, 0, 0, 2, 4, 5, 5, 5],
+  sushi: [5, 5, 5, 5, 0, 0, 0, 0, 0],
+}
+
+/**
+ * Each option's emoji, which is all a table's row heading draws (with the
+ * name hidden for screen readers); `OptionKey` says which is which first.
+ */
+const ICONS: Record<string, string> = { pizza: '🍕', tacos: '🌮', sushi: '🍣' }
+
+const optionsOf = (ratings: Ratings) => Object.keys(ratings)
+const votersOf = (ratings: Ratings) => Object.values(ratings)[0].map((_, voter) => voter)
+const OPTIONS = optionsOf(RATINGS)
+const VOTERS = votersOf(RATINGS)
 
 /**
  * A face over each voter's column, so voters and the 0–5 keycaps under them
@@ -302,23 +499,30 @@ const VOTERS = RATINGS.Alice.map((_, voter) => voter)
  * apart into two glyphs where a font lacks it, and widen the column.
  */
 const VOTER_FACES = ['👩', '👨', '🧑', '👵', '👴', '👧', '👦', '🧔', '👱']
+const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth']
 
 /** The lowest rating that counts as approval in the approval table. */
 const APPROVES_FROM = 4
 
-/** Who is left in the instant runoff once the last-placed candidate is cut. */
-const IRV_SURVIVORS: readonly Candidate[] = ['Alice', 'Charlie']
+/** What is left in the instant runoff once the last-placed option is cut. */
+const IRV_SURVIVORS: readonly string[] = ['tacos', 'sushi']
 
 const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0)
 
-/** STAR's two highest scorers, who go on to its runoff. */
-const STAR_FINALISTS: readonly Candidate[] = [...CANDIDATES]
-  .sort((x, y) => sum(RATINGS[y]) - sum(RATINGS[x]))
-  .slice(0, 2)
+/** The options by total score, highest first. Neither example ties on a total. */
+const byScore = (ratings: Ratings) =>
+  optionsOf(ratings).sort((x, y) => sum(ratings[y]) - sum(ratings[x]))
 
-/** The voter's highest-rated candidate among `among`. Nobody in the example ties. */
-const favoriteOf = (voter: number, among: readonly Candidate[]) =>
-  among.reduce((best, c) => (RATINGS[c][voter] > RATINGS[best][voter] ? c : best))
+/** STAR's two highest scorers, who go on to its runoff. */
+const finalistsOf = (ratings: Ratings): readonly string[] => byScore(ratings).slice(0, 2)
+const STAR_FINALISTS = finalistsOf(RATINGS)
+
+/** The voter's highest-rated option among `among`, or none if they rate two the same. */
+function favoriteOf(ratings: Ratings, voter: number, among: readonly string[]) {
+  const best = Math.max(...among.map((c) => ratings[c][voter]))
+  const top = among.filter((c) => ratings[c][voter] === best)
+  return top.length === 1 ? top[0] : undefined
+}
 
 /** One cell of a table: what is drawn, and what a screen reader says instead. */
 interface Cell {
@@ -327,7 +531,7 @@ interface Cell {
 }
 
 interface Row {
-  name: Candidate
+  name: string
   cells: Cell[]
   total?: number
   won?: boolean
@@ -361,28 +565,30 @@ function withWinner(rows: Row[]): Row[] {
   return rows.map((r) => ({ ...r, won: leaders.length === 1 && r === leaders[0] }))
 }
 
-function ratingRows(withTotals = false): Row[] {
-  const rows = CANDIDATES.map((name) => ({
+/** The ratings as keycaps, with each option's total if asked; no winner is marked. */
+function ratingRows(ratings: Ratings, withTotals = false): Row[] {
+  return optionsOf(ratings).map((name) => ({
     name,
-    cells: RATINGS[name].map(keycap),
-    total: withTotals ? sum(RATINGS[name]) : undefined,
+    cells: ratings[name].map(keycap),
+    total: withTotals ? sum(ratings[name]) : undefined,
   }))
-  return withTotals ? withWinner(rows) : rows
 }
 
 /**
  * One vote per voter, for their favourite among `among`: everybody, the IRV
  * survivors, or STAR's finalists (where the favourite is whichever finalist
- * the voter scored higher). `decided` says whether to name a winner: an IRV
- * first round with no majority has none yet.
+ * the voter scored higher, and a voter scoring them the same votes for
+ * neither). `decided` says whether to name a winner: an IRV first round with
+ * no majority has none yet.
  */
-function pluralityRows(among: readonly Candidate[], decided: boolean): Row[] {
-  const rows = CANDIDATES.map((name): Row => {
+function pluralityRows(ratings: Ratings, among: readonly string[], decided: boolean): Row[] {
+  const voters = votersOf(ratings)
+  const rows = optionsOf(ratings).map((name): Row => {
     if (!among.includes(name)) {
-      return { name, out: true, cells: VOTERS.map(() => blank('eliminated')) }
+      return { name, out: true, cells: voters.map(() => blank('eliminated')) }
     }
-    const cells = VOTERS.map((voter) =>
-      favoriteOf(voter, among) === name ? VOTE : blank('no vote'),
+    const cells = voters.map((voter) =>
+      favoriteOf(ratings, voter, among) === name ? VOTE : blank('no vote'),
     )
     return { name, cells, total: cells.filter((c) => c === VOTE).length }
   })
@@ -391,16 +597,26 @@ function pluralityRows(among: readonly Candidate[], decided: boolean): Row[] {
 
 /** STAR's scoring round: the ratings totalled, everyone but the finalists out. */
 function starScoreRows(): Row[] {
-  return ratingRows(true).map((row) => ({
+  return ratingRows(RATINGS, true).map((row) => ({
     ...row,
-    won: false,
     out: !STAR_FINALISTS.includes(row.name),
+  }))
+}
+
+/** The totals alone, highest first, with everyone but the finalists out. */
+function finalistRows(ratings: Ratings): Row[] {
+  const finalists = finalistsOf(ratings)
+  return byScore(ratings).map((name) => ({
+    name,
+    cells: [],
+    total: sum(ratings[name]),
+    out: !finalists.includes(name),
   }))
 }
 
 function approvalRows(): Row[] {
   return withWinner(
-    CANDIDATES.map((name) => {
+    OPTIONS.map((name) => {
       const cells = RATINGS[name].map((r) => (r >= APPROVES_FROM ? APPROVE : blank('no')))
       return { name, cells, total: cells.filter((c) => c === APPROVE).length }
     }),
@@ -410,8 +626,8 @@ function approvalRows(): Row[] {
 /** Every voter gives their favourite 5 and everybody else 0. */
 function bulletRows(): Row[] {
   return withWinner(
-    CANDIDATES.map((name) => {
-      const scores = VOTERS.map((voter) => (favoriteOf(voter, CANDIDATES) === name ? 5 : 0))
+    OPTIONS.map((name) => {
+      const scores = VOTERS.map((voter) => (favoriteOf(RATINGS, voter, OPTIONS) === name ? 5 : 0))
       return { name, cells: scores.map(keycap), total: sum(scores) }
     }),
   )
@@ -424,13 +640,18 @@ function bulletRows(): Row[] {
 function EmojiTable({
   caption,
   rows,
+  rowLabel = 'Option',
   totalLabel,
 }: {
   caption: string
+  /** Rows with no cells draw no voter columns: a table of totals alone. */
   rows: Row[]
+  /** What a row is, said to a screen reader over the first column. */
+  rowLabel?: string
   /** The last column's heading; no label, no column. */
   totalLabel?: string
 }) {
+  const voters = rows[0].cells.map((_, voter) => voter)
   return (
     <div className={classes.scroll}>
       <table className={classes.table}>
@@ -438,9 +659,9 @@ function EmojiTable({
         <thead>
           <tr>
             <th scope="col">
-              <VisuallyHidden>Candidate</VisuallyHidden>
+              <VisuallyHidden>{rowLabel}</VisuallyHidden>
             </th>
-            {VOTERS.map((voter) => (
+            {voters.map((voter) => (
               <th key={voter} scope="col">
                 <span aria-hidden className={classes.emoji}>
                   {VOTER_FACES[voter]}
@@ -459,7 +680,7 @@ function EmojiTable({
           {rows.map((row) => (
             <tr key={row.name}>
               <th scope="row" className={row.out ? classes.out : undefined}>
-                {row.name}
+                <OptionIcon name={row.name} />
               </th>
               {row.cells.map((cell, voter) => (
                 <td key={voter}>
@@ -503,6 +724,71 @@ function EmojiTable({
   )
 }
 
+/** An option's emoji, with its name hidden for screen readers. */
+function OptionIcon({ name }: { name: string }) {
+  return (
+    <>
+      <span aria-hidden className={classes.emoji}>
+        {ICONS[name]}
+      </span>
+      <VisuallyHidden>{name}</VisuallyHidden>
+    </>
+  )
+}
+
+/**
+ * Which emoji stands for which option, before a table uses them alone. The
+ * names are lower case for the prose they are read into; here each is a
+ * label, so it starts with a capital.
+ */
+function OptionKey({ ratings }: { ratings: Ratings }) {
+  return (
+    <Group justify="center" gap="lg">
+      {optionsOf(ratings).map((option) => (
+        <Text key={option} fw={700}>
+          <span aria-hidden className={classes.emoji}>
+            {ICONS[option]}
+          </span>{' '}
+          {option[0].toUpperCase() + option.slice(1)}
+        </Text>
+      ))}
+    </Group>
+  )
+}
+
+/**
+ * One voter's ballot, drawn as stars rather than keycaps, so the reader sees
+ * what the numbers in the tables after it stand for.
+ */
+function Ballot({ ratings, voter }: { ratings: Ratings; voter: number }) {
+  return (
+    <div className={classes.scroll}>
+      <table className={classes.table}>
+        <VisuallyHidden component="caption">{`Friend ${voter + 1}'s ballot`}</VisuallyHidden>
+        <tbody>
+          {optionsOf(ratings).map((option) => {
+            const stars = ratings[option][voter]
+            return (
+              <tr key={option}>
+                <th scope="row">
+                  <OptionIcon name={option} />
+                </th>
+                <td>
+                  <span aria-hidden className={classes.emoji}>
+                    {'⭐'.repeat(stars)}
+                    <span className={classes.unlit}>{'⭐'.repeat(5 - stars)}</span>
+                  </span>
+                  <VisuallyHidden>{`${stars} ${stars === 1 ? 'star' : 'stars'}`}</VisuallyHidden>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function Features() {
   usePageTitle('App features')
   return (
@@ -519,94 +805,11 @@ export function Features() {
   )
 }
 
-/**
- * The two tie-break rules, which are the two places the procedure above says
- * "and if that is level, then what?".
- */
-const PROCEDURE_NOTES: ReactNode[] = [
-  <>
-    A tie between two options in the scoring round is broken in favor of the one preferred by more
-    voters: the one scored higher than the other on more ballots. If that is level too, or if three
-    or more options are tied, the tie is broken in favor of the options given five stars on the most
-    ballots. If they remain tied after that, a finalist is chosen randomly between them.
-  </>,
-  <>
-    A tie in the runoff is broken in favor of the option with the higher total score. If both
-    finalists also have the same score, it goes to the one given five stars on more ballots. If they
-    are level on all three, the election has no winner.
-  </>,
-]
-
-/**
- * The notes belonging to one page, under the cards they annotate. Each page
- * numbers its own from 1; nothing is cross-referenced between them.
- */
-function Footnotes({ notes }: { notes: ReactNode[] }) {
-  return (
-    <Stack gap="sm" mt="md">
-      <Title order={2} size="h5">
-        Footnotes
-      </Title>
-      <List type="ordered" spacing="xs" size="sm" withPadding c="dimmed">
-        {notes.map((note, i) => (
-          // Static prose in source order: there is nothing else to key on,
-          // and no reordering for a better key to survive.
-          <List.Item key={i}>{note}</List.Item>
-        ))}
-      </List>
-    </Stack>
-  )
-}
-
-/** One bordered entry on a page: a name and the paragraph under it. */
+/** One bordered entry on the features page: a name and the paragraph under it. */
 interface Entry {
   name: string
   body: ReactNode
 }
-
-const STEPS: Entry[] = [
-  {
-    name: '1: Options defined',
-    body: <>Decide what options are available to vote on.</>,
-  },
-  {
-    name: '2: Votes cast',
-    body: (
-      <>
-        Each voter gives each option a number of stars from 0 up to 5, with 0 being the worst score
-        and 5 being the best score.
-      </>
-    ),
-  },
-  {
-    name: '3: Scores tallied',
-    body: (
-      <>
-        Once all votes are cast, a score for each option is calculated reflecting the total number
-        of stars that it received.
-      </>
-    ),
-  },
-  {
-    name: '4: Finalists determined',
-    body: (
-      <>
-        The two options with the highest scores are selected as finalists
-        <Footnote n={1} />.
-      </>
-    ),
-  },
-  {
-    name: '5: Winner resolved',
-    body: (
-      <>
-        Among the two finalists, the option that is preferred by more voters is selected as the
-        winner
-        <Footnote n={2} />.
-      </>
-    ),
-  },
-]
 
 const FEATURES: Entry[] = [
   {
@@ -684,7 +887,7 @@ const FEATURES: Entry[] = [
   },
 ]
 
-/** The bordered list the other two pages are made of; two lists, one shape. */
+/** The bordered list the features page is made of. */
 function Cards({ items }: { items: Entry[] }) {
   return (
     <Stack gap="sm">
@@ -705,17 +908,5 @@ function Ext({ href, children }: { href: string; children: ReactNode }) {
     <Anchor href={href} target="_blank" rel="noopener noreferrer" inherit>
       {children}
     </Anchor>
-  )
-}
-
-/**
- * A marker only, not a jump link: the app is served under HashRouter, so an
- * href of "#fn-1" would be read as a route rather than an in-page anchor.
- */
-function Footnote({ n }: { n: number }) {
-  return (
-    <Text component="sup" size="xs" c="dimmed" fw={700} span>
-      {n}
-    </Text>
   )
 }

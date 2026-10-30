@@ -1,5 +1,5 @@
-/* The example election on /why-star, drawn as a grid of emoji: one row per
- * candidate, one column per voter. Sized to fit a phone's card without
+/* The example elections on /star and /why-star, drawn as grids of emoji: one
+ * row per option, one column per voter. Sized to fit a phone's card without
  * scrolling (nine emoji columns, a name and a total); the wrapper scrolls if
  * a large text setting outgrows that. */
 .scroll {
@@ -53,8 +53,19 @@
   }
 }
 
-/* A candidate knocked out of an instant runoff. */
+/* The stars a ballot did not give, on /star: there, but plainly not lit. */
+.unlit {
+  filter: grayscale(1);
+  opacity: 0.3;
+}
+
+/* An option knocked out of a runoff. The heading is an emoji, which colour
+   cannot dim, so it is faded as well as struck through. */
 .out {
   color: var(--mantine-color-dimmed);
   text-decoration: line-through;
+}
+
+.out .emoji {
+  opacity: 0.4;
 }

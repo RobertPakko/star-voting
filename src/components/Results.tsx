@@ -40,7 +40,7 @@ import { OptionDescription } from './OptionDescription'
 import { Reveal } from './Reveal'
 import { RoundCard } from './RoundCard'
 import { ResultsSkeleton } from './Skeletons'
-import { count, voters } from '../lib/plural'
+import { count, stars, voters } from '../lib/plural'
 import { capRows, RESULTS_ROWS_MAX, SCORING_ROWS_MAX } from '../lib/resultsRows'
 import classes from './Results.module.css'
 
@@ -242,10 +242,10 @@ export function Results({
                     {o.description && <OptionNote name={o.name} description={o.description} />}
                   </Group>
                   <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                    {o.total_score} pts (avg {o.average_score})
+                    {stars(o.total_score)} (avg {o.average_score})
                   </Text>
                 </Group>
-                {/* The points are already in words above. */}
+                {/* The stars are already in words above. */}
                 <Progress
                   aria-hidden
                   value={grown ? (o.total_score / maxScore) * 100 : 0}
@@ -279,7 +279,7 @@ function ScoringTieBreaks({ tiebreaks }: { tiebreaks: Tiebreak[] }) {
         <Stack key={i} gap="xs">
           {i > 0 && <Divider />}
           <Text size="sm">
-            <NameList names={tb.tied} max={RESULTS_ROWS_MAX} /> tied at {tb.tied_at} pts for{' '}
+            <NameList names={tb.tied} max={RESULTS_ROWS_MAX} /> tied at {stars(tb.tied_at)} for{' '}
             {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}.
           </Text>
           {tb.steps.map((step, j) => (
@@ -346,14 +346,14 @@ function RunoffTieBreak({
       <Stack gap={2}>
         <StepHeading
           n={1}
-          label="Higher scoring total"
+          label="More stars in total"
           decisive={runoff.resolved_by === 'higher_score'}
         />
         <Text size="sm" c="dimmed" pl="md">
-          <strong>{a}</strong>: {total(aId)} pts
+          <strong>{a}</strong>: {stars(total(aId))}
         </Text>
         <Text size="sm" c="dimmed" pl="md">
-          <strong>{b}</strong>: {total(bId)} pts
+          <strong>{b}</strong>: {stars(total(bId))}
         </Text>
       </Stack>
 
@@ -375,12 +375,12 @@ function RunoffTieBreak({
 
       {runoff.resolved_by === 'unresolved' || !winner ? (
         <Text size="sm" c="orange">
-          Level on preference, on points and on five-star votes, so there is no winner.
+          Level on preference, on total stars and on five-star votes, so there is no winner.
         </Text>
       ) : (
         <Text size="sm">
           <strong>{winner}</strong> won on{' '}
-          {runoff.resolved_by === 'higher_score' ? 'the higher scoring total' : 'five-star votes'}.
+          {runoff.resolved_by === 'higher_score' ? 'more stars in total' : 'five-star votes'}.
         </Text>
       )}
     </Stack>

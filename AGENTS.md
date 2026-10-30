@@ -1547,9 +1547,10 @@ is the page.
   reduced motion it is one still frame of a filled-in ballot. Decorative
   (`aria-hidden`): the sentence under it says what it shows.
 - **The explainers are three pages** — `/star`, `/why-star`, `/features` —
-  in [`pages/Learn.tsx`](src/pages/Learn.tsx), one lazy chunk. Each numbers
-  its own footnotes from 1; the `<Footnote n={…} />` markers are written by
-  hand inside prose. *App features* links the install guide.
+  in [`pages/Learn.tsx`](src/pages/Learn.tsx), one lazy chunk. The first two
+  are drawn as the results page is, a heading over each card, and work an
+  example election through emoji tables computed from its ratings. *App
+  features* links the install guide.
 
 ## The donate page
 

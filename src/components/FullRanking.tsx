@@ -11,7 +11,7 @@ import { use24HourTime } from '../lib/clock'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
 import { NameList } from './NameList'
 import { RankingSkeleton } from './Skeletons'
-import { voters } from '../lib/plural'
+import { stars, voters } from '../lib/plural'
 
 /**
  * Which ranking endpoint to read. Same split as ResultsSource and
@@ -169,7 +169,7 @@ function Place({ entry, nameById }: { entry: RankingEntry; nameById: Map<string,
             {entry.options.map((o) => o.name).join(' and ')}
           </Text>
           <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-            {total} pts
+            {stars(total)}
           </Text>
         </Group>
 
@@ -244,7 +244,7 @@ function tiebreakNote(tb: Tiebreak) {
 
   return (
     <>
-      <NameList names={tb.tied} /> tied at {tb.tied_at} pts for the runoff;{' '}
+      <NameList names={tb.tied} /> tied at {stars(tb.tied_at)} for the runoff;{' '}
       <NameList names={tb.advanced} /> advanced on {rule}.
     </>
   )

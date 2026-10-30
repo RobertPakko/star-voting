@@ -73,7 +73,7 @@ export function Home() {
       <StarLoop />
 
       <Text ta="center">
-        ChoiceLab is a free app created to help with group decisions and advocate for STAR voting.
+        ChoiceLab is a free app to help with group decisions and advocate for STAR voting.
       </Text>
 
       <SimpleGrid cols={2} spacing="sm" verticalSpacing="sm">
