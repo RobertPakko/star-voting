@@ -13,6 +13,7 @@ import {
   LightningIcon,
   LinkIcon,
   ListNumbersIcon,
+  ScalesIcon,
   ShieldCheckIcon,
   SignInIcon,
   type Icon,
@@ -103,6 +104,11 @@ export const SITE_FEATURES: SiteFeature[] = [
         .
       </>
     ),
+  },
+  {
+    icon: ScalesIcon,
+    title: 'Fair results',
+    text: <>STAR voting leads to better group decisions than other voting algorithms.</>,
   },
   {
     icon: ShieldCheckIcon,

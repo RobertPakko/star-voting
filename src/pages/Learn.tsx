@@ -797,10 +797,6 @@ export function Features() {
       <Title order={1} mb="xs">
         App features
       </Title>
-      <Text>
-        This site is designed to be a simple, easy-to-use platform for creating and responding to
-        polls using STAR voting. It includes features such as:
-      </Text>
       <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm" verticalSpacing="sm">
         {SITE_FEATURES.map((f) => (
           <Paper key={f.title} withBorder p="md" radius="md">
