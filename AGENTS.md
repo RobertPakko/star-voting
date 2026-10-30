@@ -890,9 +890,16 @@ list:
   either side (`blendFor` in [`ratings.ts`](src/lib/ratings.ts)); the exact
   figure is a hover title. `eventBody` paints the blend, since the calendar
   tints off-theme colours.
+- **A block of the average opens a popover**: each chosen voter's rating of
+  it, best first, for finding the next best time when the winner falls
+  through. Beside the block rather than under the calendar, which is taller
+  than a screen. A read-only calendar takes no clicks (`mode="static"`), so the
+  block is the button (`select` in `eventBody`). A block is a stretch the
+  *average* holds level, so a voter who rated parts of it differently is
+  given as a range.
 - It is worked out in the browser from the sheet already read, so choosing
-  voters costs no request and discloses nothing new. The CSV download is
-  unchanged.
+  voters or opening a block costs no request and discloses nothing new. The
+  CSV download is unchanged.
 - The calendar is its own `lazy()` in `deferred.ts`, so an option poll's sheet
   fetches none of `@mantine/schedule`.
 

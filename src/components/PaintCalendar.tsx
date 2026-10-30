@@ -1,5 +1,14 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
-import { Group, Tooltip } from '@mantine/core'
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
+import { Group, Popover, Tooltip } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import {
   DayView,
@@ -55,21 +64,80 @@ const READ_LABELS = { weekday: 'Weekday' }
  * What is drawn inside an event. `ink` overrides the chip text colour, which
  * Mantine picks unreadably at the dark end of the ramp. `fill` is for colours
  * that are not theme shades (the results' blends), which the library would
- * otherwise draw as a faint tint.
+ * otherwise draw as a faint tint. `select`, with `fill`, makes the block a
+ * button opening a popover: a read-only calendar's own slots and background
+ * events take no clicks (`mode="static"`), so the press is the block's own.
+ * `selected` opens it over `details`, and rings the block; `dismiss` is a
+ * press outside or Escape. `label` names the block to a screen reader in full.
+ * A month chip is a `<button>` of the library's own, which a static calendar
+ * leaves unfocusable and deaf to clicks, so with `chip` the block takes the
+ * press but not a button's role, which axe would call nested; the week and
+ * day views are the way in from a keyboard.
  */
 function eventBody(event: ScheduleEventData) {
   const hint = event.payload?.hint as string | undefined
   const fill = event.payload?.fill as string | undefined
   const ink = event.payload?.ink as string | undefined
+  const select = event.payload?.select as (() => void) | undefined
+  const selected = event.payload?.selected === true
+  const details = event.payload?.details as ReactNode
+  const dismiss = event.payload?.dismiss as (() => void) | undefined
+  const chip = event.payload?.chip === true
+  const label = (event.payload?.label as string | undefined) ?? hint
   if (!fill) return <span style={{ color: ink }}>{event.title}</span>
   // pointerEvents is restored so the hint shows on hover; `fill` is only set
   // on read-only calendars, where nothing underneath needs the pointer.
+  const block = (
+    <span
+      // The popover says it all once it is open.
+      title={selected ? undefined : hint}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        background: fill,
+        pointerEvents: 'auto',
+        cursor: select ? 'pointer' : undefined,
+        outline: selected ? '2px solid var(--mantine-color-text)' : undefined,
+        outlineOffset: -2,
+      }}
+      onClick={select}
+      {...(select &&
+        !chip && {
+          role: 'button',
+          tabIndex: 0,
+          'aria-label': label,
+          onKeyDown: (e: KeyboardEvent) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return
+            e.preventDefault()
+            select()
+          },
+        })}
+    />
+  )
   return (
     <>
-      <span
-        title={hint}
-        style={{ position: 'absolute', inset: 0, background: fill, pointerEvents: 'auto' }}
-      />
+      {select ? (
+        <Popover
+          opened={selected}
+          // A chip's `aria-expanded` would land on a span with no role.
+          withRoles={!chip}
+          onDismiss={dismiss}
+          position="right"
+          withArrow
+          shadow="md"
+          width={260}
+          trapFocus
+          returnFocus
+          withinPortal
+        >
+          <Popover.Target>{block}</Popover.Target>
+          <Popover.Dropdown role="dialog" aria-label={label}>
+            {details}
+          </Popover.Dropdown>
+        </Popover>
+      ) : (
+        block
+      )}
       <span style={{ position: 'relative', color: ink, pointerEvents: 'none' }}>{event.title}</span>
     </>
   )

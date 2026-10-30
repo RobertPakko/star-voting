@@ -1,5 +1,15 @@
-import { useMemo, useState } from 'react'
-import { Box, Button, Card, Group, MultiSelect, Stack, Text, useMantineTheme } from '@mantine/core'
+import { useMemo, useState, type ReactNode } from 'react'
+import {
+  Box,
+  Button,
+  Card,
+  CloseButton,
+  Group,
+  MultiSelect,
+  Stack,
+  Text,
+  useMantineTheme,
+} from '@mantine/core'
 import { UsersThreeIcon } from '@phosphor-icons/react'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { PaintCalendar } from './PaintCalendar'
@@ -9,12 +19,15 @@ import {
   boundsOf,
   daysOf,
   describeOffset,
+  formatDay,
   formatTimeRange,
+  granuleKey,
   isDaily,
   paintingFromScores,
   paintingRuns,
   runBounds,
   type GranuleKey,
+  type ScheduleDay,
 } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import { offsetName } from '../lib/timezones'
@@ -88,6 +101,11 @@ export function ScheduleBallot({
  * second: when can these four make it, or what if Sam does not come. On a
  * sheet whose ballots are unnamed the picker still works, by ballot number,
  * because a ballot number is all the grid it replaces ever said about them.
+ *
+ * **A block can be opened**, to say how each of those people rated it: the
+ * average says a time is good, and the breakdown says who it is bad for, which
+ * is the question when the winner falls through and the group is looking for
+ * the next best time. It is the same sheet again, read one block at a time.
  */
 export function ScheduleBallots({
   sheet,
@@ -123,6 +141,15 @@ export function ScheduleBallots({
     [sheet],
   )
   const [chosen, setChosen] = useState<string[]>(everyone)
+  const [picked, setPicked] = useState<Block | null>(null)
+
+  // Each ballot as the calendar it was painted on, for the breakdown: the same
+  // repainting the average is taken over, so a voter's row agrees with what
+  // the block's colour is an average of.
+  const paintings = useMemo(
+    () => byBallot.map((scores) => paintingFromScores(windows, scores, schedule)),
+    [windows, byBallot, schedule],
+  )
 
   const painting = useMemo(
     () =>
@@ -175,9 +202,121 @@ export function ScheduleBallots({
             )}
           </Group>
         </Group>
-        <ReadCalendar windows={windows} schedule={schedule} painting={painting} average />
+        <ReadCalendar
+          windows={windows}
+          schedule={schedule}
+          painting={painting}
+          average
+          picked={picked}
+          onPick={(block) => setPicked(sameBlock(block, picked) ? null : block)}
+          onUnpick={() => setPicked(null)}
+          details={
+            picked && (
+              <Breakdown
+                block={picked}
+                schedule={schedule}
+                voters={chosen.map((i) => ({
+                  name: choices[Number(i)]?.label ?? '',
+                  painting: paintings[Number(i)] ?? {},
+                }))}
+                onClose={() => setPicked(null)}
+              />
+            )
+          }
+        />
+        {chosen.length > 0 && (
+          <Text size="xs" c="dimmed">
+            Tap a block to see how each {noun} rated it.
+          </Text>
+        )}
       </Stack>
     </Card>
+  )
+}
+
+/** One block of the averaged calendar, as drawn: a stretch of one day, in minutes. */
+type Block = { day: ScheduleDay; from: number; to: number }
+
+function sameBlock(a: Block, b: Block | null): boolean {
+  return b !== null && a.day === b.day && a.from === b.from && a.to === b.to
+}
+
+/**
+ * How each chosen voter rated one block, in the block's popover. A block is a stretch the *average*
+ * holds level, so one voter can rate parts of it differently (two voters
+ * swapping a 5 and a 3 average the same); such a voter's rating is given as
+ * the range it spans rather than rounded to one number that they never gave.
+ * Best first, so who cannot make it is at the foot, together.
+ */
+function Breakdown({
+  block,
+  schedule,
+  voters,
+  onClose,
+}: {
+  block: Block
+  schedule: PollSchedule
+  /** In the picker's order, which breaks ties in the ordering. */
+  voters: { name: string; painting: Record<GranuleKey, number> }[]
+  onClose: () => void
+}) {
+  const h24 = use24HourTime()
+  const cells: GranuleKey[] = []
+  for (let at = block.from; at < block.to; at += schedule.granularity) {
+    cells.push(granuleKey(block.day, at))
+  }
+
+  const rows = voters
+    .map((voter, order) => {
+      const ratings = cells.map((key) => voter.painting[key] ?? 0)
+      return {
+        ...voter,
+        order,
+        low: Math.min(...ratings),
+        high: Math.max(...ratings),
+        mean: ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length,
+      }
+    })
+    .sort((a, b) => b.mean - a.mean || b.high - a.high || a.order - b.order)
+  const average = rows.reduce((sum, row) => sum + row.mean, 0) / rows.length
+
+  const when = isDaily(schedule)
+    ? formatDay(block.day)
+    : `${formatTimeRange(block.from, block.to, h24)}, ${formatDay(block.day)}`
+
+  return (
+    <Stack gap={6}>
+      <Group justify="space-between" gap="xs" wrap="nowrap" align="flex-start">
+        <Text size="sm" fw={600}>
+          {when}: average {average.toFixed(1)} of 5
+        </Text>
+        <CloseButton size="sm" aria-label="Close the breakdown" onClick={onClose} />
+      </Group>
+      {rows.map((row) => (
+        <Group key={row.order} justify="space-between" gap="xs" wrap="nowrap">
+          <Text size="sm" truncate>
+            {row.name}
+          </Text>
+          <Group gap={6} wrap="nowrap">
+            <Box
+              w={10}
+              h={10}
+              style={{ borderRadius: 2, flexShrink: 0, background: swatchFor(row.low) }}
+            />
+            {row.high !== row.low && (
+              <Box
+                w={10}
+                h={10}
+                style={{ borderRadius: 2, flexShrink: 0, background: swatchFor(row.high) }}
+              />
+            )}
+            <Text size="sm" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {row.high === row.low ? row.low : `${row.low}\u2013${row.high}`}
+            </Text>
+          </Group>
+        </Group>
+      ))}
+    </Stack>
   )
 }
 
@@ -190,6 +329,10 @@ function ReadCalendar({
   schedule,
   painting,
   average = false,
+  picked = null,
+  onPick,
+  onUnpick,
+  details,
 }: {
   windows: string[]
   schedule: PollSchedule
@@ -204,6 +347,14 @@ function ReadCalendar({
    * one names its average, for the reader who wants it.
    */
   average?: boolean
+  /** The block whose breakdown is open, ringed on the calendar. */
+  picked?: Block | null
+  /** Makes each block a button that opens its breakdown. Averages only. */
+  onPick?: (block: Block) => void
+  /** The open block's popover closing by a press outside it, or Escape. */
+  onUnpick?: () => void
+  /** What the open block's popover holds. */
+  details?: ReactNode
 }) {
   const h24 = use24HourTime()
   const bounds = useMemo(() => boundsOf(windows, schedule), [windows, schedule])
@@ -259,6 +410,14 @@ function ReadCalendar({
           hint: average
             ? `${daily ? '' : `${times}: `}average ${run.value.toFixed(1)} of 5`
             : undefined,
+          label: average
+            ? `${daily ? '' : `${times}, `}${formatDay(run.day)}: average ${run.value.toFixed(1)} of 5`
+            : undefined,
+          select: average && onPick ? () => onPick(run) : undefined,
+          selected: sameBlock(run, picked),
+          details: sameBlock(run, picked) ? details : undefined,
+          dismiss: onUnpick,
+          chip: view === 'month',
         },
       }
     })

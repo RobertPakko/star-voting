@@ -196,6 +196,19 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.getByRole('tab', { name: 'Switch to month view' }).click()
     await expectAccessible(page, 'the averaged calendar, by the month')
 
+    // A block opens how each voter rated it, and Escape closes it.
+    await page.getByRole('tab', { name: 'Switch to week view' }).click()
+    const block = page.getByRole('button', { name: '10:30am–1pm, Sat Feb 21: average 1.8 of 5' })
+    await block.click()
+    const breakdown = page.getByRole('dialog', {
+      name: '10:30am–1pm, Sat Feb 21: average 1.8 of 5',
+    })
+    await expect(breakdown).toBeVisible()
+    await expect(breakdown.getByText('Ben', { exact: true })).toBeVisible()
+    await expectAccessible(page, 'a block of the averaged calendar, broken down')
+    await page.keyboard.press('Escape')
+    await expect(breakdown).toHaveCount(0)
+
     // Taking everybody out leaves nothing to average, and Everyone puts them back.
     await page.getByRole('button', { name: 'Clear', exact: true }).click()
     await expect(page.getByText('Nobody picked.', { exact: true })).toBeVisible()
