@@ -2005,6 +2005,12 @@ and `authenticated` has no `UPDATE` grant on `polls`. Everything that moves
 afterwards moves through a `SECURITY DEFINER` function with its own rules
 (`close_poll`, `reopen_poll`, `finalize_options`, `creator_edit_options`, …).
 
+**A blank create form starts from the last poll's settings** — who can vote,
+the four *Configuration* switches — kept per browser in
+[`lib/pollDefaults.ts`](src/lib/pollDefaults.ts) and saved only when a poll is
+made, so an abandoned form changes nothing. A duplicate is filled from its
+source instead.
+
 **`PollTags`** (`src/components/PollTags.tsx`) shows three of the four —
 always both states, always in the same order and words — on the list, the
 poll page and the public page. An absent tag carries no meaning anybody reads.

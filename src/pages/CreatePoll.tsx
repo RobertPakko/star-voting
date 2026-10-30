@@ -55,6 +55,7 @@ import {
 import { FormSkeleton } from '../components/Skeletons'
 import type { PollHeadingProps } from '../components/PollHeading'
 import { launchTitleFlight } from '../lib/headingFlight'
+import { readPollDefaults, savePollDefaults } from '../lib/pollDefaults'
 import styles from './CreatePoll.module.css'
 import listRow from '../components/listRow.module.css'
 import { MAX_OPTIONS, MAX_QUESTIONS } from '../lib/limits'
@@ -77,23 +78,27 @@ export function CreatePoll() {
   const fromParam = searchParams.get('from')
   const duplicateOf = fromParam && pollIdFromParam(fromParam)
 
+  // The last poll's settings; a duplicate is filled from its source instead.
+  const [defaults] = useState(readPollDefaults)
   const [title, setTitle] = useState('')
   // Where a new poll's title flies from.
   const titleField = useRef<HTMLInputElement>(null)
   const [description, setDescription] = useState('')
-  const [questions, setQuestions] = useState<QuestionDraft[]>([blankQuestion()])
+  const [questions, setQuestions] = useState<QuestionDraft[]>(() =>
+    defaults.multiQuestion ? [blankQuestion(), blankQuestion()] : [blankQuestion()],
+  )
   // The option row just added (for its entrance and the cursor), and rows
   // animating out.
   const [arriving, setArriving] = useState<string | null>(null)
   const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set())
-  const [multiQuestion, setMultiQuestion] = useState(false)
+  const [multiQuestion, setMultiQuestion] = useState(defaults.multiQuestion)
   // The wished-for tab; see `openQuestion` for what is actually shown.
   const [openKey, setOpenKey] = useState<string | null>(null)
   // Without an account a poll can only be open (an invite poll sends email).
-  const [mode, setMode] = useState<PollMode>(anonymous ? 'open' : 'invite')
-  const [showVoters, setShowVoters] = useState(false)
-  const [showBallots, setShowBallots] = useState(false)
-  const [solicitOptions, setSolicitOptions] = useState(false)
+  const [mode, setMode] = useState<PollMode>(anonymous ? 'open' : defaults.mode)
+  const [showVoters, setShowVoters] = useState(defaults.showVoters)
+  const [showBallots, setShowBallots] = useState(defaults.showBallots)
+  const [solicitOptions, setSolicitOptions] = useState(defaults.solicitOptions)
   const [emails, setEmails] = useState<string[]>([])
   const [includeSelf, setIncludeSelf] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -241,9 +246,11 @@ export function CreatePoll() {
           setMultiQuestion(true)
           setQuestions(rows.map((row) => draftFrom(row, row.candidates ?? [])))
         } else {
+          setMultiQuestion(false)
           setQuestions([draftFrom(source as Poll, candidates ?? [])])
         }
       } else {
+        setMultiQuestion(false)
         setQuestions([draftFrom(source as Poll, candidates ?? [])])
       }
 
@@ -497,6 +504,14 @@ export function CreatePoll() {
     }
 
     notifications.show({ message: 'Poll created', color: 'green' })
+    savePollDefaults({
+      // Without an account the mode was not a choice, so the saved one stands.
+      mode: anonymous ? defaults.mode : mode,
+      showVoters,
+      showBallots,
+      solicitOptions,
+      multiQuestion,
+    })
     // The new poll's heading is fully known, so hand it over like a list card
     // does; the title flies from the field to the page. See lib/headingFlight.ts.
     const id = data as string
