@@ -52,15 +52,13 @@ export function WhatIsStar() {
       </Title>
       <Text>
         <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is an acronym that
-        stands for &ldquo;Score Then Automatic Runoff&rdquo;. It combines{' '}
-        <Ext href="https://en.wikipedia.org/wiki/Score_voting">score voting</Ext> with{' '}
-        <Ext href="https://en.wikipedia.org/wiki/Instant-runoff_voting">ranked choice voting</Ext>{' '}
-        algorithms. Voters give every option a score, the two options with the most stars go to a
-        runoff, and whichever of those two is preferred by more voters wins.
+        stands for &ldquo;Score Then Automatic Runoff&rdquo;. Voters give every option a score, the
+        two options with the most stars go to a runoff, and whichever of those two is preferred by
+        more voters wins.
       </Text>
       <Text>
-        Let&rsquo;s walk through it one step at a time, with an example: six friends choosing where
-        to have dinner.
+        Let&rsquo;s walk through it one step at a time with an example: six friends choosing what to
+        have for dinner.
       </Text>
 
       <Stack gap="md" mt="md">
@@ -68,9 +66,8 @@ export function WhatIsStar() {
           <Stack gap="sm">
             <Text size="sm">
               First, decide what is being voted on. The options can be anything: candidates for a
-              position, places to eat, films to watch, or times to meet. There can be as many as you
-              like, as long as there are at least two. Our six friends are choosing between three
-              options:
+              position, films to watch, or times to meet. You can have as many options as you like,
+              but our six friends are choosing between three:
             </Text>
             <OptionKey ratings={DINNER} />
           </Stack>
@@ -82,8 +79,8 @@ export function WhatIsStar() {
               Each voter gives every option a score from 0 to 5 stars, where 0 is the worst and 5 is
               the best. A score is not a ranking: you can give several options the same number of
               stars, and you don&rsquo;t have to use every number. A good way to start is to give
-              your favourite 5 stars and the option you like least 0, then score the rest by how
-              much you like them in between. Here is the first friend&rsquo;s ballot:
+              your favourite option 5 stars and your least favorite 0 stars, then give the rest a
+              score in-between. Here is the first friend&rsquo;s ballot:
             </Text>
             <Ballot ratings={DINNER} voter={0} />
             <Then>Everyone&rsquo;s ballots, side by side</Then>
@@ -103,8 +100,8 @@ export function WhatIsStar() {
             <Text size="sm">
               Once voting has closed, the stars each option received are added up across every
               ballot. This is the scoring round, and it measures how much support each option has
-              across the whole group, not only how many people put it first: an option that
-              everybody likes can beat one that a few people love and the rest can&rsquo;t stand.
+              across the whole group. An option that everybody likes can score higher than one that
+              a few people love and the rest can&rsquo;t stand.
             </Text>
             <EmojiTable
               caption="Each restaurant's stars, added up"
@@ -122,7 +119,7 @@ export function WhatIsStar() {
           <Stack gap="sm">
             <Text size="sm">
               The two options with the highest scores become the finalists, and every other option
-              is out. Here {first} ({sum(DINNER[first])} stars) and {second} ({sum(DINNER[second])}{' '}
+              is cut. Here {first} ({sum(DINNER[first])} stars) and {second} ({sum(DINNER[second])}{' '}
               stars) go through to the runoff, and{' '}
               {optionsOf(DINNER)
                 .filter((option) => !finalists.includes(option))
@@ -147,11 +144,11 @@ export function WhatIsStar() {
         <RoundCard title="Step 5: Winner resolved">
           <Stack gap="sm">
             <Text size="sm">
-              Last comes the automatic runoff. Nobody votes again: every ballot already says which
-              finalist its voter prefers, because it is the one they gave more stars to. Each ballot
-              counts as one vote for that finalist, however big or small the difference between the
-              two scores, and the finalist with more votes wins. A voter who gave both finalists the
-              same score has no preference between them, so their ballot counts for neither.
+              Last comes the automatic runoff. Nobody votes again. Every ballot already says which
+              finalist its voter prefers, because it's the one they gave more stars to. Each ballot
+              counts as one vote for its preferred finalist, and the finalist with more votes wins.
+              A voter who gave both finalists the same score has no preference between them, so
+              their ballot counts for neither.
             </Text>
             <EmojiTable
               caption="The runoff: each friend's vote goes to the finalist they gave more stars"
@@ -168,8 +165,8 @@ export function WhatIsStar() {
             ))}
             <Text size="sm">
               The winner is {winner}, even though {loser} had more stars. Two friends loved {loser},
-              but more of the group preferred {winner} to it, and in the runoff every voter counts
-              the same. This is also why you can score honestly: giving your second choice a few
+              but more of the group preferred {winner}; and in the runoff, relative preference is
+              what matters. This is also why you can score honestly: giving your second choice a few
               stars never takes anything away from your favourite, because if both reach the runoff,
               your whole vote goes to the one you scored higher.
             </Text>
@@ -180,21 +177,17 @@ export function WhatIsStar() {
           <Stack gap="sm">
             <Text size="sm">
               In the rare event of a tie, STAR has rules to settle it. Ties are uncommon because a
-              score is a total over every ballot, and two options seldom land on exactly the same
-              number of stars. A tie only matters where it decides something: who reaches the
-              runoff, or who wins it.
+              score is a total over every ballot, and multiple options seldom land on exactly the
+              same number of stars.
             </Text>
             <Text size="sm" fw={700}>
-              A tie for a place in the runoff
+              A tie in the score round
             </Text>
             <Text size="sm">When two options are tied, the place goes to:</Text>
             <List type="ordered" size="sm" spacing={4} withPadding>
-              <List.Item>
-                the one more voters prefer head-to-head, meaning more ballots gave it more stars
-                than the other;
-              </List.Item>
-              <List.Item>if that is level too, the one given 5 stars on more ballots;</List.Item>
-              <List.Item>if they are still level, one of the two, chosen at random.</List.Item>
+              <List.Item>The one more voters prefer in a head-to-head comparison.</List.Item>
+              <List.Item>If that is level too, the one given 5 stars on more ballots.</List.Item>
+              <List.Item>If they are still level, one of the two is chosen at random.</List.Item>
             </List>
             <Text size="sm">
               When three or more options are tied, the head-to-head step is skipped: the places go
@@ -212,8 +205,7 @@ export function WhatIsStar() {
               </List.Item>
             </List>
             <Text size="sm">
-              If the finalists are level on all three, the election has no winner. This site says
-              so, and offers to flip a coin to settle it, which is not part of the election.
+              If the finalists are level on all three, the election has no winner.
             </Text>
           </Stack>
         </RoundCard>
@@ -241,8 +233,7 @@ export function WhyStar() {
       </Title>
       <Text>
         Let&rsquo;s look at an example with 9 voters choosing between 3 options for dinner: pizza,
-        tacos, and sushi. In this example, pizza and tacos are similar, while sushi is an outlier.
-        The voters&rsquo; ratings of each option are shown below:
+        tacos, and sushi. The voters&rsquo; ratings of each option are shown below:
       </Text>
       <Card withBorder p="sm">
         <EmojiTable caption="Each voter's rating of each option" rows={ratingRows(RATINGS)} />
@@ -255,8 +246,8 @@ export function WhyStar() {
               The most common way of voting is by{' '}
               <Ext href="https://en.wikipedia.org/wiki/First-past-the-post_voting">plurality</Ext>,
               also known as &ldquo;First Past the Post&rdquo;. In our example pizza and tacos, which
-              are similar, split the vote, which results in a win for sushi, an option that 5 of the
-              9 voters rated 0.
+              might be considered more similar to each other than to sushi, split the vote, which
+              results in a win for sushi, an option that 5 of the 9 voters rated 0.
             </Text>
             <EmojiTable
               caption="Who each voter votes for under plurality voting"
@@ -294,9 +285,9 @@ export function WhyStar() {
               (IRV, also known as Ranked Choice Voting) prevents the vote splitting problem in a
               different way. Rather than the two voters for pizza having their votes wasted, pizza
               is cut from the competition and its votes are re-allocated according to the
-              voters&rsquo; next preference. In our example tacos now win. Though this doesn&rsquo;t
-              capture that all sushi fans would prefer pizza to tacos. This is an example of how
-              Instant Runoff Voting is vulnerable to the &ldquo;
+              voters&rsquo; next preference. In our example tacos now win. However, this
+              doesn&rsquo;t capture that all the sushi fans would prefer pizza to tacos. This is an
+              example of how Instant Runoff Voting is vulnerable to the &ldquo;
               <Ext href="https://en.wikipedia.org/wiki/Center_squeeze">center squeeze</Ext>&rdquo;
               effect, where an option that has broad support is still eliminated from the running if
               it doesn&rsquo;t have enough ballots where it is the first preference.
@@ -352,11 +343,11 @@ export function WhyStar() {
               (STAR) voting combines IRV and score voting to mitigate both the &ldquo;center
               squeeze&rdquo; effect and the &ldquo;bullet voting&rdquo; incentive. The first round
               tallies scores to find options with broad support, and the second round establishes
-              relative preference between the finalists. In this example taco fans are incentivized
-              to vote honestly, since they know that their vote will still go entirely to tacos in
-              the runoff, but they still want to prevent sushi from becoming a finalist. Sushi fans
-              have their preference for pizza relative to tacos captured, even though their
-              preferred option wasn&rsquo;t a finalist.
+              relative preference between the finalists. In this example, the taco fans are
+              incentivized to vote honestly. They know that their vote will still go entirely to
+              tacos if it's a finalist but they also want their vote to go to pizza if tacos is not
+              a finalist. The sushi fans were able to have their preference for pizza relative to
+              tacos captured, even though their preferred option wasn&rsquo;t a finalist.
             </Text>
             <EmojiTable
               caption="Each voter's scores, totalled; the two highest become finalists"
@@ -381,8 +372,8 @@ export function WhyStar() {
             <Text size="sm">
               STAR voting resulted in the best outcome in this single, contrived election example,
               but this conclusion is supported by studies that simulate millions of elections with
-              diverse election scenarios. STAR performs extremely well in diverse simulated
-              elections:
+              diverse election scenarios. STAR performs extremely well in these types of election
+              simulation studies:
             </Text>
             <Figure
               src={vseByStrategy}

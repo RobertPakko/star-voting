@@ -36,100 +36,81 @@ export const SITE_FEATURES: SiteFeature[] = [
   {
     icon: LinkIcon,
     title: 'Low-friction open polls',
-    text: <>Share a link and anyone holding it can vote, with no account needed.</>,
+    text: <>Share a link and anyone can vote without needing to sign in.</>,
   },
   {
     icon: EnvelopeSimpleIcon,
     title: 'Email-authenticated polls',
-    text: (
-      <>Invite voters by email when it matters who votes: each one signs in and gets one ballot.</>
-    ),
+    text: <>Invite voters by email to ensure your voters can only vote once.</>,
   },
   {
     icon: ListNumbersIcon,
     title: 'Multi-question polls',
-    text: (
-      <>Ask several questions in one poll, with one invitation and one reveal of the results.</>
-    ),
+    text: <>Make several decisions at once using a single link.</>,
   },
   {
     icon: LightbulbIcon,
     title: 'Option solicitation',
-    text: <>Let voters suggest the options, then open the finished list for voting.</>,
+    text: <>Let voters suggest options prior to voting.</>,
   },
   {
     icon: CalendarDotsIcon,
     title: 'Time selection polls',
-    text: <>Find a time to meet: everybody paints a calendar with how well each hour suits them.</>,
+    text: <>Find a time to meet using the same STAR voting system.</>,
   },
   {
     icon: EyeSlashIcon,
     title: 'Configurable privacy',
-    text: (
-      <>
-        Choose whether voters&rsquo; names and ballots are shown or hidden. Either way, this site
-        will never publish or sell your data.
-      </>
-    ),
+    text: <>Choose whether voters&rsquo; names and ballots are shown or hidden.</>,
   },
   {
     icon: SignInIcon,
     title: 'Password-free sign-in',
-    text: <>Sign in with a link or code sent to your email, and keep all your polls in one list.</>,
+    text: <>Sign in with an emailed link to manage your polls across devices.</>,
   },
   {
     icon: LightningIcon,
     title: 'Real-time results',
-    text: <>Votes and results arrive as they happen, with no need to refresh the page.</>,
+    text: <>Watch your polls update without needing to refresh the page.</>,
   },
   {
     icon: BellIcon,
     title: 'Notifications',
-    text: (
-      <>
-        Hear when you&rsquo;re invited, when voting opens, and when results are ready, by email or
-        push notification.
-      </>
-    ),
+    text: <>See when your polls have updates via email or push notifications.</>,
   },
   {
     icon: DeviceMobileIcon,
     title: 'Support for any device',
     text: (
       <>
-        Works on phones, tablets and computers, and installs as an app on your home screen.{' '}
+        Works on any device and can be{' '}
         <Anchor component={Link} to="/app" inherit>
-          See how
-        </Anchor>
-        .
+          installed
+        </Anchor>{' '}
+        as an app.
       </>
     ),
   },
   {
     icon: ScalesIcon,
     title: 'Fair results',
-    text: <>STAR voting leads to better group decisions than other voting algorithms.</>,
+    text: <>Get better group decisions due to the advantages of STAR.</>,
   },
   {
     icon: ShieldCheckIcon,
     title: 'Trustworthy design',
-    text: (
-      <>
-        Results stay sealed until the poll is over, every tie-break is explained, and any late
-        change to a poll is flagged on its results.
-      </>
-    ),
+    text: <>Polls can't be tampered with unfairly, even by their creators.</>,
   },
   {
     icon: CodeIcon,
     title: 'Open-source code',
     text: (
       <>
-        Every line of this site is{' '}
+        Every line of code is{' '}
         <Anchor href={CODE_URL} target="_blank" rel="noopener noreferrer" inherit>
           published
         </Anchor>
-        , so anyone can check how it works.
+        , so anyone can audit it.
       </>
     ),
   },
@@ -138,9 +119,9 @@ export const SITE_FEATURES: SiteFeature[] = [
     title: 'Free',
     text: (
       <>
-        No ads, no trackers and no fees.{' '}
+        No ads, fees, or data collection. All{' '}
         <Anchor component={Link} to="/donate" inherit>
-          All donations
+          donations
         </Anchor>{' '}
         go to Khan Academy.
       </>
