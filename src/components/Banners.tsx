@@ -6,6 +6,7 @@ import {
   BellSlashIcon,
   EyeSlashIcon,
   HouseIcon,
+  NavigationArrowIcon,
 } from '@phosphor-icons/react'
 import { useAuth } from '../lib/auth'
 import { restorePolls, usePollRemoved } from '../lib/removedPolls'
@@ -138,7 +139,7 @@ function HomeBanner() {
             to="/"
             size="xs"
             variant="light"
-            leftSection={<HouseIcon size={14} aria-hidden />}
+            leftSection={<NavigationArrowIcon size={14} aria-hidden />}
           >
             Visit the home page
           </Button>

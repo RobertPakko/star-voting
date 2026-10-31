@@ -9,6 +9,7 @@ import {
   boundsOf,
   cellsInHours,
   DAY_MINUTES,
+  DEFAULT_HOURS,
   daysOf,
   describeOffset,
   enumerateWindows,
@@ -133,12 +134,15 @@ export function PaintTimes({
     for (const key of marked) next.add(key)
     return next
   }, [offered, marked, rubbed])
+  const daily = isDaily(schedule)
   // Which part of the day this reader is working in; see HoursFields. It opens
   // as the poll's own axis, so the calendar is the one the creator drew until
-  // somebody says otherwise.
-  const [hours, setHours] = useState<DailyWindow>(schedule.window)
-
-  const daily = isDaily(schedule)
+  // somebody says otherwise -- except on a list nobody has painted yet, whose
+  // stored axis is the whole day (`spanOf` of nothing), so it opens on the
+  // create form's default instead.
+  const [hours, setHours] = useState<DailyWindow>(() =>
+    offered.size === 0 && !daily ? { ...DEFAULT_HOURS } : schedule.window,
+  )
   const zone = useMemo(() => {
     const first = daysOf(offered)[0]
     return first ? offsetName(schedule.timezone, first) : null

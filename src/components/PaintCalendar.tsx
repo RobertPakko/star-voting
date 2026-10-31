@@ -484,7 +484,12 @@ export function PaintCalendar({
     // The library cannot parse 24:00.
     endTime: axis.end === '24:00' ? '23:59:59' : `${axis.end}:00`,
     intervalMinutes: schedule.granularity,
-    slotLabelFormat: (slot: string) => formatTimeOfDay(toMinutes(slot.slice(11, 16)), h24),
+    // An hour cut short by a half-hour end (`hoursColumn`) loses its label,
+    // which would otherwise be sliced through the middle.
+    slotLabelFormat: (slot: string) => {
+      const at = toMinutes(slot.slice(11, 16))
+      return at + 60 > toMinutes(axis.end) ? '' : formatTimeOfDay(at, h24)
+    },
     slotHeight: HOUR_HEIGHT,
     withAllDaySlots: false as const,
     withCurrentTimeIndicator: false as const,
