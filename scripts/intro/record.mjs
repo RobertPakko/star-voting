@@ -18,6 +18,7 @@
 // for a covered window.
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { attach, deleteGroup, deleteTitled, pause, SITE, stranger, tokenOf } from './lib.mjs'
 
@@ -33,12 +34,18 @@ const SCALE = PHONE ? 3 : 1.5
 /** The size the video is encoded at: the phone's frames halved, which is plenty for a phone. */
 const ENCODE = PHONE ? { w: 780, h: 1688 } : { w: 1920, h: 1200 }
 const SECTIONS = JSON.parse(readFileSync('src/components/intro/sections.json', 'utf8'))
+/** The frame rate the video is encoded at. */
+const FPS = 60
+/** How much faster than life a section may play before the take warns about it. */
+const MAX_SPEEDUP = 1.15
 
 /** Frames from Chromium's screencast, each with the moment it was drawn. */
 class Recorder {
   frames = []
+  writes = []
   cuts = new Set()
   marks = []
+  recording = false
   constructor(page, dir) {
     this.page = page
     this.dir = dir
@@ -51,16 +58,26 @@ class Recorder {
       deviceScaleFactor: SCALE,
       mobile: PHONE,
     })
+    // The browser sends the next frame only once this one is acknowledged, so
+    // it is acknowledged first and written afterwards: a frame held up on the
+    // disk is a frame the browser never sends.
     this.cdp.on('Page.screencastFrame', (f) => {
-      const file = join(this.dir, `${String(this.frames.length).padStart(5, '0')}.png`)
-      writeFileSync(file, Buffer.from(f.data, 'base64'))
-      this.frames.push({ file, at: f.metadata.timestamp ?? 0 })
       void this.cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {})
+      // A frame still on its way when a cut began belongs to the cut.
+      if (!this.recording) return
+      const file = join(this.dir, `${String(this.frames.length).padStart(5, '0')}.jpg`)
+      this.frames.push({ file, at: f.metadata.timestamp ?? 0 })
+      this.writes.push(writeFile(file, Buffer.from(f.data, 'base64')))
     })
   }
   async resume() {
+    this.recording = true
+    // JPEG at full quality rather than PNG: PNG is slow enough to encode at
+    // this size that the browser manages about a dozen frames a second, and
+    // the mp4 is lossy anyway.
     await this.cdp.send('Page.startScreencast', {
-      format: 'png',
+      format: 'jpeg',
+      quality: 100,
       everyNthFrame: 1,
       maxWidth: W * SCALE,
       maxHeight: H * SCALE,
@@ -68,6 +85,7 @@ class Recorder {
   }
   /** Stops recording; what happens until `resume` is cut out. */
   async cut() {
+    this.recording = false
     await this.cdp.send('Page.stopScreencast')
     this.cuts.add(this.frames.length)
   }
@@ -82,40 +100,60 @@ class Recorder {
    * Sections not reached (a take stopped early) keep their own pace.
    */
   async save() {
+    this.recording = false
     await this.cdp.send('Page.stopScreencast').catch(() => {})
+    await Promise.all(this.writes)
     const lengths = this.frames.map((f, i) => {
       const next = this.frames[i + 1]
-      if (!next) return 1 / 30
+      if (!next) return 1 / FPS
       // A pause in the recording is a cut, not a wait.
-      return this.cuts.has(i + 1) ? 1 / 30 : Math.max(next.at - f.at, 1 / 60)
+      return this.cuts.has(i + 1) ? 1 / FPS : Math.max(next.at - f.at, 1 / (2 * FPS))
     })
     this.marks.forEach((m, k) => {
       const target = SECTIONS.find((s) => s.name === m.name)?.seconds
       const end = this.marks[k + 1]?.frame ?? this.frames.length
       if (!target || end <= m.frame) return
       const raw = lengths.slice(m.frame, end).reduce((a, b) => a + b, 0)
+      const speed = raw / target
+      console.log(
+        `${m.name}: ${raw.toFixed(1)}s recorded for ${target}s,`,
+        speed > 1 ? `played ${speed.toFixed(2)}× fast,` : 'held at the end,',
+        `${((end - m.frame) / raw).toFixed(0)} frames a second captured`,
+      )
+      // Sped up much past life, a section reads as a blur of clicks.
+      if (speed > MAX_SPEEDUP)
+        console.warn(
+          `  hurried: give ${m.name} about ${Math.ceil(raw / MAX_SPEEDUP)}s in sections.json`,
+        )
       if (raw > target) for (let i = m.frame; i < end; i++) lengths[i] *= target / raw
       else lengths[end - 1] += target - raw
     })
-    const lines = this.frames.flatMap((f, i) => [
-      `file '${f.file.replaceAll('\\', '/')}'`,
-      `duration ${lengths[i].toFixed(4)}`,
-    ])
+    // Laid on the output's own grid here, each output frame showing whichever
+    // capture was on screen at its moment: handed the captures' own uneven
+    // durations (half of them under a sixtieth), ffmpeg's concat drifts by
+    // seconds over a take.
+    const total = lengths.reduce((a, b) => a + b, 0)
+    const lines = []
+    let shown = 0
+    let ends = lengths[0]
+    for (let k = 0; k < Math.round(total * FPS); k++) {
+      while ((k + 0.5) / FPS > ends && shown < this.frames.length - 1) ends += lengths[++shown]
+      lines.push(`file '${this.frames[shown].file.replaceAll('\\', '/')}'`, `duration ${1 / FPS}`)
+    }
     lines.push(lines[lines.length - 2])
     const list = join(this.dir, 'list.txt')
     writeFileSync(list, lines.join('\n'))
     const scale = `scale=${ENCODE.w}:${ENCODE.h}:flags=lanczos`
     execFileSync('ffmpeg', [
       ...['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list],
-      ...['-vf', `${scale},fps=30,format=yuv420p`, '-c:v', 'libx264', '-preset', 'slow'],
+      ...['-vf', `${scale},fps=${FPS},format=yuv420p`, '-c:v', 'libx264', '-preset', 'slow'],
       ...['-crf', '24', '-movflags', '+faststart', '-an', join(OUT, `${SHAPE}.mp4`)],
     ])
     execFileSync('ffmpeg', [
       ...['-y', '-loglevel', 'error', '-i', this.frames[0].file, '-vf', scale],
       ...['-q:v', '3', join(OUT, `${SHAPE}.jpg`)],
     ])
-    const length = lengths.reduce((a, b) => a + b, 0)
-    console.log('length', length.toFixed(2), 's')
+    console.log('length', total.toFixed(2), 's')
   }
 }
 
@@ -215,15 +253,29 @@ process.on('uncaughtException', async (error) => {
 
 /** Where the pointer is, so each move glides from there. */
 let at = { x: W * 0.75, y: H * 0.9 }
-async function glide(x, y, steps = 18) {
-  await page.mouse.move(x, y, { steps })
+/**
+ * Moves the pointer the way a hand does: easing in and out, quicker over a
+ * long way but never instant, one step a frame. (`mouse.move` with `steps`
+ * goes as fast as the browser answers, which on camera is a jump.)
+ */
+async function glide(x, y) {
+  const from = at
+  const ms = Math.min(750, 280 + Math.hypot(x - from.x, y - from.y) * 0.45)
+  const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
+  const start = Date.now()
+  for (let t = 0; t < 1;) {
+    await pause(16)
+    t = Math.min(1, (Date.now() - start) / ms)
+    const k = ease(t)
+    await page.mouse.move(from.x + (x - from.x) * k, from.y + (y - from.y) * k)
+  }
   at = { x, y }
 }
-async function click(locator, { settle = 120 } = {}) {
+async function click(locator, { settle = 350 } = {}) {
   await scrollTo(locator)
   const b = await locator.boundingBox()
   await glide(b.x + b.width / 2, b.y + b.height / 2)
-  await pause(90)
+  await pause(150)
   await page.mouse.down()
   await pause(70)
   await page.mouse.up()
@@ -231,7 +283,8 @@ async function click(locator, { settle = 120 } = {}) {
 }
 async function type(locator, text) {
   await click(locator)
-  await page.keyboard.type(text, { delay: 40 })
+  await page.keyboard.type(text, { delay: 85 })
+  await pause(250)
 }
 /**
  * Glides the page until `locator` is comfortably on screen — its top at `top`
@@ -302,8 +355,12 @@ const done = (name) => STOP === name
 // A load of its own, so nothing is left over from a take before: changing
 // only the hash would keep the form as the last take left it.
 await page.goto(SITE + '#/new')
-// The name box offers back the last name typed; each take types its own.
-await page.evaluate(() => localStorage.removeItem('star-voting:voter-name'))
+// The name box offers back the last name typed, and a blank form starts from
+// the last poll's settings (the last take's); each take starts from nothing.
+await page.evaluate(() => {
+  localStorage.removeItem('star-voting:voter-name')
+  localStorage.removeItem('star-voting:poll-defaults')
+})
 await page.reload()
 await page.getByText('Find a time').first().waitFor()
 await dress(page)
@@ -383,7 +440,7 @@ for (const [name, stars] of [
   ['Airplane', 4],
 ]) {
   const row = page.getByRole('radiogroup', { name: `Score for ${name}` })
-  await click(row.getByRole('radio', { name: `${stars} stars`, exact: true }), { settle: 250 })
+  await click(row.getByRole('radio', { name: `${stars} stars`, exact: true }), { settle: 400 })
 }
 await click(page.getByRole('button', { name: 'Submit vote' }))
 // The page moves on to the next question by itself.
@@ -412,18 +469,18 @@ async function stroke(cells, from, to) {
   const a = cells[Math.min(from, cells.length - 1)]
   const b = cells[Math.min(to, cells.length - 1)]
   await glide(a.x, a.y)
-  await pause(80)
+  await pause(150)
   await page.mouse.down()
-  await page.mouse.move(b.x, b.y, { steps: 24 })
-  await pause(80)
+  await glide(b.x, b.y)
+  await pause(150)
   await page.mouse.up()
-  await pause(250)
+  await pause(400)
 }
-const brush = (n) => click(page.getByText(String(n), { exact: true }).first(), { settle: 150 })
+const brush = (n) => click(page.getByText(String(n), { exact: true }).first())
 await firstCell.waitFor()
 // On a phone the week is wider than the screen: Friday and Saturday into view.
 await scrollTo(firstCell)
-await brush(5)
+// The brush starts on 5, so the first stroke needs no press.
 await stroke(await column('2026-10-31'), 0, 5)
 await brush(3)
 await stroke(await column('2026-10-30'), 2, 5)

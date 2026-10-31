@@ -1,9 +1,9 @@
 [
-  { "name": "make", "caption": "Make polls", "seconds": 8.5 },
-  { "name": "collect", "caption": "Solicit options", "seconds": 7.5 },
-  { "name": "rate", "caption": "Rate options", "seconds": 5 },
-  { "name": "times", "caption": "Rate times", "seconds": 6 },
-  { "name": "votes", "caption": "Watch votes", "seconds": 4.5 },
-  { "name": "decide", "caption": "Get results", "seconds": 9.5 },
-  { "name": "list", "caption": "See your polls", "seconds": 5 }
+  { "name": "make", "caption": "Make polls", "seconds": 19 },
+  { "name": "collect", "caption": "Solicit options", "seconds": 10 },
+  { "name": "rate", "caption": "Rate options", "seconds": 7.5 },
+  { "name": "times", "caption": "Rate times", "seconds": 9 },
+  { "name": "votes", "caption": "Watch votes", "seconds": 6.5 },
+  { "name": "decide", "caption": "Get results", "seconds": 11 },
+  { "name": "list", "caption": "See your polls", "seconds": 5.5 }
 ]

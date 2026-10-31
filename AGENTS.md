@@ -1418,7 +1418,7 @@ and so no button.
 
 ## The intro
 
-`#/intro` is a film of the app at work, about fifty seconds: the logo
+`#/intro` is a film of the app at work, about seventy-five seconds: the logo
 arrives and flies into the header of a recording of the real app, which makes
 a poll, gathers films from friends, rates them, paints a calendar, watches the
 votes arrive, closes the poll for both results and goes back to the poll list;
@@ -1499,11 +1499,17 @@ node scripts/intro/record.mjs test-results/intro-portrait --portrait --publish
   frames for a covered window.
 - **A take makes one poll, "Movie night", and deletes it** at the end, and
   deletes any left by a take that crashed. The example polls stay.
-- **Frames come from the screencast** (Playwright's own video blurs text) and
-  are put together by `ffmpeg`, on the PATH. A cut in the recording (the
-  selects set off camera, the reload that shows the results fresh) is a cut,
-  not a wait. Each section is then sped up evenly or held on its last frame to
-  its length in `sections.json`.
+- **Frames come from the screencast** (Playwright's own video blurs text), as
+  JPEG — PNG is slow enough to encode that the browser sends about a dozen
+  frames a second — and are put together at 60fps by `ffmpeg`, on the PATH.
+  A cut in the recording (the selects set off camera, the reload that shows
+  the results fresh) is a cut, not a wait. Each section is then sped up
+  evenly or held on its last frame to its length in `sections.json`.
+- **A section plays at close to life.** Sped up much past it, the clicks blur
+  together and the film looks cheap, so a take prints each section's recorded
+  length and warns when one plays more than 1.15× fast; lengthen that section
+  in `sections.json` and record both shapes again. The pointer and the typing
+  move at a hand's pace for the same reason.
 - **The page is dressed for the camera**: an arrow, or on the phone a
   fingertip shown only while pressing; toasts hidden; the account's address
   hidden in the header and shown as *you@example.com* elsewhere.
