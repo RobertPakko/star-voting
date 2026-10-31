@@ -2,7 +2,7 @@
 
 Make a poll, share it, and get an easy an accurate result using [STAR voting](https://en.wikipedia.org/wiki/STAR_voting)
 
-**[Open the app](https://choicelab.app/)**  ·  [What is STAR voting, and why use it?](https://choicelab.app/#/about)
+**[Open the app](https://choicelab.app/)**
 
 ## Running your own copy
 
