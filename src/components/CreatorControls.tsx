@@ -421,8 +421,8 @@ export function CreatorControls({
                 : `The ${optionCount} current options become the ballot and voting opens.`}
             </Text>
             <Text size="sm" c="dimmed">
-              Nobody can suggest an option after this. You can still correct the{' '}
-              {questions.length > 0 ? 'lists' : 'list'} yourself until the first vote comes in.
+              Nobody can suggest an option after this. You'll still be able to correct the options
+              yourself if needed.
             </Text>
             <Group justify="flex-end">
               <Button variant="default" onClick={openModal.close}>
