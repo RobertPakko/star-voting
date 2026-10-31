@@ -530,8 +530,7 @@ CREATE OR REPLACE FUNCTION "public"."broadcast_poll_updated"() RETURNS "trigger"
     SET "search_path" TO 'public'
     AS $$
 declare
-  v_quiet text[] := array['winner_name', 'winner_settled_at',
-                          'results_announced_at', 'reminder_sent_at'];
+  v_quiet text[] := array['results_announced_at', 'reminder_sent_at'];
 begin
   if to_jsonb(NEW) - v_quiet is not distinct from to_jsonb(OLD) - v_quiet then
     return null;
@@ -934,6 +933,14 @@ begin
     raise exception 'This poll has been closed';
   end if;
 
+  -- An invite poll everybody has answered shows its results without anybody
+  -- closing it, so the close alone is not where the window ends. Past the
+  -- reveal no ballot can be revised to answer a changed list, and the winner
+  -- settled from the list as it was is never elected again.
+  if poll_results_revealed(v_poll) then
+    raise exception 'The results are out, so the options can no longer be changed';
+  end if;
+
   if v_poll.kind = 'time' then
     raise exception 'A time poll''s options are its windows; change its schedule instead';
   end if;
@@ -957,7 +964,7 @@ $$;
 ALTER FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") IS 'Adds an option to the creator''s own poll, up until it closes. On a poll that already has ballots the addition is marked, and every ballot already cast scores the new option zero; where the options came from does not enter into it.';
+COMMENT ON FUNCTION "public"."creator_add_option"("p_poll_id" "uuid", "p_name" "text", "p_description" "text") IS 'Adds an option to the creator''s own poll, up until its results are out. On a poll that already has ballots the addition is marked, and every ballot already cast scores the new option zero; where the options came from does not enter into it.';
 
 
 
@@ -980,6 +987,14 @@ begin
 
   if v_poll.closed_at is not null then
     raise exception 'This poll has been closed';
+  end if;
+
+  -- An invite poll everybody has answered shows its results without anybody
+  -- closing it, so the close alone is not where the window ends. Past the
+  -- reveal no ballot can be revised to answer a changed list, and the winner
+  -- settled from the list as it was is never elected again.
+  if poll_results_revealed(v_poll) then
+    raise exception 'The results are out, so the options can no longer be changed';
   end if;
 
   select exists (select 1 from ballots where poll_id = p_poll_id) into v_voted;
@@ -1035,6 +1050,14 @@ begin
 
   if v_poll.closed_at is not null then
     raise exception 'This poll has been closed';
+  end if;
+
+  -- An invite poll everybody has answered shows its results without anybody
+  -- closing it, so the close alone is not where the window ends. Past the
+  -- reveal no ballot can be revised to answer a changed list, and the winner
+  -- settled from the list as it was is never elected again.
+  if poll_results_revealed(v_poll) then
+    raise exception 'The results are out, so the options can no longer be changed';
   end if;
 
   p_correct := coalesce(p_correct, '[]'::jsonb);
@@ -2674,13 +2697,15 @@ $$;
 ALTER FUNCTION "public"."open_poll_results"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text") RETURNS "void"
+CREATE OR REPLACE FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text" DEFAULT NULL::"text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 declare
   v_poll polls;
   v_ballot_id uuid;
+  v_name text;
+  v_old_name text;
 begin
   perform lock_poll(p_poll_id);
 
@@ -2715,17 +2740,42 @@ begin
     raise exception 'You have not voted in this poll yet';
   end if;
 
+  select voter_name into v_old_name from ballots where id = v_ballot_id;
+
+  -- Null keeps the name; a poll that hides respondents never takes one.
+  if v_poll.show_voters and p_voter_name is not null then
+    v_name := nullif(trim(p_voter_name), '');
+    if v_name is null then
+      raise exception 'Enter your name so the group can see who has voted';
+    end if;
+    if length(v_name) > 60 then
+      raise exception 'That name is too long';
+    end if;
+  else
+    v_name := v_old_name;
+  end if;
+
   perform replace_scores(v_ballot_id, v_poll.id, p_scores);
 
-  update ballots set revised_at = now() where id = v_ballot_id;
+  begin
+    update ballots set revised_at = now(), voter_name = v_name where id = v_ballot_id;
+  exception when unique_violation then
+    raise exception '"%" has already voted in this poll. Add a last initial if that is not you.', v_name;
+  end;
+
+  -- There is no trigger on an UPDATE of ballots (a changed vote says nothing;
+  -- see AGENTS.md), so a roster that moved is announced here.
+  if v_name is distinct from v_old_name then
+    perform broadcast_poll_change(v_poll.id);
+  end if;
 end;
 $$;
 
 
-ALTER FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text") IS 'Replaces the scores on this reader''s ballot -- the one their account cast, on any device, or the one this voter_key cast -- until the poll closes. The voter''s name is not revisable: it is on the roster other people are already reading.';
+COMMENT ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") IS 'Replaces the scores on this reader''s ballot -- the one their account cast, on any device, or the one this voter_key cast -- until the poll closes. A name, where the poll shows respondents, replaces the one on the ballot and announces the poll; null keeps it.';
 
 
 
@@ -3419,10 +3469,10 @@ CREATE OR REPLACE FUNCTION "public"."poll_email_html"("p_heading" "text", "p_bod
           <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 24px rgba(126,20,255,0.12);">
             <tr>
               <td align="center" style="background-color:#ffffff; padding:40px 24px 24px; border-bottom:1px solid #f0edf7;">
-                <img src="https://choicelab.app/star-voting/logo.png" width="72" height="72" alt="STAR Voting"
+                <img src="https://choicelab.app/logo.png" width="72" height="72" alt="ChoiceLab"
                      style="display:block; width:72px; height:72px; border-radius:16px;">
                 <div style="margin-top:16px; font-size:20px; font-weight:700; color:#1a1523; letter-spacing:0.2px;">
-                  STAR Voting
+                  ChoiceLab
                 </div>
               </td>
             </tr>
@@ -3454,7 +3504,7 @@ CREATE OR REPLACE FUNCTION "public"."poll_email_html"("p_heading" "text", "p_bod
               <td style="padding:20px 32px 28px; border-top:1px solid #f0edf7;">
                 <p style="margin:0 0 8px; font-size:12px; line-height:1.6; color:#b3aec0; text-align:center;">
                   Don&rsquo;t want these emails?
-                  <a href="https://choicelab.app/star-voting/#/settings" style="color:#9691a3; text-decoration:underline;">Change your notification settings</a>.
+                  <a href="https://choicelab.app/#/settings" style="color:#9691a3; text-decoration:underline;">Change your notification settings</a>.
                 </p>
                 <p style="margin:0; font-size:12px; line-height:1.6; color:#b3aec0; text-align:center;">
                   Sent by ChoiceLab.app
@@ -4278,57 +4328,6 @@ $$;
 ALTER FUNCTION "public"."poll_winner_name"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."poll_winners"("p_poll_ids" "uuid"[]) RETURNS TABLE("poll_id" "uuid", "winner_name" "text")
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-declare
-  v_email text := lower(auth.jwt() ->> 'email');
-  v_ids uuid[] := coalesce(p_poll_ids, '{}'::uuid[]);
-  v_id uuid;
-  v_poll polls;
-begin
-  if auth.uid() is null then
-    raise exception 'Not authenticated';
-  end if;
-
-  if coalesce(array_length(v_ids, 1), 0) > 200 then
-    raise exception 'Too many polls in one request';
-  end if;
-
-  foreach v_id in array v_ids loop
-    -- Visibility, on exactly the terms list_polls() uses: the polls you
-    -- created and the polls you were invited to. An id the caller cannot see
-    -- produces no row at all rather than a null one -- "not yours" and "no
-    -- winner" are different answers and must not arrive looking alike.
-    select * into v_poll from polls p
-    where p.id = v_id
-      and (
-        p.created_by = auth.uid()
-        or exists (
-          select 1 from invited_voters iv where iv.poll_id = p.id and iv.email = v_email
-        )
-      );
-
-    continue when not found;
-
-    -- Aliased through the record because this function's own OUT column is
-    -- called winner_name, and now so is the table's.
-    poll_id := v_id;
-    winner_name := v_poll.winner_name;
-    return next;
-  end loop;
-end;
-$$;
-
-
-ALTER FUNCTION "public"."poll_winners"("p_poll_ids" "uuid"[]) OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."poll_winners"("p_poll_ids" "uuid"[]) IS 'The elected option of each poll the caller can see, read from the column settle_winner() maintains. Superseded by the winner_name/winner_settled columns on list_polls() and poll_status(); kept for browsers holding a build that predates them.';
-
-
-
 CREATE OR REPLACE FUNCTION "public"."purge_old_polls"() RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -4387,7 +4386,7 @@ CREATE OR REPLACE FUNCTION "public"."push_message"("p_poll" "public"."polls", "p
     -- Relative to the app's own address, which the service worker resolves
     -- against its scope, so the same message opens the right page from a
     -- local build as well as from choicelab.app.
-    'path', '#/polls/' || short_poll_id(p_poll.id),
+    'path', '#/' || short_poll_id(p_poll.id),
     -- One notification per poll on the screen: a later one about the same
     -- poll replaces the earlier rather than stacking under it.
     'tag', short_poll_id(p_poll.id));
@@ -4814,7 +4813,7 @@ begin
       'Authorization', 'Bearer ' || v_api_key
     ),
     body := jsonb_build_object(
-      'from', 'STAR Voting <noreply@choicelab.app>',
+      'from', 'ChoiceLab <noreply@choicelab.app>',
       'to', jsonb_build_array('RobertPakko@gmail.com'),
       'reply_to', p_from,
       'subject', 'Contact form: message from ' || p_from,
@@ -4968,7 +4967,7 @@ begin
     return;
   end if;
 
-  v_link := 'https://choicelab.app/star-voting/#/polls/' || short_poll_id(p_poll_id);
+  v_link := 'https://choicelab.app/#/' || short_poll_id(p_poll_id);
 
   perform net.http_post(
     url := 'https://api.resend.com/emails',
@@ -4977,7 +4976,7 @@ begin
       'Authorization', 'Bearer ' || v_api_key
     ),
     body := jsonb_build_object(
-      'from', 'STAR Voting <noreply@choicelab.app>',
+      'from', 'ChoiceLab <noreply@choicelab.app>',
       'to', jsonb_build_array(p_to),
       'subject', p_subject,
       'html', poll_email_html(p_heading, p_body_html, v_link)
@@ -6942,9 +6941,9 @@ GRANT ALL ON FUNCTION "public"."open_poll_results"("p_poll_id" "uuid") TO "authe
 
 
 
-REVOKE ALL ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") TO "authenticated";
 
 
 
@@ -7107,11 +7106,6 @@ REVOKE ALL ON FUNCTION "public"."poll_tally"("p_poll_id" "uuid") FROM PUBLIC;
 
 
 REVOKE ALL ON FUNCTION "public"."poll_winner_name"("p_poll_id" "uuid") FROM PUBLIC;
-
-
-
-REVOKE ALL ON FUNCTION "public"."poll_winners"("p_poll_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."poll_winners"("p_poll_ids" "uuid"[]) TO "authenticated";
 
 
 
@@ -7294,6 +7288,8 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."candidates" TO "se
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."contact_messages" TO "anon";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."contact_messages" TO "authenticated";
 GRANT ALL ON TABLE "public"."contact_messages" TO "service_role";
 
 
