@@ -38,6 +38,13 @@ const SECTIONS = JSON.parse(readFileSync('src/components/intro/sections.json', '
 const FPS = 60
 /** How much faster than life a section may play before the take warns about it. */
 const MAX_SPEEDUP = 1.15
+/** The poll's two nights: the coming Friday (today, if it is one) and the Saturday after. */
+const [FRIDAY, SATURDAY] = [0, 1].map((extra) => {
+  const d = new Date()
+  d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7) + extra)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+})
 
 /** Frames from Chromium's screencast, each with the moment it was drawn. */
 class Recorder {
@@ -388,12 +395,19 @@ const keptY = await page.evaluate(() => window.scrollY)
 await pick('Length', '2 hours')
 await pick('Earliest start', '6:00pm')
 await pick('Latest end', '11:00pm')
+// The calendar opens on this week, which may have no Friday left in it. It is
+// turned off camera too, by a click that scrolls nothing.
+const friday = page.getByRole('button', { name: `Fill the whole day ${FRIDAY}` })
+if (!(await friday.count())) {
+  await page.evaluate(() => document.querySelector('[aria-label="Next week"]').click())
+  await friday.waitFor()
+}
 await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), keptY)
 await pause(200)
 await rec.resume()
 await scrollTo(page.getByRole('button', { name: /^Fill the whole day/ }).first(), 160)
 await pause(300)
-for (const day of ['2026-10-30', '2026-10-31'])
+for (const day of [FRIDAY, SATURDAY])
   await click(page.getByRole('button', { name: `Fill the whole day ${day}` }), { settle: 450 })
 await click(page.getByRole('button', { name: 'Create poll' }))
 await page.waitForURL(/#\/[A-Za-z0-9_-]{22}$/)
@@ -449,7 +463,7 @@ await pause(900)
 if (done('rate')) await finish()
 
 // ── Rate the times ────────────────────────────────────────────────────────
-const firstCell = page.locator('[data-drag-slot-group="2026-10-30"]:not([disabled])').first()
+const firstCell = page.locator(`[data-drag-slot-group="${FRIDAY}"]:not([disabled])`).first()
 rec.mark('times')
 // Low enough that the brush beside this line is clear of the top edge, or
 // pressing it would scroll the page back again.
@@ -481,9 +495,9 @@ await firstCell.waitFor()
 // On a phone the week is wider than the screen: Friday and Saturday into view.
 await scrollTo(firstCell)
 // The brush starts on 5, so the first stroke needs no press.
-await stroke(await column('2026-10-31'), 0, 5)
+await stroke(await column(SATURDAY), 0, 5)
 await brush(3)
-await stroke(await column('2026-10-30'), 2, 5)
+await stroke(await column(FRIDAY), 2, 5)
 await click(page.getByRole('button', { name: 'Submit vote' }))
 await pause(1200)
 if (done('times')) await finish()
@@ -507,9 +521,9 @@ const MOVIE_VOTES = [
  */
 const FAVOURITE = [18.5, 19, 18.5, 18, 19.5]
 const night = (i) => (name) => {
-  const [, day, h, m] = name.match(/^2026-10-(\d\d)T(\d\d):(\d\d)/)
+  const [, day, h, m] = name.match(/^(\d{4}-\d\d-\d\d)T(\d\d):(\d\d)/)
   const off = Math.abs(+h + +m / 60 - FAVOURITE[i]) * 2
-  return Math.max(0, Math.round((day === '31' ? 5 : 3) - off))
+  return Math.max(0, Math.round((day === SATURDAY ? 5 : 3) - off))
 }
 for (const [i, scores] of MOVIE_VOTES.entries()) {
   await people[i].vote(movieQ, scores)
