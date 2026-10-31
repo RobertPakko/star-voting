@@ -3,7 +3,7 @@
   { "name": "collect", "caption": "Solicit options", "seconds": 10 },
   { "name": "rate", "caption": "Rate options", "seconds": 7.5 },
   { "name": "times", "caption": "Rate times", "seconds": 9 },
-  { "name": "votes", "caption": "Watch votes", "seconds": 6.5 },
+  { "name": "votes", "caption": "Watch votes arrive", "seconds": 6.5 },
   { "name": "decide", "caption": "Get results", "seconds": 11 },
   { "name": "list", "caption": "See your polls", "seconds": 5.5 }
 ]

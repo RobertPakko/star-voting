@@ -1522,6 +1522,23 @@ node scripts/intro/record.mjs test-results/intro-portrait --portrait --publish
 - Node on Windows sometimes dies at exit with a libuv assertion; run the take
   again.
 
+### Exporting the film
+
+```bash
+node scripts/intro/export.mjs test-results/intro-landscape.mp4              # 1920×1080
+node scripts/intro/export.mjs test-results/intro-portrait.mp4 --portrait    # 1080×1920
+```
+
+[`export.mjs`](scripts/intro/export.mjs) renders the whole film — footage,
+captions, bars and the logo's flights, without the closing buttons — to one
+MP4, for posting where a link would not play. It draws the deployed site by
+default (`--site` for a local preview), so export after the footage ships.
+**It renders rather than records**: animation frames are fired by hand and
+the footage is stepped by seeking, and since the page's clock follows the
+video's playhead, stepping the video steps the film; a slow frame cannot be
+dropped. Headless Edge (Playwright's Chromium has no H.264) and `ffmpeg`; no
+account. About fifteen minutes a shape at 60fps (`--fps 30` halves it).
+
 ## The home page
 
 `/` is the front door for everybody, signed in or not: **Better group

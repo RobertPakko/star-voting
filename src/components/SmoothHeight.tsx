@@ -67,7 +67,12 @@ function frameOf(added: Element | undefined): HTMLElement | null {
  * Something that manages its own height across a swap can opt out by
  * standing inside `[data-own-height]`; the calendar does, since it already
  * holds the page still across a change of view and two corrections at once
- * would fight. A SmoothHeight is marked the same way, so one can stand
+ * would fight. **Anything that grows or shrinks its own height gradually
+ * must opt out too** (a row joining a list, `listRow.module.css`): when it
+ * moves in the same commit as a swap elsewhere in the block, the height is
+ * measured with it still at its start, and the clip hides whatever is under
+ * it until the animation ends. The option list and `NameRoster` opt out for
+ * that reason. A SmoothHeight is marked the same way, so one can stand
  * inside another: the inner one moves for its own swaps and the outer one
  * for the rest.
  */

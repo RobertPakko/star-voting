@@ -27,7 +27,11 @@ export function NameRoster({
   const arriving = useArrivals(shown)
 
   return (
-    <Stack gap={2}>
+    // Out of the page's SmoothHeight: a name joining is not a card being
+    // swapped. When it lands in the same read as an option joining the list
+    // above, the page measured its new height with that row still at nothing
+    // and clipped this roster out of sight until its animation ran out.
+    <Stack gap={2} data-own-height>
       <Title order={2} size="h4">
         {title}
       </Title>
