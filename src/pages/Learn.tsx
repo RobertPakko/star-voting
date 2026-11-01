@@ -247,7 +247,7 @@ export function WhyStar() {
               <Ext href="https://en.wikipedia.org/wiki/First-past-the-post_voting">plurality</Ext>,
               also known as &ldquo;First Past the Post&rdquo;. In our example pizza and tacos, which
               might be considered more similar to each other than to sushi, split the vote, which
-              results in a win for sushi, an option that 5 of the 9 voters rated 0.
+              results in a win for sushi, an option that 5 of the 9 voters really don't want.
             </Text>
             <EmojiTable
               caption="Who each voter votes for under plurality voting"
@@ -285,9 +285,9 @@ export function WhyStar() {
               (IRV, also known as Ranked Choice Voting) prevents the vote splitting problem in a
               different way. Rather than the two voters for pizza having their votes wasted, pizza
               is cut from the competition and its votes are re-allocated according to the
-              voters&rsquo; next preference. In our example tacos now win. However, this
-              doesn&rsquo;t capture that all the sushi fans would prefer pizza to tacos. This is an
-              example of how Instant Runoff Voting is vulnerable to the &ldquo;
+              voters&rsquo; next preference. In our example, sushi still wins. IRV doesn't
+              capture that most voters are fine with pizza despite it being few voters' first
+              choice. This is an example of how Instant Runoff Voting is vulnerable to the &ldquo;
               <Ext href="https://en.wikipedia.org/wiki/Center_squeeze">center squeeze</Ext>&rdquo;
               effect, where an option that has broad support is still eliminated from the running if
               it doesn&rsquo;t have enough ballots where it is the first preference.
@@ -315,10 +315,9 @@ export function WhyStar() {
               <Ext href="https://en.wikipedia.org/wiki/Bullet_voting">bullet voting</Ext>&rdquo;,
               which is to give your favorite option the maximum score and give all other options the
               minimum score. Taco fans are incentivized to exaggerate their preference of tacos
-              relative to pizza, as they don&rsquo;t want to help pizza get enough stars to beat
-              tacos and win, even if they honestly feel that it&rsquo;s a decent option. With
-              perfectly rational voters voting strategically, score voting can regress into
-              plurality voting.
+              relative to pizza. If they dishonestly hide their partial preference for pizza, they
+              can give tacos enough points to win. If everyone does this, then score voting
+              regresses back into plurality voting.
             </Text>
             <EmojiTable
               caption="Each voter's honest scores"
@@ -344,10 +343,10 @@ export function WhyStar() {
               squeeze&rdquo; effect and the &ldquo;bullet voting&rdquo; incentive. The first round
               tallies scores to find options with broad support, and the second round establishes
               relative preference between the finalists. In this example, the taco fans are
-              incentivized to vote honestly. They know that their vote will still go entirely to
-              tacos if it's a finalist but they also want their vote to go to pizza if tacos is not
-              a finalist. The sushi fans were able to have their preference for pizza relative to
-              tacos captured, even though their preferred option wasn&rsquo;t a finalist.
+              incentivized to vote honestly. Their vote will still go entirely to tacos in the
+              runoff even if they reveal their partial preference for pizza. The exaggeration that
+              would help them in score voting won't help them in the runoff, and revealing their
+              partial preference for pizza saves them from having to eat sushi.
             </Text>
             <EmojiTable
               caption="Each voter's scores, totalled; the two highest become finalists"
