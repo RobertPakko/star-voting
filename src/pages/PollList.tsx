@@ -442,68 +442,59 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
 type Squeeze = 0 | 1 | 2
 
 /**
- * The list's row, giving up words only where they do not fit. Each squeeze is
- * laid out unseen at its natural width, and the row takes the first that fits
- * its own width — measured rather than a breakpoint, since what fits depends
- * on whether Archived is there and on the font. If not even the boxes fit,
- * the pair drops below and keeps to the right.
+ * The list's row, giving up words only where they do not fit. Whether they fit
+ * is read off the row itself: if the pair has dropped below the way home, one
+ * more set of words goes, before paint. Not a breakpoint, since what fits
+ * depends on whether Archived is there and on the font; and not a copy laid
+ * out off screen, since a phone's text scaling (Chrome's autosizer) sizes text
+ * by the width of the block it sits in, so a hidden copy is measured with
+ * smaller text than the row draws and reads as fitting when it does not. If
+ * not even the boxes fit, the pair drops below and keeps to the right.
  */
 function ListRow({ archived }: { archived: boolean }) {
   const row = useRef<HTMLDivElement>(null)
-  const trials = useRef<(HTMLDivElement | null)[]>([])
   const [squeeze, setSqueeze] = useState<Squeeze>(0)
+
+  // Still wrapped, so give up the next set of words.
+  useLayoutEffect(() => {
+    if (squeeze < 2 && pairWrapped(row.current)) setSqueeze((squeeze + 1) as Squeeze)
+  }, [squeeze, archived])
+
+  // A different pair starts again from the words.
+  useLayoutEffect(() => setSqueeze(0), [archived])
 
   useLayoutEffect(() => {
     const el = row.current
     if (!el) return
-    const fit = () => {
-      const i = trials.current.findIndex((t) => t && t.offsetWidth <= el.clientWidth)
-      setSqueeze(i === -1 ? 2 : (i as Squeeze))
-    }
-    fit()
-    // The trials too, so a web font arriving late is measured again.
-    const observer = new ResizeObserver(fit)
+    let width = el.clientWidth
+    const observer = new ResizeObserver(() => {
+      // Wider: the words may fit again, so start from them. Otherwise (narrower,
+      // or a late web font making the pair wrap) give up more if it wrapped.
+      if (el.clientWidth > width) setSqueeze(0)
+      else if (pairWrapped(el)) setSqueeze((s) => (s < 2 ? ((s + 1) as Squeeze) : s))
+      width = el.clientWidth
+    })
     observer.observe(el)
-    for (const t of trials.current) if (t) observer.observe(t)
     return () => observer.disconnect()
-  }, [archived])
+  }, [])
 
   return (
-    <Box pos="relative">
-      <Group ref={row} justify="space-between" gap="sm">
-        <VisuallyHidden>
-          <Title order={1}>Your polls</Title>
-        </VisuallyHidden>
-        <BackToHome mb={0} />
-        <ListActions archived={archived} squeeze={squeeze} />
-      </Group>
-      <Box
-        inert
-        aria-hidden
-        pos="absolute"
-        top={0}
-        left={0}
-        w={0}
-        h={0}
-        style={{ overflow: 'hidden', visibility: 'hidden' }}
-      >
-        {([0, 1, 2] as const).map((s) => (
-          <Group
-            key={s}
-            ref={(t) => {
-              trials.current[s] = t
-            }}
-            gap="sm"
-            wrap="nowrap"
-            w="max-content"
-          >
-            <BackToHome mb={0} />
-            <ListActions archived={archived} squeeze={s} />
-          </Group>
-        ))}
-      </Box>
-    </Box>
+    <Group ref={row} justify="space-between" gap="sm">
+      <VisuallyHidden>
+        <Title order={1}>Your polls</Title>
+      </VisuallyHidden>
+      <BackToHome mb={0} />
+      <ListActions archived={archived} squeeze={squeeze} />
+    </Group>
   )
+}
+
+/** Whether the row's last item (the pair) sits on a line below the one before it. */
+function pairWrapped(row: HTMLElement | null): boolean {
+  const pair = row?.lastElementChild
+  const before = pair?.previousElementSibling
+  if (!(pair instanceof HTMLElement) || !(before instanceof HTMLElement)) return false
+  return pair.offsetTop - before.offsetTop >= before.offsetHeight
 }
 
 function ListActions({ archived, squeeze }: { archived: boolean; squeeze: Squeeze }) {
