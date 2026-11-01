@@ -315,10 +315,10 @@ export function WhyStar() {
               <Ext href="https://en.wikipedia.org/wiki/Bullet_voting">bullet voting</Ext>&rdquo;,
               which is to give your favorite option the maximum score and give all other options the
               minimum score. Taco fans are incentivized to exaggerate their preference of tacos
-              relative to pizza, but if they dishonestly hide their partial preference for pizza,
-              tacos still loses and pizza&rsquo;s lead over sushi shrinks to a single point. If
-              everyone bullet votes, score voting regresses back into plurality voting, and sushi
-              wins.
+              relative to pizza. If they dishonestly hide their partial preference for pizza, they
+              can give tacos enough points to win, even though 5 of the 9 voters rated tacos 1 or
+              lower. If everyone does this, then score voting regresses back into plurality voting,
+              and sushi wins.
             </Text>
             <EmojiTable
               caption="Each voter's honest scores"
@@ -350,10 +350,11 @@ export function WhyStar() {
               squeeze&rdquo; effect and the &ldquo;bullet voting&rdquo; incentive. The first round
               tallies scores to find options with broad support, and the second round establishes
               relative preference between the finalists. In this example, the taco fans are
-              incentivized to vote honestly. Tacos doesn&rsquo;t make the runoff, so their partial
-              preference for pizza is what decides it. Had they bullet voted, they would have scored
-              both finalists 0 and had no say in the runoff, and sushi would have won. Revealing
-              their partial preference for pizza saves them from having to eat sushi.
+              incentivized to vote honestly. Their vote will still go entirely to tacos in the
+              runoff even if they reveal their partial preference for pizza. The exaggeration that
+              would help them in score voting won&rsquo;t help them in the runoff, where pizza still
+              wins, and hiding their partial preference for pizza would nearly push pizza out of the
+              runoff in favor of sushi.
             </Text>
             <EmojiTable
               caption="Each voter's scores, totalled; the two highest become finalists"
@@ -476,7 +477,7 @@ const DINNER: Ratings = {
  */
 const RATINGS: Ratings = {
   pizza: [3, 3, 3, 3, 5, 5, 4, 4, 3],
-  tacos: [0, 0, 0, 0, 0, 4, 5, 5, 5],
+  tacos: [1, 1, 1, 1, 0, 4, 5, 5, 5],
   sushi: [5, 5, 5, 5, 1, 0, 0, 0, 0],
 }
 
