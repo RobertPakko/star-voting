@@ -247,7 +247,7 @@ export function WhyStar() {
               <Ext href="https://en.wikipedia.org/wiki/First-past-the-post_voting">plurality</Ext>,
               also known as &ldquo;First Past the Post&rdquo;. In our example pizza and tacos, which
               might be considered more similar to each other than to sushi, split the vote, which
-              results in a win for sushi, an option that 5 of the 9 voters really don't want.
+              results in a win for sushi, even though 5 of the 9 voters rated sushi 1 or lower.
             </Text>
             <EmojiTable
               caption="Who each voter votes for under plurality voting"
@@ -353,8 +353,8 @@ export function WhyStar() {
               incentivized to vote honestly. Their vote will still go entirely to tacos in the
               runoff even if they reveal their partial preference for pizza. The exaggeration that
               would help them in score voting won&rsquo;t help them in the runoff, where pizza still
-              wins, and hiding their partial preference for pizza would nearly push pizza out of the
-              runoff in favor of sushi.
+              wins. In fact, hiding their partial preference for pizza would push pizza out of the
+              runoff, and sushi would beat tacos.
             </Text>
             <EmojiTable
               caption="Each voter's scores, totalled; the two highest become finalists"
@@ -476,7 +476,7 @@ const DINNER: Ratings = {
  * alike, sushi is not. Pizza is the broadly liked option few put first.
  */
 const RATINGS: Ratings = {
-  pizza: [3, 3, 3, 3, 5, 5, 4, 4, 3],
+  pizza: [2, 2, 2, 2, 5, 5, 4, 4, 3],
   tacos: [1, 1, 1, 1, 0, 4, 5, 5, 5],
   sushi: [5, 5, 5, 5, 1, 0, 0, 0, 0],
 }
