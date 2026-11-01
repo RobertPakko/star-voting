@@ -285,9 +285,9 @@ export function WhyStar() {
               (IRV, also known as Ranked Choice Voting) prevents the vote splitting problem in a
               different way. Rather than the two voters for pizza having their votes wasted, pizza
               is cut from the competition and its votes are re-allocated according to the
-              voters&rsquo; next preference. In our example, sushi still wins. IRV doesn't
-              capture that most voters are fine with pizza despite it being few voters' first
-              choice. This is an example of how Instant Runoff Voting is vulnerable to the &ldquo;
+              voters&rsquo; next preference. In our example, sushi still wins. IRV doesn't capture
+              that most voters are fine with pizza despite it being few voters' first choice. This
+              is an example of how Instant Runoff Voting is vulnerable to the &ldquo;
               <Ext href="https://en.wikipedia.org/wiki/Center_squeeze">center squeeze</Ext>&rdquo;
               effect, where an option that has broad support is still eliminated from the running if
               it doesn&rsquo;t have enough ballots where it is the first preference.
@@ -315,19 +315,26 @@ export function WhyStar() {
               <Ext href="https://en.wikipedia.org/wiki/Bullet_voting">bullet voting</Ext>&rdquo;,
               which is to give your favorite option the maximum score and give all other options the
               minimum score. Taco fans are incentivized to exaggerate their preference of tacos
-              relative to pizza. If they dishonestly hide their partial preference for pizza, they
-              can give tacos enough points to win. If everyone does this, then score voting
-              regresses back into plurality voting.
+              relative to pizza, but if they dishonestly hide their partial preference for pizza,
+              tacos still loses and pizza&rsquo;s lead over sushi shrinks to a single point. If
+              everyone bullet votes, score voting regresses back into plurality voting, and sushi
+              wins.
             </Text>
             <EmojiTable
               caption="Each voter's honest scores"
               rows={withWinner(ratingRows(RATINGS, true))}
               totalLabel="Score"
             />
+            <Then>The taco fans bullet vote</Then>
+            <EmojiTable
+              caption="Each voter's scores when the taco fans bullet vote"
+              rows={bulletRows((voter) => favoriteOf(RATINGS, voter, OPTIONS) === 'tacos')}
+              totalLabel="Score"
+            />
             <Then>Everyone bullet votes</Then>
             <EmojiTable
               caption="Each voter's scores when everyone bullet votes"
-              rows={bulletRows()}
+              rows={bulletRows(() => true)}
               totalLabel="Score"
             />
           </Stack>
@@ -343,10 +350,10 @@ export function WhyStar() {
               squeeze&rdquo; effect and the &ldquo;bullet voting&rdquo; incentive. The first round
               tallies scores to find options with broad support, and the second round establishes
               relative preference between the finalists. In this example, the taco fans are
-              incentivized to vote honestly. Their vote will still go entirely to tacos in the
-              runoff even if they reveal their partial preference for pizza. The exaggeration that
-              would help them in score voting won't help them in the runoff, and revealing their
-              partial preference for pizza saves them from having to eat sushi.
+              incentivized to vote honestly. Tacos doesn&rsquo;t make the runoff, so their partial
+              preference for pizza is what decides it. Had they bullet voted, they would have scored
+              both finalists 0 and had no say in the runoff, and sushi would have won. Revealing
+              their partial preference for pizza saves them from having to eat sushi.
             </Text>
             <EmojiTable
               caption="Each voter's scores, totalled; the two highest become finalists"
@@ -468,9 +475,9 @@ const DINNER: Ratings = {
  * alike, sushi is not. Pizza is the broadly liked option few put first.
  */
 const RATINGS: Ratings = {
-  pizza: [2, 2, 2, 2, 5, 5, 4, 4, 2],
-  tacos: [0, 0, 0, 0, 2, 4, 5, 5, 5],
-  sushi: [5, 5, 5, 5, 0, 0, 0, 0, 0],
+  pizza: [3, 3, 3, 3, 5, 5, 4, 4, 3],
+  tacos: [0, 0, 0, 0, 0, 4, 5, 5, 5],
+  sushi: [5, 5, 5, 5, 1, 0, 0, 0, 0],
 }
 
 /**
@@ -614,11 +621,20 @@ function approvalRows(): Row[] {
   )
 }
 
-/** Every voter gives their favourite 5 and everybody else 0. */
-function bulletRows(): Row[] {
+/**
+ * The voters `bullets` picks give their favourite 5 and everything else 0;
+ * the rest keep their honest scores.
+ */
+function bulletRows(bullets: (voter: number) => boolean): Row[] {
   return withWinner(
     OPTIONS.map((name) => {
-      const scores = VOTERS.map((voter) => (favoriteOf(RATINGS, voter, OPTIONS) === name ? 5 : 0))
+      const scores = VOTERS.map((voter) =>
+        !bullets(voter)
+          ? RATINGS[name][voter]
+          : favoriteOf(RATINGS, voter, OPTIONS) === name
+            ? 5
+            : 0,
+      )
       return { name, cells: scores.map(keycap), total: sum(scores) }
     }),
   )
