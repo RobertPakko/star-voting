@@ -353,8 +353,8 @@ export function WhyStar() {
               incentivized to vote honestly. Their vote will still go entirely to tacos in the
               runoff even if they reveal their partial preference for pizza. The exaggeration that
               would help them in score voting won&rsquo;t help them in the runoff, where pizza still
-              wins. In fact, hiding their partial preference for pizza would push pizza out of the
-              runoff, and sushi would beat tacos.
+              wins. Hiding their partial preference for pizza would push pizza out of the runoff and
+              result in a sushi win.
             </Text>
             <EmojiTable
               caption="Each voter's scores, totalled; the two highest become finalists"
