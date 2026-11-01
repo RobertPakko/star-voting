@@ -145,10 +145,10 @@ export function WhatIsStar() {
           <Stack gap="sm">
             <Text size="sm">
               Last comes the automatic runoff. Nobody votes again. Every ballot already says which
-              finalist its voter prefers, because it's the one they gave more stars to. Each ballot
-              counts as one vote for its preferred finalist, and the finalist with more votes wins.
-              A voter who gave both finalists the same score has no preference between them, so
-              their ballot counts for neither.
+              finalist its voter prefers, because it&rsquo;s the one they gave more stars to. Each
+              ballot counts as one vote for its preferred finalist, and the finalist with more votes
+              wins. A voter who gave both finalists the same score has no preference between them,
+              so their ballot counts for neither.
             </Text>
             <EmojiTable
               caption="The runoff: each friend's vote goes to the finalist they gave more stars"
@@ -283,21 +283,21 @@ export function WhyStar() {
                 Instant Runoff Voting
               </Ext>{' '}
               (IRV, also known as Ranked Choice Voting) prevents the vote splitting problem in a
-              different way. Rather than the two voters for pizza having their votes wasted, pizza
-              is cut from the competition and its votes are re-allocated according to the
-              voters&rsquo; next preference. In our example, sushi still wins. IRV doesn't capture
-              that most voters are fine with pizza despite it being few voters' first choice. This
-              is an example of how Instant Runoff Voting is vulnerable to the &ldquo;
+              different way. Rather than the two pizza voters having their votes wasted, the option
+              with the fewest votes is cut from the competition and its votes are reallocated
+              according to the voters&rsquo; next preference. In our example, sushi still wins
+              because IRV doesn&rsquo;t capture that most voters are fine with pizza despite few
+              voters ranking it first. This highlights IRV&rsquo;s vulnerability to the &ldquo;
               <Ext href="https://en.wikipedia.org/wiki/Center_squeeze">center squeeze</Ext>&rdquo;
               effect, where an option that has broad support is still eliminated from the running if
-              it doesn&rsquo;t have enough ballots where it is the first preference.
+              it isn&rsquo;t ranked first on enough ballots.
             </Text>
             <EmojiTable
               caption="First preferences, before anything is eliminated"
               rows={pluralityRows(RATINGS, OPTIONS, false)}
               totalLabel="Votes"
             />
-            <Then>Pizza has the fewest votes, so it is eliminated</Then>
+            <Then>Pizza has the fewest votes, so it&rsquo;s eliminated</Then>
             <EmojiTable
               caption="Votes after the pizza votes are moved to each voter's next preference"
               rows={pluralityRows(RATINGS, IRV_SURVIVORS, true)}
@@ -348,13 +348,13 @@ export function WhyStar() {
               </Ext>{' '}
               (STAR) voting combines IRV and score voting to mitigate both the &ldquo;center
               squeeze&rdquo; effect and the &ldquo;bullet voting&rdquo; incentive. The first round
-              tallies scores to find options with broad support, and the second round establishes
-              relative preference between the finalists. In this example, the taco fans are
-              incentivized to vote honestly. Their vote will still go entirely to tacos in the
-              runoff even if they reveal their partial preference for pizza. The exaggeration that
-              would help them in score voting won&rsquo;t help them in the runoff, where pizza still
-              wins. Hiding their partial preference for pizza would push pizza out of the runoff and
-              result in a sushi win.
+              tallies scores to find the two options with broadest support, and the second round
+              establishes relative preference between these two finalists. In this example, the taco
+              fans are incentivized to vote honestly. Their vote will still go entirely to tacos in
+              the runoff even if they reveal their partial preference for pizza. The exaggeration
+              that would benefit them in score voting provides no advantage in the runoff, where
+              pizza still wins. In fact, hiding their partial preference for pizza would push pizza
+              out of the runoff and result in a sushi win, a worse outcome for the taco fans.
             </Text>
             <EmojiTable
               caption="Each voter's scores, totalled; the two highest become finalists"
