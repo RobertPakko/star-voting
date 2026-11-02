@@ -3183,11 +3183,13 @@ the score order is fixed and each round is the next runoff down it.
 
 **Multiple winners** is for choosing several at once so each sizeable group
 of voters gets one it likes; the full ranking's top few can all belong to one
-large group. Each spot is a full STAR election (scores, then a runoff) on what
-voters have left of a five-star budget, and the winner's supporters pay for it
-from the stars they gave it, scaled down to one quota's worth when it got
-more. A runoff on every spot is what keeps it house monotonic: the first spot
-is always the single-winner STAR result. It is a placeholder modal for now
+large group. It is a ranking of its own: each spot is a full STAR election
+(scores, then a runoff) in which every ballot counts at 1 ÷ (1 + 2 × SUM ÷ 5),
+SUM being the stars it gave the winners so far, **in the runoff as well as the
+scores**, since full-strength runoff votes would let a majority take every
+spot. `n` winners are the top `n`, so no number of winners is asked for and
+one more never changes the earlier ones; a runoff on every spot keeps the
+first spot the single-winner STAR result. It is a placeholder modal for now
 (`MultipleWinners.tsx`); [`multi-winner-todo.md`](multi-winner-todo.md) is
 the specification for the count. `/star` explains both on one example,
 computed in `Learn.tsx` (`rankingOf`, `spotsOf`), where the two methods'

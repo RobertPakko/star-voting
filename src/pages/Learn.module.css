@@ -53,6 +53,17 @@
   }
 }
 
+/* A number where an emoji usually goes (a score or vote at less than full
+   strength): smaller, and spaced, so neighbouring figures do not run into one
+   number. Outranks the phone rule above. */
+.table td.figure {
+  padding-inline: 4px;
+}
+
+.figure .emoji {
+  font-size: var(--mantine-font-size-xs);
+}
+
 /* The stars a ballot did not give, on /star: there, but plainly not lit. */
 .unlit {
   filter: grayscale(1);
@@ -85,4 +96,18 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* A card `?section=` scrolls to, held clear of the sticky header. */
+.target {
+  scroll-margin-top: calc(var(--app-shell-header-height, 0px) + var(--mantine-spacing-md));
+}
+
+/* The fold-out's caret, pointing down when closed and up when open. */
+.caret {
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+
+.caretOpen {
+  transform: rotate(180deg);
 }

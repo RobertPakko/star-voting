@@ -6,8 +6,9 @@ import type { PollResults } from '../lib/types'
 
 /**
  * Several winners from one set of ballots, behind a button in the result's
- * banner beside *Full ranking*: a STAR election per spot, with each winner's
- * supporters paying for it out of a budget of stars. multi-winner-todo.md at
+ * banner beside *Full ranking*: a ranking of its own, a STAR election per
+ * spot, with each winner's supporters counting for less in later spots
+ * (runoffs included). Two winners are its top two. multi-winner-todo.md at
  * the repo root specifies the count.
  *
  * The two answer different questions. The full ranking is who to go with if
@@ -47,9 +48,10 @@ export function MultipleWinners({ results }: { results: PollResults }) {
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             For when you are choosing more than one option and want everyone represented. Each spot
-            is its own STAR election, and the voters who backed the winner pay for it out of their
-            stars, so the next spot leans towards somebody else.{' '}
-            <Anchor component={Link} to="/star" inherit>
+            is its own STAR election, and the voters who backed the winners so far count for less,
+            in the runoff as well as the scores, so the next spot leans towards somebody else. For
+            two winners, take the top two.{' '}
+            <Anchor component={Link} to="/star?section=multiple-winners" inherit>
               How it works
             </Anchor>
           </Text>
