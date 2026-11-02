@@ -46,9 +46,9 @@ export function MultipleWinners({ results }: { results: PollResults }) {
       >
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            For when you are choosing more than one option and want everyone represented. Each
-            spot is its own STAR election, and the voters who backed the winner pay for it out of
-            their stars, so the next spot leans towards somebody else.{' '}
+            For when you are choosing more than one option and want everyone represented. Each spot
+            is its own STAR election, and the voters who backed the winner pay for it out of their
+            stars, so the next spot leans towards somebody else.{' '}
             <Anchor component={Link} to="/star" inherit>
               How it works
             </Anchor>

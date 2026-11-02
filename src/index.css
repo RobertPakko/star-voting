@@ -18,6 +18,26 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* A modal locks the page's scroll (react-remove-scroll, under Mantine) and
+ * makes up for the scrollbar it hides with a right margin of the same width.
+ * The gutter above already keeps that space, so the margin doubled it and
+ * the whole page stepped left whenever a modal opened. It does the same to
+ * fixed elements carrying its two class names, the app's header among them
+ * (Mantine tags it). Each rule out-specifies the library's own, which are
+ * also `!important`. */
+html body[data-scroll-locked] {
+  margin-right: 0 !important;
+  --removed-body-scroll-bar-size: 0px;
+}
+
+html body[data-scroll-locked] .right-scroll-bar-position {
+  right: 0 !important;
+}
+
+html body[data-scroll-locked] .width-before-scroll-bar {
+  margin-right: 0 !important;
+}
+
 body {
   margin: 0;
 }

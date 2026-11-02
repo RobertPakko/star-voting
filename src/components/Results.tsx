@@ -43,6 +43,7 @@ import { RoundCard } from './RoundCard'
 import { ResultsSkeleton } from './Skeletons'
 import { count, stars, voters } from '../lib/plural'
 import { capRows, RESULTS_ROWS_MAX, SCORING_ROWS_MAX } from '../lib/resultsRows'
+import { splitAdvanced } from '../lib/tiebreak'
 import classes from './Results.module.css'
 
 /** Which tally endpoint to read: a session for invite polls, the link for open ones. */
@@ -324,11 +325,7 @@ function ScoringTieBreaks({ tiebreaks }: { tiebreaks: Tiebreak[] }) {
 
           <Text size="sm" c={tb.resolved_by === 'random' ? 'orange' : undefined}>
             {tb.resolved_by === 'random'
-              ? renderAdvancedNames(
-                  tb.advanced,
-                  'Still tied after every rule; ',
-                  ' advanced by random selection.',
-                )
+              ? randomNote(tb)
               : renderAdvancedNames(
                   tb.advanced,
                   '',
@@ -617,6 +614,24 @@ function Rest({ hidden, what, pl }: { hidden: number; what: string; pl?: string 
     <Text size="sm" c="dimmed" pl={pl}>
       …and {count(hidden, what)} not shown.
     </Text>
+  )
+}
+
+/** A tie a draw settled: who, if anyone, the rules placed first, then the draw. */
+function randomNote(tb: Tiebreak) {
+  const { earned, drawn, drawnFrom } = splitAdvanced(tb)
+  if (earned.length === 0) {
+    return renderAdvancedNames(
+      drawn,
+      'Still tied after every rule; ',
+      ' advanced by random selection.',
+    )
+  }
+  return (
+    <>
+      <NameList names={earned} /> advanced on five-star votes. <NameList names={drawnFrom} /> were
+      still tied after every rule; <NameList names={drawn} /> advanced by random selection.
+    </>
   )
 }
 

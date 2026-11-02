@@ -12,6 +12,7 @@ import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
 import { NameList } from './NameList'
 import { RankingSkeleton } from './Skeletons'
 import { stars, voters } from '../lib/plural'
+import { splitAdvanced } from '../lib/tiebreak'
 
 /**
  * Which ranking endpoint to read. Same split as ResultsSource and
@@ -157,8 +158,10 @@ function Place({ entry, nameById }: { entry: RankingEntry; nameById: Map<string,
         {entry.place}
       </Badge>
       <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-        <Group gap="xs" wrap="nowrap">
-          <Text fw={600} truncate>
+        {/* Wrapped, never cut short: a shared place names every option in it,
+            and the second name is the one a reader opened this to learn. */}
+        <Group gap="xs" wrap="nowrap" align="baseline">
+          <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
             {entry.options.map((o) => o.name).join(' and ')}
           </Text>
           <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
@@ -228,17 +231,32 @@ function decision(entry: RankingEntry, nameById: Map<string, string>) {
 
 /** A tie for this place's runoff slots, and what broke it. */
 function tiebreakNote(tb: Tiebreak) {
-  const rule =
-    tb.resolved_by === 'head_to_head'
-      ? 'head-to-head preference'
-      : tb.resolved_by === 'five_star_votes'
-        ? 'five-star votes'
-        : 'a random draw'
-
-  return (
+  const tied = (
     <>
       <NameList names={tb.tied} /> tied at {stars(tb.tied_at)} for the runoff;{' '}
-      <NameList names={tb.advanced} /> advanced on {rule}.
+    </>
+  )
+
+  if (tb.resolved_by !== 'random') {
+    const rule = tb.resolved_by === 'head_to_head' ? 'head-to-head preference' : 'five-star votes'
+    return (
+      <>
+        {tied}
+        <NameList names={tb.advanced} /> advanced on {rule}.
+      </>
+    )
+  }
+
+  const { earned, drawn } = splitAdvanced(tb)
+  return (
+    <>
+      {tied}
+      {earned.length > 0 && (
+        <>
+          <NameList names={earned} /> advanced on five-star votes and{' '}
+        </>
+      )}
+      <NameList names={drawn} /> {earned.length > 0 ? 'on' : 'advanced on'} a random draw.
     </>
   )
 }
