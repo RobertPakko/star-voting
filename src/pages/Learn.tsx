@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Anchor,
   Box,
@@ -66,288 +66,272 @@ export function WhatIsStar() {
   const reduced = votersOf(DINNER).filter((voter) => spots[1].weights[voter] < 1)
   const fullStrength = runoffWinner(DINNER, spots[1].finalists)
   return (
-    <Stack maw={720} mx="auto" gap="sm">
-      <Title order={1} mb="xs">
-        What is STAR?
-      </Title>
-      <Text>
-        <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR voting</Ext> is an acronym that
-        stands for &ldquo;Score Then Automatic Runoff&rdquo;. Voters give every option a score, the
-        two options with the most stars go to a runoff, and whichever of those two is preferred by
-        more voters wins.
-      </Text>
-      <Text>
-        Let&rsquo;s walk through it one step at a time with an example: six friends choosing what to
-        have for dinner.
-      </Text>
+    <Stack maw={720} mx="auto" gap="md">
+      <Title order={1}>What is STAR?</Title>
+      <Stack gap="sm">
+        <Text>
+          <Ext href="https://en.wikipedia.org/wiki/STAR_voting">STAR</Ext> is an acronym that stands
+          for &ldquo;Score Then Automatic Runoff&rdquo;. Voters score each option, the two options
+          with the highest scores go to a runoff, and whichever of those two is preferred by more
+          voters wins.
+        </Text>
+        <Text>
+          Let&rsquo;s walk through it one step at a time with an example: six friends choosing what
+          to have for dinner.
+        </Text>
+      </Stack>
 
-      <Stack gap="md" mt="md">
-        <RoundCard title="Step 1: Options defined">
-          <Stack gap="sm">
-            <Text size="sm">
-              First, decide what is being voted on. The options can be anything: candidates for a
-              position, films to watch, or times to meet. You can have as many options as you like,
-              but our six friends are choosing between three:
-            </Text>
-            <OptionKey ratings={DINNER} />
-          </Stack>
-        </RoundCard>
+      <RoundCard title="Step 1: Options defined">
+        <Stack gap="sm">
+          <Text>
+            First, decide what is being voted on. The options can be anything: candidates for a
+            position, films to watch, or times to meet. You can have as many options as you like,
+            but our six friends are choosing between three:
+          </Text>
+          <OptionKey ratings={DINNER} />
+        </Stack>
+      </RoundCard>
 
-        <RoundCard title="Step 2: Votes cast">
-          <Stack gap="sm">
-            <Text size="sm">
-              Each voter gives every option a score from 0 to 5 stars, where 0 is the worst and 5 is
-              the best. A score is not a ranking: you can give several options the same number of
-              stars, and you don&rsquo;t have to use every number. A good way to start is to give
-              your favourite option 5 stars and your least favorite 0 stars, then give the rest a
-              score in-between. Here is the first friend&rsquo;s ballot:
-            </Text>
-            <Ballot ratings={DINNER} voter={0} />
-            <Then>Everyone&rsquo;s ballots, side by side</Then>
-            <EmojiTable
-              caption="How many stars each friend gave each restaurant"
-              rows={ratingRows(DINNER)}
-              rowLabel="Restaurant"
-            />
-            <Text size="xs" c="dimmed" ta="center">
-              Each column is one friend&rsquo;s ballot, and each number is how many stars they gave.
-            </Text>
-          </Stack>
-        </RoundCard>
+      <RoundCard title="Step 2: Votes cast">
+        <Stack gap="sm">
+          <Text>
+            Each voter gives every option a score from 0 to 5 stars, where 0 is the worst and 5 is
+            the best. A score is not a ranking: you can give several options the same number of
+            stars, and you don&rsquo;t have to use every number. A good way to start is to give your
+            favourite option 5 stars and your least favorite 0 stars, then give the rest a score
+            in-between. Here is the first friend&rsquo;s ballot:
+          </Text>
+          <Ballot ratings={DINNER} voter={0} />
+          <Then>Everyone&rsquo;s ballots, side by side</Then>
+          <EmojiTable
+            caption="How many stars each friend gave each restaurant"
+            rows={ratingRows(DINNER)}
+            rowLabel="Restaurant"
+          />
+          <Text size="xs" c="dimmed" ta="center">
+            Each column is one friend&rsquo;s ballot, and each number is how many stars they gave.
+          </Text>
+        </Stack>
+      </RoundCard>
 
-        <RoundCard title="Step 3: Scores tallied">
-          <Stack gap="sm">
-            <Text size="sm">
-              Once voting has closed, the stars each option received are added up across every
-              ballot. This is the scoring round, and it measures how much support each option has
-              across the whole group. An option that everybody likes can score higher than one that
-              a few people love and the rest can&rsquo;t stand.
-            </Text>
-            <EmojiTable
-              caption="Each restaurant's stars, added up"
-              rows={ratingRows(DINNER, true)}
-              rowLabel="Restaurant"
-              totalLabel="Score"
-            />
-            <Text size="xs" c="dimmed" ta="center">
-              For example, {first} gets {DINNER[first].join(' + ')} = {sum(DINNER[first])} stars.
-            </Text>
-          </Stack>
-        </RoundCard>
+      <RoundCard title="Step 3: Scores tallied">
+        <Stack gap="sm">
+          <Text>
+            Once voting has closed, the stars each option received are added up across every ballot.
+            This is the scoring round, and it measures how much support each option has across the
+            group.
+          </Text>
+          <EmojiTable
+            caption="Each restaurant's stars, added up"
+            rows={ratingRows(DINNER, true)}
+            rowLabel="Restaurant"
+            totalLabel="Score"
+          />
+          <Text size="xs" c="dimmed" ta="center">
+            For example, {first} gets {DINNER[first].join(' + ')} = {sum(DINNER[first])} stars.
+          </Text>
+        </Stack>
+      </RoundCard>
 
-        <RoundCard title="Step 4: Finalists determined">
-          <Stack gap="sm">
-            <Text size="sm">
-              The two options with the highest scores become the finalists, and every other option
-              is cut. Here {first} ({sum(DINNER[first])} stars) and {second} ({sum(DINNER[second])}{' '}
-              stars) go through to the runoff, and{' '}
-              {optionsOf(DINNER)
-                .filter((option) => !finalists.includes(option))
-                .map((option) => `${option} (${sum(DINNER[option])} stars)`)
-                .join(' and ')}{' '}
-              is eliminated.
-            </Text>
-            <EmojiTable
-              caption="The restaurants by score; the top two are the finalists"
-              rows={finalistRows(DINNER)}
-              rowLabel="Restaurant"
-              totalLabel="Score"
-            />
-            <Text size="sm">
-              Taking two finalists, rather than simply declaring the highest score the winner, is
-              what sets STAR apart from plain score voting. The scores find the options with the
-              broadest support; the runoff then checks which of the two the group actually prefers.
-            </Text>
-          </Stack>
-        </RoundCard>
+      <RoundCard title="Step 4: Finalists determined">
+        <Stack gap="sm">
+          <Text>
+            The two options with the highest scores become the finalists, and every other option is
+            cut. Here, {first} and {second} go through to the runoff while{' '}
+            {optionsOf(DINNER)
+              .filter((option) => !finalists.includes(option))
+              .join(' and ')}{' '}
+            is eliminated.
+          </Text>
+          <EmojiTable
+            caption="The restaurants by score; the top two are the finalists"
+            rows={finalistRows(DINNER)}
+            rowLabel="Restaurant"
+            totalLabel="Score"
+          />
+        </Stack>
+      </RoundCard>
 
-        <RoundCard title="Step 5: Winner resolved">
-          <Stack gap="sm">
-            <Text size="sm">
-              Last comes the automatic runoff. Nobody votes again. Every ballot already says which
-              finalist its voter prefers, because it&rsquo;s the one they gave more stars to. Each
-              ballot counts as one vote for its preferred finalist, and the finalist with more votes
-              wins. A voter who gave both finalists the same score has no preference between them,
-              so their ballot counts for neither.
+      <RoundCard title="Step 5: Winner resolved">
+        <Stack gap="sm">
+          <Text>
+            Last comes the automatic runoff. Nobody votes again. Every ballot already says which
+            finalist its voter prefers, because it&rsquo;s the one they gave more stars to. Each
+            ballot counts as one vote for its preferred finalist, and the finalist with more votes
+            wins. A voter who gave both finalists the same score has no preference between them, so
+            their ballot counts for neither.
+          </Text>
+          <EmojiTable
+            caption="The runoff: each friend's vote goes to the finalist they gave more stars"
+            rows={runoff}
+            rowLabel="Restaurant"
+            totalLabel="Votes"
+          />
+          {undecided.map((voter) => (
+            <Text key={voter} size="xs" c="dimmed" ta="center">
+              The {ORDINALS[voter]} friend gave {first} and {second} {DINNER[first][voter]} stars
+              each, so their ballot counts for neither.
             </Text>
-            <EmojiTable
-              caption="The runoff: each friend's vote goes to the finalist they gave more stars"
-              rows={runoff}
-              rowLabel="Restaurant"
-              totalLabel="Votes"
-            />
-            {undecided.map((voter) => (
-              <Text key={voter} size="xs" c="dimmed" ta="center">
-                The {ORDINALS[voter]} friend <span aria-hidden>{VOTER_FACES[voter]}</span> gave{' '}
-                {first} and {second} {DINNER[first][voter]} stars each, so their ballot counts for
-                neither.
-              </Text>
-            ))}
-            <Text size="sm">
-              The winner is {winner}, even though {loser} had more stars. {labelOf(loser ?? '')}{' '}
-              picked up a few stars from nearly everyone, but more of the friends preferred {winner}{' '}
-              to it; and in the runoff, relative preference is what matters. This is also why you
-              can score honestly: giving your second choice a few stars never takes anything away
-              from your favourite, because if both reach the runoff, your whole vote goes to the one
-              you scored higher.
-            </Text>
-          </Stack>
-        </RoundCard>
+          ))}
+          <Text>
+            The winner is {winner}, even though {loser} had more stars. This is an intentional
+            feature of STAR voting. If you are curious about why STAR works this way, you should
+            read more about it on the{' '}
+            <Anchor component={Link} to="/why-star" inherit>
+              Why STAR?
+            </Anchor>{' '}
+            page.
+          </Text>
+        </Stack>
+      </RoundCard>
 
-        <RoundCard title="Ties">
+      <RoundCard title="Ties">
+        <Stack gap="sm">
+          <Text>
+            In the rare event of a tie, STAR has rules to settle it. Ties are uncommon because a
+            score is a total over every ballot, and multiple options seldom land on exactly the same
+            number of stars.
+          </Text>
+          <Text fw={700}>A tie in the score round</Text>
+          <Text>When two options are tied, the place goes to:</Text>
+          <List type="ordered" size="sm" spacing={4} withPadding>
+            <List.Item>The one more voters prefer in a head-to-head comparison.</List.Item>
+            <List.Item>If that is level too, the one given 5 stars on more ballots.</List.Item>
+            <List.Item>If they are still level, one of the two is chosen at random.</List.Item>
+          </List>
+          <Text>
+            When three or more options are tied, the head-to-head step is skipped: the places go to
+            the options given 5 stars on the most ballots, and any tie left after that is settled at
+            random.
+          </Text>
+          <Text fw={700}>A tie in the runoff</Text>
+          <Text>When both finalists get the same number of votes, the winner is:</Text>
+          <List type="ordered" size="sm" spacing={4} withPadding>
+            <List.Item>the finalist with the higher score from the scoring round;</List.Item>
+            <List.Item>
+              if their scores are level too, the one given 5 stars on more ballots.
+            </List.Item>
+          </List>
+          <Text>If the finalists are level on all three, the election has no winner.</Text>
+        </Stack>
+      </RoundCard>
+
+      <RoundCard title="Full ranking">
+        <Stack gap="sm">
+          <Text>
+            STAR picks one winner, but sometimes you need a plan B: the restaurant that won is fully
+            booked tonight, or the person you picked for the job turns it down. A poll&rsquo;s
+            results have a <strong>Full ranking</strong> button for this. It puts every option in
+            order by running STAR again without the winner. The winner steps aside, and the two
+            highest scorers left go to a runoff for second place. Then second place steps aside, and
+            so on down the list.
+          </Text>
+          <Text>
+            Back to our six friends: what if the {winner} place is fully booked? With {winner} set
+            aside, {secondRunoff[0]} and {secondRunoff[1]} are the two highest scorers left, so they
+            go to a runoff for second place:
+          </Text>
+          <EmojiTable
+            caption={`The runoff for second place, with ${winner} set aside`}
+            rows={setAside(pluralityRows(DINNER, secondRunoff, true), ranking.slice(0, 1))}
+            rowLabel="Restaurant"
+            totalLabel="Votes"
+          />
+          <Then>The full ranking</Then>
+          <Places names={ranking} />
+          <Text>
+            Only first place is STAR&rsquo;s own answer; the rest comes from repeating it. That
+            means the runner-up in the first runoff doesn&rsquo;t automatically come second: it
+            still has to win the next runoff too.
+          </Text>
+        </Stack>
+      </RoundCard>
+
+      <Box id={MULTIPLE_WINNERS} className={classes.target}>
+        <RoundCard title="Multiple winners">
           <Stack gap="sm">
-            <Text size="sm">
-              In the rare event of a tie, STAR has rules to settle it. Ties are uncommon because a
-              score is a total over every ballot, and multiple options seldom land on exactly the
-              same number of stars.
+            <Text>
+              Sometimes a group wants more than one winner: two dinners on a weekend away, three
+              films for a movie marathon, or a committee of five. You could take the top of the full
+              ranking, but that can hand every spot to the biggest group. The{' '}
+              <strong>Multiple winners</strong> button gives a different ranking, one that shares
+              the top spots out so that every sizeable group of voters gets something they like:
             </Text>
-            <Text size="sm" fw={700}>
-              A tie in the score round
-            </Text>
-            <Text size="sm">When two options are tied, the place goes to:</Text>
             <List type="ordered" size="sm" spacing={4} withPadding>
-              <List.Item>The one more voters prefer in a head-to-head comparison.</List.Item>
-              <List.Item>If that is level too, the one given 5 stars on more ballots.</List.Item>
-              <List.Item>If they are still level, one of the two is chosen at random.</List.Item>
-            </List>
-            <Text size="sm">
-              When three or more options are tied, the head-to-head step is skipped: the places go
-              to the options given 5 stars on the most ballots, and any tie left after that is
-              settled at random.
-            </Text>
-            <Text size="sm" fw={700}>
-              A tie in the runoff
-            </Text>
-            <Text size="sm">When both finalists get the same number of votes, the winner is:</Text>
-            <List type="ordered" size="sm" spacing={4} withPadding>
-              <List.Item>the finalist with the higher score from the scoring round;</List.Item>
               <List.Item>
-                if their scores are level too, the one given 5 stars on more ballots.
+                Run STAR as usual: scores, then a runoff. The winner takes the first spot.
+              </List.Item>
+              <List.Item>
+                Everybody who gave the winner stars now counts for less, and the more stars they
+                gave it, the less they count.
+              </List.Item>
+              <List.Item>
+                Run STAR again on the options left, with every ballot at its new strength, in the
+                runoff as well as the scores. The winner takes the next spot.
+              </List.Item>
+              <List.Item>
+                Repeat until every option has a spot. For two winners, take the top two; for three,
+                the top three.
               </List.Item>
             </List>
-            <Text size="sm">
-              If the finalists are level on all three, the election has no winner.
+            <Text>
+              Step 3 is where this differs from a single STAR election: a runoff vote isn&rsquo;t a
+              whole vote. Voters who have already helped pick a winner count for less in the runoff
+              too, and that is what shares the spots out. If their runoff votes counted in full, the
+              biggest group would win every runoff it took part in.
             </Text>
-          </Stack>
-        </RoundCard>
-
-        <RoundCard title="Full ranking">
-          <Stack gap="sm">
-            <Text size="sm">
-              STAR picks one winner, but sometimes you need a plan B: the restaurant that won is
-              fully booked tonight, or the person you picked for the job turns it down. A
-              poll&rsquo;s results have a <strong>Full ranking</strong> button for this. It puts
-              every option in order by running STAR again without the winner. The winner steps
-              aside, and the two highest scorers left go to a runoff for second place. Then second
-              place steps aside, and so on down the list.
-            </Text>
-            <Text size="sm">
-              Back to our six friends: what if the {winner} place is fully booked? With {winner} set
-              aside, {secondRunoff[0]} and {secondRunoff[1]} are the two highest scorers left, so
-              they go to a runoff for second place:
+            <Text>
+              Back to the six friends, now choosing two dinners for a weekend away. The first spot
+              is plain STAR, so it&rsquo;s {spots[0].winner} again. The {spots[0].winner} lovers
+              each gave {spots[0].winner} 5 stars, so from here on they count for{' '}
+              {fractionOf(spots[1].given[reduced[0]])} each. That makes the stars for the second
+              spot look like this:
             </Text>
             <EmojiTable
-              caption={`The runoff for second place, with ${winner} set aside`}
-              rows={setAside(pluralityRows(DINNER, secondRunoff, true), ranking.slice(0, 1))}
+              caption={`The stars for the second spot, with ${spots[0].winner} already chosen`}
+              rows={spotScoreRows(DINNER, spots[1])}
+              rowLabel="Restaurant"
+              totalLabel="Score"
+              reduced={reduced}
+            />
+            <Then>
+              {labelOf(spots[1].finalists[0])} and {spots[1].finalists[1]} go to a runoff
+            </Then>
+            <EmojiTable
+              caption="The runoff for the second spot"
+              rows={spotRunoffRows(DINNER, spots[1])}
               rowLabel="Restaurant"
               totalLabel="Votes"
+              reduced={reduced}
             />
-            <Then>The full ranking</Then>
-            <Places names={ranking} />
-            <Text size="sm">
-              Only first place is STAR&rsquo;s own answer; the rest comes from repeating it. That
-              means the runner-up in the first runoff doesn&rsquo;t automatically come second: it
-              still has to win the next runoff too.
+            <Text>
+              The {spots[0].winner} lovers still prefer {fullStrength}, but their votes are worth a
+              third each, so {spots[1].winner} takes the second spot. Counted in full, they would
+              have won it for {fullStrength},{' '}
+              {runoffVotes(DINNER, spots[1].finalists)
+                .sort((a, b) => b - a)
+                .join(' to ')}
+              .
             </Text>
+            <Then>The multiple-winner ranking</Then>
+            <Places names={spots.map((spot) => spot.winner)} />
+            <Text>
+              So the two dinners are {spots[0].winner} and {spots[1].winner}. The full ranking put{' '}
+              {ranking[1]} second, because the {spots[0].winner} lovers like it too, which would
+              have left the {spots[1].winner} lovers with nothing. Here the {spots[0].winner} lovers
+              have already had their night, so the second one goes to somebody else.
+            </Text>
+            <Text>
+              Every spot gets its own runoff, just like a single STAR election, so scoring honestly
+              is still safe, and the first spot always goes to the option STAR would pick on its
+              own. Nor do you need to say how many winners you want before counting: the top three
+              are always the top two plus one more, so asking for more winners never changes the
+              ones you&rsquo;d have got by asking for fewer.
+            </Text>
+            <WeightFormula />
           </Stack>
         </RoundCard>
-
-        <Box id={MULTIPLE_WINNERS} className={classes.target}>
-          <RoundCard title="Multiple winners">
-            <Stack gap="sm">
-              <Text size="sm">
-                Sometimes a group wants more than one winner: two dinners on a weekend away, three
-                films for a movie marathon, or a committee of five. You could take the top of the
-                full ranking, but that can hand every spot to the biggest group. The{' '}
-                <strong>Multiple winners</strong> button gives a different ranking, one that shares
-                the top spots out so that every sizeable group of voters gets something they like:
-              </Text>
-              <List type="ordered" size="sm" spacing={4} withPadding>
-                <List.Item>
-                  Run STAR as usual: scores, then a runoff. The winner takes the first spot.
-                </List.Item>
-                <List.Item>
-                  Everybody who gave the winner stars now counts for less, and the more stars they
-                  gave it, the less they count.
-                </List.Item>
-                <List.Item>
-                  Run STAR again on the options left, with every ballot at its new strength, in the
-                  runoff as well as the scores. The winner takes the next spot.
-                </List.Item>
-                <List.Item>
-                  Repeat until every option has a spot. For two winners, take the top two; for
-                  three, the top three.
-                </List.Item>
-              </List>
-              <Text size="sm">
-                Step 3 is where this differs from a single STAR election: a runoff vote isn&rsquo;t
-                a whole vote. Voters who have already helped pick a winner count for less in the
-                runoff too, and that is what shares the spots out. If their runoff votes counted in
-                full, the biggest group would win every runoff it took part in.
-              </Text>
-              <Text size="sm">
-                Back to the six friends, now choosing two dinners for a weekend away. The first spot
-                is plain STAR, so it&rsquo;s {spots[0].winner} again. The {spots[0].winner} lovers
-                each gave {spots[0].winner} 5 stars, so from here on they count for{' '}
-                {fractionOf(spots[1].given[reduced[0]])} each. That makes the stars for the second
-                spot look like this:
-              </Text>
-              <EmojiTable
-                caption={`The stars for the second spot, with ${spots[0].winner} already chosen`}
-                rows={spotScoreRows(DINNER, spots[1])}
-                rowLabel="Restaurant"
-                totalLabel="Score"
-                reduced={reduced}
-              />
-              <Then>
-                {labelOf(spots[1].finalists[0])} and {spots[1].finalists[1]} go to a runoff
-              </Then>
-              <EmojiTable
-                caption="The runoff for the second spot"
-                rows={spotRunoffRows(DINNER, spots[1])}
-                rowLabel="Restaurant"
-                totalLabel="Votes"
-                reduced={reduced}
-              />
-              <Text size="sm">
-                The {spots[0].winner} lovers still prefer {fullStrength}, but their votes are worth
-                a third each, so {spots[1].winner} takes the second spot. Counted in full, they
-                would have won it for {fullStrength},{' '}
-                {runoffVotes(DINNER, spots[1].finalists)
-                  .sort((a, b) => b - a)
-                  .join(' to ')}
-                .
-              </Text>
-              <Then>The multiple-winner ranking</Then>
-              <Places names={spots.map((spot) => spot.winner)} />
-              <Text size="sm">
-                So the two dinners are {spots[0].winner} and {spots[1].winner}. The full ranking put{' '}
-                {ranking[1]} second, because the {spots[0].winner} lovers like it too, which would
-                have left the {spots[1].winner} lovers with nothing. Here the {spots[0].winner}{' '}
-                lovers have already had their night, so the second one goes to somebody else.
-              </Text>
-              <Text size="sm">
-                Every spot gets its own runoff, just like a single STAR election, so scoring
-                honestly is still safe, and the first spot always goes to the option STAR would pick
-                on its own. Nor do you need to say how many winners you want before counting: the
-                top three are always the top two plus one more, so asking for more winners never
-                changes the ones you&rsquo;d have got by asking for fewer.
-              </Text>
-              <WeightFormula />
-            </Stack>
-          </RoundCard>
-        </Box>
-      </Stack>
+      </Box>
     </Stack>
   )
 }
@@ -365,205 +349,205 @@ export function WhatIsStar() {
 export function WhyStar() {
   usePageTitle('Why use STAR?')
   return (
-    <Stack maw={720} mx="auto" gap="sm">
-      <Title order={1} mb="xs">
-        Why use STAR?
-      </Title>
-      <Text>
-        Let&rsquo;s look at an example with 9 voters choosing between 3 options for dinner: pizza,
-        tacos, and sushi. The voters&rsquo; ratings of each option are shown below:
-      </Text>
-      <Card withBorder p="sm">
+    <Stack maw={720} mx="auto" gap="md">
+      <Title order={1}>Why use STAR?</Title>
+      <Stack gap="sm">
+        <Text>
+          Let&rsquo;s look at an example with 9 voters choosing between 3 options for dinner: pizza,
+          tacos, and sushi. The voters&rsquo; ratings of each option are shown below:
+        </Text>
         <EmojiTable caption="Each voter's rating of each option" rows={ratingRows(RATINGS)} />
-      </Card>
-
-      <Stack gap="md" mt="md">
-        <RoundCard title="Plurality voting">
-          <Stack gap="sm">
-            <Text size="sm">
-              The most common way of voting is by{' '}
-              <Ext href="https://en.wikipedia.org/wiki/First-past-the-post_voting">plurality</Ext>,
-              also known as &ldquo;First Past the Post&rdquo;. In our example pizza and tacos, which
-              might be considered more similar to each other than to sushi, split the vote, which
-              results in a win for sushi, even though 5 of the 9 voters rated sushi 1 or lower.
-            </Text>
-            <EmojiTable
-              caption="Who each voter votes for under plurality voting"
-              rows={pluralityRows(RATINGS, OPTIONS, true)}
-              totalLabel="Votes"
-            />
-          </Stack>
-        </RoundCard>
-
-        <RoundCard title="Approval voting">
-          <Stack gap="sm">
-            <Text size="sm">
-              <Ext href="https://en.wikipedia.org/wiki/Approval_voting">Approval voting</Ext> solves
-              our vote splitting problem, but it&rsquo;s a pretty coarse representation of
-              preference. In our example above, there&rsquo;s a three-way tie: each option is
-              approved by 4 voters.
-            </Text>
-            <EmojiTable
-              caption="Which options each voter approves of"
-              rows={approvalRows()}
-              totalLabel="Votes"
-            />
-            <Text size="xs" c="dimmed" ta="center">
-              Each voter approves of the options they rated {APPROVES_FROM} or more.
-            </Text>
-          </Stack>
-        </RoundCard>
-
-        <RoundCard title="Instant runoff voting">
-          <Stack gap="sm">
-            <Text size="sm">
-              <Ext href="https://en.wikipedia.org/wiki/Instant-runoff_voting">
-                Instant Runoff Voting
-              </Ext>{' '}
-              (IRV, also known as Ranked Choice Voting) prevents the vote splitting problem in a
-              different way. Rather than the two pizza voters having their votes wasted, the option
-              with the fewest votes is cut from the competition and its votes are reallocated
-              according to the voters&rsquo; next preference. In our example, sushi still wins
-              because IRV doesn&rsquo;t capture that most voters are fine with pizza despite few
-              voters ranking it first. This highlights IRV&rsquo;s vulnerability to the &ldquo;
-              <Ext href="https://en.wikipedia.org/wiki/Center_squeeze">center squeeze</Ext>&rdquo;
-              effect, where an option that has broad support is still eliminated from the running if
-              it isn&rsquo;t ranked first on enough ballots.
-            </Text>
-            <EmojiTable
-              caption="First preferences, before anything is eliminated"
-              rows={pluralityRows(RATINGS, OPTIONS, false)}
-              totalLabel="Votes"
-            />
-            <Then>Pizza has the fewest votes, so it&rsquo;s eliminated</Then>
-            <EmojiTable
-              caption="Votes after the pizza votes are moved to each voter's next preference"
-              rows={pluralityRows(RATINGS, IRV_SURVIVORS, true)}
-              totalLabel="Votes"
-            />
-          </Stack>
-        </RoundCard>
-
-        <RoundCard title="Score voting">
-          <Stack gap="sm">
-            <Text size="sm">
-              <Ext href="https://en.wikipedia.org/wiki/Score_voting">Score voting</Ext> resolves the
-              center squeeze effect by taking into account all support from all voters. But score
-              voting incentivizes &ldquo;
-              <Ext href="https://en.wikipedia.org/wiki/Bullet_voting">bullet voting</Ext>&rdquo;,
-              which is to give your favorite option the maximum score and give all other options the
-              minimum score. Taco fans are incentivized to exaggerate their preference of tacos
-              relative to pizza. If they dishonestly hide their partial preference for pizza, they
-              can give tacos enough points to win, even though 5 of the 9 voters rated tacos 1 or
-              lower. If everyone does this, then score voting regresses back into plurality voting,
-              and sushi wins.
-            </Text>
-            <EmojiTable
-              caption="Each voter's honest scores"
-              rows={withWinner(ratingRows(RATINGS, true))}
-              totalLabel="Score"
-            />
-            <Then>The taco fans bullet vote</Then>
-            <EmojiTable
-              caption="Each voter's scores when the taco fans bullet vote"
-              rows={bulletRows((voter) => favoriteOf(RATINGS, voter, OPTIONS) === 'tacos')}
-              totalLabel="Score"
-            />
-            <Then>Everyone bullet votes</Then>
-            <EmojiTable
-              caption="Each voter's scores when everyone bullet votes"
-              rows={bulletRows(() => true)}
-              totalLabel="Score"
-            />
-          </Stack>
-        </RoundCard>
-
-        <RoundCard title="STAR voting">
-          <Stack gap="sm">
-            <Text size="sm">
-              <Ext href="https://en.wikipedia.org/wiki/STAR_voting">
-                Score Then Automatic Runoff
-              </Ext>{' '}
-              (STAR) voting combines IRV and score voting to mitigate both the &ldquo;center
-              squeeze&rdquo; effect and the &ldquo;bullet voting&rdquo; incentive. The first round
-              tallies scores to find the two options with broadest support, and the second round
-              establishes relative preference between these two finalists. In this example, the taco
-              fans are incentivized to vote honestly. Their vote will still go entirely to tacos in
-              the runoff even if they reveal their partial preference for pizza. The exaggeration
-              that would benefit them in score voting provides no advantage in the runoff, where
-              pizza still wins. In fact, hiding their partial preference for pizza would push pizza
-              out of the runoff and result in a sushi win, a worse outcome for the taco fans.
-            </Text>
-            <EmojiTable
-              caption="Each voter's scores, totalled; the two highest become finalists"
-              rows={starScoreRows()}
-              totalLabel="Score"
-            />
-            <Text size="xs" c="dimmed" ta="center">
-              The two highest scores belong to {STAR_FINALISTS[0]} and {STAR_FINALISTS[1]}, so they
-              are the finalists.
-            </Text>
-            <Then>Each voter backs whichever finalist they scored higher</Then>
-            <EmojiTable
-              caption="The runoff between the two finalists"
-              rows={pluralityRows(RATINGS, STAR_FINALISTS, true)}
-              totalLabel="Votes"
-            />
-          </Stack>
-        </RoundCard>
-
-        <RoundCard title="Other simulated elections">
-          <Stack gap="sm">
-            <Text size="sm">
-              STAR voting resulted in the best outcome in this single, contrived election example,
-              but this conclusion is supported by studies that simulate millions of elections with
-              diverse election scenarios. STAR performs extremely well in these types of election
-              simulation studies:
-            </Text>
-            <Figure
-              src={vseByStrategy}
-              alt="Chart of voter satisfaction efficiency for 3-2-1 voting, STAR, approval, IRV and plurality voting under six voter strategies. STAR stays between about 0.91 and 0.98 under every strategy, while IRV falls as low as 0.60 and plurality to about 0.72."
-              credit={
-                <>
-                  How satisfied voters are with the winner under each method, as voters vote more
-                  strategically. Chart by Jameson Quinn, from the{' '}
-                  <Ext href="https://electionscience.github.io/vse-sim/VSEbasic">
-                    Voter Satisfaction Efficiency Simulator
-                  </Ext>
-                  , maintained by{' '}
-                  <Ext href="https://electionscience.org">The Center for Election Science</Ext>.
-                </>
-              }
-            />
-            <Figure
-              src={winnerDistribution}
-              alt="Heat maps of where the winner falls across a million simulated two-dimensional elections. Plurality, top-two runoff and ranked-choice voting form a ring around the centre of the voters, while approval, Borda, Coombs, STAR and Condorcet voting cluster at the centre, like the best possible winner."
-              credit={
-                <>
-                  Where the winner falls when voters and candidates are spread across a
-                  two-dimensional political spectrum, reproducing Merrill (1985).{' '}
-                  <Ext href="https://commons.wikimedia.org/wiki/File:Center_squeeze_grid.png">
-                    &ldquo;Center squeeze grid&rdquo;
-                  </Ext>{' '}
-                  by Closed Limelike Curves, via Wikimedia Commons, licensed under{' '}
-                  <Ext href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</Ext>.
-                </>
-              }
-            />
-          </Stack>
-        </RoundCard>
-
-        <RoundCard title="Other voting methods">
-          <Text size="sm">
-            There are other interesting voting methods such as{' '}
-            <Ext href="https://en.wikipedia.org/wiki/Kemeny_method">the Kemeny method</Ext> and{' '}
-            <Ext href="https://en.wikipedia.org/wiki/Schulze_method">the Schulze method</Ext>, but
-            one is infeasibly computationally expensive and the other is very difficult to
-            understand. STAR has the advantage of being both computationally simple and easy to
-            grasp conceptually.
-          </Text>
-        </RoundCard>
+        <Text>
+          For this group of friends, pizza is the best option. It has the highest average rating and
+          it would win in a head-to-head matchup against either tacos or sushi. Suprisingly though,
+          most voting systems struggle to reach this conclusion. Let's walk through them one at a
+          time to learn why.
+        </Text>
       </Stack>
+
+      <RoundCard title="Plurality voting">
+        <Stack gap="sm">
+          <Text>
+            The most common way of voting is by{' '}
+            <Ext href="https://en.wikipedia.org/wiki/First-past-the-post_voting">plurality</Ext>,
+            also known as &ldquo;First Past the Post&rdquo;. In our example pizza and tacos, which
+            might be considered more similar to each other than to sushi, split the vote, which
+            results in a win for sushi, even though 5 of the 9 voters rated sushi 1 or lower.
+          </Text>
+          <EmojiTable
+            caption="Who each voter votes for under plurality voting"
+            rows={pluralityRows(RATINGS, OPTIONS, true)}
+            totalLabel="Votes"
+          />
+        </Stack>
+      </RoundCard>
+
+      <RoundCard title="Approval voting">
+        <Stack gap="sm">
+          <Text>
+            <Ext href="https://en.wikipedia.org/wiki/Approval_voting">Approval voting</Ext> solves
+            our vote splitting problem, but it&rsquo;s a pretty coarse representation of preference.
+            In our example above, there&rsquo;s a three-way tie: each option is approved by 4
+            voters.
+          </Text>
+          <EmojiTable
+            caption="Which options each voter approves of"
+            rows={approvalRows()}
+            totalLabel="Votes"
+          />
+          <Text size="xs" c="dimmed" ta="center">
+            Each voter approves of the options they rated {APPROVES_FROM} or more.
+          </Text>
+        </Stack>
+      </RoundCard>
+
+      <RoundCard title="Instant runoff voting">
+        <Stack gap="sm">
+          <Text>
+            <Ext href="https://en.wikipedia.org/wiki/Instant-runoff_voting">
+              Instant Runoff Voting
+            </Ext>{' '}
+            (IRV, also known as Ranked Choice Voting) prevents the vote splitting problem in a
+            different way. Rather than the two pizza voters having their votes wasted, the option
+            with the fewest votes is cut from the competition and its votes are reallocated
+            according to the voters&rsquo; next preference. In our example, sushi still wins because
+            IRV doesn&rsquo;t capture that most voters are fine with pizza despite few voters
+            ranking it first. This highlights IRV&rsquo;s vulnerability to the &ldquo;
+            <Ext href="https://en.wikipedia.org/wiki/Center_squeeze">center squeeze</Ext>&rdquo;
+            effect, where an option that has broad support is still eliminated from the running if
+            it isn&rsquo;t ranked first on enough ballots.
+          </Text>
+          <EmojiTable
+            caption="First preferences, before anything is eliminated"
+            rows={pluralityRows(RATINGS, OPTIONS, false)}
+            totalLabel="Votes"
+          />
+          <Then>Pizza has the fewest votes, so it&rsquo;s eliminated</Then>
+          <EmojiTable
+            caption="Votes after the pizza votes are moved to each voter's next preference"
+            rows={pluralityRows(RATINGS, IRV_SURVIVORS, true)}
+            totalLabel="Votes"
+          />
+        </Stack>
+      </RoundCard>
+
+      <RoundCard title="Score voting">
+        <Stack gap="sm">
+          <Text>
+            <Ext href="https://en.wikipedia.org/wiki/Score_voting">Score voting</Ext> resolves the
+            center squeeze effect by taking into account all support from all voters. But score
+            voting incentivizes &ldquo;
+            <Ext href="https://en.wikipedia.org/wiki/Bullet_voting">bullet voting</Ext>&rdquo;,
+            which is to give your favorite option the maximum score and give all other options the
+            minimum score. Taco fans are incentivized to exaggerate their preference of tacos
+            relative to pizza. If they dishonestly hide their partial preference for pizza, they can
+            give tacos enough points to win, even though 5 of the 9 voters rated tacos 1 or lower.
+            If everyone does this, then score voting regresses back into plurality voting, and sushi
+            wins.
+          </Text>
+          <EmojiTable
+            caption="Each voter's honest scores"
+            rows={withWinner(ratingRows(RATINGS, true))}
+            totalLabel="Score"
+          />
+          <Then>The taco fans bullet vote</Then>
+          <EmojiTable
+            caption="Each voter's scores when the taco fans bullet vote"
+            rows={bulletRows((voter) => favoriteOf(RATINGS, voter, OPTIONS) === 'tacos')}
+            totalLabel="Score"
+          />
+          <Then>Everyone bullet votes</Then>
+          <EmojiTable
+            caption="Each voter's scores when everyone bullet votes"
+            rows={bulletRows(() => true)}
+            totalLabel="Score"
+          />
+        </Stack>
+      </RoundCard>
+
+      <RoundCard title="STAR voting">
+        <Stack gap="sm">
+          <Text>
+            <Ext href="https://en.wikipedia.org/wiki/STAR_voting">Score Then Automatic Runoff</Ext>{' '}
+            (STAR) voting combines IRV and score voting to mitigate both the &ldquo;center
+            squeeze&rdquo; effect and the &ldquo;bullet voting&rdquo; incentive. The first round
+            tallies scores to find the two options with broadest support, and the second round
+            establishes relative preference between these two finalists. In this example, the taco
+            fans are incentivized to vote honestly. Their vote will still go entirely to tacos in
+            the runoff even if they reveal their partial preference for pizza. The exaggeration that
+            would benefit them in score voting provides no advantage in the runoff, where pizza
+            still wins. In fact, hiding their partial preference for pizza would push pizza out of
+            the runoff and result in a sushi win, a worse outcome for the taco fans.
+          </Text>
+          <EmojiTable
+            caption="Each voter's scores, totalled; the two highest become finalists"
+            rows={starScoreRows()}
+            totalLabel="Score"
+          />
+          <Text size="xs" c="dimmed" ta="center">
+            The two highest scores belong to {STAR_FINALISTS[0]} and {STAR_FINALISTS[1]}, so they
+            are the finalists.
+          </Text>
+          <Then>Each voter backs whichever finalist they scored higher</Then>
+          <EmojiTable
+            caption="The runoff between the two finalists"
+            rows={pluralityRows(RATINGS, STAR_FINALISTS, true)}
+            totalLabel="Votes"
+          />
+        </Stack>
+      </RoundCard>
+
+      <RoundCard title="Other simulated elections">
+        <Stack gap="sm">
+          <Text>
+            STAR voting resulted in the best outcome in this single, contrived election example, but
+            this conclusion is supported by studies that simulate millions of elections with diverse
+            election scenarios. STAR performs extremely well in these types of election simulation
+            studies:
+          </Text>
+          <Figure
+            src={vseByStrategy}
+            alt="Chart of voter satisfaction efficiency for 3-2-1 voting, STAR, approval, IRV and plurality voting under six voter strategies. STAR stays between about 0.91 and 0.98 under every strategy, while IRV falls as low as 0.60 and plurality to about 0.72."
+            credit={
+              <>
+                How satisfied voters are with the winner under each method, as voters vote more
+                strategically. Chart by Jameson Quinn, from the{' '}
+                <Ext href="https://electionscience.github.io/vse-sim/VSEbasic">
+                  Voter Satisfaction Efficiency Simulator
+                </Ext>
+                , maintained by{' '}
+                <Ext href="https://electionscience.org">The Center for Election Science</Ext>.
+              </>
+            }
+          />
+          <Figure
+            src={winnerDistribution}
+            alt="Heat maps of where the winner falls across a million simulated two-dimensional elections. Plurality, top-two runoff and ranked-choice voting form a ring around the centre of the voters, while approval, Borda, Coombs, STAR and Condorcet voting cluster at the centre, like the best possible winner."
+            credit={
+              <>
+                Where the winner falls when voters and candidates are spread across a
+                two-dimensional political spectrum, reproducing Merrill (1985).{' '}
+                <Ext href="https://commons.wikimedia.org/wiki/File:Center_squeeze_grid.png">
+                  &ldquo;Center squeeze grid&rdquo;
+                </Ext>{' '}
+                by Closed Limelike Curves, via Wikimedia Commons, licensed under{' '}
+                <Ext href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</Ext>.
+              </>
+            }
+          />
+        </Stack>
+      </RoundCard>
+
+      <RoundCard title="Other voting methods">
+        <Text size="sm">
+          There are other interesting voting methods such as{' '}
+          <Ext href="https://en.wikipedia.org/wiki/Kemeny_method">the Kemeny method</Ext> and{' '}
+          <Ext href="https://en.wikipedia.org/wiki/Schulze_method">the Schulze method</Ext>, but one
+          is infeasibly computationally expensive and the other is very difficult to understand.
+          STAR has the advantage of being both computationally simple and easy to grasp
+          conceptually.
+        </Text>
+      </RoundCard>
     </Stack>
   )
 }
