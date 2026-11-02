@@ -141,7 +141,7 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   await expect(rounds).toHaveText(['Runoff', 'Scoring'])
   await expect(page.getByRole('heading', { name: 'Ballots' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'See the full ranking' }).click()
+  await page.getByRole('button', { name: 'Full ranking' }).click()
   const ranking = page.getByRole('dialog', { name: 'Full ranking' })
   await expect(ranking).toBeVisible()
   // Every option placed, the last included: the ranking is the whole field.
@@ -150,6 +150,15 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   await expectAccessible(page, 'the full ranking')
   await page.keyboard.press('Escape')
   await expect(ranking).toBeHidden()
+
+  // Beside it in the winner's banner, for now a modal that says what it will do.
+  await page.getByRole('button', { name: 'Multiple winners' }).click()
+  const winners = page.getByRole('dialog', { name: 'Multiple winners' })
+  await expect(winners).toBeVisible()
+  await page.waitForTimeout(300)
+  await expectAccessible(page, 'the multiple winners placeholder')
+  await page.keyboard.press('Escape')
+  await expect(winners).toBeHidden()
 })
 
 test('a finished poll goes from one skeleton straight to its results', async ({ page }) => {

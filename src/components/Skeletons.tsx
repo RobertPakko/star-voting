@@ -258,10 +258,20 @@ function CalendarShape({ schedule }: { schedule: PollSchedule }) {
  * A one-line card: the winner banner, or the notice a question nobody
  * answered puts up. Same shape, so it is safe when which one is unknown.
  */
-function BannerShape() {
+function BannerShape({ answers = false }: { answers?: boolean }) {
   return (
     <Card withBorder>
-      <Bar kind="banner" width="60%" />
+      <Stack gap="sm">
+        <Bar kind="banner" width="60%" />
+        {/* *Full ranking* and *Multiple winners*, on a row of their own as
+            under most winners' names. */}
+        {answers && (
+          <Group gap="xs">
+            <Skeleton height={26} width={118} radius="sm" />
+            <Skeleton height={26} width={146} radius="sm" />
+          </Group>
+        )}
+      </Stack>
     </Card>
   )
 }
@@ -278,7 +288,7 @@ function TallyShape({ options }: { options?: number }) {
 
   return (
     <Stack gap="md">
-      <BannerShape />
+      <BannerShape answers={options !== undefined && options >= 3} />
 
       {/* RunoffChart: the half pie and a finalist under each end. */}
       <Stack gap={2}>
@@ -320,11 +330,6 @@ function TallyShape({ options }: { options?: number }) {
           </Stack>
         </Card>
       </Stack>
-
-      {/* *See the full ranking*, drawn from three options up. */}
-      {options !== undefined && options >= 3 && (
-        <Divider labelPosition="center" label={<Skeleton height={26} width={141} radius="sm" />} />
-      )}
     </Stack>
   )
 }

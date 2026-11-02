@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, FullRanking, CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, FullRanking, MultipleWinners, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
                  SmoothHeight, PollCards), the ways back (BackToHome, BackToList), the home page's
@@ -3168,11 +3168,30 @@ column totals); on an invite poll that does not, the reader's own ballot.
 The participation card is last and is where turnout is stated; the results
 say only that voting was closed early, when it was.
 
-**See the full ranking** (three or more options) opens the whole field in
-placed order. STAR names only a winner, so the rest comes from running it
+**The answer's banner carries what can be done with it** (`Banner` in
+`Results.tsx`): **Full ranking** and **Multiple winners** (three or more
+options), then *Add to calendar* under a time poll's winner or *Flip a coin*
+under *No winner*. The buttons share the name's line when it is short and drop
+to a row of their own otherwise; `TallyShape` draws them on their own row. A
+round's *Show tie-break* stays over its round, since it slides that card.
+
+**Full ranking** is the whole field in placed order, for when the winner
+falls through. STAR names only a winner, so the rest comes from running it
 again on what is left: the winner steps out, the two highest remaining scorers
 go to a runoff for the next place, and so on. Score totals are absolute, so
 the score order is fixed and each round is the next runoff down it.
+
+**Multiple winners** is for choosing several at once so each sizeable group
+of voters gets one it likes; the full ranking's top few can all belong to one
+large group. Each spot is a full STAR election (scores, then a runoff) on what
+voters have left of a five-star budget, and the winner's supporters pay for it
+from the stars they gave it, scaled down to one quota's worth when it got
+more. A runoff on every spot is what keeps it house monotonic: the first spot
+is always the single-winner STAR result. It is a placeholder modal for now
+(`MultipleWinners.tsx`); [`multi-winner-todo.md`](multi-winner-todo.md) is
+the specification for the count. `/star` explains both on one example,
+computed in `Learn.tsx` (`rankingOf`, `spotsOf`), where the two methods'
+second places differ.
 
 **It is a separate request, made when the button is pressed**
 (`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the

@@ -69,3 +69,20 @@
 .out .emoji {
   opacity: 0.4;
 }
+
+/* An option already placed or chosen, sitting out the round in the table:
+   faded like a knocked-out one, but not struck through, since it won. */
+.aside {
+  color: var(--mantine-color-dimmed);
+}
+
+.aside .emoji {
+  opacity: 0.4;
+}
+
+/* The full ranking on /star: an ordered list drawn as a row. */
+.places {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

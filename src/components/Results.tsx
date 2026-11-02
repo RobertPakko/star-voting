@@ -35,6 +35,7 @@ import type {
 import { AddToCalendar } from './AddToCalendar'
 import { CoinFlip, type Finalist } from './CoinFlip'
 import { FullRanking } from './FullRanking'
+import { MultipleWinners } from './MultipleWinners'
 import { NameList } from './NameList'
 import { OptionDescription } from './OptionDescription'
 import { Reveal } from './Reveal'
@@ -142,6 +143,14 @@ export function Results({
   }
   const winnerEvent = shown.winner_id ? eventFor(shown.winner_id) : null
 
+  // What a reader can do with the answer, in the banner that gives it.
+  const answers = (
+    <>
+      <FullRanking source={source} results={shown} />
+      <MultipleWinners results={shown} />
+    </>
+  )
+
   return (
     <Reveal>
       <Stack gap="md">
@@ -150,21 +159,25 @@ export function Results({
         {shown.winner_id && (
           <Reveal rise={false}>
             <Card withBorder bg="var(--mantine-color-green-light)" className={classes.landed}>
-              <Group justify="space-between" align="center" gap="sm">
-                <Text fw={700} size="lg">
-                  Winner: {nameById.get(shown.winner_id)}
-                  {/* A time poll's meeting length, kept on one line. */}
-                  {winnerEvent && (
-                    <>
-                      {' '}
-                      <span style={{ whiteSpace: 'nowrap' }}>
-                        ({describeLength(winnerEvent.minutes)})
-                      </span>
-                    </>
-                  )}
-                </Text>
+              <Banner
+                title={
+                  <>
+                    Winner: {nameById.get(shown.winner_id)}
+                    {/* A time poll's meeting length, kept on one line. */}
+                    {winnerEvent && (
+                      <>
+                        {' '}
+                        <span style={{ whiteSpace: 'nowrap' }}>
+                          ({describeLength(winnerEvent.minutes)})
+                        </span>
+                      </>
+                    )}
+                  </>
+                }
+              >
+                {answers}
                 {winnerEvent && <AddToCalendar event={winnerEvent} />}
-              </Group>
+              </Banner>
             </Card>
           </Reveal>
         )}
@@ -178,16 +191,14 @@ export function Results({
                 { '--landed-ring': 'var(--mantine-color-orange-filled)' } as React.CSSProperties
               }
             >
-              <Group justify="space-between" align="center" gap="sm">
-                <Text fw={700} size="lg">
-                  No winner
-                </Text>
+              <Banner title="No winner">
+                {answers}
                 <CoinFlip
                   pollId={key}
                   finalists={tiedPair(shown, nameById)}
                   eventFor={meeting ? eventFor : undefined}
                 />
-              </Group>
+              </Banner>
             </Card>
           </Reveal>
         )}
@@ -259,15 +270,29 @@ export function Results({
             {scoreRound.hidden > 0 && (
               <Text size="sm" c="dimmed">
                 The top {scoreRound.rows.length} of {shown.options.length} options. Open the full
-                ranking below to see them all.
+                ranking above to see them all.
               </Text>
             )}
           </Stack>
         </RoundCard>
-
-        <FullRanking source={source} results={shown} />
       </Stack>
     </Reveal>
+  )
+}
+
+/**
+ * The answer, and what can be done with it. The buttons sit beside a short
+ * name and drop to a row of their own under a long one, which with three or
+ * four of them is most names; a long name wraps before it pushes them off.
+ */
+function Banner({ title, children }: { title: ReactNode; children: ReactNode }) {
+  return (
+    <Group justify="space-between" align="center" gap="sm">
+      <Text fw={700} size="lg">
+        {title}
+      </Text>
+      <Group gap="xs">{children}</Group>
+    </Group>
   )
 }
 

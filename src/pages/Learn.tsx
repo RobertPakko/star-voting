@@ -35,7 +35,8 @@ import classes from './Learn.module.css'
  * heading over a card, as on `WhyStar`, worked through one small election
  * (`DINNER`) in the same emoji tables. The example is deliberately one where
  * the score leader loses the runoff, since that is the step a newcomer would
- * otherwise not see the point of.
+ * otherwise not see the point of. The full ranking and multiple winners carry
+ * on with the same friends.
  */
 export function WhatIsStar() {
   usePageTitle('What is STAR?')
@@ -45,6 +46,10 @@ export function WhatIsStar() {
   const winner = runoff.find((row) => row.won)?.name
   const loser = finalists.find((name) => name !== winner)
   const undecided = votersOf(DINNER).filter((voter) => !favoriteOf(DINNER, voter, finalists))
+  const ranking = rankingOf(DINNER)
+  const secondRunoff = finalistsOf(DINNER, ranking.slice(0, 1))
+  const spots = spotsOf(DINNER, DINNERS_CHOSEN)
+  const spent = votersOf(DINNER).filter((voter) => spots[1].weights[voter] === 0)
   return (
     <Stack maw={720} mx="auto" gap="sm">
       <Title order={1} mb="xs">
@@ -164,11 +169,12 @@ export function WhatIsStar() {
               </Text>
             ))}
             <Text size="sm">
-              The winner is {winner}, even though {loser} had more stars. Two friends loved {loser},
-              but more of the group preferred {winner}; and in the runoff, relative preference is
-              what matters. This is also why you can score honestly: giving your second choice a few
-              stars never takes anything away from your favourite, because if both reach the runoff,
-              your whole vote goes to the one you scored higher.
+              The winner is {winner}, even though {loser} had more stars. {labelOf(loser ?? '')}{' '}
+              picked up a few stars from nearly everyone, but more of the friends preferred {winner}{' '}
+              to it; and in the runoff, relative preference is what matters. This is also why you
+              can score honestly: giving your second choice a few stars never takes anything away
+              from your favourite, because if both reach the runoff, your whole vote goes to the one
+              you scored higher.
             </Text>
           </Stack>
         </RoundCard>
@@ -206,6 +212,106 @@ export function WhatIsStar() {
             </List>
             <Text size="sm">
               If the finalists are level on all three, the election has no winner.
+            </Text>
+          </Stack>
+        </RoundCard>
+
+        <RoundCard title="Full ranking">
+          <Stack gap="sm">
+            <Text size="sm">
+              STAR picks one winner, but sometimes you need a plan B: the restaurant that won is
+              fully booked tonight, or the person you picked for the job turns it down. A
+              poll&rsquo;s results have a <strong>Full ranking</strong> button for this. It puts
+              every option in order by running STAR again without the winner. The winner steps
+              aside, and the two highest scorers left go to a runoff for second place. Then second
+              place steps aside, and so on down the list.
+            </Text>
+            <Text size="sm">
+              Back to our six friends: what if the {winner} place is fully booked? With {winner} set
+              aside, {secondRunoff[0]} and {secondRunoff[1]} are the two highest scorers left, so
+              they go to a runoff for second place:
+            </Text>
+            <EmojiTable
+              caption={`The runoff for second place, with ${winner} set aside`}
+              rows={setAside(pluralityRows(DINNER, secondRunoff, true), ranking.slice(0, 1))}
+              rowLabel="Restaurant"
+              totalLabel="Votes"
+            />
+            <Then>The full ranking</Then>
+            <Places names={ranking} />
+            <Text size="sm">
+              Only first place is STAR&rsquo;s own answer; the rest comes from repeating it. That
+              means the runner-up in the first runoff doesn&rsquo;t automatically come second: it
+              still has to win the next runoff too.
+            </Text>
+          </Stack>
+        </RoundCard>
+
+        <RoundCard title="Multiple winners">
+          <Stack gap="sm">
+            <Text size="sm">
+              Sometimes a group wants more than one winner: two dinners on a weekend away, three
+              films for a movie marathon, or a committee of five. You could take the top of the full
+              ranking, but that can hand every spot to the biggest group. The{' '}
+              <strong>Multiple winners</strong> button shares the spots out instead, so that every
+              sizeable group of voters gets something they like. Think of it as everyone chipping in
+              to pay for the winners:
+            </Text>
+            <List type="ordered" size="sm" spacing={4} withPadding>
+              <List.Item>
+                Everyone starts with 5 stars to spend, and each spot costs an equal share of all the
+                stars. Six friends with 5 stars each makes 30 stars, so each of two dinners costs
+                15.
+              </List.Item>
+              <List.Item>
+                Run STAR as usual: scores, then a runoff. The winner gets a spot.
+              </List.Item>
+              <List.Item>
+                Everybody who gave the winner stars pays for it with those stars. If the winner got
+                more stars than the price, the bill is split: everyone pays the same fraction of
+                what they gave, so the spot costs exactly its price.
+              </List.Item>
+              <List.Item>
+                Run STAR again for the next spot. A voter counts in proportion to the stars they
+                have left: with 2 of their 5 left, their scores and their runoff vote count for two
+                fifths. Repeat until every spot is filled.
+              </List.Item>
+            </List>
+            <Text size="sm">
+              Back to the six friends, now choosing two dinners for a weekend away. The first one is
+              plain STAR, so it&rsquo;s {spots[0].winner} again. {labelOf(spots[0].winner)} got{' '}
+              {shown(sum(DINNER[spots[0].winner]))} stars, exactly the price of a dinner, so its
+              supporters pay what they gave it: the {spots[0].winner} lovers spend all their stars.
+              That leaves the stars for the second dinner looking like this:
+            </Text>
+            <EmojiTable
+              caption={`The stars left for the second dinner, with ${spots[0].winner} already chosen`}
+              rows={spotScoreRows(DINNER, spots[1])}
+              rowLabel="Restaurant"
+              totalLabel="Score"
+              spent={spent}
+            />
+            <Then>
+              {labelOf(spots[1].finalists[0])} and {spots[1].finalists[1]} go to a runoff
+            </Then>
+            <EmojiTable
+              caption="The runoff for the second dinner"
+              rows={spotRunoffRows(DINNER, spots[1])}
+              rowLabel="Restaurant"
+              totalLabel="Votes"
+              spent={spent}
+            />
+            <Text size="sm">
+              So the two dinners are {spots[0].winner} and {spots[1].winner}. The full ranking put{' '}
+              {ranking[1]} second, because the {spots[0].winner} lovers like it too, which would
+              have left the {spots[1].winner} lovers with nothing. Here the {spots[0].winner} lovers
+              have already had their night, so the second one goes to somebody else.
+            </Text>
+            <Text size="sm">
+              Every spot gets its own runoff, just like a single STAR election, so scoring honestly
+              is still safe. It also means the first spot always goes to the option STAR would pick
+              on its own: asking for more winners never loses you the one you&rsquo;d have got by
+              asking for fewer.
             </Text>
           </Stack>
         </RoundCard>
@@ -462,14 +568,21 @@ function Figure({ src, alt, credit }: { src: string; alt: string; credit: ReactN
 type Ratings = Record<string, number[]>
 
 /**
- * `/star`'s example. The score leader (sushi) loses the runoff, and the last
- * friend scores both finalists the same, so every rule of the runoff shows.
+ * `/star`'s example, used by every section of the page. Tacos leads on stars
+ * but loses the runoff to pizza, and the last friend scores both finalists 0,
+ * so every rule of the runoff shows. The full ranking then puts tacos second
+ * (the pizza lovers' second choice), while multiple winners gives the second
+ * of `DINNERS_CHOSEN` dinners to sushi. Pizza's 15 stars are exactly the price
+ * of a dinner, so its supporters pay in whole stars and every later weight is
+ * 0 or 1; the page says in words what happens when a winner has more stars
+ * than the price.
  */
 const DINNER: Ratings = {
-  pizza: [2, 3, 0, 5, 1, 0],
-  tacos: [0, 1, 4, 4, 5, 4],
-  sushi: [5, 5, 3, 2, 3, 4],
+  pizza: [5, 5, 5, 0, 0, 0],
+  tacos: [4, 4, 2, 5, 3, 0],
+  sushi: [0, 1, 0, 2, 5, 5],
 }
+const DINNERS_CHOSEN = 2
 
 /**
  * `/why-star`'s example, over the same three options: pizza and tacos are
@@ -512,9 +625,133 @@ const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0)
 const byScore = (ratings: Ratings) =>
   optionsOf(ratings).sort((x, y) => sum(ratings[y]) - sum(ratings[x]))
 
-/** STAR's two highest scorers, who go on to its runoff. */
-const finalistsOf = (ratings: Ratings): readonly string[] => byScore(ratings).slice(0, 2)
+/** STAR's two highest scorers, who go on to its runoff, leaving out any already placed. */
+const finalistsOf = (ratings: Ratings, placed: readonly string[] = []): readonly string[] =>
+  byScore(ratings)
+    .filter((option) => !placed.includes(option))
+    .slice(0, 2)
 const STAR_FINALISTS = finalistsOf(RATINGS)
+
+/** The most stars a ballot can give, and the stars each voter has to spend on winners. */
+const MAX_STARS = 5
+
+/** Each finalist's runoff votes: one per voter who scored it higher, counted at `weights`. */
+function runoffVotes(ratings: Ratings, pair: readonly string[], weights?: readonly number[]) {
+  const votes = (option: string) =>
+    sum(
+      votersOf(ratings)
+        .filter((voter) => favoriteOf(ratings, voter, pair) === option)
+        .map((voter) => weights?.[voter] ?? 1),
+    )
+  return pair.map(votes)
+}
+
+/** The runoff's winner: the finalist with more votes. Neither example ties. */
+function runoffWinner(ratings: Ratings, pair: readonly string[], weights?: readonly number[]) {
+  const [a, b] = runoffVotes(ratings, pair, weights)
+  return a >= b ? pair[0] : pair[1]
+}
+
+/** STAR again and again, each winner stepping aside for the next place. */
+function rankingOf(ratings: Ratings) {
+  const placed: string[] = []
+  while (placed.length < optionsOf(ratings).length) {
+    const pair = finalistsOf(ratings, placed)
+    placed.push(pair.length === 1 ? pair[0] : runoffWinner(ratings, pair))
+  }
+  return placed
+}
+
+/** One spot of a multiple-winner count. */
+interface Spot {
+  /** Each voter's strength going in: the stars they have left, over five. */
+  weights: number[]
+  /** Who won the spots before this one. */
+  chosen: string[]
+  finalists: readonly string[]
+  winner: string
+  /** The stars each voter paid for this spot. */
+  paid: number[]
+}
+
+/**
+ * Multiple winners, as the page describes it and multi-winner-todo.md
+ * specifies it: STAR on what each voter has left, once per spot, and the
+ * winner's supporters pay for it out of the stars they gave it, scaled down
+ * when it got more than the price.
+ */
+function spotsOf(ratings: Ratings, spots: number): Spot[] {
+  const voters = votersOf(ratings)
+  const price = (voters.length / spots) * MAX_STARS
+  let left = voters.map(() => MAX_STARS)
+  const result: Spot[] = []
+  for (let spot = 0; spot < spots; spot++) {
+    const weights = left.map((stars) => stars / MAX_STARS)
+    const chosen = result.map((s) => s.winner)
+    const total = (option: string) => weightedTotal(ratings, option, weights)
+    const finalists = optionsOf(ratings)
+      .filter((option) => !chosen.includes(option))
+      .sort((x, y) => total(y) - total(x))
+      .slice(0, 2)
+    const winner = finalists.length === 1 ? finalists[0] : runoffWinner(ratings, finalists, weights)
+    const scale = Math.min(1, price / total(winner))
+    const paid = voters.map((voter) => ratings[winner][voter] * weights[voter] * scale)
+    result.push({ weights, chosen, finalists, winner, paid })
+    left = left.map((stars, voter) => stars - paid[voter])
+  }
+  return result
+}
+
+const weightedTotal = (ratings: Ratings, option: string, weights: readonly number[]) =>
+  sum(votersOf(ratings).map((voter) => ratings[option][voter] * weights[voter]))
+
+/** A number of stars or votes as the page writes it: whole, or to one decimal place. */
+const shown = (n: number) => Math.round(n * 10) / 10
+
+/** A ballot's score at the strength it has left: a keycap at full strength, a figure otherwise. */
+function weighted(score: number, weight: number): Cell {
+  if (weight === 0) return blank('no stars left')
+  if (weight === 1) return keycap(score)
+  return { emoji: shown(score * weight), said: String(shown(score * weight)) }
+}
+
+/** A spot's scoring round: every ballot at its strength, earlier winners set aside. */
+function spotScoreRows(ratings: Ratings, spot: Spot): Row[] {
+  const rows = optionsOf(ratings).map((name): Row => ({
+    name,
+    cells: ratings[name].map((score, voter) => weighted(score, spot.weights[voter])),
+    total: shown(weightedTotal(ratings, name, spot.weights)),
+    out: !spot.finalists.includes(name),
+  }))
+  return setAside(rows, spot.chosen)
+}
+
+/** A spot's runoff: each ballot backs the finalist it scored higher, at its strength. */
+function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
+  const votes = runoffVotes(ratings, spot.finalists, spot.weights)
+  const rows = optionsOf(ratings).map((name): Row => {
+    const at = spot.finalists.indexOf(name)
+    if (at < 0) return { name, out: true, cells: votersOf(ratings).map(() => blank('eliminated')) }
+    const cells = votersOf(ratings).map((voter) =>
+      spot.weights[voter] === 0
+        ? blank('no stars left')
+        : favoriteOf(ratings, voter, spot.finalists) === name
+          ? VOTE
+          : blank('no vote'),
+    )
+    return { name, cells, total: shown(votes[at]) }
+  })
+  return withWinner(setAside(rows, spot.chosen))
+}
+
+/** Options already placed or chosen, drawn faded with their trophy and nothing else. */
+function setAside(rows: Row[], names: readonly string[]): Row[] {
+  return rows.map((row) =>
+    names.includes(row.name)
+      ? { name: row.name, cells: row.cells.map(() => blank('set aside')), aside: true }
+      : row,
+  )
+}
 
 /** The voter's highest-rated option among `among`, or none if they rate two the same. */
 function favoriteOf(ratings: Ratings, voter: number, among: readonly string[]) {
@@ -536,6 +773,8 @@ interface Row {
   won?: boolean
   /** Eliminated, or not a finalist: drawn struck through, with a cross. */
   out?: boolean
+  /** Already placed or chosen, so out of this round without having lost it. */
+  aside?: boolean
 }
 
 const keycap = (n: number): Cell => ({ emoji: `${n}️⃣`, said: String(n) })
@@ -650,6 +889,7 @@ function EmojiTable({
   rows,
   rowLabel = 'Option',
   totalLabel,
+  spent = [],
 }: {
   caption: string
   /** Rows with no cells draw no voter columns: a table of totals alone. */
@@ -658,6 +898,8 @@ function EmojiTable({
   rowLabel?: string
   /** The last column's heading; no label, no column. */
   totalLabel?: string
+  /** Voters whose ballots are set aside, their faces faded over empty columns. */
+  spent?: readonly number[]
 }) {
   const voters = rows[0].cells.map((_, voter) => voter)
   return (
@@ -671,7 +913,10 @@ function EmojiTable({
             </th>
             {voters.map((voter) => (
               <th key={voter} scope="col">
-                <span aria-hidden className={classes.emoji}>
+                <span
+                  aria-hidden
+                  className={`${classes.emoji} ${spent.includes(voter) ? classes.unlit : ''}`}
+                >
                   {VOTER_FACES[voter]}
                 </span>
                 <VisuallyHidden>Voter {voter + 1}</VisuallyHidden>
@@ -687,7 +932,10 @@ function EmojiTable({
         <tbody>
           {rows.map((row) => (
             <tr key={row.name}>
-              <th scope="row" className={row.out ? classes.out : undefined}>
+              <th
+                scope="row"
+                className={row.out ? classes.out : row.aside ? classes.aside : undefined}
+              >
                 <OptionIcon name={row.name} />
               </th>
               {row.cells.map((cell, voter) => (
@@ -699,8 +947,15 @@ function EmojiTable({
                 </td>
               ))}
               {totalLabel && (
-                <td className={classes.total}>
-                  {row.out ? (
+                <td className={`${classes.total} ${row.aside ? classes.aside : ''}`}>
+                  {row.aside ? (
+                    <>
+                      <span aria-hidden className={classes.emoji}>
+                        🏆
+                      </span>
+                      <VisuallyHidden>already chosen</VisuallyHidden>
+                    </>
+                  ) : row.out ? (
                     <>
                       {row.total !== undefined && `${row.total} `}
                       <span aria-hidden className={classes.emoji}>
@@ -757,12 +1012,31 @@ function OptionKey({ ratings }: { ratings: Ratings }) {
           <span aria-hidden className={classes.emoji}>
             {ICONS[option]}
           </span>{' '}
-          {option[0].toUpperCase() + option.slice(1)}
+          {labelOf(option)}
         </Text>
       ))}
     </Group>
   )
 }
+
+/** A full ranking, in a row like `OptionKey`'s, as the ordered list it is. */
+function Places({ names }: { names: readonly string[] }) {
+  return (
+    <Group component="ol" justify="center" gap="lg" className={classes.places}>
+      {names.map((option, i) => (
+        <Text component="li" key={option} fw={700}>
+          {i + 1}.{' '}
+          <span aria-hidden className={classes.emoji}>
+            {ICONS[option]}
+          </span>{' '}
+          {labelOf(option)}
+        </Text>
+      ))}
+    </Group>
+  )
+}
+
+const labelOf = (option: string) => option[0].toUpperCase() + option.slice(1)
 
 /**
  * One voter's ballot, drawn as stars rather than keycaps, so the reader sees

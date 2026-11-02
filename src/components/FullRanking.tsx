@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Badge, Button, Divider, Group, Modal, Stack, Text } from '@mantine/core'
+import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { ListNumbersIcon } from '@phosphor-icons/react'
 import { useDisclosure } from '@mantine/hooks'
 import { supabase } from '../lib/supabase'
@@ -21,12 +21,13 @@ import { stars, voters } from '../lib/plural'
 type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
 /**
- * The whole field in placed order, behind a button.
+ * The whole field in placed order, behind a button in the result's
+ * banner.
  *
  * Kept out of the results page proper because most polls only ever need
- * their winner; but "what were the top three" is a real question, and the
- * score round on its own doesn't answer it: the score order ignores the
- * runoffs, which is exactly the part STAR adds.
+ * their winner; but "who do we go with if the winner falls through" is a real
+ * question, and the score round on its own doesn't answer it: the score order
+ * ignores the runoffs, which is exactly the part STAR adds.
  *
  * **Fetched when the button is pressed, not with the tally that drew it.**
  * STAR names one winner in one round; ordering the rest takes a round per
@@ -97,22 +98,14 @@ export function FullRanking({
 
   return (
     <>
-      {/* A rule with a button in it, which is not a separator: a separator's
-          content is presentational, so the button inside it was a control a
-          screen reader could reach and could not name. */}
-      <Divider
-        role="presentation"
-        label={
-          <Button
-            variant="subtle"
-            size="compact-sm"
-            onClick={modal.open}
-            leftSection={<ListNumbersIcon size={14} aria-hidden />}
-          >
-            See the full ranking
-          </Button>
-        }
-      />
+      <Button
+        variant="default"
+        size="compact-sm"
+        onClick={modal.open}
+        leftSection={<ListNumbersIcon size={16} aria-hidden />}
+      >
+        Full ranking
+      </Button>
 
       <Modal
         opened={opened}
@@ -123,9 +116,9 @@ export function FullRanking({
       >
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            STAR names one winner. To order the rest, the method runs again on the options left
-            standing: the winner steps out, the two highest scorers remaining go to a runoff for the
-            next place, and so on down the list.
+            Who to go with if the winner falls through. STAR names one winner, so to order the rest
+            it runs again on the options left: the winner steps aside, the two highest scorers
+            remaining go to a runoff for the next place, and so on down the list.
           </Text>
 
           {error && (
