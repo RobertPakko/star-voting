@@ -295,10 +295,6 @@ export function WhatIsStar() {
               totalLabel="Score"
               reduced={reduced}
             />
-            <Text size="xs" c="dimmed" ta="center">
-              The first three friends gave {spots[0].winner} 5 stars, so their ballots now count at
-              half strength. The other three gave it none, so theirs still count in full.
-            </Text>
             <Then>
               {labelOf(spots[1].finalists[0])} and {spots[1].finalists[1]} go to a runoff
             </Then>
@@ -811,7 +807,7 @@ function spotScoreRows(ratings: Ratings, spot: Spot): Row[] {
     total: shown(weightedTotal(ratings, name, spot.weights)),
     out: !spot.finalists.includes(name),
   }))
-  return setAside(rows, spot.chosen, ratings)
+  return setAside(rows, spot.chosen)
 }
 
 /**
@@ -846,8 +842,8 @@ function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
 /**
  * Options already placed or chosen, drawn faded with their trophy and nothing
  * else. `ratings` keeps their stars on show instead of blanks, where those
- * stars are what the round turns on: the multiple-winner scores, whose
- * weights come from them.
+ * stars are what the next round turns on: the ballots before the
+ * multiple-winner reweighting, whose weights come from them.
  */
 function setAside(rows: Row[], names: readonly string[], ratings?: Ratings): Row[] {
   return rows.map((row) =>
