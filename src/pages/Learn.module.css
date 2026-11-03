@@ -64,6 +64,13 @@
   font-size: var(--mantine-font-size-xs);
 }
 
+/* A runoff vote at less than full strength, on /star: the green square cut
+   to the part it is worth. A block, since clip-path on an inline box clips
+   each line fragment rather than the glyph. */
+.partVote {
+  display: inline-block;
+}
+
 /* The stars a ballot did not give, on /star: there, but plainly not lit. */
 .unlit {
   filter: grayscale(1);

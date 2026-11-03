@@ -545,12 +545,10 @@ const MULTIPLE_WINNERS = 'multiple-winners'
  * *Multiple winners* card: the steps say only that a voter counts for less,
  * which is all most readers need.
  *
- * The weight is Reweighted Range Voting's with Kok and Smith's K = ½. Their
- * page calls that choice *analogous* to Sainte-Laguë; the claim made here is
- * narrower and checkable: for groups that give their own options 5 and
- * everyone else's 0, a group that has won s spots counts at 1/(1 + 2s), which
- * is Sainte-Laguë's divisor sequence exactly. multi-winner-todo.md has the
- * longer argument.
+ * The weight is Reweighted Range Voting's, with Kok and Smith's K = 1. The
+ * claim made for it here is narrow and checkable: for groups that give their
+ * own options 5 and everyone else's 0, a group that has won s spots counts at
+ * 1/(1 + s), which is D'Hondt's divisor sequence exactly.
  */
 function WeightFormula() {
   const [opened, { toggle }] = useDisclosure(false)
@@ -580,37 +578,29 @@ function WeightFormula() {
             <Text size="sm">
               A ballot&rsquo;s weight, which scales its scores and its runoff vote, is
             </Text>
-            <Text
-              size="sm"
-              fw={600}
-              ta="center"
-              aria-label="1 divided by 1 plus 2 times S divided by 5"
-            >
+            <Text size="sm" fw={600} ta="center" aria-label="1 divided by N over 5 plus 1">
               <span className={classes.fraction}>
                 <span className={classes.numerator} aria-hidden="true">
                   1
                 </span>
                 <span className={classes.denominator} aria-hidden="true">
-                  2(N/5) + 1
+                  N/5 + 1
                 </span>
               </span>
             </Text>
             <Text size="sm">
               where N is the total stars the ballot has given the winners so far. If you gave a
-              winner 5 stars, your vote in future rounds is reduced to one third of its original
-              weight. If you gave two winners 5 stars each, it is reduced to one fifth, and so on.
+              winner 5 stars, your vote in future rounds is reduced to half of its original weight.
+              If you gave two winners 5 stars each, it is reduced to one third, and so on.
             </Text>
             <Text size="sm" fw={700}>
               Why this formula
             </Text>
             <Text size="sm">
               This is the{' '}
-              <Ext href="https://en.wikipedia.org/wiki/Sainte-Lagu%C3%AB_method">
-                Sainte-Laguë method
-              </Ext>{' '}
-              for proportional representation, modified slightly to accomodate STAR. It's the same
-              method which countries including Germany, New Zealand, Norway and Sweden use to share
-              parliamentary seats out in proportion to votes.
+              <Ext href="https://en.wikipedia.org/wiki/D%27Hondt_method">D&rsquo;Hondt method</Ext>{' '}
+              for proportional representation, modified slightly to accomodate STAR. It&rsquo;s used
+              by dozens of countries around the world to apportion seats in parliamentary elections.
             </Text>
           </Stack>
         </Paper>
@@ -656,7 +646,8 @@ type Ratings = Record<string, number[]>
  * so every rule of the runoff shows. The full ranking then puts tacos second
  * (the pizza lovers' second choice), while multiple winners gives the second
  * of two dinners to sushi. The pizza lovers all gave pizza 5, so the
- * second spot weighs every ballot at 1/3 or 1; and with full-strength runoff votes they
+ * second spot weighs every ballot at 1/2 or 1, which leaves most weighted
+ * scores whole; and with full-strength runoff votes they
  * would hand the second spot to tacos, which is the point the page makes
  * about weighting the runoff. The fourth friend scores tacos and sushi the
  * same so that runoff is not a tie.
@@ -759,14 +750,14 @@ interface Spot {
 
 /**
  * A ballot's strength once it has given `given` stars to earlier winners:
- * 1 ÷ (1 + 2 × given ÷ 5), so a third after one 5, a fifth after two.
+ * 1 ÷ (1 + given ÷ 5), so a half after one 5, a third after two.
  */
-const weightOf = (given: number) => 1 / (1 + (2 * given) / MAX_STARS)
+const weightOf = (given: number) => 1 / (1 + given / MAX_STARS)
 
 /** The same strength as the page writes it: an exact fraction, since every weight is one. */
 function fractionOf(given: number) {
   const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
-  const [top, bottom] = [MAX_STARS, MAX_STARS + 2 * given]
+  const [top, bottom] = [MAX_STARS, MAX_STARS + given]
   return `${top / gcd(top, bottom)}/${bottom / gcd(top, bottom)}`
 }
 
@@ -801,10 +792,11 @@ const weightedTotal = (ratings: Ratings, option: string, weights: readonly numbe
 /** A number of stars or votes as the page writes it: whole, or to one decimal place. */
 const shown = (n: number) => Math.round(n * 10) / 10
 
-/** A ballot's score at its strength: a keycap at full strength, a figure otherwise. */
+/** A ballot's score at its strength: a keycap where it comes out whole, a figure otherwise. */
 function weighted(score: number, weight: number): Cell {
-  if (weight === 1) return keycap(score)
-  return { emoji: shown(score * weight), said: String(shown(score * weight)), figure: true }
+  const worth = score * weight
+  if (Number.isInteger(worth)) return keycap(worth)
+  return { emoji: shown(worth), said: String(shown(worth)), figure: true }
 }
 
 /** A spot's scoring round: every ballot at its strength, earlier winners set aside. */
@@ -820,8 +812,9 @@ function spotScoreRows(ratings: Ratings, spot: Spot): Row[] {
 
 /**
  * A spot's runoff: each ballot backs the finalist it scored higher, at its
- * strength, so a vote at less than full strength is drawn as the fraction it
- * is worth.
+ * strength, so a vote at less than full strength is drawn as that much of a
+ * square: the square cut off on the right (`partVote`), keeping its box so
+ * the columns stay in line.
  */
 function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
   const votes = runoffVotes(ratings, spot.finalists, spot.weights)
@@ -831,8 +824,15 @@ function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
     const cells = votersOf(ratings).map((voter): Cell => {
       if (favoriteOf(ratings, voter, spot.finalists) !== name) return blank('no vote')
       if (spot.weights[voter] === 1) return VOTE
-      const worth = fractionOf(spot.given[voter])
-      return { emoji: worth, said: `${worth} of a vote`, figure: true }
+      const unspent = `${(1 - spot.weights[voter]) * 100}%`
+      return {
+        emoji: (
+          <span className={classes.partVote} style={{ clipPath: `inset(0 ${unspent} 0 0)` }}>
+            {VOTE.emoji}
+          </span>
+        ),
+        said: `${fractionOf(spot.given[voter])} of a vote`,
+      }
     })
     return { name, cells, total: shown(votes[at]) }
   })
