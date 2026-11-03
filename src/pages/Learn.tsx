@@ -4,8 +4,8 @@ import {
   Anchor,
   Box,
   Button,
-  Card,
   Collapse,
+  Divider,
   Group,
   Image,
   List,
@@ -18,7 +18,7 @@ import {
   VisuallyHidden,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { ArrowDownIcon, CaretDownIcon } from '@phosphor-icons/react'
+import { ArrowDownIcon, CaretRightIcon } from '@phosphor-icons/react'
 import { RoundCard } from '../components/RoundCard'
 import { SITE_FEATURES } from '../components/siteFeatures'
 import { usePageTitle } from '../lib/pageTitle'
@@ -64,7 +64,6 @@ export function WhatIsStar() {
   const secondRunoff = finalistsOf(DINNER, ranking.slice(0, 1))
   const spots = spotsOf(DINNER)
   const reduced = votersOf(DINNER).filter((voter) => spots[1].weights[voter] < 1)
-  const fullStrength = runoffWinner(DINNER, spots[1].finalists)
   return (
     <Stack maw={720} mx="auto" gap="md">
       <Title order={1}>What is STAR?</Title>
@@ -98,7 +97,7 @@ export function WhatIsStar() {
             Each voter gives every option a score from 0 to 5 stars, where 0 is the worst and 5 is
             the best. A score is not a ranking: you can give several options the same number of
             stars, and you don&rsquo;t have to use every number. A good way to start is to give your
-            favourite option 5 stars and your least favorite 0 stars, then give the rest a score
+            favorite option 5 stars and your least favorite 0 stars, then give the rest a score
             in-between. Here is the first friend&rsquo;s ballot:
           </Text>
           <Ballot ratings={DINNER} voter={0} />
@@ -185,16 +184,23 @@ export function WhatIsStar() {
         </Stack>
       </RoundCard>
 
+      <Text>
+        That's generally how STAR voting works. There's no need to read-on unless you want to dive
+        into the tie-breaker details and STAR extensions.
+      </Text>
+
+      <Divider label="Details & Extensions" />
+
       <RoundCard title="Ties">
         <Stack gap="sm">
           <Text>
-            In the rare event of a tie, STAR has rules to settle it. Ties are uncommon because a
-            score is a total over every ballot, and multiple options seldom land on exactly the same
+            In the rare event of a tie, STAR has rules to settle it. Ties are uncommon since scores
+            are totaled across all ballots, and multiple options seldom land on exactly the same
             number of stars.
           </Text>
           <Text fw={700}>A tie in the score round</Text>
           <Text>When two options are tied, the place goes to:</Text>
-          <List type="ordered" size="sm" spacing={4} withPadding>
+          <List type="ordered" spacing={4} withPadding>
             <List.Item>The one more voters prefer in a head-to-head comparison.</List.Item>
             <List.Item>If that is level too, the one given 5 stars on more ballots.</List.Item>
             <List.Item>If they are still level, one of the two is chosen at random.</List.Item>
@@ -206,7 +212,7 @@ export function WhatIsStar() {
           </Text>
           <Text fw={700}>A tie in the runoff</Text>
           <Text>When both finalists get the same number of votes, the winner is:</Text>
-          <List type="ordered" size="sm" spacing={4} withPadding>
+          <List type="ordered" spacing={4} withPadding>
             <List.Item>the finalist with the higher score from the scoring round;</List.Item>
             <List.Item>
               if their scores are level too, the one given 5 stars on more ballots.
@@ -220,17 +226,17 @@ export function WhatIsStar() {
         <Stack gap="sm">
           <Text>
             STAR picks one winner, but sometimes you need a plan B: the restaurant that won is fully
-            booked tonight, or the person you picked for the job turns it down. A poll&rsquo;s
-            results have a <strong>Full ranking</strong> button for this. It puts every option in
-            order by running STAR again without the winner. The winner steps aside, and the two
-            highest scorers left go to a runoff for second place. Then second place steps aside, and
-            so on down the list.
+            booked tonight, or the person you picked for the job turns it down. Poll results have a{' '}
+            <strong>Full ranking</strong> button for this. It puts every option in order by running
+            STAR again without the winner. The winner steps aside, and the next two highest scorers
+            go to a runoff for second place. Then second place steps aside, and so on down the list.
           </Text>
           <Text>
-            Back to our six friends: what if the {winner} place is fully booked? With {winner} set
-            aside, {secondRunoff[0]} and {secondRunoff[1]} are the two highest scorers left, so they
-            go to a runoff for second place:
+            Let's show what happens with our six friends if the {winner} place is fully booked. With{' '}
+            {winner} set aside, {secondRunoff[0]} and {secondRunoff[1]} are the two highest scorers
+            left, so they go to a runoff for second place:
           </Text>
+          <Then>Next two highest scorers go to a runoff</Then>
           <EmojiTable
             caption={`The runoff for second place, with ${winner} set aside`}
             rows={setAside(pluralityRows(DINNER, secondRunoff, true), ranking.slice(0, 1))}
@@ -239,11 +245,6 @@ export function WhatIsStar() {
           />
           <Then>The full ranking</Then>
           <Places names={ranking} />
-          <Text>
-            Only first place is STAR&rsquo;s own answer; the rest comes from repeating it. That
-            means the runner-up in the first runoff doesn&rsquo;t automatically come second: it
-            still has to win the next runoff too.
-          </Text>
         </Stack>
       </RoundCard>
 
@@ -252,41 +253,29 @@ export function WhatIsStar() {
           <Stack gap="sm">
             <Text>
               Sometimes a group wants more than one winner: two dinners on a weekend away, three
-              films for a movie marathon, or a committee of five. You could take the top of the full
-              ranking, but that can hand every spot to the biggest group. The{' '}
-              <strong>Multiple winners</strong> button gives a different ranking, one that shares
-              the top spots out so that every sizeable group of voters gets something they like:
+              films for a movie marathon, or a committee of five. Using the full ranking for this
+              can result in every spot going to the biggest group. The{' '}
+              <strong>Multiple winners</strong> button gives a different ranking, one shares top
+              spots so that different groups of voters each get something they like:
             </Text>
-            <List type="ordered" size="sm" spacing={4} withPadding>
+            <List type="ordered" spacing={4} withPadding>
+              <List.Item>Run STAR as usual to select a winner.</List.Item>
               <List.Item>
-                Run STAR as usual: scores, then a runoff. The winner takes the first spot.
+                All ballots are reweighted based on how many stars they gave the winner.
               </List.Item>
               <List.Item>
-                Everybody who gave the winner stars now counts for less, and the more stars they
-                gave it, the less they count.
+                Run STAR again on the options left, with ballots at their new strength, to select
+                the next winner.
               </List.Item>
-              <List.Item>
-                Run STAR again on the options left, with every ballot at its new strength, in the
-                runoff as well as the scores. The winner takes the next spot.
-              </List.Item>
-              <List.Item>
-                Repeat until every option has a spot. For two winners, take the top two; for three,
-                the top three.
-              </List.Item>
+              <List.Item>Repeat until every option has a spot.</List.Item>
             </List>
             <Text>
-              Step 3 is where this differs from a single STAR election: a runoff vote isn&rsquo;t a
-              whole vote. Voters who have already helped pick a winner count for less in the runoff
-              too, and that is what shares the spots out. If their runoff votes counted in full, the
-              biggest group would win every runoff it took part in.
+              Let's show what happens with our six friends if we are now choosing two dinners for a
+              weekend away. The first spot is plain STAR, so it&rsquo;s {spots[0].winner} again.
+              Then the ballots are reweighted based on how many stars they gave {spots[0].winner}{' '}
+              and we run STAR again to determine the second winner.
             </Text>
-            <Text>
-              Back to the six friends, now choosing two dinners for a weekend away. The first spot
-              is plain STAR, so it&rsquo;s {spots[0].winner} again. The {spots[0].winner} lovers
-              each gave {spots[0].winner} 5 stars, so from here on they count for{' '}
-              {fractionOf(spots[1].given[reduced[0]])} each. That makes the stars for the second
-              spot look like this:
-            </Text>
+            <Then>Ballots are reweighted</Then>
             <EmojiTable
               caption={`The stars for the second spot, with ${spots[0].winner} already chosen`}
               rows={spotScoreRows(DINNER, spots[1])}
@@ -304,29 +293,13 @@ export function WhatIsStar() {
               totalLabel="Votes"
               reduced={reduced}
             />
-            <Text>
-              The {spots[0].winner} lovers still prefer {fullStrength}, but their votes are worth a
-              third each, so {spots[1].winner} takes the second spot. Counted in full, they would
-              have won it for {fullStrength},{' '}
-              {runoffVotes(DINNER, spots[1].finalists)
-                .sort((a, b) => b - a)
-                .join(' to ')}
-              .
-            </Text>
             <Then>The multiple-winner ranking</Then>
             <Places names={spots.map((spot) => spot.winner)} />
             <Text>
-              So the two dinners are {spots[0].winner} and {spots[1].winner}. The full ranking put{' '}
-              {ranking[1]} second, because the {spots[0].winner} lovers like it too, which would
-              have left the {spots[1].winner} lovers with nothing. Here the {spots[0].winner} lovers
-              have already had their night, so the second one goes to somebody else.
-            </Text>
-            <Text>
-              Every spot gets its own runoff, just like a single STAR election, so scoring honestly
-              is still safe, and the first spot always goes to the option STAR would pick on its
-              own. Nor do you need to say how many winners you want before counting: the top three
-              are always the top two plus one more, so asking for more winners never changes the
-              ones you&rsquo;d have got by asking for fewer.
+              So the two dinners are {spots[0].winner} and {spots[1].winner}. The {spots[0].winner}{' '}
+              fans had their votes reweighted in the second round to reflect that they already got
+              their top choice. This way, each group gets something that they like rather than
+              allowing the largest group to choose every winner.
             </Text>
             <WeightFormula />
           </Stack>
@@ -484,10 +457,6 @@ export function WhyStar() {
             rows={starScoreRows()}
             totalLabel="Score"
           />
-          <Text size="xs" c="dimmed" ta="center">
-            The two highest scores belong to {STAR_FINALISTS[0]} and {STAR_FINALISTS[1]}, so they
-            are the finalists.
-          </Text>
           <Then>Each voter backs whichever finalist they scored higher</Then>
           <EmojiTable
             caption="The runoff between the two finalists"
@@ -539,13 +508,17 @@ export function WhyStar() {
       </RoundCard>
 
       <RoundCard title="Other voting methods">
-        <Text size="sm">
+        <Text>
           There are other interesting voting methods such as{' '}
           <Ext href="https://en.wikipedia.org/wiki/Kemeny_method">the Kemeny method</Ext> and{' '}
           <Ext href="https://en.wikipedia.org/wiki/Schulze_method">the Schulze method</Ext>, but one
           is infeasibly computationally expensive and the other is very difficult to understand.
-          STAR has the advantage of being both computationally simple and easy to grasp
-          conceptually.
+          STAR has the advantage of being computationally simple, easy to grasp conceptually, and
+          extensible to more complex scenarios such as{' '}
+          <Anchor component={Link} to="/star?section=multiple-winners" inherit>
+            multi-winner elections
+          </Anchor>
+          .
         </Text>
       </RoundCard>
     </Stack>
@@ -579,7 +552,7 @@ function WeightFormula() {
         aria-expanded={opened}
         aria-controls={panelId}
         leftSection={
-          <CaretDownIcon
+          <CaretRightIcon
             size={14}
             aria-hidden
             className={`${classes.caret} ${opened ? classes.caretOpen : ''}`}
@@ -587,7 +560,7 @@ function WeightFormula() {
         }
         style={{ alignSelf: 'flex-start' }}
       >
-        The exact formula, and why
+        The reweighting formula
       </Button>
       <Collapse expanded={opened} id={panelId}>
         <Paper withBorder radius="md" p="md">
@@ -595,43 +568,37 @@ function WeightFormula() {
             <Text size="sm">
               A ballot&rsquo;s weight, which scales its scores and its runoff vote, is
             </Text>
-            <Text size="sm" fw={600} ta="center">
-              1 ÷ (1 + 2 × S ÷ 5)
+            <Text
+              size="sm"
+              fw={600}
+              ta="center"
+              aria-label="1 divided by 1 plus 2 times S divided by 5"
+            >
+              <span className={classes.fraction}>
+                <span className={classes.numerator} aria-hidden="true">
+                  1
+                </span>
+                <span className={classes.denominator} aria-hidden="true">
+                  2(N/5) + 1
+                </span>
+              </span>
             </Text>
             <Text size="sm">
-              where S is the total stars the ballot has given the winners so far. Before anybody has
-              won, S is 0 and every ballot counts in full. 5 stars to one winner makes it a third; 5
-              stars to two winners, a fifth; 3 stars to one winner, five elevenths.
-            </Text>
-            <Text size="sm">
-              This is the reweighting step of{' '}
-              <Ext href="https://rangevoting.org/RRV.html">Reweighted Range Voting</Ext>, in the
-              version its authors, Jan Kok and Warren D. Smith, compare to the Sainte-Laguë method.
-              ChoiceLab adds a STAR runoff to every spot.
+              where N is the total stars the ballot has given the winners so far. If you gave a
+              winner 5 stars, your vote in future rounds is reduced to one third of its original
+              weight. If you gave two winners 5 stars each, it is reduced to one fifth, and so on.
             </Text>
             <Text size="sm" fw={700}>
               Why this formula
             </Text>
             <Text size="sm">
-              Picture voters in groups, each giving its own options 5 stars and everyone
-              else&rsquo;s 0. Once a group has won one spot, its members count for a third; after
-              two, a fifth; after three, a seventh. Those are the divisors of the{' '}
+              This is the{' '}
               <Ext href="https://en.wikipedia.org/wiki/Sainte-Lagu%C3%AB_method">
                 Sainte-Laguë method
-              </Ext>
-              , which countries including Germany, New Zealand, Norway and Sweden use to share
-              parliamentary seats out in proportion to votes. It rounds each group&rsquo;s share to
-              the nearest whole seat and leans towards neither big groups nor small ones.
-            </Text>
-            <Text size="sm">
-              Without the 2, the weights would go a half, a third, a quarter: the divisors of the{' '}
-              <Ext href="https://en.wikipedia.org/wiki/D%27Hondt_method">D&rsquo;Hondt method</Ext>,
-              which favours bigger groups. Its usual defence is that it discourages parties from
-              splitting, and a poll has no parties to split.
-            </Text>
-            <Text size="sm">
-              No weight ever reaches zero, so a voter whose favourites have all won still has a say
-              in what comes next.
+              </Ext>{' '}
+              for proportional representation, modified slightly to accomodate STAR. It's the same
+              method which countries including Germany, New Zealand, Norway and Sweden use to share
+              parliamentary seats out in proportion to votes.
             </Text>
           </Stack>
         </Paper>
@@ -931,8 +898,8 @@ function ratingRows(ratings: Ratings, withTotals = false): Row[] {
 }
 
 /**
- * One vote per voter, for their favourite among `among`: everybody, the IRV
- * survivors, or STAR's finalists (where the favourite is whichever finalist
+ * One vote per voter, for their favorite among `among`: everybody, the IRV
+ * survivors, or STAR's finalists (where the favorite is whichever finalist
  * the voter scored higher, and a voter scoring them the same votes for
  * neither). `decided` says whether to name a winner: an IRV first round with
  * no majority has none yet.
@@ -980,7 +947,7 @@ function approvalRows(): Row[] {
 }
 
 /**
- * The voters `bullets` picks give their favourite 5 and everything else 0;
+ * The voters `bullets` picks give their favorite 5 and everything else 0;
  * the rest keep their honest scores.
  */
 function bulletRows(bullets: (voter: number) => boolean): Row[] {

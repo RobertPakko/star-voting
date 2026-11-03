@@ -109,5 +109,28 @@
 }
 
 .caretOpen {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
+}
+
+.fraction {
+  display: inline-grid;
+  vertical-align: middle;
+  line-height: 1.2;
+}
+
+.numerator,
+.denominator {
+  display: block;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.numerator {
+  border-bottom: 1px solid currentColor;
+  padding-inline: 4px;
+  padding-bottom: 2px;
+}
+
+.denominator {
+  padding-top: 2px;
 }
