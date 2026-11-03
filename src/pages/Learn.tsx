@@ -236,6 +236,12 @@ export function WhatIsStar() {
             {winner} set aside, {secondRunoff[0]} and {secondRunoff[1]} are the two highest scorers
             left, so they go to a runoff for second place:
           </Text>
+          <EmojiTable
+            caption={`Everyone's ballots, with ${winner} set aside`}
+            rows={setAside(ratingRows(DINNER, true), ranking.slice(0, 1))}
+            rowLabel="Restaurant"
+            totalLabel="Score"
+          />
           <Then>Next two highest scorers go to a runoff</Then>
           <EmojiTable
             caption={`The runoff for second place, with ${winner} set aside`}
@@ -252,11 +258,11 @@ export function WhatIsStar() {
         <RoundCard title="Multiple winners">
           <Stack gap="sm">
             <Text>
-              Sometimes a group wants more than one winner: two dinners on a weekend away, three
-              films for a movie marathon, or a committee of five. Using the full ranking for this
-              can result in every spot going to the biggest group. The{' '}
-              <strong>Multiple winners</strong> button gives a different ranking, one shares top
-              spots so that different groups of voters each get something they like:
+              Sometimes a group wants more than one winner, for instance choosing two dinners on a
+              weekend away or three films for a movie marathon. Using the full ranking for this can
+              result in every spot going to the biggest group. The <strong>Multiple winners</strong>{' '}
+              button gives a different ranking, one that shares top spots so that different groups
+              of voters each get something they like:
             </Text>
             <List type="ordered" spacing={4} withPadding>
               <List.Item>Run STAR as usual to select a winner.</List.Item>
@@ -275,6 +281,12 @@ export function WhatIsStar() {
               Then the ballots are reweighted based on how many stars they gave {spots[0].winner}{' '}
               and we run STAR again to determine the second winner.
             </Text>
+            <EmojiTable
+              caption={`Everyone's ballots, with ${spots[0].winner} already chosen`}
+              rows={setAside(ratingRows(DINNER, true), spots[1].chosen)}
+              rowLabel="Restaurant"
+              totalLabel="Score"
+            />
             <Then>Ballots are reweighted</Then>
             <EmojiTable
               caption={`The stars for the second spot, with ${spots[0].winner} already chosen`}
@@ -298,7 +310,7 @@ export function WhatIsStar() {
             <Text>
               So the two dinners are {spots[0].winner} and {spots[1].winner}. The {spots[0].winner}{' '}
               fans had their votes reweighted in the second round to reflect that they already got
-              their top choice. This way, each group gets something that they like rather than
+              their top choice. This way, everyone gets something that they like rather than
               allowing the largest group to choose every winner.
             </Text>
             <WeightFormula />
