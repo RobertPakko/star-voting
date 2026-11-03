@@ -283,7 +283,7 @@ export function WhatIsStar() {
             </Text>
             <EmojiTable
               caption={`Everyone's ballots, with ${spots[0].winner} already chosen`}
-              rows={setAside(ratingRows(DINNER, true), spots[1].chosen)}
+              rows={setAside(ratingRows(DINNER, true), spots[1].chosen, DINNER)}
               rowLabel="Restaurant"
               totalLabel="Score"
             />
@@ -295,6 +295,10 @@ export function WhatIsStar() {
               totalLabel="Score"
               reduced={reduced}
             />
+            <Text size="xs" c="dimmed" ta="center">
+              The first three friends gave {spots[0].winner} 5 stars, so their ballots now count at
+              half strength. The other three gave it none, so theirs still count in full.
+            </Text>
             <Then>
               {labelOf(spots[1].finalists[0])} and {spots[1].finalists[1]} go to a runoff
             </Then>
@@ -807,7 +811,7 @@ function spotScoreRows(ratings: Ratings, spot: Spot): Row[] {
     total: shown(weightedTotal(ratings, name, spot.weights)),
     out: !spot.finalists.includes(name),
   }))
-  return setAside(rows, spot.chosen)
+  return setAside(rows, spot.chosen, ratings)
 }
 
 /**
@@ -839,11 +843,20 @@ function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
   return withWinner(setAside(rows, spot.chosen))
 }
 
-/** Options already placed or chosen, drawn faded with their trophy and nothing else. */
-function setAside(rows: Row[], names: readonly string[]): Row[] {
+/**
+ * Options already placed or chosen, drawn faded with their trophy and nothing
+ * else. `ratings` keeps their stars on show instead of blanks, where those
+ * stars are what the round turns on: the multiple-winner scores, whose
+ * weights come from them.
+ */
+function setAside(rows: Row[], names: readonly string[], ratings?: Ratings): Row[] {
   return rows.map((row) =>
     names.includes(row.name)
-      ? { name: row.name, cells: row.cells.map(() => blank('set aside')), aside: true }
+      ? {
+          name: row.name,
+          cells: ratings ? ratings[row.name].map(keycap) : row.cells.map(() => blank('set aside')),
+          aside: true,
+        }
       : row,
   )
 }
