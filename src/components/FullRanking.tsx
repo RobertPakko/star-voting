@@ -19,7 +19,7 @@ import { splitAdvanced } from '../lib/tiebreak'
  * BallotsSource, and for the same reason: a session proves the caller's
  * right to an invite poll, the link proves it for an open one.
  */
-type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
+export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
 /**
  * The whole field in placed order, opened from the result's *More results*
@@ -174,7 +174,7 @@ function Place({ entry }: { entry: RankingEntry }) {
 
         {entry.tiebreaks.map((tb, i) => (
           <Text key={i} size="sm" c={tb.resolved_by === 'random' ? 'orange' : 'dimmed'}>
-            {tiebreakNote(tb)}
+            <TiebreakNote tiebreak={tb} />
           </Text>
         ))}
       </Stack>
@@ -229,7 +229,7 @@ function decision(entry: RankingEntry) {
 }
 
 /** A tie for this place's runoff slots, and what broke it. */
-function tiebreakNote(tb: Tiebreak) {
+export function TiebreakNote({ tiebreak: tb }: { tiebreak: Tiebreak }) {
   const tied = (
     <>
       <NameList names={tb.tied} /> tied at {stars(tb.tied_at)} for the runoff;{' '}

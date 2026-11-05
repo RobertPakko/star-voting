@@ -94,7 +94,14 @@ export function MoreResults({
           onClose={close}
         />
       )}
-      <MultipleWinners opened={open === 'multiple'} onClose={close} />
+      {offersMultipleWinners(results) && (
+        <MultipleWinners
+          source={source}
+          results={results}
+          opened={open === 'multiple'}
+          onClose={close}
+        />
+      )}
       <FractionalWinners opened={open === 'fractional'} onClose={close} />
     </>
   )

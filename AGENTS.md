@@ -3199,11 +3199,25 @@ large group. It is a ranking of its own: each spot is a full STAR election
 scores**, since full-strength runoff votes would let a majority take every
 spot. `n` winners are the top `n`, so no number of winners is asked for and
 one more never changes the earlier ones; a runoff on every spot keeps the
-first spot the single-winner STAR result. It is a placeholder modal for now
-(`MultipleWinners.tsx`); [`multi-winner-todo.md`](multi-winner-todo.md) is
-the specification for the count. `/extensions` explains both on one example,
-computed in `Learn.tsx` (`rankingOf`, `spotsOf`), where the two methods'
-second places differ.
+first spot the single-winner STAR result. `/extensions` explains both on one
+example, computed in `Learn.tsx` (`rankingOf`, `spotsOf`), where the two
+methods' second places differ; `48_multiple_winners` counts the same example.
+
+- **Counted in the database**, like the ranking and on the same gate
+  (`get_poll_multiple_winners` / `open_poll_multiple_winners`, via
+  `poll_multiple_winners`), on the press, **stopping at ten spots**. Each spot
+  is `weighted_star_round`: `star_round`'s rules in the same order with every
+  count a weighted sum, rounded to six places so equal sums compare equal.
+  `star_round` itself is untouched, so no single-winner tally depends on it.
+- **A runoff level on every rule shares the spot**, as in the full ranking,
+  and both options are charged to the ballots that starred them.
+- **The reader can remove options and count again**, as many times as they
+  like (`p_excluded`): the count runs as though those options were never on
+  the ballot. Removals are held by `MultipleWinners` for as long as the
+  poll's results are on screen, never stored, and can be restored one by one.
+  Removing stops at two options left.
+- **The sample cannot remove**: it answers the count recorded with nothing
+  removed (`multiple_winners` in `samplePollData.ts`).
 
 **Fractional winners** is for a choice that can be split (a budget, a run of
 meetings): every option gets a share, chosen to maximise the Nash welfare —

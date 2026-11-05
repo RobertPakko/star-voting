@@ -961,8 +961,8 @@ function fractionOf(given: number) {
 }
 
 /**
- * Multiple winners, as the page describes it and multi-winner-todo.md
- * specifies it: STAR once per spot until every option has one, with each
+ * Multiple winners, as the page describes it and `poll_multiple_winners`
+ * counts it (stopping at ten spots): STAR once per spot, with each
  * ballot counted, in the scores and the runoff alike, at a strength that falls
  * with the stars it gave the winners so far. Two winners are the first two
  * spots, three the first three, and so on.

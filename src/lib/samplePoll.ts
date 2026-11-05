@@ -42,9 +42,11 @@ import type {
 interface SampleQuestion {
   view: OpenPollView
   group: OpenGroupQuestion[]
-  /** The four a finished poll has and an open one does not. */
+  /** The five a finished poll has and an open one does not. */
   results?: PollResults
   ranking?: RankingEntry[]
+  /** Multiple winners with nothing removed; see `MultipleWinners`. */
+  multiple_winners?: RankingEntry[]
   scores?: OptionScore[]
   ballots?: BallotSheet
 }
@@ -84,6 +86,7 @@ interface OpenPollArgs {
   p_voter_key?: string
   p_scores?: { candidate_id: string; score: number }[]
   p_voter_name?: string | null
+  p_excluded?: string[]
 }
 
 /**
@@ -151,6 +154,12 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
       return question.results ? ok(question.results) : failed('Results are not available yet')
     case 'open_poll_ranking':
       return question.ranking ? ok(question.ranking) : failed('Results are not available yet')
+    // Recorded with nothing taken out, and only that: the sample cannot count
+    // again, so `MultipleWinners` offers no removal on it.
+    case 'open_poll_multiple_winners':
+      return question.multiple_winners && !args.p_excluded?.length
+        ? ok(question.multiple_winners)
+        : failed('Not available on the example poll')
     case 'open_poll_scores':
       return question.scores ? ok(question.scores) : failed('Results are not available yet')
     case 'open_poll_ballots':
