@@ -176,11 +176,24 @@ export function MultipleWinners({
   )
 }
 
-/** A weighted count as the page writes it: whole, or to one decimal place. */
-const figure = (n: number) => String(Math.round(n * 10) / 10)
+/** A weighted count as the page writes it: whole, or to `places` decimal places. */
+const figure = (n: number, places = 1) => String(Math.round(n * 10 ** places) / 10 ** places)
+
+/**
+ * The fewest decimal places (from one) at which a runoff's two sides read
+ * differently, so a close win is never written as "2.5 to 2.5" — which reads
+ * as a tie with no tie-break. The database rounds weighted counts to six
+ * places, so sides that differ do so by then.
+ */
+function placesApart(a: number, b: number) {
+  let places = 1
+  while (places < 6 && figure(a, places) === figure(b, places)) places++
+  return places
+}
 
 const weightedStars = (n: number) => `${figure(n)} ${n === 1 ? 'star' : 'stars'}`
-const weightedVotes = (n: number) => `${figure(n)} ${n === 1 ? 'vote' : 'votes'}`
+const weightedVotes = (n: number, places = 1) =>
+  `${figure(n, places)} ${n === 1 ? 'vote' : 'votes'}`
 
 function Spot({
   spot,
@@ -273,9 +286,11 @@ function decision(spot: RankingEntry) {
     )
   }
 
+  const places = placesApart(won, lost)
   return (
     <>
-      Preferred over <strong>{other}</strong> by {weightedVotes(won)} to {figure(lost)}.
+      Preferred over <strong>{other}</strong> by {weightedVotes(won, places)} to{' '}
+      {figure(lost, places)}.
     </>
   )
 }

@@ -201,6 +201,15 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   ])
   await page.keyboard.press('Escape')
   await expect(shares).toBeHidden()
+
+  // The Matrix's second spot is a close weighted runoff: written to one
+  // decimal place both sides would read 2.5, a tie with no tie-break.
+  await openMore()
+  await page.getByRole('menuitem', { name: 'Multiple winners' }).click()
+  const spots = page.getByRole('dialog', { name: 'Multiple winners' })
+  await expect(spots).toContainText('Preferred over Paddington 2 by 2.51 votes to 2.48.')
+  await page.keyboard.press('Escape')
+  await expect(spots).toBeHidden()
 })
 
 test('a finished poll goes from one skeleton straight to its results', async ({ page }) => {
