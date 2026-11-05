@@ -10,6 +10,7 @@ import {
   TITLE_MAX,
   VOTER_NAME_MAX,
 } from './limits'
+import { SCORING_ROWS_MAX } from './resultsRows'
 
 /**
  * That every number in `limits.ts` is the number the database actually
@@ -122,6 +123,13 @@ describe('the form and the database agree about', () => {
 
   test('how long a voter may name themselves', () => {
     expect(guard('open_poll_submit', 'length\\(v_name\\) >')).toBe(VOTER_NAME_MAX)
+  })
+
+  test('where the score round and the full ranking stop', () => {
+    // Not a limit the form enforces, but the same drift: the database cuts
+    // the tally and the ladder, and the browser words the cut and sizes its
+    // skeletons from its own copy.
+    expect(guard('poll_results_rows', 'select')).toBe(SCORING_ROWS_MAX)
   })
 
   test('how long a contact message and its reply address may be', () => {

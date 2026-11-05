@@ -133,7 +133,9 @@ begin
   raise notice '    ..  the tally took %', (clock_timestamp() - v_started)::interval(0);
 
   perform tests.assert_eq('the results page tallies all sixty',
-    jsonb_array_length(v_tally -> 'options'), 60);
+    (v_tally ->> 'option_count')::int, 60);
+  perform tests.assert_eq('and is sent the top ten of them',
+    jsonb_array_length(v_tally -> 'options'), 10);
 
   -- This is the assertion the whole case is built around: one tied group of
   -- sixty, which is the tie-break block's worst input and the one a calendar

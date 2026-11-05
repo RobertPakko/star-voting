@@ -10,7 +10,8 @@ import { use24HourTime } from '../lib/clock'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
 import { NameList } from './NameList'
 import { RankingSkeleton } from './Skeletons'
-import { stars, voters } from '../lib/plural'
+import { count, stars, voters } from '../lib/plural'
+import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import { splitAdvanced } from '../lib/tiebreak'
 
 /**
@@ -103,7 +104,9 @@ export function FullRanking({
     >
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          Every option in order, for when the winner falls through.{' '}
+          {results.option_count > SCORING_ROWS_MAX
+            ? `The top ${SCORING_ROWS_MAX} places, for when the winner falls through.`
+            : 'Every option in order, for when the winner falls through.'}{' '}
           <Anchor component={Link} to="/extensions?section=full-ranking" inherit>
             How it works
           </Anchor>
@@ -115,27 +118,37 @@ export function FullRanking({
           </Text>
         )}
 
-        {!error && !ranking && <RankingSkeleton places={results.options.length} />}
+        {!error && !ranking && (
+          <RankingSkeleton places={Math.min(results.option_count, SCORING_ROWS_MAX)} />
+        )}
 
-        {ranking && <Places ranking={relabelRanking(ranking, h24)} results={results} />}
+        {ranking && <Places ranking={relabelRanking(ranking, h24)} />}
+
+        {ranking && unplaced(ranking, results.option_count) > 0 && (
+          <Text size="sm" c="dimmed">
+            {count(unplaced(ranking, results.option_count), 'more option')} not placed.
+          </Text>
+        )}
       </Stack>
     </Modal>
   )
 }
 
-function Places({ ranking, results }: { ranking: RankingEntry[]; results: PollResults }) {
-  const nameById = new Map(results.options.map((o) => [o.id, o.name]))
+/** How many options the ladder stopped before reaching (`poll_results_rows()`). */
+const unplaced = (ranking: RankingEntry[], optionCount: number) =>
+  optionCount - ranking.reduce((sum, entry) => sum + entry.options.length, 0)
 
+function Places({ ranking }: { ranking: RankingEntry[] }) {
   return (
     <Stack gap="md">
       {ranking.map((entry) => (
-        <Place key={entry.place} entry={entry} nameById={nameById} />
+        <Place key={entry.place} entry={entry} />
       ))}
     </Stack>
   )
 }
 
-function Place({ entry, nameById }: { entry: RankingEntry; nameById: Map<string, string> }) {
+function Place({ entry }: { entry: RankingEntry }) {
   const total = entry.options[0].total_score
 
   return (
@@ -156,7 +169,7 @@ function Place({ entry, nameById }: { entry: RankingEntry; nameById: Map<string,
         </Group>
 
         <Text size="sm" c="dimmed">
-          {decision(entry, nameById)}
+          {decision(entry)}
         </Text>
 
         {entry.tiebreaks.map((tb, i) => (
@@ -170,8 +183,8 @@ function Place({ entry, nameById }: { entry: RankingEntry; nameById: Map<string,
 }
 
 /** How this place was settled, in one line. */
-function decision(entry: RankingEntry, nameById: Map<string, string>) {
-  const { runoff, finalists, options } = entry
+function decision(entry: RankingEntry) {
+  const { runoff, finalists, finalist_names, options } = entry
 
   if (!runoff || finalists.length < 2) {
     return 'The last option standing.'
@@ -184,7 +197,7 @@ function decision(entry: RankingEntry, nameById: Map<string, string>) {
   }
 
   const placed = options[0].id
-  const other = nameById.get(placed === finalists[0] ? finalists[1] : finalists[0]) ?? 'the other'
+  const other = (placed === finalists[0] ? finalist_names[1] : finalist_names[0]) ?? 'the other'
   const [won, lost] =
     placed === finalists[0]
       ? [runoff.prefers_a, runoff.prefers_b]

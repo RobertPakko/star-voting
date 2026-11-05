@@ -310,22 +310,44 @@ function TallyShape({ options }: { options?: number }) {
         <Bar kind="heading" width={68} />
         <Card withBorder p="sm">
           <Stack gap="xs">
-            {Array.from({ length: rows }, (_, i) => (
-              <div key={i}>
-                <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
-                  <Bar kind="line" width="35%" grow />
-                  <Bar kind="line" width={104} />
-                </Group>
-                {/* A Progress bar. */}
-                <Skeleton height={8} radius="md" />
-              </div>
-            ))}
-            {/* The "and N more" line past the cap. */}
-            {options !== undefined && options > SCORING_ROWS_MAX && <Bar kind="line" width="75%" />}
+            <ScoreRowsShape rows={rows} />
+            {/* The "top 10 of N" line and *All scores*, past the cap. */}
+            {options !== undefined && options > SCORING_ROWS_MAX && (
+              <Group justify="space-between" wrap="nowrap" gap="xs">
+                <Bar kind="line" width="45%" grow />
+                {/* A compact-sm button. */}
+                <Skeleton height={26} width={104} radius="sm" style={{ flex: 'none' }} />
+              </Group>
+            )}
           </Stack>
         </Card>
       </Stack>
     </Stack>
+  )
+}
+
+/** Score-round rows: a name and its stars over a bar. */
+function ScoreRowsShape({ rows }: { rows: number }) {
+  return Array.from({ length: rows }, (_, i) => (
+    <div key={i}>
+      <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
+        <Bar kind="line" width="35%" grow />
+        <Bar kind="line" width={104} />
+      </Group>
+      {/* A Progress bar. */}
+      <Skeleton height={8} radius="md" />
+    </div>
+  ))
+}
+
+/** Every option's score, while *All scores* reads them. Drawn a screen deep at most. */
+export function ScoresSkeleton({ rows }: { rows: number }) {
+  return (
+    <Loading>
+      <Stack gap="xs">
+        <ScoreRowsShape rows={Math.min(rows, RESULTS_ROWS_MAX)} />
+      </Stack>
+    </Loading>
   )
 }
 

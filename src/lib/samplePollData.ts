@@ -465,6 +465,68 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         question_position: 3,
       },
     ],
+    scores: [
+      {
+        id: '7300d521-7308-b1f4-d682-29f844ad20c5',
+        name: '2026-02-21T13:00:00-07:00',
+        total_score: 36,
+        average_score: 4,
+      },
+      {
+        id: 'a63b4c04-0d08-5a44-091b-68cc9f467905',
+        name: '2026-02-21T12:30:00-07:00',
+        total_score: 30,
+        average_score: 3.33,
+      },
+      {
+        id: '71a3c317-1111-21a0-4678-1e724f694c58',
+        name: '2026-02-21T10:00:00-07:00',
+        total_score: 26,
+        average_score: 2.89,
+      },
+      {
+        id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
+        name: '2026-02-21T11:00:00-07:00',
+        total_score: 25,
+        average_score: 2.78,
+      },
+      {
+        id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
+        name: '2026-02-21T11:30:00-07:00',
+        total_score: 25,
+        average_score: 2.78,
+      },
+      {
+        id: '72b623e7-4444-6197-3b84-77f30167d46b',
+        name: '2026-02-21T12:00:00-07:00',
+        total_score: 25,
+        average_score: 2.78,
+      },
+      {
+        id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+        name: '2026-02-21T09:00:00-07:00',
+        total_score: 21,
+        average_score: 2.33,
+      },
+      {
+        id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+        name: '2026-02-21T09:30:00-07:00',
+        total_score: 21,
+        average_score: 2.33,
+      },
+      {
+        id: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
+        name: '2026-02-21T10:30:00-07:00',
+        total_score: 21,
+        average_score: 2.33,
+      },
+      {
+        id: '8f21686a-ffc1-f4b2-b2d8-25756b49fc83',
+        name: '2026-02-20T18:00:00-07:00',
+        total_score: 17,
+        average_score: 1.89,
+      },
+    ],
     ballots: {
       ballots: [
         {
@@ -667,6 +729,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['7300d521-7308-b1f4-d682-29f844ad20c5', 'a63b4c04-0d08-5a44-091b-68cc9f467905'],
         tiebreaks: [],
+        finalist_names: ['2026-02-21T13:00:00-07:00', '2026-02-21T12:30:00-07:00'],
       },
       {
         place: 2,
@@ -687,6 +750,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['a63b4c04-0d08-5a44-091b-68cc9f467905', '71a3c317-1111-21a0-4678-1e724f694c58'],
         tiebreaks: [],
+        finalist_names: ['2026-02-21T12:30:00-07:00', '2026-02-21T10:00:00-07:00'],
       },
       {
         place: 3,
@@ -759,6 +823,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             resolved_by: 'random',
           },
         ],
+        finalist_names: ['2026-02-21T10:00:00-07:00', '2026-02-21T11:30:00-07:00'],
       },
       {
         place: 4,
@@ -840,6 +905,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             resolved_by: 'random',
           },
         ],
+        finalist_names: ['2026-02-21T11:30:00-07:00', '2026-02-21T12:00:00-07:00'],
       },
       {
         place: 6,
@@ -912,6 +978,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             resolved_by: 'random',
           },
         ],
+        finalist_names: ['2026-02-21T11:00:00-07:00', '2026-02-21T10:30:00-07:00'],
       },
       {
         place: 7,
@@ -993,6 +1060,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             resolved_by: 'random',
           },
         ],
+        finalist_names: ['2026-02-21T10:30:00-07:00', '2026-02-21T09:00:00-07:00'],
       },
       {
         place: 9,
@@ -1013,6 +1081,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['f48d56da-cb72-7c1d-9251-86d4bbf9b611', '8f21686a-ffc1-f4b2-b2d8-25756b49fc83'],
         tiebreaks: [],
+        finalist_names: ['2026-02-21T09:30:00-07:00', '2026-02-20T18:00:00-07:00'],
       },
       {
         place: 10,
@@ -1026,6 +1095,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['8f21686a-ffc1-f4b2-b2d8-25756b49fc83'],
         tiebreaks: [],
+        finalist_names: ['2026-02-20T18:00:00-07:00'],
       },
     ],
     results: {
@@ -1045,7 +1115,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           name: '2026-02-21T13:00:00-07:00',
           description: null,
           total_score: 36,
-          average_score: 4.0,
+          average_score: 4,
         },
         {
           id: 'a63b4c04-0d08-5a44-091b-68cc9f467905',
@@ -1116,6 +1186,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       winner_id: '7300d521-7308-b1f4-d682-29f844ad20c5',
       voter_count: 9,
       closed_early: false,
+      option_count: 10,
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
@@ -1220,6 +1291,44 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         id: 'sample-result-when',
         question_title: 'When are we meeting?',
         question_position: 3,
+      },
+    ],
+    scores: [
+      {
+        id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
+        name: 'Knives Out',
+        total_score: 33,
+        average_score: 3.67,
+      },
+      {
+        id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+        name: 'Paddington 2',
+        total_score: 26,
+        average_score: 2.89,
+      },
+      {
+        id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+        name: 'Spirited Away',
+        total_score: 26,
+        average_score: 2.89,
+      },
+      {
+        id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+        name: 'The Matrix',
+        total_score: 26,
+        average_score: 2.89,
+      },
+      {
+        id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
+        name: 'Mean Girls',
+        total_score: 12,
+        average_score: 1.33,
+      },
+      {
+        id: '39a0de7f-1759-b30e-263f-30c1cb117e16',
+        name: 'Honeyland',
+        total_score: 11,
+        average_score: 1.22,
       },
     ],
     ballots: {
@@ -1424,6 +1533,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             resolved_by: 'five_star_votes',
           },
         ],
+        finalist_names: ['Knives Out', 'Paddington 2'],
       },
       {
         place: 2,
@@ -1500,6 +1610,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             resolved_by: 'random',
           },
         ],
+        finalist_names: ['The Matrix', 'Paddington 2'],
       },
       {
         place: 3,
@@ -1525,6 +1636,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['240967c0-62e5-88a7-a662-5dc029b84eaf', '283438a5-4cf9-8a00-c399-cf9c72c9b2ac'],
         tiebreaks: [],
+        finalist_names: ['The Matrix', 'Spirited Away'],
       },
       {
         place: 5,
@@ -1545,6 +1657,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['b50cd426-947e-4697-2dbc-db6c26d1e385', '39a0de7f-1759-b30e-263f-30c1cb117e16'],
         tiebreaks: [],
+        finalist_names: ['Mean Girls', 'Honeyland'],
       },
       {
         place: 6,
@@ -1558,6 +1671,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['39a0de7f-1759-b30e-263f-30c1cb117e16'],
         tiebreaks: [],
+        finalist_names: ['Honeyland'],
       },
     ],
     results: {
@@ -1678,6 +1792,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       winner_id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
       voter_count: 9,
       closed_early: false,
+      option_count: 6,
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
@@ -1769,6 +1884,38 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         id: 'sample-result-when',
         question_title: 'When are we meeting?',
         question_position: 3,
+      },
+    ],
+    scores: [
+      {
+        id: 'd14066b2-1042-18f5-9a47-ce68843ef18c',
+        name: 'Taco bar',
+        total_score: 35,
+        average_score: 3.89,
+      },
+      {
+        id: '366ce86b-5939-fbb4-8407-df63fd2c4aca',
+        name: 'Two big pizzas',
+        total_score: 30,
+        average_score: 3.33,
+      },
+      {
+        id: '33b51896-f06b-3ce0-c3e8-6299859b60ce',
+        name: 'Thai delivery',
+        total_score: 22,
+        average_score: 2.44,
+      },
+      {
+        id: 'b5b174ab-85ae-0fe4-da06-05c3e04186e0',
+        name: 'Everyone brings a dish',
+        total_score: 18,
+        average_score: 2,
+      },
+      {
+        id: '2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b',
+        name: 'Just snacks',
+        total_score: 9,
+        average_score: 1,
       },
     ],
     ballots: {
@@ -1908,6 +2055,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['d14066b2-1042-18f5-9a47-ce68843ef18c', '366ce86b-5939-fbb4-8407-df63fd2c4aca'],
         tiebreaks: [],
+        finalist_names: ['Taco bar', 'Two big pizzas'],
       },
       {
         place: 2,
@@ -1928,6 +2076,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['d14066b2-1042-18f5-9a47-ce68843ef18c', '33b51896-f06b-3ce0-c3e8-6299859b60ce'],
         tiebreaks: [],
+        finalist_names: ['Taco bar', 'Thai delivery'],
       },
       {
         place: 3,
@@ -1948,6 +2097,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['33b51896-f06b-3ce0-c3e8-6299859b60ce', 'b5b174ab-85ae-0fe4-da06-05c3e04186e0'],
         tiebreaks: [],
+        finalist_names: ['Thai delivery', 'Everyone brings a dish'],
       },
       {
         place: 4,
@@ -1968,6 +2118,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['b5b174ab-85ae-0fe4-da06-05c3e04186e0', '2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b'],
         tiebreaks: [],
+        finalist_names: ['Everyone brings a dish', 'Just snacks'],
       },
       {
         place: 5,
@@ -1981,6 +2132,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         ],
         finalists: ['2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b'],
         tiebreaks: [],
+        finalist_names: ['Just snacks'],
       },
     ],
     results: {
@@ -2021,14 +2173,14 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           name: 'Everyone brings a dish',
           description: null,
           total_score: 18,
-          average_score: 2.0,
+          average_score: 2,
         },
         {
           id: '2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b',
           name: 'Just snacks',
           description: null,
           total_score: 9,
-          average_score: 1.0,
+          average_score: 1,
         },
       ],
       finalists: ['d14066b2-1042-18f5-9a47-ce68843ef18c', '366ce86b-5939-fbb4-8407-df63fd2c4aca'],
@@ -2036,6 +2188,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       winner_id: '366ce86b-5939-fbb4-8407-df63fd2c4aca',
       voter_count: 9,
       closed_early: false,
+      option_count: 5,
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,

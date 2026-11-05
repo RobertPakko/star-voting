@@ -3,6 +3,7 @@ import {
   ActionIcon,
   Badge,
   Box,
+  Button,
   Card,
   Divider,
   Group,
@@ -15,7 +16,7 @@ import { PieChart } from '@mantine/charts'
 import { useReducedMotion } from '@mantine/hooks'
 // Imported here so the chart CSS ships in this lazy chunk.
 import '@mantine/charts/styles.css'
-import { InfoIcon, WarningIcon } from '@phosphor-icons/react'
+import { InfoIcon, ListBulletsIcon, WarningIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { badgeColor } from '../lib/badgeColors'
@@ -33,6 +34,7 @@ import type {
   Tiebreak,
 } from '../lib/types'
 import { AddToCalendar } from './AddToCalendar'
+import { AllScores } from './AllScores'
 import { CoinFlip, type Finalist } from './CoinFlip'
 import { MoreResults } from './MoreResults'
 import { NameList } from './NameList'
@@ -41,7 +43,7 @@ import { Reveal } from './Reveal'
 import { RoundCard } from './RoundCard'
 import { ResultsSkeleton } from './Skeletons'
 import { count, stars, voters } from '../lib/plural'
-import { capRows, RESULTS_ROWS_MAX, SCORING_ROWS_MAX } from '../lib/resultsRows'
+import { capRows, RESULTS_ROWS_MAX } from '../lib/resultsRows'
 import { splitAdvanced } from '../lib/tiebreak'
 import classes from './Results.module.css'
 
@@ -72,6 +74,7 @@ export function Results({
   // Bars render at zero, then grow. Stays true so a live update moves bars
   // from where they were instead of replaying the reveal.
   const [grown, setGrown] = useState(false)
+  const [allScoresOpen, setAllScoresOpen] = useState(false)
 
   useEffect(() => {
     if (!results) return
@@ -125,8 +128,9 @@ export function Results({
   const shown = relabelResults(results, h24)
   const nameById = new Map(shown.options.map((o) => [o.id, o.name]))
   const maxScore = Math.max(1, ...shown.options.map((o) => o.total_score))
-  // Capped for the page; the full ranking still gets every option.
-  const scoreRound = capRows(shown.options, SCORING_ROWS_MAX)
+  // The database sends the top rows only (`poll_results_rows()`); the rest
+  // are behind *All scores*.
+  const unshown = shown.option_count - shown.options.length
 
   // A calendar event from the *raw* option name, which is the actual instant.
   const startById = new Map(results.options.map((o) => [o.id, o.name]))
@@ -238,7 +242,7 @@ export function Results({
           tieBreakLabel={shown.tiebreaks.length > 1 ? 'tie-breaks' : 'tie-break'}
         >
           <Stack gap="xs">
-            {scoreRound.rows.map((o, index) => (
+            {shown.options.map((o, index) => (
               <div key={o.id}>
                 <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
                   <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
@@ -262,11 +266,29 @@ export function Results({
                 />
               </div>
             ))}
-            {scoreRound.hidden > 0 && (
-              <Text size="sm" c="dimmed">
-                The top {scoreRound.rows.length} of {shown.options.length} options. Open the full
-                ranking above to see them all.
-              </Text>
+            {unshown > 0 && (
+              <Group justify="space-between" wrap="nowrap" gap="xs">
+                <Text size="sm" c="dimmed">
+                  The top {shown.options.length} of {shown.option_count} options.
+                </Text>
+                <Button
+                  variant="default"
+                  size="compact-sm"
+                  leftSection={<ListBulletsIcon size={14} aria-hidden />}
+                  onClick={() => setAllScoresOpen(true)}
+                  style={{ flex: 'none' }}
+                >
+                  All scores
+                </Button>
+                {/* Portalled, so it takes no room in the card. */}
+                <AllScores
+                  source={source}
+                  optionCount={shown.option_count}
+                  finalists={shown.finalists}
+                  opened={allScoresOpen}
+                  onClose={() => setAllScoresOpen(false)}
+                />
+              </Group>
             )}
           </Stack>
         </RoundCard>

@@ -433,6 +433,7 @@ export type Database = {
       forget_push_subscription: { Args: { p_endpoint: string }; Returns: undefined }
       get_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
       get_poll_results: { Args: { p_poll_id: string }; Returns: Json }
+      get_poll_scores: { Args: { p_poll_id: string }; Returns: Json }
       insert_option: {
         Args: {
           p_description: string
@@ -524,6 +525,7 @@ export type Database = {
       open_poll_group: { Args: { p_poll_id: string }; Returns: Json }
       open_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
       open_poll_results: { Args: { p_poll_id: string }; Returns: Json }
+      open_poll_scores: { Args: { p_poll_id: string }; Returns: Json }
       open_poll_revise: {
         Args: {
           p_poll_id: string
@@ -673,7 +675,9 @@ export type Database = {
         Args: { p_poll: Database['public']['Tables']['polls']['Row'] }
         Returns: boolean
       }
+      poll_results_rows: { Args: never; Returns: number }
       poll_retention_window: { Args: never; Returns: string }
+      poll_scores: { Args: { p_poll_id: string }; Returns: Json }
       poll_status: {
         Args: { p_poll_id: string }
         Returns: {

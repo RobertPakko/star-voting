@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners — CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners — AllScores, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
                  SmoothHeight, PollCards), the ways back (BackToHome, BackToList), the home page's
@@ -3166,7 +3166,7 @@ It is behind a button; a scannable code is too big to sit in the block.
 ### Results and the full ranking
 
 The results show the winner, then the runoff between the two finalists, then
-every option's score-round total, each round with its tie-break if it needed
+the top ten score-round totals, each round with its tie-break if it needed
 one. On a poll that publishes its ballots, the ballot grid follows (with
 column totals); on an invite poll that does not, the reader's own ballot.
 The participation card is last and is where turnout is stated; the results
@@ -3185,7 +3185,7 @@ buttons share the name's line when it is short and drop to a row of their own
 otherwise; `TallyShape` draws *More results* beside the name. A
 round's *Show tie-break* stays over its round, since it slides that card.
 
-**Full ranking** is the whole field in placed order, for when the winner
+**Full ranking** is the top ten places (see below), for when the winner
 falls through. STAR names only a winner, so the rest comes from running it
 again on what is left: the winner steps out, the two highest remaining scorers
 go to a runoff for the next place, and so on. Score totals are absolute, so
@@ -3236,23 +3236,36 @@ The modal states two consequences:
   pairings. Where two met, the loser is placed lower; elsewhere an option can
   be preferred to one placed above it. Only first place is STAR's own output.
 
-#### The page stops at ten rows, or twenty
+#### The results stop at ten, and every score is a button away
 
-**The scoring round shows ten rows** ([`SCORING_ROWS_MAX`](src/lib/resultsRows.ts)),
-since a time poll can have hundreds of options and every reader scrolls past
-this list to reach the rest. It cannot lose a finalist: `poll_tally` orders by
-total and lifts a tie-break winner above those it tied with, so the finalists
-are the first two rows. **The tie-break's lists stop at twenty**
+**The database sends ten rows of the scoring round and ten places of the
+ranking** (`poll_results_rows()`), since a time poll can have hundreds of
+options, every reader scrolls past the score list to reach the rest, and every
+place in the ranking is a STAR round over every ballot. `poll_tally` carries
+the field's size as `option_count`, which decides the wording and which tools
+*More results* offers. `poll_ranking` stops once ten places are filled (a tied
+tenth place is kept whole), and names each place's runoff opponent itself
+(`finalist_names`), since that option may be below both cuts.
+`SCORING_ROWS_MAX` is the browser's copy of the number, for skeletons and
+wording; `limits.test.ts` holds the two together.
+
+The cut cannot lose a finalist: `poll_tally` orders by total and lifts a
+tie-break winner above those it tied with, so the finalists are the first two
+rows. It also bounds the bars' 40ms stagger (`Results.module.css`).
+
+**All scores** ([`AllScores`](src/components/AllScores.tsx)) sits under a
+cut score round, beside *The top 10 of N options*, and opens every option's
+total and average in a modal. It is its own request, made on the press
+(`get_poll_scores` / `open_poll_scores`, via `poll_scores`), gated exactly as
+the tally is. It is plain sums — no tie-breaks, no runoff — ordered by total
+then name; the browser lifts the finalists above options they tied with, from
+the tally it holds, so the two lists agree. `47_results_stop_at_ten` covers
+the cuts and the gate.
+
+**The tie-break's lists stop at twenty** in the browser
 ([`RESULTS_ROWS_MAX`](src/lib/resultsRows.ts)), as does the sentence naming
-who tied (`NameList`'s `max`, "and 28 others"). `capRows` cuts and `count`
-words the remainder; `TallyShape` draws the same ten. The full ranking is
-always available on any poll long enough to be cut, and the line under a cut
-list says so.
-
-**The cut is in the browser, not in `poll_tally`**: `FullRanking` reads every
-option's name out of the tally, and the option count decides whether to offer
-the button. The cut also bounds the bars' 40ms stagger
-(`Results.module.css`).
+who tied (`NameList`'s `max`, "and 28 others"); they come whole from
+`star_round`. `capRows` cuts and `count` words the remainder.
 
 #### The runoff comes first
 
@@ -3346,7 +3359,8 @@ both ballots are shown. Neither exists in Supabase: both are answered from
 `scripts/sample-poll.sh` generates by building the throwaway database, making
 the poll **through the app's own functions** (`create_poll_group`,
 `open_poll_submit`, `close_poll`), and recording what `open_poll_view`,
-`open_poll_results`, `open_poll_ranking` and `open_poll_ballots` answer.
+`open_poll_results`, `open_poll_ranking`, `open_poll_scores` and
+`open_poll_ballots` answer.
 
 - **Nothing about the sample is computed in the browser.** Every number came
   from `star_round()` and `poll_ranking()`. To change what it shows, change

@@ -634,8 +634,19 @@ export function relabelResults<T extends Labelled>(results: T, h24: boolean): T 
   }
 }
 
-export function relabelRanking<T extends Labelled>(ranking: T[], h24: boolean): T[] {
-  return ranking.map((place) => relabelResults(place, h24))
+export function relabelRanking<T extends Labelled & { finalist_names: string[] }>(
+  ranking: T[],
+  h24: boolean,
+): T[] {
+  return ranking.map((place) => ({
+    ...relabelResults(place, h24),
+    finalist_names: place.finalist_names.map((name) => formatWindow(name, h24)),
+  }))
+}
+
+/** A plain list of scores (*All scores*), relabelled the same way. */
+export function relabelScores<T extends { name: string }>(scores: T[], h24: boolean): T[] {
+  return scores.map((option) => ({ ...option, name: formatWindow(option.name, h24) }))
 }
 
 export function relabelSheet<T extends { options: { name: string }[] }>(sheet: T, h24: boolean): T {

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type {
   BallotSheet,
   OpenPollView,
+  OptionScore,
   PollRead,
   PollResults,
   PollStatus,
@@ -241,6 +242,7 @@ export const pollResultsSchema = z.object({
       average_score: z.number(),
     }),
   ),
+  option_count: z.number(),
   finalists: z.array(z.string()),
   tie: z.boolean(),
   tiebreaks: z.array(tiebreak),
@@ -259,10 +261,20 @@ export const rankingSchema = z.array(
     place: z.number(),
     options: z.array(z.object({ id: z.string(), name: z.string(), total_score: z.number() })),
     finalists: z.array(z.string()),
+    finalist_names: z.array(z.string()),
     runoff: runoff.nullable(),
     tiebreaks: z.array(tiebreak),
   }),
 ) satisfies z.ZodType<RankingEntry[]>
+
+export const optionScoresSchema = z.array(
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    total_score: z.number(),
+    average_score: z.number(),
+  }),
+) satisfies z.ZodType<OptionScore[]>
 
 const ballotSheetSchema = z.object({
   voters_named: z.boolean(),

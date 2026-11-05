@@ -20,9 +20,9 @@ type Tool = 'ranking' | 'multiple' | 'fractional'
  * more than one winner is choosing both; how to split between two is still a
  * question.
  */
-const offersFullRanking = (results: PollResults) => results.options.length >= 3
-const offersMultipleWinners = (results: PollResults) => results.options.length >= 3
-const offersFractionalWinners = (results: PollResults) => results.options.length >= 2
+const offersFullRanking = (results: PollResults) => results.option_count >= 3
+const offersMultipleWinners = (results: PollResults) => results.option_count >= 3
+const offersFractionalWinners = (results: PollResults) => results.option_count >= 2
 
 /**
  * The other answers the same ballots can give, as one menu in the result's

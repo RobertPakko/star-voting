@@ -263,6 +263,14 @@ export interface OpenPollView {
   confirmations: string[] | null
 }
 
+/** One option's score, from `get_poll_scores` / `open_poll_scores` (*All scores*). */
+export interface OptionScore {
+  id: string
+  name: string
+  total_score: number
+  average_score: number
+}
+
 interface ResultOption {
   id: string
   name: string
@@ -332,7 +340,8 @@ export interface Runoff {
 
 /**
  * One place in the full ranking, by sequential elimination (only place 1 is
- * STAR proper). Fetched separately by `FullRanking`, since it is expensive.
+ * STAR proper). Fetched separately by `FullRanking`, since it is expensive,
+ * and stopped by the database after the top places.
  */
 export interface RankingEntry {
   place: number
@@ -340,6 +349,11 @@ export interface RankingEntry {
   options: { id: string; name: string; total_score: number }[]
   /** One id when nothing else was left. */
   finalists: string[]
+  /**
+   * The finalists' names, in the same order. The option a place beat may sit
+   * below where the ladder stops, so it is named here rather than looked up.
+   */
+  finalist_names: string[]
   /** Null for the last option standing. */
   runoff: Runoff | null
   /** Ties resolved while choosing this place's finalists only. */
@@ -347,7 +361,10 @@ export interface RankingEntry {
 }
 
 export interface PollResults {
+  /** The score round's top rows only (`poll_results_rows()`); see `option_count`. */
   options: ResultOption[]
+  /** How many options the poll has, of which `options` is the top. */
+  option_count: number
   finalists: string[]
   /** Whether any tie-break was needed. */
   tie: boolean

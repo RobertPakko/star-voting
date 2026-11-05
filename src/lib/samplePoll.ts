@@ -5,6 +5,7 @@ import type {
   BallotSheet,
   OpenGroupQuestion,
   OpenPollView,
+  OptionScore,
   PollResults,
   RankingEntry,
 } from './types'
@@ -41,9 +42,10 @@ import type {
 interface SampleQuestion {
   view: OpenPollView
   group: OpenGroupQuestion[]
-  /** The three a finished poll has and an open one does not. */
+  /** The four a finished poll has and an open one does not. */
   results?: PollResults
   ranking?: RankingEntry[]
+  scores?: OptionScore[]
   ballots?: BallotSheet
 }
 
@@ -149,6 +151,8 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
       return question.results ? ok(question.results) : failed('Results are not available yet')
     case 'open_poll_ranking':
       return question.ranking ? ok(question.ranking) : failed('Results are not available yet')
+    case 'open_poll_scores':
+      return question.scores ? ok(question.scores) : failed('Results are not available yet')
     case 'open_poll_ballots':
       return question.ballots
         ? ok(question.ballots)
