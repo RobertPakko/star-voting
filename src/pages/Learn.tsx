@@ -18,7 +18,7 @@ import {
   VisuallyHidden,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { ArrowDownIcon, CaretRightIcon, HourglassIcon } from '@phosphor-icons/react'
+import { ArrowDownIcon, CaretRightIcon, HourglassIcon, UsersThreeIcon } from '@phosphor-icons/react'
 import { RoundCard } from '../components/RoundCard'
 import { SITE_FEATURES } from '../components/siteFeatures'
 import { usePageTitle } from '../lib/pageTitle'
@@ -254,8 +254,8 @@ export function StarTies() {
  * banner's *More results* menu: *Full ranking*, *Multiple winners* and
  * *Fractional winners*. Each card carries on with `/star`'s six friends, so the page
  * restates their ballots first for a reader who arrived from a result.
- * *Sequel polls* and *Option assignment* are not built yet, so their cards
- * say so and work no example.
+ * *Sequel polls*, *Option assignment* and *Group formation* are not built
+ * yet, so their cards say so and work no example.
  *
  * `?section=` opens the page at one card (`EXTENSIONS`), for the result's
  * modals, whose reader has no use for the rest. A layout effect, so it runs
@@ -550,6 +550,53 @@ export function StarExtensions() {
           </Stack>
         </RoundCard>
       </Box>
+
+      <Box id={EXTENSIONS.groupFormation} className={classes.target}>
+        <RoundCard title="Group formation">
+          <Stack gap="sm">
+            <Alert
+              variant="light"
+              icon={<HourglassIcon size={20} aria-hidden />}
+              title="Coming soon"
+            >
+              <Text size="sm">
+                Group formation isn&rsquo;t available yet. This is how it will work.
+              </Text>
+            </Alert>
+            <Alert
+              variant="light"
+              color="gray"
+              icon={<UsersThreeIcon size={20} aria-hidden />}
+              title="Additional requirement"
+            >
+              <Text size="sm">The set of options is the same as the set of voters.</Text>
+            </Alert>
+            <Text>
+              Sometimes a group needs to split into smaller groups: teams for a project, tables at a
+              dinner, or rooms on a trip. When everyone rates everyone else,{' '}
+              <strong>Group formation</strong> uses those ratings to put people with the people they
+              most want to be with:
+            </Text>
+            <List type="ordered" spacing={4} withPadding>
+              <List.Item>
+                Every voter rates every other voter, with more stars for the people they would
+                rather be grouped with.
+              </List.Item>
+              <List.Item>
+                Every way of splitting the voters into groups of the chosen size is considered.
+              </List.Item>
+              <List.Item>
+                The split chosen is the one where the stars each voter gave the others in their own
+                group add up to the most.
+              </List.Item>
+            </List>
+            <Text>
+              Because the ratings go both ways, two people who rate each other highly are counted
+              twice over, so mutual friends are kept together before one-sided ones.
+            </Text>
+          </Stack>
+        </RoundCard>
+      </Box>
     </Stack>
   )
 }
@@ -789,6 +836,7 @@ const EXTENSIONS = {
   sequelPolls: 'sequel-polls',
   fractionalWinners: 'fractional-winners',
   optionAssignment: 'option-assignment',
+  groupFormation: 'group-formation',
 }
 
 /**
