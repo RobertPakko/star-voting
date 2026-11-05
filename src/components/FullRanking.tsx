@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
-import { ListNumbersIcon } from '@phosphor-icons/react'
-import { useDisclosure } from '@mantine/hooks'
+import { Anchor, Badge, Group, Modal, Stack, Text } from '@mantine/core'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
@@ -22,8 +21,8 @@ import { splitAdvanced } from '../lib/tiebreak'
 type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
 
 /**
- * The whole field in placed order, behind a button in the result's
- * banner.
+ * The whole field in placed order, opened from the result's *More results*
+ * menu (`MoreResults`).
  *
  * Kept out of the results page proper because most polls only ever need
  * their winner; but "who do we go with if the winner falls through" is a real
@@ -46,12 +45,15 @@ type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: 
 export function FullRanking({
   source,
   results,
+  opened,
+  onClose,
 }: {
   source: RankingSource
   /** Already relabelled by Results on a time poll; see relabelResults. */
   results: PollResults
+  opened: boolean
+  onClose: () => void
 }) {
-  const [opened, modal] = useDisclosure(false)
   const h24 = use24HourTime()
 
   // Flattened to primitives so the dependency list is complete without
@@ -91,49 +93,33 @@ export function FullRanking({
     }
   }, [opened, kind, key])
 
-  // With two options the ranking is the winner and the option it beat, both
-  // already on screen; with one there is nothing to order. Decided from the
-  // options the tally already carries, so the button never waits on a
-  // request to find out whether it should exist.
-  if (results.options.length < 3) return null
-
   return (
-    <>
-      <Button
-        variant="default"
-        size="compact-sm"
-        onClick={modal.open}
-        leftSection={<ListNumbersIcon size={16} aria-hidden />}
-      >
-        Full ranking
-      </Button>
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      size="lg"
+      centered
+      title={<Text fw={600}>Full ranking</Text>}
+    >
+      <Stack gap="md">
+        <Text size="sm" c="dimmed">
+          Every option in order, for when the winner falls through.{' '}
+          <Anchor component={Link} to="/extensions?section=full-ranking" inherit>
+            How it works
+          </Anchor>
+        </Text>
 
-      <Modal
-        opened={opened}
-        onClose={modal.close}
-        size="lg"
-        centered
-        title={<Text fw={600}>Full ranking</Text>}
-      >
-        <Stack gap="md">
-          <Text size="sm" c="dimmed">
-            Who to go with if the winner falls through. STAR names one winner, so to order the rest
-            it runs again on the options left: the winner steps aside, the two highest scorers
-            remaining go to a runoff for the next place, and so on down the list.
+        {error && (
+          <Text role="alert" c="red" size="sm">
+            {error}
           </Text>
+        )}
 
-          {error && (
-            <Text role="alert" c="red" size="sm">
-              {error}
-            </Text>
-          )}
+        {!error && !ranking && <RankingSkeleton places={results.options.length} />}
 
-          {!error && !ranking && <RankingSkeleton places={results.options.length} />}
-
-          {ranking && <Places ranking={relabelRanking(ranking, h24)} results={results} />}
-        </Stack>
-      </Modal>
-    </>
+        {ranking && <Places ranking={relabelRanking(ranking, h24)} results={results} />}
+      </Stack>
+    </Modal>
   )
 }
 

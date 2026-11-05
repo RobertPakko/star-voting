@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, FullRanking, MultipleWinners, CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners — CoinFlip),
                  the collecting stage (CollectOptions, TimeList), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
                  SmoothHeight, PollCards), the ways back (BackToHome, BackToList), the home page's
@@ -437,7 +437,7 @@ there). Every test runs at a desktop size and a phone size.
 **It needs no database.** The Supabase address it is built with is a closed
 port, and `e2e/fixtures.ts` fails any test whose page asks it anything, logs
 an error, or throws. What it can reach: the home page, the sign-in screen, the
-three explainer pages, the install guide, the intro, and the sample poll — which is
+five explainer pages, the install guide, the intro, and the sample poll — which is
 answered from a file and covers `PublicPoll`, both ballots, the question
 strip, auto-advance, changing a vote and the results. **Not covered:**
 anything behind an account or a write — the poll list, the create form,
@@ -1543,8 +1543,9 @@ account. About fifteen minutes a shape at 60fps (`--fps 30` halves it).
 
 `/` is the front door for everybody, signed in or not: **Better group
 decisions** over *using STAR voting*, a ballot being scored, one sentence, and
-twelve tiles in pairs — the intro and a new poll, signing in (or out) and the
-reader's polls, what STAR is and why use it, the sample poll and its result,
+fourteen tiles in pairs — the intro and a new poll, signing in (or out) and the
+reader's polls, the sample poll and its result, what STAR is and why use it,
+its ties and its extensions,
 installing the app (the code, once it is installed) and the features, contact
 and donate. [`pages/Home.tsx`](src/pages/Home.tsx)
 is the page.
@@ -1579,10 +1580,13 @@ is the page.
   1280×600 stage scaled to its box; it stops while out of sight, and under
   reduced motion it is one still frame of a filled-in ballot. Decorative
   (`aria-hidden`): the sentence under it says what it shows.
-- **The explainers are three pages** — `/star`, `/why-star`, `/features` —
-  in [`pages/Learn.tsx`](src/pages/Learn.tsx), one lazy chunk. The first two
-  are drawn as the results page is, a heading over each card, and work an
-  example election through emoji tables computed from its ratings. *App
+- **The explainers are five pages** — `/star`, `/ties`, `/extensions`,
+  `/why-star`, `/features` — in [`pages/Learn.tsx`](src/pages/Learn.tsx), one
+  lazy chunk. `/star`, `/extensions` and `/why-star` are drawn as the results
+  page is, a heading over each card, and work an example election through
+  emoji tables computed from its ratings. `/extensions` restates `/star`'s
+  ballots before carrying on with them, since its readers mostly arrive from a
+  result's modal (`?section=` opens it at one card). *App
   features* links the install guide.
 
 ## The donate page
@@ -3169,10 +3173,16 @@ The participation card is last and is where turnout is stated; the results
 say only that voting was closed early, when it was.
 
 **The answer's banner carries what can be done with it** (`Banner` in
-`Results.tsx`): **Full ranking** and **Multiple winners** (three or more
-options), then *Add to calendar* under a time poll's winner or *Flip a coin*
-under *No winner*. The buttons share the name's line when it is short and drop
-to a row of their own otherwise; `TallyShape` draws them on their own row. A
+`Results.tsx`): **More results**, one menu
+([`MoreResults`](src/components/MoreResults.tsx)) holding **Full ranking**
+and **Multiple winners** (three or more options) and **Fractional winners**
+(two or more), each opening a modal; then *Add to calendar* under a time
+poll's winner or *Flip a coin* under *No winner*. One menu rather than a
+button each keeps the banner to the name and a control or two. **The modals
+are short**: what the tool is for and when to use it, with *How it works*
+linking to its card on `/extensions`, where the explaining is done. The
+buttons share the name's line when it is short and drop to a row of their own
+otherwise; `TallyShape` draws *More results* beside the name. A
 round's *Show tie-break* stays over its round, since it slides that card.
 
 **Full ranking** is the whole field in placed order, for when the winner
@@ -3191,9 +3201,19 @@ spot. `n` winners are the top `n`, so no number of winners is asked for and
 one more never changes the earlier ones; a runoff on every spot keeps the
 first spot the single-winner STAR result. It is a placeholder modal for now
 (`MultipleWinners.tsx`); [`multi-winner-todo.md`](multi-winner-todo.md) is
-the specification for the count. `/star` explains both on one example,
+the specification for the count. `/extensions` explains both on one example,
 computed in `Learn.tsx` (`rankingOf`, `spotsOf`), where the two methods'
 second places differ.
+
+**Fractional winners** is for a choice that can be split (a budget, a run of
+meetings): every option gets a share, chosen to maximise the Nash welfare —
+the product of every voter's average stars under the shares. Multiplying is
+what makes it proportional: voters in groups that each like only their own
+option get that option a share the size of the group, and shares that leave
+anybody with nothing score zero. Offered from two options, since how to split
+between two is still a question. A placeholder modal for now
+(`FractionalWinners.tsx`); `/extensions` works it on the same example
+(`sharesOf`).
 
 **It is a separate request, made when the button is pressed**
 (`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the
@@ -3263,7 +3283,7 @@ stylesheet is imported in `Results.tsx`, so ballots never fetch it.
 
 ### Tie-breaks
 
-Documented for readers on [`/star`](src/pages/Learn.tsx) and implemented in
+Documented for readers on [`/ties`](src/pages/Learn.tsx) and implemented in
 the migrations. A score-round tie between **two** options goes to the one more
 voters preferred head-to-head, then the one with more five-star ballots, then
 random (by id); a tie of **three or more** goes straight to five-star counts,
@@ -3271,7 +3291,7 @@ then random. These are the STAR Voting project's published rules, as
 [BetterVoting](https://docs.bettervoting.com/help/ties.html) runs them. A
 runoff tie goes to the higher total score, then to five-star counts; if still
 level, there is no winner and the app reports the tie. **Change a rule in the
-SQL, *What is STAR?* and `test/sql/cases/` together.**
+SQL, *Ties in STAR* and `test/sql/cases/` together.**
 
 Head-to-head is not tried on ties of three or more: a round-robin is quadratic
 in the tied group (time polls tie dozens of windows) and hard for readers to

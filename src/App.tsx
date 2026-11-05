@@ -29,6 +29,10 @@ import { useLaunchRoutes } from './lib/launch'
  */
 const CreatePoll = lazy(() => import('./pages/CreatePoll').then((m) => ({ default: m.CreatePoll })))
 const WhatIsStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhatIsStar })))
+const StarTies = lazy(() => import('./pages/Learn').then((m) => ({ default: m.StarTies })))
+const StarExtensions = lazy(() =>
+  import('./pages/Learn').then((m) => ({ default: m.StarExtensions })),
+)
 const WhyStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhyStar })))
 const Features = lazy(() => import('./pages/Learn').then((m) => ({ default: m.Features })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
@@ -96,6 +100,22 @@ function App() {
             element={
               <Suspense fallback={<LearnSkeleton />}>
                 <WhatIsStar />
+              </Suspense>
+            }
+          />
+          <Route
+            path="ties"
+            element={
+              <Suspense fallback={<LearnSkeleton />}>
+                <StarTies />
+              </Suspense>
+            }
+          />
+          <Route
+            path="extensions"
+            element={
+              <Suspense fallback={<LearnSkeleton />}>
+                <StarExtensions />
               </Suspense>
             }
           />

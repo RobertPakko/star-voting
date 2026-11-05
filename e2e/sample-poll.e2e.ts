@@ -141,7 +141,24 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   await expect(rounds).toHaveText(['Runoff', 'Scoring'])
   await expect(page.getByRole('heading', { name: 'Ballots' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Full ranking' }).click()
+  // The other answers are one menu in the winner's banner.
+  const more = page.getByRole('button', { name: 'More results' })
+  // Clicked only once the dropdown has finished growing in, since an item
+  // still moving never counts as stable to click.
+  const openMore = async () => {
+    await more.click()
+    await page.waitForTimeout(300)
+  }
+  await openMore()
+  // Not run through axe while open: Mantine puts a focusable presentation
+  // div of its own at the head of every menu, which axe reads as a menu
+  // holding something other than items.
+  await expect(page.getByRole('menuitem')).toHaveText([
+    'Full ranking',
+    'Multiple winners',
+    'Fractional winners',
+  ])
+  await page.getByRole('menuitem', { name: 'Full ranking' }).click()
   const ranking = page.getByRole('dialog', { name: 'Full ranking' })
   await expect(ranking).toBeVisible()
   // Every option placed, the last included: the ranking is the whole field.
@@ -151,14 +168,17 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   await page.keyboard.press('Escape')
   await expect(ranking).toBeHidden()
 
-  // Beside it in the winner's banner, for now a modal that says what it will do.
-  await page.getByRole('button', { name: 'Multiple winners' }).click()
-  const winners = page.getByRole('dialog', { name: 'Multiple winners' })
-  await expect(winners).toBeVisible()
-  await page.waitForTimeout(300)
-  await expectAccessible(page, 'the multiple winners placeholder')
-  await page.keyboard.press('Escape')
-  await expect(winners).toBeHidden()
+  // The other two, for now modals that say what they will do.
+  for (const name of ['Multiple winners', 'Fractional winners']) {
+    await openMore()
+    await page.getByRole('menuitem', { name }).click()
+    const dialog = page.getByRole('dialog', { name })
+    await expect(dialog).toBeVisible()
+    await page.waitForTimeout(300)
+    await expectAccessible(page, `the ${name.toLowerCase()} placeholder`)
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+  }
 })
 
 test('a finished poll goes from one skeleton straight to its results', async ({ page }) => {

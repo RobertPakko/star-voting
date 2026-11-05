@@ -9,6 +9,8 @@ const PAGES: { path: string; title: string; name: string }[] = [
   { path: '#/', title: 'ChoiceLab', name: 'the home page' },
   { path: '#/sign-in', title: 'Sign in', name: 'the sign-in screen' },
   { path: '#/star', title: 'What is STAR?', name: 'What is STAR?' },
+  { path: '#/ties', title: 'Ties in STAR', name: 'Ties in STAR' },
+  { path: '#/extensions', title: 'STAR extensions', name: 'STAR extensions' },
   { path: '#/why-star', title: 'Why use STAR?', name: 'Why use STAR?' },
   { path: '#/features', title: 'App features', name: 'App features' },
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
@@ -70,7 +72,7 @@ test.describe('the home page', () => {
       page.getByRole('heading', { name: 'Better group decisions', level: 1 }),
     ).toBeVisible()
     const tiles = page.getByRole('main').locator('a, button')
-    await expect(tiles).toHaveCount(12)
+    await expect(tiles).toHaveCount(14)
     const tops = await tiles.evaluateAll((els) =>
       els.map((el) => Math.round(el.getBoundingClientRect().top)),
     )
@@ -85,6 +87,8 @@ test.describe('the home page', () => {
   test('is where the logo goes, and every page leads back to it', async ({ page }) => {
     for (const path of [
       '#/star',
+      '#/ties',
+      '#/extensions',
       '#/why-star',
       '#/features',
       '#/contact',

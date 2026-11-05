@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Collapse,
-  Divider,
   Group,
   Image,
   List,
@@ -27,7 +26,8 @@ import winnerDistribution from '../assets/why-star/winner-distribution.webp'
 import classes from './Learn.module.css'
 
 /**
- * The three pages that explain: what STAR voting is (`/star`), why use it
+ * The five pages that explain: what STAR voting is (`/star`), how it settles
+ * a tie (`/ties`), what else it can answer (`/extensions`), why use it
  * (`/why-star`), and what this site does with it (`/features`). Each is a
  * home-page tile of its own, so each is one short page rather than a tab of a
  * longer one. Public, because the people who most need them are the ones who
@@ -39,31 +39,17 @@ import classes from './Learn.module.css'
  * heading over a card, as on `WhyStar`, worked through one small election
  * (`DINNER`) in the same emoji tables. The example is deliberately one where
  * the score leader loses the runoff, since that is the step a newcomer would
- * otherwise not see the point of. The full ranking and multiple winners carry
- * on with the same friends.
- *
- * `?section=multiple-winners` opens the page at that card, for the results'
- * *Multiple winners* modal, whose reader has no use for the walkthrough above
- * it. A layout effect, so it runs after `ScrollToTop` has put the page at its
- * top.
+ * otherwise not see the point of. `StarExtensions` carries on with the same
+ * friends.
  */
 export function WhatIsStar() {
   usePageTitle('What is STAR?')
-  const [params] = useSearchParams()
-  const section = params.get('section')
-  useLayoutEffect(() => {
-    if (section) document.getElementById(section)?.scrollIntoView()
-  }, [section])
   const finalists = finalistsOf(DINNER)
   const [first, second] = finalists
   const runoff = pluralityRows(DINNER, finalists, true)
   const winner = runoff.find((row) => row.won)?.name
   const loser = finalists.find((name) => name !== winner)
   const undecided = votersOf(DINNER).filter((voter) => !favoriteOf(DINNER, voter, finalists))
-  const ranking = rankingOf(DINNER)
-  const secondRunoff = finalistsOf(DINNER, ranking.slice(0, 1))
-  const spots = spotsOf(DINNER)
-  const reduced = votersOf(DINNER).filter((voter) => spots[1].weights[voter] < 1)
   return (
     <Stack maw={720} mx="auto" gap="md">
       <Title order={1}>What is STAR?</Title>
@@ -185,20 +171,47 @@ export function WhatIsStar() {
       </RoundCard>
 
       <Text>
-        That's generally how STAR voting works. There's no need to read-on unless you want to dive
-        into the tie-breaker details and STAR extensions.
+        That&rsquo;s how STAR voting works.{' '}
+        <Anchor component={Link} to="/why-star" inherit>
+          Why STAR?
+        </Anchor>{' '}
+        compares it with other ways of voting. If you want to go further,{' '}
+        <Anchor component={Link} to="/ties" inherit>
+          Ties in STAR
+        </Anchor>{' '}
+        covers the rare election where two options land level, and{' '}
+        <Anchor component={Link} to="/extensions" inherit>
+          STAR extensions
+        </Anchor>{' '}
+        covers the other answers the same ballots can give: a full ranking, several winners, or a
+        share for each option.
+      </Text>
+    </Stack>
+  )
+}
+
+/**
+ * The tie-break rules, a page of their own because most readers never need
+ * them. The rules are the ones `star_round` and the runoff apply; change them
+ * here, in the SQL and in `test/sql/cases/` together.
+ */
+export function StarTies() {
+  usePageTitle('Ties in STAR')
+  return (
+    <Stack maw={720} mx="auto" gap="md">
+      <Title order={1}>Ties in STAR</Title>
+      <Text>
+        In the rare event of a tie, STAR has rules to settle it. Ties are uncommon since scores are
+        totaled across all ballots, and multiple options seldom land on exactly the same number of
+        stars. A tie can happen in either round of{' '}
+        <Anchor component={Link} to="/star" inherit>
+          STAR
+        </Anchor>
+        .
       </Text>
 
-      <Divider label="Details & Extensions" />
-
-      <RoundCard title="Ties">
+      <RoundCard title="A tie in the scoring round">
         <Stack gap="sm">
-          <Text>
-            In the rare event of a tie, STAR has rules to settle it. Ties are uncommon since scores
-            are totaled across all ballots, and multiple options seldom land on exactly the same
-            number of stars.
-          </Text>
-          <Text fw={700}>A tie in the score round</Text>
           <Text>When two options are tied, the place goes to:</Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>The one more voters prefer in a head-to-head comparison.</List.Item>
@@ -210,7 +223,11 @@ export function WhatIsStar() {
             the options given 5 stars on the most ballots, and any tie left after that is settled at
             random.
           </Text>
-          <Text fw={700}>A tie in the runoff</Text>
+        </Stack>
+      </RoundCard>
+
+      <RoundCard title="A tie in the runoff">
+        <Stack gap="sm">
           <Text>When both finalists get the same number of votes, the winner is:</Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>the finalist with the higher score from the scoring round;</List.Item>
@@ -218,51 +235,118 @@ export function WhatIsStar() {
               if their scores are level too, the one given 5 stars on more ballots.
             </List.Item>
           </List>
-          <Text>If the finalists are level on all three, the election has no winner.</Text>
+          <Text>
+            If the finalists are level on all three, the election has no winner. A poll&rsquo;s
+            results then offer a <strong>Flip a coin</strong> button, which picks one of the two
+            finalists. The coin lands the same way for everyone who flips it, but it isn&rsquo;t
+            part of the election: the poll still says it has no winner.
+          </Text>
         </Stack>
       </RoundCard>
+    </Stack>
+  )
+}
 
-      <RoundCard title="Full ranking">
-        <Stack gap="sm">
-          <Text>
-            STAR picks one winner, but sometimes you need a plan B: the restaurant that won is fully
-            booked tonight, or the person you picked for the job turns it down. Poll results have a{' '}
-            <strong>Full ranking</strong> button for this. It puts every option in order by running
-            STAR again without the winner. The winner steps aside, and the next two highest scorers
-            go to a runoff for second place. Then second place steps aside, and so on down the list.
-          </Text>
-          <Text>
-            Let's show what happens with our six friends if the {winner} place is fully booked. With{' '}
-            {winner} set aside, {secondRunoff[0]} and {secondRunoff[1]} are the two highest scorers
-            left, so they go to a runoff for second place:
-          </Text>
-          <EmojiTable
-            caption={`Everyone's ballots, with ${winner} set aside`}
-            rows={setAside(ratingRows(DINNER, true), ranking.slice(0, 1))}
-            rowLabel="Restaurant"
-            totalLabel="Score"
-          />
-          <Then>Next two highest scorers go to a runoff</Then>
-          <EmojiTable
-            caption={`The runoff for second place, with ${winner} set aside`}
-            rows={setAside(pluralityRows(DINNER, secondRunoff, true), ranking.slice(0, 1))}
-            rowLabel="Restaurant"
-            totalLabel="Votes"
-          />
-          <Then>The full ranking</Then>
-          <Places names={ranking} />
-        </Stack>
-      </RoundCard>
+/**
+ * The other answers a poll's results offer beside the winner, in the
+ * banner's *More results* menu: *Full ranking*, *Multiple winners* and
+ * *Fractional winners*. Each card carries on with `/star`'s six friends, so the page
+ * restates their ballots first for a reader who arrived from a result.
+ *
+ * `?section=` opens the page at one card (`EXTENSIONS`), for the result's
+ * modals, whose reader has no use for the rest. A layout effect, so it runs
+ * after `ScrollToTop` has put the page at its top.
+ */
+export function StarExtensions() {
+  usePageTitle('STAR extensions')
+  const [params] = useSearchParams()
+  const section = params.get('section')
+  useLayoutEffect(() => {
+    if (section) document.getElementById(section)?.scrollIntoView()
+  }, [section])
+  const finalists = finalistsOf(DINNER)
+  const winner = runoffWinner(DINNER, finalists)
+  const loser = finalists.find((name) => name !== winner)
+  const ranking = rankingOf(DINNER)
+  const secondRunoff = finalistsOf(DINNER, ranking.slice(0, 1))
+  const spots = spotsOf(DINNER)
+  const reduced = votersOf(DINNER).filter((voter) => spots[1].weights[voter] < 1)
+  const shares = sharesOf(DINNER)
+  const largest = optionsOf(DINNER).reduce((a, b) => (shares[b] > shares[a] ? b : a))
+  const leftOut = votersOf(DINNER).filter((voter) => DINNER[winner][voter] === 0)
+  return (
+    <Stack maw={720} mx="auto" gap="md">
+      <Title order={1}>STAR extensions</Title>
+      <Stack gap="sm">
+        <Text>
+          <Anchor component={Link} to="/star" inherit>
+            STAR
+          </Anchor>{' '}
+          elects one winner, but the same ballots can answer other questions too. Each extension
+          below is in the <strong>More results</strong> menu beside the winner on a poll&rsquo;s
+          results.
+        </Text>
+        <Text>
+          We&rsquo;ll use the same example as the What is STAR? page: six friends choosing what to
+          have for dinner between:
+        </Text>
+        <OptionKey ratings={DINNER} />
+        <Text>Here are their ballots, with each restaurant&rsquo;s stars added up:</Text>
+        <EmojiTable
+          caption="How many stars each friend gave each restaurant"
+          rows={ratingRows(DINNER, true)}
+          rowLabel="Restaurant"
+          totalLabel="Score"
+        />
+        <Text>
+          {labelOf(finalists[0])} and {finalists[1]} have the most stars, so they go to the runoff,
+          and {winner} wins it: more friends gave {winner} more stars than {loser}.
+        </Text>
+      </Stack>
 
-      <Box id={MULTIPLE_WINNERS} className={classes.target}>
+      <Box id={EXTENSIONS.fullRanking} className={classes.target}>
+        <RoundCard title="Full ranking">
+          <Stack gap="sm">
+            <Text>
+              STAR picks one winner, but sometimes you need a plan B: the restaurant that won is
+              fully booked tonight, or the person you picked for the job turns it down. The{' '}
+              <strong>Full ranking</strong> puts every option in order by running STAR again without
+              the winner. The winner steps aside, and the next two highest scorers go to a runoff
+              for second place. Then second place steps aside, and so on down the list.
+            </Text>
+            <Text>
+              Let&rsquo;s show what happens with our six friends if the {winner} place is fully
+              booked. With {winner} set aside, {secondRunoff[0]} and {secondRunoff[1]} are the two
+              highest scorers left, so they go to a runoff for second place:
+            </Text>
+            <EmojiTable
+              caption={`Everyone's ballots, with ${winner} set aside`}
+              rows={setAside(ratingRows(DINNER, true), ranking.slice(0, 1))}
+              rowLabel="Restaurant"
+              totalLabel="Score"
+            />
+            <Then>Next two highest scorers go to a runoff</Then>
+            <EmojiTable
+              caption={`The runoff for second place, with ${winner} set aside`}
+              rows={setAside(pluralityRows(DINNER, secondRunoff, true), ranking.slice(0, 1))}
+              rowLabel="Restaurant"
+              totalLabel="Votes"
+            />
+            <Then>The full ranking</Then>
+            <Places names={ranking} />
+          </Stack>
+        </RoundCard>
+      </Box>
+
+      <Box id={EXTENSIONS.multipleWinners} className={classes.target}>
         <RoundCard title="Multiple winners">
           <Stack gap="sm">
             <Text>
               Sometimes a group wants more than one winner, for instance choosing two dinners on a
               weekend away or three films for a movie marathon. Using the full ranking for this can
-              result in every spot going to the biggest group. The <strong>Multiple winners</strong>{' '}
-              button gives a different ranking, one that shares top spots so that different groups
-              of voters each get something they like:
+              result in every spot going to the biggest group. <strong>Multiple winners</strong>{' '}
+              gives a different ranking, one that shares top spots so that different groups of
+              voters each get something they like:
             </Text>
             <List type="ordered" spacing={4} withPadding>
               <List.Item>Run STAR as usual to select a winner.</List.Item>
@@ -314,6 +398,58 @@ export function WhatIsStar() {
               allowing the largest group to choose every winner.
             </Text>
             <WeightFormula />
+          </Stack>
+        </RoundCard>
+      </Box>
+
+      <Box id={EXTENSIONS.fractionalWinners} className={classes.target}>
+        <RoundCard title="Fractional winners">
+          <Stack gap="sm">
+            <Text>
+              Sometimes the choice can be split rather than made: a budget divided between projects,
+              a year of club meetings shared between venues, or an afternoon shared between games.
+              <strong>Fractional winners</strong> gives every option a share instead of a place,
+              chosen to make the group as a whole as satisfied as it can be:
+            </Text>
+            <List type="ordered" spacing={4} withPadding>
+              <List.Item>
+                A voter&rsquo;s satisfaction with a set of shares is the stars they would get on
+                average. If the friends went for pizza half the time and sushi the other half, the
+                second friend, who gave pizza 5 stars and sushi 1, would average 3 stars.
+              </List.Item>
+              <List.Item>
+                The shares chosen are the ones that make every voter&rsquo;s satisfaction,
+                multiplied together, as large as possible. This product is called the Nash welfare.
+              </List.Item>
+            </List>
+            <Text>
+              Multiplying rather than adding means that shares leaving anybody with nothing count
+              for nothing, however happy they make everyone else.
+            </Text>
+            <Text>
+              Let&rsquo;s show what happens with our six friends if they now meet for dinner every
+              week and want to decide how often to go to each place. These are the shares with the
+              largest Nash welfare:
+            </Text>
+            <Shares shares={shares} />
+            <Then>How satisfied each friend is</Then>
+            <EmojiTable
+              caption={`Each friend's average stars, going to ${winner} every week or sharing the weeks out`}
+              rows={satisfactionRows(DINNER, winner, shares)}
+              rowLabel="Plan"
+              totalLabel="Product"
+            />
+            <Text size="xs" c="dimmed" ta="center">
+              Each number is the stars a friend gets on average, and the last column multiplies them
+              together.
+            </Text>
+            <Text>
+              Going to {winner} every week, the STAR winner, leaves {leftOut.length} of the friends
+              with 0 stars every week. Sharing the weeks out, everyone gets a meal they like at
+              least some of the time. {labelOf(largest)} gets the largest share even though it lost
+              the runoff, because all but one of the friends like it at least a little.
+            </Text>
+            <NashFormula />
           </Stack>
         </RoundCard>
       </Box>
@@ -527,18 +663,34 @@ export function WhyStar() {
           is infeasibly computationally expensive and the other is very difficult to understand.
           STAR has the advantage of being computationally simple, easy to grasp conceptually, and
           extensible to more complex scenarios such as{' '}
-          <Anchor component={Link} to="/star?section=multiple-winners" inherit>
+          <Anchor component={Link} to={`/extensions?section=${EXTENSIONS.multipleWinners}`} inherit>
             multi-winner elections
           </Anchor>
           .
         </Text>
       </RoundCard>
+
+      <Text>
+        To see what else STAR can do with the same ballots, like ranking every option, choosing
+        several winners, or giving each option a share, read{' '}
+        <Anchor component={Link} to="/extensions" inherit>
+          STAR extensions
+        </Anchor>
+        .
+      </Text>
     </Stack>
   )
 }
 
-/** The *Multiple winners* card's id, which `?section=` opens the page at. */
-const MULTIPLE_WINNERS = 'multiple-winners'
+/**
+ * The ids of `StarExtensions`' cards, which `?section=` opens the page at.
+ * The result's modals link to them by these words, so keep them.
+ */
+const EXTENSIONS = {
+  fullRanking: 'full-ranking',
+  multipleWinners: 'multiple-winners',
+  fractionalWinners: 'fractional-winners',
+}
 
 /**
  * The exact weight and where it comes from, folded away at the foot of the
@@ -551,6 +703,81 @@ const MULTIPLE_WINNERS = 'multiple-winners'
  * 1/(1 + s), which is D'Hondt's divisor sequence exactly.
  */
 function WeightFormula() {
+  return (
+    <Folded label="The reweighting formula">
+      <Text size="sm">
+        A ballot&rsquo;s weight, which scales its scores and its runoff vote, is
+      </Text>
+      <Text size="sm" fw={600} ta="center" aria-label="1 divided by N over 5 plus 1">
+        <span className={classes.fraction}>
+          <span className={classes.numerator} aria-hidden="true">
+            1
+          </span>
+          <span className={classes.denominator} aria-hidden="true">
+            N/5 + 1
+          </span>
+        </span>
+      </Text>
+      <Text size="sm">
+        where N is the total stars the ballot has given the winners so far. If you gave a winner 5
+        stars, your vote in future rounds is reduced to half of its original weight. If you gave two
+        winners 5 stars each, it is reduced to one third, and so on.
+      </Text>
+      <Text size="sm" fw={700}>
+        Why this formula
+      </Text>
+      <Text size="sm">
+        This is the{' '}
+        <Ext href="https://en.wikipedia.org/wiki/D%27Hondt_method">D&rsquo;Hondt method</Ext> for
+        proportional representation, modified slightly to accomodate STAR. It&rsquo;s used by dozens
+        of countries around the world to apportion seats in parliamentary elections.
+      </Text>
+    </Folded>
+  )
+}
+
+/**
+ * The Nash welfare written out, folded away at the foot of the *Fractional
+ * winners* card as `WeightFormula` is at the foot of *Multiple winners*.
+ *
+ * The claim made for it is narrow and checkable: where voters split into
+ * groups that each give their own option 5 and every other 0, maximising
+ * Σ size × log(share) gives each option exactly its group's fraction.
+ */
+function NashFormula() {
+  return (
+    <Folded label="The Nash welfare formula">
+      <Text size="sm">
+        If option j gets share p<sub>j</sub> and voter i gave it s<sub>ij</sub> stars, voter
+        i&rsquo;s satisfaction is
+      </Text>
+      <Text size="sm" fw={600} ta="center">
+        u<sub>i</sub> = p<sub>1</sub>s<sub>i1</sub> + p<sub>2</sub>s<sub>i2</sub> + …
+      </Text>
+      <Text size="sm">and the shares chosen are the ones that make the largest</Text>
+      <Text size="sm" fw={600} ta="center">
+        u<sub>1</sub> × u<sub>2</sub> × … × u<sub>n</sub>
+      </Text>
+      <Text size="sm" fw={700}>
+        Why this formula
+      </Text>
+      <Text size="sm">
+        Multiplying makes the shares proportional. If the voters split into groups that each give
+        their own favorite 5 stars and everything else 0, every option&rsquo;s share is exactly the
+        fraction of voters in its group. A group that also likes other options gives up some of its
+        share to them, since it is satisfied by those too. The rule is named after John Nash, whose{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Cooperative_bargaining">bargaining solution</Ext>{' '}
+        maximizes the same product.
+      </Text>
+    </Folded>
+  )
+}
+
+/**
+ * A card's working, folded away under a button at its foot, for the reader
+ * who wants the exact rule rather than the steps.
+ */
+function Folded({ label, children }: { label: string; children: ReactNode }) {
   const [opened, { toggle }] = useDisclosure(false)
   const panelId = useId()
   return (
@@ -570,39 +797,11 @@ function WeightFormula() {
         }
         style={{ alignSelf: 'flex-start' }}
       >
-        The reweighting formula
+        {label}
       </Button>
       <Collapse expanded={opened} id={panelId}>
         <Paper withBorder radius="md" p="md">
-          <Stack gap="sm">
-            <Text size="sm">
-              A ballot&rsquo;s weight, which scales its scores and its runoff vote, is
-            </Text>
-            <Text size="sm" fw={600} ta="center" aria-label="1 divided by N over 5 plus 1">
-              <span className={classes.fraction}>
-                <span className={classes.numerator} aria-hidden="true">
-                  1
-                </span>
-                <span className={classes.denominator} aria-hidden="true">
-                  N/5 + 1
-                </span>
-              </span>
-            </Text>
-            <Text size="sm">
-              where N is the total stars the ballot has given the winners so far. If you gave a
-              winner 5 stars, your vote in future rounds is reduced to half of its original weight.
-              If you gave two winners 5 stars each, it is reduced to one third, and so on.
-            </Text>
-            <Text size="sm" fw={700}>
-              Why this formula
-            </Text>
-            <Text size="sm">
-              This is the{' '}
-              <Ext href="https://en.wikipedia.org/wiki/D%27Hondt_method">D&rsquo;Hondt method</Ext>{' '}
-              for proportional representation, modified slightly to accomodate STAR. It&rsquo;s used
-              by dozens of countries around the world to apportion seats in parliamentary elections.
-            </Text>
-          </Stack>
+          <Stack gap="sm">{children}</Stack>
         </Paper>
       </Collapse>
     </Stack>
@@ -840,6 +1039,90 @@ function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
 }
 
 /**
+ * Fractional winners, as the page describes it: the share of each option that
+ * makes the product of every voter's average stars largest. Found by the
+ * multiplicative update for mixture weights, p ← p × mean(s ÷ u), which climbs
+ * the (concave) log of the product from any starting point with every share
+ * above 0. A voter who gave everything 0 is satisfied by no shares, so is left
+ * out rather than holding the product at 0.
+ */
+function sharesOf(ratings: Ratings): Record<string, number> {
+  const options = optionsOf(ratings)
+  const voters = votersOf(ratings).filter((voter) => options.some((o) => ratings[o][voter] > 0))
+  let shares = options.map(() => 1 / options.length)
+  for (let step = 0; step < 2000; step++) {
+    const satisfied = voters.map((voter) =>
+      sum(options.map((option, j) => shares[j] * ratings[option][voter])),
+    )
+    shares = shares.map(
+      (share, j) =>
+        (share * sum(voters.map((voter, i) => ratings[options[j]][voter] / satisfied[i]))) /
+        voters.length,
+    )
+  }
+  return Object.fromEntries(options.map((option, j) => [option, shares[j]]))
+}
+
+/** A voter's average stars under `shares`. */
+const satisfactionOf = (ratings: Ratings, voter: number, shares: Record<string, number>) =>
+  sum(optionsOf(ratings).map((option) => shares[option] * ratings[option][voter]))
+
+/**
+ * Whole percentages that add up to 100: each share rounded down, and the
+ * points left over handed to the largest remainders.
+ */
+function percentagesOf(shares: Record<string, number>): Record<string, number> {
+  const options = Object.keys(shares)
+  const whole = Object.fromEntries(options.map((o) => [o, Math.floor(shares[o] * 100)]))
+  const spare = 100 - sum(Object.values(whole))
+  const byRemainder = [...options].sort(
+    (x, y) => shares[y] * 100 - whole[y] - (shares[x] * 100 - whole[x]),
+  )
+  for (const option of byRemainder.slice(0, spare)) whole[option] += 1
+  return whole
+}
+
+/**
+ * Two plans for the fractional-winners card, one row each: the STAR winner
+ * every time, and the Nash shares. Each cell is a voter's average stars, and
+ * the total is their product, so the plan with the larger product is marked.
+ */
+function satisfactionRows(ratings: Ratings, winner: string, shares: Record<string, number>): Row[] {
+  const plan = (name: string, heading: Row['heading'], of: Record<string, number>): Row => {
+    const each = votersOf(ratings).map((voter) => satisfactionOf(ratings, voter, of))
+    return {
+      name,
+      heading,
+      cells: each.map((n) => weighted(n, 1)),
+      total: Math.round(each.reduce((a, b) => a * b, 1)),
+    }
+  }
+  const only = Object.fromEntries(optionsOf(ratings).map((o) => [o, o === winner ? 1 : 0]))
+  return withWinner([
+    plan('only', { emoji: ICONS[winner], said: `${winner} every week` }, only),
+    plan('shares', { emoji: '🍽️', said: 'the shares' }, shares),
+  ])
+}
+
+/** Fractional winners' shares, largest first, as whole percentages. */
+function Shares({ shares }: { shares: Record<string, number> }) {
+  const percent = percentagesOf(shares)
+  const options = Object.keys(shares).sort((x, y) => shares[y] - shares[x])
+  return (
+    <Group component="ul" justify="center" gap="lg" className={classes.places}>
+      {options.map((option) => (
+        <Text component="li" key={option} fw={700}>
+          <span aria-hidden className={classes.emoji}>
+            {ICONS[option]}
+          </span>{' '}
+          {labelOf(option)} {percent[option]}%
+        </Text>
+      ))}
+    </Group>
+  )
+}
+
+/**
  * Options already placed or chosen, drawn faded with their trophy and nothing
  * else. `ratings` keeps their stars on show instead of blanks, where those
  * stars are what the next round turns on: the ballots before the
@@ -874,6 +1157,8 @@ interface Cell {
 
 interface Row {
   name: string
+  /** What the row heading draws instead of the option's emoji, for a row that is not an option. */
+  heading?: { emoji: string; said: string }
   cells: Cell[]
   total?: number
   won?: boolean
@@ -1042,7 +1327,16 @@ function EmojiTable({
                 scope="row"
                 className={row.out ? classes.out : row.aside ? classes.aside : undefined}
               >
-                <OptionIcon name={row.name} />
+                {row.heading ? (
+                  <>
+                    <span aria-hidden className={classes.emoji}>
+                      {row.heading.emoji}
+                    </span>
+                    <VisuallyHidden>{row.heading.said}</VisuallyHidden>
+                  </>
+                ) : (
+                  <OptionIcon name={row.name} />
+                )}
               </th>
               {row.cells.map((cell, voter) => (
                 <td key={voter} className={cell.figure ? classes.figure : undefined}>

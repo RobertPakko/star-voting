@@ -18,10 +18,12 @@ import {
   CodeIcon,
   DownloadSimpleIcon,
   EnvelopeSimpleIcon,
+  EqualsIcon,
   HeartIcon,
   ListBulletsIcon,
   PlayCircleIcon,
   PlusIcon,
+  PuzzlePieceIcon,
   QuestionIcon,
   ScalesIcon,
   SignInIcon,
@@ -108,9 +110,6 @@ export function Home() {
         )}
         <Tile to="/polls" icon={ListBulletsIcon} color="blue" title="Your polls" />
 
-        <Tile to="/star" icon={QuestionIcon} color="orange" title="What’s STAR?" />
-        <Tile to="/why-star" icon={ScalesIcon} color="orange" title="Why STAR?" />
-
         <Tile to={pollPath(SAMPLE_POLL_ID)} icon={StarIcon} color="cyan" title="Example poll" />
         <Tile
           to={pollPath(SAMPLE_RESULT_ID)}
@@ -118,6 +117,11 @@ export function Home() {
           color="cyan"
           title="Example result"
         />
+
+        <Tile to="/star" icon={QuestionIcon} color="orange" title="What’s STAR?" />
+        <Tile to="/why-star" icon={ScalesIcon} color="orange" title="Why STAR?" />
+        <Tile to="/ties" icon={EqualsIcon} color="orange" title="STAR ties" />
+        <Tile to="/extensions" icon={PuzzlePieceIcon} color="orange" title="STAR extensions" />
 
         {/* Installing is the more useful offer; once installed, the slot
             goes to the code, which App features also links. */}

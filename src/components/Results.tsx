@@ -34,8 +34,7 @@ import type {
 } from '../lib/types'
 import { AddToCalendar } from './AddToCalendar'
 import { CoinFlip, type Finalist } from './CoinFlip'
-import { FullRanking } from './FullRanking'
-import { MultipleWinners } from './MultipleWinners'
+import { MoreResults } from './MoreResults'
 import { NameList } from './NameList'
 import { OptionDescription } from './OptionDescription'
 import { Reveal } from './Reveal'
@@ -145,12 +144,7 @@ export function Results({
   const winnerEvent = shown.winner_id ? eventFor(shown.winner_id) : null
 
   // What a reader can do with the answer, in the banner that gives it.
-  const answers = (
-    <>
-      <FullRanking source={source} results={shown} />
-      <MultipleWinners results={shown} />
-    </>
-  )
+  const answers = <MoreResults source={source} results={shown} />
 
   return (
     <Reveal>

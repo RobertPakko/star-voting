@@ -261,17 +261,11 @@ function CalendarShape({ schedule }: { schedule: PollSchedule }) {
 function BannerShape({ answers = false }: { answers?: boolean }) {
   return (
     <Card withBorder>
-      <Stack gap="sm">
+      <Group justify="space-between" align="center" gap="sm" wrap="nowrap">
         <Bar kind="banner" width="60%" />
-        {/* *Full ranking* and *Multiple winners*, on a row of their own as
-            under most winners' names. */}
-        {answers && (
-          <Group gap="xs">
-            <Skeleton height={26} width={118} radius="sm" />
-            <Skeleton height={26} width={146} radius="sm" />
-          </Group>
-        )}
-      </Stack>
+        {/* *More results*, beside the name as under most winners'. */}
+        {answers && <Skeleton height={26} width={126} radius="sm" />}
+      </Group>
     </Card>
   )
 }
@@ -288,7 +282,8 @@ function TallyShape({ options }: { options?: number }) {
 
   return (
     <Stack gap="md">
-      <BannerShape answers={options !== undefined && options >= 3} />
+      {/* Every tally has two options at least, so it always has *More results*. */}
+      <BannerShape answers />
 
       {/* RunoffChart: the half pie and a finalist under each end. */}
       <Stack gap={2}>
