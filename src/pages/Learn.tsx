@@ -21,6 +21,7 @@ import { ArrowDownIcon, CaretRightIcon } from '@phosphor-icons/react'
 import { RoundCard } from '../components/RoundCard'
 import { SITE_FEATURES } from '../components/siteFeatures'
 import { usePageTitle } from '../lib/pageTitle'
+import { percentagesOf } from '../lib/shares'
 import vseByStrategy from '../assets/why-star/vse-by-strategy.png'
 import winnerDistribution from '../assets/why-star/winner-distribution.webp'
 import classes from './Learn.module.css'
@@ -1066,21 +1067,6 @@ function sharesOf(ratings: Ratings): Record<string, number> {
 /** A voter's average stars under `shares`. */
 const satisfactionOf = (ratings: Ratings, voter: number, shares: Record<string, number>) =>
   sum(optionsOf(ratings).map((option) => shares[option] * ratings[option][voter]))
-
-/**
- * Whole percentages that add up to 100: each share rounded down, and the
- * points left over handed to the largest remainders.
- */
-function percentagesOf(shares: Record<string, number>): Record<string, number> {
-  const options = Object.keys(shares)
-  const whole = Object.fromEntries(options.map((o) => [o, Math.floor(shares[o] * 100)]))
-  const spare = 100 - sum(Object.values(whole))
-  const byRemainder = [...options].sort(
-    (x, y) => shares[y] * 100 - whole[y] - (shares[x] * 100 - whole[x]),
-  )
-  for (const option of byRemainder.slice(0, spare)) whole[option] += 1
-  return whole
-}
 
 /**
  * Two plans for the fractional-winners card, one row each: the STAR winner

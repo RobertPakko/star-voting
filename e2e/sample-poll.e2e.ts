@@ -168,14 +168,21 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   await page.keyboard.press('Escape')
   await expect(ranking).toBeHidden()
 
-  // The other two. Multiple winners on the sample is the recorded count, with
-  // no removing; Fractional winners is still a modal saying what it will do.
-  for (const name of ['Multiple winners', 'Fractional winners']) {
+  // The other two, each the count recorded with nothing removed: the sample
+  // offers no removing.
+  const answers = {
+    'Multiple winners': 'Taco bar',
+    // The recorded shares, as whole percentages.
+    'Fractional winners': 'Taco bar91%',
+  }
+  for (const [name, says] of Object.entries(answers)) {
     await openMore()
     await page.getByRole('menuitem', { name }).click()
     const dialog = page.getByRole('dialog', { name })
     await expect(dialog).toBeVisible()
-    await page.waitForTimeout(300)
+    await expect(dialog).toContainText(says)
+    await expect(dialog.getByRole('button', { name: /^Remove / })).toHaveCount(0)
+    await page.waitForTimeout(600)
     await expectAccessible(page, `the ${name.toLowerCase()} modal`)
     await page.keyboard.press('Escape')
     await expect(dialog).toBeHidden()

@@ -316,6 +316,7 @@ begin
         'results', open_poll_results(v_poll.id),
         'ranking', open_poll_ranking(v_poll.id),
         'multiple_winners', open_poll_multiple_winners(v_poll.id, '{}'),
+        'fractional_winners', open_poll_fractional_winners(v_poll.id, '{}'),
         'scores', open_poll_scores(v_poll.id),
         'ballots', open_poll_ballots(v_poll.id)
       );

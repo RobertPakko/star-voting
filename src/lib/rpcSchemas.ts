@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type {
   BallotSheet,
+  FractionalShare,
   OpenPollView,
   OptionScore,
   PollRead,
@@ -266,6 +267,10 @@ export const rankingSchema = z.array(
     tiebreaks: z.array(tiebreak),
   }),
 ) satisfies z.ZodType<RankingEntry[]>
+
+export const fractionalSharesSchema = z.array(
+  z.object({ id: z.string(), name: z.string(), share: z.number() }),
+) satisfies z.ZodType<FractionalShare[]>
 
 export const optionScoresSchema = z.array(
   z.object({

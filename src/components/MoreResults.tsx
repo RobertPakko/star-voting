@@ -102,7 +102,14 @@ export function MoreResults({
           onClose={close}
         />
       )}
-      <FractionalWinners opened={open === 'fractional'} onClose={close} />
+      {offersFractionalWinners(results) && (
+        <FractionalWinners
+          source={source}
+          results={results}
+          opened={open === 'fractional'}
+          onClose={close}
+        />
+      )}
     </>
   )
 }

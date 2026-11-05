@@ -1098,6 +1098,425 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         finalist_names: ['2026-02-20T18:00:00-07:00'],
       },
     ],
+    multiple_winners: [
+      {
+        place: 1,
+        runoff: {
+          ties: 7,
+          prefers_a: 2,
+          prefers_b: 0,
+          resolved_by: 'preference',
+          five_stars_a: 5,
+          five_stars_b: 4,
+        },
+        options: [
+          {
+            id: '7300d521-7308-b1f4-d682-29f844ad20c5',
+            name: '2026-02-21T13:00:00-07:00',
+            total_score: 36,
+          },
+        ],
+        finalists: ['7300d521-7308-b1f4-d682-29f844ad20c5', 'a63b4c04-0d08-5a44-091b-68cc9f467905'],
+        tiebreaks: [],
+        finalist_names: ['2026-02-21T13:00:00-07:00', '2026-02-21T12:30:00-07:00'],
+      },
+      {
+        place: 2,
+        runoff: {
+          ties: 3.180556,
+          prefers_a: 1,
+          prefers_b: 1.055556,
+          resolved_by: 'preference',
+          five_stars_a: 2.5,
+          five_stars_b: 2,
+        },
+        options: [
+          {
+            id: 'a63b4c04-0d08-5a44-091b-68cc9f467905',
+            name: '2026-02-21T12:30:00-07:00',
+            total_score: 15.444444,
+          },
+        ],
+        finalists: ['71a3c317-1111-21a0-4678-1e724f694c58', 'a63b4c04-0d08-5a44-091b-68cc9f467905'],
+        tiebreaks: [],
+        finalist_names: ['2026-02-21T10:00:00-07:00', '2026-02-21T12:30:00-07:00'],
+      },
+      {
+        place: 3,
+        runoff: {
+          ties: 3.810897,
+          prefers_a: 0.333333,
+          prefers_b: 0,
+          resolved_by: 'preference',
+          five_stars_a: 2,
+          five_stars_b: 1.666667,
+        },
+        options: [
+          {
+            id: '71a3c317-1111-21a0-4678-1e724f694c58',
+            name: '2026-02-21T10:00:00-07:00',
+            total_score: 12.371795,
+          },
+        ],
+        finalists: ['71a3c317-1111-21a0-4678-1e724f694c58', 'a40a3397-abdd-d3d1-3b4d-0110ab392f37'],
+        tiebreaks: [
+          {
+            tied: [
+              {
+                id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                name: '2026-02-21T09:00:00-07:00',
+                total_score: 10.705128,
+              },
+              {
+                id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+                name: '2026-02-21T09:30:00-07:00',
+                total_score: 10.705128,
+              },
+            ],
+            slots: 1,
+            steps: [
+              {
+                rule: 'head_to_head',
+                results: [
+                  {
+                    id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                    name: '2026-02-21T09:00:00-07:00',
+                    value: 0,
+                  },
+                  {
+                    id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+                    name: '2026-02-21T09:30:00-07:00',
+                    value: 0,
+                  },
+                ],
+                decisive: false,
+                matchups: [
+                  {
+                    a: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                    b: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+                    ties: 4.144231,
+                    a_name: '2026-02-21T09:00:00-07:00',
+                    b_name: '2026-02-21T09:30:00-07:00',
+                    prefers_a: 0,
+                    prefers_b: 0,
+                  },
+                ],
+              },
+              {
+                rule: 'five_star_votes',
+                results: [
+                  {
+                    id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                    name: '2026-02-21T09:00:00-07:00',
+                    value: 1.666667,
+                  },
+                  {
+                    id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+                    name: '2026-02-21T09:30:00-07:00',
+                    value: 1.666667,
+                  },
+                ],
+                decisive: false,
+              },
+            ],
+            tied_at: 10.705128,
+            advanced: [
+              {
+                id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                name: '2026-02-21T09:00:00-07:00',
+              },
+            ],
+            resolved_by: 'random',
+          },
+        ],
+        finalist_names: ['2026-02-21T10:00:00-07:00', '2026-02-21T09:00:00-07:00'],
+      },
+      {
+        place: 4,
+        runoff: {
+          ties: 3.244209,
+          prefers_a: 0,
+          prefers_b: 0,
+          resolved_by: 'unresolved',
+          five_stars_a: 0.75,
+          five_stars_b: 0.75,
+        },
+        options: [
+          {
+            id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
+            name: '2026-02-21T11:30:00-07:00',
+            total_score: 7.179218,
+          },
+          {
+            id: '72b623e7-4444-6197-3b84-77f30167d46b',
+            name: '2026-02-21T12:00:00-07:00',
+            total_score: 7.179218,
+          },
+        ],
+        finalists: ['21a4b989-ea5b-cdc4-ae58-a7a1f25553ea', '72b623e7-4444-6197-3b84-77f30167d46b'],
+        tiebreaks: [
+          {
+            tied: [
+              {
+                id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
+                name: '2026-02-21T11:00:00-07:00',
+                total_score: 7.179218,
+              },
+              {
+                id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
+                name: '2026-02-21T11:30:00-07:00',
+                total_score: 7.179218,
+              },
+              {
+                id: '72b623e7-4444-6197-3b84-77f30167d46b',
+                name: '2026-02-21T12:00:00-07:00',
+                total_score: 7.179218,
+              },
+            ],
+            slots: 2,
+            steps: [
+              {
+                rule: 'five_star_votes',
+                results: [
+                  {
+                    id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
+                    name: '2026-02-21T11:00:00-07:00',
+                    value: 0.75,
+                  },
+                  {
+                    id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
+                    name: '2026-02-21T11:30:00-07:00',
+                    value: 0.75,
+                  },
+                  {
+                    id: '72b623e7-4444-6197-3b84-77f30167d46b',
+                    name: '2026-02-21T12:00:00-07:00',
+                    value: 0.75,
+                  },
+                ],
+                decisive: false,
+              },
+            ],
+            tied_at: 7.179218,
+            advanced: [
+              {
+                id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
+                name: '2026-02-21T11:30:00-07:00',
+              },
+              {
+                id: '72b623e7-4444-6197-3b84-77f30167d46b',
+                name: '2026-02-21T12:00:00-07:00',
+              },
+            ],
+            resolved_by: 'random',
+          },
+        ],
+        finalist_names: ['2026-02-21T11:30:00-07:00', '2026-02-21T12:00:00-07:00'],
+      },
+      {
+        place: 6,
+        runoff: {
+          ties: 0.238095,
+          prefers_a: 1.325,
+          prefers_b: 1.111111,
+          resolved_by: 'preference',
+          five_stars_a: 0.825,
+          five_stars_b: 0.833333,
+        },
+        options: [
+          {
+            id: '8f21686a-ffc1-f4b2-b2d8-25756b49fc83',
+            name: '2026-02-20T18:00:00-07:00',
+            total_score: 5.958333,
+          },
+        ],
+        finalists: ['8f21686a-ffc1-f4b2-b2d8-25756b49fc83', 'a40a3397-abdd-d3d1-3b4d-0110ab392f37'],
+        tiebreaks: [
+          {
+            tied: [
+              {
+                id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                name: '2026-02-21T09:00:00-07:00',
+                total_score: 5.522222,
+              },
+              {
+                id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+                name: '2026-02-21T09:30:00-07:00',
+                total_score: 5.522222,
+              },
+            ],
+            slots: 1,
+            steps: [
+              {
+                rule: 'head_to_head',
+                results: [
+                  {
+                    id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                    name: '2026-02-21T09:00:00-07:00',
+                    value: 0,
+                  },
+                  {
+                    id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+                    name: '2026-02-21T09:30:00-07:00',
+                    value: 0,
+                  },
+                ],
+                decisive: false,
+                matchups: [
+                  {
+                    a: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                    b: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+                    ties: 2.674206,
+                    a_name: '2026-02-21T09:00:00-07:00',
+                    b_name: '2026-02-21T09:30:00-07:00',
+                    prefers_a: 0,
+                    prefers_b: 0,
+                  },
+                ],
+              },
+              {
+                rule: 'five_star_votes',
+                results: [
+                  {
+                    id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                    name: '2026-02-21T09:00:00-07:00',
+                    value: 0.833333,
+                  },
+                  {
+                    id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+                    name: '2026-02-21T09:30:00-07:00',
+                    value: 0.833333,
+                  },
+                ],
+                decisive: false,
+              },
+            ],
+            tied_at: 5.522222,
+            advanced: [
+              {
+                id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+                name: '2026-02-21T09:00:00-07:00',
+              },
+            ],
+            resolved_by: 'random',
+          },
+        ],
+        finalist_names: ['2026-02-20T18:00:00-07:00', '2026-02-21T09:00:00-07:00'],
+      },
+      {
+        place: 7,
+        runoff: {
+          ties: 2.31452,
+          prefers_a: 0,
+          prefers_b: 0,
+          resolved_by: 'unresolved',
+          five_stars_a: 0.827957,
+          five_stars_b: 0.827957,
+        },
+        options: [
+          {
+            id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+            name: '2026-02-21T09:00:00-07:00',
+            total_score: 5.362007,
+          },
+          {
+            id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+            name: '2026-02-21T09:30:00-07:00',
+            total_score: 5.362007,
+          },
+        ],
+        finalists: ['a40a3397-abdd-d3d1-3b4d-0110ab392f37', 'f48d56da-cb72-7c1d-9251-86d4bbf9b611'],
+        tiebreaks: [],
+        finalist_names: ['2026-02-21T09:00:00-07:00', '2026-02-21T09:30:00-07:00'],
+      },
+      {
+        place: 9,
+        runoff: {
+          ties: 1.659826,
+          prefers_a: 0.238095,
+          prefers_b: 0,
+          resolved_by: 'preference',
+          five_stars_a: 0.403201,
+          five_stars_b: 0.403201,
+        },
+        options: [
+          {
+            id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
+            name: '2026-02-21T11:00:00-07:00',
+            total_score: 3.949248,
+          },
+        ],
+        finalists: ['99ed5407-1a00-3a37-8e1d-435e4e6e76ec', '260c8efa-de57-53a3-3dd9-cfa51da65c44'],
+        tiebreaks: [],
+        finalist_names: ['2026-02-21T11:00:00-07:00', '2026-02-21T10:30:00-07:00'],
+      },
+      {
+        place: 10,
+        runoff: null,
+        options: [
+          {
+            id: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
+            name: '2026-02-21T10:30:00-07:00',
+            total_score: 2.667567,
+          },
+        ],
+        finalists: ['260c8efa-de57-53a3-3dd9-cfa51da65c44'],
+        tiebreaks: [],
+        finalist_names: ['2026-02-21T10:30:00-07:00'],
+      },
+    ],
+    fractional_winners: [
+      {
+        id: '7300d521-7308-b1f4-d682-29f844ad20c5',
+        name: '2026-02-21T13:00:00-07:00',
+        share: 0.557468,
+      },
+      {
+        id: '71a3c317-1111-21a0-4678-1e724f694c58',
+        name: '2026-02-21T10:00:00-07:00',
+        share: 0.435112,
+      },
+      {
+        id: 'a63b4c04-0d08-5a44-091b-68cc9f467905',
+        name: '2026-02-21T12:30:00-07:00',
+        share: 0.007419,
+      },
+      {
+        id: '8f21686a-ffc1-f4b2-b2d8-25756b49fc83',
+        name: '2026-02-20T18:00:00-07:00',
+        share: 0,
+      },
+      {
+        id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+        name: '2026-02-21T09:00:00-07:00',
+        share: 0,
+      },
+      {
+        id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
+        name: '2026-02-21T09:30:00-07:00',
+        share: 0,
+      },
+      {
+        id: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
+        name: '2026-02-21T10:30:00-07:00',
+        share: 0,
+      },
+      {
+        id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
+        name: '2026-02-21T11:00:00-07:00',
+        share: 0,
+      },
+      {
+        id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
+        name: '2026-02-21T11:30:00-07:00',
+        share: 0,
+      },
+      {
+        id: '72b623e7-4444-6197-3b84-77f30167d46b',
+        name: '2026-02-21T12:00:00-07:00',
+        share: 0,
+      },
+    ],
     results: {
       tie: false,
       mode: 'open',
@@ -1674,6 +2093,211 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         finalist_names: ['Honeyland'],
       },
     ],
+    multiple_winners: [
+      {
+        place: 1,
+        runoff: {
+          ties: 1,
+          prefers_a: 6,
+          prefers_b: 2,
+          resolved_by: 'preference',
+          five_stars_a: 2,
+          five_stars_b: 2,
+        },
+        options: [
+          {
+            id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
+            name: 'Knives Out',
+            total_score: 33,
+          },
+        ],
+        finalists: ['08726bf7-0f4d-190a-d5ed-c00d0565abbe', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
+        tiebreaks: [
+          {
+            tied: [
+              {
+                id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+                name: 'Paddington 2',
+                total_score: 26,
+              },
+              {
+                id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+                name: 'Spirited Away',
+                total_score: 26,
+              },
+              {
+                id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+                name: 'The Matrix',
+                total_score: 26,
+              },
+            ],
+            slots: 1,
+            steps: [
+              {
+                rule: 'five_star_votes',
+                results: [
+                  {
+                    id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+                    name: 'Paddington 2',
+                    value: 2,
+                  },
+                  {
+                    id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+                    name: 'Spirited Away',
+                    value: 1,
+                  },
+                  {
+                    id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+                    name: 'The Matrix',
+                    value: 1,
+                  },
+                ],
+                decisive: true,
+              },
+            ],
+            tied_at: 26,
+            advanced: [
+              {
+                id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+                name: 'Paddington 2',
+              },
+            ],
+            resolved_by: 'five_star_votes',
+          },
+        ],
+        finalist_names: ['Knives Out', 'Paddington 2'],
+      },
+      {
+        place: 2,
+        runoff: {
+          ties: 0.625,
+          prefers_a: 2.394841,
+          prefers_b: 2.236111,
+          resolved_by: 'preference',
+          five_stars_a: 0.555556,
+          five_stars_b: 1.180556,
+        },
+        options: [
+          {
+            id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+            name: 'The Matrix',
+            total_score: 15.337302,
+          },
+        ],
+        finalists: ['240967c0-62e5-88a7-a662-5dc029b84eaf', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
+        tiebreaks: [],
+        finalist_names: ['The Matrix', 'Paddington 2'],
+      },
+      {
+        place: 3,
+        runoff: {
+          ties: 0,
+          prefers_a: 1.416667,
+          prefers_b: 2.529637,
+          resolved_by: 'preference',
+          five_stars_a: 0.916667,
+          five_stars_b: 0.454545,
+        },
+        options: [
+          {
+            id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+            name: 'Spirited Away',
+            total_score: 11.132617,
+          },
+        ],
+        finalists: ['7ddc6826-8f1e-3e14-ac34-e915a79c202e', '283438a5-4cf9-8a00-c399-cf9c72c9b2ac'],
+        tiebreaks: [],
+        finalist_names: ['Paddington 2', 'Spirited Away'],
+      },
+      {
+        place: 4,
+        runoff: {
+          ties: 0.833333,
+          prefers_a: 2.37166,
+          prefers_b: 0,
+          resolved_by: 'preference',
+          five_stars_a: 0.77381,
+          five_stars_b: 0,
+        },
+        options: [
+          {
+            id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+            name: 'Paddington 2',
+            total_score: 9.356416,
+          },
+        ],
+        finalists: ['7ddc6826-8f1e-3e14-ac34-e915a79c202e', 'b50cd426-947e-4697-2dbc-db6c26d1e385'],
+        tiebreaks: [],
+        finalist_names: ['Paddington 2', 'Mean Girls'],
+      },
+      {
+        place: 5,
+        runoff: {
+          ties: 0.890609,
+          prefers_a: 1.500258,
+          prefers_b: 0.263158,
+          resolved_by: 'preference',
+          five_stars_a: 0,
+          five_stars_b: 0.263158,
+        },
+        options: [
+          {
+            id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
+            name: 'Mean Girls',
+            total_score: 3.658927,
+          },
+        ],
+        finalists: ['b50cd426-947e-4697-2dbc-db6c26d1e385', '39a0de7f-1759-b30e-263f-30c1cb117e16'],
+        tiebreaks: [],
+        finalist_names: ['Mean Girls', 'Honeyland'],
+      },
+      {
+        place: 6,
+        runoff: null,
+        options: [
+          {
+            id: '39a0de7f-1759-b30e-263f-30c1cb117e16',
+            name: 'Honeyland',
+            total_score: 2.999843,
+          },
+        ],
+        finalists: ['39a0de7f-1759-b30e-263f-30c1cb117e16'],
+        tiebreaks: [],
+        finalist_names: ['Honeyland'],
+      },
+    ],
+    fractional_winners: [
+      {
+        id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
+        name: 'Knives Out',
+        share: 1,
+      },
+      {
+        id: '39a0de7f-1759-b30e-263f-30c1cb117e16',
+        name: 'Honeyland',
+        share: 0,
+      },
+      {
+        id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
+        name: 'Mean Girls',
+        share: 0,
+      },
+      {
+        id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+        name: 'Paddington 2',
+        share: 0,
+      },
+      {
+        id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+        name: 'Spirited Away',
+        share: 0,
+      },
+      {
+        id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+        name: 'The Matrix',
+        share: 0,
+      },
+    ],
     results: {
       tie: true,
       mode: 'open',
@@ -2133,6 +2757,133 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         finalists: ['2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b'],
         tiebreaks: [],
         finalist_names: ['Just snacks'],
+      },
+    ],
+    multiple_winners: [
+      {
+        place: 1,
+        runoff: {
+          ties: 0,
+          prefers_a: 4,
+          prefers_b: 5,
+          resolved_by: 'preference',
+          five_stars_a: 4,
+          five_stars_b: 2,
+        },
+        options: [
+          {
+            id: '366ce86b-5939-fbb4-8407-df63fd2c4aca',
+            name: 'Two big pizzas',
+            total_score: 30,
+          },
+        ],
+        finalists: ['d14066b2-1042-18f5-9a47-ce68843ef18c', '366ce86b-5939-fbb4-8407-df63fd2c4aca'],
+        tiebreaks: [],
+        finalist_names: ['Taco bar', 'Two big pizzas'],
+      },
+      {
+        place: 2,
+        runoff: {
+          ties: 1.111111,
+          prefers_a: 3.94246,
+          prefers_b: 0.5,
+          resolved_by: 'preference',
+          five_stars_a: 2.886905,
+          five_stars_b: 0,
+        },
+        options: [
+          {
+            id: 'd14066b2-1042-18f5-9a47-ce68843ef18c',
+            name: 'Taco bar',
+            total_score: 22.434524,
+          },
+        ],
+        finalists: ['d14066b2-1042-18f5-9a47-ce68843ef18c', '33b51896-f06b-3ce0-c3e8-6299859b60ce'],
+        tiebreaks: [],
+        finalist_names: ['Taco bar', 'Thai delivery'],
+      },
+      {
+        place: 3,
+        runoff: {
+          ties: 0.416667,
+          prefers_a: 2.121212,
+          prefers_b: 1.158425,
+          resolved_by: 'preference',
+          five_stars_a: 0,
+          five_stars_b: 0,
+        },
+        options: [
+          {
+            id: '33b51896-f06b-3ce0-c3e8-6299859b60ce',
+            name: 'Thai delivery',
+            total_score: 9.097153,
+          },
+        ],
+        finalists: ['33b51896-f06b-3ce0-c3e8-6299859b60ce', 'b5b174ab-85ae-0fe4-da06-05c3e04186e0'],
+        tiebreaks: [],
+        finalist_names: ['Thai delivery', 'Everyone brings a dish'],
+      },
+      {
+        place: 4,
+        runoff: {
+          ties: 0.697115,
+          prefers_a: 2.383929,
+          prefers_b: 0,
+          resolved_by: 'preference',
+          five_stars_a: 0,
+          five_stars_b: 0,
+        },
+        options: [
+          {
+            id: 'b5b174ab-85ae-0fe4-da06-05c3e04186e0',
+            name: 'Everyone brings a dish',
+            total_score: 6.138278,
+          },
+        ],
+        finalists: ['b5b174ab-85ae-0fe4-da06-05c3e04186e0', '2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b'],
+        tiebreaks: [],
+        finalist_names: ['Everyone brings a dish', 'Just snacks'],
+      },
+      {
+        place: 5,
+        runoff: null,
+        options: [
+          {
+            id: '2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b',
+            name: 'Just snacks',
+            total_score: 2.714955,
+          },
+        ],
+        finalists: ['2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b'],
+        tiebreaks: [],
+        finalist_names: ['Just snacks'],
+      },
+    ],
+    fractional_winners: [
+      {
+        id: 'd14066b2-1042-18f5-9a47-ce68843ef18c',
+        name: 'Taco bar',
+        share: 0.912224,
+      },
+      {
+        id: '366ce86b-5939-fbb4-8407-df63fd2c4aca',
+        name: 'Two big pizzas',
+        share: 0.087776,
+      },
+      {
+        id: 'b5b174ab-85ae-0fe4-da06-05c3e04186e0',
+        name: 'Everyone brings a dish',
+        share: 0,
+      },
+      {
+        id: '2695ffa3-1c9b-5f6f-c9b7-1df3e6a6457b',
+        name: 'Just snacks',
+        share: 0,
+      },
+      {
+        id: '33b51896-f06b-3ce0-c3e8-6299859b60ce',
+        name: 'Thai delivery',
+        share: 0,
       },
     ],
     results: {

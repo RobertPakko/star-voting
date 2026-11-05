@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import type { Database } from './database.types'
 import type {
   BallotSheet,
+  FractionalShare,
   OpenGroupQuestion,
   OpenPollView,
   OptionScore,
@@ -42,11 +43,13 @@ import type {
 interface SampleQuestion {
   view: OpenPollView
   group: OpenGroupQuestion[]
-  /** The five a finished poll has and an open one does not. */
+  /** The six a finished poll has and an open one does not. */
   results?: PollResults
   ranking?: RankingEntry[]
   /** Multiple winners with nothing removed; see `MultipleWinners`. */
   multiple_winners?: RankingEntry[]
+  /** Fractional winners with nothing removed; see `FractionalWinners`. */
+  fractional_winners?: FractionalShare[]
   scores?: OptionScore[]
   ballots?: BallotSheet
 }
@@ -155,10 +158,15 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
     case 'open_poll_ranking':
       return question.ranking ? ok(question.ranking) : failed('Results are not available yet')
     // Recorded with nothing taken out, and only that: the sample cannot count
-    // again, so `MultipleWinners` offers no removal on it.
+    // again, so neither `MultipleWinners` nor `FractionalWinners` offers
+    // removal on it.
     case 'open_poll_multiple_winners':
       return question.multiple_winners && !args.p_excluded?.length
         ? ok(question.multiple_winners)
+        : failed('Not available on the example poll')
+    case 'open_poll_fractional_winners':
+      return question.fractional_winners && !args.p_excluded?.length
+        ? ok(question.fractional_winners)
         : failed('Not available on the example poll')
     case 'open_poll_scores':
       return question.scores ? ok(question.scores) : failed('Results are not available yet')

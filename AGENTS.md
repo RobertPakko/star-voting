@@ -3225,9 +3225,30 @@ the product of every voter's average stars under the shares. Multiplying is
 what makes it proportional: voters in groups that each like only their own
 option get that option a share the size of the group, and shares that leave
 anybody with nothing score zero. Offered from two options, since how to split
-between two is still a question. A placeholder modal for now
-(`FractionalWinners.tsx`); `/extensions` works it on the same example
-(`sharesOf`).
+between two is still a question. `/extensions` works it on the same example
+(`sharesOf`); `49_fractional_winners` checks the same shares.
+
+- **Worked out in the database**, on the same gate and the same press
+  (`get_poll_fractional_winners` / `open_poll_fractional_winners`, via
+  `poll_fractional_winners`), answering `{ id, name, share }` largest first.
+- **Only the ten options with the most stars are shared between**
+  (`poll_results_rows()`), so the work grows with the voters, not with a time
+  poll's hundreds of windows. The cost is that a small group's favourite
+  outside the top ten gets nothing; the modal says how many were not
+  considered, and removing one lets the next in.
+- **Newton's method, not the multiplicative update** `/extensions` describes
+  (`p ← p × mean(s ÷ u)`): both climb the same concave product, but the update
+  takes thousands of passes on ordinary ballots to settle the shares at 0,
+  and Newton on the shares above 0 a handful. Ballots are folded into
+  distinct score patterns first. The suite checks the answer against the
+  optimality conditions rather than against a second solver.
+- **Removing works as in Multiple winners** (`p_excluded`, held by
+  `FractionalWinners`, never stored, stopping at two options left, and not on
+  the sample, which answers `fractional_winners` in `samplePollData.ts`).
+- **A pie and a list.** The pie is inert decoration; the list names every
+  option with its share as whole percentages adding up to 100
+  (`percentagesOf` in [`lib/shares.ts`](src/lib/shares.ts), which
+  `/extensions` uses too), so colour never carries the answer alone.
 
 **It is a separate request, made when the button is pressed**
 (`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the
@@ -3373,8 +3394,9 @@ both ballots are shown. Neither exists in Supabase: both are answered from
 `scripts/sample-poll.sh` generates by building the throwaway database, making
 the poll **through the app's own functions** (`create_poll_group`,
 `open_poll_submit`, `close_poll`), and recording what `open_poll_view`,
-`open_poll_results`, `open_poll_ranking`, `open_poll_scores` and
-`open_poll_ballots` answer.
+`open_poll_results`, `open_poll_ranking`, `open_poll_multiple_winners`,
+`open_poll_fractional_winners`, `open_poll_scores` and `open_poll_ballots`
+answer.
 
 - **Nothing about the sample is computed in the browser.** Every number came
   from `star_round()` and `poll_ranking()`. To change what it shows, change

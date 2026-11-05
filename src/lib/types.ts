@@ -360,6 +360,18 @@ export interface RankingEntry {
   tiebreaks: Tiebreak[]
 }
 
+/**
+ * One option's share under *Fractional winners*, from
+ * `get_poll_fractional_winners` / `open_poll_fractional_winners`: a fraction
+ * of 1, the shares summing to 1 (or all 0 where nobody starred any of them).
+ * Largest first, and only the options with the most stars.
+ */
+export interface FractionalShare {
+  id: string
+  name: string
+  share: number
+}
+
 export interface PollResults {
   /** The score round's top rows only (`poll_results_rows()`); see `option_count`. */
   options: ResultOption[]

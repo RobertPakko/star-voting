@@ -576,6 +576,32 @@ export function RankingSkeleton({ places = 5 }: { places?: number }) {
 }
 
 /**
+ * *Fractional winners*: the pie, then a row per share (swatch, name,
+ * percentage). The pie is drawn at its real size, so the modal does not jump
+ * when the shares land.
+ */
+export function SharesSkeleton({ rows = 5, size }: { rows?: number; size: number }) {
+  return (
+    <Loading>
+      <Stack gap="md">
+        <Group justify="center">
+          <Skeleton height={size} width={size} circle />
+        </Group>
+        <Stack gap={4}>
+          {Array.from({ length: rows }, (_, i) => (
+            <Group key={i} gap="sm" wrap="nowrap">
+              <Skeleton height={10} width={10} radius={2} style={{ flex: 'none' }} />
+              <Bar kind="name" width={160} grow />
+              <Bar kind="line" width={36} />
+            </Group>
+          ))}
+        </Stack>
+      </Stack>
+    </Loading>
+  )
+}
+
+/**
  * The published ballot grid. Rows are drawn whole: the column count isn't
  * known yet.
  */

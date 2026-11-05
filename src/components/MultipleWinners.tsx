@@ -1,16 +1,6 @@
 import { useEffect, useState } from 'react'
-import {
-  ActionIcon,
-  Anchor,
-  Badge,
-  Button,
-  Group,
-  Modal,
-  Stack,
-  Text,
-  Tooltip,
-} from '@mantine/core'
-import { ArrowCounterClockwiseIcon, XIcon } from '@phosphor-icons/react'
+import { ActionIcon, Anchor, Badge, Group, Modal, Stack, Text, Tooltip } from '@mantine/core'
+import { XIcon } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
@@ -23,12 +13,7 @@ import { RankingSkeleton } from './Skeletons'
 import { count } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import { TiebreakNote, type RankingSource } from './FullRanking'
-
-/** An option the reader has taken out of the count, named as it was shown. */
-interface LeftOut {
-  id: string
-  name: string
-}
+import { RemovedOptions, type LeftOut } from './RemovedOptions'
 
 /**
  * Several winners from one set of ballots, opened from the result's *More
@@ -149,35 +134,7 @@ export function MultipleWinners({
           </Text>
         )}
 
-        {leftOut.length > 0 && (
-          <Stack gap={6}>
-            <Text size="sm" fw={600}>
-              Removed
-            </Text>
-            <Group gap="xs">
-              {leftOut.map((option) => (
-                <Button
-                  key={option.id}
-                  variant="default"
-                  size="compact-sm"
-                  leftSection={<ArrowCounterClockwiseIcon size={14} aria-hidden />}
-                  onClick={() => restore(option.id)}
-                  aria-label={`Restore ${option.name}`}
-                  style={{ maxWidth: '100%' }}
-                >
-                  <Text span inherit truncate>
-                    {option.name}
-                  </Text>
-                </Button>
-              ))}
-              {leftOut.length > 1 && (
-                <Button variant="subtle" size="compact-sm" onClick={() => setLeftOut([])}>
-                  Restore all
-                </Button>
-              )}
-            </Group>
-          </Stack>
-        )}
+        <RemovedOptions leftOut={leftOut} onRestore={restore} onRestoreAll={() => setLeftOut([])} />
 
         {error && (
           <Text role="alert" c="red" size="sm">
