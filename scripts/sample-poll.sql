@@ -64,9 +64,12 @@ create table if not exists sample.link (
 --           three-way tie for the second finalist slot, settled on five-star
 --           votes: Paddington 2 has two, the other two one each. Those two
 --           fives are Diego's and Gina's, who are cool on Knives Out where
---           everybody else likes it, so the fractional winners give
---           Paddington 2 a share of its own rather than handing the whole
---           evening to Knives Out.
+--           most of the room likes it, as is Hugo, who would rather see The
+--           Matrix: so the fractional winners give Paddington 2 and The Matrix
+--           shares of their own rather than handing the whole evening to
+--           Knives Out. Multiple winners and the full ranking also disagree
+--           here -- The Matrix takes the second spot, Paddington 2 the second
+--           place.
 --   when    a different ballot altogether: a calendar, painted rather than
 --           scored. It is last because it is the most to take in, and it is a
 --           plain election on purpose -- the score leader wins the runoff too,
@@ -128,8 +131,8 @@ select $json${
         [2, 2, 4, 5, 1, 0],
         [5, 4, 2, 3, 2, 1],
         [3, 3, 4, 2, 2, 2],
-        [1, 2, 1, 5, 2, 0],
-        [2, 3, 3, 2, 1, 1],
+        [2, 2, 1, 5, 2, 0],
+        [1, 3, 3, 2, 1, 1],
         [3, 0, 2, 2, 2, 1]
       ]
     },

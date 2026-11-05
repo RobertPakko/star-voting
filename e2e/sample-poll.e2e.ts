@@ -194,7 +194,11 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   await openMore()
   await page.getByRole('menuitem', { name: 'Fractional winners' }).click()
   const shares = page.getByRole('dialog', { name: 'Fractional winners' })
-  await expect(shares.getByRole('listitem')).toHaveText(['Knives Out69%', 'Paddington 231%'])
+  await expect(shares.getByRole('listitem')).toHaveText([
+    'Knives Out61%',
+    'Paddington 224%',
+    'The Matrix15%',
+  ])
   await page.keyboard.press('Escape')
   await expect(shares).toBeHidden()
 })
