@@ -254,7 +254,8 @@ export function StarTies() {
  * banner's *More results* menu: *Full ranking*, *Multiple winners* and
  * *Fractional winners*. Each card carries on with `/star`'s six friends, so the page
  * restates their ballots first for a reader who arrived from a result.
- * *Sequel polls* is not built yet, so its card says so and works no example.
+ * *Sequel polls* and *Option assignment* are not built yet, so their cards
+ * say so and work no example.
  *
  * `?section=` opens the page at one card (`EXTENSIONS`), for the result's
  * modals, whose reader has no use for the rest. A layout effect, so it runs
@@ -507,6 +508,48 @@ export function StarExtensions() {
           </Stack>
         </RoundCard>
       </Box>
+
+      <Box id={EXTENSIONS.optionAssignment} className={classes.target}>
+        <RoundCard title="Option assignment">
+          <Stack gap="sm">
+            <Alert
+              variant="light"
+              icon={<HourglassIcon size={20} aria-hidden />}
+              title="Coming soon"
+            >
+              <Text size="sm">
+                Option assignment isn&rsquo;t available yet. This is how it will work.
+              </Text>
+            </Alert>
+            <Text>
+              Sometimes every voter needs a different option of their own: chores shared out between
+              housemates, topics handed out to a class, or shifts split between volunteers.{' '}
+              <strong>Option assignment</strong> gives each voter one option, and each option to one
+              voter, choosing the pairing that gives the voters as many stars between them as
+              possible:
+            </Text>
+            <List type="ordered" spacing={4} withPadding>
+              <List.Item>
+                Every voter rates every option as usual, with more stars for the options they would
+                rather have.
+              </List.Item>
+              <List.Item>
+                Every way of pairing voters with options is considered, with nobody getting more
+                than one option and no option going to more than one voter.
+              </List.Item>
+              <List.Item>
+                The pairing chosen is the one where the stars each voter gave their own option add
+                up to the most.
+              </List.Item>
+            </List>
+            <Text>
+              The numbers don&rsquo;t have to match. If there are more voters than options, every
+              option is assigned and some voters go without one. If there are more options than
+              voters, every voter gets one and some options are left unassigned.
+            </Text>
+          </Stack>
+        </RoundCard>
+      </Box>
     </Stack>
   )
 }
@@ -745,6 +788,7 @@ const EXTENSIONS = {
   multipleWinners: 'multiple-winners',
   sequelPolls: 'sequel-polls',
   fractionalWinners: 'fractional-winners',
+  optionAssignment: 'option-assignment',
 }
 
 /**
