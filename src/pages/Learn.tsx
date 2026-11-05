@@ -18,7 +18,14 @@ import {
   VisuallyHidden,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { ArrowDownIcon, CaretRightIcon, HourglassIcon, UsersThreeIcon } from '@phosphor-icons/react'
+import {
+  ArrowDownIcon,
+  ArrowsLeftRightIcon,
+  CaretRightIcon,
+  CoinsIcon,
+  HourglassIcon,
+  UsersThreeIcon,
+} from '@phosphor-icons/react'
 import { RoundCard } from '../components/RoundCard'
 import { SITE_FEATURES } from '../components/siteFeatures'
 import { usePageTitle } from '../lib/pageTitle'
@@ -254,8 +261,12 @@ export function StarTies() {
  * banner's *More results* menu: *Full ranking*, *Multiple winners* and
  * *Fractional winners*. Each card carries on with `/star`'s six friends, so the page
  * restates their ballots first for a reader who arrived from a result.
- * *Sequel polls*, *Option assignment* and *Group formation* are not built
- * yet, so their cards say so and work no example.
+ * *Sequel polls*, *Budgeting*, *Option assignment*, *Two-sided matching* and
+ * *Group formation* are not built yet, so their cards say so and work no
+ * example. Where one needs a number on each option or voter, it is called a
+ * *size* in every card — what a budget option costs, how many voters an
+ * assigned option takes, how many matches a voter takes — so one field can
+ * serve them all.
  *
  * `?section=` opens the page at one card (`EXTENSIONS`), for the result's
  * modals, whose reader has no use for the rest. A layout effect, so it runs
@@ -509,6 +520,59 @@ export function StarExtensions() {
         </RoundCard>
       </Box>
 
+      <Box id={EXTENSIONS.budgeting} className={classes.target}>
+        <RoundCard title="Budgeting">
+          <Stack gap="sm">
+            <Alert
+              variant="light"
+              icon={<HourglassIcon size={20} aria-hidden />}
+              title="Coming soon"
+            >
+              <Text size="sm">Budgeting isn&rsquo;t available yet. This is how it will work.</Text>
+            </Alert>
+            <Alert
+              variant="light"
+              color="gray"
+              icon={<CoinsIcon size={20} aria-hidden />}
+              title="Additional requirement"
+            >
+              <Text size="sm">
+                Every option has a size, and the poll has a limit on the total size.
+              </Text>
+            </Alert>
+            <Text>
+              Sometimes the choice is which options to take, with only so much to spend: projects
+              for a community fund, activities for a trip with a fixed budget, or talks for a day
+              with only so many hours. <strong>Budgeting</strong> picks the set of options that
+              gives the voters as many stars as possible without going over the limit:
+            </Text>
+            <List type="ordered" spacing={4} withPadding>
+              <List.Item>Every voter rates every option as usual.</List.Item>
+              <List.Item>
+                Each option is given a size: what it takes out of the limit. A project might cost
+                $3,000 of a $10,000 fund, or a talk take one hour of a six-hour day.
+              </List.Item>
+              <List.Item>
+                Every set of options whose sizes add up to no more than the limit is considered.
+              </List.Item>
+              <List.Item>
+                The set chosen is the one whose options&rsquo; stars, from every voter, add up to
+                the most.
+              </List.Item>
+            </List>
+            <Text>
+              An option is either taken whole or left out. That means the option with the most stars
+              can lose its place to two smaller ones that together have more, and some of the limit
+              can be left unspent when nothing else fits.
+            </Text>
+            <Text>
+              Unlike Fractional winners, which can give an option any share, Budgeting is for
+              choices that can&rsquo;t be split: a project funded halfway doesn&rsquo;t get built.
+            </Text>
+          </Stack>
+        </RoundCard>
+      </Box>
+
       <Box id={EXTENSIONS.optionAssignment} className={classes.target}>
         <RoundCard title="Option assignment">
           <Stack gap="sm">
@@ -524,9 +588,8 @@ export function StarExtensions() {
             <Text>
               Sometimes every voter needs a different option of their own: chores shared out between
               housemates, topics handed out to a class, or shifts split between volunteers.{' '}
-              <strong>Option assignment</strong> gives each voter one option, and each option to one
-              voter, choosing the pairing that gives the voters as many stars between them as
-              possible:
+              <strong>Option assignment</strong> gives each voter one option, choosing the
+              assignment that gives the voters as many stars between them as possible:
             </Text>
             <List type="ordered" spacing={4} withPadding>
               <List.Item>
@@ -534,18 +597,100 @@ export function StarExtensions() {
                 rather have.
               </List.Item>
               <List.Item>
-                Every way of pairing voters with options is considered, with nobody getting more
-                than one option and no option going to more than one voter.
+                Each option can optionally be given a size: how many voters it can go to. A chore
+                might need two housemates, or a shift four volunteers. An option with no size set
+                goes to one voter.
               </List.Item>
               <List.Item>
-                The pairing chosen is the one where the stars each voter gave their own option add
-                up to the most.
+                Every way of assigning voters to options is considered, with nobody getting more
+                than one option and no option going to more voters than its size.
+              </List.Item>
+              <List.Item>
+                The assignment chosen is the one where the stars each voter gave their own option
+                add up to the most.
               </List.Item>
             </List>
             <Text>
-              The numbers don&rsquo;t have to match. If there are more voters than options, every
-              option is assigned and some voters go without one. If there are more options than
-              voters, every voter gets one and some options are left unassigned.
+              The numbers don&rsquo;t have to match. If there are more voters than places across all
+              the options, every place is filled and some voters go without one. If there are more
+              places than voters, every voter gets one and some places are left empty.
+            </Text>
+          </Stack>
+        </RoundCard>
+      </Box>
+
+      <Box id={EXTENSIONS.twoSidedMatching} className={classes.target}>
+        <RoundCard title="Two-sided matching">
+          <Stack gap="sm">
+            <Alert
+              variant="light"
+              icon={<HourglassIcon size={20} aria-hidden />}
+              title="Coming soon"
+            >
+              <Text size="sm">
+                Two-sided matching isn&rsquo;t available yet. This is how it will work.
+              </Text>
+            </Alert>
+            <Alert
+              variant="light"
+              color="gray"
+              icon={<UsersThreeIcon size={20} aria-hidden />}
+              title="Additional requirement"
+            >
+              <Text size="sm">The set of options is the same as the set of voters.</Text>
+            </Alert>
+            <Alert
+              variant="light"
+              color="gray"
+              icon={<ArrowsLeftRightIcon size={20} aria-hidden />}
+              title="Additional requirement"
+            >
+              <Text size="sm">Voters are divided into two groups with equal total size.</Text>
+            </Alert>
+            <Text>
+              Sometimes people need to be paired with people from another group: mentors with
+              mentees, new starters with buddies, or students with project supervisors. Both sides
+              care who they get, so when everyone rates everyone in the other group,{' '}
+              <strong>Two-sided matching</strong> uses those ratings to find a matching that is
+              stable: no two people would both rather be matched with each other than with who they
+              got.
+            </Text>
+            <List type="ordered" spacing={4} withPadding>
+              <List.Item>
+                Every voter rates everyone in the other group, with more stars for the people they
+                would rather be matched with.
+              </List.Item>
+              <List.Item>
+                Each voter has a size: how many people from the other group they can be matched
+                with. A mentor might take three mentees while each mentee has one mentor.
+              </List.Item>
+              <List.Item>
+                Everyone in one group proposes to the people they gave the most stars in the other
+                group, as many as their size.
+              </List.Item>
+              <List.Item>
+                Everyone in the other group holds on to the best proposals they have received, up to
+                their size, and turns down the rest.
+              </List.Item>
+              <List.Item>
+                Anyone turned down proposes to the next person on their list, and a held proposal is
+                given up when a better one arrives. This repeats until nobody has anyone left to
+                propose to.
+              </List.Item>
+            </List>
+            <Text>
+              This is the{' '}
+              <Ext href="https://en.wikipedia.org/wiki/Gale%E2%80%93Shapley_algorithm">
+                Gale&ndash;Shapley algorithm
+              </Ext>
+              . It always ends in a stable matching, and because both groups have the same total
+              size, every place is filled.
+            </Text>
+            <Text>
+              Unlike Option assignment, which adds up the stars, this is about stability: a pairing
+              with more stars in total could leave two people who would both rather leave their
+              matches for each other. The group that proposes gets the best stable matching it can,
+              so it matters which group goes first.
             </Text>
           </Stack>
         </RoundCard>
@@ -835,7 +980,9 @@ const EXTENSIONS = {
   multipleWinners: 'multiple-winners',
   sequelPolls: 'sequel-polls',
   fractionalWinners: 'fractional-winners',
+  budgeting: 'budgeting',
   optionAssignment: 'option-assignment',
+  twoSidedMatching: 'two-sided-matching',
   groupFormation: 'group-formation',
 }
 
