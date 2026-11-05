@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
+  Alert,
   Anchor,
   Box,
   Button,
@@ -17,7 +18,7 @@ import {
   VisuallyHidden,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { ArrowDownIcon, CaretRightIcon } from '@phosphor-icons/react'
+import { ArrowDownIcon, CaretRightIcon, HourglassIcon } from '@phosphor-icons/react'
 import { RoundCard } from '../components/RoundCard'
 import { SITE_FEATURES } from '../components/siteFeatures'
 import { usePageTitle } from '../lib/pageTitle'
@@ -253,6 +254,7 @@ export function StarTies() {
  * banner's *More results* menu: *Full ranking*, *Multiple winners* and
  * *Fractional winners*. Each card carries on with `/star`'s six friends, so the page
  * restates their ballots first for a reader who arrived from a result.
+ * *Sequel polls* is not built yet, so its card says so and works no example.
  *
  * `?section=` opens the page at one card (`EXTENSIONS`), for the result's
  * modals, whose reader has no use for the rest. A layout effect, so it runs
@@ -284,8 +286,8 @@ export function StarExtensions() {
             STAR
           </Anchor>{' '}
           elects one winner, but the same ballots can answer other questions too. Each extension
-          below is in the <strong>More results</strong> menu beside the winner on a poll&rsquo;s
-          results.
+          below that is available is in the <strong>More results</strong> menu beside the winner on
+          a poll&rsquo;s results.
         </Text>
         <Text>
           We&rsquo;ll use the same example as the What is STAR? page: six friends choosing what to
@@ -403,12 +405,63 @@ export function StarExtensions() {
         </RoundCard>
       </Box>
 
+      <Box id={EXTENSIONS.sequelPolls} className={classes.target}>
+        <RoundCard title="Sequel polls">
+          <Stack gap="sm">
+            <Alert
+              variant="light"
+              icon={<HourglassIcon size={20} aria-hidden />}
+              title="Coming soon"
+            >
+              <Text size="sm">
+                Sequel polls aren&rsquo;t available yet. This is how they will work.
+              </Text>
+            </Alert>
+            <Text>
+              Some choices come round again: where to go for dinner every week, which game to play
+              at each club night, or who hosts the next meeting. Running a fresh poll each time lets
+              the biggest group win every time. A <strong>Sequel poll</strong> carries on from an
+              earlier poll instead, with every ballot reweighted by how much its voter liked the
+              earlier winner:
+            </Text>
+            <List type="ordered" spacing={4} withPadding>
+              <List.Item>Run the first poll as usual to select a winner.</List.Item>
+              <List.Item>
+                Make a sequel poll from it. The options and the voters can change: a new restaurant
+                can be added, and a friend who couldn&rsquo;t make it last time can join in.
+              </List.Item>
+              <List.Item>
+                Each returning voter&rsquo;s ballot is reweighted based on how many stars they gave
+                the earlier winners, as in Multiple winners.
+              </List.Item>
+              <List.Item>Run STAR on the sequel with ballots at their new strength.</List.Item>
+            </List>
+            <Text>
+              This is like Multiple winners, but spread across many polls rather than counted in
+              one. A sequel can have sequels of its own, and each carries on the weights from every
+              poll before it, so over time the wins are shared out in proportion to the groups that
+              want them.
+            </Text>
+            <Text>
+              A voter who wasn&rsquo;t in the earlier polls has no stars to reweight by, so their
+              ballot gets the average weight of everyone who was. That way joining late neither
+              helps nor hurts.
+            </Text>
+            <Text>
+              The weights are also scaled up together so that the average ballot counts as one
+              again. This is only to make the scores easier to read as stars: scaling every ballot
+              by the same amount doesn&rsquo;t change who wins.
+            </Text>
+          </Stack>
+        </RoundCard>
+      </Box>
+
       <Box id={EXTENSIONS.fractionalWinners} className={classes.target}>
         <RoundCard title="Fractional winners">
           <Stack gap="sm">
             <Text>
               Sometimes the choice can be split rather than made: a budget divided between projects,
-              a year of club meetings shared between venues, or an afternoon shared between games.
+              a year of club meetings shared between venues, or an afternoon shared between games.{' '}
               <strong>Fractional winners</strong> gives every option a share instead of a place,
               chosen to make the group as a whole as satisfied as it can be:
             </Text>
@@ -690,6 +743,7 @@ export function WhyStar() {
 const EXTENSIONS = {
   fullRanking: 'full-ranking',
   multipleWinners: 'multiple-winners',
+  sequelPolls: 'sequel-polls',
   fractionalWinners: 'fractional-winners',
 }
 
