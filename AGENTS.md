@@ -3246,9 +3246,10 @@ between two is still a question. `/extensions` works it on the same example
   `FractionalWinners`, never stored, stopping at two options left, and not on
   the sample, which answers `fractional_winners` in `samplePollData.ts`).
 - **A pie and a list.** The pie is inert decoration; the list names every
-  option with its share as whole percentages adding up to 100
+  option given a share, as whole percentages adding up to 100
   (`percentagesOf` in [`lib/shares.ts`](src/lib/shares.ts), which
-  `/extensions` uses too), so colour never carries the answer alone.
+  `/extensions` uses too), so colour never carries the answer alone. Options
+  with no share are left off: the percentages already add up to the whole.
 
 **It is a separate request, made when the button is pressed**
 (`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the

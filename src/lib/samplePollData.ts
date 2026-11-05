@@ -29,7 +29,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: null,
-        created_at: '2026-10-19T13:36:54.02919-07:00',
+        created_at: '2026-11-04T21:55:19.333951-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -153,7 +153,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '72b22b36-9803-668e-a119-9de317add162',
         schedule: null,
         closed_at: null,
-        created_at: '2026-10-19T13:36:54.02919-07:00',
+        created_at: '2026-11-04T21:55:19.333951-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -255,7 +255,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '72b22b36-9803-668e-a119-9de317add162',
         schedule: null,
         closed_at: null,
-        created_at: '2026-10-19T13:36:54.02919-07:00',
+        created_at: '2026-11-04T21:55:19.333951-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -352,7 +352,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-10-19T13:36:54.02919-07:00',
+        created_at: '2026-11-04T21:55:19.333951-08:00',
         description:
           'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
         show_voters: true,
@@ -1621,7 +1621,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '423ac0bc-0ec1-c015-0f1a-5110613b338c',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-10-19T13:36:54.02919-07:00',
+        created_at: '2026-11-04T21:55:19.333951-08:00',
         description:
           'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
         show_voters: true,
@@ -1716,8 +1716,8 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       {
         id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
         name: 'Knives Out',
-        total_score: 33,
-        average_score: 3.67,
+        total_score: 29,
+        average_score: 3.22,
       },
       {
         id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
@@ -1788,7 +1788,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Diego',
           scores: {
-            '08726bf7-0f4d-190a-d5ed-c00d0565abbe': 3,
+            '08726bf7-0f4d-190a-d5ed-c00d0565abbe': 2,
             '240967c0-62e5-88a7-a662-5dc029b84eaf': 4,
             '283438a5-4cf9-8a00-c399-cf9c72c9b2ac': 2,
             '39a0de7f-1759-b30e-263f-30c1cb117e16': 0,
@@ -1821,7 +1821,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Gina',
           scores: {
-            '08726bf7-0f4d-190a-d5ed-c00d0565abbe': 4,
+            '08726bf7-0f4d-190a-d5ed-c00d0565abbe': 1,
             '240967c0-62e5-88a7-a662-5dc029b84eaf': 1,
             '283438a5-4cf9-8a00-c399-cf9c72c9b2ac': 2,
             '39a0de7f-1759-b30e-263f-30c1cb117e16': 0,
@@ -1895,7 +1895,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           {
             id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
             name: 'Knives Out',
-            total_score: 33,
+            total_score: 29,
           },
         ],
         finalists: ['08726bf7-0f4d-190a-d5ed-c00d0565abbe', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
@@ -2108,7 +2108,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           {
             id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
             name: 'Knives Out',
-            total_score: 33,
+            total_score: 29,
           },
         ],
         finalists: ['08726bf7-0f4d-190a-d5ed-c00d0565abbe', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
@@ -2171,70 +2171,70 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         place: 2,
         runoff: {
           ties: 0.625,
-          prefers_a: 2.394841,
-          prefers_b: 2.236111,
+          prefers_a: 2.603175,
+          prefers_b: 2.394841,
           resolved_by: 'preference',
-          five_stars_a: 0.555556,
-          five_stars_b: 1.180556,
-        },
-        options: [
-          {
-            id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
-            name: 'The Matrix',
-            total_score: 15.337302,
-          },
-        ],
-        finalists: ['240967c0-62e5-88a7-a662-5dc029b84eaf', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
-        tiebreaks: [],
-        finalist_names: ['The Matrix', 'Paddington 2'],
-      },
-      {
-        place: 3,
-        runoff: {
-          ties: 0,
-          prefers_a: 1.416667,
-          prefers_b: 2.529637,
-          resolved_by: 'preference',
-          five_stars_a: 0.916667,
-          five_stars_b: 0.454545,
-        },
-        options: [
-          {
-            id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
-            name: 'Spirited Away',
-            total_score: 11.132617,
-          },
-        ],
-        finalists: ['7ddc6826-8f1e-3e14-ac34-e915a79c202e', '283438a5-4cf9-8a00-c399-cf9c72c9b2ac'],
-        tiebreaks: [],
-        finalist_names: ['Paddington 2', 'Spirited Away'],
-      },
-      {
-        place: 4,
-        runoff: {
-          ties: 0.833333,
-          prefers_a: 2.37166,
-          prefers_b: 0,
-          resolved_by: 'preference',
-          five_stars_a: 0.77381,
-          five_stars_b: 0,
+          five_stars_a: 1.547619,
+          five_stars_b: 0.555556,
         },
         options: [
           {
             id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
             name: 'Paddington 2',
-            total_score: 9.356416,
+            total_score: 16.944444,
           },
         ],
-        finalists: ['7ddc6826-8f1e-3e14-ac34-e915a79c202e', 'b50cd426-947e-4697-2dbc-db6c26d1e385'],
+        finalists: ['7ddc6826-8f1e-3e14-ac34-e915a79c202e', '240967c0-62e5-88a7-a662-5dc029b84eaf'],
         tiebreaks: [],
-        finalist_names: ['Paddington 2', 'Mean Girls'],
+        finalist_names: ['Paddington 2', 'The Matrix'],
+      },
+      {
+        place: 3,
+        runoff: {
+          ties: 0.555556,
+          prefers_a: 1.871212,
+          prefers_b: 1.672494,
+          resolved_by: 'preference',
+          five_stars_a: 0.454545,
+          five_stars_b: 0.416667,
+        },
+        options: [
+          {
+            id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+            name: 'The Matrix',
+            total_score: 11.91317,
+          },
+        ],
+        finalists: ['240967c0-62e5-88a7-a662-5dc029b84eaf', '283438a5-4cf9-8a00-c399-cf9c72c9b2ac'],
+        tiebreaks: [],
+        finalist_names: ['The Matrix', 'Spirited Away'],
+      },
+      {
+        place: 4,
+        runoff: {
+          ties: 0.416667,
+          prefers_a: 2.422619,
+          prefers_b: 0.416667,
+          resolved_by: 'preference',
+          five_stars_a: 0.357143,
+          five_stars_b: 0,
+        },
+        options: [
+          {
+            id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
+            name: 'Spirited Away',
+            total_score: 9.169643,
+          },
+        ],
+        finalists: ['283438a5-4cf9-8a00-c399-cf9c72c9b2ac', 'b50cd426-947e-4697-2dbc-db6c26d1e385'],
+        tiebreaks: [],
+        finalist_names: ['Spirited Away', 'Mean Girls'],
       },
       {
         place: 5,
         runoff: {
           ties: 0.890609,
-          prefers_a: 1.500258,
+          prefers_a: 1.577903,
           prefers_b: 0.263158,
           resolved_by: 'preference',
           five_stars_a: 0,
@@ -2244,7 +2244,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           {
             id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
             name: 'Mean Girls',
-            total_score: 3.658927,
+            total_score: 3.799597,
           },
         ],
         finalists: ['b50cd426-947e-4697-2dbc-db6c26d1e385', '39a0de7f-1759-b30e-263f-30c1cb117e16'],
@@ -2270,7 +2270,12 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       {
         id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
         name: 'Knives Out',
-        share: 1,
+        share: 0.688298,
+      },
+      {
+        id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+        name: 'Paddington 2',
+        share: 0.311702,
       },
       {
         id: '39a0de7f-1759-b30e-263f-30c1cb117e16',
@@ -2280,11 +2285,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       {
         id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
         name: 'Mean Girls',
-        share: 0,
-      },
-      {
-        id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
-        name: 'Paddington 2',
         share: 0,
       },
       {
@@ -2315,8 +2315,8 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           name: 'Knives Out',
           description:
             'When renowned crime novelist Harlan Thrombey is found dead at his estate just after his 85th birthday, the inquisitive and debonair Detective Benoit Blanc is mysteriously enlisted to investigate.',
-          total_score: 33,
-          average_score: 3.67,
+          total_score: 29,
+          average_score: 3.22,
         },
         {
           id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
@@ -2432,7 +2432,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '423ac0bc-0ec1-c015-0f1a-5110613b338c',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-10-19T13:36:54.02919-07:00',
+        created_at: '2026-11-04T21:55:19.333951-08:00',
         description:
           'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
         show_voters: true,

@@ -187,6 +187,16 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
     await page.keyboard.press('Escape')
     await expect(dialog).toBeHidden()
   }
+
+  // The movie question splits the evening, and lists only the films given a
+  // share: the percentages already account for the whole.
+  await page.goto('#/sample-result-movie')
+  await openMore()
+  await page.getByRole('menuitem', { name: 'Fractional winners' }).click()
+  const shares = page.getByRole('dialog', { name: 'Fractional winners' })
+  await expect(shares.getByRole('listitem')).toHaveText(['Knives Out69%', 'Paddington 231%'])
+  await page.keyboard.press('Escape')
+  await expect(shares).toBeHidden()
 })
 
 test('a finished poll goes from one skeleton straight to its results', async ({ page }) => {

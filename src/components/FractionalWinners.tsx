@@ -60,7 +60,9 @@ const PIE_SIZE = 200
  * stay on screen.
  *
  * The pie is decorative and inert; the list under it is the answer, in words
- * and whole percentages that add up to 100 (`percentagesOf`).
+ * and whole percentages that add up to 100 (`percentagesOf`). **Options with
+ * no share are left off the list**: the percentages already account for the
+ * whole, so a row of *No share* per option only buries the answer.
  *
  * **The sample cannot remove**: it answers from a recording
  * (`samplePollData.ts`), which holds the shares with nothing taken out.
@@ -219,12 +221,11 @@ function Shares({
     )
   }
 
-  const percent = percentagesOf(Object.fromEntries(shares.map((s) => [s.id, s.share])))
+  const shared = shares.filter((s) => s.share > 0)
+  const percent = percentagesOf(Object.fromEntries(shared.map((s) => [s.id, s.share])))
   // Largest first, as the database sends them, so colours run in order of size.
-  const colorOf = new Map(shares.map((s, i) => [s.id, SLICE_COLORS[i % SLICE_COLORS.length]]))
-  const data = shares
-    .filter((s) => s.share > 0)
-    .map((s) => ({ name: s.name, value: s.share, color: colorOf.get(s.id)! }))
+  const colorOf = new Map(shared.map((s, i) => [s.id, SLICE_COLORS[i % SLICE_COLORS.length]]))
+  const data = shared.map((s) => ({ name: s.name, value: s.share, color: colorOf.get(s.id)! }))
 
   return (
     <>
@@ -246,8 +247,7 @@ function Shares({
       </Box>
 
       <Stack component="ul" gap={4} m={0} p={0} style={{ listStyle: 'none' }}>
-        {shares.map((s) => {
-          const shared = s.share > 0
+        {shared.map((s) => {
           const whole = percent[s.id]
           return (
             <Group component="li" key={s.id} gap="sm" wrap="nowrap" align="center">
@@ -257,24 +257,18 @@ function Shares({
                 style={{
                   borderRadius: 2,
                   flexShrink: 0,
-                  backgroundColor: shared ? cssColor(colorOf.get(s.id)!) : 'transparent',
-                  border: shared ? undefined : '1px solid var(--mantine-color-dimmed)',
+                  backgroundColor: cssColor(colorOf.get(s.id)!),
                 }}
               />
-              <Text
-                fw={shared ? 600 : undefined}
-                c={shared ? undefined : 'dimmed'}
-                style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}
-              >
+              <Text fw={600} style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
                 {s.name}
               </Text>
               <Text
                 size="sm"
-                fw={shared ? 600 : undefined}
-                c={shared ? undefined : 'dimmed'}
+                fw={600}
                 style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
               >
-                {!shared ? 'No share' : whole === 0 ? 'Under 1%' : `${whole}%`}
+                {whole === 0 ? 'Under 1%' : `${whole}%`}
               </Text>
               {removable && (
                 <Tooltip label="Remove and share again">
