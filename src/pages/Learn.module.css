@@ -118,8 +118,19 @@
   border: 1px solid var(--mantine-color-default-border);
 }
 
+/* The accordion pads both the control and the label inside it, and more at the
+   sides than above and below. One even margin all round instead, the home
+   tiles' own, and the open section's body inset by the same. */
 .choiceControl {
-  padding-block: var(--mantine-spacing-xs);
+  padding: var(--mantine-spacing-sm);
+}
+
+.choiceLabel {
+  padding-block: 0;
+}
+
+.choiceContent {
+  padding: 0 var(--mantine-spacing-sm) var(--mantine-spacing-sm);
 }
 
 /* The fold-out's caret, pointing down when closed and up when open. */

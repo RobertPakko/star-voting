@@ -18,6 +18,7 @@ import {
   ThemeIcon,
   Title,
   VisuallyHidden,
+  type MantineColor,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import {
@@ -339,13 +340,24 @@ export function AllChoices() {
         onChange={setOpen}
         variant="separated"
         order={2}
-        classNames={{ item: classes.choice, control: classes.choiceControl }}
+        classNames={{
+          item: classes.choice,
+          control: classes.choiceControl,
+          label: classes.choiceLabel,
+          content: classes.choiceContent,
+        }}
       >
-        <Choice id={CHOICES.bestOption} icon={TrophyIcon} title="Best option" algorithms={['STAR']}>
+        <Choice
+          id={CHOICES.bestOption}
+          icon={TrophyIcon}
+          color="yellow"
+          title="Best option / time"
+          algorithms={['STAR']}
+        >
           <Text>
-            The one option the group likes best. This is what every poll&rsquo;s result shows, and
-            it&rsquo;s plain STAR: everyone scores every option, the two highest scorers go to a
-            runoff, and the finalist more voters preferred wins.
+            The one option the group likes best, or on a poll looking for a meeting slot, the one
+            time. It&rsquo;s plain STAR: everyone scores every option, the two highest scorers go to
+            a runoff, and the finalist more voters preferred wins.
           </Text>
           <Text>
             For our six friends, {labelOf(finalists[0])} and {finalists[1]} have the most stars, so
@@ -367,6 +379,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.consensusOption}
           icon={HandshakeIcon}
+          color="teal"
           title="Consensus option / time"
           algorithms={['Maximin', 'STAR']}
         >
@@ -403,6 +416,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.optionRanking}
           icon={ListNumbersIcon}
+          color="blue"
           title="Option ranking"
           algorithms={['Iterative STAR']}
         >
@@ -438,6 +452,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.multipleWinners}
           icon={RankingIcon}
+          color="violet"
           title="Multiple winners"
           algorithms={['Iterative STAR', 'Ballot reweighting']}
         >
@@ -503,6 +518,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.sequentialPolls}
           icon={RepeatIcon}
+          color="cyan"
           title="Sequential polls"
           algorithms={['Iterative STAR', 'Ballot reweighting']}
         >
@@ -546,6 +562,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.proportionalBudget}
           icon={CoinsIcon}
+          color="green"
           title="Proportional budget"
           algorithms={['Iterative STAR', 'Ballot reweighting', 'Cost adjustment']}
         >
@@ -585,6 +602,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.fractionalWinners}
           icon={ChartPieSliceIcon}
+          color="grape"
           title="Fractional winners"
           algorithms={['Nash']}
         >
@@ -639,6 +657,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.optionAllocation}
           icon={ArrowsSplitIcon}
+          color="orange"
           title="Option allocation"
           algorithms={['Nash']}
         >
@@ -682,6 +701,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.groupFormation}
           icon={UsersThreeIcon}
+          color="pink"
           title="Group formation"
           algorithms={['Nash']}
         >
@@ -718,6 +738,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.fractionalBudget}
           icon={PiggyBankIcon}
+          color="lime"
           title="Fractional budget"
           algorithms={['Nash', 'Cost adjustment']}
         >
@@ -758,6 +779,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.optimalSwap}
           icon={SwapIcon}
+          color="indigo"
           title="Optimal swap"
           algorithms={['Shapley–Scarf']}
         >
@@ -798,6 +820,7 @@ export function AllChoices() {
         <Choice
           id={CHOICES.bipartiteMatching}
           icon={LinkSimpleIcon}
+          color="red"
           title="Bipartite matching"
           algorithms={['Gale–Shapley']}
         >
@@ -865,12 +888,15 @@ export function AllChoices() {
 function Choice({
   id,
   icon: Glyph,
+  color,
   title,
   algorithms,
   children,
 }: {
   id: string
   icon: Icon
+  /** The icon's colour, a different one per section so the folded list is easy to scan. */
+  color: MantineColor
   title: string
   algorithms: string[]
   children: ReactNode
@@ -879,19 +905,20 @@ function Choice({
     <Accordion.Item value={id} id={id} className={classes.target}>
       <Accordion.Control
         icon={
-          <ThemeIcon size={36} radius="md" variant="light" color="orange">
-            <Glyph size={20} aria-hidden />
+          <ThemeIcon size={40} radius="md" variant="light" color={color}>
+            <Glyph size={22} aria-hidden />
           </ThemeIcon>
         }
       >
-        <Stack gap={4}>
-          <Text fw={700} size="lg" lh={1.3}>
+        {/* The title and tags together are the icon's 40px: 20 + 2 + 18. */}
+        <Stack gap={2}>
+          <Text fw={700} size="md" lh="20px">
             {title}
           </Text>
           <Group gap={4}>
             <VisuallyHidden>{algorithms.length > 1 ? 'Algorithms:' : 'Algorithm:'}</VisuallyHidden>
             {algorithms.map((name) => (
-              <Badge key={name} variant="light" color={badgeColor.algorithm}>
+              <Badge key={name} size="sm" variant="light" color={badgeColor.algorithm}>
                 {name}
               </Badge>
             ))}

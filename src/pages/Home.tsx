@@ -23,11 +23,11 @@ import {
   ListBulletsIcon,
   PlayCircleIcon,
   PlusIcon,
-  PuzzlePieceIcon,
   QuestionIcon,
   ScalesIcon,
   SignInIcon,
   SignOutIcon,
+  SignpostIcon,
   SparkleIcon,
   StarIcon,
   type Icon,
@@ -120,8 +120,8 @@ export function Home() {
 
         <Tile to="/star" icon={QuestionIcon} color="orange" title="What’s STAR?" />
         <Tile to="/why-star" icon={ScalesIcon} color="orange" title="Why STAR?" />
-        <Tile to="/choices" icon={PuzzlePieceIcon} color="orange" title="All choices" />
-        <Tile to="/examples" icon={LightbulbIcon} color="orange" title="More examples" />
+        <Tile to="/choices" icon={SignpostIcon} color="teal" title="All choices" />
+        <Tile to="/examples" icon={LightbulbIcon} color="lime" title="More examples" />
 
         {/* Installing is the more useful offer; once installed, the slot
             goes to the code, which App features also links. */}
