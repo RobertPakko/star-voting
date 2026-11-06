@@ -3264,6 +3264,14 @@ between two is still a question. `/choices` works it on the same example
   (`percentagesOf` in [`lib/shares.ts`](src/lib/shares.ts), which
   `/choices` uses too), so colour never carries the answer alone. Options
   with no share are left off: the percentages already add up to the whole.
+- **The pie is also a wheel.** *Spin the wheel* draws one option with
+  probability equal to its share, for a split made one decision at a time
+  ([`lib/wheel.ts`](src/lib/wheel.ts)). **The draw is made before the wheel
+  moves** — option and resting place both — and the spin only animates
+  there, so timing cannot change the answer. Unlike the coin it is a fresh
+  draw per spin, per reader, written nowhere. Like the coin it is allowed to
+  be enjoyed: it turns for four seconds on a decelerating curve of its own,
+  and under reduced motion jumps straight to where it stops.
 
 **It is a separate request, made when the button is pressed**
 (`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the
@@ -3434,8 +3442,8 @@ before a tie is foreseeable. The hash is FNV-1a with murmur3's avalanche, which
 is load-bearing (raw FNV's lowest bit is the parity of the input bytes).
 `coinFlip.test.ts` asserts stability and fairness.
 
-**The coin turns** — the exception to the Motion rule, because the point is to
-be seen to be a coin. It takes twice `--motion-slow` and ends on a whole
+**The coin turns** — an exception to the Motion rule, as is the fractional
+wheel, because the point is to be seen to be a coin. It takes twice `--motion-slow` and ends on a whole
 number of turns. Reduced motion shows the resting frame; the result is also
 stated in text.
 

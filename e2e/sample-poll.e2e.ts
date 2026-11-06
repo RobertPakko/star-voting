@@ -199,6 +199,14 @@ test('the results show the rounds, the tie-break and the option ranking', async 
     'Paddington 224%',
     'The Matrix15%',
   ])
+
+  // The wheel draws one of the films with a share, and says which.
+  await shares.getByRole('button', { name: 'Spin the wheel' }).click()
+  await expect(shares).toContainText(/The wheel landed on (Knives Out|Paddington 2|The Matrix)\./, {
+    timeout: 10_000,
+  })
+  await expect(shares.getByRole('button', { name: 'Spin again' })).toBeEnabled()
+  await expectAccessible(page, 'the fractional winners wheel')
   await page.keyboard.press('Escape')
   await expect(shares).toBeHidden()
 

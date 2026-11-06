@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { ActionIcon, Anchor, Box, Group, Modal, Stack, Text, Tooltip } from '@mantine/core'
+import { useEffect, useRef, useState } from 'react'
+import { ActionIcon, Anchor, Box, Button, Group, Modal, Stack, Text, Tooltip } from '@mantine/core'
 import { PieChart } from '@mantine/charts'
 import { useReducedMotion } from '@mantine/hooks'
-import { XIcon } from '@phosphor-icons/react'
+import { SpinnerBallIcon, XIcon } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
@@ -10,6 +10,9 @@ import { relabelScores } from '../lib/schedule'
 import { fractionalSharesSchema, parseAnswer } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
 import { percentagesOf } from '../lib/shares'
+import { landingFor, rotationTo } from '../lib/wheel'
+import { motionMs } from '../lib/motion'
+import { announce } from '../lib/announce'
 import { count } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { FractionalShare, PollResults } from '../lib/types'
@@ -260,22 +263,13 @@ function Shares({
 
   return (
     <>
-      {/* Inert too: the chart draws a focusable surface. */}
-      <Box aria-hidden inert style={{ display: 'flex', justifyContent: 'center' }}>
-        <PieChart
-          data={data}
-          size={PIE_SIZE}
-          startAngle={90}
-          endAngle={-270}
-          strokeWidth={1}
-          accessibilityLayer={false}
-          pieProps={{
-            isAnimationActive: !reducedMotion,
-            animationDuration: 500,
-            animationEasing: 'ease-out',
-          }}
-        />
-      </Box>
+      <Wheel
+        // A new set of shares is a new wheel: an answer on screen was drawn from the old one.
+        key={shared.map((s) => `${s.id}:${s.share}`).join(',')}
+        shared={shared}
+        data={data}
+        reducedMotion={reducedMotion}
+      />
 
       <Stack component="ul" gap={4} m={0} p={0} style={{ listStyle: 'none' }}>
         {shared.map((s) => {
@@ -319,5 +313,140 @@ function Shares({
         })}
       </Stack>
     </>
+  )
+}
+
+/** Whole turns a spin makes before it settles, so it reads as a spin. */
+const TURNS = 5
+
+/**
+ * A wheel slowing under friction: fast off the mark, a long slow finish. The
+ * one place the app leaves `--motion-ease`, which settles too early for a
+ * wheel and gives away where it will stop.
+ */
+const WHEEL_EASE = 'cubic-bezier(0.1, 0.6, 0.15, 1)'
+
+/**
+ * The pie, which is also a wheel: *Spin the wheel* draws one option with
+ * probability equal to its share (`landingFor`) and turns the pie until that
+ * option is under the pointer. For a split made one decision at a time — a
+ * run of movie nights, whose turn it is to pick — so that over many spins
+ * each option comes up about as often as its share says.
+ *
+ * **The draw comes first and the spin only shows it.** Where the wheel stops
+ * is decided before it moves, so nothing about the animation's timing can
+ * change the answer. It is the second animation in the app allowed to be
+ * enjoyed, after the coin, and for the same reason: a name simply stated
+ * reads as a verdict, and the point is to be seen to be drawn. Under reduced
+ * motion the wheel jumps to where it stops.
+ *
+ * Every spin is a fresh draw, made in this browser and written nowhere; see
+ * `wheel.ts` for why this, unlike the coin, is not the same for every reader.
+ * The sentence under the button states the answer, and it is announced.
+ */
+function Wheel({
+  shared,
+  data,
+  reducedMotion,
+}: {
+  shared: FractionalShare[]
+  data: { name: string; value: number; color: string }[]
+  reducedMotion: boolean
+}) {
+  const wheel = useRef<HTMLDivElement>(null)
+  const turned = useRef(0)
+  const running = useRef<Animation | null>(null)
+  const [spinning, setSpinning] = useState(false)
+  const [landed, setLanded] = useState<string | null>(null)
+
+  useEffect(() => () => running.current?.cancel(), [])
+
+  const spin = () => {
+    const element = wheel.current
+    const landing = landingFor(shared)
+    if (!element || !landing) return
+    const name = shared.find((s) => s.id === landing.id)!.name
+
+    const animate = !reducedMotion && typeof element.animate === 'function'
+    const from = turned.current
+    const to = rotationTo(from, landing.angle, animate ? TURNS : 0)
+    // Kept within one turn, so the numbers never grow however often it is spun.
+    turned.current = to % 360
+    element.style.transform = `rotate(${turned.current}deg)`
+
+    const done = () => {
+      setSpinning(false)
+      setLanded(name)
+      announce(`The wheel landed on ${name}.`)
+    }
+    if (!animate) return done()
+
+    setLanded(null)
+    setSpinning(true)
+    running.current = element.animate(
+      [{ transform: `rotate(${from}deg)` }, { transform: `rotate(${to}deg)` }],
+      { duration: motionMs('slow') * 8, easing: WHEEL_EASE },
+    )
+    // A cancelled spin (the wheel unmounting) rejects; there is nobody to tell.
+    running.current.finished.then(done, () => {})
+  }
+
+  return (
+    <Stack gap="sm" align="center">
+      {/* Inert too: the chart draws a focusable surface. */}
+      <Box aria-hidden inert pos="relative" pt={6}>
+        <div ref={wheel}>
+          <PieChart
+            data={data}
+            size={PIE_SIZE}
+            startAngle={90}
+            endAngle={-270}
+            strokeWidth={1}
+            accessibilityLayer={false}
+            pieProps={{
+              isAnimationActive: !reducedMotion,
+              animationDuration: 500,
+              animationEasing: 'ease-out',
+            }}
+          />
+        </div>
+        {/* The pointer, which stays still while the wheel turns under it. */}
+        <Box
+          pos="absolute"
+          top={0}
+          left="50%"
+          style={{
+            transform: 'translateX(-50%)',
+            width: 0,
+            height: 0,
+            borderLeft: '9px solid transparent',
+            borderRight: '9px solid transparent',
+            borderTop: '18px solid var(--mantine-color-text)',
+          }}
+        />
+      </Box>
+
+      <Button
+        variant="default"
+        size="compact-sm"
+        leftSection={<SpinnerBallIcon size={14} aria-hidden />}
+        onClick={spin}
+        disabled={spinning}
+      >
+        {landed ? 'Spin again' : 'Spin the wheel'}
+      </Button>
+
+      <Text size="sm" ta="center">
+        {landed ? (
+          <>
+            The wheel landed on <b>{landed}</b>.
+          </>
+        ) : spinning ? (
+          'Spinning…'
+        ) : (
+          'Deciding one at a time? Spin, and each option comes up as often as its share.'
+        )}
+      </Text>
+    </Stack>
   )
 }
