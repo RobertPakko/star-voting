@@ -61,7 +61,7 @@ test('a voter can answer all three questions and is taken to the result', async 
 
   // The sample's last ballot leads to the same poll after it was decided.
   await expect(page).toHaveURL(/#\/sample-result-dinner$/)
-  await expect(page.getByText(/^Winner: /)).toBeVisible()
+  await expect(page.getByText(/^Best (option|time): /)).toBeVisible()
 })
 
 test('a vote can be changed before the results are out', async ({ page }) => {
@@ -133,7 +133,12 @@ test('a name typed and not yet sent survives a refresh', async ({ page }) => {
 
 test('the results show the rounds, the tie-break and the option ranking', async ({ page }) => {
   await page.goto('#/sample-result-dinner')
-  await expect(page.getByText('Winner: Two big pizzas')).toBeVisible()
+  await expect(page.getByText('Best option: Two big pizzas')).toBeVisible()
+  // The bar names what the question asked for, and leads to where it is explained.
+  await expect(page.getByRole('link', { name: 'What best option means' })).toHaveAttribute(
+    'href',
+    '#/choices?section=best-option',
+  )
   await expect(page.getByRole('heading', { name: 'Scoring' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Runoff' })).toBeVisible()
   // The runoff elected the winner, so it is read first, straight under it.
@@ -239,7 +244,7 @@ test('a finished poll goes from one skeleton straight to its results', async ({ 
     requestAnimationFrame(frame)
   })
   await page.goto('#/sample-result-dinner')
-  await expect(page.getByText('Winner: Two big pizzas')).toBeVisible()
+  await expect(page.getByText('Best option: Two big pizzas')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Ballots' })).toBeVisible()
   const shapes = await page.evaluate(
     () => (window as unknown as { skeletonShapes: number[] }).skeletonShapes,

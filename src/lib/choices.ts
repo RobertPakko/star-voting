@@ -9,15 +9,18 @@ import { SCORING_ROWS_MAX } from './resultsRows'
  * Several best times are a time poll's *More results*, not a kind of their
  * own.
  */
-export const CHOICES: Record<PollKind, { label: string }> = {
-  option: { label: 'Best option' },
-  time: { label: 'Best time' },
-  ranking: { label: 'Option ranking' },
-  multiple: { label: 'Multiple winners' },
-  fractional: { label: 'Fractional winners' },
-  consensus: { label: 'Consensus option' },
-  consensus_time: { label: 'Consensus time' },
+export const CHOICES: Record<PollKind, { label: string; section: string }> = {
+  option: { label: 'Best option', section: 'best-option' },
+  time: { label: 'Best time', section: 'best-option' },
+  ranking: { label: 'Option ranking', section: 'option-ranking' },
+  multiple: { label: 'Multiple winners', section: 'multiple-winners' },
+  fractional: { label: 'Fractional winners', section: 'fractional-winners' },
+  consensus: { label: 'Consensus option', section: 'consensus-option' },
+  consensus_time: { label: 'Consensus time', section: 'consensus-option' },
 }
+
+/** Where `/choices` explains a kind; each `section` is one of its card ids. */
+export const choicePage = (kind: PollKind) => `/choices?section=${CHOICES[kind].section}`
 
 /**
  * Whether a kind's ballot is a calendar: its options are the starts of
@@ -37,12 +40,26 @@ export const CHOICE_ORDER: PollKind[] = [
   'fractional',
 ]
 
-/** The results a tally can offer beside STAR's own answer, each a modal. */
-export type ResultTool = Extract<PollKind, 'ranking' | 'multiple' | 'fractional' | 'consensus'>
+/**
+ * The results a tally can offer, each a modal where it is not the one the
+ * page opens on. `option` is STAR's own answer: the winner, the runoff and
+ * the scoring round.
+ */
+export type ResultTool = Extract<
+  PollKind,
+  'option' | 'ranking' | 'multiple' | 'fractional' | 'consensus'
+>
+
+/** The kind a tool is on a poll of this kind: on a calendar, an option is a time. */
+export function toolKind(tool: ResultTool, kind: PollKind): PollKind {
+  if (!isCalendar(kind)) return tool
+  if (tool === 'option') return 'time'
+  if (tool === 'consensus') return 'consensus_time'
+  return tool
+}
 
 /** A result tool's name on a poll of this kind: a time poll's consensus is a time. */
-export const toolLabel = (tool: ResultTool, kind: PollKind) =>
-  tool === 'consensus' && isCalendar(kind) ? CHOICES.consensus_time.label : CHOICES[tool].label
+export const toolLabel = (tool: ResultTool, kind: PollKind) => CHOICES[toolKind(tool, kind)].label
 
 /**
  * What a kind's number (`kind_value`) counts, for the kinds that take one.
@@ -71,6 +88,7 @@ export const DEFAULT_CHOICE_NUMBER: Partial<Record<PollKind, number>> = {
  * `poll_tally` applies the same floors to the result it carries.
  */
 export function offers(tool: ResultTool, results: PollResults) {
+  if (tool === 'option') return true
   return tool === 'fractional' || tool === 'consensus'
     ? results.option_count >= 2
     : results.option_count >= 3

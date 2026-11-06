@@ -1,0 +1,508 @@
+import { useEffect, useState } from 'react'
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Divider,
+  Group,
+  Popover,
+  Progress,
+  Stack,
+  Text,
+} from '@mantine/core'
+import { PieChart } from '@mantine/charts'
+import { useReducedMotion } from '@mantine/hooks'
+// Imported here so the chart CSS ships in the results chunk, never a ballot's.
+import '@mantine/charts/styles.css'
+import { InfoIcon, ListBulletsIcon } from '@phosphor-icons/react'
+import { badgeColor } from '../lib/badgeColors'
+import type { FiveStarStep, HeadToHeadStep, PollResults, Runoff, Tiebreak } from '../lib/types'
+import { AllScores } from './AllScores'
+import { NameList } from './NameList'
+import { OptionDescription } from './OptionDescription'
+import { RoundCard } from './RoundCard'
+import { count, stars, voters } from '../lib/plural'
+import { capRows, RESULTS_ROWS_MAX } from '../lib/resultsRows'
+import { splitAdvanced } from '../lib/tiebreak'
+import type { ResultsSource } from './Results'
+import classes from './Results.module.css'
+
+/**
+ * STAR's two rounds, the runoff over the scoring round: how the best option
+ * was chosen. Drawn on the results page of a question that asked for the best
+ * option or time, and in the *Best option* modal (`BestOption`) on any other.
+ *
+ * The runoff comes first: it is what elected the winner, and the scoring
+ * round's leader often isn't the winner.
+ */
+export function StarRounds({
+  source,
+  results,
+}: {
+  source: ResultsSource
+  /** Already relabelled by Results on a time poll; see relabelResults. */
+  results: PollResults
+}) {
+  const shown = results
+  const nameById = new Map(shown.options.map((o) => [o.id, o.name]))
+  const maxScore = Math.max(1, ...shown.options.map((o) => o.total_score))
+  // The database sends the top rows only (`poll_results_rows()`); the rest
+  // are behind *All scores*.
+  const unshown = shown.option_count - shown.options.length
+  const [allScoresOpen, setAllScoresOpen] = useState(false)
+
+  // Bars render at zero, then grow. Stays true so a live update moves bars
+  // from where they were instead of replaying the reveal.
+  const [grown, setGrown] = useState(false)
+  useEffect(() => {
+    // Two frames: the zero width must actually be painted before the
+    // transition, and one rAF after an effect doesn't guarantee that.
+    let second = 0
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setGrown(true))
+    })
+    return () => {
+      cancelAnimationFrame(first)
+      cancelAnimationFrame(second)
+    }
+  }, [])
+
+  return (
+    <Stack gap="md">
+      {shown.runoff && shown.finalists.length === 2 && (
+        <RoundCard
+          title="Runoff"
+          tieBreak={
+            shown.runoff.resolved_by === 'preference' ? null : (
+              <RunoffTieBreak results={shown} runoff={shown.runoff} nameById={nameById} />
+            )
+          }
+        >
+          <RunoffChart
+            a={nameById.get(shown.finalists[0]) ?? ''}
+            b={nameById.get(shown.finalists[1]) ?? ''}
+            runoff={shown.runoff}
+          />
+        </RoundCard>
+      )}
+
+      <RoundCard
+        title="Scoring"
+        tieBreak={
+          shown.tiebreaks.length > 0 ? <ScoringTieBreaks tiebreaks={shown.tiebreaks} /> : null
+        }
+        tieBreakLabel={shown.tiebreaks.length > 1 ? 'tie-breaks' : 'tie-break'}
+      >
+        <Stack gap="xs">
+          {shown.options.map((o, index) => (
+            <div key={o.id}>
+              <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
+                <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+                  <Text size="sm" fw={shown.finalists.includes(o.id) ? 700 : 400} truncate>
+                    {o.name}
+                  </Text>
+                  {o.description && <OptionNote name={o.name} description={o.description} />}
+                </Group>
+                <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                  {stars(o.total_score)} (avg {o.average_score})
+                </Text>
+              </Group>
+              {/* The stars are already in words above. */}
+              <Progress
+                aria-hidden
+                value={grown ? (o.total_score / maxScore) * 100 : 0}
+                color={shown.finalists.includes(o.id) ? 'blue' : 'var(--muted-bar)'}
+                classNames={{ root: classes.bar, section: classes.section }}
+                // Staggers the bars; see Results.module.css.
+                style={{ '--row': index } as React.CSSProperties}
+              />
+            </div>
+          ))}
+          {unshown > 0 && (
+            <Group justify="space-between" wrap="nowrap" gap="xs">
+              <Text size="sm" c="dimmed">
+                The top {shown.options.length} of {shown.option_count} options.
+              </Text>
+              <Button
+                variant="default"
+                size="compact-sm"
+                leftSection={<ListBulletsIcon size={14} aria-hidden />}
+                onClick={() => setAllScoresOpen(true)}
+                style={{ flex: 'none' }}
+              >
+                All scores
+              </Button>
+              {/* Portalled, so it takes no room in the card. */}
+              <AllScores
+                source={source}
+                optionCount={shown.option_count}
+                finalists={shown.finalists}
+                opened={allScoresOpen}
+                onClose={() => setAllScoresOpen(false)}
+              />
+            </Group>
+          )}
+        </Stack>
+      </RoundCard>
+    </Stack>
+  )
+}
+
+/** The score round's tie-breaks, one section per tie in the order met. */
+function ScoringTieBreaks({ tiebreaks }: { tiebreaks: Tiebreak[] }) {
+  return (
+    <Stack gap="sm">
+      {tiebreaks.map((tb, i) => (
+        <Stack key={i} gap="xs">
+          {i > 0 && <Divider />}
+          <Text size="sm">
+            <NameList names={tb.tied} max={RESULTS_ROWS_MAX} /> tied at {stars(tb.tied_at)} for{' '}
+            {tb.slots === 1 ? 'the last runoff slot' : `${tb.slots} runoff slots`}.
+          </Text>
+          {tb.steps.map((step, j) => (
+            <Stack key={step.rule} gap={2}>
+              <StepHeading
+                n={j + 1}
+                label={step.rule === 'head_to_head' ? 'Head-to-head preference' : 'Five-star votes'}
+                decisive={step.decisive}
+              />
+              {step.rule === 'head_to_head' ? (
+                <HeadToHead step={step} />
+              ) : (
+                <FiveStars step={step} />
+              )}
+            </Stack>
+          ))}
+
+          <Text size="sm" c={tb.resolved_by === 'random' ? 'orange' : undefined}>
+            {tb.resolved_by === 'random'
+              ? randomNote(tb)
+              : renderAdvancedNames(
+                  tb.advanced,
+                  '',
+                  ` advanced on ${
+                    tb.resolved_by === 'head_to_head'
+                      ? 'head-to-head preference'
+                      : 'five-star votes'
+                  }.`,
+                )}
+          </Text>
+        </Stack>
+      ))}
+    </Stack>
+  )
+}
+
+/** How a level runoff was settled: higher score total, then five-star votes. */
+function RunoffTieBreak({
+  results,
+  runoff,
+  nameById,
+}: {
+  results: PollResults
+  runoff: Runoff
+  nameById: Map<string, string>
+}) {
+  const [aId, bId] = results.finalists
+  const a = nameById.get(aId) ?? aId
+  const b = nameById.get(bId) ?? bId
+  const total = (id: string) => results.options.find((o) => o.id === id)?.total_score ?? 0
+  const winner = results.winner_id ? nameById.get(results.winner_id) : null
+
+  return (
+    <Stack gap="xs">
+      <Text size="sm">
+        <strong>{a}</strong> and <strong>{b}</strong> were each preferred by{' '}
+        {voters(runoff.prefers_a)}
+      </Text>
+
+      <Stack gap={2}>
+        <StepHeading
+          n={1}
+          label="More stars in total"
+          decisive={runoff.resolved_by === 'higher_score'}
+        />
+        <Text size="sm" c="dimmed" pl="md">
+          <strong>{a}</strong>: {stars(total(aId))}
+        </Text>
+        <Text size="sm" c="dimmed" pl="md">
+          <strong>{b}</strong>: {stars(total(bId))}
+        </Text>
+      </Stack>
+
+      {runoff.resolved_by !== 'higher_score' && (
+        <Stack gap={2}>
+          <StepHeading
+            n={2}
+            label="Five-star votes"
+            decisive={runoff.resolved_by === 'five_star_votes'}
+          />
+          <Text size="sm" c="dimmed" pl="md">
+            <strong>{a}</strong>: {fiveStarVotes(runoff.five_stars_a)}
+          </Text>
+          <Text size="sm" c="dimmed" pl="md">
+            <strong>{b}</strong>: {fiveStarVotes(runoff.five_stars_b)}
+          </Text>
+        </Stack>
+      )}
+
+      {runoff.resolved_by === 'unresolved' || !winner ? (
+        <Text size="sm" c="orange">
+          Level on preference, on total stars and on five-star votes, so there is no winner.
+        </Text>
+      ) : (
+        <Text size="sm">
+          <strong>{winner}</strong> won on{' '}
+          {runoff.resolved_by === 'higher_score' ? 'more stars in total' : 'five-star votes'}.
+        </Text>
+      )}
+    </Stack>
+  )
+}
+
+/** "First rule: …", named rather than numbered (a lone "1." looks like a truncated list). */
+function StepHeading({ n, label, decisive }: { n: number; label: string; decisive: boolean }) {
+  return (
+    <Group gap="xs">
+      <Text size="sm" fw={600}>
+        {RULE_ORDINALS[n - 1] ?? `Rule ${n}`}: {label}
+      </Text>
+      <Badge size="xs" variant="light" color={decisive ? badgeColor.done : badgeColor.unsettled}>
+        {decisive ? 'Decisive' : 'Still tied'}
+      </Badge>
+    </Group>
+  )
+}
+
+/** Every tie-break has at most two rules. */
+const RULE_ORDINALS = ['First rule', 'Second rule']
+
+const fiveStarVotes = (n: number) => `${n} ${n === 1 ? 'five-star vote' : 'five-star votes'}`
+
+/**
+ * Runoff colours: blue and violet (the app's gradient ends) to tell the
+ * finalists apart, grey for "scored equally". Names are always written too.
+ */
+const RUNOFF_COLORS = { a: 'blue.6', b: 'violet.6', equal: 'gray.5' } as const
+
+const cssColor = (color: string) => `var(--mantine-color-${color.replace('.', '-')})`
+
+/** The half pie's width; it is half as tall. */
+const CHART_SIZE = 240
+
+/**
+ * The runoff as a half pie, one finalist from each side, so the winner is
+ * visible past the top. Voters who scored both equally are left out (they
+ * don't decide it) except when nobody chose a side. Drawn as a full pie
+ * centred on the bottom edge of a half-height box. The chart animates from
+ * JS, so reduced motion is checked here; 500ms is `--motion-slow`.
+ */
+function RunoffChart({ a, b, runoff }: { a: string; b: string; runoff: Runoff }) {
+  const reducedMotion = useReducedMotion(false, { getInitialValueInEffect: false })
+  const nobodyChose = runoff.prefers_a + runoff.prefers_b === 0
+  // Zero slices would still draw a hairline of stroke.
+  const data = (
+    nobodyChose
+      ? [{ name: 'Scored equally', value: runoff.ties, color: RUNOFF_COLORS.equal }]
+      : [
+          { name: a, value: runoff.prefers_a, color: RUNOFF_COLORS.a },
+          { name: b, value: runoff.prefers_b, color: RUNOFF_COLORS.b },
+        ]
+  ).filter((d) => d.value > 0)
+
+  return (
+    <Stack gap="xs" align="center">
+      {data.length > 0 && (
+        // Inert too: the chart draws a focusable surface.
+        <Box aria-hidden inert>
+          <PieChart
+            data={data}
+            size={CHART_SIZE}
+            startAngle={180}
+            endAngle={0}
+            accessibilityLayer={false}
+            style={{ height: CHART_SIZE / 2, minHeight: CHART_SIZE / 2, marginTop: 8 }}
+            pieProps={{
+              cy: '100%',
+              isAnimationActive: !reducedMotion,
+              animationDuration: 500,
+              animationEasing: 'ease-out',
+            }}
+          />
+        </Box>
+      )}
+      <Group
+        justify="space-between"
+        align="flex-start"
+        wrap="nowrap"
+        gap="md"
+        w="100%"
+        maw={CHART_SIZE + 120}
+      >
+        <RunoffSide name={a} preferred={runoff.prefers_a} color={RUNOFF_COLORS.a} side="left" />
+        <RunoffSide name={b} preferred={runoff.prefers_b} color={RUNOFF_COLORS.b} side="right" />
+      </Group>
+      <Group gap={6} wrap="nowrap" justify="center">
+        {nobodyChose && runoff.ties > 0 && <Swatch color={RUNOFF_COLORS.equal} />}
+        <Text size="sm" c="dimmed">
+          {voters(runoff.ties)} scored both finalists equally.
+        </Text>
+      </Group>
+    </Stack>
+  )
+}
+
+/** One finalist under its end of the arc, swatch on the outside edge. */
+function RunoffSide({
+  name,
+  preferred,
+  color,
+  side,
+}: {
+  name: string
+  preferred: number
+  color: string
+  side: 'left' | 'right'
+}) {
+  return (
+    <Stack
+      gap={0}
+      align={side === 'left' ? 'flex-start' : 'flex-end'}
+      style={{ flex: 1, minWidth: 0 }}
+    >
+      <Group
+        gap={6}
+        wrap="nowrap"
+        style={{ minWidth: 0, flexDirection: side === 'left' ? 'row' : 'row-reverse' }}
+      >
+        <Swatch color={color} />
+        <Text size="sm" fw={700} ta={side} style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+          {name}
+        </Text>
+      </Group>
+      <Text size="sm" c="dimmed" ta={side}>
+        {voters(preferred)} preferred
+      </Text>
+    </Stack>
+  )
+}
+
+function Swatch({ color }: { color: string }) {
+  return (
+    <Box
+      w={10}
+      h={10}
+      style={{ borderRadius: 2, flexShrink: 0, backgroundColor: cssColor(color) }}
+    />
+  )
+}
+
+/** The head-to-head step: only two-way ties use it, so it is one comparison. */
+function HeadToHead({ step }: { step: HeadToHeadStep }) {
+  const m = step.matchups[0]
+  if (!m) return null
+
+  return (
+    <Stack gap={2} pl="md">
+      <Text size="sm" c="dimmed">
+        <strong>{m.a_name}</strong>: {voters(m.prefers_a)} preferred it
+      </Text>
+      <Text size="sm" c="dimmed">
+        <strong>{m.b_name}</strong>: {voters(m.prefers_b)} preferred it
+      </Text>
+      {m.ties > 0 && (
+        <Text size="sm" c="dimmed">
+          {voters(m.ties)} scored them equally.
+        </Text>
+      )}
+    </Stack>
+  )
+}
+
+/** Five-star counts, capped; the cut-off tail is options that weren't going to advance. */
+function FiveStars({ step }: { step: FiveStarStep }) {
+  const { rows, hidden } = capRows(step.results)
+
+  return (
+    <>
+      {rows.map((r) => (
+        <Text key={r.id} size="sm" c="dimmed" pl="md">
+          <strong>{r.name}</strong>: {fiveStarVotes(r.value)}
+        </Text>
+      ))}
+      {hidden > 0 && <Rest hidden={hidden} what="option" pl="md" />}
+    </>
+  )
+}
+
+/** Says how many a capped list left out, so it never looks complete. */
+function Rest({ hidden, what, pl }: { hidden: number; what: string; pl?: string }) {
+  return (
+    <Text size="sm" c="dimmed" pl={pl}>
+      …and {count(hidden, what)} not shown.
+    </Text>
+  )
+}
+
+/** A tie a draw settled: who, if anyone, the rules placed first, then the draw. */
+function randomNote(tb: Tiebreak) {
+  const { earned, drawn, drawnFrom } = splitAdvanced(tb)
+  if (earned.length === 0) {
+    return renderAdvancedNames(
+      drawn,
+      'Still tied after every rule; ',
+      ' advanced by random selection.',
+    )
+  }
+  return (
+    <>
+      <NameList names={earned} /> advanced on five-star votes. <NameList names={drawnFrom} /> were
+      still tied after every rule; <NameList names={drawn} /> advanced by random selection.
+    </>
+  )
+}
+
+function renderAdvancedNames(
+  advanced: { id: string; name: string }[],
+  prefix: string,
+  suffix: string,
+) {
+  return (
+    <>
+      {prefix}
+      <NameList names={advanced} />
+      {suffix}
+    </>
+  )
+}
+
+/**
+ * An option's description, folded into a popover beside its name (a tooltip
+ * can't be opened on a phone). Shown only for options that have one.
+ */
+function OptionNote({ name, description }: { name: string; description: string }) {
+  return (
+    <Popover width={280} position="bottom-start" withArrow shadow="md">
+      <Popover.Target>
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          size="sm"
+          radius="xl"
+          aria-label={`What ${name} said`}
+        >
+          <InfoIcon size={14} aria-hidden />
+        </ActionIcon>
+      </Popover.Target>
+      <Popover.Dropdown>
+        <Stack gap={4}>
+          <Text size="sm" fw={500}>
+            {name}
+          </Text>
+          <OptionDescription description={description} />
+        </Stack>
+      </Popover.Dropdown>
+    </Popover>
+  )
+}

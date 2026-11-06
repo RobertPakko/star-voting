@@ -5,10 +5,12 @@ import {
   ChartPieSliceIcon,
   HandshakeIcon,
   ListNumbersIcon,
+  TrophyIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
 import { CHOICES, offers, toolLabel, type ResultTool } from '../lib/choices'
 import type { PollResults } from '../lib/types'
+import { BestOption } from './BestOption'
 import { FullRanking } from './FullRanking'
 import { MultipleWinners } from './MultipleWinners'
 import { FractionalWinners } from './FractionalWinners'
@@ -32,14 +34,19 @@ export function MoreResults({
   source: ComponentProps<typeof FullRanking>['source']
   /** Already relabelled by Results on a time poll; see relabelResults. */
   results: PollResults
-  /** The result on the page, left off the menu; none where it is STAR's winner. */
-  shown?: Tool
+  /** The result on the page, left off the menu: `option` where it is STAR's winner. */
+  shown: Tool
 }) {
   const [open, setOpen] = useState<Tool | null>(null)
   const close = () => setOpen(null)
   const offered = (tool: Tool) => tool !== shown && offers(tool, results)
 
   const items = [
+    offered('option') && {
+      tool: 'option' as const,
+      label: toolLabel('option', results.kind),
+      icon: TrophyIcon,
+    },
     offered('consensus') && {
       tool: 'consensus' as const,
       label: toolLabel('consensus', results.kind),
@@ -89,6 +96,9 @@ export function MoreResults({
         </Menu.Dropdown>
       </Menu>
 
+      {offered('option') && (
+        <BestOption source={source} results={results} opened={open === 'option'} onClose={close} />
+      )}
       {offered('consensus') && (
         <Consensus
           source={source}

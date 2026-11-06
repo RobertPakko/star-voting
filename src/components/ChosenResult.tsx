@@ -62,6 +62,7 @@ export function ChosenResult({
           leftOut={leftOut}
           onLeftOut={setLeftOut}
           eventFor={eventFor}
+          bannered
         />
       )
   }

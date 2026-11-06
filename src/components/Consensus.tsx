@@ -73,6 +73,7 @@ export function ConsensusBody({
   leftOut,
   onLeftOut,
   eventFor,
+  bannered = false,
 }: {
   source: RankingSource
   results: PollResults
@@ -80,6 +81,11 @@ export function ConsensusBody({
   leftOut: LeftOut[]
   onLeftOut: (next: LeftOut[]) => void
   eventFor?: (id: string) => MeetingEvent | null
+  /**
+   * Drawn under the results page's bar, which already names the winner the
+   * tally carried: the body names one only once an option is removed.
+   */
+  bannered?: boolean
 }) {
   const h24 = use24HourTime()
   const kind = source.kind
@@ -181,6 +187,7 @@ export function ConsensusBody({
             removable={canRemove && !loading}
             onRemove={remove}
             eventFor={eventFor}
+            named={!bannered || leftOut.length > 0}
           />
         </Stack>
       )}
@@ -195,12 +202,14 @@ function Answer({
   removable,
   onRemove,
   eventFor,
+  named,
 }: {
   consensus: ConsensusResult
   h24: boolean
   removable: boolean
   onRemove: (option: LeftOut) => void
   eventFor?: (id: string) => MeetingEvent | null
+  named: boolean
 }) {
   const options = relabelScores(consensus.options, h24)
   const [a, b] = consensus.finalist_names.map((name) => formatWindow(name, h24))
@@ -212,7 +221,7 @@ function Answer({
 
   return (
     <>
-      {winner ? (
+      {!named ? null : winner ? (
         <Group justify="space-between" align="center" gap="sm">
           <Text fw={700} size="lg" style={{ overflowWrap: 'anywhere' }}>
             {winner.name}
