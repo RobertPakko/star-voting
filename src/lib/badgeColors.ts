@@ -62,6 +62,12 @@ export const badgeColor = {
    * is not a poll collecting its options.
    */
   unmarked: 'gray',
+
+  /**
+   * An algorithm a choice on `/choices` runs on. A label, not a state, and
+   * never on a poll's screens, so it claims a hue nothing else uses.
+   */
+  algorithm: 'indigo',
 } as const
 
 /**

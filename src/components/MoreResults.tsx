@@ -28,7 +28,7 @@ const offersFractionalWinners = (results: PollResults) => results.option_count >
  * The other answers the same ballots can give, as one menu in the result's
  * banner rather than a button each, so the banner keeps to the winner's name
  * and one control. Each item opens its own modal; which are offered is
- * decided here (`offers…`). `/extensions` is the page that explains all three.
+ * decided here (`offers…`). `/choices` is the page that explains all three.
  */
 export function MoreResults({
   source,
@@ -44,7 +44,7 @@ export function MoreResults({
   const items = [
     offersFullRanking(results) && {
       tool: 'ranking' as const,
-      label: 'Full ranking',
+      label: 'Option ranking',
       icon: ListNumbersIcon,
     },
     offersMultipleWinners(results) && {

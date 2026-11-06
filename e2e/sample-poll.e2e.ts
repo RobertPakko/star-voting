@@ -131,7 +131,7 @@ test('a name typed and not yet sent survives a refresh', async ({ page }) => {
   await expect(page.getByLabel('Your name')).toHaveValue('')
 })
 
-test('the results show the rounds, the tie-break and the full ranking', async ({ page }) => {
+test('the results show the rounds, the tie-break and the option ranking', async ({ page }) => {
   await page.goto('#/sample-result-dinner')
   await expect(page.getByText('Winner: Two big pizzas')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Scoring' })).toBeVisible()
@@ -154,17 +154,17 @@ test('the results show the rounds, the tie-break and the full ranking', async ({
   // div of its own at the head of every menu, which axe reads as a menu
   // holding something other than items.
   await expect(page.getByRole('menuitem')).toHaveText([
-    'Full ranking',
+    'Option ranking',
     'Multiple winners',
     'Fractional winners',
   ])
-  await page.getByRole('menuitem', { name: 'Full ranking' }).click()
-  const ranking = page.getByRole('dialog', { name: 'Full ranking' })
+  await page.getByRole('menuitem', { name: 'Option ranking' }).click()
+  const ranking = page.getByRole('dialog', { name: 'Option ranking' })
   await expect(ranking).toBeVisible()
   // Every option placed, the last included: the ranking is the whole field.
   for (const option of ['Two big pizzas', 'Taco bar', 'Thai delivery', 'Just snacks'])
     await expect(ranking).toContainText(option)
-  await expectAccessible(page, 'the full ranking')
+  await expectAccessible(page, 'the option ranking')
   await page.keyboard.press('Escape')
   await expect(ranking).toBeHidden()
 

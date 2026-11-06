@@ -1,7 +1,7 @@
 /**
  * Shares of a whole as the app writes them: whole percentages that add up to
  * exactly 100. Used by *Fractional winners* on a result and by its card on
- * `/extensions`, so the page and the modal round the same way.
+ * `/choices`, so the page and the modal round the same way.
  */
 
 /**

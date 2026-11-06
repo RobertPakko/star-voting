@@ -9,8 +9,8 @@ const PAGES: { path: string; title: string; name: string }[] = [
   { path: '#/', title: 'ChoiceLab', name: 'the home page' },
   { path: '#/sign-in', title: 'Sign in', name: 'the sign-in screen' },
   { path: '#/star', title: 'What is STAR?', name: 'What is STAR?' },
-  { path: '#/ties', title: 'Ties in STAR', name: 'Ties in STAR' },
-  { path: '#/extensions', title: 'STAR extensions', name: 'STAR extensions' },
+  { path: '#/choices', title: 'All choices', name: 'All choices' },
+  { path: '#/examples', title: 'More examples', name: 'More examples' },
   { path: '#/why-star', title: 'Why use STAR?', name: 'Why use STAR?' },
   { path: '#/features', title: 'App features', name: 'App features' },
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
@@ -87,8 +87,8 @@ test.describe('the home page', () => {
   test('is where the logo goes, and every page leads back to it', async ({ page }) => {
     for (const path of [
       '#/star',
-      '#/ties',
-      '#/extensions',
+      '#/choices',
+      '#/examples',
       '#/why-star',
       '#/features',
       '#/contact',
@@ -108,6 +108,16 @@ test.describe('the home page', () => {
       .getByRole('link', { name: /ChoiceLab/ })
       .click()
     await expect(page).toHaveURL(/#\/$/)
+  })
+
+  test('the pages that moved still answer at their old addresses', async ({ page }) => {
+    await page.goto('#/ties')
+    await expect(page).toHaveTitle('What is STAR?')
+    await expect(page).toHaveURL(/#\/star\?section=ties$/)
+    await expect(page.getByRole('heading', { name: 'Ties' })).toBeInViewport()
+    await page.goto('#/extensions?section=multiple-winners')
+    await expect(page).toHaveTitle('All choices')
+    await expect(page).toHaveURL(/#\/choices\?section=multiple-winners$/)
   })
 
   test('opens the page a tile leads to at its top', async ({ page }) => {
@@ -314,5 +324,32 @@ test.describe('the web app manifest', () => {
       const png = await response.body()
       expect([png.readUInt32BE(16), png.readUInt32BE(20)], src).toEqual([width, height])
     }
+  })
+})
+
+test.describe('all choices', () => {
+  test('opens with every section folded, its algorithms showing', async ({ page }) => {
+    await page.goto('#/choices')
+    const sections = page.getByRole('heading', { level: 2 }).getByRole('button')
+    await expect(sections).toHaveCount(12)
+    for (const button of await sections.all())
+      await expect(button).toHaveAttribute('aria-expanded', 'false')
+    const best = page.getByRole('button', { name: /^Best option/ })
+    await expect(best).toContainText('STAR')
+    await best.click()
+    await expect(best).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByRole('link', { name: 'Why STAR?' })).toBeVisible()
+  })
+
+  test('opens the section a link names, and only that one', async ({ page }) => {
+    await page.goto('#/choices?section=fractional-winners')
+    const named = page.getByRole('button', { name: /^Fractional winners/ })
+    await expect(named).toHaveAttribute('aria-expanded', 'true')
+    await expect(named).toBeInViewport()
+    await expect(page.getByRole('button', { name: /^Best option/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    await expectAccessible(page, 'a section of All choices, open')
   })
 })

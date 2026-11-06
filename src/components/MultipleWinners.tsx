@@ -20,7 +20,7 @@ import { RemovedOptions, type LeftOut } from './RemovedOptions'
  * results* menu (`MoreResults`): a ranking of its own, a STAR election per
  * spot, with each ballot counting at 1 ÷ (1 + SUM ÷ 5) for the stars SUM it
  * gave the winners before (runoffs included). The first spot is the STAR
- * winner; take as many from the top as are needed. `/extensions` explains it,
+ * winner; take as many from the top as are needed. `/choices` explains it,
  * and `poll_multiple_winners` counts it.
  *
  * **An option can be taken out**, as many as the reader likes, one after
@@ -123,7 +123,7 @@ export function MultipleWinners({
         <Text size="sm" c="dimmed">
           For choosing several options at once, so that different groups of voters each get one they
           like. Take as many from the top as you need.{' '}
-          <Anchor component={Link} to="/extensions?section=multiple-winners" inherit>
+          <Anchor component={Link} to="/choices?section=multiple-winners" inherit>
             How it works
           </Anchor>
         </Text>

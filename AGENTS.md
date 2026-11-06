@@ -485,7 +485,7 @@ first — never copied from a passing run.
 ### What it does and does not cover
 
 The SQL suite covers the tally end to end (score round, finalists, every
-tie-break, the runoff, the genuine tie, the full ranking) and the rules around
+tie-break, the runoff, the genuine tie, the option ranking) and the rules around
 it: the write paths, the option-list windows, confirming, reopening, revising,
 the reveal gates on results and ballot sheets, the two readings of an open
 poll, the poll list's paging, removed polls, who each email and push would go
@@ -1580,14 +1580,26 @@ is the page.
   1280×600 stage scaled to its box; it stops while out of sight, and under
   reduced motion it is one still frame of a filled-in ballot. Decorative
   (`aria-hidden`): the sentence under it says what it shows.
-- **The explainers are five pages** — `/star`, `/ties`, `/extensions`,
-  `/why-star`, `/features` — in [`pages/Learn.tsx`](src/pages/Learn.tsx), one
-  lazy chunk. `/star`, `/extensions` and `/why-star` are drawn as the results
-  page is, a heading over each card, and work an example election through
-  emoji tables computed from its ratings. `/extensions` restates `/star`'s
-  ballots before carrying on with them, since its readers mostly arrive from a
-  result's modal (`?section=` opens it at one card). *App
-  features* links the install guide.
+- **The explainers are five pages** — `/star` (*What is STAR?*, ending on the
+  tie-break rules), `/choices` (*All choices*), `/examples` (*More
+  examples*), `/why-star`, `/features` — in
+  [`pages/Learn.tsx`](src/pages/Learn.tsx), one lazy chunk. `/star` and
+  `/why-star` are drawn as the results page is, a heading over each card, and
+  work an example election through emoji tables computed from its ratings.
+  `?section=` opens a page at one card.
+- **`/choices` is a list of folded sections**, one per question the ballots
+  can answer, because no section builds on another and the page is long.
+  Each heading carries an icon and the algorithms the choice runs on as tags
+  (`badgeColor.algorithm`), visible while folded. Every section starts
+  folded except the one `?section=` names, which the result's modals use;
+  that one opens already expanded. A choice not built yet says so in a
+  *Coming soon* banner and works no example, and one a voter can game by
+  scoring dishonestly carries a warning that says so. The page restates
+  `/star`'s ballots above the sections, since its readers mostly arrive from
+  a result's modal. `/examples` holds harder elections, one per
+  choice as each is built, and says it is under construction until the first.
+  `/ties` and `/extensions` redirect to `/star?section=ties` and `/choices`
+  for links already shared. *App features* links the install guide.
 
 ## The donate page
 
@@ -2178,7 +2190,7 @@ Rules:
 - **They belong to the ballot.** Both ballots show them under the option's
   name. The score round shows one dimmed mark beside options that have one,
   opening a popover (a tooltip cannot be opened on a phone); `poll_tally`
-  carries the text, on the same terms as the results. The full ranking and
+  carries the text, on the same terms as the results. The option ranking and
   ballot grid do not.
 - **URLs become links**: `OptionDescription` turns `http(s)://` and `www.`
   runs into anchors as React elements, never parsed HTML, so a description
@@ -3163,7 +3175,7 @@ things:
 
 It is behind a button; a scannable code is too big to sit in the block.
 
-### Results and the full ranking
+### Results and the option ranking
 
 The results show the winner, then the runoff between the two finalists, then
 the top ten score-round totals, each round with its tie-break if it needed
@@ -3174,32 +3186,32 @@ say only that voting was closed early, when it was.
 
 **The answer's banner carries what can be done with it** (`Banner` in
 `Results.tsx`): **More results**, one menu
-([`MoreResults`](src/components/MoreResults.tsx)) holding **Full ranking**
+([`MoreResults`](src/components/MoreResults.tsx)) holding **Option ranking**
 and **Multiple winners** (three or more options) and **Fractional winners**
 (two or more), each opening a modal; then *Add to calendar* under a time
 poll's winner or *Flip a coin* under *No winner*. One menu rather than a
 button each keeps the banner to the name and a control or two. **The modals
 are short**: what the tool is for and when to use it, with *How it works*
-linking to its card on `/extensions`, where the explaining is done. The
+linking to its card on `/choices`, where the explaining is done. The
 buttons share the name's line when it is short and drop to a row of their own
 otherwise; `TallyShape` draws *More results* beside the name. A
 round's *Show tie-break* stays over its round, since it slides that card.
 
-**Full ranking** is the top ten places (see below), for when the winner
+**Option ranking** is the top ten places (see below), for when the winner
 falls through. STAR names only a winner, so the rest comes from running it
 again on what is left: the winner steps out, the two highest remaining scorers
 go to a runoff for the next place, and so on. Score totals are absolute, so
 the score order is fixed and each round is the next runoff down it.
 
 **Multiple winners** is for choosing several at once so each sizeable group
-of voters gets one it likes; the full ranking's top few can all belong to one
+of voters gets one it likes; the option ranking's top few can all belong to one
 large group. It is a ranking of its own: each spot is a full STAR election
 (scores, then a runoff) in which every ballot counts at 1 ÷ (1 + SUM ÷ 5)
 (D'Hondt's divisors), SUM being the stars it gave the winners so far, **in the runoff as well as the
 scores**, since full-strength runoff votes would let a majority take every
 spot. `n` winners are the top `n`, so no number of winners is asked for and
 one more never changes the earlier ones; a runoff on every spot keeps the
-first spot the single-winner STAR result. `/extensions` explains both on one
+first spot the single-winner STAR result. `/choices` explains both on one
 example, computed in `Learn.tsx` (`rankingOf`, `spotsOf`), where the two
 methods' second places differ; `48_multiple_winners` counts the same example.
 
@@ -3209,7 +3221,7 @@ methods' second places differ; `48_multiple_winners` counts the same example.
   is `weighted_star_round`: `star_round`'s rules in the same order with every
   count a weighted sum, rounded to six places so equal sums compare equal.
   `star_round` itself is untouched, so no single-winner tally depends on it.
-- **A runoff level on every rule shares the spot**, as in the full ranking,
+- **A runoff level on every rule shares the spot**, as in the option ranking,
   and both options are charged to the ballots that starred them.
 - **The reader can remove options and count again**, as many times as they
   like (`p_excluded`): the count runs as though those options were never on
@@ -3225,7 +3237,7 @@ the product of every voter's average stars under the shares. Multiplying is
 what makes it proportional: voters in groups that each like only their own
 option get that option a share the size of the group, and shares that leave
 anybody with nothing score zero. Offered from two options, since how to split
-between two is still a question. `/extensions` works it on the same example
+between two is still a question. `/choices` works it on the same example
 (`sharesOf`); `49_fractional_winners` checks the same shares.
 
 - **Worked out in the database**, on the same gate and the same press
@@ -3236,7 +3248,7 @@ between two is still a question. `/extensions` works it on the same example
   poll's hundreds of windows. The cost is that a small group's favourite
   outside the top ten gets nothing; the modal says how many were not
   considered, and removing one lets the next in.
-- **Newton's method, not the multiplicative update** `/extensions` describes
+- **Newton's method, not the multiplicative update** `/choices` describes
   (`p ← p × mean(s ÷ u)`): both climb the same concave product, but the update
   takes thousands of passes on ordinary ballots to settle the shares at 0,
   and Newton on the shares above 0 a handful. Ballots are folded into
@@ -3248,7 +3260,7 @@ between two is still a question. `/extensions` works it on the same example
 - **A pie and a list.** The pie is inert decoration; the list names every
   option given a share, as whole percentages adding up to 100
   (`percentagesOf` in [`lib/shares.ts`](src/lib/shares.ts), which
-  `/extensions` uses too), so colour never carries the answer alone. Options
+  `/choices` uses too), so colour never carries the answer alone. Options
   with no share are left off: the percentages already add up to the whole.
 
 **It is a separate request, made when the button is pressed**
@@ -3332,7 +3344,7 @@ stylesheet is imported in `Results.tsx`, so ballots never fetch it.
 
 ### Tie-breaks
 
-Documented for readers on [`/ties`](src/pages/Learn.tsx) and implemented in
+Documented for readers at the foot of [`/star`](src/pages/Learn.tsx) and implemented in
 the migrations. A score-round tie between **two** options goes to the one more
 voters preferred head-to-head, then the one with more five-star ballots, then
 random (by id); a tie of **three or more** goes straight to five-star counts,
@@ -3340,7 +3352,7 @@ then random. These are the STAR Voting project's published rules, as
 [BetterVoting](https://docs.bettervoting.com/help/ties.html) runs them. A
 runoff tie goes to the higher total score, then to five-star counts; if still
 level, there is no winner and the app reports the tie. **Change a rule in the
-SQL, *Ties in STAR* and `test/sql/cases/` together.**
+SQL, *What is STAR?* and `test/sql/cases/` together.**
 
 Head-to-head is not tried on ties of three or more: a round-robin is quadratic
 in the tied group (time polls tie dozens of windows) and hard for readers to

@@ -36,7 +36,7 @@ export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
  * expensive thing this app asks a database for — a tally that took 48ms on ten
  * options and a hundred voters takes 8ms without it, and one that took 527ms
  * on fifty options takes 19ms. Almost nobody presses the button, so almost
- * nobody should pay for it. See AGENTS.md, "Results and the full ranking".
+ * nobody should pay for it. See AGENTS.md, "Results and the option ranking".
  *
  * The answer is not held on to, because the votes under it can move: a
  * creator can open a closed poll again, or correct its options over the votes
@@ -100,14 +100,14 @@ export function FullRanking({
       onClose={onClose}
       size="lg"
       centered
-      title={<Text fw={600}>Full ranking</Text>}
+      title={<Text fw={600}>Option ranking</Text>}
     >
       <Stack gap="md">
         <Text size="sm" c="dimmed">
           {results.option_count > SCORING_ROWS_MAX
             ? `The top ${SCORING_ROWS_MAX} places, for when the winner falls through.`
             : 'Every option in order, for when the winner falls through.'}{' '}
-          <Anchor component={Link} to="/extensions?section=full-ranking" inherit>
+          <Anchor component={Link} to="/choices?section=option-ranking" inherit>
             How it works
           </Anchor>
         </Text>

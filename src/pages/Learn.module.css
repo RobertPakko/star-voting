@@ -110,6 +110,18 @@
   scroll-margin-top: calc(var(--app-shell-header-height, 0px) + var(--mantine-spacing-md));
 }
 
+/* A section of /choices: bordered on the page's own background, as a round's
+   card is, open or closed, rather than the separated accordion's tinted fill. */
+.choice,
+.choice[data-active] {
+  background-color: var(--mantine-color-body);
+  border: 1px solid var(--mantine-color-default-border);
+}
+
+.choiceControl {
+  padding-block: var(--mantine-spacing-xs);
+}
+
 /* The fold-out's caret, pointing down when closed and up when open. */
 .caret {
   transition: transform var(--motion-base) var(--motion-ease);

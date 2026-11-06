@@ -45,7 +45,7 @@ const PIE_SIZE = 200
  * *More results* menu (`MoreResults`): the shares that make the product of
  * every voter's average stars largest (the Nash welfare). For a choice that
  * can be split — a budget, a run of meetings, an afternoon — where *Multiple
- * winners* is for picking several whole options. `/extensions` explains it,
+ * winners* is for picking several whole options. `/choices` explains it,
  * and `poll_fractional_winners` works it out.
  *
  * **Only the ten options with the most stars are shared between**, so the
@@ -153,7 +153,7 @@ export function FractionalWinners({
         <Text size="sm" c="dimmed">
           For splitting something between the options, like a budget or a run of meetings. Every
           option gets a share, sized so that each group of voters gets some of what it likes.{' '}
-          <Anchor component={Link} to="/extensions?section=fractional-winners" inherit>
+          <Anchor component={Link} to="/choices?section=fractional-winners" inherit>
             How it works
           </Anchor>
         </Text>

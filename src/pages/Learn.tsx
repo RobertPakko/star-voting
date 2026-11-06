@@ -1,8 +1,10 @@
-import { useId, useLayoutEffect, type ReactNode } from 'react'
+import { useId, useLayoutEffect, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
+  Accordion,
   Alert,
   Anchor,
+  Badge,
   Box,
   Button,
   Collapse,
@@ -21,13 +23,27 @@ import { useDisclosure } from '@mantine/hooks'
 import {
   ArrowDownIcon,
   ArrowsLeftRightIcon,
+  ArrowsSplitIcon,
   CaretRightIcon,
+  ChartPieSliceIcon,
   CoinsIcon,
+  CpuIcon,
+  HandshakeIcon,
   HourglassIcon,
+  LinkSimpleIcon,
+  ListNumbersIcon,
+  PiggyBankIcon,
+  RankingIcon,
+  RepeatIcon,
+  SwapIcon,
+  TrophyIcon,
   UsersThreeIcon,
+  WarningIcon,
+  type Icon,
 } from '@phosphor-icons/react'
 import { RoundCard } from '../components/RoundCard'
 import { SITE_FEATURES } from '../components/siteFeatures'
+import { badgeColor } from '../lib/badgeColors'
 import { usePageTitle } from '../lib/pageTitle'
 import { percentagesOf } from '../lib/shares'
 import vseByStrategy from '../assets/why-star/vse-by-strategy.png'
@@ -35,24 +51,45 @@ import winnerDistribution from '../assets/why-star/winner-distribution.webp'
 import classes from './Learn.module.css'
 
 /**
- * The five pages that explain: what STAR voting is (`/star`), how it settles
- * a tie (`/ties`), what else it can answer (`/extensions`), why use it
- * (`/why-star`), and what this site does with it (`/features`). Each is a
- * home-page tile of its own, so each is one short page rather than a tab of a
- * longer one. Public, because the people who most need them are the ones who
- * arrived from a share link and have never heard of the method.
+ * The five pages that explain: what STAR voting is and how it settles a tie
+ * (`/star`), what else the same ballots can answer (`/choices`), harder
+ * elections worked through (`/examples`), why use it (`/why-star`), and what
+ * this site does with it (`/features`). Each is a home-page tile of its own,
+ * so each is one short page rather than a tab of a longer one. Public, because
+ * the people who most need them are the ones who arrived from a share link and
+ * have never heard of the method.
  */
+
+/**
+ * Opens the page at the card `?section=` names, for links that want one card
+ * of a long page (the result's modals, the old `/ties` address). A layout
+ * effect, so it runs after `ScrollToTop` has put the page at its top.
+ */
+function useSection() {
+  const [params] = useSearchParams()
+  const section = params.get('section')
+  useLayoutEffect(() => {
+    if (section) document.getElementById(section)?.scrollIntoView()
+  }, [section])
+  return section
+}
+
+/** The id of `WhatIsStar`'s tie-break card, which `/ties` redirects to. */
+const TIES = 'ties'
 
 /**
  * STAR, one step at a time, for a reader who has never met it: each step a
  * heading over a card, as on `WhyStar`, worked through one small election
  * (`DINNER`) in the same emoji tables. The example is deliberately one where
  * the score leader loses the runoff, since that is the step a newcomer would
- * otherwise not see the point of. `StarExtensions` carries on with the same
- * friends.
+ * otherwise not see the point of. The tie-break rules follow the steps, as
+ * one card most readers never need; they are the ones `star_round` and the
+ * runoff apply, so change them here, in the SQL and in `test/sql/cases/`
+ * together. `AllChoices` carries on with the same friends.
  */
 export function WhatIsStar() {
   usePageTitle('What is STAR?')
+  useSection()
   const finalists = finalistsOf(DINNER)
   const [first, second] = finalists
   const runoff = pluralityRows(DINNER, finalists, true)
@@ -179,106 +216,87 @@ export function WhatIsStar() {
         </Stack>
       </RoundCard>
 
+      <Box id={TIES} className={classes.target}>
+        <RoundCard title="Ties">
+          <Stack gap="sm">
+            <Text>
+              In the rare event of a tie, STAR has rules to settle it. Ties are uncommon since
+              scores are totaled across all ballots, and multiple options seldom land on exactly the
+              same number of stars. A tie can happen in either round.
+            </Text>
+            <Text fw={700}>A tie in the scoring round</Text>
+            <Text>When two options are tied, the place goes to:</Text>
+            <List type="ordered" spacing={4} withPadding>
+              <List.Item>The one more voters prefer in a head-to-head comparison.</List.Item>
+              <List.Item>If that is level too, the one given 5 stars on more ballots.</List.Item>
+              <List.Item>If they are still level, one of the two is chosen at random.</List.Item>
+            </List>
+            <Text>
+              When three or more options are tied, the head-to-head step is skipped: the places go
+              to the options given 5 stars on the most ballots, and any tie left after that is
+              settled at random.
+            </Text>
+            <Text fw={700}>A tie in the runoff</Text>
+            <Text>When both finalists get the same number of votes, the winner is:</Text>
+            <List type="ordered" spacing={4} withPadding>
+              <List.Item>the finalist with the higher score from the scoring round;</List.Item>
+              <List.Item>
+                if their scores are level too, the one given 5 stars on more ballots.
+              </List.Item>
+            </List>
+            <Text>
+              If the finalists are level on all three, the election has no winner. A poll&rsquo;s
+              results then offer a <strong>Flip a coin</strong> button, which picks one of the two
+              finalists. The coin lands the same way for everyone who flips it, but it isn&rsquo;t
+              part of the election: the poll still says it has no winner.
+            </Text>
+          </Stack>
+        </RoundCard>
+      </Box>
+
       <Text>
         That&rsquo;s how STAR voting works.{' '}
         <Anchor component={Link} to="/why-star" inherit>
           Why STAR?
         </Anchor>{' '}
-        compares it with other ways of voting. If you want to go further,{' '}
-        <Anchor component={Link} to="/ties" inherit>
-          Ties in STAR
+        compares it with other ways of voting, and{' '}
+        <Anchor component={Link} to="/choices" inherit>
+          All choices
         </Anchor>{' '}
-        covers the rare election where two options land level, and{' '}
-        <Anchor component={Link} to="/extensions" inherit>
-          STAR extensions
-        </Anchor>{' '}
-        covers the other answers the same ballots can give: a full ranking, several winners, or a
-        share for each option.
+        covers the other answers the same ballots can give: a ranking of every option, several
+        winners, or a share for each option.
       </Text>
     </Stack>
   )
 }
 
 /**
- * The tie-break rules, a page of their own because most readers never need
- * them. The rules are the ones `star_round` and the runoff apply; change them
- * here, in the SQL and in `test/sql/cases/` together.
- */
-export function StarTies() {
-  usePageTitle('Ties in STAR')
-  return (
-    <Stack maw={720} mx="auto" gap="md">
-      <Title order={1}>Ties in STAR</Title>
-      <Text>
-        In the rare event of a tie, STAR has rules to settle it. Ties are uncommon since scores are
-        totaled across all ballots, and multiple options seldom land on exactly the same number of
-        stars. A tie can happen in either round of{' '}
-        <Anchor component={Link} to="/star" inherit>
-          STAR
-        </Anchor>
-        .
-      </Text>
-
-      <RoundCard title="A tie in the scoring round">
-        <Stack gap="sm">
-          <Text>When two options are tied, the place goes to:</Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>The one more voters prefer in a head-to-head comparison.</List.Item>
-            <List.Item>If that is level too, the one given 5 stars on more ballots.</List.Item>
-            <List.Item>If they are still level, one of the two is chosen at random.</List.Item>
-          </List>
-          <Text>
-            When three or more options are tied, the head-to-head step is skipped: the places go to
-            the options given 5 stars on the most ballots, and any tie left after that is settled at
-            random.
-          </Text>
-        </Stack>
-      </RoundCard>
-
-      <RoundCard title="A tie in the runoff">
-        <Stack gap="sm">
-          <Text>When both finalists get the same number of votes, the winner is:</Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>the finalist with the higher score from the scoring round;</List.Item>
-            <List.Item>
-              if their scores are level too, the one given 5 stars on more ballots.
-            </List.Item>
-          </List>
-          <Text>
-            If the finalists are level on all three, the election has no winner. A poll&rsquo;s
-            results then offer a <strong>Flip a coin</strong> button, which picks one of the two
-            finalists. The coin lands the same way for everyone who flips it, but it isn&rsquo;t
-            part of the election: the poll still says it has no winner.
-          </Text>
-        </Stack>
-      </RoundCard>
-    </Stack>
-  )
-}
-
-/**
- * The other answers a poll's results offer beside the winner, in the
- * banner's *More results* menu: *Full ranking*, *Multiple winners* and
- * *Fractional winners*. Each card carries on with `/star`'s six friends, so the page
- * restates their ballots first for a reader who arrived from a result.
- * *Sequel polls*, *Budgeting*, *Option assignment*, *Two-sided matching* and
- * *Group formation* are not built yet, so their cards say so and work no
- * example. Where one needs a number on each option or voter, it is called a
- * *size* in every card — what a budget option costs, how many voters an
- * assigned option takes, how many matches a voter takes — so one field can
- * serve them all.
+ * Every question the same star ballots can answer, one section each. Unlike
+ * the other explainers, the sections do not build on each other, so each is
+ * folded away under its heading, with the algorithms it runs on as tags that
+ * show while it is closed. The page opens with all of them closed, except the
+ * one `?section=` names (the result's modals link to their own), which opens
+ * already expanded. A link to another section while the page is up opens that
+ * one too, keeping whatever the reader had open.
  *
- * `?section=` opens the page at one card (`EXTENSIONS`), for the result's
- * modals, whose reader has no use for the rest. A layout effect, so it runs
- * after `ScrollToTop` has put the page at its top.
+ * The sections that work an example carry on with `/star`'s six friends,
+ * whose ballots are restated above the sections for a reader who arrived from
+ * a result. A choice that is not built yet says so and works no example.
+ * Each number a choice needs on an option or voter has its own word: a
+ * *cost* (out of a budget) or a number of *places* (voters an option can go
+ * to, or matches a voter can take).
  */
-export function StarExtensions() {
-  usePageTitle('STAR extensions')
-  const [params] = useSearchParams()
-  const section = params.get('section')
-  useLayoutEffect(() => {
-    if (section) document.getElementById(section)?.scrollIntoView()
-  }, [section])
+export function AllChoices() {
+  usePageTitle('All choices')
+  const section = useSection()
+  const [open, setOpen] = useState<string[]>(() => (section ? [section] : []))
+  // A new `?section=` while mounted opens that section too, during render
+  // rather than in an effect, so it is open on the frame the page scrolls.
+  const [opened, setOpened] = useState(section)
+  if (section !== opened) {
+    setOpened(section)
+    if (section && !open.includes(section)) setOpen([...open, section])
+  }
   const finalists = finalistsOf(DINNER)
   const winner = runoffWinner(DINNER, finalists)
   const loser = finalists.find((name) => name !== winner)
@@ -291,19 +309,19 @@ export function StarExtensions() {
   const leftOut = votersOf(DINNER).filter((voter) => DINNER[winner][voter] === 0)
   return (
     <Stack maw={720} mx="auto" gap="md">
-      <Title order={1}>STAR extensions</Title>
+      <Title order={1}>All choices</Title>
       <Stack gap="sm">
         <Text>
           <Anchor component={Link} to="/star" inherit>
             STAR
           </Anchor>{' '}
-          elects one winner, but the same ballots can answer other questions too. Each extension
-          below that is available is in the <strong>More results</strong> menu beside the winner on
-          a poll&rsquo;s results.
+          elects one winner, but the same ballots can answer other questions too. Each choice below
+          stands on its own, so open whichever you need. The ones already available are in the{' '}
+          <strong>More results</strong> menu beside the winner on a poll&rsquo;s results.
         </Text>
         <Text>
-          We&rsquo;ll use the same example as the What is STAR? page: six friends choosing what to
-          have for dinner between:
+          The examples use the same six friends as the What is STAR? page, choosing what to have for
+          dinner between:
         </Text>
         <OptionKey ratings={DINNER} />
         <Text>Here are their ballots, with each restaurant&rsquo;s stars added up:</Text>
@@ -313,436 +331,706 @@ export function StarExtensions() {
           rowLabel="Restaurant"
           totalLabel="Score"
         />
-        <Text>
-          {labelOf(finalists[0])} and {finalists[1]} have the most stars, so they go to the runoff,
-          and {winner} wins it: more friends gave {winner} more stars than {loser}.
-        </Text>
       </Stack>
 
-      <Box id={EXTENSIONS.fullRanking} className={classes.target}>
-        <RoundCard title="Full ranking">
-          <Stack gap="sm">
-            <Text>
-              STAR picks one winner, but sometimes you need a plan B: the restaurant that won is
-              fully booked tonight, or the person you picked for the job turns it down. The{' '}
-              <strong>Full ranking</strong> puts every option in order by running STAR again without
-              the winner. The winner steps aside, and the next two highest scorers go to a runoff
-              for second place. Then second place steps aside, and so on down the list.
-            </Text>
-            <Text>
-              Let&rsquo;s show what happens with our six friends if the {winner} place is fully
-              booked. With {winner} set aside, {secondRunoff[0]} and {secondRunoff[1]} are the two
-              highest scorers left, so they go to a runoff for second place:
-            </Text>
-            <EmojiTable
-              caption={`Everyone's ballots, with ${winner} set aside`}
-              rows={setAside(ratingRows(DINNER, true), ranking.slice(0, 1))}
-              rowLabel="Restaurant"
-              totalLabel="Score"
-            />
-            <Then>Next two highest scorers go to a runoff</Then>
-            <EmojiTable
-              caption={`The runoff for second place, with ${winner} set aside`}
-              rows={setAside(pluralityRows(DINNER, secondRunoff, true), ranking.slice(0, 1))}
-              rowLabel="Restaurant"
-              totalLabel="Votes"
-            />
-            <Then>The full ranking</Then>
-            <Places names={ranking} />
-          </Stack>
-        </RoundCard>
-      </Box>
+      <Accordion
+        multiple
+        value={open}
+        onChange={setOpen}
+        variant="separated"
+        order={2}
+        classNames={{ item: classes.choice, control: classes.choiceControl }}
+      >
+        <Choice id={CHOICES.bestOption} icon={TrophyIcon} title="Best option" algorithms={['STAR']}>
+          <Text>
+            The one option the group likes best. This is what every poll&rsquo;s result shows, and
+            it&rsquo;s plain STAR: everyone scores every option, the two highest scorers go to a
+            runoff, and the finalist more voters preferred wins.
+          </Text>
+          <Text>
+            For our six friends, {labelOf(finalists[0])} and {finalists[1]} have the most stars, so
+            they go to the runoff, and {winner} wins it: more friends gave {winner} more stars than{' '}
+            {loser}.
+          </Text>
+          <Text>
+            <Anchor component={Link} to="/star" inherit>
+              What is STAR?
+            </Anchor>{' '}
+            walks through it one step at a time, and{' '}
+            <Anchor component={Link} to="/why-star" inherit>
+              Why STAR?
+            </Anchor>{' '}
+            compares it with other ways of voting.
+          </Text>
+        </Choice>
 
-      <Box id={EXTENSIONS.multipleWinners} className={classes.target}>
-        <RoundCard title="Multiple winners">
-          <Stack gap="sm">
-            <Text>
-              Sometimes a group wants more than one winner, for instance choosing two dinners on a
-              weekend away or three films for a movie marathon. Using the full ranking for this can
-              result in every spot going to the biggest group. <strong>Multiple winners</strong>{' '}
-              gives a different ranking, one that shares top spots so that different groups of
-              voters each get something they like:
-            </Text>
-            <List type="ordered" spacing={4} withPadding>
-              <List.Item>Run STAR as usual to select a winner.</List.Item>
-              <List.Item>
-                All ballots are reweighted based on how many stars they gave the winner.
-              </List.Item>
-              <List.Item>
-                Run STAR again on the options left, with ballots at their new strength, to select
-                the next winner.
-              </List.Item>
-              <List.Item>Repeat until every option has a spot.</List.Item>
-            </List>
-            <Text>
-              Let's show what happens with our six friends if we are now choosing two dinners for a
-              weekend away. The first spot is plain STAR, so it&rsquo;s {spots[0].winner} again.
-              Then the ballots are reweighted based on how many stars they gave {spots[0].winner}{' '}
-              and we run STAR again to determine the second winner.
-            </Text>
-            <EmojiTable
-              caption={`Everyone's ballots, with ${spots[0].winner} already chosen`}
-              rows={setAside(ratingRows(DINNER, true), spots[1].chosen, DINNER)}
-              rowLabel="Restaurant"
-              totalLabel="Score"
-            />
-            <Then>Ballots are reweighted</Then>
-            <EmojiTable
-              caption={`The stars for the second spot, with ${spots[0].winner} already chosen`}
-              rows={spotScoreRows(DINNER, spots[1])}
-              rowLabel="Restaurant"
-              totalLabel="Score"
-              reduced={reduced}
-            />
-            <Then>
-              {labelOf(spots[1].finalists[0])} and {spots[1].finalists[1]} go to a runoff
-            </Then>
-            <EmojiTable
-              caption="The runoff for the second spot"
-              rows={spotRunoffRows(DINNER, spots[1])}
-              rowLabel="Restaurant"
-              totalLabel="Votes"
-              reduced={reduced}
-            />
-            <Then>The multiple-winner ranking</Then>
-            <Places names={spots.map((spot) => spot.winner)} />
-            <Text>
-              So the two dinners are {spots[0].winner} and {spots[1].winner}. The {spots[0].winner}{' '}
-              fans had their votes reweighted in the second round to reflect that they already got
-              their top choice. This way, everyone gets something that they like rather than
-              allowing the largest group to choose every winner.
-            </Text>
-            <WeightFormula />
-          </Stack>
-        </RoundCard>
-      </Box>
+        <Choice
+          id={CHOICES.consensusOption}
+          icon={HandshakeIcon}
+          title="Consensus option / time"
+          algorithms={['Maximin', 'STAR']}
+        >
+          <ComingSoon name="Consensus option" />
+          <NotStrategyProof easily />
+          <Text>
+            Sometimes the best option is the one nobody minds: a meeting time everyone can make, or
+            a restaurant nobody hates. <strong>Consensus option</strong> picks the option whose
+            worst score is as good as possible:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>Every voter rates every option as usual.</List.Item>
+            <List.Item>
+              Each option is judged by the fewest stars any voter gave it, rather than by its total.
+            </List.Item>
+            <List.Item>The option whose fewest stars is the most wins.</List.Item>
+            <List.Item>
+              If several options tie on that, STAR is run between just those options to choose
+              between them.
+            </List.Item>
+          </List>
+          <Text>
+            On a poll looking for a time, this finds the time where the person least happy with it
+            is as happy as they can be, so a time somebody marked as impossible only wins if every
+            time is impossible for somebody.
+          </Text>
+          <Text>
+            Because a single ballot&rsquo;s lowest score decides, one voter giving an option 0 stars
+            rules it out, however much everyone else likes it. A voter who wants their favourite can
+            give every other option 0, which is why this choice is easy to game.
+          </Text>
+        </Choice>
 
-      <Box id={EXTENSIONS.sequelPolls} className={classes.target}>
-        <RoundCard title="Sequel polls">
-          <Stack gap="sm">
-            <Alert
-              variant="light"
-              icon={<HourglassIcon size={20} aria-hidden />}
-              title="Coming soon"
-            >
-              <Text size="sm">
-                Sequel polls aren&rsquo;t available yet. This is how they will work.
-              </Text>
-            </Alert>
-            <Text>
-              Some choices come round again: where to go for dinner every week, which game to play
-              at each club night, or who hosts the next meeting. Running a fresh poll each time lets
-              the biggest group win every time. A <strong>Sequel poll</strong> carries on from an
-              earlier poll instead, with every ballot reweighted by how much its voter liked the
-              earlier winner:
-            </Text>
-            <List type="ordered" spacing={4} withPadding>
-              <List.Item>Run the first poll as usual to select a winner.</List.Item>
-              <List.Item>
-                Make a sequel poll from it. The options and the voters can change: a new restaurant
-                can be added, and a friend who couldn&rsquo;t make it last time can join in.
-              </List.Item>
-              <List.Item>
-                Each returning voter&rsquo;s ballot is reweighted based on how many stars they gave
-                the earlier winners, as in Multiple winners.
-              </List.Item>
-              <List.Item>Run STAR on the sequel with ballots at their new strength.</List.Item>
-            </List>
-            <Text>
-              This is like Multiple winners, but spread across many polls rather than counted in
-              one. A sequel can have sequels of its own, and each carries on the weights from every
-              poll before it, so over time the wins are shared out in proportion to the groups that
-              want them.
-            </Text>
-            <Text>
-              A voter who wasn&rsquo;t in the earlier polls has no stars to reweight by, so their
-              ballot gets the average weight of everyone who was. That way joining late neither
-              helps nor hurts.
-            </Text>
-            <Text>
-              The weights are also scaled up together so that the average ballot counts as one
-              again. This is only to make the scores easier to read as stars: scaling every ballot
-              by the same amount doesn&rsquo;t change who wins.
-            </Text>
-          </Stack>
-        </RoundCard>
-      </Box>
+        <Choice
+          id={CHOICES.optionRanking}
+          icon={ListNumbersIcon}
+          title="Option ranking"
+          algorithms={['Iterative STAR']}
+        >
+          <Text>
+            STAR picks one winner, but sometimes you need a plan B: the restaurant that won is fully
+            booked tonight, or the person you picked for the job turns it down. The{' '}
+            <strong>Option ranking</strong> puts every option in order by running STAR again without
+            the winner. The winner steps aside, and the next two highest scorers go to a runoff for
+            second place. Then second place steps aside, and so on down the list.
+          </Text>
+          <Text>
+            Let&rsquo;s show what happens with our six friends if the {winner} place is fully
+            booked. With {winner} set aside, {secondRunoff[0]} and {secondRunoff[1]} are the two
+            highest scorers left, so they go to a runoff for second place:
+          </Text>
+          <EmojiTable
+            caption={`Everyone's ballots, with ${winner} set aside`}
+            rows={setAside(ratingRows(DINNER, true), ranking.slice(0, 1))}
+            rowLabel="Restaurant"
+            totalLabel="Score"
+          />
+          <Then>Next two highest scorers go to a runoff</Then>
+          <EmojiTable
+            caption={`The runoff for second place, with ${winner} set aside`}
+            rows={setAside(pluralityRows(DINNER, secondRunoff, true), ranking.slice(0, 1))}
+            rowLabel="Restaurant"
+            totalLabel="Votes"
+          />
+          <Then>The option ranking</Then>
+          <Places names={ranking} />
+        </Choice>
 
-      <Box id={EXTENSIONS.fractionalWinners} className={classes.target}>
-        <RoundCard title="Fractional winners">
-          <Stack gap="sm">
-            <Text>
-              Sometimes the choice can be split rather than made: a budget divided between projects,
-              a year of club meetings shared between venues, or an afternoon shared between games.{' '}
-              <strong>Fractional winners</strong> gives every option a share instead of a place,
-              chosen to make the group as a whole as satisfied as it can be:
-            </Text>
-            <List type="ordered" spacing={4} withPadding>
-              <List.Item>
-                A voter&rsquo;s satisfaction with a set of shares is the stars they would get on
-                average. If the friends went for pizza half the time and sushi the other half, the
-                second friend, who gave pizza 5 stars and sushi 1, would average 3 stars.
-              </List.Item>
-              <List.Item>
-                The shares chosen are the ones that make every voter&rsquo;s satisfaction,
-                multiplied together, as large as possible. This product is called the Nash welfare.
-              </List.Item>
-            </List>
-            <Text>
-              Multiplying rather than adding means that shares leaving anybody with nothing count
-              for nothing, however happy they make everyone else.
-            </Text>
-            <Text>
-              Let&rsquo;s show what happens with our six friends if they now meet for dinner every
-              week and want to decide how often to go to each place. These are the shares with the
-              largest Nash welfare:
-            </Text>
-            <Shares shares={shares} />
-            <Then>How satisfied each friend is</Then>
-            <EmojiTable
-              caption={`Each friend's average stars, going to ${winner} every week or sharing the weeks out`}
-              rows={satisfactionRows(DINNER, winner, shares)}
-              rowLabel="Plan"
-              totalLabel="Product"
-            />
-            <Text size="xs" c="dimmed" ta="center">
-              Each number is the stars a friend gets on average, and the last column multiplies them
-              together.
-            </Text>
-            <Text>
-              Going to {winner} every week, the STAR winner, leaves {leftOut.length} of the friends
-              with 0 stars every week. Sharing the weeks out, everyone gets a meal they like at
-              least some of the time. {labelOf(largest)} gets the largest share even though it lost
-              the runoff, because all but one of the friends like it at least a little.
-            </Text>
-            <NashFormula />
-          </Stack>
-        </RoundCard>
-      </Box>
+        <Choice
+          id={CHOICES.multipleWinners}
+          icon={RankingIcon}
+          title="Multiple winners"
+          algorithms={['Iterative STAR', 'Ballot reweighting']}
+        >
+          <Text>
+            Sometimes a group wants more than one winner, for instance choosing two dinners on a
+            weekend away or three films for a movie marathon. Taking the top of the option ranking
+            for this can result in every spot going to the biggest group.{' '}
+            <strong>Multiple winners</strong> gives a different ranking, one that shares top spots
+            so that different groups of voters each get something they like:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>Run STAR as usual to select a winner.</List.Item>
+            <List.Item>
+              All ballots are reweighted based on how many stars they gave the winner.
+            </List.Item>
+            <List.Item>
+              Run STAR again on the options left, with ballots at their new strength, to select the
+              next winner.
+            </List.Item>
+            <List.Item>Repeat until every option has a spot.</List.Item>
+          </List>
+          <Text>
+            Let&rsquo;s show what happens with our six friends if we are now choosing two dinners
+            for a weekend away. The first spot is plain STAR, so it&rsquo;s {spots[0].winner}. Then
+            the ballots are reweighted based on how many stars they gave {spots[0].winner} and we
+            run STAR again to determine the second winner.
+          </Text>
+          <EmojiTable
+            caption={`Everyone's ballots, with ${spots[0].winner} already chosen`}
+            rows={setAside(ratingRows(DINNER, true), spots[1].chosen, DINNER)}
+            rowLabel="Restaurant"
+            totalLabel="Score"
+          />
+          <Then>Ballots are reweighted</Then>
+          <EmojiTable
+            caption={`The stars for the second spot, with ${spots[0].winner} already chosen`}
+            rows={spotScoreRows(DINNER, spots[1])}
+            rowLabel="Restaurant"
+            totalLabel="Score"
+            reduced={reduced}
+          />
+          <Then>
+            {labelOf(spots[1].finalists[0])} and {spots[1].finalists[1]} go to a runoff
+          </Then>
+          <EmojiTable
+            caption="The runoff for the second spot"
+            rows={spotRunoffRows(DINNER, spots[1])}
+            rowLabel="Restaurant"
+            totalLabel="Votes"
+            reduced={reduced}
+          />
+          <Then>The multiple-winner ranking</Then>
+          <Places names={spots.map((spot) => spot.winner)} />
+          <Text>
+            So the two dinners are {spots[0].winner} and {spots[1].winner}. The {spots[0].winner}{' '}
+            fans had their votes reweighted in the second round to reflect that they already got
+            their top choice. This way, everyone gets something that they like rather than allowing
+            the largest group to choose every winner.
+          </Text>
+          <WeightFormula />
+        </Choice>
 
-      <Box id={EXTENSIONS.budgeting} className={classes.target}>
-        <RoundCard title="Budgeting">
-          <Stack gap="sm">
-            <Alert
-              variant="light"
-              icon={<HourglassIcon size={20} aria-hidden />}
-              title="Coming soon"
-            >
-              <Text size="sm">Budgeting isn&rsquo;t available yet. This is how it will work.</Text>
-            </Alert>
-            <Alert
-              variant="light"
-              color="gray"
-              icon={<CoinsIcon size={20} aria-hidden />}
-              title="Additional requirement"
-            >
-              <Text size="sm">
-                Every option has a size, and the poll has a limit on the total size.
-              </Text>
-            </Alert>
-            <Text>
-              Sometimes the choice is which options to take, with only so much to spend: projects
-              for a community fund, activities for a trip with a fixed budget, or talks for a day
-              with only so many hours. <strong>Budgeting</strong> picks the set of options that
-              gives the voters as many stars as possible without going over the limit:
-            </Text>
-            <List type="ordered" spacing={4} withPadding>
-              <List.Item>Every voter rates every option as usual.</List.Item>
-              <List.Item>
-                Each option is given a size: what it takes out of the limit. A project might cost
-                $3,000 of a $10,000 fund, or a talk take one hour of a six-hour day.
-              </List.Item>
-              <List.Item>
-                Every set of options whose sizes add up to no more than the limit is considered.
-              </List.Item>
-              <List.Item>
-                The set chosen is the one whose options&rsquo; stars, from every voter, add up to
-                the most.
-              </List.Item>
-            </List>
-            <Text>
-              An option is either taken whole or left out. That means the option with the most stars
-              can lose its place to two smaller ones that together have more, and some of the limit
-              can be left unspent when nothing else fits.
-            </Text>
-            <Text>
-              Unlike Fractional winners, which can give an option any share, Budgeting is for
-              choices that can&rsquo;t be split: a project funded halfway doesn&rsquo;t get built.
-            </Text>
-          </Stack>
-        </RoundCard>
-      </Box>
+        <Choice
+          id={CHOICES.sequentialPolls}
+          icon={RepeatIcon}
+          title="Sequential polls"
+          algorithms={['Iterative STAR', 'Ballot reweighting']}
+        >
+          <ComingSoon name="Sequential polls" plural />
+          <Text>
+            Some choices come round again: where to go for dinner every week, which game to play at
+            each club night, or who hosts the next meeting. Running a fresh poll each time lets the
+            biggest group win every time. <strong>Sequential polls</strong> carry on from the poll
+            before instead, with every ballot reweighted by how much its voter liked the earlier
+            winners:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>Run the first poll as usual to select a winner.</List.Item>
+            <List.Item>
+              Make the next poll from it. The options and the voters can change: a new restaurant
+              can be added, and a friend who couldn&rsquo;t make it last time can join in.
+            </List.Item>
+            <List.Item>
+              Each returning voter&rsquo;s ballot is reweighted based on how many stars they gave
+              the earlier winners, as in Multiple winners.
+            </List.Item>
+            <List.Item>Run STAR on the new poll with ballots at their new strength.</List.Item>
+          </List>
+          <Text>
+            This is like Multiple winners, but spread across many polls rather than counted in one.
+            Each poll carries on the weights from every poll before it, so over time the wins are
+            shared out in proportion to the groups that want them.
+          </Text>
+          <Text>
+            A voter who wasn&rsquo;t in the earlier polls has no stars to reweight by, so their
+            ballot gets the average weight of everyone who was. That way joining late neither helps
+            nor hurts.
+          </Text>
+          <Text>
+            The weights are also scaled up together so that the average ballot counts as one again.
+            This is only to make the scores easier to read as stars: scaling every ballot by the
+            same amount doesn&rsquo;t change who wins.
+          </Text>
+        </Choice>
 
-      <Box id={EXTENSIONS.optionAssignment} className={classes.target}>
-        <RoundCard title="Option assignment">
-          <Stack gap="sm">
-            <Alert
-              variant="light"
-              icon={<HourglassIcon size={20} aria-hidden />}
-              title="Coming soon"
-            >
-              <Text size="sm">
-                Option assignment isn&rsquo;t available yet. This is how it will work.
-              </Text>
-            </Alert>
-            <Text>
-              Sometimes every voter needs a different option of their own: chores shared out between
-              housemates, topics handed out to a class, or shifts split between volunteers.{' '}
-              <strong>Option assignment</strong> gives each voter one option, choosing the
-              assignment that gives the voters as many stars between them as possible:
-            </Text>
-            <List type="ordered" spacing={4} withPadding>
-              <List.Item>
-                Every voter rates every option as usual, with more stars for the options they would
-                rather have.
-              </List.Item>
-              <List.Item>
-                Each option can optionally be given a size: how many voters it can go to. A chore
-                might need two housemates, or a shift four volunteers. An option with no size set
-                goes to one voter.
-              </List.Item>
-              <List.Item>
-                Every way of assigning voters to options is considered, with nobody getting more
-                than one option and no option going to more voters than its size.
-              </List.Item>
-              <List.Item>
-                The assignment chosen is the one where the stars each voter gave their own option
-                add up to the most.
-              </List.Item>
-            </List>
-            <Text>
-              The numbers don&rsquo;t have to match. If there are more voters than places across all
-              the options, every place is filled and some voters go without one. If there are more
-              places than voters, every voter gets one and some places are left empty.
-            </Text>
-          </Stack>
-        </RoundCard>
-      </Box>
+        <Choice
+          id={CHOICES.proportionalBudget}
+          icon={CoinsIcon}
+          title="Proportional budget"
+          algorithms={['Iterative STAR', 'Ballot reweighting', 'Cost adjustment']}
+        >
+          <ComingSoon name="Proportional budget" />
+          <NeedsCost />
+          <Text>
+            Sometimes the choice is which options to fund, with only so much to spend: projects for
+            a community fund, activities for a trip with a fixed budget, or talks for a day with
+            only so many hours. Funding the most popular options until the money runs out lets the
+            biggest group spend the whole budget. <strong>Proportional budget</strong> shares the
+            money out the way Multiple winners shares out spots:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Every option is given a cost: what it takes out of the budget. A project might cost
+              $3,000 of a $10,000 fund, or a talk take one hour of a six-hour day.
+            </List.Item>
+            <List.Item>
+              Run STAR on the options that still fit in what is left of the budget, and fund the
+              winner.
+            </List.Item>
+            <List.Item>
+              All ballots are reweighted based on how many stars they gave the funded options, with
+              each counted in proportion to its cost: an option costing twice as much as the average
+              counts twice as much.
+            </List.Item>
+            <List.Item>Repeat until nothing left fits in the budget.</List.Item>
+          </List>
+          <Text>
+            Counting by cost means a group that gets one expensive option funded has spent as much
+            of its say as a group that gets several cheap ones. An option is either funded whole or
+            left out, so some of the budget can be left unspent when nothing else fits.
+          </Text>
+          <BudgetFormula />
+        </Choice>
 
-      <Box id={EXTENSIONS.twoSidedMatching} className={classes.target}>
-        <RoundCard title="Two-sided matching">
-          <Stack gap="sm">
-            <Alert
-              variant="light"
-              icon={<HourglassIcon size={20} aria-hidden />}
-              title="Coming soon"
-            >
-              <Text size="sm">
-                Two-sided matching isn&rsquo;t available yet. This is how it will work.
-              </Text>
-            </Alert>
-            <Alert
-              variant="light"
-              color="gray"
-              icon={<UsersThreeIcon size={20} aria-hidden />}
-              title="Additional requirement"
-            >
-              <Text size="sm">The set of options is the same as the set of voters.</Text>
-            </Alert>
-            <Alert
-              variant="light"
-              color="gray"
-              icon={<ArrowsLeftRightIcon size={20} aria-hidden />}
-              title="Additional requirement"
-            >
-              <Text size="sm">Voters are divided into two groups with equal total size.</Text>
-            </Alert>
-            <Text>
-              Sometimes people need to be paired with people from another group: mentors with
-              mentees, new starters with buddies, or students with project supervisors. Both sides
-              care who they get, so when everyone rates everyone in the other group,{' '}
-              <strong>Two-sided matching</strong> uses those ratings to find a matching that is
-              stable: no two people would both rather be matched with each other than with who they
-              got.
-            </Text>
-            <List type="ordered" spacing={4} withPadding>
-              <List.Item>
-                Every voter rates everyone in the other group, with more stars for the people they
-                would rather be matched with.
-              </List.Item>
-              <List.Item>
-                Each voter has a size: how many people from the other group they can be matched
-                with. A mentor might take three mentees while each mentee has one mentor.
-              </List.Item>
-              <List.Item>
-                Everyone in one group proposes to the people they gave the most stars in the other
-                group, as many as their size.
-              </List.Item>
-              <List.Item>
-                Everyone in the other group holds on to the best proposals they have received, up to
-                their size, and turns down the rest.
-              </List.Item>
-              <List.Item>
-                Anyone turned down proposes to the next person on their list, and a held proposal is
-                given up when a better one arrives. This repeats until nobody has anyone left to
-                propose to.
-              </List.Item>
-            </List>
-            <Text>
-              This is the{' '}
-              <Ext href="https://en.wikipedia.org/wiki/Gale%E2%80%93Shapley_algorithm">
-                Gale&ndash;Shapley algorithm
-              </Ext>
-              . It always ends in a stable matching, and because both groups have the same total
-              size, every place is filled.
-            </Text>
-            <Text>
-              Unlike Option assignment, which adds up the stars, this is about stability: a pairing
-              with more stars in total could leave two people who would both rather leave their
-              matches for each other. The group that proposes gets the best stable matching it can,
-              so it matters which group goes first.
-            </Text>
-          </Stack>
-        </RoundCard>
-      </Box>
+        <Choice
+          id={CHOICES.fractionalWinners}
+          icon={ChartPieSliceIcon}
+          title="Fractional winners"
+          algorithms={['Nash']}
+        >
+          <NotStrategyProof easily />
+          <Text>
+            Sometimes the choice can be split rather than made: a year of club meetings shared
+            between venues, an afternoon shared between games, or a playlist shared between genres.{' '}
+            <strong>Fractional winners</strong> gives every option a share instead of a place,
+            chosen to make the group as a whole as satisfied as it can be:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              A voter&rsquo;s satisfaction with a set of shares is the stars they would get on
+              average. If the friends went for pizza half the time and sushi the other half, the
+              second friend, who gave pizza 5 stars and sushi 1, would average 3 stars.
+            </List.Item>
+            <List.Item>
+              The shares chosen are the ones that make every voter&rsquo;s satisfaction, multiplied
+              together, as large as possible. This product is called the Nash welfare.
+            </List.Item>
+          </List>
+          <Text>
+            Multiplying rather than adding means that shares leaving anybody with nothing count for
+            nothing, however happy they make everyone else.
+          </Text>
+          <Text>
+            Let&rsquo;s show what happens with our six friends if they now meet for dinner every
+            week and want to decide how often to go to each place. These are the shares with the
+            largest Nash welfare:
+          </Text>
+          <Shares shares={shares} />
+          <Then>How satisfied each friend is</Then>
+          <EmojiTable
+            caption={`Each friend's average stars, going to ${winner} every week or sharing the weeks out`}
+            rows={satisfactionRows(DINNER, winner, shares)}
+            rowLabel="Plan"
+            totalLabel="Product"
+          />
+          <Text size="xs" c="dimmed" ta="center">
+            Each number is the stars a friend gets on average, and the last column multiplies them
+            together.
+          </Text>
+          <Text>
+            Going to {winner} every week, the STAR winner, leaves {leftOut.length} of the friends
+            with 0 stars every week. Sharing the weeks out, everyone gets a meal they like at least
+            some of the time. {labelOf(largest)} gets the largest share even though it lost the
+            runoff, because all but one of the friends like it at least a little.
+          </Text>
+          <NashFormula />
+        </Choice>
 
-      <Box id={EXTENSIONS.groupFormation} className={classes.target}>
-        <RoundCard title="Group formation">
-          <Stack gap="sm">
-            <Alert
-              variant="light"
-              icon={<HourglassIcon size={20} aria-hidden />}
-              title="Coming soon"
-            >
-              <Text size="sm">
-                Group formation isn&rsquo;t available yet. This is how it will work.
-              </Text>
-            </Alert>
-            <Alert
-              variant="light"
-              color="gray"
-              icon={<UsersThreeIcon size={20} aria-hidden />}
-              title="Additional requirement"
-            >
-              <Text size="sm">The set of options is the same as the set of voters.</Text>
-            </Alert>
-            <Text>
-              Sometimes a group needs to split into smaller groups: teams for a project, tables at a
-              dinner, or rooms on a trip. When everyone rates everyone else,{' '}
-              <strong>Group formation</strong> uses those ratings to put people with the people they
-              most want to be with:
-            </Text>
-            <List type="ordered" spacing={4} withPadding>
-              <List.Item>
-                Every voter rates every other voter, with more stars for the people they would
-                rather be grouped with.
-              </List.Item>
-              <List.Item>
-                Every way of splitting the voters into groups of the chosen size is considered.
-              </List.Item>
-              <List.Item>
-                The split chosen is the one where the stars each voter gave the others in their own
-                group add up to the most.
-              </List.Item>
-            </List>
-            <Text>
-              Because the ratings go both ways, two people who rate each other highly are counted
-              twice over, so mutual friends are kept together before one-sided ones.
-            </Text>
-          </Stack>
-        </RoundCard>
-      </Box>
+        <Choice
+          id={CHOICES.optionAllocation}
+          icon={ArrowsSplitIcon}
+          title="Option allocation"
+          algorithms={['Nash']}
+        >
+          <ComingSoon name="Option allocation" />
+          <NotStrategyProof />
+          <HardToSolve />
+          <Text>
+            Sometimes every voter needs a different option of their own: chores shared out between
+            housemates, topics handed out to a class, or shifts split between volunteers.{' '}
+            <strong>Option allocation</strong> gives each voter one option, choosing the allocation
+            that leaves the group as a whole as satisfied as it can be:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Every voter rates every option as usual, with more stars for the options they would
+              rather have.
+            </List.Item>
+            <List.Item>
+              Each option can optionally be given a number of places: how many voters it can go to.
+              A chore might need two housemates, or a shift four volunteers. An option with no
+              number set goes to one voter.
+            </List.Item>
+            <List.Item>
+              The allocation chosen is the one where the stars each voter gave their own option,
+              multiplied together, are as large as possible.
+            </List.Item>
+          </List>
+          <Text>
+            Multiplying rather than adding stops the allocation from handing one voter an option
+            they gave 0 stars so that the others can do slightly better: anyone left with 0 stars
+            makes the whole product 0.
+          </Text>
+          <Text>
+            The numbers don&rsquo;t have to match. If there are more voters than places across all
+            the options, every place is filled and some voters go without one, and those voters are
+            left out of the product. If there are more places than voters, every voter gets one and
+            some places are left empty.
+          </Text>
+        </Choice>
+
+        <Choice
+          id={CHOICES.groupFormation}
+          icon={UsersThreeIcon}
+          title="Group formation"
+          algorithms={['Nash']}
+        >
+          <ComingSoon name="Group formation" />
+          <VotersAreOptions />
+          <NotStrategyProof />
+          <HardToSolve />
+          <Text>
+            Sometimes a group needs to split into smaller groups: teams for a project, tables at a
+            dinner, or rooms on a trip. When everyone rates everyone else,{' '}
+            <strong>Group formation</strong> uses those ratings to put people with the people they
+            most want to be with:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Every voter rates every other voter, with more stars for the people they would rather
+              be grouped with.
+            </List.Item>
+            <List.Item>
+              A voter&rsquo;s satisfaction with a split is the stars they gave the others in their
+              own group, on average.
+            </List.Item>
+            <List.Item>
+              The split chosen, into groups of the chosen size, is the one where every voter&rsquo;s
+              satisfaction, multiplied together, is as large as possible.
+            </List.Item>
+          </List>
+          <Text>
+            Multiplying rather than adding means nobody is put in a group of people they gave 0
+            stars to just so that everyone else can be with their favourites.
+          </Text>
+        </Choice>
+
+        <Choice
+          id={CHOICES.fractionalBudget}
+          icon={PiggyBankIcon}
+          title="Fractional budget"
+          algorithms={['Nash', 'Cost adjustment']}
+        >
+          <ComingSoon name="Fractional budget" />
+          <NeedsCost />
+          <NotStrategyProof />
+          <Text>
+            Sometimes a budget can be split between options in any amounts, but each option only
+            needs so much: donations shared between charities, hours of help shared between
+            projects, or a grant shared between teams. <strong>Fractional budget</strong> is
+            Fractional winners with a cost on every option:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Every option is given a cost: the most it can use. A charity might be able to use
+              $2,000 of a $10,000 fund.
+            </List.Item>
+            <List.Item>
+              An option funded part of the way gives its voters that part of their stars, so an
+              option funded halfway counts for half the stars each voter gave it. No option is given
+              more than its cost.
+            </List.Item>
+            <List.Item>
+              A voter&rsquo;s satisfaction is the stars they get from every option, counted this
+              way, added up.
+            </List.Item>
+            <List.Item>
+              The budget is split in the way that makes every voter&rsquo;s satisfaction, multiplied
+              together, as large as possible.
+            </List.Item>
+          </List>
+          <Text>
+            Unlike Proportional budget, which funds an option whole or not at all, this is for
+            options that are still worth something funded part of the way.
+          </Text>
+        </Choice>
+
+        <Choice
+          id={CHOICES.optimalSwap}
+          icon={SwapIcon}
+          title="Optimal swap"
+          algorithms={['Shapley–Scarf']}
+        >
+          <ComingSoon name="Optimal swap" />
+          <Requirement icon={SwapIcon}>Every voter brings one option of their own.</Requirement>
+          <Text>
+            Sometimes everyone already has something and would happily trade: shifts on a rota,
+            rooms on a trip, or presents at a gift swap. <strong>Optimal swap</strong> finds the
+            trades that leave everyone as happy as they can be without anybody ending up worse off
+            than they started:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Every voter brings one option (their shift, room or present) and rates
+              everyone&rsquo;s options, including their own.
+            </List.Item>
+            <List.Item>
+              Each voter points to whoever brought the option they gave the most stars, among those
+              still to be handed out.
+            </List.Item>
+            <List.Item>
+              Following the pointers always leads round in a loop, which may be one voter pointing
+              at themselves. Everyone in a loop gets the option they pointed to, and leaves with it.
+            </List.Item>
+            <List.Item>Repeat with everyone left until every option has been handed out.</List.Item>
+          </List>
+          <Text>
+            This is{' '}
+            <Ext href="https://en.wikipedia.org/wiki/Top_trading_cycle">
+              Shapley and Scarf&rsquo;s top trading cycles
+            </Ext>
+            . Nobody ends up with an option they like less than the one they brought, no group could
+            do better by trading among themselves instead, and nobody can get a better option by
+            rating dishonestly.
+          </Text>
+        </Choice>
+
+        <Choice
+          id={CHOICES.bipartiteMatching}
+          icon={LinkSimpleIcon}
+          title="Bipartite matching"
+          algorithms={['Gale–Shapley']}
+        >
+          <ComingSoon name="Bipartite matching" />
+          <VotersAreOptions />
+          <Requirement icon={ArrowsLeftRightIcon}>
+            Voters are divided into two groups with the same number of places in total.
+          </Requirement>
+          <Text>
+            Sometimes people need to be paired with people from another group: mentors with mentees,
+            new starters with buddies, or students with project supervisors. Both sides care who
+            they get, so when everyone rates everyone in the other group,{' '}
+            <strong>Bipartite matching</strong> uses those ratings to find a matching that is
+            stable: no two people would both rather be matched with each other than with who they
+            got.
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Every voter rates everyone in the other group, with more stars for the people they
+              would rather be matched with.
+            </List.Item>
+            <List.Item>
+              Each voter has a number of places: how many people from the other group they can be
+              matched with. A mentor might take three mentees while each mentee has one mentor.
+            </List.Item>
+            <List.Item>
+              Everyone in one group proposes to the people they gave the most stars in the other
+              group, as many as they have places.
+            </List.Item>
+            <List.Item>
+              Everyone in the other group holds on to the best proposals they have received, as many
+              as they have places, and turns down the rest.
+            </List.Item>
+            <List.Item>
+              Anyone turned down proposes to the next person on their list, and a held proposal is
+              given up when a better one arrives. This repeats until nobody has anyone left to
+              propose to.
+            </List.Item>
+          </List>
+          <Text>
+            This is the{' '}
+            <Ext href="https://en.wikipedia.org/wiki/Gale%E2%80%93Shapley_algorithm">
+              Gale&ndash;Shapley algorithm
+            </Ext>
+            . It always ends in a stable matching, and because both groups have the same number of
+            places, every place is filled.
+          </Text>
+          <Text>
+            Unlike Option allocation, which looks at everyone&rsquo;s stars together, this is about
+            stability: a pairing that leaves people happier overall could leave two people who would
+            both rather leave their matches for each other. The group that proposes gets the best
+            stable matching it can, so it matters which group goes first.
+          </Text>
+        </Choice>
+      </Accordion>
     </Stack>
+  )
+}
+
+/**
+ * One section of `AllChoices`: its icon, title and algorithm tags in the
+ * heading, which is the button that opens it. The tags sit inside the button
+ * so they show while the section is closed; they read after the title.
+ */
+function Choice({
+  id,
+  icon: Glyph,
+  title,
+  algorithms,
+  children,
+}: {
+  id: string
+  icon: Icon
+  title: string
+  algorithms: string[]
+  children: ReactNode
+}) {
+  return (
+    <Accordion.Item value={id} id={id} className={classes.target}>
+      <Accordion.Control
+        icon={
+          <ThemeIcon size={36} radius="md" variant="light" color="orange">
+            <Glyph size={20} aria-hidden />
+          </ThemeIcon>
+        }
+      >
+        <Stack gap={4}>
+          <Text fw={700} size="lg" lh={1.3}>
+            {title}
+          </Text>
+          <Group gap={4}>
+            <VisuallyHidden>{algorithms.length > 1 ? 'Algorithms:' : 'Algorithm:'}</VisuallyHidden>
+            {algorithms.map((name) => (
+              <Badge key={name} variant="light" color={badgeColor.algorithm}>
+                {name}
+              </Badge>
+            ))}
+          </Group>
+        </Stack>
+      </Accordion.Control>
+      <Accordion.Panel>
+        <Stack gap="sm">{children}</Stack>
+      </Accordion.Panel>
+    </Accordion.Item>
+  )
+}
+
+/** The banner on every choice that is described but not built. */
+function ComingSoon({ name, plural }: { name: string; plural?: boolean }) {
+  return (
+    <Alert variant="light" icon={<HourglassIcon size={20} aria-hidden />} title="Coming soon">
+      <Text size="sm">
+        {name} {plural ? 'aren’t' : 'isn’t'} available yet. This is how {plural ? 'they' : 'it'}{' '}
+        will work.
+      </Text>
+    </Alert>
+  )
+}
+
+/**
+ * The warning on a choice a voter can do better under by scoring dishonestly,
+ * which STAR's runoff guards against. `easily` where one ballot's extreme
+ * scores can carry the result on their own.
+ */
+function NotStrategyProof({ easily }: { easily?: boolean }) {
+  return (
+    <Alert variant="light" color="orange" icon={<WarningIcon size={20} aria-hidden />}>
+      <Text size="sm">
+        Warning: unlike STAR, this choice is not resistant to strategic voting. Voters can
+        {easily ? ' easily' : ''} game this system by responding dishonestly.
+      </Text>
+    </Alert>
+  )
+}
+
+/** The warning on a choice whose best answer can take too long to find. */
+function HardToSolve() {
+  return (
+    <Alert variant="light" color="orange" icon={<CpuIcon size={20} aria-hidden />}>
+      <Text size="sm">
+        Warning: finding this solution can be computationally expensive. This app might not be able
+        to find the most optimal solution possible.
+      </Text>
+    </Alert>
+  )
+}
+
+/** Something a choice needs from its poll beyond a list of options. */
+function Requirement({ icon: Glyph, children }: { icon: Icon; children: ReactNode }) {
+  return (
+    <Alert
+      variant="light"
+      color="gray"
+      icon={<Glyph size={20} aria-hidden />}
+      title="Additional requirement"
+    >
+      <Text size="sm">{children}</Text>
+    </Alert>
+  )
+}
+
+function NeedsCost() {
+  return (
+    <Requirement icon={CoinsIcon}>Every option has a cost, and the poll has a budget.</Requirement>
+  )
+}
+
+function VotersAreOptions() {
+  return (
+    <Requirement icon={UsersThreeIcon}>
+      The set of options is the same as the set of voters.
+    </Requirement>
+  )
+}
+
+/**
+ * The ids of `AllChoices`' sections, which `?section=` opens the page at.
+ * The result's modals link to them by these words, so keep them.
+ */
+const CHOICES = {
+  bestOption: 'best-option',
+  consensusOption: 'consensus-option',
+  optionRanking: 'option-ranking',
+  multipleWinners: 'multiple-winners',
+  sequentialPolls: 'sequential-polls',
+  proportionalBudget: 'proportional-budget',
+  fractionalWinners: 'fractional-winners',
+  optionAllocation: 'option-allocation',
+  groupFormation: 'group-formation',
+  fractionalBudget: 'fractional-budget',
+  optimalSwap: 'optimal-swap',
+  bipartiteMatching: 'bipartite-matching',
+}
+
+/**
+ * *Proportional budget*'s weight, folded away at the foot of its section as
+ * `WeightFormula` is under *Multiple winners*: the same divisor, with each
+ * funded option's stars scaled by its cost over the average cost of every
+ * option on the poll, so an option of average cost charges a ballot exactly
+ * as a Multiple winners spot does.
+ */
+function BudgetFormula() {
+  return (
+    <Folded label="The reweighting formula">
+      <Text size="sm">
+        A ballot&rsquo;s weight, which scales its scores and its runoff vote, is
+      </Text>
+      <Text
+        size="sm"
+        fw={600}
+        ta="center"
+        aria-label="1 divided by 1 plus the sum, over funded options, of stars over 5 times cost over average cost"
+      >
+        <span className={classes.fraction}>
+          <span className={classes.numerator} aria-hidden="true">
+            1
+          </span>
+          <span className={classes.denominator} aria-hidden="true">
+            1 + Σ (s<sub>j</sub>/5) × (cost<sub>j</sub>/c)
+          </span>
+        </span>
+      </Text>
+      <Text size="sm">
+        where the sum is over the options funded so far, s<sub>j</sub> is the stars the ballot gave
+        option j, cost<sub>j</sub> is what option j costs, and c is the average cost of every option
+        on the poll.
+      </Text>
+      <Text size="sm">
+        An option of average cost counts exactly as a winner does in Multiple winners: giving it 5
+        stars halves your vote in future rounds. Giving 5 stars to an option that costs half the
+        average counts half as much, and to one that costs twice the average, twice as much.
+      </Text>
+    </Folded>
   )
 }
 
@@ -952,7 +1240,7 @@ export function WhyStar() {
           is infeasibly computationally expensive and the other is very difficult to understand.
           STAR has the advantage of being computationally simple, easy to grasp conceptually, and
           extensible to more complex scenarios such as{' '}
-          <Anchor component={Link} to={`/extensions?section=${EXTENSIONS.multipleWinners}`} inherit>
+          <Anchor component={Link} to={`/choices?section=${CHOICES.multipleWinners}`} inherit>
             multi-winner elections
           </Anchor>
           .
@@ -962,28 +1250,13 @@ export function WhyStar() {
       <Text>
         To see what else STAR can do with the same ballots, like ranking every option, choosing
         several winners, or giving each option a share, read{' '}
-        <Anchor component={Link} to="/extensions" inherit>
-          STAR extensions
+        <Anchor component={Link} to="/choices" inherit>
+          All choices
         </Anchor>
         .
       </Text>
     </Stack>
   )
-}
-
-/**
- * The ids of `StarExtensions`' cards, which `?section=` opens the page at.
- * The result's modals link to them by these words, so keep them.
- */
-const EXTENSIONS = {
-  fullRanking: 'full-ranking',
-  multipleWinners: 'multiple-winners',
-  sequelPolls: 'sequel-polls',
-  fractionalWinners: 'fractional-winners',
-  budgeting: 'budgeting',
-  optionAssignment: 'option-assignment',
-  twoSidedMatching: 'two-sided-matching',
-  groupFormation: 'group-formation',
 }
 
 /**
@@ -1747,6 +2020,38 @@ function Ballot({ ratings, voter }: { ratings: Ratings; voter: number }) {
         </tbody>
       </table>
     </div>
+  )
+}
+
+/**
+ * Harder elections than `/star`'s six friends, worked through one per card,
+ * added as the choices on `/choices` are built. Under construction until the
+ * first one lands.
+ */
+export function MoreExamples() {
+  usePageTitle('More examples')
+  return (
+    <Stack maw={720} mx="auto" gap="md">
+      <Title order={1}>More examples</Title>
+      <Alert
+        variant="light"
+        icon={<HourglassIcon size={20} aria-hidden />}
+        title="Under construction"
+      >
+        <Text size="sm">This page isn&rsquo;t ready yet. Check back soon.</Text>
+      </Alert>
+      <Text>
+        This page will work through more complex elections than the six friends on{' '}
+        <Anchor component={Link} to="/star" inherit>
+          What is STAR?
+        </Anchor>
+        , one for each choice on{' '}
+        <Anchor component={Link} to="/choices" inherit>
+          All choices
+        </Anchor>{' '}
+        as it is built.
+      </Text>
+    </Stack>
   )
 }
 

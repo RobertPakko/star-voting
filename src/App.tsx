@@ -29,10 +29,8 @@ import { useLaunchRoutes } from './lib/launch'
  */
 const CreatePoll = lazy(() => import('./pages/CreatePoll').then((m) => ({ default: m.CreatePoll })))
 const WhatIsStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhatIsStar })))
-const StarTies = lazy(() => import('./pages/Learn').then((m) => ({ default: m.StarTies })))
-const StarExtensions = lazy(() =>
-  import('./pages/Learn').then((m) => ({ default: m.StarExtensions })),
-)
+const AllChoices = lazy(() => import('./pages/Learn').then((m) => ({ default: m.AllChoices })))
+const MoreExamples = lazy(() => import('./pages/Learn').then((m) => ({ default: m.MoreExamples })))
 const WhyStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhyStar })))
 const Features = lazy(() => import('./pages/Learn').then((m) => ({ default: m.Features })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
@@ -104,21 +102,28 @@ function App() {
             }
           />
           <Route
-            path="ties"
+            path="choices"
             element={
               <Suspense fallback={<LearnSkeleton />}>
-                <StarTies />
+                <AllChoices />
               </Suspense>
             }
           />
           <Route
-            path="extensions"
+            path="examples"
             element={
               <Suspense fallback={<LearnSkeleton />}>
-                <StarExtensions />
+                <MoreExamples />
               </Suspense>
             }
           />
+          {/* Where the tie-break rules and the choices used to be; kept for
+            links already shared. */}
+          <Route
+            path="ties"
+            element={<Navigate to={{ pathname: '/star', search: '?section=ties' }} replace />}
+          />
+          <Route path="extensions" element={<MovedTo pathname="/choices" />} />
           <Route
             path="why-star"
             element={
@@ -214,8 +219,13 @@ function PollRoute() {
 }
 
 function OldCreateAddress() {
+  return <MovedTo pathname="/new" />
+}
+
+/** A page that has moved, keeping the query (`?section=` and the like). */
+function MovedTo({ pathname }: { pathname: string }) {
   const { search } = useLocation()
-  return <Navigate to={{ pathname: '/new', search }} replace />
+  return <Navigate to={{ pathname, search }} replace />
 }
 
 export default App

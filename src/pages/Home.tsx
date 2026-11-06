@@ -18,8 +18,8 @@ import {
   CodeIcon,
   DownloadSimpleIcon,
   EnvelopeSimpleIcon,
-  EqualsIcon,
   HeartIcon,
+  LightbulbIcon,
   ListBulletsIcon,
   PlayCircleIcon,
   PlusIcon,
@@ -120,8 +120,8 @@ export function Home() {
 
         <Tile to="/star" icon={QuestionIcon} color="orange" title="What’s STAR?" />
         <Tile to="/why-star" icon={ScalesIcon} color="orange" title="Why STAR?" />
-        <Tile to="/ties" icon={EqualsIcon} color="orange" title="STAR ties" />
-        <Tile to="/extensions" icon={PuzzlePieceIcon} color="orange" title="STAR extensions" />
+        <Tile to="/choices" icon={PuzzlePieceIcon} color="orange" title="All choices" />
+        <Tile to="/examples" icon={LightbulbIcon} color="orange" title="More examples" />
 
         {/* Installing is the more useful offer; once installed, the slot
             goes to the code, which App features also links. */}
