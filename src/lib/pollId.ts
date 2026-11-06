@@ -24,7 +24,7 @@
  * readily as a short one, so a link carrying the long form still opens its
  * poll. It costs one regex.
  *
- * **The sample's ids are words and stay words.** `sample-dinner` is neither a
+ * **The sample's ids are words and stay words.** `sample-movie` is neither a
  * uuid nor 22 characters, so both directions hand it back untouched -- which
  * is the whole point of it being a word, since those links are meant to be
  * read aloud. See `isSampleId`.

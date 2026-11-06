@@ -17,9 +17,9 @@ const PAGES: { path: string; title: string; name: string }[] = [
   { path: '#/intro', title: 'ChoiceLab', name: 'the intro' },
   { path: '#/donate', title: 'Donate', name: 'the donate page' },
   { path: '#/contact', title: 'Contact', name: 'the contact page' },
-  { path: '#/sample-dinner', title: 'Movie night', name: 'a ballot' },
+  { path: '#/sample-movie', title: 'Movie night', name: 'a ballot' },
   { path: '#/sample-when', title: 'Movie night', name: 'a calendar ballot' },
-  { path: '#/sample-result-dinner', title: 'Movie night', name: 'a result' },
+  { path: '#/sample-result-movie', title: 'Movie night', name: 'a result' },
   { path: '#/sample-result-when', title: 'Movie night', name: 'a calendar result' },
 ]
 
@@ -94,7 +94,7 @@ test.describe('the home page', () => {
       '#/contact',
       '#/donate',
       '#/app',
-      '#/sample-dinner',
+      '#/sample-movie',
       '#/sign-in',
       '#/no-such-page',
     ]) {
@@ -137,11 +137,11 @@ test.describe('the home page', () => {
   test('opens the sample poll and its result', async ({ page }) => {
     await page.goto('#/')
     await page.getByRole('link', { name: /^Example poll/ }).click()
-    await expect(page).toHaveURL(/#\/sample-dinner$/)
+    await expect(page).toHaveURL(/#\/sample-movie$/)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Movie night')
     await page.goBack()
     await page.getByRole('link', { name: /^Example result/ }).click()
-    await expect(page).toHaveURL(/#\/sample-result-dinner$/)
+    await expect(page).toHaveURL(/#\/sample-result-movie$/)
   })
 
   test('holds its ballot still under reduced motion', async ({ page }) => {

@@ -3491,10 +3491,10 @@ The home page's *Example poll* and *Example result* tiles open it.
 
 #### The sample poll is a recording, not rows
 
-`/#/sample-dinner` is a three-question poll ("Movie night") still taking
-votes; `/#/sample-result-dinner` is the same poll after nine people finished
-it. Its questions ask progressively more — a bare list, a list with
-descriptions, then a calendar (a Friday evening and a Saturday daytime) — so
+`/#/sample-movie` is a two-question poll ("Movie night") still taking
+votes; `/#/sample-result-movie` is the same poll after nine people finished
+it. The first question is a list with descriptions, the second a calendar (a
+Friday evening and a Saturday daytime) asking for the consensus time, so
 both ballots are shown. Neither exists in Supabase: both are answered from
 [`src/lib/samplePollData.ts`](src/lib/samplePollData.ts), which
 `scripts/sample-poll.sh` generates by building the throwaway database, making
@@ -3524,7 +3524,7 @@ what answers it. The `sample-` prefix cannot collide with a uuid, and the ids
 are words so the links can be read aloud.
 
 **The router must also recognise a sample id**: `PollPage` sends it straight
-to `PublicPoll`, because asking the database about `sample-host` errors on the
+to `PublicPoll`, because asking the database about `sample-movie` errors on the
 uuid cast. `isSampleId` is exported for that. An unknown `sample-` id gets
 `PublicPoll`'s *poll not found*, not the sign-in screen.
 

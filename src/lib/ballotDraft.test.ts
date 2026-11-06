@@ -107,11 +107,11 @@ describe('a ballot draft', () => {
   })
 
   test('is kept in memory, not storage, for the sample, and forgotten with it', () => {
-    saveBallotDraft(scope('sample-dinner'), { a: 4 })
+    saveBallotDraft(scope('sample-movie'), { a: 4 })
     expect(localStorage.getItem('star-voting:ballot-drafts')).toBeNull()
-    expect(readBallotDraft(scope('sample-dinner'))).toEqual({ a: 4 })
+    expect(readBallotDraft(scope('sample-movie'))).toEqual({ a: 4 })
     forgetSampleDrafts()
-    expect(readBallotDraft(scope('sample-dinner'))).toBeNull()
+    expect(readBallotDraft(scope('sample-movie'))).toBeNull()
   })
 
   test('survives storage that refuses, for as long as the tab is open', () => {

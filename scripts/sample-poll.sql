@@ -26,9 +26,9 @@
 
 create schema if not exists sample;
 
--- The readable name each question is recorded under: 'sample-host' and its
--- two siblings for the copy still taking votes, 'sample-result-host' and its
--- two for the copy that has finished.
+-- The readable name each question is recorded under: 'sample-movie' and its
+-- sibling for the copy still taking votes, 'sample-result-movie' and its
+-- sibling for the copy that has finished.
 --
 -- It used to be the poll's `public_token`, a real column holding a real
 -- capability, and readable values were written straight into it. The link to
@@ -37,7 +37,7 @@ create schema if not exists sample;
 -- script runs: the build records which poll each name belongs to, and the
 -- recording below substitutes the name for the uuid in the payloads it
 -- prints. What ships is a sample whose questions are reached at
--- `#/sample-host`, which is a link that can be read out in a talk.
+-- `#/sample-movie`, which is a link that can be read out in a talk.
 --
 -- Nothing in the database is fooled by it. Every payload here is what the
 -- real functions answered about the real uuid; the swap happens in the text
@@ -52,38 +52,33 @@ create table if not exists sample.link (
 -- The poll
 -- ---------------------------------------------------------------------------
 --
--- Three questions, each one asking more of the reader than the last:
+-- Two questions, the second asking more of the reader than the first:
 --
---   dinner  the plainest ballot there is -- five options, no descriptions,
---           nothing to read before you can score it -- and the clearest lesson.
---           The runoff overturns the score round: taco bar leads on points
---           because the four voters who want it want it badly, and pizza wins
---           because five of the nine prefer it, which is the whole reason STAR
---           runs a runoff at all.
---   movie   the same ballot with a paragraph under each option, and a
---           three-way tie for the second finalist slot, settled on five-star
---           votes: Paddington 2 has two, the other two one each. Those two
---           fives are Diego's and Gina's, who are cool on Knives Out where
---           most of the room likes it, as is Hugo, who would rather see The
---           Matrix: so the fractional winners give Paddington 2 and The Matrix
---           shares of their own rather than handing the whole evening to
---           Knives Out. Multiple winners and the full ranking also disagree
---           here -- The Matrix takes the second spot, Paddington 2 the second
---           place.
+--   movie   a list with a paragraph under each option, and a three-way tie
+--           for the second finalist slot, settled on five-star votes:
+--           Paddington 2 has two, the other two one each. Those two fives are
+--           Diego's and Gina's, who are cool on Knives Out where most of the
+--           room likes it, as is Hugo, who would rather see The Matrix: so the
+--           fractional winners give Paddington 2 and The Matrix shares of their
+--           own rather than handing the whole evening to Knives Out. Multiple
+--           winners and the full ranking also disagree here -- The Matrix takes
+--           the second spot, Paddington 2 the second place.
 --   when    a different ballot altogether: a calendar, painted rather than
---           scored. It is last because it is the most to take in, and it is a
---           plain election on purpose -- the score leader wins the runoff too,
---           so a reader here is learning what the ballot is rather than what a
---           tie-break is.
+--           scored, asking for the consensus time -- the window whose
+--           least-keen voter is keenest -- since a meeting is a choice
+--           everybody has to live with. It is last because it is the most to
+--           take in.
 --
 --           Its ten options are the four-hour windows that fit inside a Friday
 --           evening and a Saturday daytime -- one on the Friday, nine on the
 --           Saturday -- which is the point of asking about two days at once:
 --           the two are not the same question and the grid says so. The nine
---           ballots are what nine painted calendars flatten to; see
---           `scoresFromPainting`, which scores a window by its *worst* half
---           hour rather than by its average, so a voter free from ten scores
---           every window that reaches back to nine a zero.
+--           ballots are what nine painted calendars flatten to (a window
+--           scores the mean of its half hours; see `scoresFromPainting`):
+--           Chloe is busy until eleven on Saturday, Erin from two, Gina keen
+--           only on the morning. STAR elects 9:00, which most of the room
+--           likes best; the consensus is 10:00, the one window nobody rates
+--           below 4.
 --
 -- The nine voters are the same nine in every question.
 create or replace function sample.poll() returns jsonb language sql immutable as $$
@@ -91,28 +86,6 @@ select $json${
   "title": "Movie night",
   "voters": ["Ana", "Ben", "Chloe", "Diego", "Erin", "Farid", "Gina", "Hugo", "Iris"],
   "questions": [
-    {
-      "slug": "dinner",
-      "title": "What are we eating?",
-      "options": [
-        { "name": "Two big pizzas" },
-        { "name": "Taco bar" },
-        { "name": "Everyone brings a dish" },
-        { "name": "Thai delivery" },
-        { "name": "Just snacks" }
-      ],
-      "ballots": [
-        [1, 5, 2, 3, 1],
-        [2, 5, 1, 2, 0],
-        [3, 5, 3, 2, 1],
-        [2, 5, 2, 1, 2],
-        [4, 3, 2, 3, 1],
-        [5, 2, 1, 4, 1],
-        [5, 4, 3, 2, 1],
-        [4, 3, 2, 2, 1],
-        [4, 3, 2, 3, 1]
-      ]
-    },
     {
       "slug": "movie",
       "title": "What are we watching?",
@@ -139,7 +112,7 @@ select $json${
     {
       "slug": "when",
       "title": "When are we meeting?",
-      "kind": "time",
+      "kind": "consensus_time",
       "schedule": {
         "timezone": "-07:00",
         "window": { "start": "09:00", "end": "22:00" },
@@ -161,13 +134,13 @@ select $json${
       "ballots": [
         [5, 4, 4, 4, 4, 4, 4, 4, 4, 4],
         [0, 5, 5, 5, 5, 5, 5, 5, 5, 5],
-        [5, 0, 0, 0, 0, 0, 0, 0, 0, 3],
-        [2, 0, 0, 5, 5, 5, 5, 5, 5, 5],
-        [0, 5, 5, 5, 0, 0, 0, 0, 0, 0],
-        [4, 0, 0, 0, 0, 0, 0, 0, 5, 5],
-        [0, 0, 0, 0, 0, 4, 4, 4, 4, 4],
-        [1, 5, 5, 5, 5, 5, 5, 5, 5, 5],
-        [0, 2, 2, 2, 2, 2, 2, 2, 2, 5]
+        [5, 3, 3, 4, 4, 5, 5, 5, 5, 5],
+        [2, 5, 4, 4, 4, 3, 3, 2, 2, 1],
+        [0, 5, 5, 5, 4, 4, 3, 3, 2, 1],
+        [4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+        [0, 4, 4, 4, 3, 3, 2, 2, 2, 2],
+        [1, 5, 4, 4, 4, 4, 4, 4, 4, 4],
+        [0, 4, 4, 4, 4, 5, 5, 5, 5, 5]
       ]
     }
   ]
@@ -338,7 +311,7 @@ begin
 
   -- Every poll id in the payloads, swapped for the readable name the question
   -- is recorded under. This is what makes the sample's links readable: the id
-  -- IS the link now, so `sample-host` in this text is what the browser puts in
+  -- IS the link now, so `sample-movie` in this text is what the browser puts in
   -- the address bar and what `open_poll_group` hands back as the next
   -- question. It cannot be done in the database -- every ballot and option
   -- points at the real uuid by the time the poll is built -- so it is done in
@@ -374,7 +347,7 @@ begin
   );
   perform sample.build(
     'sample-result',
-    'An example of the results from a poll. Nine people voted, and each question was harder to settle than the one before it.',
+    'An example of the results from a poll. Nine people voted on a film and a time to meet.',
     true
   );
 end $$;

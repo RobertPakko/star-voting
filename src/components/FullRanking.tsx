@@ -205,7 +205,11 @@ function Place({ entry }: { entry: RankingEntry }) {
         </Text>
 
         {entry.tiebreaks.map((tb, i) => (
-          <Text key={i} size="sm" c={tb.resolved_by === 'random' ? 'orange' : 'dimmed'}>
+          <Text
+            key={i}
+            size="sm"
+            c={tb.resolved_by === 'random' ? 'var(--mantine-color-orange-light-color)' : 'dimmed'}
+          >
             <TiebreakNote tiebreak={tb} />
           </Text>
         ))}

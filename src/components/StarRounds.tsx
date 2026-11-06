@@ -175,7 +175,10 @@ function ScoringTieBreaks({ tiebreaks }: { tiebreaks: Tiebreak[] }) {
             </Stack>
           ))}
 
-          <Text size="sm" c={tb.resolved_by === 'random' ? 'orange' : undefined}>
+          <Text
+            size="sm"
+            c={tb.resolved_by === 'random' ? 'var(--mantine-color-orange-light-color)' : undefined}
+          >
             {tb.resolved_by === 'random'
               ? randomNote(tb)
               : renderAdvancedNames(
@@ -248,7 +251,7 @@ function RunoffTieBreak({
       )}
 
       {runoff.resolved_by === 'unresolved' || !winner ? (
-        <Text size="sm" c="orange">
+        <Text size="sm" c="var(--mantine-color-orange-light-color)">
           Level on preference, on total stars and on five-star votes, so there is no winner.
         </Text>
       ) : (

@@ -15,10 +15,10 @@ import type {
 /**
  * The sample poll the About page links to, and the one place that serves it.
  *
- * It is a real three-question poll -- "Movie night" -- in two states: one copy
- * still taking votes, and one that nine people finished, whose questions get
- * progressively harder to take in. The last of them is a poll that finds a
- * time, so the sample shows both ballots this app has. Both are answered out of
+ * It is a real two-question poll -- "Movie night" -- in two states: one copy
+ * still taking votes, and one that nine people finished. The first question
+ * is a list and the second a calendar asking for the consensus time, so the
+ * sample shows both ballots this app has. Both are answered out of
  * `samplePollData.ts`, which `scripts/sample-poll.sh` records by building the
  * poll in a throwaway database and asking the real RPCs about it.
  *
@@ -40,7 +40,7 @@ import type {
  * the reader a uuid syntax error instead of the sample.
  */
 
-/** The three questions of one copy of the sample, keyed by poll id. */
+/** The two questions of one copy of the sample, keyed by poll id. */
 interface SampleQuestion {
   view: OpenPollView
   group: OpenGroupQuestion[]
@@ -60,8 +60,8 @@ interface SampleQuestion {
 export type SamplePayloads = Record<string, SampleQuestion>
 
 /** Question 1 of each copy: where the About page's two links point. */
-export const SAMPLE_POLL_ID = 'sample-dinner'
-export const SAMPLE_RESULT_ID = 'sample-result-dinner'
+export const SAMPLE_POLL_ID = 'sample-movie'
+export const SAMPLE_RESULT_ID = 'sample-result-movie'
 
 /**
  * A real poll id is a v4 UUID, so nothing the database can mint begins with
@@ -208,7 +208,7 @@ const failed = (message: string): RpcAnswer => ({ data: null, error: { message }
  * About page, to show somebody. A reader returning to it wants the ballot they
  * came to try, not the one they filled in weeks ago and a *your vote is in*
  * they have to find their way past. So the visit is the whole of the memory:
- * enough for the three questions to be walked through and the roster to be
+ * enough for the two questions to be walked through and the roster to be
  * right while that is happening, and gone by the next arrival. `PollPage`
  * calls `forgetSampleBallots` on its way off the poll routes.
  */

@@ -80,7 +80,7 @@ describe('pollIdFromParam', () => {
   })
 
   it('hands back the sample ids untouched, in both directions', () => {
-    for (const id of ['sample-dinner', 'sample-result-dinner', 'sample-when']) {
+    for (const id of ['sample-movie', 'sample-result-movie', 'sample-when']) {
       expect(shortPollId(id)).toBe(id)
       expect(pollIdFromParam(id)).toBe(id)
       expect(pollPath(id)).toBe(`/${id}`)
@@ -105,7 +105,7 @@ describe('pollPath', () => {
 describe('isPollParam', () => {
   it('takes both spellings of an id and a sample word', () => {
     const id = seededUuid(12)
-    for (const param of [id, id.toUpperCase(), shortPollId(id), 'sample-dinner']) {
+    for (const param of [id, id.toUpperCase(), shortPollId(id), 'sample-movie']) {
       expect(isPollParam(param)).toBe(true)
     }
   })

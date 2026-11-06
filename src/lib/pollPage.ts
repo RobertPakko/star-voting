@@ -13,7 +13,7 @@ import type { OpenPollView, PollRead, PollStatus } from './types'
  *
  * It goes through `openPollRpc` so the About page's sample answers out of its
  * file like every other open-poll read; asking the database about
- * `sample-host` is a uuid syntax error rather than an empty result.
+ * `sample-movie` is a uuid syntax error rather than an empty result.
  *
  * **The voter key is peeked at, never minted.** This is the request that
  * establishes whether the address even leads to an open poll, so minting here

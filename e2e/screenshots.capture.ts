@@ -42,7 +42,7 @@ test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 
   test('ballot', async ({ page }) => {
-    await open(page, '#/sample-dinner')
+    await open(page, '#/sample-movie')
     await scoreSome(page)
     await page.evaluate(() => window.scrollTo(0, 0))
     await page.screenshot({ path: `${OUT}/phone-ballot.png` })
@@ -65,7 +65,7 @@ test.describe('phone', () => {
   })
 
   test('results', async ({ page }) => {
-    await open(page, '#/sample-result-dinner')
+    await open(page, '#/sample-result-movie')
     await page.screenshot({ path: `${OUT}/phone-results.png` })
   })
 })
@@ -74,14 +74,14 @@ test.describe('desktop', () => {
   test.use({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 })
 
   test('ballot', async ({ page }) => {
-    await open(page, '#/sample-dinner')
+    await open(page, '#/sample-movie')
     await scoreSome(page)
     await page.evaluate(() => window.scrollTo(0, 0))
     await page.screenshot({ path: `${OUT}/desktop-ballot.png` })
   })
 
   test('results', async ({ page }) => {
-    await open(page, '#/sample-result-dinner')
+    await open(page, '#/sample-result-movie')
     await page.screenshot({ path: `${OUT}/desktop-results.png` })
   })
 })
