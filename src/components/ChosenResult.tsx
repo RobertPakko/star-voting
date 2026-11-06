@@ -3,6 +3,8 @@ import type { PollResults } from '../lib/types'
 import { FractionalWinnersBody } from './FractionalWinners'
 import { RankingBody, type RankingSource } from './FullRanking'
 import { MultipleWinnersBody } from './MultipleWinners'
+import { ConsensusBody } from './Consensus'
+import type { MeetingEvent } from '../lib/calendarEvent'
 import { useLeftOut } from '../lib/useLeftOut'
 
 /**
@@ -18,10 +20,13 @@ export function ChosenResult({
   source,
   results,
   chosen,
+  eventFor,
 }: {
   source: RankingSource
   results: PollResults
   chosen: Chosen
+  /** A time poll's window as a calendar event, for the consensus time. */
+  eventFor?: (id: string) => MeetingEvent | null
 }) {
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
 
@@ -46,6 +51,17 @@ export function ChosenResult({
           initial={chosen.shares}
           leftOut={leftOut}
           onLeftOut={setLeftOut}
+        />
+      )
+    case 'consensus':
+      return (
+        <ConsensusBody
+          source={source}
+          results={results}
+          initial={chosen.consensus}
+          leftOut={leftOut}
+          onLeftOut={setLeftOut}
+          eventFor={eventFor}
         />
       )
   }

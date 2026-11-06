@@ -308,6 +308,9 @@ export function AllChoices() {
   const shares = sharesOf(DINNER)
   const largest = optionsOf(DINNER).reduce((a, b) => (shares[b] > shares[a] ? b : a))
   const leftOut = votersOf(DINNER).filter((voter) => DINNER[winner][voter] === 0)
+  // Every restaurant's fewest stars. All three are 0, which is the point the
+  // consensus section makes; the tacos' one 0 is the sixth friend's.
+  const allHated = optionsOf(DINNER).every((name) => Math.min(...DINNER[name]) === 0)
   return (
     <Stack maw={720} mx="auto" gap="md">
       <Title order={1}>All choices</Title>
@@ -383,7 +386,6 @@ export function AllChoices() {
           title="Consensus option / time"
           algorithms={['Maximin', 'STAR']}
         >
-          <ComingSoon name="Consensus option" />
           <NotStrategyProof easily />
           <Text>
             Sometimes the best option is the one nobody minds: a meeting time everyone can make, or
@@ -402,10 +404,22 @@ export function AllChoices() {
             </List.Item>
           </List>
           <Text>
-            On a poll looking for a time, this finds the time where the person least happy with it
-            is as happy as they can be, so a time somebody marked as impossible only wins if every
-            time is impossible for somebody.
+            A ballot that gives every option 0 stars is left out, since it says nothing about which
+            option is better. Kept in, it would give every option a lowest score of 0.
           </Text>
+          <Text>
+            On a poll looking for a time, this finds the time where the person least happy with it
+            is as happy as they can be, so a time somebody can&rsquo;t make at all only wins if
+            every time is like that for somebody.
+          </Text>
+          {allHated && (
+            <Text>
+              For our six friends, every restaurant was given 0 stars by somebody, so all three tie
+              on their fewest stars and STAR decides between them: it&rsquo;s {winner}, as with the
+              best option. Had the sixth friend given tacos even 1 star, tacos would have been the
+              only restaurant nobody hated, and it would have won.
+            </Text>
+          )}
           <Text>
             Because a single ballot&rsquo;s lowest score decides, one voter giving an option 0 stars
             rules it out, however much everyone else likes it. A voter who wants their favourite can

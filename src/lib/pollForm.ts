@@ -21,7 +21,7 @@ import {
   tooLong,
 } from './limits'
 import type { DailyWindow, PollKind, PollSchedule } from './types'
-import { CHOICE_NUMBER, DEFAULT_CHOICE_NUMBER } from './choices'
+import { CHOICE_NUMBER, DEFAULT_CHOICE_NUMBER, isCalendar } from './choices'
 
 /*
  * The create form's draft model and validation, apart from the page that
@@ -212,7 +212,7 @@ export function validate(form: {
       }
     }
 
-    if (question.kind === 'time') {
+    if (isCalendar(question.kind)) {
       // Counted from the same set the submit enumerates (past days dropped),
       // so the numbers quoted here match the options made.
       const marked = fromDay(question.marked, todayIn(question.schedule.timezone))

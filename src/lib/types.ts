@@ -15,12 +15,21 @@ export type PollMode = 'invite' | 'open'
 
 /**
  * What a question asks for, and so which result it opens on (the create
- * form's *Choice*; see lib/choices.ts). 'time' is a meeting-slot poll whose
- * options are window starts and whose ballot is a calendar; every other kind
- * is a written list scored 0-5. 'option' and 'time' ask for STAR's winner,
- * the rest for the option ranking, multiple winners or fractional winners.
+ * form's *Choice*; see lib/choices.ts). 'time' and 'consensus_time' are
+ * meeting-slot polls whose options are window starts and whose ballot is a
+ * calendar (`isCalendar`); every other kind is a written list scored 0-5.
+ * 'option' and 'time' ask for STAR's winner, 'consensus' and
+ * 'consensus_time' for the option whose lowest score is highest, the rest
+ * for the option ranking, multiple winners or fractional winners.
  */
-export type PollKind = 'option' | 'time' | 'ranking' | 'multiple' | 'fractional'
+export type PollKind =
+  | 'option'
+  | 'time'
+  | 'ranking'
+  | 'multiple'
+  | 'fractional'
+  | 'consensus'
+  | 'consensus_time'
 
 /**
  * A time poll's grid; null on an ordinary poll. Which days and hours are asked
@@ -379,6 +388,32 @@ export interface FractionalShare {
   share: number
 }
 
+/**
+ * The consensus, from `get_poll_consensus` / `open_poll_consensus`: the
+ * option whose lowest score (its floor) is highest, with STAR between the
+ * options that share it. Ballots giving every option 0 are left out.
+ */
+export interface ConsensusResult {
+  /** Null where the options sharing the floor tied their runoff on every rule. */
+  winner_id: string | null
+  /** The winner's floor: the fewest stars any counted ballot gave it. */
+  floor: number
+  /** How many options were counted (the poll's, less any left out). */
+  option_count: number
+  /** How many options share the highest floor; above one, STAR decided. */
+  tied_count: number
+  /** Ballots counted. */
+  voter_count: number
+  /** Ballots left out for giving every option 0. */
+  blank_ballots: number
+  /** STAR's finalists among the tied, or empty where one option stood alone. */
+  finalists: string[]
+  finalist_names: string[]
+  runoff: Runoff | null
+  /** The top options by floor, the winner first, then by stars. */
+  options: { id: string; name: string; floor: number; total_score: number }[]
+}
+
 export interface PollResults {
   /** The score round's top rows only (`poll_results_rows()`); see `option_count`. */
   options: ResultOption[]
@@ -408,9 +443,10 @@ export interface PollResults {
    * The result the kind asks for, whole (every place the database counts),
    * when it is more than STAR's winner and the poll is big enough to offer
    * it. Places for a ranking or multiple winners, shares for fractional
-   * winners; `chosenResult` in lib/choices.ts tells them apart.
+   * winners, an object for the consensus; `chosenResult` in lib/choices.ts
+   * tells them apart.
    */
-  kind_result: RankingEntry[] | FractionalShare[] | null
+  kind_result: RankingEntry[] | FractionalShare[] | ConsensusResult | null
 }
 
 /** One voter's scores, keyed by option id. */

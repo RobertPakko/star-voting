@@ -65,7 +65,7 @@ import listRow from '../components/listRow.module.css'
 import { MAX_OPTIONS, MAX_QUESTIONS } from '../lib/limits'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type { Invitee, Poll, PollKind, PollMode, PollOption } from '../lib/types'
-import { CHOICE_NUMBER, CHOICE_NUMBERS, CHOICE_ORDER, CHOICES } from '../lib/choices'
+import { CHOICE_NUMBER, CHOICE_NUMBERS, CHOICE_ORDER, CHOICES, isCalendar } from '../lib/choices'
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
 
@@ -196,15 +196,15 @@ export function CreatePoll() {
               ? fresh.kindNumbers
               : { ...fresh.kindNumbers, [row.kind]: row.kind_value },
         }
-        const parsed = row.kind === 'time' ? pollScheduleSchema.safeParse(row.schedule) : null
+        const parsed = isCalendar(row.kind) ? pollScheduleSchema.safeParse(row.schedule) : null
         const grid = parsed?.success ? parsed.data : null
 
-        if (row.kind === 'time') {
+        if (isCalendar(row.kind)) {
           if (!grid) {
             setError(
               "That poll's calendar could not be read, so this copy has its title and settings but none of its times. Mark the days and hours below.",
             )
-            return { ...blank, title: row.question_title ?? '', kind: 'time' }
+            return { ...blank, title: row.question_title ?? '' }
           }
 
           // Read the painting off the options, then move it forward whole
@@ -221,7 +221,6 @@ export function CreatePoll() {
           return {
             ...blank,
             title: row.question_title ?? '',
-            kind: 'time',
             // The source's offset is a choice, so later date changes must not move it.
             schedule: grid,
             offsetPicked: true,
@@ -451,7 +450,7 @@ export function CreatePoll() {
     // A time question's options are its enumerated windows, sent as ordinary
     // options. Blank option rows are dropped, with their descriptions.
     const cleaned = questions.map((question) => {
-      if (question.kind !== 'time') {
+      if (!isCalendar(question.kind)) {
         return {
           title: question.title.trim(),
           kind: question.kind,
@@ -468,7 +467,7 @@ export function CreatePoll() {
       const grid = settle(question.schedule, marked)
       return {
         title: question.title.trim(),
-        kind: 'time' as const,
+        kind: question.kind,
         kind_value: null,
         schedule: grid,
         options: enumerateWindows(grid, marked).map((name) => ({
@@ -638,7 +637,7 @@ export function CreatePoll() {
 
         {choiceFields(question, questionIndex)}
 
-        {question.kind === 'time' ? (
+        {isCalendar(question.kind) ? (
           <>
             {question.datesMoved > 0 && (
               <Alert color="blue" title="These dates have moved">
@@ -740,7 +739,7 @@ export function CreatePoll() {
         {/* Removing a question is a named button at the foot of the question,
             kept apart from the option rows' × so the two never look alike. */}
         <Group gap="sm" align="center" justify="space-between">
-          {question.kind === 'time' ? (
+          {isCalendar(question.kind) ? (
             <span />
           ) : (
             <Button
@@ -784,7 +783,7 @@ export function CreatePoll() {
           setQuestions((prev) =>
             prev.map((question) => {
               const copied = datePick.copied.get(question.key)
-              if (question.kind !== 'time' || !copied) return question
+              if (!isCalendar(question.kind) || !copied) return question
               const marked = startingOn(copied, first, datePick.from)
               return { ...question, marked, days: daysOf(marked), datesMoved: 0 }
             }),

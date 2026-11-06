@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners — ChosenResult, ChoiceCount, AllScores, CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus — ChosenResult, ChoiceCount, AllScores, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
                  SmoothHeight, PollCards), the ways back (BackToHome, BackToList), the home page's
@@ -617,8 +617,10 @@ real project each is preceded by a CORS preflight. Count requests against
 
 A poll has a `kind`, which is also what it asks for (see [A question asks
 for the result it opens on](#a-question-asks-for-the-result-it-opens-on)).
-Every kind but `time` is a list somebody wrote, scored 0–5. `time` is
-a poll looking for a meeting slot: the creator says how long the meeting is
+Every kind but the two calendar kinds, `time` and `consensus_time`
+(`isCalendar` in [`lib/choices.ts`](src/lib/choices.ts)), is a list somebody
+wrote, scored 0–5; *a time poll* below means either. A time poll is a poll
+looking for a meeting slot: the creator says how long the meeting is
 and which UTC offset the poll is held at, then **paints a calendar** to say
 which hours of which days are in bounds. Every window of that length that fits
 inside the painting becomes an **option**, and voters rate the options by
@@ -3188,10 +3190,11 @@ say only that voting was closed early, when it was.
 
 **The answer's banner carries what can be done with it** (`Banner` in
 `Results.tsx`): **More results**, one menu
-([`MoreResults`](src/components/MoreResults.tsx)) holding **Option ranking**
-and **Multiple winners** (three or more options) and **Fractional winners**
-(two or more), each opening a modal; then *Add to calendar* under a time
-poll's winner or *Flip a coin* under *No winner*. One menu rather than a
+([`MoreResults`](src/components/MoreResults.tsx)) holding **Consensus
+option** (*Consensus time* on a time poll) and **Fractional winners** (two or
+more options), and **Option ranking** and **Multiple winners** (three or
+more), each opening a modal; then *Add to calendar* under a time poll's
+winner or *Flip a coin* under *No winner*. One menu rather than a
 button each keeps the banner to the name and a control or two. **The modals
 are short**: what the tool is for and when to use it, with *How it works*
 linking to its card on `/choices`, where the explaining is done. The
@@ -3273,6 +3276,33 @@ between two is still a question. `/choices` works it on the same example
   be enjoyed: it turns for four seconds on a decelerating curve of its own,
   and under reduced motion jumps straight to where it stops.
 
+**Consensus option** is for a choice everybody has to live with, a meeting
+time above all: the option whose lowest score (its *floor*) is highest, so
+whoever likes it least likes it as much as they can (maximin). Offered from
+two options, where it can already differ from STAR's winner.
+[`Consensus`](src/components/Consensus.tsx) is the modal and the card;
+`51_consensus` holds the rules below.
+
+- **Options sharing the highest floor go to STAR between themselves**
+  (`star_round` over just those), so a runoff level on every rule leaves no
+  winner, as STAR's does. One option alone on the floor wins outright.
+- **A ballot giving every option 0 is left out**, and the card says how
+  many were. Kept in, it would hold every floor at 0 and hand the choice to
+  plain STAR — on a time poll, anybody who opened the calendar and painted
+  nothing would do that. Where every ballot is blank, all of them count.
+- **Counted in the database**, on the same gate and the same press as the
+  others (`get_poll_consensus` / `open_poll_consensus`, via
+  `poll_consensus`), answering the winner, its floor, how many shared it,
+  STAR's finalists among those, and the top `poll_results_rows()` options by
+  floor, the winner first.
+- **Removing works as in Multiple winners** (`p_excluded`, held by
+  `Consensus`, never stored, stopping at two options left; a ballot is blank
+  or not on the options still in). Not on the sample, which answers
+  `consensus` in `samplePollData.ts`.
+- **On a time poll a window is the mean of its granules**, so a window with
+  one *Can't* hour in it scores 1–4, not 0, and only a window somebody cannot
+  make at all has a floor of 0. `/choices` words it that way.
+
 **It is a separate request, made when the button is pressed**
 (`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the
 ladder is the most expensive thing the app asks the database for and most
@@ -3299,11 +3329,17 @@ The modal states two consequences:
 
 A question's `kind` is what it asks for, picked on the create form as
 *Choice* and frozen at creation: `option` (*Best option*, the default),
-`time` (*Best time*, the calendar ballot), `ranking` (*Option ranking*),
-`multiple` (*Multiple winners*) or `fractional` (*Fractional winners*).
-**Only `time` changes the ballot**; every other kind is a written list, so
-code that asks `kind === 'time'` needs to know nothing more. **Several best
-times are not a kind**: a time poll's *More results* offers them. One column,
+`time` (*Best time*, the calendar ballot), `consensus` (*Consensus
+option*), `consensus_time` (*Consensus time*, the calendar ballot),
+`ranking` (*Option ranking*), `multiple` (*Multiple winners*) or
+`fractional` (*Fractional winners*). **Only the two time kinds change the
+ballot**, and code asks `isCalendar(kind)`, never `kind === 'time'`; every
+other kind is a written list. In SQL the same question is `kind in ('time',
+'consensus_time')` (`polls_schedule_ck`, `create_poll`,
+`create_poll_group`, and the two creator doors that refuse a typed name).
+The consensus is the one result with a calendar of its own, because it is
+the one most worth asking of a meeting time. **Several best times are not a
+kind**: a time poll's *More results* offers them. One column,
 because one dropdown: a separate ballot-shape setting and result setting were
 two questions where the creator has one. The names are in
 [`lib/choices.ts`](src/lib/choices.ts), with `offers`, the option counts
@@ -3318,11 +3354,13 @@ explanation on the form itself.
   the page shows STAR's winner. The cost is the ranking's (or the count's) on
   every read of the result, which the creator asked for.
 - **It takes the winner's place.** `ChosenResult` draws the modal's own body
-  (`RankingBody`, `MultipleWinnersBody`, `FractionalWinnersBody`) in a card
-  at the top, handed the carried result, so it asks for nothing until an
-  option is removed. The runoff and the score round follow as usual (they are
-  how the first place was chosen); the winner's banner and the coin are not
-  drawn. *More results* offers the others, not the one already on the page.
+  (`RankingBody`, `MultipleWinnersBody`, `FractionalWinnersBody`,
+  `ConsensusBody`) in a card at the top, handed the carried result, so it
+  asks for nothing until an option is removed. The runoff and the score round
+  follow as usual (they are how the first place was chosen, and on a
+  consensus how STAR alone would have chosen); the winner's banner and the
+  coin are not drawn, and a consensus time carries its own *Add to calendar*.
+  *More results* offers the others, not the one already on the page.
 - **One number per question** (`polls.kind_value`), whose meaning belongs to
   the kind: places to rank, winners to choose. A dropdown of 2 to
   `SCORING_ROWS_MAX` beside *Choice*, because the database counts no more
@@ -3463,8 +3501,8 @@ both ballots are shown. Neither exists in Supabase: both are answered from
 the poll **through the app's own functions** (`create_poll_group`,
 `open_poll_submit`, `close_poll`), and recording what `open_poll_view`,
 `open_poll_results`, `open_poll_ranking`, `open_poll_multiple_winners`,
-`open_poll_fractional_winners`, `open_poll_scores` and `open_poll_ballots`
-answer.
+`open_poll_fractional_winners`, `open_poll_consensus`, `open_poll_scores`
+and `open_poll_ballots` answer.
 
 - **Nothing about the sample is computed in the browser.** Every number came
   from `star_round()` and `poll_ranking()`. To change what it shows, change

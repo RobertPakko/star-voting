@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type {
   BallotSheet,
+  ConsensusResult,
   FractionalShare,
   OpenPollView,
   OptionScore,
@@ -60,7 +61,15 @@ import type {
  */
 
 const pollMode = z.enum(['invite', 'open'])
-const pollKind = z.enum(['option', 'time', 'ranking', 'multiple', 'fractional'])
+const pollKind = z.enum([
+  'option',
+  'time',
+  'ranking',
+  'multiple',
+  'fractional',
+  'consensus',
+  'consensus_time',
+])
 
 /** The vertical axis of a grid: the earliest and latest a day may run. */
 const dailyWindow = z.object({ start: z.string(), end: z.string() })
@@ -249,6 +258,21 @@ export const fractionalSharesSchema = z.array(
   z.object({ id: z.string(), name: z.string(), share: z.number() }),
 ) satisfies z.ZodType<FractionalShare[]>
 
+export const consensusSchema = z.object({
+  winner_id: z.string().nullable(),
+  floor: z.number(),
+  option_count: z.number(),
+  tied_count: z.number(),
+  voter_count: z.number(),
+  blank_ballots: z.number(),
+  finalists: z.array(z.string()),
+  finalist_names: z.array(z.string()),
+  runoff: runoff.nullable(),
+  options: z.array(
+    z.object({ id: z.string(), name: z.string(), floor: z.number(), total_score: z.number() }),
+  ),
+}) satisfies z.ZodType<ConsensusResult>
+
 export const pollResultsSchema = z.object({
   options: z.array(
     z.object({
@@ -274,8 +298,9 @@ export const pollResultsSchema = z.object({
   kind: pollKind,
   kind_value: z.number().nullable(),
   // Shares first: an entry of a ranking has no `share`, so it falls through
-  // to the ranking; an empty list is either, and either reads as nothing.
-  kind_result: z.union([fractionalSharesSchema, rankingSchema]).nullable(),
+  // to the ranking; an empty list is either, and either reads as nothing. The
+  // consensus is the one object.
+  kind_result: z.union([consensusSchema, fractionalSharesSchema, rankingSchema]).nullable(),
 }) satisfies z.ZodType<PollResults>
 
 export const optionScoresSchema = z.array(

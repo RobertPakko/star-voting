@@ -46,7 +46,7 @@ import { ResultsSkeleton } from './Skeletons'
 import { count, stars, voters } from '../lib/plural'
 import { capRows, RESULTS_ROWS_MAX } from '../lib/resultsRows'
 import { splitAdvanced } from '../lib/tiebreak'
-import { chosenResult, CHOICES } from '../lib/choices'
+import { chosenResult, toolLabel } from '../lib/choices'
 import classes from './Results.module.css'
 
 /** Which tally endpoint to read: a session for invite polls, the link for open ones. */
@@ -154,7 +154,7 @@ export function Results({
   const chosen = chosenResult(results)
 
   // What a reader can do with the answer, in the banner that gives it.
-  const answers = <MoreResults source={source} results={shown} shown={chosen?.kind ?? 'option'} />
+  const answers = <MoreResults source={source} results={shown} shown={chosen?.kind} />
 
   return (
     <Reveal>
@@ -165,8 +165,13 @@ export function Results({
           <Reveal rise={false}>
             <Card withBorder className={classes.landed}>
               <Stack gap="sm">
-                <Banner title={CHOICES[chosen.kind].label}>{answers}</Banner>
-                <ChosenResult source={source} results={shown} chosen={chosen} />
+                <Banner title={toolLabel(chosen.kind, shown.kind)}>{answers}</Banner>
+                <ChosenResult
+                  source={source}
+                  results={shown}
+                  chosen={chosen}
+                  eventFor={meeting ? eventFor : undefined}
+                />
               </Stack>
             </Card>
           </Reveal>

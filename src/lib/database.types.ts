@@ -438,6 +438,10 @@ export type Database = {
       finalize_options: { Args: { p_poll_id: string }; Returns: undefined }
       finish_account_carry_over: { Args: { p_token: string }; Returns: number }
       forget_push_subscription: { Args: { p_endpoint: string }; Returns: undefined }
+      get_poll_consensus: {
+        Args: { p_excluded?: string[]; p_poll_id: string }
+        Returns: Json
+      }
       get_poll_fractional_winners: {
         Args: { p_excluded?: string[]; p_poll_id: string }
         Returns: Json
@@ -543,6 +547,10 @@ export type Database = {
         Returns: undefined
       }
       open_poll_group: { Args: { p_poll_id: string }; Returns: Json }
+      open_poll_consensus: {
+        Args: { p_excluded?: string[]; p_poll_id: string }
+        Returns: Json
+      }
       open_poll_fractional_winners: {
         Args: { p_excluded?: string[]; p_poll_id: string }
         Returns: Json
@@ -678,6 +686,10 @@ export type Database = {
       }
       poll_page: {
         Args: { p_poll_id: string; p_voter_key?: string }
+        Returns: Json
+      }
+      poll_consensus: {
+        Args: { p_excluded: string[]; p_poll_id: string }
         Returns: Json
       }
       poll_fractional_winners: {

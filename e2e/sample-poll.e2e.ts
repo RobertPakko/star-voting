@@ -154,6 +154,7 @@ test('the results show the rounds, the tie-break and the option ranking', async 
   // div of its own at the head of every menu, which axe reads as a menu
   // holding something other than items.
   await expect(page.getByRole('menuitem')).toHaveText([
+    'Consensus option',
     'Option ranking',
     'Multiple winners',
     'Fractional winners',
@@ -168,9 +169,11 @@ test('the results show the rounds, the tie-break and the option ranking', async 
   await page.keyboard.press('Escape')
   await expect(ranking).toBeHidden()
 
-  // The other two, each the count recorded with nothing removed: the sample
+  // The others, each the count recorded with nothing removed: the sample
   // offers no removing.
   const answers = {
+    // Nobody gave the taco bar fewer than 2 stars.
+    'Consensus option': 'Taco bar',
     'Multiple winners': 'Taco bar',
     // The recorded shares, as whole percentages.
     'Fractional winners': 'Taco bar91%',
