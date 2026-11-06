@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners — AllScores, CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners — ChosenResult, ChoiceCount, AllScores, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
                  SmoothHeight, PollCards), the ways back (BackToHome, BackToList), the home page's
@@ -615,7 +615,9 @@ real project each is preceded by a CORS preflight. Count requests against
 
 ## A poll that finds a time
 
-A poll has a `kind`. `option` is a list somebody wrote, scored 0–5. `time` is
+A poll has a `kind`, which is also what it asks for (see [A question asks
+for the result it opens on](#a-question-asks-for-the-result-it-opens-on)).
+Every kind but `time` is a list somebody wrote, scored 0–5. `time` is
 a poll looking for a meeting slot: the creator says how long the meeting is
 and which UTC offset the poll is held at, then **paints a calendar** to say
 which hours of which days are in bounds. Every window of that length that fits
@@ -640,7 +642,7 @@ one header, one set of rules.
 ### What is stored
 
 `polls.kind` and `polls.schedule`, tied by a check constraint: `schedule` is
-null if and only if `kind = 'option'`.
+null if and only if `kind <> 'time'`.
 
 ```json
 {
@@ -3266,7 +3268,8 @@ between two is still a question. `/choices` works it on the same example
 **It is a separate request, made when the button is pressed**
 (`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the
 ladder is the most expensive thing the app asks the database for and most
-readers never open it. `poll_tally` runs the head round and stops. Opening the
+readers never open it. `poll_tally` runs the head round and stops — unless
+the question asked for the ranking (see below). Opening the
 modal re-runs the head round (first place is part of the ranking), and the
 modal has a loading state; whether the button appears is decided from the
 option count the tally already carries.
@@ -3283,6 +3286,50 @@ The modal states two consequences:
 - **Most pairs never meet.** n options take n−1 runoffs out of n(n−1)/2
   pairings. Where two met, the loser is placed lower; elsewhere an option can
   be preferred to one placed above it. Only first place is STAR's own output.
+
+#### A question asks for the result it opens on
+
+A question's `kind` is what it asks for, picked on the create form as
+*Choice* and frozen at creation: `option` (*Best option*, the default),
+`time` (*Best time*, the calendar ballot), `ranking` (*Option ranking*),
+`multiple` (*Multiple winners*) or `fractional` (*Fractional winners*).
+**Only `time` changes the ballot**; every other kind is a written list, so
+code that asks `kind === 'time'` needs to know nothing more. **Several best
+times are not a kind**: a time poll's *More results* offers them. One column,
+because one dropdown: a separate ballot-shape setting and result setting were
+two questions where the creator has one. The names are in
+[`lib/choices.ts`](src/lib/choices.ts), with `offers`, the option counts
+each result is offered from. The form's *Choice* label carries an info icon
+to `/choices` (in a new tab, so the form survives) in place of any
+explanation on the form itself.
+
+- **The tally carries the asked-for result** (`kind_result`), so a finished
+  poll still opens in one read and the wait is one shape. `poll_tally` calls
+  the same function the menu's modal does, with nothing removed, so the two
+  never disagree; below the size the kind is offered at it carries none, and
+  the page shows STAR's winner. The cost is the ranking's (or the count's) on
+  every read of the result, which the creator asked for.
+- **It takes the winner's place.** `ChosenResult` draws the modal's own body
+  (`RankingBody`, `MultipleWinnersBody`, `FractionalWinnersBody`) in a card
+  at the top, handed the carried result, so it asks for nothing until an
+  option is removed. The runoff and the score round follow as usual (they are
+  how the first place was chosen); the winner's banner and the coin are not
+  drawn. *More results* offers the others, not the one already on the page.
+- **One number per question** (`polls.kind_value`), whose meaning belongs to
+  the kind: places to rank, winners to choose. A dropdown of 2 to
+  `SCORING_ROWS_MAX` beside *Choice*, because the database counts no more
+  places than that (`validate_kind`); null means as many as it holds. A kind
+  that takes none must have none (`polls_kind_value_ck`).
+- **The reader can try another number** (`ChoiceCount`), in the card and in
+  the modals alike. Every place is already counted, so it is a cut of the
+  answer on screen (`cutTo`, a shared place kept whole) and costs no request.
+  It opens on the poll's own number where the poll asked for that result, and
+  on *All* otherwise.
+- **An option has a number too** (`candidates.kind_value`), for kinds not
+  built yet (a cost, a capacity). Nothing writes or reads it.
+
+`50_a_question_asks_for_its_result` covers the rules and that the carried
+result is the modal's.
 
 #### The results stop at ten, and every score is a button away
 

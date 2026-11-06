@@ -1609,6 +1609,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
+      kind: 'time',
+      kind_value: null,
+      kind_result: null,
     },
   },
   'sample-result-movie': {
@@ -2420,6 +2423,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
+      kind: 'option',
+      kind_value: null,
+      kind_result: null,
     },
   },
   'sample-result-dinner': {
@@ -2943,6 +2949,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
+      kind: 'option',
+      kind_value: null,
+      kind_result: null,
     },
   },
 }

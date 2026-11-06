@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { CopyIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react'
+import { CopyIcon, InfoIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
@@ -10,6 +10,8 @@ import {
   Checkbox,
   Group,
   SegmentedControl,
+  Select,
+  SimpleGrid,
   Stack,
   Switch,
   Tabs,
@@ -18,6 +20,7 @@ import {
   Textarea,
   TextInput,
   Title,
+  Tooltip,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
@@ -42,6 +45,7 @@ import { pollScheduleSchema } from '../lib/rpcSchemas'
 import {
   blankOption,
   blankQuestion,
+  kindValueOf,
   hasErrors,
   noErrors,
   optionKey,
@@ -61,6 +65,7 @@ import listRow from '../components/listRow.module.css'
 import { MAX_OPTIONS, MAX_QUESTIONS } from '../lib/limits'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type { Invitee, Poll, PollKind, PollMode, PollOption } from '../lib/types'
+import { CHOICE_NUMBER, CHOICE_NUMBERS, CHOICE_ORDER, CHOICES } from '../lib/choices'
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
 
@@ -180,7 +185,17 @@ export function CreatePoll() {
       const clock: { today?: ScheduleDay } = {}
 
       const draftFrom = (row: Poll, rows: PollOption[]): QuestionDraft => {
-        const blank = blankQuestion()
+        const fresh = blankQuestion()
+        // The source's kind and number come across; a number it did not set
+        // leaves the form's default for that kind.
+        const blank: QuestionDraft = {
+          ...fresh,
+          kind: row.kind,
+          kindNumbers:
+            row.kind_value === null || row.kind_value === undefined
+              ? fresh.kindNumbers
+              : { ...fresh.kindNumbers, [row.kind]: row.kind_value },
+        }
         const parsed = row.kind === 'time' ? pollScheduleSchema.safeParse(row.schedule) : null
         const grid = parsed?.success ? parsed.data : null
 
@@ -439,7 +454,8 @@ export function CreatePoll() {
       if (question.kind !== 'time') {
         return {
           title: question.title.trim(),
-          kind: 'option' as const,
+          kind: question.kind,
+          kind_value: kindValueOf(question),
           schedule: null,
           options: question.options
             .map((o) => ({ name: o.name.trim(), description: o.description?.trim() || null }))
@@ -453,6 +469,7 @@ export function CreatePoll() {
       return {
         title: question.title.trim(),
         kind: 'time' as const,
+        kind_value: null,
         schedule: grid,
         options: enumerateWindows(grid, marked).map((name) => ({
           name,
@@ -490,6 +507,7 @@ export function CreatePoll() {
           p_solicit_options: solicitOptions,
           p_kind: only.kind,
           p_schedule: only.schedule ?? undefined,
+          p_kind_value: only.kind_value ?? undefined,
           // Omitted when nothing is described. '' stands for none: the SQL
           // nullifies blanks, and `text[]` can't type nullable elements.
           p_option_descriptions: only.options.some((o) => o.description)
@@ -542,6 +560,67 @@ export function CreatePoll() {
     navigate(pollPath(id), { state: { title: heading.title, heading } })
   }
 
+  /**
+   * What the question asks for (`kind`), and its number where it takes one.
+   * The number is a dropdown rather than a number field: the database counts
+   * at most `SCORING_ROWS_MAX` places, so there are only nine answers. What
+   * each choice does is explained on `/choices`, behind the info icon, which
+   * opens in a new tab so the form is not lost.
+   */
+  function choiceFields(question: QuestionDraft, questionIndex: number) {
+    const number = CHOICE_NUMBER[question.kind]
+    const id = `choice-${question.key}`
+    return (
+      <SimpleGrid cols={{ base: 1, xs: number ? 2 : 1 }} spacing="xs">
+        <Stack gap={2}>
+          <Group gap={4} wrap="nowrap">
+            <Text component="label" htmlFor={id} size="sm" fw={500}>
+              Choice
+            </Text>
+            <Tooltip label="What each choice does">
+              <ActionIcon
+                component={Link}
+                to="/choices"
+                target="_blank"
+                variant="subtle"
+                color="gray"
+                size="sm"
+                radius="xl"
+                aria-label="What each choice does (opens in a new tab)"
+              >
+                <InfoIcon size={16} aria-hidden />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+          <Select
+            id={id}
+            allowDeselect={false}
+            value={question.kind}
+            onChange={(v) => v && patchQuestion(questionIndex, { kind: v as PollKind })}
+            data={CHOICE_ORDER.map((kind) => ({ value: kind, label: CHOICES[kind].label }))}
+          />
+        </Stack>
+        {number && (
+          // Its label sits on the choice's label row, so the two boxes line up.
+          <Stack gap={2} justify="flex-end">
+            <Select
+              label={number.label}
+              allowDeselect={false}
+              value={String(question.kindNumbers[question.kind] ?? CHOICE_NUMBERS.at(-1))}
+              onChange={(v) =>
+                v &&
+                patchQuestion(questionIndex, {
+                  kindNumbers: { ...question.kindNumbers, [question.kind]: Number(v) },
+                })
+              }
+              data={CHOICE_NUMBERS.map((n) => String(n))}
+            />
+          </Stack>
+        )}
+      </SimpleGrid>
+    )
+  }
+
   /** One question's fields, the same whether in a tab panel or the bare form. */
   function questionFields(question: QuestionDraft, questionIndex: number) {
     return (
@@ -557,15 +636,7 @@ export function CreatePoll() {
           />
         )}
 
-        <SegmentedControl
-          fullWidth
-          value={question.kind}
-          onChange={(v) => patchQuestion(questionIndex, { kind: v as PollKind })}
-          data={[
-            { value: 'option', label: 'Choose an option' },
-            { value: 'time', label: 'Find a time' },
-          ]}
-        />
+        {choiceFields(question, questionIndex)}
 
         {question.kind === 'time' ? (
           <>

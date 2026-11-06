@@ -35,6 +35,7 @@ import type {
 } from '../lib/types'
 import { AddToCalendar } from './AddToCalendar'
 import { AllScores } from './AllScores'
+import { ChosenResult } from './ChosenResult'
 import { CoinFlip, type Finalist } from './CoinFlip'
 import { MoreResults } from './MoreResults'
 import { NameList } from './NameList'
@@ -45,6 +46,7 @@ import { ResultsSkeleton } from './Skeletons'
 import { count, stars, voters } from '../lib/plural'
 import { capRows, RESULTS_ROWS_MAX } from '../lib/resultsRows'
 import { splitAdvanced } from '../lib/tiebreak'
+import { chosenResult, CHOICES } from '../lib/choices'
 import classes from './Results.module.css'
 
 /** Which tally endpoint to read: a session for invite polls, the link for open ones. */
@@ -147,15 +149,29 @@ export function Results({
   }
   const winnerEvent = shown.winner_id ? eventFor(shown.winner_id) : null
 
+  // The result the question asked for, where it is more than STAR's winner: it
+  // takes the winner's place at the top, and STAR's rounds follow.
+  const chosen = chosenResult(results)
+
   // What a reader can do with the answer, in the banner that gives it.
-  const answers = <MoreResults source={source} results={shown} />
+  const answers = <MoreResults source={source} results={shown} shown={chosen?.kind ?? 'option'} />
 
   return (
     <Reveal>
       <Stack gap="md">
         {/* Its own entrance, since a poll that finishes while watched grows
             this card without the rest remounting. */}
-        {shown.winner_id && (
+        {chosen && (
+          <Reveal rise={false}>
+            <Card withBorder className={classes.landed}>
+              <Stack gap="sm">
+                <Banner title={CHOICES[chosen.kind].label}>{answers}</Banner>
+                <ChosenResult source={source} results={shown} chosen={chosen} />
+              </Stack>
+            </Card>
+          </Reveal>
+        )}
+        {!chosen && shown.winner_id && (
           <Reveal rise={false}>
             <Card withBorder bg="var(--mantine-color-green-light)" className={classes.landed}>
               <Banner
@@ -180,7 +196,7 @@ export function Results({
             </Card>
           </Reveal>
         )}
-        {!shown.winner_id && shown.finalists.length === 2 && (
+        {!chosen && !shown.winner_id && shown.finalists.length === 2 && (
           <Reveal rise={false}>
             <Card
               withBorder

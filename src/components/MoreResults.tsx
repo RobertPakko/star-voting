@@ -6,55 +6,51 @@ import {
   ListNumbersIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
-import type { PollResults } from '../lib/types'
+import { CHOICES, offers, type ResultTool } from '../lib/choices'
+import type { PollKind, PollResults } from '../lib/types'
 import { FullRanking } from './FullRanking'
 import { MultipleWinners } from './MultipleWinners'
 import { FractionalWinners } from './FractionalWinners'
 
-type Tool = 'ranking' | 'multiple' | 'fractional'
-
-/*
- * Which tools a tally is offered, from the option count it already carries,
- * so the menu never waits on a request to find out. With two options the
- * ranking is the winner and the option it beat, both on screen, and choosing
- * more than one winner is choosing both; how to split between two is still a
- * question.
- */
-const offersFullRanking = (results: PollResults) => results.option_count >= 3
-const offersMultipleWinners = (results: PollResults) => results.option_count >= 3
-const offersFractionalWinners = (results: PollResults) => results.option_count >= 2
+type Tool = ResultTool
 
 /**
  * The other answers the same ballots can give, as one menu in the result's
  * banner rather than a button each, so the banner keeps to the winner's name
  * and one control. Each item opens its own modal; which are offered is
- * decided here (`offers…`). `/choices` is the page that explains all three.
+ * decided by `offers` in lib/choices.ts. The result the page already draws
+ * (the question's kind, `shown`) is not offered again. `/choices` is the
+ * page that explains all three.
  */
 export function MoreResults({
   source,
   results,
+  shown = 'option',
 }: {
   source: ComponentProps<typeof FullRanking>['source']
   /** Already relabelled by Results on a time poll; see relabelResults. */
   results: PollResults
+  /** The result on the page, left off the menu. */
+  shown?: PollKind
 }) {
   const [open, setOpen] = useState<Tool | null>(null)
   const close = () => setOpen(null)
+  const offered = (tool: Tool) => tool !== shown && offers(tool, results)
 
   const items = [
-    offersFullRanking(results) && {
+    offered('ranking') && {
       tool: 'ranking' as const,
-      label: 'Option ranking',
+      label: CHOICES.ranking.label,
       icon: ListNumbersIcon,
     },
-    offersMultipleWinners(results) && {
+    offered('multiple') && {
       tool: 'multiple' as const,
-      label: 'Multiple winners',
+      label: CHOICES.multiple.label,
       icon: UsersThreeIcon,
     },
-    offersFractionalWinners(results) && {
+    offered('fractional') && {
       tool: 'fractional' as const,
-      label: 'Fractional winners',
+      label: CHOICES.fractional.label,
       icon: ChartPieSliceIcon,
     },
   ].filter((item) => item !== false)
@@ -86,7 +82,7 @@ export function MoreResults({
         </Menu.Dropdown>
       </Menu>
 
-      {offersFullRanking(results) && (
+      {offered('ranking') && (
         <FullRanking
           source={source}
           results={results}
@@ -94,7 +90,7 @@ export function MoreResults({
           onClose={close}
         />
       )}
-      {offersMultipleWinners(results) && (
+      {offered('multiple') && (
         <MultipleWinners
           source={source}
           results={results}
@@ -102,7 +98,7 @@ export function MoreResults({
           onClose={close}
         />
       )}
-      {offersFractionalWinners(results) && (
+      {offered('fractional') && (
         <FractionalWinners
           source={source}
           results={results}

@@ -369,7 +369,7 @@ await page.evaluate(() => {
   localStorage.removeItem('star-voting:poll-defaults')
 })
 await page.reload()
-await page.getByText('Find a time').first().waitFor()
+await page.getByRole('combobox', { name: 'Choice' }).first().waitFor()
 await dress(page)
 await page.mouse.move(at.x, at.y)
 // Where the film's logo lands and takes off from: the header's own.
@@ -386,7 +386,8 @@ await pause(300)
 await type(page.getByPlaceholder('What is this question asking?'), 'Which movie?')
 await click(page.getByRole('tab', { name: 'Question 2' }), { settle: 400 })
 await type(page.getByPlaceholder('What is this question asking?'), 'Which night?')
-await click(page.getByText('Find a time'), { settle: 1500 })
+await click(page.getByRole('combobox', { name: 'Choice' }))
+await click(page.getByRole('option', { name: 'Best time', exact: true }), { settle: 1500 })
 // The selects are set off camera: they are slow to watch and say little.
 // Opening one scrolls the page, so it is put back before recording resumes
 // and the way down to the calendar is seen.

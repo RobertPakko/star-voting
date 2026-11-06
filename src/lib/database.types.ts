@@ -60,6 +60,7 @@ export type Database = {
       }
       candidates: {
         Row: {
+          kind_value: number | null
           description: string | null
           id: string
           name: string
@@ -67,6 +68,7 @@ export type Database = {
           sort_order: number
         }
         Insert: {
+          kind_value?: number | null
           description?: string | null
           id?: string
           name: string
@@ -74,6 +76,7 @@ export type Database = {
           sort_order?: number
         }
         Update: {
+          kind_value?: number | null
           description?: string | null
           id?: string
           name?: string
@@ -180,6 +183,7 @@ export type Database = {
       }
       polls: {
         Row: {
+          kind_value: number | null
           closed_at: string | null
           created_at: string
           created_by: string
@@ -206,6 +210,7 @@ export type Database = {
           winner_settled_at: string | null
         }
         Insert: {
+          kind_value?: number | null
           closed_at?: string | null
           created_at?: string
           created_by: string
@@ -232,6 +237,7 @@ export type Database = {
           winner_settled_at?: string | null
         }
         Update: {
+          kind_value?: number | null
           closed_at?: string | null
           created_at?: string
           created_by?: string
@@ -383,6 +389,7 @@ export type Database = {
       }
       create_poll: {
         Args: {
+          p_kind_value?: number
           p_description: string
           p_emails: string[]
           p_kind?: string
@@ -459,6 +466,7 @@ export type Database = {
       }
       insert_poll_row: {
         Args: {
+          p_kind_value?: number
           p_description: string
           p_emails: string[]
           p_group_id?: string

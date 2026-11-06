@@ -207,7 +207,7 @@ begin
       where p.pronamespace = 'public'::regnamespace and p.proname = 'insert_poll_row'),
     false);
   perform tests.assert_eq('while an account can still create one',
-    has_function_privilege('authenticated', 'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb)', 'execute'),
+    has_function_privilege('authenticated', 'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb, numeric)', 'execute'),
     true);
 end $$;
 

@@ -15,6 +15,7 @@ import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { FractionalShare, PollResults } from '../lib/types'
 import type { RankingSource } from './FullRanking'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
+import { useLeftOut } from '../lib/useLeftOut'
 import { SharesSkeleton } from './Skeletons'
 
 /**
@@ -42,7 +43,8 @@ const PIE_SIZE = 200
 
 /**
  * A share for every option rather than a place, opened from the result's
- * *More results* menu (`MoreResults`): the shares that make the product of
+ * *More results* menu (`MoreResults`), or drawn on the results page where
+ * the question chose it (`ChosenResult`): the shares that make the product of
  * every voter's average stars largest (the Nash welfare). For a choice that
  * can be split — a budget, a run of meetings, an afternoon — where *Multiple
  * winners* is for picking several whole options. `/choices` explains it,
@@ -79,23 +81,55 @@ export function FractionalWinners({
   opened: boolean
   onClose: () => void
 }) {
+  // Held here rather than in the body, which is mounted only while open.
+  const [leftOut, setLeftOut] = useLeftOut(source.pollId)
+
+  return (
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      size="lg"
+      centered
+      title={<Text fw={600}>Fractional winners</Text>}
+    >
+      <FractionalWinnersBody
+        source={source}
+        results={results}
+        leftOut={leftOut}
+        onLeftOut={setLeftOut}
+      />
+    </Modal>
+  )
+}
+
+/**
+ * The shares themselves, in the modal or on the results page. Handed the
+ * shares the tally carried (`initial`), it asks for nothing until an option
+ * is removed.
+ */
+export function FractionalWinnersBody({
+  source,
+  results,
+  initial = null,
+  leftOut,
+  onLeftOut,
+}: {
+  source: RankingSource
+  results: PollResults
+  initial?: FractionalShare[] | null
+  leftOut: LeftOut[]
+  onLeftOut: (next: LeftOut[]) => void
+}) {
   const h24 = use24HourTime()
   const kind = source.kind
   const key = source.pollId
   const sample = isSampleId(key)
 
-  const [leftOut, setLeftOut] = useState<LeftOut[]>([])
-  const [shares, setShares] = useState<FractionalShare[] | null>(null)
+  const [shares, setShares] = useState<FractionalShare[] | null>(
+    leftOut.length === 0 ? initial : null,
+  )
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-
-  // Another poll's removals mean nothing here.
-  const [leftOutFor, setLeftOutFor] = useState(key)
-  if (leftOutFor !== key) {
-    setLeftOutFor(key)
-    setLeftOut([])
-    setShares(null)
-  }
 
   // Sorted, so the same set asked for twice is the same request.
   const excludedKey = leftOut
@@ -104,9 +138,14 @@ export function FractionalWinners({
     .join(',')
 
   useEffect(() => {
-    if (!opened) return
-
     setError(null)
+    // Nothing removed: the shares the tally carried are the answer.
+    if (!excludedKey && initial) {
+      setShares(initial)
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     let cancelled = false
 
@@ -129,75 +168,67 @@ export function FractionalWinners({
     return () => {
       cancelled = true
     }
-  }, [opened, kind, key, excludedKey])
+  }, [kind, key, excludedKey, initial])
 
   const remaining = results.option_count - leftOut.length
   // Below two there is nothing left to split.
   const canRemove = !sample && remaining > 2
 
-  const remove = (option: LeftOut) => setLeftOut((list) => [...list, option])
-  const restore = (id: string) => setLeftOut((list) => list.filter((o) => o.id !== id))
+  const remove = (option: LeftOut) => onLeftOut([...leftOut, option])
+  const restore = (id: string) => onLeftOut(leftOut.filter((o) => o.id !== id))
 
   const shown = shares && relabelScores(shares, h24)
   const unshared = shown ? remaining - shown.length : 0
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      size="lg"
-      centered
-      title={<Text fw={600}>Fractional winners</Text>}
-    >
-      <Stack gap="md">
+    <Stack gap="md">
+      <Text size="sm" c="dimmed">
+        For splitting something between the options, like a budget or a run of meetings. Every
+        option gets a share, sized so that each group of voters gets some of what it likes.{' '}
+        <Anchor component={Link} to="/choices?section=fractional-winners" inherit>
+          How it works
+        </Anchor>
+      </Text>
+
+      {!sample && (
         <Text size="sm" c="dimmed">
-          For splitting something between the options, like a budget or a run of meetings. Every
-          option gets a share, sized so that each group of voters gets some of what it likes.{' '}
-          <Anchor component={Link} to="/choices?section=fractional-winners" inherit>
-            How it works
-          </Anchor>
+          If an option is not available, remove it and the shares are worked out again without it.
         </Text>
+      )}
 
-        {!sample && (
-          <Text size="sm" c="dimmed">
-            If an option is not available, remove it and the shares are worked out again without it.
-          </Text>
-        )}
+      <RemovedOptions leftOut={leftOut} onRestore={restore} onRestoreAll={() => onLeftOut([])} />
 
-        <RemovedOptions leftOut={leftOut} onRestore={restore} onRestoreAll={() => setLeftOut([])} />
+      {error && (
+        <Text role="alert" c="red" size="sm">
+          {error}
+        </Text>
+      )}
 
-        {error && (
-          <Text role="alert" c="red" size="sm">
-            {error}
-          </Text>
-        )}
+      {!error && !shown && (
+        <SharesSkeleton size={PIE_SIZE} rows={Math.min(results.option_count, SCORING_ROWS_MAX)} />
+      )}
 
-        {!error && !shown && (
-          <SharesSkeleton size={PIE_SIZE} rows={Math.min(results.option_count, SCORING_ROWS_MAX)} />
-        )}
+      {shown && (
+        <Stack
+          gap="md"
+          aria-busy={loading}
+          style={{
+            opacity: loading ? 0.5 : 1,
+            transition: 'opacity var(--motion-fast)',
+          }}
+        >
+          <Shares shares={shown} removable={canRemove && !loading} onRemove={remove} />
+        </Stack>
+      )}
 
-        {shown && (
-          <Stack
-            gap="md"
-            aria-busy={loading}
-            style={{
-              opacity: loading ? 0.5 : 1,
-              transition: 'opacity var(--motion-fast)',
-            }}
-          >
-            <Shares shares={shown} removable={canRemove && !loading} onRemove={remove} />
-          </Stack>
-        )}
-
-        {shown && !loading && unshared > 0 && (
-          <Text size="sm" c="dimmed">
-            Shared between the {shown.length} options with the most stars;{' '}
-            {count(unshared, 'more option')} {unshared === 1 ? 'was' : 'were'} not considered.
-            Remove one to let the next in.
-          </Text>
-        )}
-      </Stack>
-    </Modal>
+      {shown && !loading && unshared > 0 && (
+        <Text size="sm" c="dimmed">
+          Shared between the {shown.length} options with the most stars;{' '}
+          {count(unshared, 'more option')} {unshared === 1 ? 'was' : 'were'} not considered. Remove
+          one to let the next in.
+        </Text>
+      )}
+    </Stack>
   )
 }
 

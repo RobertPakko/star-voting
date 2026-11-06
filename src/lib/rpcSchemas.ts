@@ -60,7 +60,7 @@ import type {
  */
 
 const pollMode = z.enum(['invite', 'open'])
-const pollKind = z.enum(['option', 'time'])
+const pollKind = z.enum(['option', 'time', 'ranking', 'multiple', 'fractional'])
 
 /** The vertical axis of a grid: the earliest and latest a day may run. */
 const dailyWindow = z.object({ start: z.string(), end: z.string() })
@@ -106,6 +106,7 @@ const poll = z.object({
   question_title: z.string().nullable(),
   kind: pollKind,
   schedule: pollScheduleSchema.nullable(),
+  kind_value: z.number().nullable(),
 })
 
 const groupQuestion = z.object({
@@ -233,6 +234,21 @@ const runoff = z.object({
   resolved_by: z.enum(['preference', 'higher_score', 'five_star_votes', 'unresolved']),
 })
 
+export const rankingSchema = z.array(
+  z.object({
+    place: z.number(),
+    options: z.array(z.object({ id: z.string(), name: z.string(), total_score: z.number() })),
+    finalists: z.array(z.string()),
+    finalist_names: z.array(z.string()),
+    runoff: runoff.nullable(),
+    tiebreaks: z.array(tiebreak),
+  }),
+) satisfies z.ZodType<RankingEntry[]>
+
+export const fractionalSharesSchema = z.array(
+  z.object({ id: z.string(), name: z.string(), share: z.number() }),
+) satisfies z.ZodType<FractionalShare[]>
+
 export const pollResultsSchema = z.object({
   options: z.array(
     z.object({
@@ -255,22 +271,12 @@ export const pollResultsSchema = z.object({
   closed_early: z.boolean(),
   options_edited_after_votes: z.boolean(),
   votes_after_reveal: z.boolean(),
+  kind: pollKind,
+  kind_value: z.number().nullable(),
+  // Shares first: an entry of a ranking has no `share`, so it falls through
+  // to the ranking; an empty list is either, and either reads as nothing.
+  kind_result: z.union([fractionalSharesSchema, rankingSchema]).nullable(),
 }) satisfies z.ZodType<PollResults>
-
-export const rankingSchema = z.array(
-  z.object({
-    place: z.number(),
-    options: z.array(z.object({ id: z.string(), name: z.string(), total_score: z.number() })),
-    finalists: z.array(z.string()),
-    finalist_names: z.array(z.string()),
-    runoff: runoff.nullable(),
-    tiebreaks: z.array(tiebreak),
-  }),
-) satisfies z.ZodType<RankingEntry[]>
-
-export const fractionalSharesSchema = z.array(
-  z.object({ id: z.string(), name: z.string(), share: z.number() }),
-) satisfies z.ZodType<FractionalShare[]>
 
 export const optionScoresSchema = z.array(
   z.object({

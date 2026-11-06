@@ -8,16 +8,20 @@ import { countBadge } from '../lib/badgeColors'
 import { relabelRanking } from '../lib/schedule'
 import { parseAnswer, rankingSchema } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
+import { CHOICE_NUMBER, cutTo } from '../lib/choices'
 import type { PollResults, RankingEntry } from '../lib/types'
+import { ChoiceCount } from './ChoiceCount'
 import { RankingSkeleton } from './Skeletons'
 import { count } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import { TiebreakNote, type RankingSource } from './FullRanking'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
+import { useLeftOut } from '../lib/useLeftOut'
 
 /**
  * Several winners from one set of ballots, opened from the result's *More
- * results* menu (`MoreResults`): a ranking of its own, a STAR election per
+ * results* menu (`MoreResults`), or drawn on the results page where the
+ * question chose it (`ChosenResult`): a ranking of its own, a STAR election per
  * spot, with each ballot counting at 1 ÷ (1 + SUM ÷ 5) for the stars SUM it
  * gave the winners before (runoffs included). The first spot is the STAR
  * winner; take as many from the top as are needed. `/choices` explains it,
@@ -32,7 +36,8 @@ import { RemovedOptions, type LeftOut } from './RemovedOptions'
  *
  * Fetched when opened, and the answer is not held, for the same reason as
  * `FullRanking`: the count is a STAR round per spot, and the votes under it
- * can move unannounced.
+ * can move unannounced. A question that chose it has the count in its tally,
+ * and asks again only once something is removed.
  *
  * **The sample cannot remove**: it answers from a recording
  * (`samplePollData.ts`), which holds the count with nothing taken out.
@@ -49,23 +54,55 @@ export function MultipleWinners({
   opened: boolean
   onClose: () => void
 }) {
+  // Held here rather than in the body, which is mounted only while open.
+  const [leftOut, setLeftOut] = useLeftOut(source.pollId)
+
+  return (
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      size="lg"
+      centered
+      title={<Text fw={600}>Multiple winners</Text>}
+    >
+      <MultipleWinnersBody
+        source={source}
+        results={results}
+        leftOut={leftOut}
+        onLeftOut={setLeftOut}
+      />
+    </Modal>
+  )
+}
+
+/**
+ * The winners themselves, in the modal or on the results page. Handed the
+ * count the tally carried (`initial`), it asks for nothing until an option
+ * is removed. Opens on the poll's own number of winners where the poll chose
+ * multiple winners, and on every spot otherwise.
+ */
+export function MultipleWinnersBody({
+  source,
+  results,
+  initial = null,
+  leftOut,
+  onLeftOut,
+}: {
+  source: RankingSource
+  results: PollResults
+  initial?: RankingEntry[] | null
+  leftOut: LeftOut[]
+  onLeftOut: (next: LeftOut[]) => void
+}) {
   const h24 = use24HourTime()
   const kind = source.kind
   const key = source.pollId
   const sample = isSampleId(key)
 
-  const [leftOut, setLeftOut] = useState<LeftOut[]>([])
-  const [spots, setSpots] = useState<RankingEntry[] | null>(null)
+  const [spots, setSpots] = useState<RankingEntry[] | null>(leftOut.length === 0 ? initial : null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-
-  // Another poll's removals mean nothing here.
-  const [leftOutFor, setLeftOutFor] = useState(key)
-  if (leftOutFor !== key) {
-    setLeftOutFor(key)
-    setLeftOut([])
-    setSpots(null)
-  }
+  const [winners, setWinners] = useState(results.kind === 'multiple' ? results.kind_value : null)
 
   // Sorted, so the same set asked for twice is the same request.
   const excludedKey = leftOut
@@ -74,9 +111,14 @@ export function MultipleWinners({
     .join(',')
 
   useEffect(() => {
-    if (!opened) return
-
     setError(null)
+    // Nothing removed: the count the tally carried is the answer.
+    if (!excludedKey && initial) {
+      setSpots(initial)
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     let cancelled = false
 
@@ -99,80 +141,79 @@ export function MultipleWinners({
     return () => {
       cancelled = true
     }
-  }, [opened, kind, key, excludedKey])
+  }, [kind, key, excludedKey, initial])
 
   const remaining = results.option_count - leftOut.length
   // Below two there is nothing left to choose several of.
   const canRemove = !sample && remaining > 2
 
-  const remove = (option: LeftOut) => setLeftOut((list) => [...list, option])
-  const restore = (id: string) => setLeftOut((list) => list.filter((o) => o.id !== id))
+  const remove = (option: LeftOut) => onLeftOut([...leftOut, option])
+  const restore = (id: string) => onLeftOut(leftOut.filter((o) => o.id !== id))
 
-  const shown = spots && relabelRanking(spots, h24)
+  const shown = spots && relabelRanking(cutTo(spots, winners), h24)
   const placed = shown ? shown.reduce((sum, spot) => sum + spot.options.length, 0) : 0
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      size="lg"
-      centered
-      title={<Text fw={600}>Multiple winners</Text>}
-    >
-      <Stack gap="md">
+    <Stack gap="md">
+      <Text size="sm" c="dimmed">
+        For choosing several options at once, so that different groups of voters each get one they
+        like. Take as many from the top as you need.{' '}
+        <Anchor component={Link} to="/choices?section=multiple-winners" inherit>
+          How it works
+        </Anchor>
+      </Text>
+
+      {!sample && (
         <Text size="sm" c="dimmed">
-          For choosing several options at once, so that different groups of voters each get one they
-          like. Take as many from the top as you need.{' '}
-          <Anchor component={Link} to="/choices?section=multiple-winners" inherit>
-            How it works
-          </Anchor>
+          If an option is not available, remove it and the winners are counted again without it.
         </Text>
+      )}
 
-        {!sample && (
-          <Text size="sm" c="dimmed">
-            If an option is not available, remove it and the winners are counted again without it.
-          </Text>
-        )}
+      <ChoiceCount
+        label={CHOICE_NUMBER.multiple!.label}
+        value={winners}
+        optionCount={remaining}
+        onChange={setWinners}
+      />
 
-        <RemovedOptions leftOut={leftOut} onRestore={restore} onRestoreAll={() => setLeftOut([])} />
+      <RemovedOptions leftOut={leftOut} onRestore={restore} onRestoreAll={() => onLeftOut([])} />
 
-        {error && (
-          <Text role="alert" c="red" size="sm">
-            {error}
-          </Text>
-        )}
+      {error && (
+        <Text role="alert" c="red" size="sm">
+          {error}
+        </Text>
+      )}
 
-        {!error && !shown && (
-          <RankingSkeleton places={Math.min(results.option_count, SCORING_ROWS_MAX)} />
-        )}
+      {!error && !shown && (
+        <RankingSkeleton places={Math.min(remaining, winners ?? SCORING_ROWS_MAX)} />
+      )}
 
-        {shown && (
-          <Stack
-            gap="md"
-            aria-busy={loading}
-            style={{
-              opacity: loading ? 0.5 : 1,
-              transition: 'opacity var(--motion-fast)',
-            }}
-          >
-            {shown.map((spot) => (
-              <Spot
-                key={spot.place}
-                spot={spot}
-                removable={canRemove && !loading}
-                onRemove={remove}
-              />
-            ))}
-          </Stack>
-        )}
+      {shown && (
+        <Stack
+          gap="md"
+          aria-busy={loading}
+          style={{
+            opacity: loading ? 0.5 : 1,
+            transition: 'opacity var(--motion-fast)',
+          }}
+        >
+          {shown.map((spot) => (
+            <Spot
+              key={spot.place}
+              spot={spot}
+              removable={canRemove && !loading}
+              onRemove={remove}
+            />
+          ))}
+        </Stack>
+      )}
 
-        {shown && !loading && remaining - placed > 0 && (
-          <Text size="sm" c="dimmed">
-            {count(remaining - placed, 'more option')} not placed.
-          </Text>
-        )}
-      </Stack>
-    </Modal>
+      {shown && !loading && remaining - placed > 0 && (
+        <Text size="sm" c="dimmed">
+          {count(remaining - placed, 'more option')} not placed.
+        </Text>
+      )}
+    </Stack>
   )
 }
 

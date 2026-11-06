@@ -21,6 +21,7 @@ import {
   tooLong,
 } from './limits'
 import type { DailyWindow, PollKind, PollSchedule } from './types'
+import { CHOICE_NUMBER, DEFAULT_CHOICE_NUMBER } from './choices'
 
 /*
  * The create form's draft model and validation, apart from the page that
@@ -53,10 +54,16 @@ export interface QuestionDraft {
   key: string
   title: string
   options: OptionDraft[]
+  /** What the question asks for: the form's *Choice*. */
   kind: PollKind
+  /**
+   * The kind's number (winners, places), kept per kind so switching between
+   * them and back loses nothing. Only the chosen kind's is sent.
+   */
+  kindNumbers: Partial<Record<PollKind, number>>
   /*
-   * The time-poll fields are kept whatever the kind, so toggling a question
-   * between kinds loses nothing on either side.
+   * The time-poll fields are kept whatever the kind, so switching a question
+   * to a list and back loses nothing on either side; so are the options.
    */
   schedule: PollSchedule
   /** The days on the calendar. Not stored. */
@@ -80,6 +87,7 @@ export function blankQuestion(): QuestionDraft {
     title: '',
     options: [blankOption(), blankOption()],
     kind: 'option',
+    kindNumbers: { ...DEFAULT_CHOICE_NUMBER },
     schedule: blankSchedule(),
     days: [],
     hours: { ...DEFAULT_HOURS },
@@ -87,6 +95,11 @@ export function blankQuestion(): QuestionDraft {
     offsetPicked: false,
     datesMoved: 0,
   }
+}
+
+/** The number a question sends with its kind: null where the kind takes none. */
+export function kindValueOf(question: QuestionDraft): number | null {
+  return CHOICE_NUMBER[question.kind] ? (question.kindNumbers[question.kind] ?? null) : null
 }
 
 /** Key for an option-level message: question index and row index. */

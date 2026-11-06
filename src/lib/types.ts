@@ -14,11 +14,13 @@
 export type PollMode = 'invite' | 'open'
 
 /**
- * 'option' is a written list scored 0-5; 'time' is a meeting-slot poll whose
- * options are window starts and whose ballot is a calendar. Only the browser
- * cares which -- the database sees options and scores either way.
+ * What a question asks for, and so which result it opens on (the create
+ * form's *Choice*; see lib/choices.ts). 'time' is a meeting-slot poll whose
+ * options are window starts and whose ballot is a calendar; every other kind
+ * is a written list scored 0-5. 'option' and 'time' ask for STAR's winner,
+ * the rest for the option ranking, multiple winners or fractional winners.
  */
-export type PollKind = 'option' | 'time'
+export type PollKind = 'option' | 'time' | 'ranking' | 'multiple' | 'fractional'
 
 /**
  * A time poll's grid; null on an ordinary poll. Which days and hours are asked
@@ -55,6 +57,11 @@ export interface Poll {
   /** Undefined reads as an ordinary poll. */
   kind: PollKind
   schedule: PollSchedule | null
+  /**
+   * The kind's number: places to rank, or winners to choose. Null where the
+   * kind takes none, or for as many as the results hold.
+   */
+  kind_value: number | null
   /** Participants can see who has responded. */
   show_voters: boolean
   /**
@@ -393,6 +400,17 @@ export interface PollResults {
   options_edited_after_votes: boolean
   /** A vote was cast or changed after the tally had been shown (via a reopen). */
   votes_after_reveal: boolean
+  /** The question's kind, which the results open on. */
+  kind: PollKind
+  /** Its number (`Poll.kind_value`): where the reader's count starts. */
+  kind_value: number | null
+  /**
+   * The result the kind asks for, whole (every place the database counts),
+   * when it is more than STAR's winner and the poll is big enough to offer
+   * it. Places for a ranking or multiple winners, shares for fractional
+   * winners; `chosenResult` in lib/choices.ts tells them apart.
+   */
+  kind_result: RankingEntry[] | FractionalShare[] | null
 }
 
 /** One voter's scores, keyed by option id. */
