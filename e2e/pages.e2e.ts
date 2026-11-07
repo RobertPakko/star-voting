@@ -352,4 +352,34 @@ test.describe('all choices', () => {
     )
     await expectAccessible(page, 'a section of All choices, open')
   })
+
+  test('marks the choices not built yet, folded', async ({ page }) => {
+    await page.goto('#/choices')
+    await expect(page.getByText('Under construction')).toHaveCount(6)
+    await expect(page.getByRole('button', { name: /^Proportional budget/ })).toContainText(
+      'Under construction',
+    )
+    await expect(page.getByRole('button', { name: /^Fractional winners/ })).not.toContainText(
+      'Under construction',
+    )
+  })
+
+  test('leads each built choice to the sample poll, its result open', async ({ page }) => {
+    // The ranking opens its modal straight away, and closing it takes the
+    // request off the address so a refresh does not open it again.
+    await page.goto('#/choices?section=option-ranking')
+    await page.getByRole('link', { name: 'See an example' }).click()
+    const ranking = page.getByRole('dialog', { name: 'Option ranking' })
+    await expect(ranking).toBeVisible()
+    await expect(ranking).toContainText('Honeyland')
+    await page.keyboard.press('Escape')
+    await expect(ranking).toBeHidden()
+    await expect(page).toHaveURL(/#\/sample-result-movie$/)
+
+    // The consensus is the calendar question, which opens on it.
+    await page.goto('#/choices?section=consensus-option')
+    await page.getByRole('link', { name: 'See an example' }).click()
+    await expect(page).toHaveURL(/#\/sample-result-when$/)
+    await expect(page.getByText(/^Consensus time: /)).toBeVisible()
+  })
 })

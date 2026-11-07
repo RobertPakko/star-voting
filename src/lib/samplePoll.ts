@@ -62,6 +62,8 @@ export type SamplePayloads = Record<string, SampleQuestion>
 /** Question 1 of each copy: where the About page's two links point. */
 export const SAMPLE_POLL_ID = 'sample-movie'
 export const SAMPLE_RESULT_ID = 'sample-result-movie'
+/** The finished copy's question 2, the calendar asking for the consensus time. */
+export const SAMPLE_RESULT_TIME_ID = 'sample-result-when'
 
 /**
  * A real poll id is a v4 UUID, so nothing the database can mint begins with

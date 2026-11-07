@@ -1598,7 +1598,14 @@ is the page.
   folded except the one `?section=` names, which the result's modals use;
   that one opens already expanded. A choice not built yet says so in a
   *Coming soon* banner and works no example, and one a voter can game by
-  scoring dishonestly carries a warning that says so. The page restates
+  scoring dishonestly carries a warning that says so. From *Proportional
+  budget* down, the heading also carries a grey *Under construction* badge,
+  for now. Each built choice ends on **See an example**, which opens the
+  finished sample poll on it (`exampleFor`): the calendar question for the
+  consensus, since it asked for the consensus time; the film question for
+  the rest, with that choice's *More results* modal open by `?result=`
+  (`RESULT_PARAM`, read by `MoreResults` and taken off the address when
+  the modal closes), except the best option, which that question opens on. The page restates
   `/star`'s ballots above the sections, since its readers mostly arrive from
   a result's modal. `/examples` holds harder elections, one per
   choice as each is built, and says it is under construction until the first.
@@ -3196,8 +3203,11 @@ more options), and **Option ranking** and **Multiple winners** (three or
 more), each opening a modal; then *Add to calendar* under a time poll's
 winner or *Flip a coin* under *No winner*. One menu rather than a
 button each keeps the banner to the name and a control or two. **The modals
-are short**: what the tool is for and when to use it, with *How it works*
-linking to its card on `/choices`, where the explaining is done. The
+are short**: no title, but the sentence that kind's card on `/choices` opens
+with, the kind's name in bold, ending in *Learn more* (`blurb` in
+`CHOICES`, drawn by `ChoiceBlurb`; `ChoiceModal` puts it where the title
+would be, which also names the dialog). The same sentence is the popover on
+the info mark beside the bar's name. The explaining is done on `/choices`. The
 buttons share the name's line when it is short and drop to a row of their own
 otherwise; `TallyShape` draws *More results* beside the name. A
 round's *Show tie-break* stays over its round, since it slides that card.
@@ -3293,8 +3303,13 @@ two options, where it can already differ from STAR's winner.
 - **Counted in the database**, on the same gate and the same press as the
   others (`get_poll_consensus` / `open_poll_consensus`, via
   `poll_consensus`), answering the winner, its floor, how many shared it,
-  STAR's finalists among those, and the top `poll_results_rows()` options by
-  floor, the winner first.
+  STAR's finalists among those and their runoff, and the top
+  `poll_results_rows()` options by floor, the winner first, each with its
+  total stars.
+- **The card shows the STAR it ran**, where options shared the floor: which
+  two had the most stars and how the runoff settled, in the option ranking's
+  words. Written out only then: where one option holds the floor alone,
+  STAR ran nothing, and the table stays to *Fewest stars*.
 - **Removing works as in Multiple winners** (`p_excluded`, held by
   `Consensus`, never stored, stopping at two options left; a ballot is blank
   or not on the options still in). Not on the sample, which answers
@@ -3344,8 +3359,8 @@ because one dropdown: a separate ballot-shape setting and result setting were
 two questions where the creator has one. The names are in
 [`lib/choices.ts`](src/lib/choices.ts), with `offers`, the option counts
 each result is offered from. The form's *Choice* label carries an info icon
-to `/choices` (in a new tab, so the form survives) in place of any
-explanation on the form itself.
+opening a popover that links to `/choices` (in a new tab, so the form
+survives), in place of any explanation on the form itself.
 
 - **The tally carries the asked-for result** (`kind_result`), so a finished
   poll still opens in one read and the wait is one shape. `poll_tally` calls
@@ -3366,11 +3381,11 @@ explanation on the form itself.
   `SCORING_ROWS_MAX` beside *Choice*, because the database counts no more
   places than that (`validate_kind`); null means as many as it holds. A kind
   that takes none must have none (`polls_kind_value_ck`).
-- **The reader can try another number** (`ChoiceCount`), in the card and in
-  the modals alike. Every place is already counted, so it is a cut of the
-  answer on screen (`cutTo`, a shared place kept whole) and costs no request.
-  It opens on the poll's own number where the poll asked for that result, and
-  on *All* otherwise.
+- **The reader can try another number** (`ChoiceCount`), in the card only,
+  opening on the poll's own. Every place is already counted, so it is a cut
+  of the answer on screen (`cutTo`, a shared place kept whole) and costs no
+  request. The *More results* modals have no number and show every place: a
+  reader who went looking for the ranking wants the whole of it.
 - **An option has a number too** (`candidates.kind_value`), for kinds not
   built yet (a cost, a capacity). Nothing writes or reads it.
 

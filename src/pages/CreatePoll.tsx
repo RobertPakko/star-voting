@@ -9,6 +9,7 @@ import {
   Card,
   Checkbox,
   Group,
+  Popover,
   SegmentedControl,
   Select,
   SimpleGrid,
@@ -20,7 +21,6 @@ import {
   Textarea,
   TextInput,
   Title,
-  Tooltip,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useAuth } from '../lib/auth'
@@ -576,20 +576,29 @@ export function CreatePoll() {
             <Text component="label" htmlFor={id} size="sm" fw={500}>
               Choice
             </Text>
-            <Tooltip label="What each choice does">
-              <ActionIcon
-                component={Link}
-                to="/choices"
-                target="_blank"
-                variant="subtle"
-                color="gray"
-                size="sm"
-                radius="xl"
-                aria-label="What each choice does (opens in a new tab)"
-              >
-                <InfoIcon size={16} aria-hidden />
-              </ActionIcon>
-            </Tooltip>
+            <Popover width={260} position="bottom-start" withArrow shadow="md" trapFocus>
+              <Popover.Target>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
+                  radius="xl"
+                  aria-label="What each choice does"
+                >
+                  <InfoIcon size={16} aria-hidden />
+                </ActionIcon>
+              </Popover.Target>
+              <Popover.Dropdown>
+                {/* A new tab, so the form being filled in survives. */}
+                <Text size="sm">
+                  Visit the{' '}
+                  <Anchor component={Link} to="/choices" target="_blank" inherit>
+                    list of choices
+                  </Anchor>{' '}
+                  to learn about what these options mean.
+                </Text>
+              </Popover.Dropdown>
+            </Popover>
           </Group>
           <Select
             id={id}

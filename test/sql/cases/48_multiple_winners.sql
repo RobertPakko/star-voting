@@ -11,18 +11,19 @@
 --   friend 3   5     2     0
 --   friend 4   0     3     3
 --   friend 5   0     3     5
---   friend 6   0     0     5
+--   friend 6   1     1     5
 --
--- Spot 1 is plain STAR: tacos 16 and pizza 15 are the finalists, and pizza
--- wins the runoff 3 to 2. Friends 1-3 gave pizza 5, so count at 1/2 from now
--- on. Spot 2: tacos 2 + 2 + 1 + 3 + 3 + 0 = 11, sushi 0 + 0.5 + 0 + 3 + 5 + 5
--- = 13.5; the runoff is tacos 1.5 (friends 1-3 at a half each), sushi 2
--- (friends 5 and 6), friend 4 level. Sushi takes spot 2, where the full
--- ranking puts tacos second.
+-- Spot 1 is plain STAR: tacos 17 and pizza 16 are the finalists, and pizza
+-- wins the runoff 3 to 2 (friend 6 level). Friends 1-3 gave pizza 5,
+-- so count at 1/2 from now on, and friend 6 gave it 1, so at 5/6. Spot 2:
+-- tacos 2 + 2 + 1 + 3 + 3 + 5/6 = 11.833333, sushi 0 + 0.5 + 0 + 3 + 5 +
+-- 25/6 = 12.666667; the runoff is tacos 1.5 (friends 1-3 at a half each),
+-- sushi 1 + 5/6 = 1.833333 (friends 5 and 6), friend 4 level. Sushi takes
+-- spot 2, where the full ranking puts tacos second.
 --
--- With pizza left out, spot 1 is tacos (16 to 14, runoff 3 to 2). Then every
--- ballot is charged its tacos stars: 4, 4, 2, 3, 3, 0, so sushi's weighted
--- total is 1 * 5/9 + 3 * 5/8 + 5 * 5/8 + 5 = 10.555556.
+-- With pizza left out, spot 1 is tacos (17 to 14, runoff 3 to 2). Then every
+-- ballot is charged its tacos stars: 4, 4, 2, 3, 3, 1, so sushi's weighted
+-- total is 1 * 5/9 + 3 * 5/8 + 5 * 5/8 + 5 * 5/6 = 9.722222.
 
 begin;
 
@@ -40,7 +41,7 @@ begin
           [5, 2, 0],
           [0, 3, 3],
           [0, 3, 5],
-          [0, 0, 5]]);
+          [1, 1, 5]]);
   perform close_poll(v_poll);
 
   select id into v_pizza from candidates where poll_id = v_poll and name = 'pizza';
@@ -60,10 +61,10 @@ begin
 
   -- Spot 2's numbers, at the friends' new strengths. Sushi leads on score,
   -- so it is the runoff's `a`.
-  perform tests.assert_eq('sushi is elected on 13.5 weighted stars',
-    (m #>> '{1,options,0,total_score}')::numeric, 13.5);
-  perform tests.assert_eq('sushi is preferred at two full strengths',
-    (m #>> '{1,runoff,prefers_a}')::numeric, 2::numeric);
+  perform tests.assert_eq('sushi is elected on 12.666667 weighted stars',
+    (m #>> '{1,options,0,total_score}')::numeric, 12.666667);
+  perform tests.assert_eq('sushi is preferred at one full strength and five sixths',
+    (m #>> '{1,runoff,prefers_a}')::numeric, 1.833333);
   perform tests.assert_eq('tacos by three halves',
     (m #>> '{1,runoff,prefers_b}')::numeric, 1.5);
   perform tests.assert_eq('and friend 4 scored them level',
@@ -79,7 +80,7 @@ begin
   perform tests.assert_eq('tacos first', tests.placed_at(m, 1), array['tacos']);
   perform tests.assert_eq('sushi second', tests.placed_at(m, 2), array['sushi']);
   perform tests.assert_eq('sushi at the strengths tacos left',
-    (m #>> '{1,options,0,total_score}')::numeric, 10.555556);
+    (m #>> '{1,options,0,total_score}')::numeric, 9.722222);
 
   -- And again: leaving out options one after another.
   m := get_poll_multiple_winners(v_poll, array[v_pizza, v_tacos]);

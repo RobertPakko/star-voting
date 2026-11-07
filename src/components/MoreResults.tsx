@@ -8,7 +8,8 @@ import {
   TrophyIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
-import { CHOICES, offers, toolLabel, type ResultTool } from '../lib/choices'
+import { useSearchParams } from 'react-router-dom'
+import { CHOICES, RESULT_PARAM, offers, toolLabel, type ResultTool } from '../lib/choices'
 import type { PollResults } from '../lib/types'
 import { BestOption } from './BestOption'
 import { FullRanking } from './FullRanking'
@@ -17,6 +18,13 @@ import { FractionalWinners } from './FractionalWinners'
 import { Consensus } from './Consensus'
 
 type Tool = ResultTool
+const TOOLS: readonly string[] = [
+  'option',
+  'consensus',
+  'ranking',
+  'multiple',
+  'fractional',
+] satisfies Tool[]
 
 /**
  * The other answers the same ballots can give, as one menu in the result's
@@ -37,9 +45,22 @@ export function MoreResults({
   /** The result on the page, left off the menu: `option` where it is STAR's winner. */
   shown: Tool
 }) {
-  const [open, setOpen] = useState<Tool | null>(null)
-  const close = () => setOpen(null)
   const offered = (tool: Tool) => tool !== shown && offers(tool, results)
+  // `?result=` opens a modal on arrival, for `/choices`' example links. It
+  // is taken off the address on closing, so a refresh does not open it again.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get(RESULT_PARAM) as Tool | null
+  const [open, setOpen] = useState<Tool | null>(() =>
+    asked && TOOLS.includes(asked) && offered(asked) ? asked : null,
+  )
+  const close = () => {
+    setOpen(null)
+    if (params.has(RESULT_PARAM)) {
+      const next = new URLSearchParams(params)
+      next.delete(RESULT_PARAM)
+      setParams(next, { replace: true, preventScrollReset: true })
+    }
+  }
 
   const items = [
     offered('option') && {

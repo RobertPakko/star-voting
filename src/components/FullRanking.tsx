@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Anchor, Badge, Group, Modal, Stack, Text } from '@mantine/core'
-import { Link } from 'react-router-dom'
+import { Badge, Group, Stack, Text } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
@@ -10,6 +9,7 @@ import { use24HourTime } from '../lib/clock'
 import { CHOICE_NUMBER, cutTo } from '../lib/choices'
 import type { PollResults, RankingEntry, Tiebreak } from '../lib/types'
 import { ChoiceCount } from './ChoiceCount'
+import { ChoiceModal } from './ChoiceBlurb'
 import { NameList } from './NameList'
 import { RankingSkeleton } from './Skeletons'
 import { count, stars, voters } from '../lib/plural'
@@ -60,33 +60,30 @@ export function FullRanking({
   onClose: () => void
 }) {
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      size="lg"
-      centered
-      title={<Text fw={600}>Option ranking</Text>}
-    >
+    <ChoiceModal kind="ranking" opened={opened} onClose={onClose}>
       {/* Mounted only while open, so the read is made on the press. */}
       <RankingBody source={source} results={results} />
-    </Modal>
+    </ChoiceModal>
   )
 }
 
 /**
  * The ranking itself, in the modal or, on a question that chose it, on the
  * results page (`ChosenResult`), handed the ranking the tally carried
- * (`initial`) so it asks for nothing. Opens on the poll's own number of
- * places where the poll chose a ranking, and on all of them otherwise.
+ * (`initial`) so it asks for nothing. Only the results page offers a number
+ * of places (`counted`), opening on the poll's own; the modal shows them all,
+ * since a reader who went looking for the ranking wants the whole of it.
  */
 export function RankingBody({
   source,
   results,
   initial = null,
+  counted = false,
 }: {
   source: RankingSource
   results: PollResults
   initial?: RankingEntry[] | null
+  counted?: boolean
 }) {
   const h24 = use24HourTime()
 
@@ -98,7 +95,9 @@ export function RankingBody({
 
   const [ranking, setRanking] = useState<RankingEntry[] | null>(initial)
   const [error, setError] = useState<string | null>(null)
-  const [places, setPlaces] = useState(results.kind === 'ranking' ? results.kind_value : null)
+  const [places, setPlaces] = useState(
+    counted && results.kind === 'ranking' ? results.kind_value : null,
+  )
 
   useEffect(() => {
     // The whole point of the split: nothing is asked for until somebody
@@ -129,21 +128,14 @@ export function RankingBody({
 
   return (
     <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        {results.option_count > SCORING_ROWS_MAX
-          ? `The top ${SCORING_ROWS_MAX} places, for when the winner falls through.`
-          : 'Every option in order, for when the winner falls through.'}{' '}
-        <Anchor component={Link} to="/choices?section=option-ranking" inherit>
-          How it works
-        </Anchor>
-      </Text>
-
-      <ChoiceCount
-        label={CHOICE_NUMBER.ranking!.label}
-        value={places}
-        optionCount={results.option_count}
-        onChange={setPlaces}
-      />
+      {counted && (
+        <ChoiceCount
+          label={CHOICE_NUMBER.ranking!.label}
+          value={places}
+          optionCount={results.option_count}
+          onChange={setPlaces}
+        />
+      )}
 
       {error && (
         <Text role="alert" c="red" size="sm">

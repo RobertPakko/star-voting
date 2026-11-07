@@ -47,6 +47,10 @@ import { SITE_FEATURES } from '../components/siteFeatures'
 import { badgeColor } from '../lib/badgeColors'
 import { usePageTitle } from '../lib/pageTitle'
 import { percentagesOf } from '../lib/shares'
+import { stars } from '../lib/plural'
+import { pollPath } from '../lib/pollId'
+import { SAMPLE_RESULT_ID, SAMPLE_RESULT_TIME_ID } from '../lib/samplePoll'
+import { RESULT_PARAM, type ResultTool } from '../lib/choices'
 import vseByStrategy from '../assets/why-star/vse-by-strategy.png'
 import winnerDistribution from '../assets/why-star/winner-distribution.webp'
 import classes from './Learn.module.css'
@@ -201,7 +205,7 @@ export function WhatIsStar() {
           />
           {undecided.map((voter) => (
             <Text key={voter} size="xs" c="dimmed" ta="center">
-              The {ORDINALS[voter]} friend gave {first} and {second} {DINNER[first][voter]} stars
+              The {ORDINALS[voter]} friend gave {first} and {second} {stars(DINNER[first][voter])}{' '}
               each, so their ballot counts for neither.
             </Text>
           ))}
@@ -330,6 +334,7 @@ export function AllChoices() {
           icon={TrophyIcon}
           color="yellow"
           title="Best option"
+          example="option"
           algorithms={['STAR']}
         >
           <Text>
@@ -359,6 +364,7 @@ export function AllChoices() {
           icon={HandshakeIcon}
           color="teal"
           title="Consensus option"
+          example="consensus"
           algorithms={['Maximin', 'STAR']}
         >
           <NotStrategyProof easily />
@@ -394,6 +400,7 @@ export function AllChoices() {
           icon={ListNumbersIcon}
           color="blue"
           title="Option ranking"
+          example="ranking"
           algorithms={['Iterative STAR']}
         >
           <Text>
@@ -430,6 +437,7 @@ export function AllChoices() {
           icon={RankingIcon}
           color="violet"
           title="Multiple winners"
+          example="multiple"
           algorithms={['Iterative STAR', 'Ballot reweighting']}
         >
           <Text>
@@ -529,6 +537,7 @@ export function AllChoices() {
           icon={ChartPieSliceIcon}
           color="grape"
           title="Fractional winners"
+          example="fractional"
           algorithms={['Nash']}
         >
           <NotStrategyProof easily />
@@ -583,6 +592,7 @@ export function AllChoices() {
           icon={CoinsIcon}
           color="green"
           title="Proportional budget"
+          unbuilt
           algorithms={['Iterative STAR', 'Ballot reweighting', 'Cost adjustment']}
         >
           <ComingSoon name="Proportional budget" />
@@ -629,6 +639,7 @@ export function AllChoices() {
           icon={PiggyBankIcon}
           color="lime"
           title="Fractional budget"
+          unbuilt
           algorithms={['Nash', 'Cost adjustment']}
         >
           <ComingSoon name="Fractional budget" />
@@ -670,6 +681,7 @@ export function AllChoices() {
           icon={ArrowsSplitIcon}
           color="orange"
           title="Option allocation"
+          unbuilt
           algorithms={['Nash']}
         >
           <ComingSoon name="Option allocation" />
@@ -714,6 +726,7 @@ export function AllChoices() {
           icon={UsersThreeIcon}
           color="pink"
           title="Group formation"
+          unbuilt
           algorithms={['Nash']}
         >
           <ComingSoon name="Group formation" />
@@ -751,6 +764,7 @@ export function AllChoices() {
           icon={SwapIcon}
           color="indigo"
           title="Optimal swap"
+          unbuilt
           algorithms={['Shapley–Scarf']}
         >
           <ComingSoon name="Optimal swap" />
@@ -792,6 +806,7 @@ export function AllChoices() {
           icon={LinkSimpleIcon}
           color="red"
           title="Bipartite matching"
+          unbuilt
           algorithms={['Gale–Shapley']}
         >
           <ComingSoon name="Bipartite matching" />
@@ -861,6 +876,8 @@ function Choice({
   color,
   title,
   algorithms,
+  example,
+  unbuilt = false,
   children,
 }: {
   id: string
@@ -869,6 +886,10 @@ function Choice({
   color: MantineColor
   title: string
   algorithms: string[]
+  /** The result in the sample poll that shows this choice, for a choice that is built. */
+  example?: ResultTool
+  /** Marked *Under construction* beside the title, so it shows while folded. */
+  unbuilt?: boolean
   children: ReactNode
 }) {
   return (
@@ -882,9 +903,17 @@ function Choice({
       >
         {/* The title and tags together are the icon's 40px: 20 + 2 + 18. */}
         <Stack gap={2}>
-          <Text fw={700} size="md" lh="20px">
-            {title}
-          </Text>
+          {/* On a phone the badge drops under the title rather than being cut short. */}
+          <Group gap="xs" style={{ rowGap: 2 }}>
+            <Text fw={700} size="md" lh="20px">
+              {title}
+            </Text>
+            {unbuilt && (
+              <Badge size="sm" variant="light" color="gray">
+                Under construction
+              </Badge>
+            )}
+          </Group>
           <Group gap={4}>
             <VisuallyHidden>{algorithms.length > 1 ? 'Algorithms:' : 'Algorithm:'}</VisuallyHidden>
             {algorithms.map((name) => (
@@ -896,10 +925,32 @@ function Choice({
         </Stack>
       </Accordion.Control>
       <Accordion.Panel>
-        <Stack gap="sm">{children}</Stack>
+        <Stack gap="sm">
+          {children}
+          {example && (
+            <Group>
+              <Button component={Link} to={exampleFor(example)} variant="light">
+                See an example
+              </Button>
+            </Group>
+          )}
+        </Stack>
       </Accordion.Panel>
     </Accordion.Item>
   )
+}
+
+/**
+ * Where a built choice is shown on the finished sample poll: the consensus on
+ * its calendar question, which asked for the consensus time and so opens on
+ * it; the best option on the film question, which opens on STAR; and the
+ * rest on the film question with their *More results* modal open
+ * (`RESULT_PARAM`, read by `MoreResults`).
+ */
+function exampleFor(tool: ResultTool) {
+  if (tool === 'consensus') return pollPath(SAMPLE_RESULT_TIME_ID)
+  const films = pollPath(SAMPLE_RESULT_ID)
+  return tool === 'option' ? films : `${films}?${RESULT_PARAM}=${tool}`
 }
 
 /** The banner on every choice that is described but not built. */
@@ -1404,19 +1455,22 @@ type Ratings = Record<string, number[]>
 
 /**
  * `/star`'s example, used by every section of the page. Tacos leads on stars
- * but loses the runoff to pizza, and the last friend scores both finalists 0,
- * so every rule of the runoff shows. The full ranking then puts tacos second
- * (the pizza lovers' second choice), while multiple winners gives the second
- * of two dinners to sushi. The pizza lovers all gave pizza 5, so the
- * second spot weighs every ballot at 1/2 or 1, which leaves most weighted
- * scores whole; and with full-strength runoff votes they
- * would hand the second spot to tacos, which is the point the page makes
- * about weighting the runoff. The fourth friend scores tacos and sushi the
- * same so that runoff is not a tie.
+ * but loses the runoff to pizza, and the last friend scores both finalists 1,
+ * so every rule of the runoff shows. That 1 is also what makes tacos the
+ * consensus option: everybody gave it at least 1, and pizza and sushi were
+ * each given 0 by somebody; raising pizza with it keeps that friend
+ * undecided in the runoff. The full ranking then puts tacos second (the pizza
+ * lovers' second choice), while multiple winners gives the second of two
+ * dinners to sushi. The pizza lovers all gave pizza 5, so the second spot
+ * weighs their ballots at 1/2 (and the last friend's at 5/6); with
+ * full-strength runoff votes they would hand the second spot to tacos, which
+ * is the point the page makes about weighting the runoff. The fourth friend
+ * scores tacos and sushi the same so that runoff is not a tie.
+ * `48_multiple_winners` and `49_fractional_winners` count the same ballots.
  */
 const DINNER: Ratings = {
-  pizza: [5, 5, 5, 0, 0, 0],
-  tacos: [4, 4, 2, 3, 3, 0],
+  pizza: [5, 5, 5, 0, 0, 1],
+  tacos: [4, 4, 2, 3, 3, 1],
   sushi: [0, 1, 0, 3, 5, 5],
 }
 

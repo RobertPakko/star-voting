@@ -131,11 +131,18 @@ test('a name typed and not yet sent survives a refresh', async ({ page }) => {
 test('the results show the rounds, the tie-break and the option ranking', async ({ page }) => {
   await page.goto('#/sample-result-movie')
   await expect(page.getByText('Best option: Knives Out')).toBeVisible()
-  // The bar names what the question asked for, and leads to where it is explained.
-  await expect(page.getByRole('link', { name: 'What best option means' })).toHaveAttribute(
+  // The bar names what the question asked for, and its info mark says what
+  // that is in a sentence, leading to where it is explained.
+  await page.getByRole('button', { name: 'What best option means' }).click()
+  const blurb = page.getByRole('dialog').filter({ hasText: 'picks one option using STAR' })
+  await expect(blurb).toBeVisible()
+  await expect(blurb.getByRole('link', { name: 'Learn more' })).toHaveAttribute(
     'href',
     '#/choices?section=best-option',
   )
+  await expectAccessible(page, 'the info popover on the result')
+  await page.keyboard.press('Escape')
+  await expect(blurb).toBeHidden()
   await expect(page.getByRole('heading', { name: 'Scoring' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Runoff' })).toBeVisible()
   // The runoff elected the winner, so it is read first, straight under it.
@@ -167,6 +174,8 @@ test('the results show the rounds, the tie-break and the option ranking', async 
   // Every option placed, the last included: the ranking is the whole field.
   for (const option of ['Knives Out', 'Paddington 2', 'The Matrix', 'Honeyland'])
     await expect(ranking).toContainText(option)
+  // Opened from the menu, it is the whole ranking, with no number to pick.
+  await expect(ranking.getByLabel('Places to rank')).toHaveCount(0)
   await expectAccessible(page, 'the option ranking')
   await page.keyboard.press('Escape')
   await expect(ranking).toBeHidden()

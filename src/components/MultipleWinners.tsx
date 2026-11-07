@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ActionIcon, Anchor, Badge, Group, Modal, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Group, Stack, Text, Tooltip } from '@mantine/core'
 import { XIcon } from '@phosphor-icons/react'
-import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { countBadge } from '../lib/badgeColors'
@@ -11,6 +10,7 @@ import { use24HourTime } from '../lib/clock'
 import { CHOICE_NUMBER, cutTo } from '../lib/choices'
 import type { PollResults, RankingEntry } from '../lib/types'
 import { ChoiceCount } from './ChoiceCount'
+import { ChoiceModal } from './ChoiceBlurb'
 import { RankingSkeleton } from './Skeletons'
 import { count } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
@@ -58,28 +58,22 @@ export function MultipleWinners({
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      size="lg"
-      centered
-      title={<Text fw={600}>Multiple winners</Text>}
-    >
+    <ChoiceModal kind="multiple" opened={opened} onClose={onClose}>
       <MultipleWinnersBody
         source={source}
         results={results}
         leftOut={leftOut}
         onLeftOut={setLeftOut}
       />
-    </Modal>
+    </ChoiceModal>
   )
 }
 
 /**
  * The winners themselves, in the modal or on the results page. Handed the
  * count the tally carried (`initial`), it asks for nothing until an option
- * is removed. Opens on the poll's own number of winners where the poll chose
- * multiple winners, and on every spot otherwise.
+ * is removed. Only the results page offers a number of winners (`counted`),
+ * opening on the poll's own; the modal shows every spot.
  */
 export function MultipleWinnersBody({
   source,
@@ -87,12 +81,14 @@ export function MultipleWinnersBody({
   initial = null,
   leftOut,
   onLeftOut,
+  counted = false,
 }: {
   source: RankingSource
   results: PollResults
   initial?: RankingEntry[] | null
   leftOut: LeftOut[]
   onLeftOut: (next: LeftOut[]) => void
+  counted?: boolean
 }) {
   const h24 = use24HourTime()
   const kind = source.kind
@@ -102,7 +98,9 @@ export function MultipleWinnersBody({
   const [spots, setSpots] = useState<RankingEntry[] | null>(leftOut.length === 0 ? initial : null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [winners, setWinners] = useState(results.kind === 'multiple' ? results.kind_value : null)
+  const [winners, setWinners] = useState(
+    counted && results.kind === 'multiple' ? results.kind_value : null,
+  )
 
   // Sorted, so the same set asked for twice is the same request.
   const excludedKey = leftOut
@@ -155,26 +153,20 @@ export function MultipleWinnersBody({
 
   return (
     <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        For choosing several options at once, so that different groups of voters each get one they
-        like. Take as many from the top as you need.{' '}
-        <Anchor component={Link} to="/choices?section=multiple-winners" inherit>
-          How it works
-        </Anchor>
-      </Text>
-
       {!sample && (
         <Text size="sm" c="dimmed">
           If an option is not available, remove it and the winners are counted again without it.
         </Text>
       )}
 
-      <ChoiceCount
-        label={CHOICE_NUMBER.multiple!.label}
-        value={winners}
-        optionCount={remaining}
-        onChange={setWinners}
-      />
+      {counted && (
+        <ChoiceCount
+          label={CHOICE_NUMBER.multiple!.label}
+          value={winners}
+          optionCount={remaining}
+          onChange={setWinners}
+        />
+      )}
 
       <RemovedOptions leftOut={leftOut} onRestore={restore} onRestoreAll={() => onLeftOut([])} />
 

@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
-import { ActionIcon, Group, Modal, Stack, Text, Tooltip } from '@mantine/core'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ActionIcon, Group, Stack, Text, Tooltip } from '@mantine/core'
 import { XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { formatWindow, relabelScores } from '../lib/schedule'
 import { consensusSchema, parseAnswer } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
-import { count, stars } from '../lib/plural'
-import { toolLabel } from '../lib/choices'
+import { count, stars, voters } from '../lib/plural'
+import { toolKind } from '../lib/choices'
+import { ChoiceModal } from './ChoiceBlurb'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { MeetingEvent } from '../lib/calendarEvent'
 import type { ConsensusResult, PollResults } from '../lib/types'
@@ -48,15 +49,9 @@ export function Consensus({
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      size="lg"
-      centered
-      title={<Text fw={600}>{toolLabel('consensus', results.kind)}</Text>}
-    >
+    <ChoiceModal kind={toolKind('consensus', results.kind)} opened={opened} onClose={onClose}>
       <ConsensusBody source={source} results={results} leftOut={leftOut} onLeftOut={setLeftOut} />
-    </Modal>
+    </ChoiceModal>
   )
 }
 
@@ -237,16 +232,10 @@ function Answer({
             {everyone
               ? 'Every option was given 0 stars by somebody, so STAR was run between them all.'
               : `${count(tied, 'option')} were given at least ${stars(floor)} by everyone, so STAR was run between them.`}
-            {a && b && (
-              <>
-                {' '}
-                {a} and {b} went to the runoff,{' '}
-                {winner
-                  ? `and ${winner.name} won it.`
-                  : 'which was level on every rule, so there is no winner.'}
-              </>
-            )}
           </Text>
+        )}
+        {tied > 1 && a && b && consensus.runoff && (
+          <StarSteps consensus={consensus} names={[a, b]} />
         )}
         {consensus.blank_ballots > 0 && (
           <Text size="sm" c="dimmed">
@@ -302,5 +291,76 @@ function Answer({
         )}
       </Stack>
     </>
+  )
+}
+
+/**
+ * STAR between the options sharing the floor, told as the option ranking
+ * tells a place (`FullRanking`'s `decision`): which two had the most stars,
+ * and how the runoff between them was settled.
+ */
+function StarSteps({
+  consensus,
+  names: [a, b],
+}: {
+  consensus: ConsensusResult
+  /** The finalists' readable names, in `finalists` order. */
+  names: [string, string]
+}) {
+  const runoff = consensus.runoff!
+  const totalOf = (id: string) => consensus.options.find((o) => o.id === id)?.total_score
+  const [ta, tb] = consensus.finalists.map(totalOf)
+  const aWon = consensus.winner_id === consensus.finalists[0]
+  const [won, lost] = aWon ? [a, b] : [b, a]
+  const [forWon, forLost] = aWon
+    ? [runoff.prefers_a, runoff.prefers_b]
+    : [runoff.prefers_b, runoff.prefers_a]
+  const [fiveWon, fiveLost] = aWon
+    ? [runoff.five_stars_a, runoff.five_stars_b]
+    : [runoff.five_stars_b, runoff.five_stars_a]
+
+  let settled: ReactNode
+  if (runoff.resolved_by === 'unresolved') {
+    settled = (
+      <>
+        Level at {voters(runoff.prefers_a)} each, on identical score totals and five-star votes, so
+        there is no winner.
+      </>
+    )
+  } else if (runoff.resolved_by === 'higher_score') {
+    settled = (
+      <>
+        Level at {voters(forWon)} each; <strong>{won}</strong> won on the higher score total.
+      </>
+    )
+  } else if (runoff.resolved_by === 'five_star_votes') {
+    settled = (
+      <>
+        Level at {voters(forWon)} each and on score; <strong>{won}</strong> won on five-star votes,{' '}
+        {fiveWon} to {fiveLost}.
+      </>
+    )
+  } else {
+    settled = (
+      <>
+        <strong>{won}</strong> was preferred over <strong>{lost}</strong> by {voters(forWon)} to{' '}
+        {forLost}.
+      </>
+    )
+  }
+
+  return (
+    <Stack gap={2}>
+      <Text size="sm">
+        <strong>Scoring:</strong> {a}
+        {ta !== undefined && <> ({stars(ta)})</>} and {b}
+        {tb !== undefined && <> ({stars(tb)})</>} had the most stars among them, so they went to the
+        runoff.
+      </Text>
+      <Text size="sm">
+        <strong>Runoff:</strong> {settled}
+        {runoff.ties > 0 && <> {count(runoff.ties, 'voter')} scored them equally.</>}
+      </Text>
+    </Stack>
   )
 }

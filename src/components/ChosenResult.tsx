@@ -32,7 +32,7 @@ export function ChosenResult({
 
   switch (chosen.kind) {
     case 'ranking':
-      return <RankingBody source={source} results={results} initial={chosen.entries} />
+      return <RankingBody source={source} results={results} initial={chosen.entries} counted />
     case 'multiple':
       return (
         <MultipleWinnersBody
@@ -41,6 +41,7 @@ export function ChosenResult({
           initial={chosen.entries}
           leftOut={leftOut}
           onLeftOut={setLeftOut}
+          counted
         />
       )
     case 'fractional':

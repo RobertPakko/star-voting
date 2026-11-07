@@ -9,14 +9,35 @@ import { SCORING_ROWS_MAX } from './resultsRows'
  * Several best times are a time poll's *More results*, not a kind of their
  * own.
  */
-export const CHOICES: Record<PollKind, { label: string; section: string }> = {
-  option: { label: 'Best option', section: 'best-option' },
-  time: { label: 'Best time', section: 'best-option' },
-  ranking: { label: 'Option ranking', section: 'option-ranking' },
-  multiple: { label: 'Multiple winners', section: 'multiple-winners' },
-  fractional: { label: 'Fractional winners', section: 'fractional-winners' },
-  consensus: { label: 'Consensus option', section: 'consensus-option' },
-  consensus_time: { label: 'Consensus time', section: 'consensus-option' },
+export const CHOICES: Record<PollKind, { label: string; section: string; blurb: string }> = {
+  option: { label: 'Best option', section: 'best-option', blurb: 'picks one option using STAR.' },
+  time: { label: 'Best time', section: 'best-option', blurb: 'picks one time using STAR.' },
+  ranking: {
+    label: 'Option ranking',
+    section: 'option-ranking',
+    blurb: 'puts every option in order by running STAR again without the winner.',
+  },
+  multiple: {
+    label: 'Multiple winners',
+    section: 'multiple-winners',
+    blurb:
+      'gives a ranking that shares top spots so that different groups of voters each get something they like.',
+  },
+  fractional: {
+    label: 'Fractional winners',
+    section: 'fractional-winners',
+    blurb: 'computes the fairest split of options when it’s possible to take a little of each.',
+  },
+  consensus: {
+    label: 'Consensus option',
+    section: 'consensus-option',
+    blurb: 'picks the option whose worst score is as good as possible.',
+  },
+  consensus_time: {
+    label: 'Consensus time',
+    section: 'consensus-option',
+    blurb: 'picks the time whose worst score is as good as possible.',
+  },
 }
 
 /** Where `/choices` explains a kind; each `section` is one of its card ids. */
@@ -60,6 +81,12 @@ export function toolKind(tool: ResultTool, kind: PollKind): PollKind {
 
 /** A result tool's name on a poll of this kind: a time poll's consensus is a time. */
 export const toolLabel = (tool: ResultTool, kind: PollKind) => CHOICES[toolKind(tool, kind)].label
+
+/**
+ * The `?result=` a results page opens a *More results* modal from, so
+ * `/choices` can link an example straight to it.
+ */
+export const RESULT_PARAM = 'result'
 
 /**
  * What a kind's number (`kind_value`) counts, for the kinds that take one.

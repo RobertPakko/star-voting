@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActionIcon, Anchor, Box, Button, Group, Modal, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Box, Button, Group, Stack, Text, Tooltip } from '@mantine/core'
 import { PieChart } from '@mantine/charts'
 import { useReducedMotion } from '@mantine/hooks'
 import { SpinnerBallIcon, XIcon } from '@phosphor-icons/react'
-import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { relabelScores } from '../lib/schedule'
@@ -20,6 +19,7 @@ import type { RankingSource } from './FullRanking'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
 import { useLeftOut } from '../lib/useLeftOut'
 import { SharesSkeleton } from './Skeletons'
+import { ChoiceModal } from './ChoiceBlurb'
 
 /**
  * A slice colour per share, largest first. Ten, one for each option the
@@ -88,20 +88,14 @@ export function FractionalWinners({
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      size="lg"
-      centered
-      title={<Text fw={600}>Fractional winners</Text>}
-    >
+    <ChoiceModal kind="fractional" opened={opened} onClose={onClose}>
       <FractionalWinnersBody
         source={source}
         results={results}
         leftOut={leftOut}
         onLeftOut={setLeftOut}
       />
-    </Modal>
+    </ChoiceModal>
   )
 }
 
@@ -185,14 +179,6 @@ export function FractionalWinnersBody({
 
   return (
     <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        For splitting something between the options, like a budget or a run of meetings. Every
-        option gets a share, sized so that each group of voters gets some of what it likes.{' '}
-        <Anchor component={Link} to="/choices?section=fractional-winners" inherit>
-          How it works
-        </Anchor>
-      </Text>
-
       {!sample && (
         <Text size="sm" c="dimmed">
           If an option is not available, remove it and the shares are worked out again without it.

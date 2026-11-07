@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ActionIcon, Card, Group, Stack, Text } from '@mantine/core'
+import { ActionIcon, Card, Group, Popover, Stack, Text } from '@mantine/core'
 import { InfoIcon, WarningIcon } from '@phosphor-icons/react'
-import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { parseAnswer, pollResultsSchema } from '../lib/rpcSchemas'
@@ -17,7 +16,8 @@ import { MoreResults } from './MoreResults'
 import { Reveal } from './Reveal'
 import { ResultsSkeleton } from './Skeletons'
 import { StarRounds } from './StarRounds'
-import { CHOICES, choicePage, chosenResult, toolKind } from '../lib/choices'
+import { CHOICES, chosenResult, toolKind } from '../lib/choices'
+import { ChoiceBlurb } from './ChoiceBlurb'
 import classes from './Results.module.css'
 
 /** Which tally endpoint to read: a session for invite polls, the link for open ones. */
@@ -192,7 +192,8 @@ export function Results({
 
 /**
  * The answer, under the name of what the question asked for, with an info
- * mark leading to where `/choices` explains that kind. Green where there is
+ * mark opening that kind's one sentence (`ChoiceBlurb`), which leads on to
+ * where `/choices` explains it. Green where there is
  * an answer, orange where the kind names one winner and found none (`name`
  * null); `name` left out is a kind whose answer is several options.
  *
@@ -238,17 +239,23 @@ function AnswerBar({
               </>
             )}
           </Text>
-          <ActionIcon
-            component={Link}
-            to={choicePage(kind)}
-            variant="subtle"
-            color="gray"
-            radius="xl"
-            aria-label={`What ${label.toLowerCase()} means`}
-            style={{ flexShrink: 0 }}
-          >
-            <InfoIcon size={18} aria-hidden />
-          </ActionIcon>
+          {/* Focus moves in, so the link is reachable by keyboard and Escape closes it. */}
+          <Popover width={280} position="bottom" withArrow shadow="md" trapFocus>
+            <Popover.Target>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                radius="xl"
+                aria-label={`What ${label.toLowerCase()} means`}
+                style={{ flexShrink: 0 }}
+              >
+                <InfoIcon size={18} aria-hidden />
+              </ActionIcon>
+            </Popover.Target>
+            <Popover.Dropdown>
+              <ChoiceBlurb kind={kind} />
+            </Popover.Dropdown>
+          </Popover>
         </Group>
         <Group gap="xs">{children}</Group>
       </Group>

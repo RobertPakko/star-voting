@@ -98,7 +98,7 @@ begin
 end $$;
 
 -- /extensions' six friends, whose shares the page works out in the browser
--- (sharesOf in Learn.tsx) and prints as tacos 43%, sushi 36%, pizza 21%:
+-- (sharesOf in Learn.tsx) and prints as tacos 73%, sushi 17%, pizza 10%:
 --
 --            pizza tacos sushi
 --   friend 1   5     4     0
@@ -106,7 +106,10 @@ end $$;
 --   friend 3   5     2     0
 --   friend 4   0     3     3
 --   friend 5   0     3     5
---   friend 6   0     0     5
+--   friend 6   1     1     5
+--
+-- At the maximum (0.102, 0.726, 0.172) every option's mean of stars over
+-- satisfaction is exactly 1, which is what tests.nash_gap checks.
 do $$
 declare
   v_poll uuid;
@@ -121,7 +124,7 @@ begin
           [5, 2, 0],
           [0, 3, 3],
           [0, 3, 5],
-          [0, 0, 5]]);
+          [1, 1, 5]]);
   perform close_poll(v_poll);
 
   select id into v_pizza from candidates where poll_id = v_poll and name = 'pizza';
@@ -130,10 +133,10 @@ begin
   m := get_poll_fractional_winners(v_poll, '{}');
   perform tests.assert_eq('the shares sum to 1', tests.share_total(m), 1::numeric);
   perform tests.assert_eq('and are the maximum', tests.nash_gap(v_poll, m) < 0.001, true);
-  perform tests.assert_eq('tacos 43%', round(tests.share(m, 'tacos'), 2), 0.43);
-  perform tests.assert_eq('sushi 36%', round(tests.share(m, 'sushi'), 2), 0.36);
-  perform tests.assert_eq('pizza 21%, though it won the runoff',
-    round(tests.share(m, 'pizza'), 2), 0.21);
+  perform tests.assert_eq('tacos 73%', round(tests.share(m, 'tacos'), 2), 0.73);
+  perform tests.assert_eq('sushi 17%', round(tests.share(m, 'sushi'), 2), 0.17);
+  perform tests.assert_eq('pizza 10%, though it won the runoff',
+    round(tests.share(m, 'pizza'), 2), 0.10);
   perform tests.assert_eq('tacos first', m #>> '{0,name}', 'tacos');
 
   -- Leaving pizza out shares the meals as though it had never been on the
