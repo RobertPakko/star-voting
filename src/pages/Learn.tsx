@@ -305,6 +305,9 @@ export function AllChoices() {
   // The working is shown with the whole percentages the page prints, so a
   // reader can redo it by hand from what is on screen.
   const percent = percentagesOf(shares)
+  const budget = budgetOf(DINNER, COSTS, BUDGET)
+  const budgetReduced = votersOf(DINNER).filter((voter) => budget.spots[1].weights[voter] < 1)
+  const popular = byPopularity(DINNER, COSTS, BUDGET)
   const compromise = bestSingleOption(DINNER)
   const sharedOut = optionsOf(DINNER).find((o) => o !== winner && o !== compromise)!
 
@@ -662,7 +665,6 @@ export function AllChoices() {
           icon={CoinsIcon}
           color="green"
           title="Proportional budget"
-          unbuilt
           algorithms={['Iterative STAR', 'Ballot reweighting', 'Cost adjustment']}
         >
           <ComingSoon name="Proportional budget" />
@@ -687,7 +689,69 @@ export function AllChoices() {
             </List.Item>
             <List.Item>Repeat until nothing left fits in the budget.</List.Item>
           </List>
-          <Text>TODO: Example</Text>
+          <Text>
+            Let&rsquo;s say our six friends are now throwing a party with a ${BUDGET} food budget,
+            and each restaurant&rsquo;s party platter costs:
+          </Text>
+          <Costs costs={COSTS} />
+          <Text>
+            The average cost is ${averageCost(COSTS)}. Each star is multiplied by the average cost
+            divided by the option&rsquo;s cost, so a cheaper option&rsquo;s stars count for more:{' '}
+            {optionsOf(DINNER)
+              .map((option) => `${option} ×${decimal(averageCost(COSTS) / COSTS[option])}`)
+              .join(', ')}
+            . The scoring round adds up the scaled stars:
+          </Text>
+          <EmojiTable
+            caption="Everyone's stars, scaled by each restaurant's cost"
+            rows={spotScoreRows(budget.adjusted, budget.spots[0])}
+            rowLabel="Restaurant"
+            totalLabel="Score"
+          />
+          <Then>
+            {labelOf(budget.spots[0].finalists[0])} and {budget.spots[0].finalists[1]} go to a
+            runoff
+          </Then>
+          <EmojiTable
+            caption="The runoff for the first option funded"
+            rows={spotRunoffRows(DINNER, budget.spots[0])}
+            rowLabel="Restaurant"
+            totalLabel="Votes"
+          />
+          <Text>
+            {labelOf(budget.spots[0].winner)} is funded, leaving $
+            {BUDGET - COSTS[budget.spots[0].winner]}. Then every ballot is reweighted by how many
+            stars it gave {budget.spots[0].winner}, scaled by {budget.spots[0].winner}&rsquo;s cost,
+            and STAR runs again on the options that still fit:
+          </Text>
+          <EmojiTable
+            caption={`The scaled stars for the second option funded, with ${budget.spots[0].winner} already funded`}
+            rows={spotScoreRows(budget.adjusted, budget.spots[1])}
+            rowLabel="Restaurant"
+            totalLabel="Score"
+            reduced={budgetReduced}
+          />
+          <Then>
+            {labelOf(budget.spots[1].finalists[0])} and {budget.spots[1].finalists[1]} go to a
+            runoff
+          </Then>
+          <EmojiTable
+            caption="The runoff for the second option funded"
+            rows={spotRunoffRows(DINNER, budget.spots[1])}
+            rowLabel="Restaurant"
+            totalLabel="Votes"
+            reduced={budgetReduced}
+          />
+          <Text>
+            {labelOf(budget.spots[1].winner)} is funded, leaving ${budget.left}, which is not enough
+            for anything else, so the count stops there.
+          </Text>
+          <Places names={budget.spots.map((spot) => spot.winner)} />
+          <Text>
+            Funding the most popular options in order would have bought {popular.join(' and ')},
+            spending the whole budget on the options the {budget.spots[0].winner} fans like most.
+            Instead, both groups get their favorite.
+          </Text>
           <Text>
             Including cost in the reweighting step means a group that gets one expensive option
             funded has spent as much of its influence as a group that gets several cheap ones.
@@ -1596,19 +1660,33 @@ const STAR_FINALISTS = finalistsOf(RATINGS)
 const MAX_STARS = 5
 
 /** Each finalist's runoff votes: one per voter who scored it higher, counted at `weights`. */
-function runoffVotes(ratings: Ratings, pair: readonly string[], weights?: readonly number[]) {
+function runoffVotes(
+  ratings: Ratings,
+  pair: readonly string[],
+  weights?: readonly number[],
+  scale?: Record<string, number>,
+) {
   const votes = (option: string) =>
     sum(
       votersOf(ratings)
         .filter((voter) => favoriteOf(ratings, voter, pair) === option)
-        .map((voter) => weights?.[voter] ?? 1),
+        .map((voter) => (weights?.[voter] ?? 1) * (scale?.[option] ?? 1)),
     )
   return pair.map(votes)
 }
 
-/** The runoff's winner: the finalist with more votes. Neither example ties. */
-function runoffWinner(ratings: Ratings, pair: readonly string[], weights?: readonly number[]) {
-  const [a, b] = runoffVotes(ratings, pair, weights)
+/**
+ * The runoff's winner: the finalist with more votes, each vote counted at its
+ * ballot's weight and, under a budget, its finalist's cost scale. Neither
+ * example ties.
+ */
+function runoffWinner(
+  ratings: Ratings,
+  pair: readonly string[],
+  weights?: readonly number[],
+  scale?: Record<string, number>,
+) {
+  const [a, b] = runoffVotes(ratings, pair, weights, scale)
   return a >= b ? pair[0] : pair[1]
 }
 
@@ -1622,12 +1700,14 @@ function rankingOf(ratings: Ratings) {
   return placed
 }
 
-/** One spot of a multiple-winner count. */
+/** One spot of a multiple-winner count, or one option funded from a proportional budget. */
 interface Spot {
-  /** The stars each voter gave the winners of the spots before this one. */
-  given: number[]
-  /** Each voter's strength going in, from `given` (`weightOf`). */
+  /** Each voter's strength going in, from what they gave the winners before this one. */
   weights: number[]
+  /** The same strengths as the page writes them: exact fractions. */
+  fractions: string[]
+  /** Under a budget, what each option's runoff votes are multiplied by: average cost over its cost. */
+  scale?: Record<string, number>
   /** Who won the spots before this one. */
   chosen: string[]
   finalists: readonly string[]
@@ -1666,10 +1746,108 @@ function spotsOf(ratings: Ratings): Spot[] {
       .sort((x, y) => total(y) - total(x))
       .slice(0, 2)
     const winner = finalists.length === 1 ? finalists[0] : runoffWinner(ratings, finalists, weights)
-    result.push({ given, weights, chosen, finalists, winner })
+    result.push({ weights, fractions: given.map(fractionOf), chosen, finalists, winner })
     given = given.map((stars, voter) => stars + ratings[winner][voter])
   }
   return result
+}
+
+/**
+ * The example budget for *Proportional budget*: each restaurant's platter
+ * for a party. Chosen so the order matters: pizza is funded first, and the
+ * last $30 then goes to sushi rather than tacos, where funding the options
+ * by popularity alone would buy pizza and tacos.
+ */
+const COSTS: Record<string, number> = { pizza: 20, tacos: 30, sushi: 25 }
+const BUDGET = 50
+
+/** The average cost of every option on the poll, which a cost is measured against. */
+const averageCost = (costs: Record<string, number>) =>
+  sum(Object.values(costs)) / Object.keys(costs).length
+
+/**
+ * Every star scaled by the average cost over the option's cost, so an option
+ * costing half the average counts each star twice. The scoring round is run
+ * on these; the runoff takes each voter's preference from their own stars and
+ * scales the vote by the same factor (`Spot.scale`).
+ */
+function costAdjusted(ratings: Ratings, costs: Record<string, number>): Ratings {
+  const average = averageCost(costs)
+  return Object.fromEntries(
+    optionsOf(ratings).map((o) => [o, ratings[o].map((stars) => (stars * average) / costs[o])]),
+  )
+}
+
+/** A strength as an exact fraction where a small one is exact, else to two decimal places. */
+function ratioOf(x: number) {
+  if (x === 1) return '1/1'
+  for (let bottom = 2; bottom <= 1000; bottom++) {
+    const top = Math.round(x * bottom)
+    if (Math.abs(top / bottom - x) < 1e-9) return `${top}/${bottom}`
+  }
+  return String(Math.round(x * 100) / 100)
+}
+
+/**
+ * Proportional budget, as the page describes it: cost-adjusted STAR once per
+ * option funded, among the options that still fit in what is left, with each
+ * ballot's strength 1 ÷ (1 + Σ stars ÷ 5 × cost ÷ average cost) over what it
+ * funded so far (`BudgetFormula`). Stops when nothing left fits.
+ */
+function budgetOf(ratings: Ratings, costs: Record<string, number>, budget: number) {
+  const adjusted = costAdjusted(ratings, costs)
+  const average = averageCost(costs)
+  const scale = Object.fromEntries(optionsOf(ratings).map((o) => [o, average / costs[o]]))
+  let lost = votersOf(ratings).map(() => 0)
+  let left = budget
+  const spots: Spot[] = []
+  for (;;) {
+    const weights = lost.map((l) => 1 / (1 + l))
+    const chosen = spots.map((spot) => spot.winner)
+    const total = (option: string) => weightedTotal(adjusted, option, weights)
+    const finalists = optionsOf(ratings)
+      .filter((option) => !chosen.includes(option) && costs[option] <= left)
+      .sort((x, y) => total(y) - total(x))
+      .slice(0, 2)
+    if (finalists.length === 0) break
+    const winner =
+      finalists.length === 1 ? finalists[0] : runoffWinner(ratings, finalists, weights, scale)
+    spots.push({ weights, fractions: weights.map(ratioOf), chosen, finalists, winner, scale })
+    left -= costs[winner]
+    lost = lost.map(
+      (l, voter) => l + (ratings[winner][voter] / MAX_STARS) * (costs[winner] / average),
+    )
+  }
+  return { adjusted, spots, left }
+}
+
+/** What funding the options in STAR's ranking order, while they fit, would buy instead. */
+function byPopularity(ratings: Ratings, costs: Record<string, number>, budget: number) {
+  const bought: string[] = []
+  let left = budget
+  for (const option of rankingOf(ratings)) {
+    if (costs[option] <= left) {
+      bought.push(option)
+      left -= costs[option]
+    }
+  }
+  return bought
+}
+
+/** Each option's cost, in a row like `OptionKey`'s. */
+function Costs({ costs }: { costs: Record<string, number> }) {
+  return (
+    <Group component="ul" justify="center" gap="lg" className={classes.places}>
+      {Object.keys(costs).map((option) => (
+        <Text component="li" key={option} fw={700}>
+          <span aria-hidden className={classes.emoji}>
+            {ICONS[option]}
+          </span>{' '}
+          {labelOf(option)} ${costs[option]}
+        </Text>
+      ))}
+    </Group>
+  )
 }
 
 const weightedTotal = (ratings: Ratings, option: string, weights: readonly number[]) =>
@@ -1678,18 +1856,28 @@ const weightedTotal = (ratings: Ratings, option: string, weights: readonly numbe
 /** A number of stars or votes as the page writes it: whole, or to one decimal place. */
 const shown = (n: number) => Math.round(n * 10) / 10
 
-/** A ballot's score at its strength: a keycap where it comes out whole, a figure otherwise. */
-function weighted(score: number, weight: number): Cell {
+/**
+ * A ballot's score at its strength: a keycap where it comes out whole, a
+ * figure otherwise, or a figure always where `plain` (a table that is almost
+ * all figures, where a few keycaps among them read as a different kind of cell).
+ */
+function weighted(score: number, weight: number, plain = false): Cell {
   const worth = score * weight
-  if (Number.isInteger(worth)) return keycap(worth)
+  if (Number.isInteger(worth) && !plain) return keycap(worth)
   return { emoji: shown(worth), said: String(shown(worth)), figure: true }
 }
 
-/** A spot's scoring round: every ballot at its strength, earlier winners set aside. */
+/**
+ * A spot's scoring round: every ballot at its strength, earlier winners set
+ * aside. Under a budget every cell is scaled by cost, so nearly all are
+ * fractional and all are written as figures.
+ */
 function spotScoreRows(ratings: Ratings, spot: Spot): Row[] {
   const rows = optionsOf(ratings).map((name): Row => ({
     name,
-    cells: ratings[name].map((score, voter) => weighted(score, spot.weights[voter])),
+    cells: ratings[name].map((score, voter) =>
+      weighted(score, spot.weights[voter], Boolean(spot.scale)),
+    ),
     total: shown(weightedTotal(ratings, name, spot.weights)),
     out: !spot.finalists.includes(name),
   }))
@@ -1703,12 +1891,18 @@ function spotScoreRows(ratings: Ratings, spot: Spot): Row[] {
  * the columns stay in line.
  */
 function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
-  const votes = runoffVotes(ratings, spot.finalists, spot.weights)
+  const votes = runoffVotes(ratings, spot.finalists, spot.weights, spot.scale)
   const rows = optionsOf(ratings).map((name): Row => {
     const at = spot.finalists.indexOf(name)
     if (at < 0) return { name, out: true, cells: votersOf(ratings).map(() => blank('eliminated')) }
     const cells = votersOf(ratings).map((voter): Cell => {
       if (favoriteOf(ratings, voter, spot.finalists) !== name) return blank('no vote')
+      // Under a budget a vote can be worth more than one, so it is written as
+      // the figure it counts for rather than drawn as part of a square.
+      if (spot.scale) {
+        const worth = spot.weights[voter] * spot.scale[name]
+        return { emoji: decimal(worth), said: `${decimal(worth)} of a vote`, figure: true }
+      }
       if (spot.weights[voter] === 1) return VOTE
       const unspent = `${(1 - spot.weights[voter]) * 100}%`
       return {
@@ -1717,7 +1911,7 @@ function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
             {VOTE.emoji}
           </span>
         ),
-        said: `${fractionOf(spot.given[voter])} of a vote`,
+        said: `${spot.fractions[voter]} of a vote`,
       }
     })
     return { name, cells, total: shown(votes[at]) }
@@ -1771,9 +1965,8 @@ const bestSingleOption = (ratings: Ratings) =>
 /** A number as the satisfaction working writes it: to two decimal places at most. */
 const decimal = (n: number) => Math.round(n * 100) / 100
 
-/** A worked figure in a table: a keycap where it is whole, two decimals otherwise. */
+/** A worked figure in a table, to two decimal places at most, written as a number even where whole. */
 function figure(n: number): Cell {
-  if (Number.isInteger(decimal(n))) return keycap(decimal(n))
   return { emoji: decimal(n), said: String(decimal(n)), figure: true }
 }
 

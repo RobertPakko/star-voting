@@ -355,11 +355,11 @@ test.describe('all choices', () => {
 
   test('marks the choices not built yet, folded', async ({ page }) => {
     await page.goto('#/choices')
-    await expect(page.getByText('Under construction')).toHaveCount(6)
-    await expect(page.getByRole('button', { name: /^Proportional budget/ })).toContainText(
+    await expect(page.getByText('Under construction')).toHaveCount(5)
+    await expect(page.getByRole('button', { name: /^Fractional budget/ })).toContainText(
       'Under construction',
     )
-    await expect(page.getByRole('button', { name: /^Fractional winners/ })).not.toContainText(
+    await expect(page.getByRole('button', { name: /^Proportional budget/ })).not.toContainText(
       'Under construction',
     )
   })

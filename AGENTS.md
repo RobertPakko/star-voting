@@ -1598,7 +1598,7 @@ is the page.
   folded except the one `?section=` names, which the result's modals use;
   that one opens already expanded. A choice not built yet says so in a
   *Coming soon* banner and works no example, and one a voter can game by
-  scoring dishonestly carries a warning that says so. From *Proportional
+  scoring dishonestly carries a warning that says so. From *Fractional
   budget* down, the heading also carries a grey *Under construction* badge,
   for now. Each built choice ends on **See an example**, which opens the
   finished sample poll on it (`exampleFor`): the calendar question for the
