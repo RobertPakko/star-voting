@@ -254,19 +254,6 @@ export function WhatIsStar() {
           </Stack>
         </RoundCard>
       </Box>
-
-      <Text>
-        That&rsquo;s how STAR voting works.{' '}
-        <Anchor component={Link} to="/why-star" inherit>
-          Why STAR?
-        </Anchor>{' '}
-        compares it with other ways of voting, and{' '}
-        <Anchor component={Link} to="/choices" inherit>
-          All choices
-        </Anchor>{' '}
-        covers the other answers the same ballots can give: a ranking of every option, several
-        winners, or a share for each option.
-      </Text>
     </Stack>
   )
 }
@@ -300,40 +287,28 @@ export function AllChoices() {
   }
   const finalists = finalistsOf(DINNER)
   const winner = runoffWinner(DINNER, finalists)
-  const loser = finalists.find((name) => name !== winner)
   const ranking = rankingOf(DINNER)
   const secondRunoff = finalistsOf(DINNER, ranking.slice(0, 1))
   const spots = spotsOf(DINNER)
   const reduced = votersOf(DINNER).filter((voter) => spots[1].weights[voter] < 1)
   const shares = sharesOf(DINNER)
-  const largest = optionsOf(DINNER).reduce((a, b) => (shares[b] > shares[a] ? b : a))
-  const leftOut = votersOf(DINNER).filter((voter) => DINNER[winner][voter] === 0)
-  // Every restaurant's fewest stars. All three are 0, which is the point the
-  // consensus section makes; the tacos' one 0 is the sixth friend's.
-  const allHated = optionsOf(DINNER).every((name) => Math.min(...DINNER[name]) === 0)
+
   return (
     <Stack maw={720} mx="auto" gap="md">
       <Title order={1}>All choices</Title>
       <Stack gap="sm">
         <Text>
-          <Anchor component={Link} to="/star" inherit>
-            STAR
-          </Anchor>{' '}
-          elects one winner, but the same ballots can answer other questions too. Each choice below
-          stands on its own, so open whichever you need. The ones already available are in the{' '}
-          <strong>More results</strong> menu beside the winner on a poll&rsquo;s results.
-        </Text>
-        <Text>
-          The examples use the same six friends as the What is STAR? page, choosing what to have for
-          dinner between:
+          The same set of ballots can answer a wide variety of interesting questions about a given
+          group. This page shows all of the choices supported by this app, when it makes sense to
+          use them, and how they work. We'll try to look at each one through the lens of our six
+          friends deciding between three options for dinner:
         </Text>
         <OptionKey ratings={DINNER} />
-        <Text>Here are their ballots, with each restaurant&rsquo;s stars added up:</Text>
+        <Text>Here's how they voted:</Text>
         <EmojiTable
           caption="How many stars each friend gave each restaurant"
           rows={ratingRows(DINNER, true)}
           rowLabel="Restaurant"
-          totalLabel="Score"
         />
       </Stack>
 
@@ -354,28 +329,28 @@ export function AllChoices() {
           id={CHOICES.bestOption}
           icon={TrophyIcon}
           color="yellow"
-          title="Best option / time"
+          title="Best option"
           algorithms={['STAR']}
         >
           <Text>
-            The one option the group likes best, or on a poll looking for a meeting slot, the one
-            time. It&rsquo;s plain STAR: everyone scores every option, the two highest scorers go to
-            a runoff, and the finalist more voters preferred wins.
+            Sometimes a group has many options and must pick one. <strong>Best option</strong> picks
+            one option using STAR, a very clever procedure that ameliorates many of the issues found
+            in other voting methods.
           </Text>
           <Text>
-            For our six friends, {labelOf(finalists[0])} and {finalists[1]} have the most stars, so
-            they go to the runoff, and {winner} wins it: more friends gave {winner} more stars than{' '}
-            {loser}.
-          </Text>
-          <Text>
+            It's special enough that it gets a couple of its own pages.{' '}
             <Anchor component={Link} to="/star" inherit>
               What is STAR?
             </Anchor>{' '}
-            walks through it one step at a time, and{' '}
+            walks through the procedure one step at a time, and{' '}
             <Anchor component={Link} to="/why-star" inherit>
               Why STAR?
             </Anchor>{' '}
-            compares it with other ways of voting.
+            explains why it's so powerful.
+          </Text>
+          <Text>
+            The same procedure can be used on time options just as easily. To facilitate that, this
+            app provides calendar tools when all options are times.
           </Text>
         </Choice>
 
@@ -383,47 +358,34 @@ export function AllChoices() {
           id={CHOICES.consensusOption}
           icon={HandshakeIcon}
           color="teal"
-          title="Consensus option / time"
+          title="Consensus option"
           algorithms={['Maximin', 'STAR']}
         >
           <NotStrategyProof easily />
           <Text>
-            Sometimes the best option is the one nobody minds: a meeting time everyone can make, or
-            a restaurant nobody hates. <strong>Consensus option</strong> picks the option whose
-            worst score is as good as possible:
+            Sometimes the best option is the one that nobody hates: a meeting time everyone can make
+            or a dinner option that no one is allergic to. <strong>Consensus option</strong> picks
+            the option whose worst score is as good as possible:
           </Text>
           <List type="ordered" spacing={4} withPadding>
-            <List.Item>Every voter rates every option as usual.</List.Item>
             <List.Item>
-              Each option is judged by the fewest stars any voter gave it, rather than by its total.
+              Each option gets a score equal to the fewest stars it was given by any one voter.
             </List.Item>
-            <List.Item>The option whose fewest stars is the most wins.</List.Item>
-            <List.Item>
-              If several options tie on that, STAR is run between just those options to choose
-              between them.
-            </List.Item>
+            <List.Item>The option with the highest score wins.</List.Item>
           </List>
+          <Text>TODO: Example here</Text>
           <Text>
-            A ballot that gives every option 0 stars is left out, since it says nothing about which
-            option is better. Kept in, it would give every option a lowest score of 0.
+            For our six friends, tacos is the consensus option since pizza and sushi were each given
+            0 stars by someone. This also shows why this system is easy to game. A voter can give
+            every option except their favorite 0 stars to force the group into a specific option.
+            Though hopefully no one would do that for a poll among friends.
           </Text>
           <Text>
-            On a poll looking for a time, this finds the time where the person least happy with it
-            is as happy as they can be, so a time somebody can&rsquo;t make at all only wins if
-            every time is like that for somebody.
+            A ballot that gives every option 0 stars is left out, since it says nothing and would
+            give every option a score of 0.
           </Text>
-          {allHated && (
-            <Text>
-              For our six friends, every restaurant was given 0 stars by somebody, so all three tie
-              on their fewest stars and STAR decides between them: it&rsquo;s {winner}, as with the
-              best option. Had the sixth friend given tacos even 1 star, tacos would have been the
-              only restaurant nobody hated, and it would have won.
-            </Text>
-          )}
           <Text>
-            Because a single ballot&rsquo;s lowest score decides, one voter giving an option 0 stars
-            rules it out, however much everyone else likes it. A voter who wants their favourite can
-            give every other option 0, which is why this choice is easy to game.
+            If several options tie, STAR is run between just those options to choose one of them.
           </Text>
         </Choice>
 
@@ -436,7 +398,7 @@ export function AllChoices() {
         >
           <Text>
             STAR picks one winner, but sometimes you need a plan B: the restaurant that won is fully
-            booked tonight, or the person you picked for the job turns it down. The{' '}
+            booked or the person you picked for the job turns it down.{' '}
             <strong>Option ranking</strong> puts every option in order by running STAR again without
             the winner. The winner steps aside, and the next two highest scorers go to a runoff for
             second place. Then second place steps aside, and so on down the list.
@@ -471,11 +433,11 @@ export function AllChoices() {
           algorithms={['Iterative STAR', 'Ballot reweighting']}
         >
           <Text>
-            Sometimes a group wants more than one winner, for instance choosing two dinners on a
-            weekend away or three films for a movie marathon. Taking the top of the option ranking
-            for this can result in every spot going to the biggest group.{' '}
-            <strong>Multiple winners</strong> gives a different ranking, one that shares top spots
-            so that different groups of voters each get something they like:
+            Sometimes a group wants more than one winner: choosing two dinners on a weekend away or
+            three films for a movie marathon. Taking the top of the option ranking for this can
+            result in every spot going to the biggest group. <strong>Multiple winners</strong> gives
+            a ranking that shares top spots so that different groups of voters each get something
+            they like:
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>Run STAR as usual to select a winner.</List.Item>
@@ -537,40 +499,83 @@ export function AllChoices() {
           algorithms={['Iterative STAR', 'Ballot reweighting']}
         >
           <ComingSoon name="Sequential polls" plural />
+          <Requirement icon={UsersThreeIcon}>
+            A previous poll must exist. Create a sequential poll in the poll management section of
+            an existing poll rather than from the poll creation page.
+          </Requirement>
           <Text>
-            Some choices come round again: where to go for dinner every week, which game to play at
-            each club night, or who hosts the next meeting. Running a fresh poll each time lets the
-            biggest group win every time. <strong>Sequential polls</strong> carry on from the poll
-            before instead, with every ballot reweighted by how much its voter liked the earlier
-            winners:
+            Sometimes choices are recurring: what to eat at a weekly dinner or who hosts the next
+            meeting. Always running a fresh poll lets the biggest group win every time.{' '}
+            <strong>Sequential polls</strong> take into account the results of previous polls, with
+            every ballot reweighted by how much its voter liked the previous winners.
+          </Text>
+          <Text>
+            This uses exactly the same procedure as <strong>multiple winners</strong>, but spread
+            across several polls. Over time wins are shared out among different groups.
+          </Text>
+          <Text>TODO: Example here</Text>
+          <Text>
+            Any voter joining late gets the average weight of the previous ballots so that joining
+            late neither helps nor hurts.
+          </Text>
+          <Text>
+            Ballots are also re-normalized for display purposes. This doesn't change the result, but
+            makes it easier to read if the weights have become very small over time.
+          </Text>
+        </Choice>
+
+        <Choice
+          id={CHOICES.fractionalWinners}
+          icon={ChartPieSliceIcon}
+          color="grape"
+          title="Fractional winners"
+          algorithms={['Nash']}
+        >
+          <NotStrategyProof easily />
+          <Text>
+            Sometimes options can be taken partially rather than entirely: a playlist shared between
+            genres or a permanent split between different dinner options.{' '}
+            <strong>Fractional winners</strong> computes the fairest split of options when it's
+            possible to take a little of each.
           </Text>
           <List type="ordered" spacing={4} withPadding>
-            <List.Item>Run the first poll as usual to select a winner.</List.Item>
             <List.Item>
-              Make the next poll from it. The options and the voters can change: a new restaurant
-              can be added, and a friend who couldn&rsquo;t make it last time can join in.
+              Consider a voter&rsquo;s satisfaction with each option's result to be the fraction it
+              won multiplied by what they rated that option.
             </List.Item>
             <List.Item>
-              Each returning voter&rsquo;s ballot is reweighted based on how many stars they gave
-              the earlier winners, as in Multiple winners.
+              Consider a voter&rsquo;s total satisfaction to be the sum of their satisfaction for
+              each option's result.
             </List.Item>
-            <List.Item>Run STAR on the new poll with ballots at their new strength.</List.Item>
+            <List.Item>
+              The split is then chosen such that every voter&rsquo;s total satisfaction, multiplied
+              together, is as large as possible.
+            </List.Item>
           </List>
           <Text>
-            This is like Multiple winners, but spread across many polls rather than counted in one.
-            Each poll carries on the weights from every poll before it, so over time the wins are
-            shared out in proportion to the groups that want them.
+            Let&rsquo;s show what happens with our six friends if they now meet for dinner every
+            week and want to decide how often to go to each place. This would be the result:
+          </Text>
+          <Shares shares={shares} />
+          <Then>How satisfied each friend is</Then>
+          <EmojiTable
+            caption={`Each friend's average stars, going to ${winner} every week or sharing the weeks out`}
+            rows={satisfactionRows(DINNER, winner, shares)}
+            rowLabel="Plan"
+            totalLabel="Product"
+          />
+          <Text>
+            Notice how {winner} has the smallest share even though it would win a STAR election.
+            This is because perpetually alternating between two groups' favorite options can lead to
+            greater satisfaction than picking one option as a compromise.
           </Text>
           <Text>
-            A voter who wasn&rsquo;t in the earlier polls has no stars to reweight by, so their
-            ballot gets the average weight of everyone who was. That way joining late neither helps
-            nor hurts.
+            This app provides a way to randomly select an option once you have your fractional
+            winners. This allows you to just pick an option randomly when you need to make a
+            decision rather than having everyone fill out a poll each time. Across many decisions
+            the set of randomized results approaches the optimal split.
           </Text>
-          <Text>
-            The weights are also scaled up together so that the average ballot counts as one again.
-            This is only to make the scores easier to read as stars: scaling every ballot by the
-            same amount doesn&rsquo;t change who wins.
-          </Text>
+          <NashFormula />
         </Choice>
 
         <Choice
@@ -583,89 +588,81 @@ export function AllChoices() {
           <ComingSoon name="Proportional budget" />
           <NeedsCost />
           <Text>
-            Sometimes the choice is which options to fund, with only so much to spend: projects for
-            a community fund, activities for a trip with a fixed budget, or talks for a day with
-            only so many hours. Funding the most popular options until the money runs out lets the
+            Sometimes options can have differing costs: activities for a trip with a fixed budget or
+            talks at a one-day conference. Funding the most popular options in order lets the
             biggest group spend the whole budget. <strong>Proportional budget</strong> shares the
-            money out the way Multiple winners shares out spots:
+            budget so that different groups of voters each get something they like:
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
-              Every option is given a cost: what it takes out of the budget. A project might cost
-              $3,000 of a $10,000 fund, or a talk take one hour of a six-hour day.
+              Run STAR to select a winner, with scores reweighted to adjust for cost.
             </List.Item>
             <List.Item>
-              Run STAR on the options that still fit in what is left of the budget, and fund the
-              winner.
+              All ballots are reweighted based on how many stars they gave the funded options and
+              the cost of those options.
             </List.Item>
             <List.Item>
-              All ballots are reweighted based on how many stars they gave the funded options, with
-              each counted in proportion to its cost: an option costing twice as much as the average
-              counts twice as much.
+              Run cost-adjusted STAR again on the options left, with ballots at their new strength,
+              to select the next winner.
             </List.Item>
             <List.Item>Repeat until nothing left fits in the budget.</List.Item>
           </List>
+          <Text>TODO: Example</Text>
           <Text>
-            Counting by cost means a group that gets one expensive option funded has spent as much
-            of its say as a group that gets several cheap ones. An option is either funded whole or
-            left out, so some of the budget can be left unspent when nothing else fits.
+            Including cost in the reweighting step means a group that gets one expensive option
+            funded has spent as much of its influence as a group that gets several cheap ones.
+          </Text>
+          <Text>
+            Each option is either fully funded or left out, so some of the budget can be left
+            unspent.
+          </Text>
+          <Text>
+            Voters aren't shown the cost of each option, they are expected to provide a rating
+            without considering the cost since the procedure automatically accounts for the cost of
+            each option.
           </Text>
           <BudgetFormula />
         </Choice>
 
         <Choice
-          id={CHOICES.fractionalWinners}
-          icon={ChartPieSliceIcon}
-          color="grape"
-          title="Fractional winners"
-          algorithms={['Nash']}
+          id={CHOICES.fractionalBudget}
+          icon={PiggyBankIcon}
+          color="lime"
+          title="Fractional budget"
+          algorithms={['Nash', 'Cost adjustment']}
         >
-          <NotStrategyProof easily />
+          <ComingSoon name="Fractional budget" />
+          <NeedsCost />
+          <NotStrategyProof />
           <Text>
-            Sometimes the choice can be split rather than made: a year of club meetings shared
-            between venues, an afternoon shared between games, or a playlist shared between genres.{' '}
-            <strong>Fractional winners</strong> gives every option a share instead of a place,
-            chosen to make the group as a whole as satisfied as it can be:
+            Sometimes a budget can be split between options in any amounts, but each option only
+            needs so much: donations shared between charities, hours of help shared between
+            projects, or a grant shared between teams. <strong>Fractional budget</strong> is
+            Fractional winners with a cost on every option:
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
-              A voter&rsquo;s satisfaction with a set of shares is the stars they would get on
-              average. If the friends went for pizza half the time and sushi the other half, the
-              second friend, who gave pizza 5 stars and sushi 1, would average 3 stars.
+              Every option is given a cost: the most it can use. A charity might be able to use
+              $2,000 of a $10,000 fund.
             </List.Item>
             <List.Item>
-              The shares chosen are the ones that make every voter&rsquo;s satisfaction, multiplied
-              together, as large as possible. This product is called the Nash welfare.
+              An option funded part of the way gives its voters that part of their stars, so an
+              option funded halfway counts for half the stars each voter gave it. No option is given
+              more than its cost.
+            </List.Item>
+            <List.Item>
+              A voter&rsquo;s satisfaction is the stars they get from every option, counted this
+              way, added up.
+            </List.Item>
+            <List.Item>
+              The budget is split in the way that makes every voter&rsquo;s satisfaction, multiplied
+              together, as large as possible.
             </List.Item>
           </List>
           <Text>
-            Multiplying rather than adding means that shares leaving anybody with nothing count for
-            nothing, however happy they make everyone else.
+            Unlike Proportional budget, which funds an option whole or not at all, this is for
+            options that are still worth something funded part of the way.
           </Text>
-          <Text>
-            Let&rsquo;s show what happens with our six friends if they now meet for dinner every
-            week and want to decide how often to go to each place. These are the shares with the
-            largest Nash welfare:
-          </Text>
-          <Shares shares={shares} />
-          <Then>How satisfied each friend is</Then>
-          <EmojiTable
-            caption={`Each friend's average stars, going to ${winner} every week or sharing the weeks out`}
-            rows={satisfactionRows(DINNER, winner, shares)}
-            rowLabel="Plan"
-            totalLabel="Product"
-          />
-          <Text size="xs" c="dimmed" ta="center">
-            Each number is the stars a friend gets on average, and the last column multiplies them
-            together.
-          </Text>
-          <Text>
-            Going to {winner} every week, the STAR winner, leaves {leftOut.length} of the friends
-            with 0 stars every week. Sharing the weeks out, everyone gets a meal they like at least
-            some of the time. {labelOf(largest)} gets the largest share even though it lost the
-            runoff, because all but one of the friends like it at least a little.
-          </Text>
-          <NashFormula />
         </Choice>
 
         <Choice
@@ -746,47 +743,6 @@ export function AllChoices() {
           <Text>
             Multiplying rather than adding means nobody is put in a group of people they gave 0
             stars to just so that everyone else can be with their favourites.
-          </Text>
-        </Choice>
-
-        <Choice
-          id={CHOICES.fractionalBudget}
-          icon={PiggyBankIcon}
-          color="lime"
-          title="Fractional budget"
-          algorithms={['Nash', 'Cost adjustment']}
-        >
-          <ComingSoon name="Fractional budget" />
-          <NeedsCost />
-          <NotStrategyProof />
-          <Text>
-            Sometimes a budget can be split between options in any amounts, but each option only
-            needs so much: donations shared between charities, hours of help shared between
-            projects, or a grant shared between teams. <strong>Fractional budget</strong> is
-            Fractional winners with a cost on every option:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Every option is given a cost: the most it can use. A charity might be able to use
-              $2,000 of a $10,000 fund.
-            </List.Item>
-            <List.Item>
-              An option funded part of the way gives its voters that part of their stars, so an
-              option funded halfway counts for half the stars each voter gave it. No option is given
-              more than its cost.
-            </List.Item>
-            <List.Item>
-              A voter&rsquo;s satisfaction is the stars they get from every option, counted this
-              way, added up.
-            </List.Item>
-            <List.Item>
-              The budget is split in the way that makes every voter&rsquo;s satisfaction, multiplied
-              together, as large as possible.
-            </List.Item>
-          </List>
-          <Text>
-            Unlike Proportional budget, which funds an option whole or not at all, this is for
-            options that are still worth something funded part of the way.
           </Text>
         </Choice>
 
@@ -968,7 +924,7 @@ function NotStrategyProof({ easily }: { easily?: boolean }) {
     <Alert variant="light" color="orange" icon={<WarningIcon size={20} aria-hidden />}>
       <Text size="sm">
         Warning: unlike STAR, this choice is not resistant to strategic voting. Voters can
-        {easily ? ' easily' : ''} game this system by responding dishonestly.
+        {easily ? ' easily' : ''} game the result by responding dishonestly.
       </Text>
     </Alert>
   )
@@ -1057,19 +1013,22 @@ function BudgetFormula() {
             1
           </span>
           <span className={classes.denominator} aria-hidden="true">
-            1 + Σ (s<sub>j</sub>/5) × (cost<sub>j</sub>/c)
+            1 + Σ ((N<sub>i</sub>/5) (C<sub>i</sub>/A))
           </span>
         </span>
       </Text>
       <Text size="sm">
-        where the sum is over the options funded so far, s<sub>j</sub> is the stars the ballot gave
-        option j, cost<sub>j</sub> is what option j costs, and c is the average cost of every option
-        on the poll.
+        The influence lost for previous winners is N<sub>i</sub>/5 times C<sub>i</sub>/A where N
+        <sub>i</sub> is the stars given to the winner of round i, C<sub>i</sub> is the cost of the
+        winner of round i, and A is the average cost of every option on the poll. Summing these
+        values over all previous winners gives the total influence lost, which we add to the
+        denominator.
       </Text>
       <Text size="sm">
-        An option of average cost counts exactly as a winner does in Multiple winners: giving it 5
-        stars halves your vote in future rounds. Giving 5 stars to an option that costs half the
-        average counts half as much, and to one that costs twice the average, twice as much.
+        Note that if every option costs the same, this expression collapses to the exact same
+        expression used in <strong>multiple winners</strong>. Giving 5 stars to an option that costs
+        half the average loses half as much influence. Giving 5 stars to an option that costs twice
+        the average loses twice as much influence.
       </Text>
     </Folded>
   )
@@ -1280,22 +1239,14 @@ export function WhyStar() {
           <Ext href="https://en.wikipedia.org/wiki/Schulze_method">the Schulze method</Ext>, but one
           is infeasibly computationally expensive and the other is very difficult to understand.
           STAR has the advantage of being computationally simple, easy to grasp conceptually, and
-          extensible to more complex scenarios such as{' '}
-          <Anchor component={Link} to={`/choices?section=${CHOICES.multipleWinners}`} inherit>
-            multi-winner elections
-          </Anchor>
-          .
+          extensible to more complex scenarios. Learn more about what STAR can do beyond choosing
+          one option by checking out all the types of{' '}
+          <Anchor component={Link} to="/choices" inherit>
+            choices
+          </Anchor>{' '}
+          supported by this app.
         </Text>
       </RoundCard>
-
-      <Text>
-        To see what else STAR can do with the same ballots, like ranking every option, choosing
-        several winners, or giving each option a share, read{' '}
-        <Anchor component={Link} to="/choices" inherit>
-          All choices
-        </Anchor>
-        .
-      </Text>
     </Stack>
   )
 }
@@ -1354,13 +1305,13 @@ function WeightFormula() {
  */
 function NashFormula() {
   return (
-    <Folded label="The Nash welfare formula">
+    <Folded label="The satisfaction formula">
       <Text size="sm">
-        If option j gets share p<sub>j</sub> and voter i gave it s<sub>ij</sub> stars, voter
-        i&rsquo;s satisfaction is
+        If option i gets share P<sub>i</sub> and voter j gave it N<sub>ij</sub> stars, voter
+        j&rsquo;s satisfaction is
       </Text>
       <Text size="sm" fw={600} ta="center">
-        u<sub>i</sub> = p<sub>1</sub>s<sub>i1</sub> + p<sub>2</sub>s<sub>i2</sub> + …
+        u<sub>j</sub> = P<sub>1</sub>N<sub>1j</sub> + P<sub>2</sub>N<sub>2j</sub> + …
       </Text>
       <Text size="sm">and the shares chosen are the ones that make the largest</Text>
       <Text size="sm" fw={600} ta="center">
@@ -1373,9 +1324,13 @@ function NashFormula() {
         Multiplying makes the shares proportional. If the voters split into groups that each give
         their own favorite 5 stars and everything else 0, every option&rsquo;s share is exactly the
         fraction of voters in its group. A group that also likes other options gives up some of its
-        share to them, since it is satisfied by those too. The rule is named after John Nash, whose{' '}
-        <Ext href="https://en.wikipedia.org/wiki/Cooperative_bargaining">bargaining solution</Ext>{' '}
-        maximizes the same product.
+        share to them, since it is satisfied by those too. This is the{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Nash_welfare_rule">Nash welfare</Ext> solution to
+        the{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Cooperative_bargaining">
+          cooperative bargaining
+        </Ext>{' '}
+        problem.
       </Text>
     </Folded>
   )

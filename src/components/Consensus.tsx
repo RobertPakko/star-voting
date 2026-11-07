@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ActionIcon, Anchor, Group, Modal, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Group, Modal, Stack, Text, Tooltip } from '@mantine/core'
 import { XIcon } from '@phosphor-icons/react'
-import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { formatWindow, relabelScores } from '../lib/schedule'
@@ -146,17 +145,9 @@ export function ConsensusBody({
 
   return (
     <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        For a choice everyone has to live with, like a meeting time. The winner is the option whose
-        lowest score is highest, so whoever likes it least still likes it as much as they can.{' '}
-        <Anchor component={Link} to="/choices?section=consensus-option" inherit>
-          How it works
-        </Anchor>
-      </Text>
-
       {!sample && (
         <Text size="sm" c="dimmed">
-          If an option is not available, remove it and the consensus is worked out again without it.
+          If an option is not available then remove the option to see the recalculated result.
         </Text>
       )}
 

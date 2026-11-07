@@ -71,14 +71,14 @@ export function Home() {
           Better group decisions
         </Title>
         <Text size="xl" c="dimmed">
-          using STAR voting
+          using STAR and other tools
         </Text>
       </Stack>
 
       <StarLoop />
 
       <Text ta="center">
-        ChoiceLab is a free app to help with group decisions and advocate for STAR voting.
+        ChoiceLab is a free app featuring a wide catalog of decision-making tools.
       </Text>
 
       <SimpleGrid cols={2} spacing="sm" verticalSpacing="sm">
