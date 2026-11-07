@@ -164,3 +164,12 @@
 .denominator {
   padding-top: 2px;
 }
+
+/* The cell a row turns on, on /choices (an option's fewest stars): circled,
+   since the keycap's own colours cannot be changed. */
+.table td.marked .emoji {
+  display: inline-block;
+  border-radius: 50%;
+  outline: 2px solid var(--mantine-color-orange-filled);
+  outline-offset: -1px;
+}

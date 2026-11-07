@@ -295,7 +295,18 @@ export function AllChoices() {
   const secondRunoff = finalistsOf(DINNER, ranking.slice(0, 1))
   const spots = spotsOf(DINNER)
   const reduced = votersOf(DINNER).filter((voter) => spots[1].weights[voter] < 1)
+  const consensus = floorRows(DINNER).find((row) => row.won)!.name
+  const weeks = weeksOf([DINNER, DINNER, DINNER, WITH_LATECOMER])
+  const latecomer = votersOf(DINNER).length
+  const repeat = weeks.find((week, i) =>
+    weeks.some((other, j) => j < i && other.winner === week.winner),
+  )?.winner
   const shares = sharesOf(DINNER)
+  // The working is shown with the whole percentages the page prints, so a
+  // reader can redo it by hand from what is on screen.
+  const percent = percentagesOf(shares)
+  const compromise = bestSingleOption(DINNER)
+  const sharedOut = optionsOf(DINNER).find((o) => o !== winner && o !== compromise)!
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -379,12 +390,25 @@ export function AllChoices() {
             </List.Item>
             <List.Item>The option with the highest score wins.</List.Item>
           </List>
-          <Text>TODO: Example here</Text>
           <Text>
-            For our six friends, tacos is the consensus option since pizza and sushi were each given
-            0 stars by someone. This also shows why this system is easy to game. A voter can give
-            every option except their favorite 0 stars to force the group into a specific option.
-            Though hopefully no one would do that for a poll among friends.
+            Here are our six friends&rsquo; ballots again, with each option's lowest score(s)
+            circled:
+          </Text>
+          <EmojiTable
+            caption="Each restaurant's fewest stars from any one friend"
+            rows={floorRows(DINNER)}
+            rowLabel="Restaurant"
+            totalLabel="Lowest"
+          />
+          <Text>
+            For our six friends, {consensus} is the consensus option since everyone gave it at least{' '}
+            {stars(Math.min(...DINNER[consensus]))}, while{' '}
+            {optionsOf(DINNER)
+              .filter((option) => option !== consensus)
+              .join(' and ')}{' '}
+            were each given 0 stars by someone. This also shows why this system is easy to game. A
+            voter can give every option except their favorite 0 stars to force the group into a
+            specific option. Though hopefully no one would do that for a poll among friends.
           </Text>
           <Text>
             A ballot that gives every option 0 stars is left out, since it says nothing and would
@@ -521,10 +545,37 @@ export function AllChoices() {
             This uses exactly the same procedure as <strong>multiple winners</strong>, but spread
             across several polls. Over time wins are shared out among different groups.
           </Text>
-          <Text>TODO: Example here</Text>
           <Text>
-            Any voter joining late gets the average weight of the previous ballots so that joining
-            late neither helps nor hurts.
+            Let&rsquo;s say our six friends now have dinner every week and run a poll each time,
+            voting the same way every week. Without reweighting, {winner} would win every single
+            week. With sequential polls, the first four weeks go like this:
+          </Text>
+          <Weeks weeks={weeks} />
+          <Then>How much each friend&rsquo;s ballot counted each week</Then>
+          <EmojiTable
+            caption="Each friend's ballot strength, week by week, beside the dinner that week chose"
+            rows={weekRows(weeks)}
+            rowLabel="Week"
+          />
+          <Text size="xs" c="dimmed" ta="center">
+            Each row is a week. Every ballot starts at full strength and its strength is reduced
+            each time a dinner it liked wins.
+          </Text>
+          <Text>
+            In week {weeks.length}, a {ORDINALS[latecomer]} friend joins, giving{' '}
+            {optionsOf(WITH_LATECOMER)
+              .map((option) => `${option} ${stars(WITH_LATECOMER[option][latecomer])}`)
+              .join(', ')
+              .replace(/, ([^,]*)$/, ' and $1')}
+            . Any voter joining late gets the average weight of the ballots already there, so
+            joining late neither helps nor hurts
+          </Text>
+          <Text>
+            Over the four weeks, every restaurant gets a turn, where without reweighting {winner}{' '}
+            would have won them all. Notice too that {repeat} wins twice. Unlike{' '}
+            <strong>multiple winners</strong>, where a winner steps aside, every option is on every
+            poll, so an option can win again once the other groups have had a turn and their ballots
+            count for less too.
           </Text>
           <Text>
             Ballots are also re-normalized for display purposes. This doesn't change the result, but
@@ -563,20 +614,39 @@ export function AllChoices() {
           </List>
           <Text>
             Let&rsquo;s show what happens with our six friends if they now meet for dinner every
-            week and want to decide how often to go to each place. This would be the result:
+            week and want to decide how often to go to each place. Here are their ballots again,
+            with each restaurant&rsquo;s share of the weeks in the last column:
           </Text>
-          <Shares shares={shares} />
-          <Then>How satisfied each friend is</Then>
           <EmojiTable
-            caption={`Each friend's average stars, going to ${winner} every week or sharing the weeks out`}
-            rows={satisfactionRows(DINNER, winner, shares)}
-            rowLabel="Plan"
+            caption="How many stars each friend gave each restaurant, and each restaurant's share of the weeks"
+            rows={shareRows(DINNER, percent)}
+            rowLabel="Restaurant"
+            totalLabel="Share"
+          />
+          <Then>Each friend&rsquo;s satisfaction</Then>
+          <EmojiTable
+            caption="Each friend's stars times each restaurant's share, added up, and those sums multiplied together"
+            rows={satisfactionRows(DINNER, percent)}
+            rowLabel="Restaurant"
             totalLabel="Product"
           />
+          <Text size="xs" c="dimmed" ta="center">
+            332 is the highest possible product of the friends&rsquo; satisfaction scores, so this
+            is the fairest split of the options.
+          </Text>
+          <Text>
+            Multiplying the satisfactions together is what makes the split fair. Going to {winner}{' '}
+            or {sharedOut} every week leaves someone with 0 stars, which makes the whole product 0,
+            however happy everyone else is. Going to {compromise} every week is the best of the
+            single options, with a product of{' '}
+            {Math.round(productOf(DINNER, onlyOf(DINNER, compromise)))}, but the split does better
+            still: a little {winner} and {sharedOut} raises the satisfaction of the friends who love
+            them by more, proportionally, than it costs everyone else.
+          </Text>
           <Text>
             Notice how {winner} has the smallest share even though it would win a STAR election.
-            This is because perpetually alternating between two groups' favorite options can lead to
-            greater satisfaction than picking one option as a compromise.
+            This is because its fans also gave {compromise} plenty of stars, so weeks of{' '}
+            {compromise} keep them happy too, while the {sharedOut} fans liked {compromise} less.
           </Text>
           <Text>
             This app provides a way to randomly select an option once you have your fractional
@@ -1501,7 +1571,7 @@ const VOTERS = votersOf(RATINGS)
  * apart into two glyphs where a font lacks it, and widen the column.
  */
 const VOTER_FACES = ['👩', '👨', '🧑', '👵', '👴', '👧', '👦', '🧔', '👱']
-const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth']
+const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
 
 /** The lowest rating that counts as approval in the approval table. */
 const APPROVES_FROM = 4
@@ -1684,40 +1754,172 @@ function sharesOf(ratings: Ratings): Record<string, number> {
 const satisfactionOf = (ratings: Ratings, voter: number, shares: Record<string, number>) =>
   sum(optionsOf(ratings).map((option) => shares[option] * ratings[option][voter]))
 
-/**
- * Two plans for the fractional-winners card, one row each: the STAR winner
- * every time, and the Nash shares. Each cell is a voter's average stars, and
- * the total is their product, so the plan with the larger product is marked.
- */
-function satisfactionRows(ratings: Ratings, winner: string, shares: Record<string, number>): Row[] {
-  const plan = (name: string, heading: Row['heading'], of: Record<string, number>): Row => {
-    const each = votersOf(ratings).map((voter) => satisfactionOf(ratings, voter, of))
-    return {
-      name,
-      heading,
-      cells: each.map((n) => weighted(n, 1)),
-      total: Math.round(each.reduce((a, b) => a * b, 1)),
-    }
-  }
-  const only = Object.fromEntries(optionsOf(ratings).map((o) => [o, o === winner ? 1 : 0]))
-  return withWinner([
-    plan('only', { emoji: ICONS[winner], said: `${winner} every week` }, only),
-    plan('shares', { emoji: '🍽️', said: 'the shares' }, shares),
-  ])
+/** All of the weeks to one option. */
+const onlyOf = (ratings: Ratings, option: string) =>
+  Object.fromEntries(optionsOf(ratings).map((o) => [o, o === option ? 1 : 0]))
+
+/** The product of every voter's satisfaction under `shares`. */
+const productOf = (ratings: Ratings, shares: Record<string, number>) =>
+  votersOf(ratings).reduce((product, voter) => product * satisfactionOf(ratings, voter, shares), 1)
+
+/** The option whose every-week plan has the largest product: the best compromise. */
+const bestSingleOption = (ratings: Ratings) =>
+  optionsOf(ratings).sort(
+    (x, y) => productOf(ratings, onlyOf(ratings, y)) - productOf(ratings, onlyOf(ratings, x)),
+  )[0]
+
+/** A number as the satisfaction working writes it: to two decimal places at most. */
+const decimal = (n: number) => Math.round(n * 100) / 100
+
+/** A worked figure in a table: a keycap where it is whole, two decimals otherwise. */
+function figure(n: number): Cell {
+  if (Number.isInteger(decimal(n))) return keycap(decimal(n))
+  return { emoji: decimal(n), said: String(decimal(n)), figure: true }
 }
 
-/** Fractional winners' shares, largest first, as whole percentages. */
-function Shares({ shares }: { shares: Record<string, number> }) {
-  const percent = percentagesOf(shares)
-  const options = Object.keys(shares).sort((x, y) => shares[y] - shares[x])
+/**
+ * The fractional-winners result: the ratings as they were given, with each
+ * option's share, in the whole percentages the page prints, as its total.
+ */
+function shareRows(ratings: Ratings, percent: Record<string, number>): Row[] {
+  return ratingRows(ratings).map((row) => ({ ...row, total: `${percent[row.name]}%` }))
+}
+
+/**
+ * The fractional-winners working: each star times its option's share, then a
+ * row of each voter's satisfaction (the column above it added up), whose
+ * total alone is filled in: every satisfaction multiplied together. Worked
+ * from the printed percentages, so a reader can redo it by hand.
+ */
+function satisfactionRows(ratings: Ratings, percent: Record<string, number>): Row[] {
+  const fractions = Object.fromEntries(optionsOf(ratings).map((o) => [o, percent[o] / 100]))
+  const options = optionsOf(ratings).map((name) => ({
+    name,
+    cells: ratings[name].map((score) => figure(score * fractions[name])),
+  }))
+  return [
+    ...options,
+    {
+      name: 'satisfaction',
+      heading: { emoji: '➕', said: 'Satisfaction, the column added up' },
+      cells: votersOf(ratings).map((voter) => figure(satisfactionOf(ratings, voter, fractions))),
+      total: Math.round(productOf(ratings, fractions)),
+    },
+  ]
+}
+
+/**
+ * Consensus option's working: the ratings, with each option's lowest score
+ * marked and given as its total, the highest of those marked the winner.
+ * Neither example ties on a floor.
+ */
+function floorRows(ratings: Ratings): Row[] {
+  return withWinner(
+    optionsOf(ratings).map((name) => {
+      const floor = Math.min(...ratings[name])
+      return {
+        name,
+        cells: ratings[name].map((score) => ({
+          ...keycap(score),
+          marked: score === floor,
+          said: score === floor ? `${score}, the fewest` : String(score),
+        })),
+        total: floor,
+      }
+    }),
+  )
+}
+
+/**
+ * `DINNER` with a seventh friend, who joins the sequential polls' last week.
+ * They love tacos, which hands that week to tacos, so every restaurant gets a
+ * turn across the four weeks, and pizza, winning weeks 1 and 3, shows that an
+ * option can win again.
+ */
+const WITH_LATECOMER: Ratings = {
+  pizza: [...DINNER.pizza, 0],
+  tacos: [...DINNER.tacos, 5],
+  sushi: [...DINNER.sushi, 3],
+}
+
+/** One poll of a run of sequential polls. */
+interface Week {
+  /**
+   * Each voter's strength going in, as the page writes it: an exact fraction
+   * where it comes from the stars they gave earlier winners, two decimals
+   * where it is an average (a voter who joined late).
+   */
+  strengths: string[]
+  winner: string
+}
+
+/**
+ * Sequential polls: Multiple winners spread across polls, so every option is
+ * on every poll, an earlier winner included, and each ballot counts at the
+ * strength the winners before it leave it (`weightOf`). A poll may have more
+ * voters than the one before (the extra columns of `ratings`); each newcomer
+ * starts at the average strength of the voters already there, and is charged
+ * from then on as though they had given the stars that would leave them at it.
+ */
+function weeksOf(polls: Ratings[]): Week[] {
+  let given: number[] = []
+  return polls.map((ratings) => {
+    const average = given.length ? sum(given.map(weightOf)) / given.length : 1
+    const weights = votersOf(ratings).map((voter) =>
+      voter < given.length ? weightOf(given[voter]) : average,
+    )
+    const strengths = votersOf(ratings).map((voter) =>
+      weights[voter] === 1
+        ? '1/1'
+        : voter < given.length && Number.isInteger(given[voter])
+          ? fractionOf(given[voter])
+          : String(decimal(weights[voter])),
+    )
+    const total = (option: string) => weightedTotal(ratings, option, weights)
+    const finalists = optionsOf(ratings)
+      .sort((x, y) => total(y) - total(x))
+      .slice(0, 2)
+    const winner = runoffWinner(ratings, finalists, weights)
+    // A newcomer is charged the stars that would have left them at the
+    // average, from 1 ÷ (1 + given ÷ 5).
+    given = votersOf(ratings).map(
+      (voter) =>
+        (voter < given.length ? given[voter] : MAX_STARS / average - MAX_STARS) +
+        ratings[winner][voter],
+    )
+    return { strengths, winner }
+  })
+}
+
+/**
+ * One row per week: the week's winner as its heading, each ballot's strength
+ * in its cells, and a gap for a voter who had not joined yet.
+ */
+function weekRows(weeks: Week[]): Row[] {
+  const voters = Math.max(...weeks.map((week) => week.strengths.length))
+  return weeks.map((week, i) => ({
+    name: `week-${i + 1}`,
+    heading: { emoji: ICONS[week.winner], said: `Week ${i + 1}, won by ${week.winner}` },
+    cells: Array.from({ length: voters }, (_, voter): Cell => {
+      const strength = week.strengths[voter]
+      if (strength === undefined) return blank('not joined yet')
+      if (strength === '1/1') return keycap(1)
+      return { emoji: strength, said: strength, figure: true }
+    }),
+  }))
+}
+
+/** The winner of each sequential poll, in order, as `Places` draws a ranking. */
+function Weeks({ weeks }: { weeks: Week[] }) {
   return (
-    <Group component="ul" justify="center" gap="lg" className={classes.places}>
-      {options.map((option) => (
-        <Text component="li" key={option} fw={700}>
+    <Group component="ol" justify="center" gap="lg" className={classes.places}>
+      {weeks.map((week, i) => (
+        <Text component="li" key={i} fw={700}>
+          Week {i + 1}:{' '}
           <span aria-hidden className={classes.emoji}>
-            {ICONS[option]}
+            {ICONS[week.winner]}
           </span>{' '}
-          {labelOf(option)} {percent[option]}%
+          {labelOf(week.winner)}
         </Text>
       ))}
     </Group>
@@ -1755,6 +1957,8 @@ interface Cell {
   said: string
   /** A number rather than an emoji, drawn smaller and spaced. */
   figure?: boolean
+  /** Circled, as the cell the row turns on (an option's fewest stars). */
+  marked?: boolean
 }
 
 interface Row {
@@ -1762,7 +1966,8 @@ interface Row {
   /** What the row heading draws instead of the option's emoji, for a row that is not an option. */
   heading?: { emoji: string; said: string }
   cells: Cell[]
-  total?: number
+  /** A number, or a figure already written out (a share). Only a number can win. */
+  total?: number | string
   won?: boolean
   /** Eliminated, or not a finalist: drawn struck through, with a cross. */
   out?: boolean
@@ -1791,7 +1996,7 @@ const blank = (said: string): Cell => ({
 
 /** The highest total, marked as the winner only if nobody shares it. */
 function withWinner(rows: Row[]): Row[] {
-  const best = Math.max(...rows.map((r) => r.total ?? -1))
+  const best = Math.max(...rows.map((r) => (typeof r.total === 'number' ? r.total : -1)))
   const leaders = rows.filter((r) => r.total === best)
   return rows.map((r) => ({ ...r, won: leaders.length === 1 && r === leaders[0] }))
 }
@@ -1941,7 +2146,14 @@ function EmojiTable({
                 )}
               </th>
               {row.cells.map((cell, voter) => (
-                <td key={voter} className={cell.figure ? classes.figure : undefined}>
+                <td
+                  key={voter}
+                  className={
+                    [cell.figure && classes.figure, cell.marked && classes.marked]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                >
                   <span aria-hidden className={classes.emoji}>
                     {cell.emoji}
                   </span>
