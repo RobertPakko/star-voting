@@ -298,12 +298,7 @@ export function AllChoices() {
   const consensus = floorRows(DINNER).find((row) => row.won)!.name
   const weeks = weeksOf([DINNER, DINNER, DINNER, WITH_LATECOMER])
   const latecomer = votersOf(DINNER).length
-  const repeat = weeks.find((week, i) =>
-    weeks.some((other, j) => j < i && other.winner === week.winner),
-  )?.winner
   const shares = sharesOf(DINNER)
-  // The working is shown with the whole percentages the page prints, so a
-  // reader can redo it by hand from what is on screen.
   const percent = percentagesOf(shares)
   const budget = budgetOf(DINNER, COSTS, BUDGET)
   const budgetReduced = votersOf(DINNER).filter((voter) => budget.spots[1].weights[voter] < 1)
@@ -368,8 +363,8 @@ export function AllChoices() {
             explains why it's so powerful.
           </Text>
           <Text>
-            The same procedure can be used on time options just as easily. To facilitate that, this
-            app provides calendar tools when all options are times.
+            The app also has a <strong>best time</strong> option. It uses exactly the same procedure
+            but the options are presented on a calendar to make voting easier.
           </Text>
         </Choice>
 
@@ -419,6 +414,10 @@ export function AllChoices() {
           </Text>
           <Text>
             If several options tie, STAR is run between just those options to choose one of them.
+          </Text>
+          <Text>
+            The app also has a <strong>consensus time</strong> option. It uses exactly the same
+            procedure but the options are presented on a calendar to make voting easier.
           </Text>
         </Choice>
 
@@ -572,13 +571,6 @@ export function AllChoices() {
               .replace(/, ([^,]*)$/, ' and $1')}
             . Any voter joining late gets the average weight of the ballots already there, so
             joining late neither helps nor hurts
-          </Text>
-          <Text>
-            Over the four weeks, every restaurant gets a turn, where without reweighting {winner}{' '}
-            would have won them all. Notice too that {repeat} wins twice. Unlike{' '}
-            <strong>multiple winners</strong>, where a winner steps aside, every option is on every
-            poll, so an option can win again once the other groups have had a turn and their ballots
-            count for less too.
           </Text>
           <Text>
             Ballots are also re-normalized for display purposes. This doesn't change the result, but
