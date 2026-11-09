@@ -161,6 +161,16 @@ export function ScheduleBallots({
     [windows, chosen, byBallot, schedule],
   )
 
+  // Who the breakdown lists, in the picker's order.
+  const voters = useMemo(
+    () =>
+      chosen.map((i) => ({
+        name: choices[Number(i)]?.label ?? '',
+        painting: paintings[Number(i)] ?? {},
+      })),
+    [chosen, choices, paintings],
+  )
+
   const all = chosen.length === everyone.length
   const noun = sheet.voters_named ? 'voter' : 'ballot'
 
@@ -210,19 +220,14 @@ export function ScheduleBallots({
           picked={picked}
           onPick={(block) => setPicked(sameBlock(block, picked) ? null : block)}
           onUnpick={() => setPicked(null)}
-          details={
-            picked && (
-              <Breakdown
-                block={picked}
-                schedule={schedule}
-                voters={chosen.map((i) => ({
-                  name: choices[Number(i)]?.label ?? '',
-                  painting: paintings[Number(i)] ?? {},
-                }))}
-                onClose={() => setPicked(null)}
-              />
-            )
-          }
+          details={(block) => (
+            <Breakdown
+              block={block}
+              schedule={schedule}
+              voters={voters}
+              onClose={() => setPicked(null)}
+            />
+          )}
         />
         {chosen.length > 0 && (
           <Text size="xs" c="dimmed">
@@ -353,8 +358,13 @@ function ReadCalendar({
   onPick?: (block: Block) => void
   /** The open block's popover closing by a press outside it, or Escape. */
   onUnpick?: () => void
-  /** What the open block's popover holds. */
-  details?: ReactNode
+  /**
+   * What a block's popover holds. Every block is given its own rather than
+   * only the open one, so a popover that is closing keeps its contents for
+   * its exit transition instead of fading out as an empty frame. A dropdown
+   * renders its children only while mounted, so a closed block costs nothing.
+   */
+  details?: (block: Block) => ReactNode
 }) {
   const h24 = use24HourTime()
   const bounds = useMemo(() => boundsOf(windows, schedule), [windows, schedule])
@@ -415,7 +425,7 @@ function ReadCalendar({
             : undefined,
           select: average && onPick ? () => onPick(run) : undefined,
           selected: sameBlock(run, picked),
-          details: sameBlock(run, picked) ? details : undefined,
+          details: details?.(run),
           dismiss: onUnpick,
           chip: view === 'month',
         },
