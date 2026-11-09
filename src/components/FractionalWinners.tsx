@@ -430,7 +430,7 @@ function Wheel({
         ) : spinning ? (
           'Spinning…'
         ) : (
-          'Deciding one at a time? Spin, and each option comes up as often as its share.'
+          'Spin the wheel to pick an option randomly.'
         )}
       </Text>
     </Stack>

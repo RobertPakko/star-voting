@@ -223,8 +223,7 @@ function Answer({
       <Stack gap={4}>
         {tied === 1 && winner && (
           <Text size="sm">
-            Nobody gave it fewer than {stars(floor)}, and every other option was given fewer by
-            somebody.
+            <strong>{winner.name}</strong> had the highest minimum score at {stars(floor)}.
           </Text>
         )}
         {tied > 1 && (

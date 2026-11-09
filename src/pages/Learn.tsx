@@ -313,8 +313,8 @@ export function AllChoices() {
         <Text>
           The same set of ballots can answer a wide variety of interesting questions about a given
           group. This page shows all of the choices supported by this app, when it makes sense to
-          use them, and how they work. We'll try to look at each one through the lens of our six
-          friends deciding between three options for dinner:
+          use them, and how they work. To help explain them we'll look at each one through the lens
+          of our six friends deciding between three options for dinner:
         </Text>
         <OptionKey ratings={DINNER} />
         <Text>Here's how they voted:</Text>
@@ -376,7 +376,7 @@ export function AllChoices() {
           example="consensus"
           algorithms={['Maximin', 'STAR']}
         >
-          <NotStrategyProof easily />
+          <NotStrategyProof />
           <Text>
             Sometimes the best option is the one that nobody hates: a meeting time everyone can make
             or a dinner option that no one is allergic to. <strong>Consensus option</strong> picks
@@ -586,7 +586,7 @@ export function AllChoices() {
           example="fractional"
           algorithms={['Nash']}
         >
-          <NotStrategyProof easily />
+          <NotStrategyProof />
           <Text>
             Sometimes options can be taken partially rather than entirely: a playlist shared between
             genres or a permanent split between different dinner options.{' '}
@@ -1096,13 +1096,10 @@ function ComingSoon({ name, plural }: { name: string; plural?: boolean }) {
  * which STAR's runoff guards against. `easily` where one ballot's extreme
  * scores can carry the result on their own.
  */
-function NotStrategyProof({ easily }: { easily?: boolean }) {
+function NotStrategyProof() {
   return (
     <Alert variant="light" color="orange" icon={<WarningIcon size={20} aria-hidden />}>
-      <Text size="sm">
-        Warning: unlike STAR, this choice is not resistant to strategic voting. Voters can
-        {easily ? ' easily' : ''} game the result by responding dishonestly.
-      </Text>
+      <Text size="sm">Warning: not resistant to strategic voting.</Text>
     </Alert>
   )
 }
