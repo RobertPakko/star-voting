@@ -49,8 +49,8 @@ import { usePageTitle } from '../lib/pageTitle'
 import { percentagesOf } from '../lib/shares'
 import { stars } from '../lib/plural'
 import { pollPath } from '../lib/pollId'
-import { SAMPLE_RESULT_ID, SAMPLE_RESULT_TIME_ID } from '../lib/samplePoll'
-import { RESULT_PARAM, type ResultTool } from '../lib/choices'
+import { SAMPLE_RESULT_ID, SAMPLE_RESULT_TIME_ID, sampleResultAs } from '../lib/samplePoll'
+import type { ResultTool } from '../lib/choices'
 import vseByStrategy from '../assets/why-star/vse-by-strategy.png'
 import winnerDistribution from '../assets/why-star/winner-distribution.webp'
 import classes from './Learn.module.css'
@@ -1054,7 +1054,7 @@ function Choice({
         <Stack gap="sm">
           {children}
           {example && (
-            <Group>
+            <Group justify="flex-end">
               <Button component={Link} to={exampleFor(example)} variant="light">
                 See an example
               </Button>
@@ -1067,16 +1067,16 @@ function Choice({
 }
 
 /**
- * Where a built choice is shown on the finished sample poll: the consensus on
- * its calendar question, which asked for the consensus time and so opens on
- * it; the best option on the film question, which opens on STAR; and the
- * rest on the film question with their *More results* modal open
- * (`RESULT_PARAM`, read by `MoreResults`).
+ * Where a built choice is shown on the finished sample poll, opening on that
+ * choice as though the question had asked for it: the consensus on its
+ * calendar question, which did ask for the consensus time; the best option
+ * on the film question, which asked for it; and the rest on the film
+ * question recast as that kind (`sampleResultAs`).
  */
 function exampleFor(tool: ResultTool) {
   if (tool === 'consensus') return pollPath(SAMPLE_RESULT_TIME_ID)
-  const films = pollPath(SAMPLE_RESULT_ID)
-  return tool === 'option' ? films : `${films}?${RESULT_PARAM}=${tool}`
+  if (tool === 'option') return pollPath(SAMPLE_RESULT_ID)
+  return pollPath(sampleResultAs(tool))
 }
 
 /** The banner on every choice that is described but not built. */

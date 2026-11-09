@@ -364,17 +364,15 @@ test.describe('all choices', () => {
     )
   })
 
-  test('leads each built choice to the sample poll, its result open', async ({ page }) => {
-    // The ranking opens its modal straight away, and closing it takes the
-    // request off the address so a refresh does not open it again.
+  test('leads each built choice to the sample poll, opening on that choice', async ({ page }) => {
+    // The film question, recast as a question that asked for the ranking:
+    // the ranking is the page's own card, not a modal.
     await page.goto('#/choices?section=option-ranking')
     await page.getByRole('link', { name: 'See an example' }).click()
-    const ranking = page.getByRole('dialog', { name: 'Option ranking' })
-    await expect(ranking).toBeVisible()
-    await expect(ranking).toContainText('Honeyland')
-    await page.keyboard.press('Escape')
-    await expect(ranking).toBeHidden()
-    await expect(page).toHaveURL(/#\/sample-result-movie$/)
+    await expect(page).toHaveURL(/#\/sample-result-movie-as-ranking$/)
+    await expect(page.getByText(/^Option ranking$/).first()).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.getByText('Honeyland').first()).toBeVisible()
 
     // The consensus is the calendar question, which opens on it.
     await page.goto('#/choices?section=consensus-option')

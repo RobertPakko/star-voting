@@ -1564,7 +1564,9 @@ is the page.
   one row with *Archived* and *New poll* together on the right (each down
   to its icon, Archived first, only when the row is measured too narrow for
   the words), its heading kept for screen readers; the archived view goes
-  back to the list.
+  back to the list. *What is STAR?*, *Why use STAR?* and *All choices* carry
+  **New poll** at the right of the same row (`NewPollButton`, which gives a
+  reader with no session one on the press, as the home page's tile does).
   A poll draws its
   own: **Your polls** for a reader with a list (the list is one step nearer
   home and leads back here), **Back to homepage** for anybody else and on the
@@ -1600,12 +1602,15 @@ is the page.
   *Coming soon* banner and works no example, and one a voter can game by
   scoring dishonestly carries a warning that says so. From *Fractional
   budget* down, the heading also carries a grey *Under construction* badge,
-  for now. Each built choice ends on **See an example**, which opens the
-  finished sample poll on it (`exampleFor`): the calendar question for the
-  consensus, since it asked for the consensus time; the film question for
-  the rest, with that choice's *More results* modal open by `?result=`
-  (`RESULT_PARAM`, read by `MoreResults` and taken off the address when
-  the modal closes), except the best option, which that question opens on. The page restates
+  for now. Each built choice ends on **See an example** (right-aligned), which
+  opens the finished sample poll as though the question had asked for that
+  choice (`exampleFor`): the calendar question for the consensus, since it
+  did ask for the consensus time; the film question for the best option;
+  and for the rest the film question recast as that kind under an id of its
+  own (`sampleResultAs`, e.g. `sample-result-movie-as-ranking`), which
+  `samplePoll.ts` answers from the same recording with `kind` and
+  `kind_result` swapped for the result its *More results* modal records.
+  The page restates
   `/star`'s ballots above the sections, since its readers mostly arrive from
   a result's modal. `/examples` holds harder elections, one per
   choice as each is built, and says it is under construction until the first.
@@ -3209,7 +3214,8 @@ with, the kind's name in bold, ending in *Learn more* (`blurb` in
 would be, which also names the dialog). The same sentence is the popover on
 the info mark beside the bar's name. The explaining is done on `/choices`. The
 buttons share the name's line when it is short and drop to a row of their own
-otherwise; `TallyShape` draws *More results* beside the name. A
+otherwise, kept to the right (`ml="auto"`); `TallyShape` draws *More
+results* beside the name. A
 round's *Show tie-break* stays over its round, since it slides that card.
 
 **Option ranking** is the top ten places (see below), for when the winner

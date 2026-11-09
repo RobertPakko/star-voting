@@ -83,12 +83,6 @@ export function toolKind(tool: ResultTool, kind: PollKind): PollKind {
 export const toolLabel = (tool: ResultTool, kind: PollKind) => CHOICES[toolKind(tool, kind)].label
 
 /**
- * The `?result=` a results page opens a *More results* modal from, so
- * `/choices` can link an example straight to it.
- */
-export const RESULT_PARAM = 'result'
-
-/**
  * What a kind's number (`kind_value`) counts, for the kinds that take one.
  * The database holds it to 2 – `SCORING_ROWS_MAX` (`validate_kind`).
  */

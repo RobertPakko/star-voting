@@ -257,7 +257,10 @@ function AnswerBar({
             </Popover.Dropdown>
           </Popover>
         </Group>
-        <Group gap="xs">{children}</Group>
+        {/* `ml="auto"` keeps the buttons right-aligned when they drop below the name. */}
+        <Group gap="xs" ml="auto">
+          {children}
+        </Group>
       </Group>
     </Card>
   )

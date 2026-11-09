@@ -1,3 +1,4 @@
+import { DEFAULT_CHOICE_NUMBER } from './choices'
 import { forgetAnswered } from './questionMarks'
 import { supabase } from './supabase'
 import type { Database } from './database.types'
@@ -66,6 +67,19 @@ export const SAMPLE_RESULT_ID = 'sample-result-movie'
 export const SAMPLE_RESULT_TIME_ID = 'sample-result-when'
 
 /**
+ * The finished film question as though it had asked for another result: one
+ * id per kind `/choices` links an example to, each answered from the same
+ * recording with `kind` and the carried result (`kind_result`) swapped for
+ * that kind's. Nothing is computed: the swapped-in result is the one the
+ * recording's *More results* modal answers with.
+ */
+const SAMPLE_AS_KINDS = ['ranking', 'multiple', 'fractional'] as const
+type SampleAsKind = (typeof SAMPLE_AS_KINDS)[number]
+
+/** The finished film question, opening on `kind`'s result. */
+export const sampleResultAs = (kind: SampleAsKind) => `${SAMPLE_RESULT_ID}-as-${kind}`
+
+/**
  * A real poll id is a v4 UUID, so nothing the database can mint begins with
  * this and no poll can be shadowed by the sample. It is also why the sample's
  * ids are words: a poll's id is its link, and the sample's links are meant to
@@ -124,7 +138,7 @@ export function openPollRpc(fn: OpenPollFn, args: OpenPollArgs): PromiseLike<Rpc
 }
 
 function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): RpcAnswer {
-  const question = payloads[args.p_poll_id]
+  const question = payloads[args.p_poll_id] ?? recast(payloads, args.p_poll_id)
 
   // The same message a mistyped link gets from the server, because a
   // mistyped sample link is the same mistake.
@@ -188,6 +202,35 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
       return castLocally(question, args)
     default:
       return failed(`The sample poll cannot answer ${fn}`)
+  }
+}
+
+/**
+ * One of `sampleResultAs`' ids: the film question under that id, with its
+ * kind and carried result swapped. Its place in the group takes the new id,
+ * so the strip marks it as the question on screen; question 2 is the
+ * recording's own.
+ */
+function recast(payloads: SamplePayloads, pollId: string): SampleQuestion | undefined {
+  const kind = SAMPLE_AS_KINDS.find((k) => sampleResultAs(k) === pollId)
+  const base = payloads[SAMPLE_RESULT_ID]
+  if (!kind || !base?.results) return undefined
+
+  const carried = {
+    ranking: base.ranking,
+    multiple: base.multiple_winners,
+    fractional: base.fractional_winners,
+  }[kind]
+  const kindValue = DEFAULT_CHOICE_NUMBER[kind] ?? null
+  return {
+    ...base,
+    view: {
+      ...base.view,
+      poll: { ...base.view.poll, id: pollId, kind },
+      options: base.view.options.map((o) => ({ ...o, poll_id: pollId })),
+    },
+    group: base.group.map((q) => (q.id === SAMPLE_RESULT_ID ? { ...q, id: pollId } : q)),
+    results: { ...base.results, kind, kind_value: kindValue, kind_result: carried ?? null },
   }
 }
 

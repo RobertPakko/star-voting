@@ -4,6 +4,7 @@ import { GearIcon } from '@phosphor-icons/react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { BackToHome } from './BackToHome'
+import { NewPollButton } from './NewPollButton'
 import { ClockSwitch } from './ClockSwitch'
 import { InstallButton } from './InstallButton'
 import { NotificationSwitches } from './NotificationSwitches'
@@ -176,11 +177,17 @@ export function Layout() {
             page's entrance, so the page stops this rise itself before the
             first paint. See `stillEntrances` in lib/headingFlight.ts. */}
         <Reveal key={pageKey(pathname)}>
-          {showsBackToHome(pathname) && (
-            <Box maw={720} mx="auto">
-              <BackToHome />
-            </Box>
-          )}
+          {showsBackToHome(pathname) &&
+            (offersNewPoll(pathname) ? (
+              <Group maw={720} mx="auto" mb="sm" gap="sm" justify="space-between">
+                <BackToHome mb={0} />
+                <NewPollButton />
+              </Group>
+            ) : (
+              <Box maw={720} mx="auto">
+                <BackToHome />
+              </Box>
+            ))}
           <Outlet />
         </Reveal>
       </AppShell.Main>
@@ -196,4 +203,9 @@ export function Layout() {
  */
 function showsBackToHome(pathname: string): boolean {
   return pathname !== '/' && pathname !== '/polls' && pageKey(pathname) !== '/:pollId'
+}
+
+/** The explainers that end a reader wanting to try one, which carry *New poll* beside the way home. */
+function offersNewPoll(pathname: string): boolean {
+  return pathname === '/star' || pathname === '/why-star' || pathname === '/choices'
 }
