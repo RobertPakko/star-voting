@@ -374,7 +374,7 @@ export function AllChoices() {
           color="teal"
           title="Consensus option"
           example="consensus"
-          algorithms={['Maximin', 'STAR']}
+          algorithms={['Maximin']}
         >
           <NotStrategyProof />
           <Text>
@@ -409,11 +409,10 @@ export function AllChoices() {
             specific option. Though hopefully no one would do that for a poll among friends.
           </Text>
           <Text>
-            A ballot that gives every option 0 stars is left out, since it says nothing and would
-            give every option a score of 0.
-          </Text>
-          <Text>
-            If several options tie, STAR is run between just those options to choose one of them.
+            If several options tie, then the next lowest rating given to each of the tied options is
+            used to break the tie. This continues until a winner is found. If all scores are
+            exhausted and several options still tie, then there is no winner. The app lets you flip
+            a coin to choose one.
           </Text>
           <Text>
             The app also has a <strong>consensus time</strong> option. It uses exactly the same
