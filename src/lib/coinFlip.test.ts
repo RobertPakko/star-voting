@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { coinFlip } from './coinFlip'
+import { coinFlip, drawOne } from './coinFlip'
 
 /**
  * The two properties the feature rests on, and they pull against each other.
@@ -88,5 +88,33 @@ describe('the coin', () => {
 
     // Fifteen separate ties, so both sides should turn up among them.
     expect(new Set(sides).size).toBe(2)
+  })
+})
+
+describe('the draw among several', () => {
+  test('is the coin when two are level', () => {
+    const [poll, a, b] = ids(3)
+    expect(drawOne(poll, [a, b])).toBe(coinFlip(poll, a, b))
+  })
+
+  test('gives it to one of them, the same one in any order', () => {
+    const [poll, ...level] = ids(6)
+    const drawn = drawOne(poll, level)
+
+    expect(level).toContain(drawn)
+    expect(drawOne(poll, [...level].reverse())).toBe(drawn)
+  })
+
+  test('is fair among three over three thousand ties', () => {
+    const pool = ids(12000)
+    const places = [0, 0, 0]
+
+    for (let i = 0; i + 3 < pool.length; i += 4) {
+      const [poll, ...level] = pool.slice(i, i + 4)
+      places[[...level].sort().indexOf(drawOne(poll, level))]++
+    }
+
+    // Each place is a third of 3000; three standard deviations is about 77.
+    for (const n of places) expect(Math.abs(n - 1000)).toBeLessThan(80)
   })
 })

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { ActionIcon, Group, Stack, Text, Tooltip } from '@mantine/core'
 import { XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
@@ -6,7 +6,7 @@ import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { formatWindow, relabelScores } from '../lib/schedule'
 import { consensusSchema, parseAnswer } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
-import { count, stars, voters } from '../lib/plural'
+import { count, stars } from '../lib/plural'
 import { toolKind } from '../lib/choices'
 import { ChoiceModal } from './ChoiceBlurb'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
@@ -15,18 +15,21 @@ import type { ConsensusResult, PollResults } from '../lib/types'
 import type { RankingSource } from './FullRanking'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
 import { AddToCalendar } from './AddToCalendar'
+import { CoinFlip } from './CoinFlip'
+import { levelOptions } from '../lib/consensus'
 import { useLeftOut } from '../lib/useLeftOut'
 import { ScoresSkeleton } from './Skeletons'
 
 /**
  * The consensus option (or time), opened from the result's *More results*
  * menu (`MoreResults`), or drawn on the results page where the question chose
- * it (`ChosenResult`): the option whose lowest score is highest, with STAR
- * between the options that share it. For a choice everyone has to live
- * with. `/choices` explains it, and `poll_consensus` works it out.
+ * it (`ChosenResult`): the option whose lowest score is highest, options
+ * sharing it compared on their next-lowest score, then the next. For a
+ * choice everyone has to live with. `/choices` explains it, and
+ * `poll_consensus` works it out.
  *
- * **A ballot giving every option 0 is left out**, and the card says how many
- * were: kept in, it would hold every option's lowest score at 0.
+ * **Options level on every score leave no winner**, and the card offers the
+ * coin (`CoinFlip`) between them, as STAR's *No winner* does.
  *
  * **An option can be taken out**, as in `MultipleWinners`: each removal asks
  * the database to count again as though that option had never been on the
@@ -174,11 +177,23 @@ export function ConsensusBody({
             onRemove={remove}
             eventFor={eventFor}
             named={!bannered || leftOut.length > 0}
+            pollId={key}
           />
         </Stack>
       )}
     </Stack>
   )
+}
+
+const ORDINALS = ['second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth']
+
+/** Lowest, second-lowest, third-lowest, … 10th-lowest, 21st-lowest. */
+function lowest(position: number): string {
+  if (position === 1) return 'lowest'
+  if (position < 10) return `${ORDINALS[position - 2]}-lowest`
+  const teen = position % 100 >= 11 && position % 100 <= 13
+  const suffix = teen ? 'th' : (['th', 'st', 'nd', 'rd'][position % 10] ?? 'th')
+  return `${position}${suffix}-lowest`
 }
 
 /** The winner, how it was reached, and every option's lowest score. */
@@ -189,6 +204,7 @@ function Answer({
   onRemove,
   eventFor,
   named,
+  pollId,
 }: {
   consensus: ConsensusResult
   h24: boolean
@@ -196,13 +212,15 @@ function Answer({
   onRemove: (option: LeftOut) => void
   eventFor?: (id: string) => MeetingEvent | null
   named: boolean
+  /** What the coin is seeded on, where options are level; see coinFlip. */
+  pollId: string
 }) {
   const options = relabelScores(consensus.options, h24)
-  const [a, b] = consensus.finalist_names.map((name) => formatWindow(name, h24))
-  const { winner_id: winnerId, floor, tied_count: tied } = consensus
+  const { winner_id: winnerId, floor, tied_count: tied, decided_at: at } = consensus
   const winner = options.find((o) => o.id === winnerId)
   const event = winnerId && eventFor ? eventFor(winnerId) : null
-  const everyone = floor === 0 && tied === consensus.option_count
+  const level = levelOptions(consensus, h24)
+  const runnerUp = consensus.runner_up
   const unshown = consensus.option_count - options.length
 
   return (
@@ -215,9 +233,12 @@ function Answer({
           {event && <AddToCalendar event={event} />}
         </Group>
       ) : (
-        <Text fw={700} size="lg">
-          No winner
-        </Text>
+        <Group justify="space-between" align="center" gap="sm">
+          <Text fw={700} size="lg">
+            No winner
+          </Text>
+          {level.length >= 2 && <CoinFlip pollId={pollId} finalists={level} eventFor={eventFor} />}
+        </Group>
       )}
 
       <Stack gap={4}>
@@ -228,18 +249,25 @@ function Answer({
         )}
         {tied > 1 && (
           <Text size="sm">
-            {everyone
-              ? 'Every option was given 0 stars by somebody, so STAR was run between them all.'
-              : `${count(tied, 'option')} were given at least ${stars(floor)} by everyone, so STAR was run between them.`}
+            {tied === consensus.option_count
+              ? `Every option was given at least ${stars(floor)} by everyone`
+              : `${count(tied, 'option')} were given at least ${stars(floor)} by everyone`}
+            , so their next-lowest scores were compared.
           </Text>
         )}
-        {tied > 1 && a && b && consensus.runoff && (
-          <StarSteps consensus={consensus} names={[a, b]} />
+        {winner && at !== null && at > 1 && runnerUp && consensus.winner_score !== null && (
+          <Text size="sm">
+            <strong>{winner.name}</strong> pulled ahead on its {lowest(at)} score:{' '}
+            {stars(consensus.winner_score)} to {formatWindow(runnerUp.name, h24)}&rsquo;s{' '}
+            {runnerUp.score}.
+          </Text>
         )}
-        {consensus.blank_ballots > 0 && (
-          <Text size="sm" c="dimmed">
-            {count(consensus.blank_ballots, 'ballot')} gave every option 0 stars and{' '}
-            {consensus.blank_ballots === 1 ? 'was' : 'were'} left out.
+        {level.length >= 2 && (
+          <Text size="sm">
+            {level.length === consensus.option_count
+              ? 'Every option was'
+              : `${count(level.length, 'option')} were`}{' '}
+            given exactly the same scores, so there is no winner.
           </Text>
         )}
       </Stack>
@@ -290,76 +318,5 @@ function Answer({
         )}
       </Stack>
     </>
-  )
-}
-
-/**
- * STAR between the options sharing the floor, told as the option ranking
- * tells a place (`FullRanking`'s `decision`): which two had the most stars,
- * and how the runoff between them was settled.
- */
-function StarSteps({
-  consensus,
-  names: [a, b],
-}: {
-  consensus: ConsensusResult
-  /** The finalists' readable names, in `finalists` order. */
-  names: [string, string]
-}) {
-  const runoff = consensus.runoff!
-  const totalOf = (id: string) => consensus.options.find((o) => o.id === id)?.total_score
-  const [ta, tb] = consensus.finalists.map(totalOf)
-  const aWon = consensus.winner_id === consensus.finalists[0]
-  const [won, lost] = aWon ? [a, b] : [b, a]
-  const [forWon, forLost] = aWon
-    ? [runoff.prefers_a, runoff.prefers_b]
-    : [runoff.prefers_b, runoff.prefers_a]
-  const [fiveWon, fiveLost] = aWon
-    ? [runoff.five_stars_a, runoff.five_stars_b]
-    : [runoff.five_stars_b, runoff.five_stars_a]
-
-  let settled: ReactNode
-  if (runoff.resolved_by === 'unresolved') {
-    settled = (
-      <>
-        Level at {voters(runoff.prefers_a)} each, on identical score totals and five-star votes, so
-        there is no winner.
-      </>
-    )
-  } else if (runoff.resolved_by === 'higher_score') {
-    settled = (
-      <>
-        Level at {voters(forWon)} each; <strong>{won}</strong> won on the higher score total.
-      </>
-    )
-  } else if (runoff.resolved_by === 'five_star_votes') {
-    settled = (
-      <>
-        Level at {voters(forWon)} each and on score; <strong>{won}</strong> won on five-star votes,{' '}
-        {fiveWon} to {fiveLost}.
-      </>
-    )
-  } else {
-    settled = (
-      <>
-        <strong>{won}</strong> was preferred over <strong>{lost}</strong> by {voters(forWon)} to{' '}
-        {forLost}.
-      </>
-    )
-  }
-
-  return (
-    <Stack gap={2}>
-      <Text size="sm">
-        <strong>Scoring:</strong> {a}
-        {ta !== undefined && <> ({stars(ta)})</>} and {b}
-        {tb !== undefined && <> ({stars(tb)})</>} had the most stars among them, so they went to the
-        runoff.
-      </Text>
-      <Text size="sm">
-        <strong>Runoff:</strong> {settled}
-        {runoff.ties > 0 && <> {count(runoff.ties, 'voter')} scored them equally.</>}
-      </Text>
-    </Stack>
   )
 }

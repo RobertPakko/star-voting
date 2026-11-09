@@ -48,6 +48,21 @@ export function coinFlip(pollId: string, a: string, b: string): string {
 }
 
 /**
+ * Which of several options level on everything the draw gives it to, for the
+ * consensus, where a tie can hold more than two (a calendar's neighbouring
+ * windows painted alike). Two is exactly `coinFlip`, so a tie of two reads
+ * the same coin wherever it is drawn. The ids are sorted first, as there.
+ *
+ * Above two, the hash is taken modulo the count. Its bias is the remainder
+ * of 2^32 over the count, divided by 2^32: nothing a group could notice.
+ */
+export function drawOne(pollId: string, ids: string[]): string {
+  if (ids.length === 2) return coinFlip(pollId, ids[0], ids[1])
+  const sorted = [...ids].sort()
+  return sorted[mix(`${pollId}:${sorted.join(':')}`) % sorted.length]
+}
+
+/**
  * One bit out of a string, as even as a coin.
  *
  * FNV-1a over the seed, then murmur3's final avalanche over what comes out.
@@ -62,6 +77,11 @@ export function coinFlip(pollId: string, a: string, b: string): string {
  * lose the low bits that are the whole point.
  */
 function heads(seed: string): boolean {
+  return mix(seed) >>> 31 === 1
+}
+
+/** The seed hashed and mixed to an unsigned 32-bit number; see `heads`. */
+function mix(seed: string): number {
   let h = 0x811c9dc5
   for (let i = 0; i < seed.length; i++) {
     h = Math.imul(h ^ seed.charCodeAt(i), 0x01000193)
@@ -73,5 +93,5 @@ function heads(seed: string): boolean {
   h = Math.imul(h, 0x735a2d97)
   h ^= h >>> 15
 
-  return h >>> 31 === 1
+  return h >>> 0
 }

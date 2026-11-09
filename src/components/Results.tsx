@@ -12,6 +12,7 @@ import type { PollKind, PollResults, PollSchedule } from '../lib/types'
 import { AddToCalendar } from './AddToCalendar'
 import { ChosenResult } from './ChosenResult'
 import { CoinFlip, type Finalist } from './CoinFlip'
+import { levelOptions } from '../lib/consensus'
 import { MoreResults } from './MoreResults'
 import { Reveal } from './Reveal'
 import { ResultsSkeleton } from './Skeletons'
@@ -121,10 +122,14 @@ export function Results({
     // winner outside its top rows.
     const raw = options.find((o) => o.id === winnerId)?.name
     const event = winnerId ? eventFor(winnerId) : null
+    const level = levelOptions(chosen.consensus, h24)
     bar = (
       <AnswerBar kind={barKind} name={raw ? formatWindow(raw, h24) : null} event={event}>
         {answers}
         {event && <AddToCalendar event={event} />}
+        {level.length >= 2 && (
+          <CoinFlip pollId={key} finalists={level} eventFor={meeting ? eventFor : undefined} />
+        )}
       </AnswerBar>
     )
   } else if (chosen) {
@@ -283,8 +288,8 @@ function Caveat({ children }: { children: ReactNode }) {
   )
 }
 
-/** The two tied finalists, as the pair `CoinFlip` takes. */
-function tiedPair(results: PollResults, nameById: Map<string, string>): [Finalist, Finalist] {
+/** The two tied finalists, as `CoinFlip` takes them. */
+function tiedPair(results: PollResults, nameById: Map<string, string>): Finalist[] {
   const named = (id: string): Finalist => ({ id, name: nameById.get(id) ?? id })
 
   return [named(results.finalists[0]), named(results.finalists[1])]

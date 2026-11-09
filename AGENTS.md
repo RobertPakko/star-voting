@@ -3299,27 +3299,33 @@ two options, where it can already differ from STAR's winner.
 [`Consensus`](src/components/Consensus.tsx) is the modal and the card;
 `51_consensus` holds the rules below.
 
-- **Options sharing the highest floor go to STAR between themselves**
-  (`star_round` over just those), so a runoff level on every rule leaves no
-  winner, as STAR's does. One option alone on the floor wins outright.
-- **A ballot giving every option 0 is left out**, and the card says how
-  many were. Kept in, it would hold every floor at 0 and hand the choice to
-  plain STAR — on a time poll, anybody who opened the calendar and painted
-  nothing would do that. Where every ballot is blank, all of them count.
+- **Options sharing the highest floor are compared on their next-lowest
+  score**, then the next, until one is ahead (leximin). STAR is not run
+  between them: it would hand a tie on the floor to whichever option has
+  the most stars, which is the opposite of what the question asks.
+- **Options level on every score leave no winner**, and the card offers the
+  coin between them (see [Settling a tie with a
+  coin](#settling-a-tie-with-a-coin)). Level means given the same scores,
+  not by the same voters. On a time poll a run of windows painted alike is
+  level, so this is a real outcome there.
+- **Every ballot counts.** A ballot giving every option 0 adds one 0 to the
+  bottom of every option alike, so it pulls every floor to 0 but cannot
+  change the winner: the comparison passes over it to the next score up.
 - **Counted in the database**, on the same gate and the same press as the
   others (`get_poll_consensus` / `open_poll_consensus`, via
-  `poll_consensus`), answering the winner, its floor, how many shared it,
-  STAR's finalists among those and their runoff, and the top
-  `poll_results_rows()` options by floor, the winner first, each with its
-  total stars.
-- **The card shows the STAR it ran**, where options shared the floor: which
-  two had the most stars and how the runoff settled, in the option ranking's
-  words. Written out only then: where one option holds the floor alone,
-  STAR ran nothing, and the table stays to *Fewest stars*.
+  `poll_consensus`), answering the winner, the highest floor, how many
+  shared it, where the winner pulled ahead (`decided_at`) and against which
+  option (`runner_up`), the options left level where there is no winner,
+  and the top `poll_results_rows()` options in the consensus's order, each
+  with its floor and total stars. Each option's scores sorted lowest first
+  are an `int[]`, and Postgres compares arrays element by element, so the
+  whole order is one `order by`.
+- **The card says how the tie was broken**: on which score the winner
+  pulled ahead and the runner-up's score there. The table stays to *Fewest
+  stars*.
 - **Removing works as in Multiple winners** (`p_excluded`, held by
-  `Consensus`, never stored, stopping at two options left; a ballot is blank
-  or not on the options still in). Not on the sample, which answers
-  `consensus` in `samplePollData.ts`.
+  `Consensus`, never stored, stopping at two options left). Not on the
+  sample, which answers `consensus` in `samplePollData.ts`.
 - **On a time poll a window is the mean of its granules**, so a window with
   one *Can't* hour in it scores 1–4, not 0, and only a window somebody cannot
   make at all has a floor of 0. `/choices` words it that way.
@@ -3379,8 +3385,9 @@ survives), in place of any explanation on the form itself.
   `ConsensusBody`) in a card at the top, handed the carried result, so it
   asks for nothing until an option is removed. The runoff and the score round
   follow as usual (they are how the first place was chosen, and on a
-  consensus how STAR alone would have chosen); the winner's banner and the
-  coin are not drawn, and a consensus time carries its own *Add to calendar*.
+  consensus how STAR alone would have chosen); the winner's banner and
+  STAR's coin are not drawn. A consensus carries its own coin where options
+  are left level, and a consensus time its own *Add to calendar*.
   *More results* offers the others, not the one already on the page.
 - **One number per question** (`polls.kind_value`), whose meaning belongs to
   the kind: places to rank, winners to choose. A dropdown of 2 to
@@ -3487,14 +3494,17 @@ head-to-head step cannot be read without its matchup.
 ### Settling a tie with a coin
 
 When the card says **No winner**, every rule is spent. It carries **Flip a
-coin**, whose modal names one finalist.
+coin**, whose modal names one finalist — or, on a consensus, one of the
+options level on every score, which can be more than two (`drawOne`, which
+for two is the same coin).
 
 **It is not part of the election**: `winner_id` stays null, the poll list
 still shows a tie, the modal says so, and nothing is written.
 
 **Every reader gets the same side.** A per-browser draw would give different
 readers different answers. `src/lib/coinFlip.ts` hashes the poll id and the
-two finalists' ids (sorted) and reads one bit — stable on every device, with no
+two finalists' ids (sorted) and reads one bit (among more, the hash modulo
+their count) — stable on every device, with no
 write, no race and no new grant, and the sample poll works too. It cannot be
 rigged: the ids are uuids Postgres minted, and the option list is fixed long
 before a tie is foreseeable. The hash is FNV-1a with murmur3's avalanche, which

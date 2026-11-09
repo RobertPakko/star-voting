@@ -2,12 +2,12 @@ import { Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { describeLength } from '../lib/schedule'
 import { useDisclosure } from '@mantine/hooks'
 import { CoinVerticalIcon } from '@phosphor-icons/react'
-import { coinFlip } from '../lib/coinFlip'
+import { drawOne } from '../lib/coinFlip'
 import type { MeetingEvent } from '../lib/calendarEvent'
 import { AddToCalendar } from './AddToCalendar'
 import classes from './CoinFlip.module.css'
 
-/** One of the two the runoff could not separate, named for the reader. */
+/** One of the options the election could not separate, named for the reader. */
 export interface Finalist {
   id: string
   name: string
@@ -40,10 +40,14 @@ export function CoinFlip({
   finalists,
   eventFor,
 }: {
-  /** What the flip is seeded on, with the two ids; see coinFlip. */
+  /** What the flip is seeded on, with the ids; see coinFlip. */
   pollId: string
-  /** The two finalists, in whichever order the tally listed them. */
-  finalists: [Finalist, Finalist]
+  /**
+   * The options level at the end: STAR's two finalists, or the consensus's
+   * options level on every score, which can be more than two. In whichever
+   * order the tally listed them.
+   */
+  finalists: Finalist[]
   /**
    * On a time poll, the side the coin lands on as a calendar event. The coin
    * still elects nobody (see above); this is the group having agreed to go
@@ -53,8 +57,14 @@ export function CoinFlip({
 }) {
   const [opened, modal] = useDisclosure(false)
 
-  const winner = coinFlip(pollId, finalists[0].id, finalists[1].id)
-  const [won, lost] = finalists[0].id === winner ? finalists : [finalists[1], finalists[0]]
+  const winner = drawOne(
+    pollId,
+    finalists.map((f) => f.id),
+  )
+  const won = finalists.find((f) => f.id === winner)!
+  // A coin has two faces: the other side carries the other name where there
+  // is one other, and nothing where the draw was among more.
+  const lost = finalists.length === 2 ? finalists.find((f) => f.id !== winner)! : null
   const event = eventFor?.(won.id) ?? null
 
   return (
@@ -76,7 +86,7 @@ export function CoinFlip({
                 <span className={classes.name}>{won.name}</span>
               </div>
               <div className={`${classes.face} ${classes.back}`}>
-                <span className={classes.name}>{lost.name}</span>
+                {lost && <span className={classes.name}>{lost.name}</span>}
               </div>
             </div>
           </div>

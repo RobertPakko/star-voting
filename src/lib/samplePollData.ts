@@ -29,7 +29,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: null,
-        created_at: '2026-11-06T15:24:40.697074-08:00',
+        created_at: '2026-11-09T07:49:36.045496-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -148,7 +148,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: 'e0338139-5a10-2e5e-0a17-3511e2a329fd',
         schedule: null,
         closed_at: null,
-        created_at: '2026-11-06T15:24:40.697074-08:00',
+        created_at: '2026-11-09T07:49:36.045496-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -253,7 +253,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-06T15:24:40.697074-08:00',
+        created_at: '2026-11-09T07:49:36.045496-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film and a time to meet.',
         show_voters: true,
@@ -953,7 +953,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       kind_value: null,
       kind_result: {
         floor: 4,
-        runoff: null,
         options: [
           {
             id: '71a3c317-1111-21a0-4678-1e724f694c58',
@@ -974,16 +973,16 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             total_score: 37,
           },
           {
-            id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
-            name: '2026-02-21T11:00:00-07:00',
-            floor: 3,
-            total_score: 37,
-          },
-          {
             id: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
             name: '2026-02-21T10:30:00-07:00',
             floor: 3,
             total_score: 36,
+          },
+          {
+            id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
+            name: '2026-02-21T11:00:00-07:00',
+            floor: 3,
+            total_score: 37,
           },
           {
             id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
@@ -1016,13 +1015,19 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             total_score: 17,
           },
         ],
-        finalists: [],
+        level_ids: [],
+        runner_up: {
+          id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+          name: '2026-02-21T09:00:00-07:00',
+          score: 3,
+        },
         winner_id: '71a3c317-1111-21a0-4678-1e724f694c58',
+        decided_at: 1,
         tied_count: 1,
+        level_names: [],
         voter_count: 9,
         option_count: 10,
-        blank_ballots: 0,
-        finalist_names: [],
+        winner_score: 4,
       },
       voter_count: 9,
       closed_early: false,
@@ -1033,7 +1038,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     },
     consensus: {
       floor: 4,
-      runoff: null,
       options: [
         {
           id: '71a3c317-1111-21a0-4678-1e724f694c58',
@@ -1054,16 +1058,16 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           total_score: 37,
         },
         {
-          id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
-          name: '2026-02-21T11:00:00-07:00',
-          floor: 3,
-          total_score: 37,
-        },
-        {
           id: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
           name: '2026-02-21T10:30:00-07:00',
           floor: 3,
           total_score: 36,
+        },
+        {
+          id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
+          name: '2026-02-21T11:00:00-07:00',
+          floor: 3,
+          total_score: 37,
         },
         {
           id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
@@ -1096,13 +1100,19 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           total_score: 17,
         },
       ],
-      finalists: [],
+      level_ids: [],
+      runner_up: {
+        id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+        name: '2026-02-21T09:00:00-07:00',
+        score: 3,
+      },
       winner_id: '71a3c317-1111-21a0-4678-1e724f694c58',
+      decided_at: 1,
       tied_count: 1,
+      level_names: [],
       voter_count: 9,
       option_count: 10,
-      blank_ballots: 0,
-      finalist_names: [],
+      winner_score: 4,
     },
     multiple_winners: [
       {
@@ -1372,7 +1382,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '0c0ce273-8fac-602a-659a-427718fdd95e',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-06T15:24:40.697074-08:00',
+        created_at: '2026-11-09T07:49:36.045496-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film and a time to meet.',
         show_voters: true,
@@ -1967,7 +1977,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     },
     consensus: {
       floor: 2,
-      runoff: null,
       options: [
         {
           id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
@@ -2006,13 +2015,19 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           total_score: 11,
         },
       ],
-      finalists: [],
+      level_ids: [],
+      runner_up: {
+        id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
+        name: 'Knives Out',
+        score: 1,
+      },
       winner_id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+      decided_at: 1,
       tied_count: 1,
+      level_names: [],
       voter_count: 9,
       option_count: 6,
-      blank_ballots: 0,
-      finalist_names: [],
+      winner_score: 2,
     },
     multiple_winners: [
       {

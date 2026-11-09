@@ -390,27 +390,35 @@ export interface FractionalShare {
 
 /**
  * The consensus, from `get_poll_consensus` / `open_poll_consensus`: the
- * option whose lowest score (its floor) is highest, with STAR between the
- * options that share it. Ballots giving every option 0 are left out.
+ * option whose lowest score (its floor) is highest. Options sharing it are
+ * compared on their next-lowest score, then the next, until one is ahead;
+ * options level on every score leave no winner. Every ballot counts.
  */
 export interface ConsensusResult {
-  /** Null where the options sharing the floor tied their runoff on every rule. */
+  /** Null where two or more options were given exactly the same scores. */
   winner_id: string | null
-  /** The winner's floor: the fewest stars any counted ballot gave it. */
+  /** The highest floor: the fewest stars any ballot gave the winner. */
   floor: number
   /** How many options were counted (the poll's, less any left out). */
   option_count: number
-  /** How many options share the highest floor; above one, STAR decided. */
+  /** How many options share the highest floor; above one, a tie-break decided. */
   tied_count: number
   /** Ballots counted. */
   voter_count: number
-  /** Ballots left out for giving every option 0. */
-  blank_ballots: number
-  /** STAR's finalists among the tied, or empty where one option stood alone. */
-  finalists: string[]
-  finalist_names: string[]
-  runoff: Runoff | null
-  /** The top options by floor, the winner first, then by stars. */
+  /**
+   * Where the winner pulled ahead, counting each option's scores lowest
+   * first: 1 on its floor, 2 on its next-lowest score. Null with no winner,
+   * or no other option to beat.
+   */
+  decided_at: number | null
+  /** The winner's score at `decided_at`. */
+  winner_score: number | null
+  /** The next option in the order, with its score at `decided_at`. */
+  runner_up: { id: string; name: string; score: number } | null
+  /** With no winner, the options level on every score (two or more); else empty. */
+  level_ids: string[]
+  level_names: string[]
+  /** The top options in the consensus's order, the winner first. */
   options: { id: string; name: string; floor: number; total_score: number }[]
 }
 
