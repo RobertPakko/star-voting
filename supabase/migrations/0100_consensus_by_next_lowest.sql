@@ -6,9 +6,6 @@
 -- bottom of every option's scores alike, so it moves every floor to 0 but
 -- cannot change which option wins: the comparison passes over it to the next
 -- score up.
---
--- Settled winners of finished consensus questions are worked out again under
--- the new rule at the foot of this file.
 
 
 -- Answers { winner_id, floor, option_count, tied_count, voter_count,
@@ -150,12 +147,3 @@ begin
 end;
 $$;
 
-
--- Finished consensus questions keep the winner the new rule elects. A
--- question settled with no name (a tie that went to STAR's runoff) may now
--- have one, and one settled with a name may now have none.
-UPDATE "public"."polls"
-SET "winner_name" = "public"."poll_winner_name"("id")
-WHERE "kind" IN ('consensus', 'consensus_time')
-  AND "winner_settled_at" IS NOT NULL
-  AND "public"."poll_names_one_winner"("id");

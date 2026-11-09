@@ -38,11 +38,38 @@ export const test = base.extend<{ page: Page }>({
 export { expect }
 
 /**
+ * Waits for every finite animation and transition on the page to finish, so
+ * axe measures what the reader is left looking at. A popover, modal or menu
+ * fading in is text at part opacity, which axe reads as a contrast failure
+ * (and a menu half mounted as a missing child), depending on how far the fade
+ * had got when it looked. Mantine starts a transition a frame or two after
+ * mounting, so the page is checked again after two frames until nothing is
+ * moving; endless ones (skeletons, spinners) are left alone.
+ */
+async function settled(page: Page) {
+  await page.evaluate(async () => {
+    const frame = () => new Promise((resolve) => requestAnimationFrame(resolve))
+    for (let round = 0; round < 20; round++) {
+      await frame()
+      await frame()
+      const moving = document
+        .getAnimations()
+        .filter(
+          (a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity,
+        )
+      if (moving.length === 0) return
+      await Promise.all(moving.map((a) => a.finished.catch(() => undefined)))
+    }
+  })
+}
+
+/**
  * Runs axe over what is on screen and fails on anything it finds, at any
  * impact. Checked against the WCAG 2.1 A and AA rules, which is the bar the
  * app is held to, plus axe's best-practice set.
  */
 export async function expectAccessible(page: Page, label?: string) {
+  await settled(page)
   const { violations } = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'])
     .analyze()
