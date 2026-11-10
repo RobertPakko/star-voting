@@ -575,6 +575,7 @@ export function AllChoices() {
             Ballots are also re-normalized for display purposes. This doesn't change the result, but
             makes it easier to read if the weights have become very small over time.
           </Text>
+          <WeightFormula />
         </Choice>
 
         <Choice
@@ -585,7 +586,6 @@ export function AllChoices() {
           example="fractional"
           algorithms={['Nash']}
         >
-          <NotStrategyProof />
           <Text>
             Sometimes options can be taken partially rather than entirely: a playlist shared between
             genres or a permanent split between different dinner options.{' '}
@@ -642,6 +642,15 @@ export function AllChoices() {
             This is because its fans also gave {compromise} plenty of stars, so weeks of{' '}
             {compromise} keep them happy too, while the {sharedOut} fans liked {compromise} less.
           </Text>
+          <Text>
+            So the friends split their weeks{' '}
+            {sharesInOrder(percent)
+              .map((option) => `${percent[option]}% ${option}`)
+              .join(', ')
+              .replace(/, ([^,]*)$/, ' and $1')}
+            .
+          </Text>
+          <Shares percent={percent} />
           <Text>
             This app provides a way to randomly select an option once you have your fractional
             winners. This allows you to just pick an option randomly when you need to make a
@@ -2425,6 +2434,28 @@ function Places({ names }: { names: readonly string[] }) {
             {ICONS[option]}
           </span>{' '}
           {labelOf(option)}
+        </Text>
+      ))}
+    </Group>
+  )
+}
+
+/** The options given a share, largest first, ties in the page's own order. */
+const sharesInOrder = (percent: Record<string, number>) =>
+  Object.keys(percent)
+    .filter((option) => percent[option] > 0)
+    .sort((x, y) => percent[y] - percent[x])
+
+/** Fractional winners' answer, drawn as `Places` draws a ranking, with each share. */
+function Shares({ percent }: { percent: Record<string, number> }) {
+  return (
+    <Group component="ul" justify="center" gap="lg" className={classes.places}>
+      {sharesInOrder(percent).map((option) => (
+        <Text component="li" key={option} fw={700}>
+          <span aria-hidden className={classes.emoji}>
+            {ICONS[option]}
+          </span>{' '}
+          {labelOf(option)} {percent[option]}%
         </Text>
       ))}
     </Group>
