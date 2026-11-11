@@ -678,7 +678,7 @@ export function CreatePoll() {
         <Stack gap={2}>
           <Group gap={4} wrap="nowrap">
             <Text component="label" htmlFor={id} size="sm" fw={500}>
-              Choice
+              Choice type
             </Text>
             <Popover width={260} position="bottom-start" withArrow shadow="md" trapFocus>
               <Popover.Target>
@@ -1046,24 +1046,18 @@ export function CreatePoll() {
         <Card withBorder p="sm">
           <Stack gap="sm">
             {anySequential ? (
-              <Stack gap={4}>
-                <Switch
-                  checked={showVoters}
-                  onChange={(e) => {
-                    setShowVoters(e.currentTarget.checked)
-                    setShowBallots(e.currentTarget.checked)
-                  }}
-                  label={
-                    mode === 'invite'
-                      ? 'Show voter emails and publish ballots'
-                      : 'Show voter names and publish ballots'
-                  }
-                />
-                <Text size="xs" c="dimmed">
-                  A sequential poll shows both or neither: each ballot&rsquo;s weight would
-                  otherwise say whose it is.
-                </Text>
-              </Stack>
+              <Switch
+                checked={showVoters}
+                onChange={(e) => {
+                  setShowVoters(e.currentTarget.checked)
+                  setShowBallots(e.currentTarget.checked)
+                }}
+                label={
+                  mode === 'invite'
+                    ? 'Show voter emails and publish ballots'
+                    : 'Show voter names and publish ballots'
+                }
+              />
             ) : (
               <>
                 <Switch

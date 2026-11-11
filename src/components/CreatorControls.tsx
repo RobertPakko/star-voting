@@ -102,7 +102,6 @@ export function CreatorControls({
   const [openOpened, openModal] = useDisclosure(false)
   const [lateEditOpened, lateEditModal] = useDisclosure(false)
   const [remindOpened, remindModal] = useDisclosure(false)
-  const [sequelOpened, sequelModal] = useDisclosure(false)
   // Set on a sent reminder so the button says so at once, rather than after
   // the re-read that `onChange` starts has landed.
   const [remindedHere, setRemindedHere] = useState(false)
@@ -348,12 +347,10 @@ export function CreatorControls({
             {/* The next poll of a sequence, filled in from this one's
                 published ballots: each voter's stars for the winner are added
                 to what they had given before. Only once there is a winner. */}
-            {status.results_available && (
+            {status.results_available && canSequel && (
               <Button
                 variant="light"
-                onClick={() =>
-                  canSequel ? navigate(`/new?sequel=${shortPollId(pollId)}`) : sequelModal.open()
-                }
+                onClick={() => navigate(`/new?sequel=${shortPollId(pollId)}`)}
                 leftSection={<RepeatIcon size={16} aria-hidden />}
               >
                 Create sequel poll
@@ -370,31 +367,6 @@ export function CreatorControls({
             </Button>
           </Group>
         </Stack>
-
-        <Modal
-          opened={sequelOpened}
-          onClose={sequelModal.close}
-          title="This poll can't fill in a sequel"
-          centered
-        >
-          <Stack gap="md">
-            <Text size="sm">
-              A sequel poll counts each voter&rsquo;s ballot by how many stars they gave the earlier
-              winners. Filling that in from this poll would mean reading each voter&rsquo;s own
-              scores, and this poll promised to{' '}
-              {poll.show_ballots ? 'keep who cast each ballot hidden' : 'keep its ballots private'}.
-            </Text>
-            <Text size="sm">
-              You can still make a sequential poll from <strong>New poll</strong>, giving each
-              voter&rsquo;s stars yourself.
-            </Text>
-            <Group justify="flex-end">
-              <Button variant="default" onClick={sequelModal.close}>
-                Close
-              </Button>
-            </Group>
-          </Stack>
-        </Modal>
 
         <Modal
           opened={lateEditOpened}

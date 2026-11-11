@@ -45,8 +45,7 @@ export function CarriedVoters({
         Earlier voters
       </Text>
       <Text size="xs" c="dimmed">
-        Each ballot counts at 5 ÷ (5 + stars), from the stars its voter gave the winners of earlier
-        polls. Anyone not listed votes at the average weight of those who are.{' '}
+        Provide the stars each voter gave to previous winners so their ballot can be reweighted.{' '}
         <Anchor component={Link} to="/choices?section=sequential-polls" target="_blank" inherit>
           How this works
         </Anchor>

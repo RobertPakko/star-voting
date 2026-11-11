@@ -357,7 +357,6 @@ export function AllChoices() {
             in other voting methods.
           </Text>
           <Text>
-            It's special enough that it gets a couple of its own pages.{' '}
             <Anchor component={Link} to="/star" inherit>
               What is STAR?
             </Anchor>{' '}
@@ -538,9 +537,7 @@ export function AllChoices() {
           example="sequential"
         >
           <Requirement icon={UsersThreeIcon}>
-            Choose <strong>Sequential poll</strong> when creating a poll and list the earlier
-            voters, each with the stars they gave previous winners. On a finished poll whose voters
-            and ballots are shown, <strong>Create sequel poll</strong> fills them in for you.
+            We have the voters and ballots from a previous poll
           </Requirement>
           <Text>
             Sometimes choices are recurring: what to eat at a weekly dinner or who hosts the next
@@ -1149,9 +1146,7 @@ function Requirement({ icon: Glyph, children }: { icon: Icon; children: ReactNod
 }
 
 function NeedsCost() {
-  return (
-    <Requirement icon={CoinsIcon}>Every option has a cost, and the poll has a budget.</Requirement>
-  )
+  return <Requirement icon={CoinsIcon}>Options have different costs.</Requirement>
 }
 
 function VotersAreOptions() {
@@ -1205,7 +1200,7 @@ function BudgetFormula() {
             5
           </span>
           <span className={classes.denominator} aria-hidden="true">
-            5 + Σ N<sub>i</sub> × C<sub>i</sub>/A
+            5 + Σ (N<sub>i</sub> × C<sub>i</sub>/A)
           </span>
         </span>
       </Text>
