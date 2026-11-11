@@ -16,7 +16,7 @@ import { blankCarried, type CarriedDraft } from '../lib/pollForm'
 /**
  * A sequential question's earlier voters on the create form: who voted in the
  * polls before this one, and how many stars each gave their winners. Each
- * ballot counts at 1 ÷ (1 + stars ÷ 5); anyone not listed votes at the
+ * ballot counts at 5 ÷ (5 + stars); anyone not listed votes at the
  * average weight of those who are. *Create sequel poll* fills this in from a
  * finished poll, and it stays editable.
  */
@@ -45,8 +45,8 @@ export function CarriedVoters({
         Earlier voters
       </Text>
       <Text size="xs" c="dimmed">
-        Each ballot counts at 1 ÷ (1 + stars ÷ 5), from the stars its voter gave the winners of
-        earlier polls. Anyone not listed votes at the average weight of those who are.{' '}
+        Each ballot counts at 5 ÷ (5 + stars), from the stars its voter gave the winners of earlier
+        polls. Anyone not listed votes at the average weight of those who are.{' '}
         <Anchor component={Link} to="/choices?section=sequential-polls" target="_blank" inherit>
           How this works
         </Anchor>

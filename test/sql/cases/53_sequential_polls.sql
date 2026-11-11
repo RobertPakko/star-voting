@@ -1,6 +1,6 @@
 -- Sequential polls: a question that carries its earlier voters, each with the
 -- stars N they gave earlier winners, and counts each ballot at
--- 1 / (1 + N / 5).
+-- 5 / (5 + N).
 --
 -- The ballots are /choices' six friends again, voting the same way in week 2
 -- after pizza won week 1:

@@ -3468,7 +3468,7 @@ stylesheet is imported in `Results.tsx`, so ballots never fetch it.
 ### Sequential polls
 
 A sequential question counts every ballot at the strength multiple winners
-would give it, 1 ÷ (1 + N ÷ 5), N being the stars its voter gave the winners
+would give it, 5 ÷ (5 + N), N being the stars its voter gave the winners
 of earlier polls, so over a run of polls the wins are shared out instead of
 the largest group taking each one. `/choices` explains it; `53_sequential_polls`
 holds the rules below.

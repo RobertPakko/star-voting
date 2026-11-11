@@ -1,6 +1,6 @@
 -- Sequential polls: a question that remembers how much each of its voters
 -- liked the winners of earlier polls, and counts every ballot at the strength
--- multiple winners would give it, 1 / (1 + N / 5), N being the stars it gave
+-- multiple winners would give it, 5 / (5 + N), N being the stars it gave
 -- those winners. Over a run of polls the wins are shared out between groups
 -- instead of the largest group taking every one.
 --
@@ -50,7 +50,7 @@ ALTER TABLE "public"."ballots"
   ADD COLUMN "given" numeric,
   ADD CONSTRAINT "ballots_given_ck" CHECK ((("given" IS NULL) OR ("given" >= (0)::numeric)));
 
-COMMENT ON COLUMN "public"."ballots"."given" IS 'On a sequential question, the stars this ballot''s voter had given earlier winners when it was cast: the carried row it claimed, or the newcomer''s share (newcomer_given). Its weight is 1 / (1 + given / 5). Null on every ballot of a question that is not sequential. Fixed at casting; a revision does not move it.';
+COMMENT ON COLUMN "public"."ballots"."given" IS 'On a sequential question, the stars this ballot''s voter had given earlier winners when it was cast: the carried row it claimed, or the newcomer''s share (newcomer_given). Its weight is 5 / (5 + given). Null on every ballot of a question that is not sequential. Fixed at casting; a revision does not move it.';
 
 
 -- Whether a question's ballots carry weights.
