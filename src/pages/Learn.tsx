@@ -822,39 +822,36 @@ export function AllChoices() {
           algorithms={['Nash']}
         >
           <ComingSoon name="Option allocation" />
-          <NotStrategyProof />
           <HardToSolve />
           <Text>
-            Sometimes every voter needs a different option of their own: chores shared out between
-            housemates, topics handed out to a class, or shifts split between volunteers.{' '}
-            <strong>Option allocation</strong> gives each voter one option, choosing the allocation
-            that leaves the group as a whole as satisfied as it can be:
+            Sometimes different voters need different options: chores shared out between housemates
+            or shifts split between volunteers. <strong>Option allocation</strong> splits options up
+            between voters, choosing the allocation that leaves the group as a whole as satisfied as
+            possible:
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
               Every voter rates every option as usual, with more stars for the options they would
-              rather have.
+              prefer.
             </List.Item>
             <List.Item>
-              Each option can optionally be given a number of places: how many voters it can go to.
-              A chore might need two housemates, or a shift four volunteers. An option with no
-              number set goes to one voter.
+              Each option can optionally be given a capacity: how many voters it can go to. A chore
+              might need two housemates, or a shift four volunteers.
             </List.Item>
             <List.Item>
-              The allocation chosen is the one where the stars each voter gave their own option,
-              multiplied together, are as large as possible.
+              Each voter&rsquo;s satisfaction is the sum of the stars that they gave the option(s)
+              they were assigned.
+            </List.Item>
+            <List.Item>
+              The allocation chosen is the one where each voter&rsquo;s satisfaction, multiplied
+              together, is as large as possible.
             </List.Item>
           </List>
           <Text>
-            Multiplying rather than adding stops the allocation from handing one voter an option
-            they gave 0 stars so that the others can do slightly better: anyone left with 0 stars
-            makes the whole product 0.
-          </Text>
-          <Text>
-            The numbers don&rsquo;t have to match. If there are more voters than places across all
-            the options, every place is filled and some voters go without one, and those voters are
-            left out of the product. If there are more places than voters, every voter gets one and
-            some places are left empty.
+            The system will try to give each voter positive satisfaction if possible, since one 0
+            makes the whole product 0. If this isn't possible, it will choose the largest possible
+            set of voters that can have positive satisfaction and find the optimal solution for that
+            set of voters.
           </Text>
         </Choice>
 
@@ -1124,8 +1121,8 @@ function HardToSolve() {
   return (
     <Alert variant="light" color="orange" icon={<CpuIcon size={20} aria-hidden />}>
       <Text size="sm">
-        Warning: finding this solution can be computationally expensive. This app might not be able
-        to find the most optimal solution possible.
+        Finding this solution can be computationally expensive. This app might not be able to find
+        the most optimal possible solution.
       </Text>
     </Alert>
   )
