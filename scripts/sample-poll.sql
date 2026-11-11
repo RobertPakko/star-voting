@@ -147,6 +147,100 @@ select $json${
 }$json$::jsonb
 $$;
 
+-- The sequel: the next movie night, made from the finished one as *Create
+-- sequel poll* makes it (see src/lib/sequel.ts). The film question is
+-- sequential: each of the nine carries the stars they gave last time's
+-- winner, Knives Out, so its fans -- Ana and Erin gave it 5 -- count at half
+-- strength or so, and Hugo, who gave it 1, at nearly full. The calendar asks
+-- for a consensus time, which STAR's weights do not apply to, so it copies as
+-- an ordinary question a week on. Jules is new, and votes at the average
+-- weight.
+--
+-- Knives Out is off the list (they have seen it) and Arrival is on. Counted
+-- as a fresh poll, Arrival would win: Ana, Ben, Chloe and Erin prefer it to
+-- Paddington 2, against Diego, Gina and Hugo. Counted as a sequel, those four
+-- had their film last week, and Paddington 2 wins the runoff on weight.
+create or replace function sample.sequel() returns jsonb language sql immutable as $$
+select $json${
+  "title": "Movie night 2",
+  "voters": ["Ana", "Ben", "Chloe", "Diego", "Erin", "Farid", "Gina", "Hugo", "Iris", "Jules"],
+  "questions": [
+    {
+      "slug": "movie",
+      "title": "What are we watching?",
+      "carried_from": "movie",
+      "options": [
+        { "name": "Arrival", "description": "When twelve mysterious spacecraft appear around the world, a linguist is brought in to find out whether they come in peace." },
+        { "name": "Paddington 2", "description": "Paddington, now happily settled with the Brown family and a popular member of the local community, picks up a series of odd jobs to buy the perfect present for his Aunt Lucy's 100th birthday, only for the gift to be stolen." },
+        { "name": "Spirited Away", "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts." },
+        { "name": "The Matrix", "description": "A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI." },
+        { "name": "Honeyland", "description": "The last female bee-hunter in Europe must save the bees and return the natural balance in Honeyland, when a family of nomadic beekeepers invade her land and threaten her livelihood." }
+      ],
+      "ballots": [
+        [5, 2, 4, 3, 0],
+        [5, 2, 3, 4, 1],
+        [4, 3, 5, 2, 4],
+        [1, 5, 2, 4, 0],
+        [5, 3, 4, 2, 1],
+        [4, 4, 3, 4, 2],
+        [1, 5, 2, 1, 0],
+        [2, 4, 3, 3, 1],
+        [4, 4, 1, 2, 1],
+        [3, 3, 5, 1, 2]
+      ]
+    },
+    {
+      "slug": "when",
+      "title": "When are we meeting?",
+      "kind": "consensus_time",
+      "schedule": {
+        "timezone": "-07:00",
+        "window": { "start": "09:00", "end": "22:00" },
+        "desired_slots": 8,
+        "granularity": 30
+      },
+      "options": [
+        { "name": "2026-02-27T18:00:00-07:00" },
+        { "name": "2026-02-28T09:00:00-07:00" },
+        { "name": "2026-02-28T09:30:00-07:00" },
+        { "name": "2026-02-28T10:00:00-07:00" },
+        { "name": "2026-02-28T10:30:00-07:00" },
+        { "name": "2026-02-28T11:00:00-07:00" },
+        { "name": "2026-02-28T11:30:00-07:00" },
+        { "name": "2026-02-28T12:00:00-07:00" },
+        { "name": "2026-02-28T12:30:00-07:00" },
+        { "name": "2026-02-28T13:00:00-07:00" }
+      ],
+      "ballots": [
+        [5, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+        [0, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+        [5, 3, 3, 4, 4, 5, 5, 5, 5, 5],
+        [2, 5, 4, 4, 4, 3, 3, 2, 2, 1],
+        [0, 5, 5, 5, 4, 4, 3, 3, 2, 1],
+        [4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+        [0, 4, 4, 4, 3, 3, 2, 2, 2, 2],
+        [1, 5, 4, 4, 4, 4, 4, 4, 4, 4],
+        [0, 4, 4, 4, 4, 5, 5, 5, 5, 5],
+        [4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+      ]
+    }
+  ]
+}$json$::jsonb
+$$;
+
+-- A sequential question's earlier voters, read off the finished question it
+-- follows exactly as the create form reads them (carriedFrom in
+-- src/lib/sequel.ts): every published ballot's N, plus the stars it gave the
+-- winner; a tie charges nobody.
+create or replace function sample.carried(p_poll_id uuid) returns jsonb language sql as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'voter', b ->> 'voter',
+           'given', coalesce((b ->> 'given')::numeric, 0)
+                    + coalesce((b -> 'scores' ->> (r.tally ->> 'winner_id'))::numeric, 0))), '[]')
+  from jsonb_array_elements(open_poll_ballots(p_poll_id) -> 'ballots') b,
+       (select open_poll_results(p_poll_id) as tally) r
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Building one copy of it
 -- ---------------------------------------------------------------------------
@@ -159,10 +253,12 @@ $$;
 -- p_vote decides which copy this is: with the ballots cast and the poll
 -- closed, or empty and open. Everything else about the two is identical,
 -- because they are meant to be read as one poll seen at two moments.
-create or replace function sample.build(p_prefix text, p_description text, p_vote boolean)
+create or replace function sample.build(
+  p_prefix text, p_description text, p_vote boolean,
+  p_poll jsonb default sample.poll(), p_follows text default null)
 returns void language plpgsql as $$
 declare
-  v_poll jsonb := sample.poll();
+  v_poll jsonb := p_poll;
   v_group_id uuid;
   v_first uuid;
   v_question jsonb;
@@ -184,10 +280,18 @@ begin
     -- them be a calendar; see 0056_schedule_options.sql. A question that is not
     -- one sends neither, and create_poll_group defaults it to an ordinary poll
     -- exactly as it always did.
+    --
+    -- A sequel's question names the question it follows (`carried_from`),
+    -- whose voters it carries; see sample.carried.
     (select jsonb_agg(
               jsonb_build_object('title', x ->> 'title', 'options', x -> 'options')
               || jsonb_strip_nulls(
-                   jsonb_build_object('kind', x -> 'kind', 'schedule', x -> 'schedule'))
+                   jsonb_build_object(
+                     'kind', x -> 'kind',
+                     'schedule', x -> 'schedule',
+                     'carried', case when x ? 'carried_from' then sample.carried(
+                       (select poll_id from sample.link
+                        where name = p_follows || '-' || (x ->> 'carried_from'))) end))
             order by ord)
      from jsonb_array_elements(v_poll -> 'questions') with ordinality as t(x, ord)),
     null,
@@ -349,6 +453,15 @@ begin
     'sample-result',
     'An example of the results from a poll. Nine people voted on a film and a time to meet.',
     true
+  );
+  -- Made once the first has finished, since its film question is read from
+  -- the first's results. Closing the first pins nothing yet; see below.
+  perform sample.build(
+    'sample-sequel',
+    'The next movie night, made as a sequel to the first. Everyone''s ballot counts less the more they liked last week''s film.',
+    true,
+    sample.sequel(),
+    'sample-result'
   );
 end $$;
 

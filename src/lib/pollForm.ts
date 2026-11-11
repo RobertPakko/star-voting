@@ -12,6 +12,8 @@ import {
   type GranuleKey,
 } from './schedule'
 import {
+  GIVEN_MAX,
+  MAX_CARRIED,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   OPTION_DESCRIPTION_MAX,
@@ -19,6 +21,7 @@ import {
   POLL_DESCRIPTION_MAX,
   TITLE_MAX,
   tooLong,
+  VOTER_NAME_MAX,
 } from './limits'
 import type { DailyWindow, PollKind, PollSchedule } from './types'
 import { CHOICE_NUMBER, DEFAULT_CHOICE_NUMBER, isCalendar } from './choices'
@@ -76,6 +79,49 @@ export interface QuestionDraft {
   offsetPicked: boolean
   /** Weeks a duplicate's dates were moved forward; 0 otherwise. */
   datesMoved: number
+  /**
+   * A sequential poll: `kind` is then its *Sequential poll type*, and every
+   * ballot counts at the weight its voter's stars for earlier winners leave
+   * it (`carried`). Kept whatever the choice, like the calendar.
+   */
+  sequential: boolean
+  carried: CarriedDraft[]
+}
+
+/**
+ * One earlier voter of a sequential question: a name (an address on an invite
+ * poll) and the stars they gave the winners of earlier polls. `given` is what
+ * the number box holds, '' while it is empty.
+ */
+export interface CarriedDraft {
+  /** Stable identity for the row; never sent. */
+  key: string
+  voter: string
+  given: number | string
+}
+
+let carriedSeq = 0
+
+export function blankCarried(voter = '', given: number | string = ''): CarriedDraft {
+  carriedSeq += 1
+  return { key: `carried-${carriedSeq}`, voter, given }
+}
+
+/** Whether a row was left empty, and so is ignored rather than refused. */
+const isBlankCarried = (row: CarriedDraft) => !row.voter.trim() && row.given === ''
+
+/** The earlier voters a question sends, or null for a question that is not sequential. */
+export function carriedOf(
+  question: QuestionDraft,
+  isOpen: boolean,
+): { voter: string; given: number }[] | null {
+  if (!question.sequential) return null
+  return question.carried
+    .filter((row) => !isBlankCarried(row))
+    .map((row) => ({
+      voter: isOpen ? row.voter.trim() : row.voter.trim().toLowerCase(),
+      given: Number(row.given),
+    }))
 }
 
 let questionSeq = 0
@@ -94,6 +140,8 @@ export function blankQuestion(): QuestionDraft {
     marked: new Set(),
     offsetPicked: false,
     datesMoved: 0,
+    sequential: false,
+    carried: [blankCarried()],
   }
 }
 
@@ -121,10 +169,24 @@ export interface FormErrors {
   /** By `optionKey()`. */
   optionNames: Record<string, string>
   optionDescriptions: Record<string, string>
+  /** A sequential question's list of earlier voters, by question index. */
+  carried: Record<number, string>
+  /** One earlier voter's name and stars, by `optionKey()` (question, row). */
+  carriedVoters: Record<string, string>
+  carriedGiven: Record<string, string>
 }
 
 export function noErrors(): FormErrors {
-  return { schedules: {}, questionTitles: {}, options: {}, optionNames: {}, optionDescriptions: {} }
+  return {
+    schedules: {},
+    questionTitles: {},
+    options: {},
+    optionNames: {},
+    optionDescriptions: {},
+    carried: {},
+    carriedVoters: {},
+    carriedGiven: {},
+  }
 }
 
 export function hasErrors(errors: FormErrors): boolean {
@@ -137,7 +199,10 @@ export function hasErrors(errors: FormErrors): boolean {
     Object.keys(errors.questionTitles).length ||
     Object.keys(errors.options).length ||
     Object.keys(errors.optionNames).length ||
-    Object.keys(errors.optionDescriptions).length,
+    Object.keys(errors.optionDescriptions).length ||
+    Object.keys(errors.carried).length ||
+    Object.keys(errors.carriedVoters).length ||
+    Object.keys(errors.carriedGiven).length,
   )
 }
 
@@ -146,7 +211,8 @@ export function questionHasError(errors: FormErrors, questionIndex: number): boo
   if (
     errors.questionTitles[questionIndex] ||
     errors.options[questionIndex] ||
-    errors.schedules[questionIndex]
+    errors.schedules[questionIndex] ||
+    errors.carried[questionIndex]
   ) {
     return true
   }
@@ -154,8 +220,62 @@ export function questionHasError(errors: FormErrors, questionIndex: number): boo
   const prefix = `${questionIndex}:`
   return (
     Object.keys(errors.optionNames).some((key) => key.startsWith(prefix)) ||
-    Object.keys(errors.optionDescriptions).some((key) => key.startsWith(prefix))
+    Object.keys(errors.optionDescriptions).some((key) => key.startsWith(prefix)) ||
+    Object.keys(errors.carriedVoters).some((key) => key.startsWith(prefix)) ||
+    Object.keys(errors.carriedGiven).some((key) => key.startsWith(prefix))
   )
+}
+
+/**
+ * A sequential question's earlier voters. Mirrors `insert_carried_weights`:
+ * named, once each, an invitee on an invite poll, with stars from 0 to
+ * `GIVEN_MAX`. A row left wholly empty is ignored.
+ */
+function validateCarried(
+  question: QuestionDraft,
+  questionIndex: number,
+  isOpen: boolean,
+  invited: Set<string>,
+  errors: FormErrors,
+) {
+  const rows = question.carried.filter((row) => !isBlankCarried(row))
+  if (rows.length === 0) {
+    errors.carried[questionIndex] = 'Add the voters from earlier polls, or choose another Choice.'
+    return
+  }
+  if (rows.length > MAX_CARRIED) {
+    errors.carried[questionIndex] =
+      `A sequential poll can carry ${MAX_CARRIED} earlier voters; this one has ${rows.length}.`
+  }
+
+  const seen = new Map<string, number>()
+  question.carried.forEach((row, index) => {
+    if (isBlankCarried(row)) return
+    const key = optionKey(questionIndex, index)
+    const voter = row.voter.trim()
+    const folded = voter.toLowerCase()
+
+    if (!voter) {
+      errors.carriedVoters[key] = isOpen ? 'Give this voter a name.' : 'Give this voter an email.'
+    } else if (!isOpen && !EMAIL_RE.test(folded)) {
+      errors.carriedVoters[key] = `"${voter}" doesn't look like an email address.`
+    } else if (!isOpen && !invited.has(folded)) {
+      errors.carriedVoters[key] = 'Not on the invite list above.'
+    } else if (isOpen && voter.length > VOTER_NAME_MAX) {
+      errors.carriedVoters[key] = tooLong('A name', voter.length, VOTER_NAME_MAX)
+    } else {
+      const first = seen.get(folded)
+      if (first !== undefined) errors.carriedVoters[key] = `Same as voter ${first + 1}.`
+      else seen.set(folded, index)
+    }
+
+    const given = row.given === '' ? NaN : Number(row.given)
+    if (row.given === '') {
+      errors.carriedGiven[key] = 'How many stars did they give earlier winners?'
+    } else if (!Number.isFinite(given) || given < 0 || given > GIVEN_MAX) {
+      errors.carriedGiven[key] = `From 0 to ${GIVEN_MAX.toLocaleString('en-US')}.`
+    }
+  })
 }
 
 /** The stored schedule: `window` becomes the union of what is actually painted. */
@@ -198,7 +318,16 @@ export function validate(form: {
     }
   }
 
+  // Who an invite poll's earlier voters may be: the people it invites.
+  const invited = new Set(
+    [...form.emails, ...(form.includeSelf ? [form.myEmail] : [])].map((e) =>
+      e.trim().toLowerCase(),
+    ),
+  )
+
   form.questions.forEach((question, questionIndex) => {
+    if (question.sequential) validateCarried(question, questionIndex, form.isOpen, invited, errors)
+
     if (form.multiQuestion) {
       const questionTitle = question.title.trim()
       if (!questionTitle) {

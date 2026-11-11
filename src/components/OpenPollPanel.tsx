@@ -7,7 +7,7 @@ import { forgetWatch, usePushHere, useWatching, watchPoll } from '../lib/push'
 import { openPollViewSchema, parseAnswer } from '../lib/rpcSchemas'
 import { voterKeyFor } from '../lib/voterKey'
 import type { DraftScope } from '../lib/ballotDraft'
-import type { VoterName } from '../lib/voterName'
+import { rememberedVoterName, type VoterName } from '../lib/voterName'
 import { BallotCard } from './BallotCard'
 import type { BallotScore } from './BallotFrame'
 import { CollectOptions, Confirmations } from './CollectOptions'
@@ -214,6 +214,7 @@ export function OpenPollPanel({
             poll={view.poll}
             options={view.options}
             voterName={needsName ? voterName : undefined}
+            carried={view.sequential ? (view.carried_names ?? []) : undefined}
             isCreator={isCreator}
             onVoted={onFirstVote ?? onChanged}
             questionStrip={questionStrip}
@@ -337,6 +338,7 @@ function OpenBallot({
   poll,
   options,
   voterName,
+  carried,
   isCreator,
   initial,
   onVoted,
@@ -348,6 +350,11 @@ function OpenBallot({
   options: PollOption[]
   /** Absent on polls that don't ask. */
   voterName?: VoterName
+  /**
+   * On a new ballot of a sequential poll, the earlier voters still to vote,
+   * offered as names where the poll shows them (empty where it hides them).
+   */
+  carried?: string[]
   isCreator: boolean
   /** The scores already on this ballot; absent when casting one. */
   initial?: Record<string, number>
@@ -385,20 +392,23 @@ function OpenBallot({
           p_poll_id: pollId,
           p_scores: scores,
           p_voter_key: voterKeyFor(pollId),
-          p_voter_name: voterName?.trimmed ?? null,
+          // A sequential poll that hides names still matches one, to find the
+          // ballot's weight from earlier polls: the name this browser last
+          // answered under, which the database uses and then throws away.
+          p_voter_name: voterName?.trimmed ?? (carried ? rememberedVoterName() || null : null),
         })
     if (error) throw new Error(error.message)
   }
+
+  const nameField = voterName && (
+    <VoterNameField name={voterName} suggestions={revising ? undefined : carried} />
+  )
 
   if (isCalendar(poll.kind) && poll.schedule) {
     return (
       <Suspense
         fallback={
-          <QuestionSkeleton
-            schedule={poll.schedule}
-            nameField={voterName && <VoterNameField name={voterName} />}
-            strip={questionStrip}
-          />
+          <QuestionSkeleton schedule={poll.schedule} nameField={nameField} strip={questionStrip} />
         }
       >
         <TimeBallotCard
@@ -406,7 +416,7 @@ function OpenBallot({
           schedule={poll.schedule}
           initial={initial}
           draft={draft}
-          nameField={voterName && <VoterNameField name={voterName} />}
+          nameField={nameField}
           questionStrip={questionStrip}
           note={<RevealNote reveal={{ kind: 'open', isCreator }} canRevise />}
           beforeSubmit={checkName}
@@ -423,7 +433,7 @@ function OpenBallot({
       options={options}
       initial={initial}
       draft={draft}
-      nameField={voterName && <VoterNameField name={voterName} />}
+      nameField={nameField}
       questionStrip={questionStrip}
       note={<RevealNote reveal={{ kind: 'open', isCreator }} canRevise />}
       beforeSubmit={checkName}

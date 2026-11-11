@@ -190,6 +190,8 @@ export const openPollViewSchema = z.object({
   your_confirmed_name: z.string().nullable(),
   confirmed_count: z.number(),
   confirmations: z.array(z.string()).nullable(),
+  sequential: z.boolean().optional(),
+  carried_names: z.array(z.string()).nullable().optional(),
 }) satisfies z.ZodType<OpenPollView>
 
 const tiebreakEntry = z.object({
@@ -302,6 +304,7 @@ export const pollResultsSchema = z.object({
   // to the ranking; an empty list is either, and either reads as nothing. The
   // consensus is the one object.
   kind_result: z.union([consensusSchema, fractionalSharesSchema, rankingSchema]).nullable(),
+  weighted: z.boolean().optional(),
 }) satisfies z.ZodType<PollResults>
 
 export const optionScoresSchema = z.array(
@@ -313,13 +316,14 @@ export const optionScoresSchema = z.array(
   }),
 ) satisfies z.ZodType<OptionScore[]>
 
-const ballotSheetSchema = z.object({
+export const ballotSheetSchema = z.object({
   voters_named: z.boolean(),
   options: z.array(z.object({ id: z.string(), name: z.string() })),
   ballots: z.array(
     z.object({
       voter: z.string().nullable(),
       scores: z.record(z.string(), z.number()),
+      given: z.number().optional(),
     }),
   ),
 }) satisfies z.ZodType<BallotSheet>

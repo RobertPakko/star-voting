@@ -1,4 +1,4 @@
-import { Divider, TextInput } from '@mantine/core'
+import { Autocomplete, Divider, TextInput } from '@mantine/core'
 import { VOTER_NAME_MAX } from '../lib/limits'
 import type { VoterName } from '../lib/voterName'
 
@@ -11,13 +11,45 @@ export function VoterNameField({
   name,
   disabled,
   value,
+  suggestions,
 }: {
   name: VoterName
   /** Once the answer is in; Edit vote enables it again. */
   disabled?: boolean
   /** What a disabled box shows instead of what is typed (the name the ballot carries). */
   value?: string
+  /**
+   * On a sequential poll, the earlier voters still to vote: offered as a list
+   * to pick from, so a ballot carries its weight from earlier polls. Any other
+   * name is a newcomer's, so the box still takes one typed in.
+   */
+  suggestions?: string[]
 }) {
+  if (suggestions && !disabled) {
+    return (
+      <>
+        <Autocomplete
+          ref={name.ref}
+          label="Your name"
+          description="Pick your name from earlier polls, or type a new one."
+          placeholder="Your name"
+          data={suggestions}
+          value={name.value}
+          onChange={name.onChange}
+          error={name.error}
+          maxLength={VOTER_NAME_MAX}
+          required
+          enterKeyHint="done"
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            name.blur()
+          }}
+        />
+        <Divider />
+      </>
+    )
+  }
+
   return (
     <>
       <TextInput

@@ -1,3 +1,4 @@
+import { sheetWeights } from './ballotWeight'
 import type { BallotSheet } from './types'
 
 /**
@@ -30,11 +31,19 @@ import type { BallotSheet } from './types'
  * hand it to a reader as though the poll had one.
  */
 export function ballotsCsv(sheet: BallotSheet): string {
-  const head = [sheet.voters_named ? 'Voter' : 'Ballot', ...sheet.options.map((o) => o.name)]
+  // A sequential poll's ballots carry weights, which the totals are summed
+  // at; the column holds the exact weight, so a SUMPRODUCT reproduces them.
+  const weights = sheetWeights(sheet)
+  const head = [
+    sheet.voters_named ? 'Voter' : 'Ballot',
+    ...(weights ? ['Weight'] : []),
+    ...sheet.options.map((o) => o.name),
+  ]
   const rows = sheet.ballots.map((ballot, i) => [
     // The grid draws an unnamed ballot as `#1`; the number alone is the same
     // fact in a column something is going to read as data.
     sheet.voters_named ? (ballot.voter ?? '') : String(i + 1),
+    ...(weights ? [String(weights[i])] : []),
     // Unscored reads as 0, exactly as it does everywhere else in the app, so
     // the columns add up to what the tally says. See `Ballots`.
     ...sheet.options.map((o) => String(ballot.scores[o.id] ?? 0)),

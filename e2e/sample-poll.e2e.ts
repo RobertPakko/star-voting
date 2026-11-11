@@ -311,6 +311,22 @@ test('a tie-break can be opened over its round', async ({ page }) => {
   await expectAccessible(page, 'an open tie-break')
 })
 
+test('a sequel counts each ballot at its weight, and says so on the sheet', async ({ page }) => {
+  await page.goto('#/examples')
+  await page.getByRole('link', { name: 'See the result' }).click()
+  // Counted fresh, Arrival would win; counted as a sequel, last week's film's
+  // fans count for less and Paddington 2 takes the runoff.
+  await expect(page.getByText('Best option: Paddington 2')).toBeVisible()
+  const sheet = page.getByRole('region', { name: 'Ballots' })
+  await expect(sheet.getByRole('columnheader', { name: 'Weight', exact: true })).toBeVisible()
+  // Hugo gave Knives Out 1 star, so he is the strongest ballot; Ana gave it
+  // 5, so hers counts at (5 + 1) / (5 + 5).
+  await expect(sheet.getByRole('row', { name: /^Hugo 1 / })).toBeVisible()
+  await expect(sheet.getByRole('row', { name: /^Ana 3\/5 / })).toBeVisible()
+  await expect(sheet.getByText('Weighted total')).toBeVisible()
+  await expectAccessible(page, 'a sequel and its weighted sheet')
+})
+
 test('a mistyped sample link says so', async ({ page }) => {
   await page.goto('#/sample-nothing-here')
   await expect(heading(page)).toHaveText('Poll not found')

@@ -26,13 +26,15 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
  * It is only ever a suggestion — every field starts filled in and stays
  * editable — and a poll that hides its respondents shows no field at all:
  * `open_poll_submit` discards the name on such a poll whatever the client
- * sends, so a remembered name cannot leak onto an anonymous ballot.
+ * sends, so a remembered name cannot leak onto an anonymous ballot. (A
+ * sequential poll that hides names does send it, unasked, to find the
+ * ballot's weight from earlier polls; it is discarded all the same.)
  */
 
 const STORAGE_KEY = 'star-voting:voter-name'
 
 /** The remembered name, or '' when there is none and for a browser with no storage. */
-function rememberedVoterName(): string {
+export function rememberedVoterName(): string {
   try {
     return localStorage.getItem(STORAGE_KEY) ?? ''
   } catch {

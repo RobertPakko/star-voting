@@ -55,6 +55,15 @@ export const MAX_OPTIONS = 500
 export const VOTER_NAME_MAX = 60
 
 /**
+ * A sequential question's earlier voters, and the stars each may have given
+ * earlier winners. Both match `insert_carried_weights`; the stars are bounded
+ * only so a typo of extra zeros is caught, since no run of polls gives that
+ * many.
+ */
+export const MAX_CARRIED = 500
+export const GIVEN_MAX = 10000
+
+/**
  * "Too long, by this much" — the number a writer needs is how much to cut,
  * not what the ceiling was.
  */

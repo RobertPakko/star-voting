@@ -41,10 +41,19 @@ import {
 } from '../lib/schedule'
 import { DuplicateDates } from '../components/DuplicateDates'
 import { viewerOffsetOn } from '../lib/timezones'
-import { pollScheduleSchema } from '../lib/rpcSchemas'
 import {
+  ballotSheetSchema,
+  parseAnswer,
+  pollResultsSchema,
+  pollScheduleSchema,
+} from '../lib/rpcSchemas'
+import { carriedFrom } from '../lib/sequel'
+import { CarriedVoters } from '../components/CarriedVoters'
+import {
+  blankCarried,
   blankOption,
   blankQuestion,
+  carriedOf,
   kindValueOf,
   hasErrors,
   noErrors,
@@ -65,9 +74,19 @@ import listRow from '../components/listRow.module.css'
 import { MAX_OPTIONS, MAX_QUESTIONS } from '../lib/limits'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type { Invitee, Poll, PollKind, PollMode, PollOption } from '../lib/types'
-import { CHOICE_NUMBER, CHOICE_NUMBERS, CHOICE_ORDER, CHOICES, isCalendar } from '../lib/choices'
+import {
+  CHOICE_NUMBER,
+  CHOICE_NUMBERS,
+  CHOICE_ORDER,
+  CHOICES,
+  isCalendar,
+  SEQUENTIAL_KINDS,
+} from '../lib/choices'
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
+
+/** The *Choice* entry that makes a question sequential; its type is a second select. */
+const SEQUENTIAL = 'sequential'
 
 /** The `+` tab's value. Question keys are `question-N`, so it cannot collide. */
 const ADD_QUESTION = 'add-question'
@@ -80,8 +99,12 @@ export function CreatePoll() {
   const { session, anonymous } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const fromParam = searchParams.get('from')
+  // A duplicate, or a sequel: the same copy, with a sequel's STAR questions
+  // made sequential and their earlier voters filled in (lib/sequel.ts).
+  const sequelParam = searchParams.get('sequel')
+  const fromParam = searchParams.get('from') ?? sequelParam
   const duplicateOf = fromParam && pollIdFromParam(fromParam)
+  const sequel = Boolean(sequelParam)
 
   // The last poll's settings; a duplicate is filled from its source instead.
   const [defaults] = useState(readPollDefaults)
@@ -124,6 +147,11 @@ export function CreatePoll() {
 
   const myEmail = session?.user.email?.toLowerCase() ?? ''
   const isOpen = mode === 'open'
+  // A sequential question shows who voted and the ballots, or neither: a
+  // ballot's weight on an anonymous sheet would say whose it is. So while any
+  // question is sequential the two settings are one switch.
+  const anySequential = questions.some((question) => question.sequential)
+  const publishBallots = anySequential ? showVoters : showBallots
 
   const errors = validate({
     title,
@@ -144,6 +172,41 @@ export function CreatePoll() {
     : (questions[0]?.key ?? null)
 
   const sectionTitle = multiQuestion ? 'Questions' : 'Decision'
+
+  /**
+   * A sequel's earlier voters for one question of the poll it follows: null
+   * for a question that cannot be sequential (it copies as an ordinary one),
+   * a sentence where its ballots could not be read. Read through the same
+   * gates the results page reads through, so only a poll whose ballots are
+   * published with names on them gives anything.
+   */
+  async function sequelOf(
+    row: Poll,
+    invitees: string[] | null,
+  ): Promise<{ voter: string; given: number }[] | string | null> {
+    if (!SEQUENTIAL_KINDS.includes(row.kind)) return null
+    const [sheetRes, resultsRes, skippedRes] = await Promise.all([
+      supabase.rpc('poll_ballots', { p_poll_id: row.id }),
+      supabase.rpc('get_poll_results', { p_poll_id: row.id }),
+      supabase.rpc('get_poll_carried_weights', { p_poll_id: row.id }),
+    ])
+    const failure = sheetRes.error ?? resultsRes.error ?? skippedRes.error
+    if (failure) {
+      return `Couldn't fill in the earlier voters from that poll: ${failure.message}`
+    }
+    const sheet = parseAnswer(ballotSheetSchema, 'poll_ballots', sheetRes.data)
+    const results = parseAnswer(pollResultsSchema, 'get_poll_results', resultsRes.data)
+    const skipped = Array.isArray(skippedRes.data)
+      ? (skippedRes.data as { voter: string; given: number }[])
+      : []
+    if (sheet.error !== null || results.error !== null) {
+      return `Couldn't fill in the earlier voters from that poll: ${sheet.error ?? results.error}`
+    }
+    const rows = carriedFrom(sheet.value, results.value, skipped)
+    // An invite poll's earlier voters must be on its list; one taken off it
+    // since has nothing to vote with.
+    return invitees ? rows.filter((r) => invitees.includes(r.voter.toLowerCase())) : rows
+  }
 
   // Duplicating fills the form from the source poll; nothing is created until
   // submit. Read through ordinary RLS, so only a poll the user can see.
@@ -244,6 +307,8 @@ export function CreatePoll() {
         }
       }
 
+      // The questions copied, in order, for a sequel's ballots.
+      let sourceRows: Poll[] = []
       if (source.group_id) {
         // Copy every question of the group. Each question carries the whole
         // invite list, so RLS lets the reader see all siblings.
@@ -256,6 +321,7 @@ export function CreatePoll() {
         if (cancelled) return
 
         const rows = (groupRes.data as (Poll & { candidates: PollOption[] })[] | null) ?? []
+        sourceRows = rows.length > 1 ? rows : [source as Poll]
         if (rows.length > 1) {
           setMultiQuestion(true)
           setQuestions(rows.map((row) => draftFrom(row, row.candidates ?? [])))
@@ -268,6 +334,7 @@ export function CreatePoll() {
         setQuestions([draftFrom(source as Poll, candidates ?? [])])
       }
 
+      let invitees: string[] | null = null
       if (source.mode === 'invite') {
         // `poll_invitees` raises on open polls.
         const { data: inviteeData } = await supabase.rpc('poll_invitees', {
@@ -275,9 +342,31 @@ export function CreatePoll() {
         })
         if (cancelled) return
         const allEmails = ((inviteeData as Invitee[]) ?? []).map((i) => i.email)
+        invitees = allEmails
         // The creator's own address is the checkbox, not a tag.
         setIncludeSelf(allEmails.includes(myEmail))
         setEmails(allEmails.filter((e) => e !== myEmail))
+      }
+
+      if (sequel) {
+        const sources = source.group_id ? sourceRows : [source as Poll]
+        const carried = await Promise.all(sources.map((row) => sequelOf(row, invitees)))
+        if (cancelled) return
+        const failed = carried.find((c) => typeof c === 'string')
+        if (failed) setError(failed)
+        setQuestions((prev) =>
+          prev.map((question, i) => {
+            const rows = carried[i]
+            if (!Array.isArray(rows)) return question
+            return {
+              ...question,
+              sequential: true,
+              carried: rows.length
+                ? rows.map((row) => blankCarried(row.voter, row.given))
+                : [blankCarried()],
+            }
+          }),
+        )
       }
 
       // A copy of a time poll is nearly always about other dates, so ask for
@@ -296,7 +385,7 @@ export function CreatePoll() {
     return () => {
       cancelled = true
     }
-  }, [duplicateOf, myEmail])
+  }, [duplicateOf, myEmail, sequel])
 
   function patchOptions(question: number, edit: (options: OptionDraft[]) => OptionDraft[]) {
     setQuestions((prev) =>
@@ -456,6 +545,7 @@ export function CreatePoll() {
           kind: question.kind,
           kind_value: kindValueOf(question),
           schedule: null,
+          carried: carriedOf(question, isOpen),
           options: question.options
             .map((o) => ({ name: o.name.trim(), description: o.description?.trim() || null }))
             .filter((o) => o.name),
@@ -470,6 +560,7 @@ export function CreatePoll() {
         kind: question.kind,
         kind_value: null,
         schedule: grid,
+        carried: carriedOf(question, isOpen),
         options: enumerateWindows(grid, marked).map((name) => ({
           name,
           description: null,
@@ -492,7 +583,7 @@ export function CreatePoll() {
           p_emails: isOpen ? [] : allEmails,
           p_mode: mode,
           p_show_voters: showVoters,
-          p_show_ballots: showBallots,
+          p_show_ballots: publishBallots,
           p_solicit_options: solicitOptions,
         })
       : await supabase.rpc('create_poll', {
@@ -502,8 +593,9 @@ export function CreatePoll() {
           p_emails: isOpen ? [] : allEmails,
           p_mode: mode,
           p_show_voters: showVoters,
-          p_show_ballots: showBallots,
+          p_show_ballots: publishBallots,
           p_solicit_options: solicitOptions,
+          p_carried: only.carried ?? undefined,
           p_kind: only.kind,
           p_schedule: only.schedule ?? undefined,
           p_kind_value: only.kind_value ?? undefined,
@@ -525,7 +617,7 @@ export function CreatePoll() {
       // Without an account the mode was not a choice, so the saved one stands.
       mode: anonymous ? defaults.mode : mode,
       showVoters,
-      showBallots,
+      showBallots: publishBallots,
       solicitOptions,
       multiQuestion,
     })
@@ -538,7 +630,7 @@ export function CreatePoll() {
       createdBy: 'you',
       mode,
       showVoters,
-      showBallots,
+      showBallots: publishBallots,
       turnout: {
         soliciting: solicitOptions,
         mode,
@@ -569,8 +661,20 @@ export function CreatePoll() {
   function choiceFields(question: QuestionDraft, questionIndex: number) {
     const number = CHOICE_NUMBER[question.kind]
     const id = `choice-${question.key}`
+    const columns = 1 + (question.sequential ? 1 : 0) + (number ? 1 : 0)
+
+    // Sequential is a choice of its own with a type under it; the type is
+    // the question's kind, so a sequential best time is still a time poll.
+    const choose = (value: string) =>
+      value === SEQUENTIAL
+        ? patchQuestion(questionIndex, {
+            sequential: true,
+            kind: SEQUENTIAL_KINDS.includes(question.kind) ? question.kind : 'option',
+          })
+        : patchQuestion(questionIndex, { sequential: false, kind: value as PollKind })
+
     return (
-      <SimpleGrid cols={{ base: 1, xs: number ? 2 : 1 }} spacing="xs">
+      <SimpleGrid cols={{ base: 1, xs: columns }} spacing="xs">
         <Stack gap={2}>
           <Group gap={4} wrap="nowrap">
             <Text component="label" htmlFor={id} size="sm" fw={500}>
@@ -603,11 +707,25 @@ export function CreatePoll() {
           <Select
             id={id}
             allowDeselect={false}
-            value={question.kind}
-            onChange={(v) => v && patchQuestion(questionIndex, { kind: v as PollKind })}
-            data={CHOICE_ORDER.map((kind) => ({ value: kind, label: CHOICES[kind].label }))}
+            value={question.sequential ? SEQUENTIAL : question.kind}
+            onChange={(v) => v && choose(v)}
+            data={[
+              ...CHOICE_ORDER.map((kind) => ({ value: kind, label: CHOICES[kind].label })),
+              { value: SEQUENTIAL, label: 'Sequential poll' },
+            ]}
           />
         </Stack>
+        {question.sequential && (
+          <Stack gap={2} justify="flex-end">
+            <Select
+              label="Sequential poll type"
+              allowDeselect={false}
+              value={question.kind}
+              onChange={(v) => v && patchQuestion(questionIndex, { kind: v as PollKind })}
+              data={SEQUENTIAL_KINDS.map((kind) => ({ value: kind, label: CHOICES[kind].label }))}
+            />
+          </Stack>
+        )}
         {number && (
           // Its label sits on the choice's label row, so the two boxes line up.
           <Stack gap={2} justify="flex-end">
@@ -645,6 +763,17 @@ export function CreatePoll() {
         )}
 
         {choiceFields(question, questionIndex)}
+
+        {question.sequential && (
+          <CarriedVoters
+            rows={question.carried}
+            isOpen={isOpen}
+            onChange={(rows) => patchQuestion(questionIndex, { carried: rows })}
+            listError={shown.carried[questionIndex]}
+            voterError={(i) => shown.carriedVoters[optionKey(questionIndex, i)]}
+            givenError={(i) => shown.carriedGiven[optionKey(questionIndex, i)]}
+          />
+        )}
 
         {isCalendar(question.kind) ? (
           <>
@@ -806,7 +935,7 @@ export function CreatePoll() {
   return (
     <Stack maw={720} mx="auto" gap="md">
       <Title order={1} size="h2" ta="center">
-        {duplicateOf ? 'Duplicate poll' : 'New poll'}
+        {sequel ? 'Sequel poll' : duplicateOf ? 'Duplicate poll' : 'New poll'}
       </Title>
 
       <Stack gap={2}>
@@ -916,17 +1045,40 @@ export function CreatePoll() {
         </Title>
         <Card withBorder p="sm">
           <Stack gap="sm">
-            <Switch
-              checked={showVoters}
-              onChange={(e) => setShowVoters(e.currentTarget.checked)}
-              label={mode === 'invite' ? 'Show voter emails' : 'Show voter names'}
-            />
+            {anySequential ? (
+              <Stack gap={4}>
+                <Switch
+                  checked={showVoters}
+                  onChange={(e) => {
+                    setShowVoters(e.currentTarget.checked)
+                    setShowBallots(e.currentTarget.checked)
+                  }}
+                  label={
+                    mode === 'invite'
+                      ? 'Show voter emails and publish ballots'
+                      : 'Show voter names and publish ballots'
+                  }
+                />
+                <Text size="xs" c="dimmed">
+                  A sequential poll shows both or neither: each ballot&rsquo;s weight would
+                  otherwise say whose it is.
+                </Text>
+              </Stack>
+            ) : (
+              <>
+                <Switch
+                  checked={showVoters}
+                  onChange={(e) => setShowVoters(e.currentTarget.checked)}
+                  label={mode === 'invite' ? 'Show voter emails' : 'Show voter names'}
+                />
 
-            <Switch
-              checked={showBallots}
-              onChange={(e) => setShowBallots(e.currentTarget.checked)}
-              label="Publish ballots"
-            />
+                <Switch
+                  checked={showBallots}
+                  onChange={(e) => setShowBallots(e.currentTarget.checked)}
+                  label="Publish ballots"
+                />
+              </>
+            )}
 
             <Switch
               checked={solicitOptions}
@@ -1020,7 +1172,7 @@ export function CreatePoll() {
             duplicateOf ? <CopyIcon size={16} aria-hidden /> : <PlusIcon size={16} aria-hidden />
           }
         >
-          {duplicateOf ? 'Create copy' : 'Create poll'}
+          {sequel ? 'Create sequel' : duplicateOf ? 'Create copy' : 'Create poll'}
         </Button>
       </Group>
     </Stack>

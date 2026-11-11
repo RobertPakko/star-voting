@@ -142,11 +142,11 @@ begin
   -- The grants of the remade functions.
   perform tests.assert_eq('create_poll is still the account''s to call',
     has_function_privilege('authenticated',
-      'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb, numeric)',
+      'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb, numeric, jsonb)',
       'execute'), true);
   perform tests.assert_eq('and not the link''s',
     has_function_privilege('anon',
-      'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb, numeric)',
+      'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb, numeric, jsonb)',
       'execute'), false);
   perform tests.assert_eq('insert_poll_row is nobody''s',
     has_function_privilege('authenticated',

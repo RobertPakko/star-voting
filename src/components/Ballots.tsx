@@ -4,6 +4,8 @@ import { DownloadSimpleIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { ballotsCsv, ballotsFileName, downloadCsv } from '../lib/ballotCsv'
+import { formatWeight, lowestGiven, sheetWeights } from '../lib/ballotWeight'
+import { figure } from '../lib/plural'
 import { Reveal } from './Reveal'
 import { BallotsSkeleton, ReadCalendarSkeleton } from './Skeletons'
 import { ScheduleBallots } from './deferred'
@@ -126,8 +128,12 @@ export function Ballots({
   // a score would have to predate the "score every option" rule, but reading
   // it as 0 keeps the columns adding up to what the tally says.
   const scoreOn = (scores: Record<string, number>, optionId: string) => scores[optionId] ?? 0
+  // On a sequential poll each ballot counts at its weight, which is drawn
+  // beside its name, and the totals are the weighted ones the tally counted.
+  const weights = sheetWeights(shown)
+  const low = weights ? lowestGiven(shown) : 0
   const totals = shown.options.map((o) =>
-    shown.ballots.reduce((sum, b) => sum + scoreOn(b.scores, o.id), 0),
+    shown.ballots.reduce((sum, b, i) => sum + scoreOn(b.scores, o.id) * (weights?.[i] ?? 1), 0),
   )
 
   // Faded in over the shape that was standing in for it; see Reveal.
@@ -173,7 +179,7 @@ export function Ballots({
             table for its scrollbar would sit inside the frame as an empty
             row. */}
             <Table.ScrollContainer
-              minWidth={120 + shown.options.length * 90}
+              minWidth={120 + (weights ? 80 : 0) + shown.options.length * 90}
               className={classes.frame}
               scrollAreaProps={{
                 offsetScrollbars: false,
@@ -188,6 +194,7 @@ export function Ballots({
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th className={classes.label}>{named ? 'Voter' : 'Ballot'}</Table.Th>
+                    {weights && <Table.Th ta="right">Weight</Table.Th>}
                     {shown.options.map((o) => (
                       <Table.Th key={o.id} ta="right">
                         {o.name}
@@ -209,6 +216,9 @@ export function Ballots({
                           </Text>
                         )}
                       </Table.Td>
+                      {weights && (
+                        <Table.Td ta="right">{formatWeight(ballot.given ?? 0, low)}</Table.Td>
+                      )}
                       {shown.options.map((o) => (
                         <Table.Td key={o.id} ta="right">
                           {scoreOn(ballot.scores, o.id)}
@@ -219,10 +229,13 @@ export function Ballots({
                 </Table.Tbody>
                 <Table.Tfoot>
                   <Table.Tr>
-                    <Table.Th className={classes.label}>Total</Table.Th>
+                    <Table.Th className={classes.label}>
+                      {weights ? 'Weighted total' : 'Total'}
+                    </Table.Th>
+                    {weights && <Table.Td />}
                     {totals.map((total, i) => (
                       <Table.Th key={shown.options[i].id} ta="right">
-                        {total}
+                        {figure(total)}
                       </Table.Th>
                     ))}
                   </Table.Tr>

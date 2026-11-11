@@ -277,6 +277,16 @@ export interface OpenPollView {
   confirmed_count: number
   /** Who has confirmed; null when the poll hides respondents. */
   confirmations: string[] | null
+  /**
+   * Whether the question carries earlier voters (a sequential poll). Optional
+   * until 0101 has landed everywhere.
+   */
+  sequential?: boolean
+  /**
+   * The earlier voters still to vote, offered as names to pick; null where the
+   * question is not sequential or hides who voted.
+   */
+  carried_names?: string[] | null
 }
 
 /** One option's score, from `get_poll_scores` / `open_poll_scores` (*All scores*). */
@@ -455,6 +465,11 @@ export interface PollResults {
    * tells them apart.
    */
   kind_result: RankingEntry[] | FractionalShare[] | ConsensusResult | null
+  /**
+   * Whether the ballots carry weights (a sequential poll): every count is
+   * then a weighted sum. Optional until 0101 has landed everywhere.
+   */
+  weighted?: boolean
 }
 
 /** One voter's scores, keyed by option id. */
@@ -462,6 +477,12 @@ export interface Ballot {
   /** Null on a poll that hides respondents. */
   voter: string | null
   scores: Record<string, number>
+  /**
+   * On a sequential question, the stars this ballot's voter had given earlier
+   * winners when it was cast (its weight is drawn from it; see
+   * `lib/ballotWeight.ts`). Absent on every other ballot.
+   */
+  given?: number
 }
 
 /** Every ballot in a poll, for auditing. Returned only once results unlock. */

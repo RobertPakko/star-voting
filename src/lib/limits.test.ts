@@ -2,6 +2,8 @@ import { describe, expect, test } from 'vitest'
 import {
   CONTACT_EMAIL_MAX,
   CONTACT_MESSAGE_MAX,
+  GIVEN_MAX,
+  MAX_CARRIED,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   OPTION_DESCRIPTION_MAX,
@@ -123,6 +125,11 @@ describe('the form and the database agree about', () => {
 
   test('how long a voter may name themselves', () => {
     expect(guard('open_poll_submit', 'length\\(v_name\\) >')).toBe(VOTER_NAME_MAX)
+  })
+
+  test("a sequential question's earlier voters", () => {
+    expect(guard('insert_carried_weights', 'jsonb_array_length\\(p_carried\\) >')).toBe(MAX_CARRIED)
+    expect(guard('insert_carried_weights', 'v_given >')).toBe(GIVEN_MAX)
   })
 
   test('where the score round and the full ranking stop', () => {
