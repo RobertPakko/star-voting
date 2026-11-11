@@ -20,6 +20,7 @@ export type Database = {
       ballots: {
         Row: {
           account_id: string | null
+          given: number | null
           id: string
           poll_id: string
           revised_at: string | null
@@ -30,6 +31,7 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
+          given?: number | null
           id?: string
           poll_id: string
           revised_at?: string | null
@@ -40,6 +42,7 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
+          given?: number | null
           id?: string
           poll_id?: string
           revised_at?: string | null
@@ -389,6 +392,7 @@ export type Database = {
       }
       create_poll: {
         Args: {
+          p_carried?: Json
           p_kind_value?: number
           p_description: string
           p_emails: string[]
@@ -452,6 +456,7 @@ export type Database = {
       }
       get_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
       get_poll_results: { Args: { p_poll_id: string }; Returns: Json }
+      get_poll_carried_weights: { Args: { p_poll_id: string }; Returns: Json }
       get_poll_scores: { Args: { p_poll_id: string }; Returns: Json }
       insert_option: {
         Args: {

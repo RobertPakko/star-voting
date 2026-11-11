@@ -5,13 +5,19 @@
  * close result against.
  */
 
-export const voters = (n: number) => `${n} ${n === 1 ? 'voter' : 'voters'}`
+/**
+ * A count as written: whole, or to two places where ballots carry weights
+ * (a sequential poll), where "2.5 voters" is what the runoff counted.
+ */
+export const figure = (n: number) => String(Math.round(n * 100) / 100)
+
+export const voters = (n: number) => `${figure(n)} ${n === 1 ? 'voter' : 'voters'}`
 
 /**
  * A score, as the stars it is made of rather than "points", so a reader can
  * see that an option's total is the stars its ballots gave it.
  */
-export const stars = (n: number) => `${n} ${n === 1 ? 'star' : 'stars'}`
+export const stars = (n: number) => `${figure(n)} ${n === 1 ? 'star' : 'stars'}`
 
 /**
  * "1 option", "23 pairs" -- a count and the thing it counts, agreeing.

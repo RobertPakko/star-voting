@@ -49,7 +49,12 @@ import { usePageTitle } from '../lib/pageTitle'
 import { percentagesOf } from '../lib/shares'
 import { stars } from '../lib/plural'
 import { pollPath } from '../lib/pollId'
-import { SAMPLE_RESULT_ID, SAMPLE_RESULT_TIME_ID, sampleResultAs } from '../lib/samplePoll'
+import {
+  SAMPLE_RESULT_ID,
+  SAMPLE_RESULT_TIME_ID,
+  SAMPLE_SEQUEL_ID,
+  sampleResultAs,
+} from '../lib/samplePoll'
 import type { ResultTool } from '../lib/choices'
 import vseByStrategy from '../assets/why-star/vse-by-strategy.png'
 import winnerDistribution from '../assets/why-star/winner-distribution.webp'
@@ -530,11 +535,12 @@ export function AllChoices() {
           color="cyan"
           title="Sequential polls"
           algorithms={['Iterative STAR', 'Ballot reweighting']}
+          example="sequential"
         >
-          <ComingSoon name="Sequential polls" plural />
           <Requirement icon={UsersThreeIcon}>
-            A previous poll must exist. Create a sequential poll in the poll management section of
-            an existing poll rather than from the poll creation page.
+            Choose <strong>Sequential poll</strong> when creating a poll and list the earlier
+            voters, each with the stars they gave previous winners. On a finished poll whose voters
+            and ballots are shown, <strong>Create sequel poll</strong> fills them in for you.
           </Requirement>
           <Text>
             Sometimes choices are recurring: what to eat at a weekly dinner or who hosts the next
@@ -1020,8 +1026,11 @@ function Choice({
   color: MantineColor
   title: string
   algorithms: string[]
-  /** The result in the sample poll that shows this choice, for a choice that is built. */
-  example?: ResultTool
+  /**
+   * The result in the sample poll that shows this choice, for a choice that is
+   * built; `sequential` is the sample's sequel.
+   */
+  example?: ResultTool | 'sequential'
   /** Marked *Under construction* beside the title, so it shows while folded. */
   unbuilt?: boolean
   children: ReactNode
@@ -1081,7 +1090,8 @@ function Choice({
  * on the film question, which asked for it; and the rest on the film
  * question recast as that kind (`sampleResultAs`).
  */
-function exampleFor(tool: ResultTool) {
+function exampleFor(tool: ResultTool | 'sequential') {
+  if (tool === 'sequential') return pollPath(SAMPLE_SEQUEL_ID)
   if (tool === 'consensus') return pollPath(SAMPLE_RESULT_TIME_ID)
   if (tool === 'option') return pollPath(SAMPLE_RESULT_ID)
   return pollPath(sampleResultAs(tool))
@@ -2498,33 +2508,51 @@ function Ballot({ ratings, voter }: { ratings: Ratings; voter: number }) {
 }
 
 /**
- * Harder elections than `/star`'s six friends, worked through one per card,
- * added as the choices on `/choices` are built. Under construction until the
- * first one lands.
+ * Finished sample polls showing more than `/star`'s six friends do, one per
+ * card, each opened as the poll it is.
  */
 export function MoreExamples() {
   usePageTitle('More examples')
   return (
     <Stack maw={720} mx="auto" gap="md">
       <Title order={1}>More examples</Title>
-      <Alert
-        variant="light"
-        icon={<HourglassIcon size={20} aria-hidden />}
-        title="Under construction"
-      >
-        <Text size="sm">This page isn&rsquo;t ready yet. Check back soon.</Text>
-      </Alert>
       <Text>
-        This page will work through more complex elections than the six friends on{' '}
-        <Anchor component={Link} to="/star" inherit>
-          What is STAR?
-        </Anchor>
-        , one for each choice on{' '}
+        Finished polls showing more of what the choices on{' '}
         <Anchor component={Link} to="/choices" inherit>
           All choices
         </Anchor>{' '}
-        as it is built.
+        can do than the six friends on{' '}
+        <Anchor component={Link} to="/star" inherit>
+          What is STAR?
+        </Anchor>
+        .
       </Text>
+      <Paper withBorder p="md" radius="md">
+        <Group gap="sm" wrap="nowrap" align="flex-start">
+          <ThemeIcon variant="light" color="cyan" size={44} radius="xl">
+            <RepeatIcon size={24} aria-hidden />
+          </ThemeIcon>
+          <Stack gap="xs" style={{ flex: 1 }}>
+            <Text fw={700}>Movie night 2</Text>
+            <Text size="sm">
+              A sequel to the{' '}
+              <Anchor component={Link} to={pollPath(SAMPLE_RESULT_ID)} inherit>
+                example result
+              </Anchor>
+              , made as a{' '}
+              <Anchor component={Link} to="/choices?section=sequential-polls" inherit>
+                sequential poll
+              </Anchor>
+              . The friends who loved last week&rsquo;s film count for less this week.
+            </Text>
+            <Group justify="flex-end">
+              <Button component={Link} to={pollPath(SAMPLE_SEQUEL_ID)} variant="light">
+                See the result
+              </Button>
+            </Group>
+          </Stack>
+        </Group>
+      </Paper>
     </Stack>
   )
 }

@@ -65,6 +65,11 @@ export const SAMPLE_POLL_ID = 'sample-movie'
 export const SAMPLE_RESULT_ID = 'sample-result-movie'
 /** The finished copy's question 2, the calendar asking for the consensus time. */
 export const SAMPLE_RESULT_TIME_ID = 'sample-result-when'
+/**
+ * The next movie night, made as a sequel to the finished one: its film
+ * question is a sequential poll. Shown on *More examples*.
+ */
+export const SAMPLE_SEQUEL_ID = 'sample-sequel-movie'
 
 /**
  * The finished film question as though it had asked for another result: one

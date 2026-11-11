@@ -52,6 +52,18 @@ describe('the ballots as a CSV', () => {
     expect(lines(csv)).toEqual(['Ballot,Pizza,Tacos', '1,3,3', '2,2,5'])
   })
 
+  test("a sequential poll carries each ballot's weight", () => {
+    const csv = ballotsCsv(
+      sheet({
+        ballots: [
+          { voter: 'Ada', scores: { a: 5, b: 1 }, given: 5 },
+          { voter: 'Grace', scores: { a: 0, b: 4 }, given: 0 },
+        ],
+      }),
+    )
+    expect(lines(csv)).toEqual(['Voter,Weight,Pizza,Tacos', 'Ada,0.5,5,1', 'Grace,1,0,4'])
+  })
+
   test('an option nobody scored counts as 0, as it does in the tally', () => {
     const csv = ballotsCsv(sheet({ ballots: [{ voter: 'Ada', scores: { a: 4 } }] }))
     expect(lines(csv)[1]).toBe('Ada,4,0')

@@ -26,7 +26,8 @@ src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage 
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
                  results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus — ChosenResult, ChoiceCount, AllScores, CoinFlip),
-                 the collecting stage (CollectOptions, TimeList), the poll heading and its tags,
+                 the collecting stage (CollectOptions, TimeList), a sequential question's earlier
+                 voters on the create form (CarriedVoters), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
                  SmoothHeight, PollCards), the ways back (BackToHome, BackToList), the home page's
                  ballot loop (StarLoop), ErrorBoundary, Announcer, and the intro film under intro/
@@ -1612,8 +1613,9 @@ is the page.
   `kind_result` swapped for the result its *More results* modal records.
   The page restates
   `/star`'s ballots above the sections, since its readers mostly arrive from
-  a result's modal. `/examples` holds harder elections, one per
-  choice as each is built, and says it is under construction until the first.
+  a result's modal. `/examples` is a card per finished sample poll that
+  shows more than `/star` does, each opening the poll itself: so far the
+  sequel (see [The sample poll](#the-sample-poll)).
   `/ties` and `/extensions` redirect to `/star?section=ties` and `/choices`
   for links already shared. *App features* links the install guide.
 
@@ -3463,6 +3465,68 @@ on the bottom edge of a half-height box. It sweeps in except under reduced
 motion (it animates from JavaScript, so it checks `useReducedMotion`). Its
 stylesheet is imported in `Results.tsx`, so ballots never fetch it.
 
+### Sequential polls
+
+A sequential question counts every ballot at the strength multiple winners
+would give it, 1 ÷ (1 + N ÷ 5), N being the stars its voter gave the winners
+of earlier polls, so over a run of polls the wins are shared out instead of
+the largest group taking each one. `/choices` explains it; `53_sequential_polls`
+holds the rules below.
+
+- **Nothing links one poll to the next.** A question is sequential exactly
+  when it carries earlier voters (`carried_weights`: a name on an open poll, an
+  invitee's address on an invite poll, and N), typed on the create form as
+  *Choice* → *Sequential poll*, with a *Sequential poll type* under it. The
+  type is the question's `kind`, and only the four STAR decides can be one
+  (`SEQUENTIAL_KINDS`, `insert_carried_weights`): a consensus or a split
+  would ignore the weights. *More results* leaves those two out on a weighted
+  tally for the same reason.
+- **A ballot takes its N when it is cast and keeps it** (`ballots.given`,
+  `claim_carried_weight`): the row matching the invitee's address, or the
+  open ballot's name, case-insensitively, claimed once. A ballot matching
+  nobody is a newcomer, at the N that gives it **the average weight** of the
+  carried rows (`newcomer_given`) — the average of weights, not of N, which
+  would start a newcomer below the average. A revision never moves N.
+- **The tally reads the weights off the ballots** (`poll_is_weighted`,
+  `poll_round`, which picks `weighted_star_round` over `star_round`), so a
+  question that carries nobody is counted exactly as before. The head round,
+  the kept winner, the option ranking, *All scores* and multiple winners
+  (which starts each ballot from its N and charges on top) all go through
+  it; the tally says `weighted`, and every count is then a weighted sum, read
+  out to two places (`figure` in `plural.ts`).
+- **Weights are scaled so the strongest ballot counts as one**
+  (`poll_ballot_weights`). No comparison changes, the figures stay readable
+  after many polls, and the published sheet's *Weight* column and
+  *Weighted total* row (`lib/ballotWeight.ts`) are the tally's own numbers. A
+  weight is an exact fraction where N is whole.
+- **A sequential question shows who voted and the ballots, or neither**
+  (refused otherwise, and one switch on the create form): a weight is a
+  function of what its voter gave earlier winners, which the creator typed,
+  so on an anonymous sheet it would say whose ballot it is.
+- **An open poll matches by name.** Showing voters, the name box offers the
+  earlier voters still to vote (`carried_names` on `open_poll_view`; a
+  Mantine `Autocomplete`, so a new name can still be typed). Hiding them, the
+  ballot sends the name this browser last answered under, which finds the
+  weight and is then discarded like every name on such a poll; no list is
+  shown, since a list losing names as they vote would be a roster. Nobody can
+  read which rows are claimed.
+- **A voter who skips a poll keeps their N**: their row stays unclaimed, and
+  `get_poll_carried_weights` (creator only, on a question showing voters)
+  hands it to the next sequel.
+- **A tie charges nobody.**
+
+**Create sequel poll** (`CreatorControls`, once the results are out) opens
+the create form at `#/new?sequel=<id>`, which is *Duplicate* plus, for each
+STAR question, the earlier voters worked out by `carriedFrom` in
+[`lib/sequel.ts`](src/lib/sequel.ts): every published ballot's N plus the
+stars it gave this poll's winners (multiple winners: the places the question
+asked for, else the first), then the voters who skipped. Other questions copy
+as ordinary ones. It reads every voter's own scores, so **it fills in only
+from a poll that publishes ballots with names on them**; on any other poll the
+button opens a modal saying why, and the creator can still type the voters
+in. Everything it fills in stays editable: it does nothing the creator could
+not.
+
 ### Tie-breaks
 
 Documented for readers at the foot of [`/star`](src/pages/Learn.tsx) and implemented in
@@ -3534,6 +3598,12 @@ the poll **through the app's own functions** (`create_poll_group`,
 `open_poll_results`, `open_poll_ranking`, `open_poll_multiple_winners`,
 `open_poll_fractional_winners`, `open_poll_consensus`, `open_poll_scores`
 and `open_poll_ballots` answer.
+
+`/#/sample-sequel-movie` is "Movie night 2", made from the finished copy as
+*Create sequel poll* makes it (`sample.carried` reads the published sheet as
+`carriedFrom` does): its film question is sequential, and Paddington 2 wins
+on weight where a fresh count would elect Arrival. *More examples* and the
+*Sequential polls* section of `/choices` open it.
 
 - **Nothing about the sample is computed in the browser.** Every number came
   from `star_round()` and `poll_ranking()`. To change what it shows, change

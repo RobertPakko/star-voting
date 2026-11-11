@@ -50,6 +50,12 @@ export const choicePage = (kind: PollKind) => `/choices?section=${CHOICES[kind].
  */
 export const isCalendar = (kind: PollKind) => kind === 'time' || kind === 'consensus_time'
 
+/**
+ * The kinds a sequential poll can be: the results STAR decides, which count
+ * each ballot at its weight. `insert_carried_weights` holds the same list.
+ */
+export const SEQUENTIAL_KINDS: PollKind[] = ['option', 'time', 'ranking', 'multiple']
+
 /** In the order the create form offers them. */
 export const CHOICE_ORDER: PollKind[] = [
   'option',
@@ -110,6 +116,9 @@ export const DEFAULT_CHOICE_NUMBER: Partial<Record<PollKind, number>> = {
  */
 export function offers(tool: ResultTool, results: PollResults) {
   if (tool === 'option') return true
+  // A sequential poll's ballots carry weights, which only STAR's results
+  // count with; a consensus or a split of them would quietly ignore them.
+  if (results.weighted && !SEQUENTIAL_KINDS.includes(tool)) return false
   return tool === 'fractional' || tool === 'consensus'
     ? results.option_count >= 2
     : results.option_count >= 3
