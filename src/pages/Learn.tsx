@@ -52,6 +52,7 @@ import { pollPath } from '../lib/pollId'
 import {
   SAMPLE_RESULT_ID,
   SAMPLE_RESULT_TIME_ID,
+  SAMPLE_SEQUEL_BUDGET_ID,
   SAMPLE_SEQUEL_ID,
   sampleResultAs,
 } from '../lib/samplePoll'
@@ -61,11 +62,11 @@ import winnerDistribution from '../assets/why-star/winner-distribution.webp'
 import classes from './Learn.module.css'
 
 /**
- * The five pages that explain: what STAR voting is and how it settles a tie
- * (`/star`), what else the same ballots can answer (`/choices`), harder
- * elections worked through (`/examples`), why use it (`/why-star`), and what
- * this site does with it (`/features`). Each is a home-page tile of its own,
- * so each is one short page rather than a tab of a longer one. Public, because
+ * The four pages that explain: what STAR voting is and how it settles a tie
+ * (`/star`), what else the same ballots can answer (`/choices`), why use it
+ * (`/why-star`), and what this site does with it (`/features`). Each is a
+ * home-page tile of its own, so each is one short page rather than a tab of
+ * a longer one. Public, because
  * the people who most need them are the ones who arrived from a share link and
  * have never heard of the method.
  */
@@ -669,8 +670,8 @@ export function AllChoices() {
           color="green"
           title="Proportional budget"
           algorithms={['Iterative STAR', 'Ballot reweighting', 'Cost adjustment']}
+          example="budget"
         >
-          <ComingSoon name="Proportional budget" />
           <NeedsCost />
           <Text>
             Sometimes options can have differing costs: activities for a trip with a fixed budget or
@@ -767,6 +768,10 @@ export function AllChoices() {
             Voters aren't shown the cost of each option, they are expected to provide a rating
             without considering the cost since the procedure automatically accounts for the cost of
             each option.
+          </Text>
+          <Text>
+            Since the ballots don&rsquo;t depend on the costs, any finished poll can be shared out
+            this way: open <strong>More results</strong>, give each option a cost and set a budget.
           </Text>
           <BudgetFormula />
         </Choice>
@@ -1085,10 +1090,13 @@ function Choice({
  * choice as though the question had asked for it: the consensus on its
  * calendar question, which did ask for the consensus time; the best option
  * on the film question, which asked for it; and the rest on the film
- * question recast as that kind (`sampleResultAs`).
+ * question recast as that kind (`sampleResultAs`). The two the first poll
+ * cannot show are the sequel's questions: its film question is sequential and
+ * its upgrades question a proportional budget.
  */
 function exampleFor(tool: ResultTool | 'sequential') {
   if (tool === 'sequential') return pollPath(SAMPLE_SEQUEL_ID)
+  if (tool === 'budget') return pollPath(SAMPLE_SEQUEL_BUDGET_ID)
   if (tool === 'consensus') return pollPath(SAMPLE_RESULT_TIME_ID)
   if (tool === 'option') return pollPath(SAMPLE_RESULT_ID)
   return pollPath(sampleResultAs(tool))
@@ -2499,56 +2507,6 @@ function Ballot({ ratings, voter }: { ratings: Ratings; voter: number }) {
         </tbody>
       </table>
     </div>
-  )
-}
-
-/**
- * Finished sample polls showing more than `/star`'s six friends do, one per
- * card, each opened as the poll it is.
- */
-export function MoreExamples() {
-  usePageTitle('More examples')
-  return (
-    <Stack maw={720} mx="auto" gap="md">
-      <Title order={1}>More examples</Title>
-      <Text>
-        Finished polls showing more of what the choices on{' '}
-        <Anchor component={Link} to="/choices" inherit>
-          All choices
-        </Anchor>{' '}
-        can do than the six friends on{' '}
-        <Anchor component={Link} to="/star" inherit>
-          What is STAR?
-        </Anchor>
-        .
-      </Text>
-      <Paper withBorder p="md" radius="md">
-        <Group gap="sm" wrap="nowrap" align="flex-start">
-          <ThemeIcon variant="light" color="cyan" size={44} radius="xl">
-            <RepeatIcon size={24} aria-hidden />
-          </ThemeIcon>
-          <Stack gap="xs" style={{ flex: 1 }}>
-            <Text fw={700}>Movie night 2</Text>
-            <Text size="sm">
-              A sequel to the{' '}
-              <Anchor component={Link} to={pollPath(SAMPLE_RESULT_ID)} inherit>
-                example result
-              </Anchor>
-              , made as a{' '}
-              <Anchor component={Link} to="/choices?section=sequential-polls" inherit>
-                sequential poll
-              </Anchor>
-              . The friends who loved last week&rsquo;s film count for less this week.
-            </Text>
-            <Group justify="flex-end">
-              <Button component={Link} to={pollPath(SAMPLE_SEQUEL_ID)} variant="light">
-                See the result
-              </Button>
-            </Group>
-          </Stack>
-        </Group>
-      </Paper>
-    </Stack>
   )
 }
 

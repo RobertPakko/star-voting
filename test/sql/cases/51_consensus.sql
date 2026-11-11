@@ -268,7 +268,7 @@ begin
   perform tests.assert_raises('a consensus takes no number',
     format('select create_poll(%L, null, array[%L, %L], array[%L], p_kind => %L, p_kind_value => 3)',
            'Lunch', 'Pizza', 'Sushi', 'voter1@example.com', 'consensus'),
-    'Only an option ranking or multiple winners takes a number');
+    'Only an option ranking, multiple winners or a proportional budget takes a number');
   perform tests.assert_raises('the table holds the grid to the calendar kinds',
     format('insert into polls (title, created_by, kind) values (%L, %L, %L)',
            'Standup', auth.uid(), 'consensus_time'),

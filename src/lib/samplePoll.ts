@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import type { Database } from './database.types'
 import type {
   BallotSheet,
+  BudgetResult,
   ConsensusResult,
   FractionalShare,
   OpenGroupQuestion,
@@ -54,6 +55,8 @@ interface SampleQuestion {
   fractional_winners?: FractionalShare[]
   /** The consensus with nothing removed; see `Consensus`. */
   consensus?: ConsensusResult
+  /** The proportional budget with nothing removed or recosted; see `ProportionalBudget`. */
+  budget?: BudgetResult
   scores?: OptionScore[]
   ballots?: BallotSheet
 }
@@ -70,6 +73,8 @@ export const SAMPLE_RESULT_TIME_ID = 'sample-result-when'
  * question is a sequential poll. Shown on *More examples*.
  */
 export const SAMPLE_SEQUEL_ID = 'sample-sequel-movie'
+/** The sequel's question 2, a proportional budget of upgrades to the movie nights. */
+export const SAMPLE_SEQUEL_BUDGET_ID = 'sample-sequel-budget'
 
 /**
  * The finished film question as though it had asked for another result: one
@@ -114,6 +119,8 @@ interface OpenPollArgs {
   p_scores?: { candidate_id: string; score: number }[]
   p_voter_name?: string | null
   p_excluded?: string[]
+  p_costs?: Record<string, number | null>
+  p_budget?: number
 }
 
 /**
@@ -182,8 +189,8 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
     case 'open_poll_ranking':
       return question.ranking ? ok(question.ranking) : failed('Results are not available yet')
     // Recorded with nothing taken out, and only that: the sample cannot count
-    // again, so none of `MultipleWinners`, `FractionalWinners` and
-    // `Consensus` offers removal on it.
+    // again, so none of `MultipleWinners`, `FractionalWinners`, `Consensus`
+    // and `ProportionalBudget` offers removal (or new costs) on it.
     case 'open_poll_multiple_winners':
       return question.multiple_winners && !args.p_excluded?.length
         ? ok(question.multiple_winners)
@@ -195,6 +202,10 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
     case 'open_poll_consensus':
       return question.consensus && !args.p_excluded?.length
         ? ok(question.consensus)
+        : failed('Not available on the example poll')
+    case 'open_poll_proportional_budget':
+      return question.budget && !args.p_excluded?.length && !args.p_costs && !args.p_budget
+        ? ok(question.budget)
         : failed('Not available on the example poll')
     case 'open_poll_scores':
       return question.scores ? ok(question.scores) : failed('Results are not available yet')

@@ -92,11 +92,11 @@ begin
     'Unknown poll kind');
   perform tests.assert_raises('the best option takes no number',
     $q$select create_poll('x', null, array['a', 'b'], null, 'open', p_kind_value => 3)$q$,
-    'Only an option ranking or multiple winners takes a number');
+    'Only an option ranking, multiple winners or a proportional budget takes a number');
   perform tests.assert_raises('nor do fractional winners',
     $q$select create_poll('x', null, array['a', 'b'], null, 'open',
                           p_kind => 'fractional', p_kind_value => 3)$q$,
-    'Only an option ranking or multiple winners takes a number');
+    'Only an option ranking, multiple winners or a proportional budget takes a number');
   perform tests.assert_raises('the number stops where the results do',
     $q$select create_poll('x', null, array['a', 'b'], null, 'open',
                           p_kind => 'multiple', p_kind_value => 11)$q$,
@@ -142,11 +142,11 @@ begin
   -- The grants of the remade functions.
   perform tests.assert_eq('create_poll is still the account''s to call',
     has_function_privilege('authenticated',
-      'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb, numeric, jsonb)',
+      'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb, numeric, jsonb, numeric[])',
       'execute'), true);
   perform tests.assert_eq('and not the link''s',
     has_function_privilege('anon',
-      'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb, numeric, jsonb)',
+      'public.create_poll(text, text, text[], text[], text, boolean, boolean, text[], boolean, text, jsonb, numeric, jsonb, numeric[])',
       'execute'), false);
   perform tests.assert_eq('insert_poll_row is nobody''s',
     has_function_privilege('authenticated',

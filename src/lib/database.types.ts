@@ -398,6 +398,7 @@ export type Database = {
           p_emails: string[]
           p_kind?: string
           p_mode?: string
+          p_option_costs?: number[]
           p_option_descriptions?: string[]
           p_options: string[]
           p_schedule?: Json
@@ -452,6 +453,10 @@ export type Database = {
       }
       get_poll_multiple_winners: {
         Args: { p_excluded?: string[]; p_poll_id: string }
+        Returns: Json
+      }
+      get_poll_proportional_budget: {
+        Args: { p_budget?: number; p_costs?: Json; p_excluded?: string[]; p_poll_id: string }
         Returns: Json
       }
       get_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
@@ -562,6 +567,10 @@ export type Database = {
       }
       open_poll_multiple_winners: {
         Args: { p_excluded?: string[]; p_poll_id: string }
+        Returns: Json
+      }
+      open_poll_proportional_budget: {
+        Args: { p_budget?: number; p_costs?: Json; p_excluded?: string[]; p_poll_id: string }
         Returns: Json
       }
       open_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }

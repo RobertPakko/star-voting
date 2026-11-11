@@ -17,3 +17,25 @@ export function useLeftOut(pollId: string) {
   }
   return [leftOut, setLeftOut] as const
 }
+
+/**
+ * Costs and a budget a reader has typed into *Proportional budget*, sent with
+ * every count and never stored. Null counts the question's own (a budget
+ * question has them; any other has none, and asks for them first). A cost of
+ * null takes that option's cost away, leaving it out of the count.
+ */
+export interface BudgetInputs {
+  costs: Record<string, number | null>
+  budget: number
+}
+
+/** The reader's costs and budget for one poll, held as `useLeftOut` holds removals. */
+export function useBudgetInputs(pollId: string) {
+  const [inputs, setInputs] = useState<BudgetInputs | null>(null)
+  const [inputsFor, setInputsFor] = useState(pollId)
+  if (inputsFor !== pollId) {
+    setInputsFor(pollId)
+    setInputs(null)
+  }
+  return [inputs, setInputs] as const
+}

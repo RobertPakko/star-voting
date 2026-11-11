@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isPollParam, pollIdFromParam, pollPath, shortPollId } from './pollId'
+import { SAMPLE_PAYLOADS } from './samplePollData'
 
 /**
  * The shortened link is the same number in a denser alphabet, and the property
@@ -80,7 +81,9 @@ describe('pollIdFromParam', () => {
   })
 
   it('hands back the sample ids untouched, in both directions', () => {
-    for (const id of ['sample-movie', 'sample-result-movie', 'sample-when']) {
+    // Every id the recording answers: one that happened to be twenty-two
+    // characters would be read as a short id and sent to the database.
+    for (const id of Object.keys(SAMPLE_PAYLOADS)) {
       expect(shortPollId(id)).toBe(id)
       expect(pollIdFromParam(id)).toBe(id)
       expect(pollPath(id)).toBe(`/${id}`)

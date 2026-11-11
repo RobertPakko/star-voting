@@ -30,7 +30,6 @@ import { useLaunchRoutes } from './lib/launch'
 const CreatePoll = lazy(() => import('./pages/CreatePoll').then((m) => ({ default: m.CreatePoll })))
 const WhatIsStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhatIsStar })))
 const AllChoices = lazy(() => import('./pages/Learn').then((m) => ({ default: m.AllChoices })))
-const MoreExamples = lazy(() => import('./pages/Learn').then((m) => ({ default: m.MoreExamples })))
 const WhyStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhyStar })))
 const Features = lazy(() => import('./pages/Learn').then((m) => ({ default: m.Features })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
@@ -106,14 +105,6 @@ function App() {
             element={
               <Suspense fallback={<LearnSkeleton />}>
                 <AllChoices />
-              </Suspense>
-            }
-          />
-          <Route
-            path="examples"
-            element={
-              <Suspense fallback={<LearnSkeleton />}>
-                <MoreExamples />
               </Suspense>
             }
           />

@@ -30,6 +30,7 @@ export type PollKind =
   | 'fractional'
   | 'consensus'
   | 'consensus_time'
+  | 'budget'
 
 /**
  * A time poll's grid; null on an ordinary poll. Which days and hours are asked
@@ -126,6 +127,11 @@ export interface PollOption {
   name: string
   description: string | null
   sort_order: number
+  /**
+   * The option's cost, on a proportional budget question; null elsewhere.
+   * Optional until 0102 has landed everywhere.
+   */
+  cost?: number | null
 }
 
 export interface PollStatus {
@@ -432,6 +438,43 @@ export interface ConsensusResult {
   options: { id: string; name: string; floor: number; total_score: number }[]
 }
 
+/** One funded option of a proportional budget, with its cost. */
+export interface BudgetOption {
+  id: string
+  name: string
+  cost: number
+  /** The scaled, weighted stars it was funded on. */
+  total_score: number
+}
+
+/** One round of a proportional budget: a multiple-winners spot, with costs. */
+export interface BudgetSpot extends Omit<RankingEntry, 'options'> {
+  options: BudgetOption[]
+  /** The budget still unspent after this round. */
+  left: number
+}
+
+/**
+ * The proportional budget, from `get_poll_proportional_budget` /
+ * `open_poll_proportional_budget`: cost-adjusted STAR once per option funded,
+ * among the options that still fit, every ballot weakened by what it has
+ * already been given.
+ */
+export interface BudgetResult {
+  budget: number
+  spent: number
+  left: number
+  /** The average cost of the options counted, which each cost is measured against. */
+  average_cost: number
+  spots: BudgetSpot[]
+  /** Every counted option left out, cheapest first. */
+  unfunded: { id: string; name: string; cost: number }[]
+  /** Options given no cost, so not counted. */
+  uncosted: { id: string; name: string }[]
+  /** A runoff level on every rule with room for only one of the pair: the count stops there. */
+  tied: { id: string; name: string; cost: number }[] | null
+}
+
 export interface PollResults {
   /** The score round's top rows only (`poll_results_rows()`); see `option_count`. */
   options: ResultOption[]
@@ -464,7 +507,7 @@ export interface PollResults {
    * winners, an object for the consensus; `chosenResult` in lib/choices.ts
    * tells them apart.
    */
-  kind_result: RankingEntry[] | FractionalShare[] | ConsensusResult | null
+  kind_result: RankingEntry[] | FractionalShare[] | ConsensusResult | BudgetResult | null
   /**
    * Whether the ballots carry weights (a sequential poll): every count is
    * then a weighted sum. Optional until 0101 has landed everywhere.

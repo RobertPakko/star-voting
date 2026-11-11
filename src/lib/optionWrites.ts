@@ -19,8 +19,11 @@ export type OptionsSource =
  */
 export type DraftHold = { current: (() => Promise<boolean>) | null }
 
-/** An option as typed: an empty description means none. */
-type Typed = { name: string; description: string }
+/**
+ * An option as typed: an empty description means none. A cost only on a
+ * proportional budget, where every option has one.
+ */
+type Typed = { name: string; description: string; cost?: number | null }
 
 /**
  * Send a draft, typed or painted. The creator's correction is one
@@ -35,11 +38,16 @@ export async function sendDraft(
   draft: { added: Typed[]; corrected: (Typed & { id: string })[]; removed: string[] },
 ) {
   // Null, not '', is what the column holds for no description.
-  const added = draft.added.map((o) => ({ name: o.name, description: o.description || null }))
+  const added = draft.added.map((o) => ({
+    name: o.name,
+    description: o.description || null,
+    cost: o.cost ?? null,
+  }))
   const corrected = draft.corrected.map((o) => ({
     id: o.id,
     name: o.name,
     description: o.description || null,
+    cost: o.cost ?? null,
   }))
 
   if (source.kind === 'creator')

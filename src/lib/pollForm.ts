@@ -12,6 +12,7 @@ import {
   type GranuleKey,
 } from './schedule'
 import {
+  AMOUNT_MAX,
   GIVEN_MAX,
   MAX_CARRIED,
   MAX_OPTIONS,
@@ -39,13 +40,19 @@ export interface OptionDraft {
   key: string
   name: string
   description: string | null
+  /**
+   * What the option costs, on a proportional budget question: what the number
+   * box holds, '' while it is empty. Kept whatever the kind, like the
+   * calendar, and sent only on a budget.
+   */
+  cost: number | string
 }
 
 let optionSeq = 0
 
 export function blankOption(): OptionDraft {
   optionSeq += 1
-  return { key: `option-${optionSeq}`, name: '', description: null }
+  return { key: `option-${optionSeq}`, name: '', description: null, cost: '' }
 }
 
 /**
@@ -64,6 +71,8 @@ export interface QuestionDraft {
    * them and back loses nothing. Only the chosen kind's is sent.
    */
   kindNumbers: Partial<Record<PollKind, number>>
+  /** A proportional budget's budget, as the number box holds it: '' while empty. */
+  budget: number | string
   /*
    * The time-poll fields are kept whatever the kind, so switching a question
    * to a list and back loses nothing on either side; so are the options.
@@ -134,6 +143,7 @@ export function blankQuestion(): QuestionDraft {
     options: [blankOption(), blankOption()],
     kind: 'option',
     kindNumbers: { ...DEFAULT_CHOICE_NUMBER },
+    budget: '',
     schedule: blankSchedule(),
     days: [],
     hours: { ...DEFAULT_HOURS },
@@ -147,7 +157,27 @@ export function blankQuestion(): QuestionDraft {
 
 /** The number a question sends with its kind: null where the kind takes none. */
 export function kindValueOf(question: QuestionDraft): number | null {
+  if (question.kind === 'budget') return question.budget === '' ? null : Number(question.budget)
   return CHOICE_NUMBER[question.kind] ? (question.kindNumbers[question.kind] ?? null) : null
+}
+
+/** An option's cost as sent: only on a budget question, and null while empty. */
+export function costOf(question: QuestionDraft, option: OptionDraft): number | null {
+  if (question.kind !== 'budget' || option.cost === '') return null
+  return Number(option.cost)
+}
+
+/**
+ * The refusal for a budget or a cost that is not a whole number from 1 to
+ * `AMOUNT_MAX`, as `validate_amount` has it; null where it is one. '' is
+ * empty, which the caller words.
+ */
+export function amountError(value: number | string): string | null {
+  const n = Number(value)
+  if (value === '' || !Number.isInteger(n) || n < 1 || n > AMOUNT_MAX) {
+    return `A whole number from 1 to ${AMOUNT_MAX.toLocaleString('en-US')}.`
+  }
+  return null
 }
 
 /** Key for an option-level message: question index and row index. */
@@ -169,6 +199,9 @@ export interface FormErrors {
   /** By `optionKey()`. */
   optionNames: Record<string, string>
   optionDescriptions: Record<string, string>
+  optionCosts: Record<string, string>
+  /** A proportional budget's budget, by question index. */
+  budgets: Record<number, string>
   /** A sequential question's list of earlier voters, by question index. */
   carried: Record<number, string>
   /** One earlier voter's name and stars, by `optionKey()` (question, row). */
@@ -183,6 +216,8 @@ export function noErrors(): FormErrors {
     options: {},
     optionNames: {},
     optionDescriptions: {},
+    optionCosts: {},
+    budgets: {},
     carried: {},
     carriedVoters: {},
     carriedGiven: {},
@@ -200,6 +235,8 @@ export function hasErrors(errors: FormErrors): boolean {
     Object.keys(errors.options).length ||
     Object.keys(errors.optionNames).length ||
     Object.keys(errors.optionDescriptions).length ||
+    Object.keys(errors.optionCosts).length ||
+    Object.keys(errors.budgets).length ||
     Object.keys(errors.carried).length ||
     Object.keys(errors.carriedVoters).length ||
     Object.keys(errors.carriedGiven).length,
@@ -212,6 +249,7 @@ export function questionHasError(errors: FormErrors, questionIndex: number): boo
     errors.questionTitles[questionIndex] ||
     errors.options[questionIndex] ||
     errors.schedules[questionIndex] ||
+    errors.budgets[questionIndex] ||
     errors.carried[questionIndex]
   ) {
     return true
@@ -221,6 +259,7 @@ export function questionHasError(errors: FormErrors, questionIndex: number): boo
   return (
     Object.keys(errors.optionNames).some((key) => key.startsWith(prefix)) ||
     Object.keys(errors.optionDescriptions).some((key) => key.startsWith(prefix)) ||
+    Object.keys(errors.optionCosts).some((key) => key.startsWith(prefix)) ||
     Object.keys(errors.carriedVoters).some((key) => key.startsWith(prefix)) ||
     Object.keys(errors.carriedGiven).some((key) => key.startsWith(prefix))
   )
@@ -370,6 +409,13 @@ export function validate(form: {
       return
     }
 
+    if (question.kind === 'budget') {
+      const budget = amountError(question.budget)
+      if (budget) {
+        errors.budgets[questionIndex] = question.budget === '' ? 'Give the budget.' : budget
+      }
+    }
+
     // Duplicates are case-insensitive and only within one question.
     const seen = new Map<string, number>()
     question.options.forEach((option, index) => {
@@ -391,6 +437,12 @@ export function validate(form: {
           optionDescription.length,
           OPTION_DESCRIPTION_MAX,
         )
+      }
+
+      // Every option a budget counts has a cost; a blank row is not an option.
+      if (question.kind === 'budget' && name) {
+        const cost = amountError(option.cost)
+        if (cost) errors.optionCosts[key] = option.cost === '' ? 'Give it a cost.' : cost
       }
     })
 

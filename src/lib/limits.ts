@@ -64,6 +64,14 @@ export const MAX_CARRIED = 500
 export const GIVEN_MAX = 10000
 
 /**
+ * A proportional budget and each option's cost: whole numbers from 1 to
+ * this. Matches `validate_amount`; the ceiling is only there to catch a typo
+ * of extra zeros, since the count compares amounts and never sums enough of
+ * them to strain a number.
+ */
+export const AMOUNT_MAX = 1_000_000_000
+
+/**
  * "Too long, by this much" — the number a writer needs is how much to cut,
  * not what the ceiling was.
  */

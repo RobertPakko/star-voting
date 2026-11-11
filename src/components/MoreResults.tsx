@@ -3,6 +3,7 @@ import { Button, Menu } from '@mantine/core'
 import {
   CaretDownIcon,
   ChartPieSliceIcon,
+  CoinsIcon,
   HandshakeIcon,
   ListNumbersIcon,
   TrophyIcon,
@@ -15,6 +16,8 @@ import { FullRanking } from './FullRanking'
 import { MultipleWinners } from './MultipleWinners'
 import { FractionalWinners } from './FractionalWinners'
 import { Consensus } from './Consensus'
+import { ProportionalBudget } from './ProportionalBudget'
+import { isSampleId } from '../lib/samplePoll'
 
 type Tool = ResultTool
 
@@ -37,7 +40,10 @@ export function MoreResults({
   /** The result on the page, left off the menu: `option` where it is STAR's winner. */
   shown: Tool
 }) {
-  const offered = (tool: Tool) => tool !== shown && offers(tool, results)
+  // The sample answers from a recording, which holds no budget for a question
+  // that did not ask for one.
+  const offered = (tool: Tool) =>
+    tool !== shown && offers(tool, results) && !(tool === 'budget' && isSampleId(source.pollId))
   const [open, setOpen] = useState<Tool | null>(null)
   const close = () => setOpen(null)
 
@@ -66,6 +72,11 @@ export function MoreResults({
       tool: 'fractional' as const,
       label: CHOICES.fractional.label,
       icon: ChartPieSliceIcon,
+    },
+    offered('budget') && {
+      tool: 'budget' as const,
+      label: CHOICES.budget.label,
+      icon: CoinsIcon,
     },
   ].filter((item) => item !== false)
 
@@ -128,6 +139,14 @@ export function MoreResults({
           source={source}
           results={results}
           opened={open === 'fractional'}
+          onClose={close}
+        />
+      )}
+      {offered('budget') && (
+        <ProportionalBudget
+          source={source}
+          results={results}
+          opened={open === 'budget'}
           onClose={close}
         />
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ActionIcon, Badge, Group, Stack, Text, Tooltip } from '@mantine/core'
 import { XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
@@ -228,14 +228,22 @@ const weightedStars = (n: number) => `${figure(n)} ${n === 1 ? 'star' : 'stars'}
 const weightedVotes = (n: number, places = 1) =>
   `${figure(n, places)} ${n === 1 ? 'vote' : 'votes'}`
 
-function Spot({
+/**
+ * One spot: its options, how it was settled, and its tie-breaks. Shared with
+ * `ProportionalBudget`, whose rounds are spots with a cost beside each option
+ * (`aside`).
+ */
+export function Spot({
   spot,
   removable,
   onRemove,
+  aside,
 }: {
   spot: RankingEntry
   removable: boolean
   onRemove: (option: LeftOut) => void
+  /** Drawn after an option's stars. */
+  aside?: (id: string) => ReactNode
 }) {
   return (
     <Group align="flex-start" wrap="nowrap" gap="sm">
@@ -251,6 +259,7 @@ function Spot({
             <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
               {weightedStars(option.total_score)}
             </Text>
+            {aside?.(option.id)}
             {removable && (
               <Tooltip label="Remove and count again">
                 <ActionIcon
