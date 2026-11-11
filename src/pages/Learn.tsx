@@ -898,15 +898,37 @@ export function AllChoices() {
           algorithms={['Nash']}
         >
           <ComingSoon name="Option allocation" />
-          <NotStrategyProof />
           <HardToSolve />
           <Text>
-            Sometimes there are many options and only a few voters, and each voter takes several of
-            them: heirlooms shared between heirs, furniture divided between housemates moving out,
-            or toys split between siblings. <strong>Option allocation</strong> will share the
-            options out so that the group as a whole is as satisfied as it can be.
+            Sometimes different voters need different options: chores shared out between housemates
+            or shifts split between volunteers. <strong>Option allocation</strong> splits options up
+            between voters, choosing the allocation that leaves the group as a whole as satisfied as
+            possible:
           </Text>
-          <Text>More about how it works is on its way.</Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Every voter rates every option as usual, with more stars for the options they would
+              prefer.
+            </List.Item>
+            <List.Item>
+              Each option can optionally be given a capacity: how many voters it can go to. A chore
+              might need two housemates, or a shift four volunteers.
+            </List.Item>
+            <List.Item>
+              Each voter&rsquo;s satisfaction is the sum of the stars that they gave the option(s)
+              they were assigned.
+            </List.Item>
+            <List.Item>
+              The allocation chosen is the one where each voter&rsquo;s satisfaction, multiplied
+              together, is as large as possible.
+            </List.Item>
+          </List>
+          <Text>
+            The system will try to give each voter positive satisfaction if possible, since one 0
+            makes the whole product 0. If this isn't possible, it will choose the largest possible
+            set of voters that can have positive satisfaction and find the optimal solution for that
+            set of voters.
+          </Text>
         </Choice>
 
         <Choice
@@ -1180,8 +1202,8 @@ function HardToSolve() {
   return (
     <Alert variant="light" color="orange" icon={<CpuIcon size={20} aria-hidden />}>
       <Text size="sm">
-        Warning: finding this solution can be computationally expensive. This app might not be able
-        to find the most optimal solution possible.
+        Finding this solution can be computationally expensive. This app might not be able to find
+        the most optimal possible solution.
       </Text>
     </Alert>
   )
