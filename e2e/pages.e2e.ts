@@ -10,7 +10,6 @@ const PAGES: { path: string; title: string; name: string }[] = [
   { path: '#/sign-in', title: 'Sign in', name: 'the sign-in screen' },
   { path: '#/star', title: 'What is STAR?', name: 'What is STAR?' },
   { path: '#/choices', title: 'All choices', name: 'All choices' },
-  { path: '#/examples', title: 'More examples', name: 'More examples' },
   { path: '#/why-star', title: 'Why use STAR?', name: 'Why use STAR?' },
   { path: '#/features', title: 'App features', name: 'App features' },
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
@@ -21,6 +20,8 @@ const PAGES: { path: string; title: string; name: string }[] = [
   { path: '#/sample-when', title: 'Movie night', name: 'a calendar ballot' },
   { path: '#/sample-result-movie', title: 'Movie night', name: 'a result' },
   { path: '#/sample-result-when', title: 'Movie night', name: 'a calendar result' },
+  { path: '#/sample-sequel-movie', title: 'Movie night 2', name: 'a sequential result' },
+  { path: '#/sample-sequel-budget', title: 'Movie night 2', name: 'a budget result' },
 ]
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -88,7 +89,6 @@ test.describe('the home page', () => {
     for (const path of [
       '#/star',
       '#/choices',
-      '#/examples',
       '#/why-star',
       '#/features',
       '#/contact',

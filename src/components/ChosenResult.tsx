@@ -4,8 +4,9 @@ import { FractionalWinnersBody } from './FractionalWinners'
 import { RankingBody, type RankingSource } from './FullRanking'
 import { MultipleWinnersBody } from './MultipleWinners'
 import { ConsensusBody } from './Consensus'
+import { ProportionalBudgetBody } from './ProportionalBudget'
 import type { MeetingEvent } from '../lib/calendarEvent'
-import { useLeftOut } from '../lib/useLeftOut'
+import { useBudgetInputs, useLeftOut } from '../lib/useLeftOut'
 
 /**
  * The result a question asked for (`polls.kind`), where it is more than
@@ -29,6 +30,7 @@ export function ChosenResult({
   eventFor?: (id: string) => MeetingEvent | null
 }) {
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
+  const [inputs, setInputs] = useBudgetInputs(source.pollId)
 
   switch (chosen.kind) {
     case 'ranking':
@@ -64,6 +66,18 @@ export function ChosenResult({
           onLeftOut={setLeftOut}
           eventFor={eventFor}
           bannered
+        />
+      )
+    case 'budget':
+      return (
+        <ProportionalBudgetBody
+          source={source}
+          results={results}
+          initial={chosen.budget}
+          leftOut={leftOut}
+          onLeftOut={setLeftOut}
+          inputs={inputs}
+          onInputs={setInputs}
         />
       )
   }

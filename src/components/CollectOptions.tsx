@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { ActionIcon, Button, Card, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
+import {
+  ActionIcon,
+  Button,
+  Card,
+  Divider,
+  Group,
+  NumberInput,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core'
 import {
   ArrowCounterClockwiseIcon,
   CheckIcon,
@@ -11,7 +21,14 @@ import { notifications } from '@mantine/notifications'
 import { sendConfirmation, sendDraft, withdrawConfirmation } from '../lib/optionWrites'
 import type { DraftHold, OptionsSource } from '../lib/optionWrites'
 import { TimeList } from './TimeList'
-import { MAX_OPTIONS, OPTION_DESCRIPTION_MAX, OPTION_NAME_MAX, tooLong } from '../lib/limits'
+import {
+  AMOUNT_MAX,
+  MAX_OPTIONS,
+  OPTION_DESCRIPTION_MAX,
+  OPTION_NAME_MAX,
+  tooLong,
+} from '../lib/limits'
+import { amountError } from '../lib/pollForm'
 import type { VoterName } from '../lib/voterName'
 import { DescriptionField, DescriptionToggle } from './DescriptionField'
 import { NameRoster } from './NameRoster'
@@ -24,8 +41,12 @@ import type { PollOption, PollSchedule } from '../lib/types'
 /** Unique within one open card; never leaves it. */
 let draftSeq = 0
 
-/** `description` is null when its field is hidden, which means no description. */
-type OptionText = { name: string; description: string | null }
+/**
+ * `description` is null when its field is hidden, which means no description.
+ * `cost` is what its number box holds ('' while empty), and is read only on a
+ * proportional budget.
+ */
+type OptionText = { name: string; description: string | null; cost: number | string }
 
 /** An option this reader is typing and has not sent. */
 type Draft = OptionText & { key: string }
@@ -33,21 +54,24 @@ type Draft = OptionText & { key: string }
 /** A new draft opens with its description field showing. */
 function blankDraft(): Draft {
   draftSeq += 1
-  return { key: `draft-${draftSeq}`, name: '', description: '' }
+  return { key: `draft-${draftSeq}`, name: '', description: '', cost: '' }
 }
 
 function isBlank(d: Draft): boolean {
-  return !d.name.trim() && !d.description?.trim()
+  return !d.name.trim() && !d.description?.trim() && d.cost === ''
 }
 
 function fieldsOf(option: PollOption): OptionText {
-  return { name: option.name, description: option.description || null }
+  return { name: option.name, description: option.description || null, cost: option.cost ?? '' }
 }
 
 type Focus = { key: string; field: 'name' | 'description' }
 
 /** A validation problem, marked on the field it is about. */
-type Problem = { field: 'name' | 'description'; message: string }
+type Problem = { field: 'name' | 'description' | 'cost'; message: string }
+
+/** An option as checked and ready to send. */
+type Checked = { name: string; description: string; cost: number | null }
 
 /**
  * How this reader says they are done adding. Absent for the creator's
@@ -77,6 +101,7 @@ export function CollectOptions({
   source,
   options,
   schedule,
+  costed = false,
   isCreator,
   voterName,
   questionStrip,
@@ -89,6 +114,12 @@ export function CollectOptions({
   options: PollOption[]
   /** Set on a time poll, which collects by calendar instead of text boxes. */
   schedule?: PollSchedule | null
+  /**
+   * A proportional budget: every option carries a cost, typed beside its name
+   * and shown on its row. Readers see the costs here, where the list is being
+   * written, and never on the ballot.
+   */
+  costed?: boolean
   isCreator: boolean
   /**
    * The name to confirm under: only an open poll that shows respondents asks.
@@ -310,6 +341,7 @@ export function CollectOptions({
           <OptionList
             source={source}
             options={options}
+            costed={costed}
             isCreator={isCreator}
             ownSave={!confirm && !done}
             draft={draft}
@@ -327,6 +359,7 @@ export function CollectOptions({
 function OptionList({
   source,
   options,
+  costed,
   isCreator,
   ownSave,
   draft,
@@ -336,6 +369,7 @@ function OptionList({
 }: {
   source: OptionsSource
   options: PollOption[]
+  costed: boolean
   isCreator: boolean
   /** Draw a *Save options* of its own (only when the card has no closing button). */
   ownSave: boolean
@@ -373,7 +407,9 @@ function OptionList({
     return (
       e &&
       !dropping.has(o.id) &&
-      (e.name.trim() !== o.name || (e.description ?? '').trim() !== (o.description ?? ''))
+      (e.name.trim() !== o.name ||
+        (e.description ?? '').trim() !== (o.description ?? '') ||
+        (costed && (e.cost === '' ? null : Number(e.cost)) !== (o.cost ?? null)))
     )
   })
   const staying = options.length - dropping.size
@@ -409,12 +445,11 @@ function OptionList({
    * option added, or false for a correction (which cannot hit the ceiling).
    */
   function checkOption(
-    rawName: string,
-    rawDescription: string,
+    { name: rawName, description: rawDescription, cost }: OptionText,
     { adding, exceptKey }: { adding: number | false; exceptKey?: string },
-  ): { name: string; description: string } | Problem {
+  ): Checked | Problem {
     const trimmed = rawName.trim()
-    const trimmedDescription = rawDescription.trim()
+    const trimmedDescription = (rawDescription ?? '').trim()
 
     if (!trimmed) return { field: 'name', message: 'Give the option a name.' }
     if (trimmed.length > OPTION_NAME_MAX)
@@ -433,21 +468,26 @@ function OptionList({
         message: `This poll already holds the ${MAX_OPTIONS} options a ballot can.`,
       }
 
-    return { name: trimmed, description: trimmedDescription }
+    if (costed) {
+      const problem = amountError(cost)
+      if (problem) return { field: 'cost', message: cost === '' ? 'Give it a cost.' : problem }
+    }
+
+    return { name: trimmed, description: trimmedDescription, cost: costed ? Number(cost) : null }
   }
 
   /** Every draft and correction, checked; null (with every problem marked) if any fail. */
   function checkedDraft(): {
-    added: { name: string; description: string }[]
-    corrected: { id: string; name: string; description: string }[]
+    added: Checked[]
+    corrected: (Checked & { id: string })[]
   } | null {
     setError(null)
 
     const addProblems = new Map<string, Problem>()
-    const added: { name: string; description: string }[] = []
+    const added: Checked[] = []
     for (const d of drafts) {
       if (isBlank(d)) continue
-      const result = checkOption(d.name, d.description ?? '', {
+      const result = checkOption(d, {
         adding: staying + added.length + addProblems.size + 1,
         exceptKey: d.key,
       })
@@ -456,10 +496,10 @@ function OptionList({
     }
 
     const fixProblems = new Map<string, Problem>()
-    const corrected: { id: string; name: string; description: string }[] = []
+    const corrected: (Checked & { id: string })[] = []
     for (const o of changed) {
       const e = editing.get(o.id)!
-      const result = checkOption(e.name, e.description ?? '', { adding: false, exceptKey: o.id })
+      const result = checkOption(e, { adding: false, exceptKey: o.id })
       if ('field' in result) fixProblems.set(o.id, result)
       else corrected.push({ id: o.id, ...result })
     }
@@ -608,6 +648,7 @@ function OptionList({
                 {open && !struck ? (
                   <OptionFields
                     value={open}
+                    costed={costed}
                     problem={editProblems.get(option.id) ?? null}
                     focus={focus?.key === option.id ? focus.field : undefined}
                     ariaLabel={`Name of ${option.name}`}
@@ -621,6 +662,12 @@ function OptionList({
                       td={struck ? 'line-through' : undefined}
                     >
                       {shown.name}
+                      {costed && option.cost != null && (
+                        <Text span size="sm" c="dimmed" fw={400}>
+                          {' · cost '}
+                          {option.cost.toLocaleString('en-US')}
+                        </Text>
+                      )}
                     </Text>
                     {shown.description && (
                       <OptionDescription description={shown.description} struck={struck} />
@@ -694,6 +741,7 @@ function OptionList({
             <Group gap="xs" align="flex-start" wrap="nowrap">
               <OptionFields
                 value={d}
+                costed={costed}
                 problem={draftProblems.get(d.key) ?? null}
                 focus={focus?.key === d.key ? focus.field : undefined}
                 placeholder={
@@ -765,6 +813,7 @@ function without<V>(map: ReadonlyMap<string, V>, key: string): ReadonlyMap<strin
 /** One option's two fields, controlled: a draft, or a row opened by its pencil. */
 function OptionFields({
   value,
+  costed,
   problem,
   focus,
   placeholder,
@@ -772,6 +821,7 @@ function OptionFields({
   onChange,
 }: {
   value: OptionText
+  costed: boolean
   problem: Problem | null
   /** Which field takes the cursor on mount. */
   focus?: 'name' | 'description'
@@ -781,14 +831,33 @@ function OptionFields({
 }) {
   return (
     <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
-      <TextInput
-        value={value.name}
-        autoFocus={focus === 'name'}
-        placeholder={placeholder}
-        aria-label={ariaLabel}
-        onChange={(e) => onChange({ ...value, name: e.currentTarget.value })}
-        error={problem?.field === 'name' ? problem.message : null}
-      />
+      <Group gap="xs" align="flex-start" wrap="nowrap">
+        <TextInput
+          style={{ flex: 1, minWidth: 0 }}
+          value={value.name}
+          autoFocus={focus === 'name'}
+          placeholder={placeholder}
+          aria-label={ariaLabel}
+          onChange={(e) => onChange({ ...value, name: e.currentTarget.value })}
+          error={problem?.field === 'name' ? problem.message : null}
+        />
+        {costed && (
+          <NumberInput
+            w={110}
+            value={value.cost}
+            onChange={(cost) => onChange({ ...value, cost })}
+            placeholder="Cost"
+            aria-label={`${ariaLabel}: cost`}
+            min={1}
+            max={AMOUNT_MAX}
+            allowDecimal={false}
+            allowNegative={false}
+            thousandSeparator=","
+            hideControls
+            error={problem?.field === 'cost' ? problem.message : null}
+          />
+        )}
+      </Group>
       {value.description !== null && (
         <DescriptionField
           value={value.description}

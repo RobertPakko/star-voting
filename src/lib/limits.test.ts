@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import {
+  AMOUNT_MAX,
   CONTACT_EMAIL_MAX,
   CONTACT_MESSAGE_MAX,
   GIVEN_MAX,
@@ -137,6 +138,10 @@ describe('the form and the database agree about', () => {
     // the tally and the ladder, and the browser words the cut and sizes its
     // skeletons from its own copy.
     expect(guard('poll_results_rows', 'select')).toBe(SCORING_ROWS_MAX)
+  })
+
+  test('how big a cost or a budget may be', () => {
+    expect(guard('validate_amount', 'p_value >')).toBe(AMOUNT_MAX)
   })
 
   test('how long a contact message and its reply address may be', () => {

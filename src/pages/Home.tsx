@@ -37,7 +37,7 @@ import { useMakePoll } from '../lib/makePoll'
 import { isInstalledApp } from '../lib/push'
 import { noteHomeVisited } from '../lib/homeVisit'
 import { pollPath } from '../lib/pollId'
-import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID } from '../lib/samplePoll'
+import { SAMPLE_POLL_ID, SAMPLE_RESULT_ID, SAMPLE_SEQUEL_ID } from '../lib/samplePoll'
 import { APP_TITLE, usePageTitle } from '../lib/pageTitle'
 import { CODE_URL } from '../lib/sourceCode'
 import { StarLoop } from '../components/StarLoop'
@@ -121,7 +121,13 @@ export function Home() {
         <Tile to="/star" icon={QuestionIcon} color="orange" title="What’s STAR?" />
         <Tile to="/why-star" icon={ScalesIcon} color="orange" title="Why STAR?" />
         <Tile to="/choices" icon={SignpostIcon} color="teal" title="All choices" />
-        <Tile to="/examples" icon={LightbulbIcon} color="lime" title="More examples" />
+        {/* The sequel's results, which show what the first poll cannot. */}
+        <Tile
+          to={pollPath(SAMPLE_SEQUEL_ID)}
+          icon={LightbulbIcon}
+          color="lime"
+          title="More examples"
+        />
 
         {/* Installing is the more useful offer; once installed, the slot
             goes to the code, which App features also links. */}

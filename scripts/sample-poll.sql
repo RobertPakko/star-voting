@@ -151,15 +151,25 @@ $$;
 -- sequel poll* makes it (see src/lib/sequel.ts). The film question is
 -- sequential: each of the nine carries the stars they gave last time's
 -- winner, Knives Out, so its fans -- Ana and Erin gave it 5 -- count at half
--- strength or so, and Hugo, who gave it 1, at nearly full. The calendar asks
--- for a consensus time, which STAR's weights do not apply to, so it copies as
--- an ordinary question a week on. Jules is new, and votes at the average
--- weight.
+-- strength or so, and Hugo, who gave it 1, at nearly full. Jules is new, and
+-- votes at the average weight. Each question is titled with the choice it
+-- shows, since *More examples* is this poll's results.
 --
 -- Knives Out is off the list (they have seen it) and Arrival is on. Counted
 -- as a fresh poll, Arrival would win: Ana, Ben, Chloe and Erin prefer it to
 -- Paddington 2, against Diego, Gina and Hugo. Counted as a sequel, those four
 -- had their film last week, and Paddington 2 wins the runoff on weight.
+--
+-- The second question is a proportional budget: 1,000 to spend on upgrades
+-- for the movie nights, the average option costing 270. Ana, Ben, Chloe,
+-- Erin, Farid and Jules want the big screen (projector, surround sound);
+-- Diego, Gina, Hugo and Iris want to be comfortable (beanbags, popcorn).
+-- Funded in STAR's order while they fit, the money would buy the projector,
+-- surround sound and the popcorn machine. Counted proportionally, the cheap
+-- popcorn machine goes first (its stars count 2.7 times over), then the
+-- curtains everybody half wants, then the beanbags, and the 550 left buys the
+-- projector rather than the surround sound: the big-screen fans get their
+-- projector, the comfort seekers their beanbags and popcorn, and 50 is left.
 create or replace function sample.sequel() returns jsonb language sql immutable as $$
 select $json${
   "title": "Movie night 2",
@@ -167,7 +177,7 @@ select $json${
   "questions": [
     {
       "slug": "movie",
-      "title": "What are we watching?",
+      "title": "Sequential poll",
       "carried_from": "movie",
       "options": [
         { "name": "Arrival", "description": "When twelve mysterious spacecraft appear around the world, a linguist is brought in to find out whether they come in peace." },
@@ -190,38 +200,28 @@ select $json${
       ]
     },
     {
-      "slug": "when",
-      "title": "When are we meeting?",
-      "kind": "consensus_time",
-      "schedule": {
-        "timezone": "-07:00",
-        "window": { "start": "09:00", "end": "22:00" },
-        "desired_slots": 8,
-        "granularity": 30
-      },
+      "slug": "budget",
+      "title": "Proportional budget",
+      "kind": "budget",
+      "kind_value": 1000,
       "options": [
-        { "name": "2026-02-27T18:00:00-07:00" },
-        { "name": "2026-02-28T09:00:00-07:00" },
-        { "name": "2026-02-28T09:30:00-07:00" },
-        { "name": "2026-02-28T10:00:00-07:00" },
-        { "name": "2026-02-28T10:30:00-07:00" },
-        { "name": "2026-02-28T11:00:00-07:00" },
-        { "name": "2026-02-28T11:30:00-07:00" },
-        { "name": "2026-02-28T12:00:00-07:00" },
-        { "name": "2026-02-28T12:30:00-07:00" },
-        { "name": "2026-02-28T13:00:00-07:00" }
+        { "name": "Projector", "cost": 500, "description": "A projector and a pull-down screen, for a picture as wide as the wall." },
+        { "name": "Surround sound", "cost": 400, "description": "Five speakers and a subwoofer, so the spaceships sound like they are in the room." },
+        { "name": "Beanbags", "cost": 200, "description": "Four big beanbags, for sinking into for the length of a film." },
+        { "name": "Blackout curtains", "cost": 150, "description": "Curtains that keep the light out, so a film can start before sunset." },
+        { "name": "Popcorn machine", "cost": 100, "description": "A popcorn machine, for fresh popcorn every movie night." }
       ],
       "ballots": [
-        [5, 4, 4, 4, 4, 4, 4, 4, 4, 4],
-        [0, 5, 5, 5, 5, 5, 5, 5, 5, 5],
-        [5, 3, 3, 4, 4, 5, 5, 5, 5, 5],
-        [2, 5, 4, 4, 4, 3, 3, 2, 2, 1],
-        [0, 5, 5, 5, 4, 4, 3, 3, 2, 1],
-        [4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
-        [0, 4, 4, 4, 3, 3, 2, 2, 2, 2],
-        [1, 5, 4, 4, 4, 4, 4, 4, 4, 4],
-        [0, 4, 4, 4, 4, 5, 5, 5, 5, 5],
-        [4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+        [5, 5, 1, 2, 0],
+        [5, 4, 0, 3, 1],
+        [5, 5, 1, 2, 0],
+        [2, 0, 5, 1, 5],
+        [5, 4, 1, 2, 1],
+        [4, 4, 2, 3, 2],
+        [1, 1, 5, 2, 4],
+        [2, 0, 4, 1, 5],
+        [1, 1, 5, 2, 4],
+        [4, 3, 2, 2, 2]
       ]
     }
   ]
@@ -288,6 +288,7 @@ begin
               || jsonb_strip_nulls(
                    jsonb_build_object(
                      'kind', x -> 'kind',
+                     'kind_value', x -> 'kind_value',
                      'schedule', x -> 'schedule',
                      'carried', case when x ? 'carried_from' then sample.carried(
                        (select poll_id from sample.link
@@ -405,6 +406,12 @@ begin
         'scores', open_poll_scores(v_poll.id),
         'ballots', open_poll_ballots(v_poll.id)
       );
+
+      -- Only a budget question has costs and a budget to count with.
+      if v_poll.kind = 'budget' then
+        v_entry := v_entry || jsonb_build_object(
+          'budget', open_poll_proportional_budget(v_poll.id, '{}'));
+      end if;
     end if;
 
     v_out := v_out || jsonb_build_object(
@@ -458,7 +465,7 @@ begin
   -- the first's results. Closing the first pins nothing yet; see below.
   perform sample.build(
     'sample-sequel',
-    'The next movie night, made as a sequel to the first. Everyone''s ballot counts less the more they liked last week''s film.',
+    'The next movie night, made as a sequel to the first: everyone''s ballot on the film counts less the more they liked last week''s. And the friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something.',
     true,
     sample.sequel(),
     'sample-result'

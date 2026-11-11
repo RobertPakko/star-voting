@@ -35,9 +35,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
  * Sixteen bytes of base64url. The length is the whole test: the alphabet
- * overlaps the sample's ids -- `-` is in it -- but the longest of those is
- * twenty characters, so nothing the About page links to can be mistaken for
- * one of these.
+ * overlaps the sample's ids -- `-` is in it -- so no sample id may be exactly
+ * twenty-two characters long, or it is read as one of these.
  */
 const SHORT = /^[A-Za-z0-9_-]{22}$/
 

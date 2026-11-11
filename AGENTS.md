@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus — ChosenResult, ChoiceCount, AllScores, CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus, ProportionalBudget — ChosenResult, ChoiceCount, AllScores, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), a sequential question's earlier
                  voters on the create form (CarriedVoters), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
@@ -438,7 +438,7 @@ there). Every test runs at a desktop size and a phone size.
 **It needs no database.** The Supabase address it is built with is a closed
 port, and `e2e/fixtures.ts` fails any test whose page asks it anything, logs
 an error, or throws. What it can reach: the home page, the sign-in screen, the
-five explainer pages, the install guide, the intro, and the sample poll — which is
+four explainer pages, the install guide, the intro, and the sample poll — which is
 answered from a file and covers `PublicPoll`, both ballots, the question
 strip, auto-advance, changing a vote and the results. **Not covered:**
 anything behind an account or a write — the poll list, the create form,
@@ -1550,8 +1550,8 @@ account. About fifteen minutes a shape at 60fps (`--fps 30` halves it).
 decisions** over *using STAR voting*, a ballot being scored, one sentence, and
 fourteen tiles in pairs — the intro and a new poll, signing in (or out) and the
 reader's polls, the sample poll and its result, what STAR is and why use it,
-its ties and its extensions,
-installing the app (the code, once it is installed) and the features, contact
+all choices and more examples (the sequel's results; see [The sample
+poll](#the-sample-poll)), installing the app (the code, once it is installed) and the features, contact
 and donate. [`pages/Home.tsx`](src/pages/Home.tsx)
 is the page.
 
@@ -1587,9 +1587,8 @@ is the page.
   1280×600 stage scaled to its box; it stops while out of sight, and under
   reduced motion it is one still frame of a filled-in ballot. Decorative
   (`aria-hidden`): the sentence under it says what it shows.
-- **The explainers are five pages** — `/star` (*What is STAR?*, ending on the
-  tie-break rules), `/choices` (*All choices*), `/examples` (*More
-  examples*), `/why-star`, `/features` — in
+- **The explainers are four pages** — `/star` (*What is STAR?*, ending on the
+  tie-break rules), `/choices` (*All choices*), `/why-star`, `/features` — in
   [`pages/Learn.tsx`](src/pages/Learn.tsx), one lazy chunk. `/star` and
   `/why-star` are drawn as the results page is, a heading over each card, and
   work an example election through emoji tables computed from its ratings.
@@ -1611,11 +1610,10 @@ is the page.
   own (`sampleResultAs`, e.g. `sample-result-movie-as-ranking`), which
   `samplePoll.ts` answers from the same recording with `kind` and
   `kind_result` swapped for the result its *More results* modal records.
-  The page restates
-  `/star`'s ballots above the sections, since its readers mostly arrive from
-  a result's modal. `/examples` is a card per finished sample poll that
-  shows more than `/star` does, each opening the poll itself: so far the
-  sequel (see [The sample poll](#the-sample-poll)).
+  The two the film question cannot show open the sequel: *Sequential polls*
+  its film question, *Proportional budget* its upgrades question. The page
+  restates `/star`'s ballots above the sections, since its readers mostly
+  arrive from a result's modal.
   `/ties` and `/extensions` redirect to `/star?section=ties` and `/choices`
   for links already shared. *App features* links the install guide.
 
@@ -2438,6 +2436,8 @@ The promise is that **everyone who votes scores the same list**:
   (`suggest_options`, `open_poll_suggest_options`): invitees have no `INSERT`
   grant on `candidates` and `anon` has none anywhere, and one path keeps the
   rules in one place.
+- **On a budget question a suggestion carries a cost**, typed beside its
+  name, since every option a budget counts needs one.
 - **Suggestions carry no name.** Who suggested what would be a third
   disclosure question the tags do not answer.
 
@@ -3205,9 +3205,10 @@ say only that voting was closed early, when it was.
 **The answer's banner carries what can be done with it** (`Banner` in
 `Results.tsx`): **More results**, one menu
 ([`MoreResults`](src/components/MoreResults.tsx)) holding **Consensus
-option** (*Consensus time* on a time poll) and **Fractional winners** (two or
-more options), and **Option ranking** and **Multiple winners** (three or
-more), each opening a modal; then *Add to calendar* under a time poll's
+option** (*Consensus time* on a time poll), **Fractional winners** and
+**Proportional budget** (two or more options; the budget not on a time poll),
+and **Option ranking** and **Multiple winners** (three or more), each opening
+a modal; then *Add to calendar* under a time poll's
 winner or *Flip a coin* under *No winner*. One menu rather than a
 button each keeps the banner to the name and a control or two. **The modals
 are short**: no title, but the sentence that kind's card on `/choices` opens
@@ -3244,6 +3245,8 @@ methods' second places differ; `48_multiple_winners` counts the same example.
   is `weighted_star_round`: `star_round`'s rules in the same order with every
   count a weighted sum, rounded to six places so equal sums compare equal.
   `star_round` itself is untouched, so no single-winner tally depends on it.
+  `weighted_star_round` is `scaled_star_round` at a scale of one; see
+  *Proportional budget* below.
 - **A runoff level on every rule shares the spot**, as in the option ranking,
   and both options are charged to the ballots that starred them.
 - **The reader can remove options and count again**, as many times as they
@@ -3293,6 +3296,49 @@ between two is still a question. `/choices` works it on the same example
   draw per spin, per reader, written nowhere. Like the coin it is allowed to
   be enjoyed: it turns for four seconds on a decelerating curve of its own,
   and under reduced motion jumps straight to where it stops.
+
+**Proportional budget** is for options of differing costs bought out of one
+budget, so each sizeable group of voters gets something it likes rather than
+the largest spending all of it. It is multiple winners with the cost let in
+twice: every star is scaled by the average cost over the option's cost (in
+the scores, the tie-breaks and the runoff), and a ballot is charged each
+funded option's stars times its cost over the average, so its strength is
+5 ÷ (5 + Σ N × C ÷ A). Each round is STAR over the options that still fit in
+what is left, and the count stops when nothing does. Options are funded whole
+or not at all, so some of the budget can be left over. `/choices` works it on
+the dinner example (`budgetOf`); `54_proportional_budget` counts the same
+example.
+
+- **Counted in the database** (`get_poll_proportional_budget` /
+  `open_poll_proportional_budget`, via `poll_proportional_budget`), on the
+  same gate and the same press as the others. Each round is
+  `scaled_star_round`, which is `weighted_star_round` with a scale per
+  option; a vote for an option counts its ballot's weight times that option's
+  scale, and voters scoring the two finalists equally are counted unscaled.
+  The answer is multiple winners' spots with a `cost` on each option and
+  the budget `left` after each, plus what was spent, the options left
+  unfunded or uncosted, and `tied`.
+- **The average cost is over the options counted**, so a removed option
+  counts as though it was never on the ballot, as removal does everywhere.
+- **A runoff level on every rule funds both finalists where both fit**,
+  sharing the spot. Where only one would, it funds neither and the count
+  stops there, naming them (`tied`): there is no fair way to pick.
+- **Costs and the budget are numbers with no unit.** Whole, from 1 to
+  `AMOUNT_MAX` (`validate_amount`); the ceiling only catches a typo.
+- **Any written list can be costed after the fact.** Voters never see a
+  cost, so nothing about the ballots depends on when one was given. A
+  budget question (`kind` `budget`) stores its own: the budget is its
+  `polls.kind_value` and each option's cost its `candidates.kind_value`.
+  On any other the modal opens on a cost per option and a budget
+  (`CostEditor`), and the count runs on those (`p_costs`, `p_budget`);
+  *Edit costs* lets a reader try others on a budget question too. Like
+  removals, they are held by `useBudgetInputs` for as long as the poll's
+  results are on screen and never stored. An option given no cost is left
+  out of the count, and said to be.
+- **Not on a sequential tally** (its ballots carry weights the budget would
+  ignore; refused in the database too), **not on a time poll** (its windows
+  are not bought), and **not on the sample's other questions**, which cannot
+  recount. The sample's budget question answers its recorded count.
 
 **Consensus option** is for a choice everybody has to live with, a meeting
 time above all: the option whose lowest score (its *floor*) is highest, so
@@ -3360,8 +3406,8 @@ A question's `kind` is what it asks for, picked on the create form as
 *Choice* and frozen at creation: `option` (*Best option*, the default),
 `time` (*Best time*, the calendar ballot), `consensus` (*Consensus
 option*), `consensus_time` (*Consensus time*, the calendar ballot),
-`ranking` (*Option ranking*), `multiple` (*Multiple winners*) or
-`fractional` (*Fractional winners*). **Only the two time kinds change the
+`ranking` (*Option ranking*), `multiple` (*Multiple winners*),
+`fractional` (*Fractional winners*) or `budget` (*Proportional budget*). **Only the two time kinds change the
 ballot**, and code asks `isCalendar(kind)`, never `kind === 'time'`; every
 other kind is a written list. In SQL the same question is `kind in ('time',
 'consensus_time')` (`polls_schedule_ck`, `create_poll`,
@@ -3384,7 +3430,7 @@ survives), in place of any explanation on the form itself.
   every read of the result, which the creator asked for.
 - **It takes the winner's place.** `ChosenResult` draws the modal's own body
   (`RankingBody`, `MultipleWinnersBody`, `FractionalWinnersBody`,
-  `ConsensusBody`) in a card at the top, handed the carried result, so it
+  `ConsensusBody`, `ProportionalBudgetBody`) in a card at the top, handed the carried result, so it
   asks for nothing until an option is removed. The runoff and the score round
   follow as usual (they are how the first place was chosen, and on a
   consensus how STAR alone would have chosen); the winner's banner and
@@ -3392,17 +3438,24 @@ survives), in place of any explanation on the form itself.
   are left level, and a consensus time its own *Add to calendar*.
   *More results* offers the others, not the one already on the page.
 - **One number per question** (`polls.kind_value`), whose meaning belongs to
-  the kind: places to rank, winners to choose. A dropdown of 2 to
-  `SCORING_ROWS_MAX` beside *Choice*, because the database counts no more
-  places than that (`validate_kind`); null means as many as it holds. A kind
+  the kind: places to rank, winners to choose, the budget. For a ranking or
+  winners, a dropdown of 2 to `SCORING_ROWS_MAX` beside *Choice*, because
+  the database counts no more places than that (`validate_kind`); null means
+  as many as it holds. A budget is a number box and must be given. A kind
   that takes none must have none (`polls_kind_value_ck`).
 - **The reader can try another number** (`ChoiceCount`), in the card only,
   opening on the poll's own. Every place is already counted, so it is a cut
   of the answer on screen (`cutTo`, a shared place kept whole) and costs no
   request. The *More results* modals have no number and show every place: a
   reader who went looking for the ranking wants the whole of it.
-- **An option has a number too** (`candidates.kind_value`), for kinds not
-  built yet (a cost, a capacity). Nothing writes or reads it.
+- **An option has a number too** (`candidates.kind_value`): its cost, on a
+  budget question, where every option must have one and no other kind may
+  (`option_cost`). It is written by every door into `candidates` — creation
+  (`p_option_costs` on `create_poll`, `cost` on each option of a group's
+  question), the plural suggestion doors and the creator's correction — and
+  read back as `cost` beside each option (`open_poll_view`, `poll_page`).
+  The create form and `CollectOptions` draw a cost box beside each name on
+  a budget question; the ballot never shows it.
 
 `50_a_question_asks_for_its_result` covers the rules and that the carried
 result is the modal's.
@@ -3597,13 +3650,21 @@ the poll **through the app's own functions** (`create_poll_group`,
 `open_poll_submit`, `close_poll`), and recording what `open_poll_view`,
 `open_poll_results`, `open_poll_ranking`, `open_poll_multiple_winners`,
 `open_poll_fractional_winners`, `open_poll_consensus`, `open_poll_scores`
-and `open_poll_ballots` answer.
+and `open_poll_ballots` answer, and `open_poll_proportional_budget` of a
+budget question.
 
 `/#/sample-sequel-movie` is "Movie night 2", made from the finished copy as
 *Create sequel poll* makes it (`sample.carried` reads the published sheet as
 `carriedFrom` does): its film question is sequential, and Paddington 2 wins
-on weight where a fresh count would elect Arrival. *More examples* and the
-*Sequential polls* section of `/choices` open it.
+on weight where a fresh count would elect Arrival. Its second question,
+`/#/sample-sequel-budget`, is a proportional budget: 1,000 for upgrades to
+the movie nights, where the big-screen fans get the projector and the
+comfort seekers the beanbags and popcorn machine, and funding by popularity
+would have bought the projector, surround sound and popcorn. Each question is
+titled with the choice it shows. The home page's *More examples* tile opens
+it, as do the two sections of `/choices`. **No sample id may be twenty-two
+characters long**: that is a short poll id's length, and the app would send
+it to the database (`pollId.test.ts` checks every recorded id).
 
 - **Nothing about the sample is computed in the browser.** Every number came
   from `star_round()` and `poll_ranking()`. To change what it shows, change

@@ -9,6 +9,7 @@ import {
   Card,
   Checkbox,
   Group,
+  NumberInput,
   Popover,
   SegmentedControl,
   Select,
@@ -54,6 +55,7 @@ import {
   blankOption,
   blankQuestion,
   carriedOf,
+  costOf,
   kindValueOf,
   hasErrors,
   noErrors,
@@ -71,7 +73,7 @@ import { launchTitleFlight } from '../lib/headingFlight'
 import { readPollDefaults, savePollDefaults } from '../lib/pollDefaults'
 import styles from './CreatePoll.module.css'
 import listRow from '../components/listRow.module.css'
-import { MAX_OPTIONS, MAX_QUESTIONS } from '../lib/limits'
+import { AMOUNT_MAX, MAX_OPTIONS, MAX_QUESTIONS } from '../lib/limits'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type { Invitee, Poll, PollKind, PollMode, PollOption } from '../lib/types'
 import {
@@ -250,14 +252,17 @@ export function CreatePoll() {
       const draftFrom = (row: Poll, rows: PollOption[]): QuestionDraft => {
         const fresh = blankQuestion()
         // The source's kind and number come across; a number it did not set
-        // leaves the form's default for that kind.
+        // leaves the form's default for that kind. A budget's number is its
+        // budget, which has a box of its own.
+        const number = row.kind_value ?? null
         const blank: QuestionDraft = {
           ...fresh,
           kind: row.kind,
           kindNumbers:
-            row.kind_value === null || row.kind_value === undefined
+            number === null || row.kind === 'budget'
               ? fresh.kindNumbers
-              : { ...fresh.kindNumbers, [row.kind]: row.kind_value },
+              : { ...fresh.kindNumbers, [row.kind]: number },
+          budget: row.kind === 'budget' && number !== null ? number : '',
         }
         const parsed = isCalendar(row.kind) ? pollScheduleSchema.safeParse(row.schedule) : null
         const grid = parsed?.success ? parsed.data : null
@@ -294,10 +299,12 @@ export function CreatePoll() {
           }
         }
 
+        // A table read, so an option's cost is its column, `kind_value`.
         const drafted = rows.map((o) => ({
           ...blankOption(),
           name: o.name,
           description: o.description,
+          cost: (o as PollOption & { kind_value?: number | null }).kind_value ?? '',
         }))
         return {
           ...blank,
@@ -547,7 +554,11 @@ export function CreatePoll() {
           schedule: null,
           carried: carriedOf(question, isOpen),
           options: question.options
-            .map((o) => ({ name: o.name.trim(), description: o.description?.trim() || null }))
+            .map((o) => ({
+              name: o.name.trim(),
+              description: o.description?.trim() || null,
+              cost: costOf(question, o),
+            }))
             .filter((o) => o.name),
         }
       }
@@ -564,6 +575,7 @@ export function CreatePoll() {
         options: enumerateWindows(grid, marked).map((name) => ({
           name,
           description: null,
+          cost: null,
         })),
       }
     })
@@ -604,6 +616,8 @@ export function CreatePoll() {
           p_option_descriptions: only.options.some((o) => o.description)
             ? only.options.map((o) => o.description ?? '')
             : undefined,
+          // A budget's costs, paired by position like the descriptions.
+          p_option_costs: only.kind === 'budget' ? only.options.map((o) => o.cost ?? 0) : undefined,
         })
     setSubmitting(false)
 
@@ -661,7 +675,8 @@ export function CreatePoll() {
   function choiceFields(question: QuestionDraft, questionIndex: number) {
     const number = CHOICE_NUMBER[question.kind]
     const id = `choice-${question.key}`
-    const columns = 1 + (question.sequential ? 1 : 0) + (number ? 1 : 0)
+    const budget = question.kind === 'budget'
+    const columns = 1 + (question.sequential ? 1 : 0) + (number || budget ? 1 : 0)
 
     // Sequential is a choice of its own with a type under it; the type is
     // the question's kind, so a sequential best time is still a time poll.
@@ -743,6 +758,24 @@ export function CreatePoll() {
             />
           </Stack>
         )}
+        {budget && (
+          // A number field rather than a dropdown: a budget is any amount, in
+          // whatever unit the poll is about, so it says none.
+          <Stack gap={2} justify="flex-end">
+            <NumberInput
+              label="Budget"
+              placeholder="How much there is to spend"
+              value={question.budget}
+              onChange={(v) => patchQuestion(questionIndex, { budget: v })}
+              min={1}
+              max={AMOUNT_MAX}
+              allowDecimal={false}
+              allowNegative={false}
+              thousandSeparator=","
+              error={shown.budgets[questionIndex]}
+            />
+          </Stack>
+        )}
       </SimpleGrid>
     )
   }
@@ -808,6 +841,8 @@ export function CreatePoll() {
               {solicitOptions
                 ? 'Voters will be able to add to this list later.'
                 : 'Use + to add a description to an option.'}
+              {question.kind === 'budget' &&
+                ' Give every option a cost. Voters will not see the costs.'}
             </Text>
 
             {question.options.map((option, index) => (
@@ -849,6 +884,24 @@ export function CreatePoll() {
                       />
                     )}
                   </Stack>
+                  {question.kind === 'budget' && (
+                    // Voters never see it: they rate each option on its own
+                    // merits, and the count weighs the cost.
+                    <NumberInput
+                      w={110}
+                      value={option.cost}
+                      onChange={(v) => updateOption(questionIndex, index, { cost: v })}
+                      placeholder="Cost"
+                      aria-label={`Option ${index + 1} cost`}
+                      min={1}
+                      max={AMOUNT_MAX}
+                      allowDecimal={false}
+                      allowNegative={false}
+                      thousandSeparator=","
+                      hideControls
+                      error={shown.optionCosts[optionKey(questionIndex, index)]}
+                    />
+                  )}
                   <DescriptionToggle
                     open={option.description !== null}
                     subject={`option ${index + 1}`}

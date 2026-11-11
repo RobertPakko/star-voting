@@ -312,8 +312,8 @@ test('a tie-break can be opened over its round', async ({ page }) => {
 })
 
 test('a sequel counts each ballot at its weight, and says so on the sheet', async ({ page }) => {
-  await page.goto('#/examples')
-  await page.getByRole('link', { name: 'See the result' }).click()
+  await page.goto('#/')
+  await page.getByRole('link', { name: 'More examples' }).click()
   // Counted fresh, Arrival would win; counted as a sequel, last week's film's
   // fans count for less and Paddington 2 takes the runoff.
   await expect(page.getByText('Best option: Paddington 2')).toBeVisible()
@@ -325,6 +325,21 @@ test('a sequel counts each ballot at its weight, and says so on the sheet', asyn
   await expect(sheet.getByRole('row', { name: /^Ana 3\/5 / })).toBeVisible()
   await expect(sheet.getByText('Weighted total')).toBeVisible()
   await expectAccessible(page, 'a sequel and its weighted sheet')
+})
+
+test('a budget shares the money out, and says what popularity would have bought', async ({
+  page,
+}) => {
+  await page.goto('#/sample-sequel-budget')
+  // The projector for the big-screen fans; the beanbags and popcorn for the
+  // comfort seekers, where funding by popularity would have bought surround
+  // sound with the projector.
+  const card = page.getByText('950 of 1,000 spent, 50 left over.')
+  await expect(card).toBeVisible()
+  await expect(page.getByText('Surround sound (400)')).toBeVisible()
+  // The recording cannot count again, so nothing offers to.
+  await expect(page.getByRole('button', { name: 'Edit costs' })).toHaveCount(0)
+  await expectAccessible(page, 'a proportional budget')
 })
 
 test('a mistyped sample link says so', async ({ page }) => {

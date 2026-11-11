@@ -1,4 +1,11 @@
-import type { ConsensusResult, FractionalShare, PollKind, PollResults, RankingEntry } from './types'
+import type {
+  BudgetResult,
+  ConsensusResult,
+  FractionalShare,
+  PollKind,
+  PollResults,
+  RankingEntry,
+} from './types'
 import { SCORING_ROWS_MAX } from './resultsRows'
 
 /**
@@ -38,6 +45,12 @@ export const CHOICES: Record<PollKind, { label: string; section: string; blurb: 
     section: 'consensus-option',
     blurb: 'picks the time whose worst score is as good as possible.',
   },
+  budget: {
+    label: 'Proportional budget',
+    section: 'proportional-budget',
+    blurb:
+      'shares a budget between options of differing costs so that different groups of voters each get something they like.',
+  },
 }
 
 /** Where `/choices` explains a kind; each `section` is one of its card ids. */
@@ -65,6 +78,7 @@ export const CHOICE_ORDER: PollKind[] = [
   'ranking',
   'multiple',
   'fractional',
+  'budget',
 ]
 
 /**
@@ -74,7 +88,7 @@ export const CHOICE_ORDER: PollKind[] = [
  */
 export type ResultTool = Extract<
   PollKind,
-  'option' | 'ranking' | 'multiple' | 'fractional' | 'consensus'
+  'option' | 'ranking' | 'multiple' | 'fractional' | 'consensus' | 'budget'
 >
 
 /** The kind a tool is on a poll of this kind: on a calendar, an option is a time. */
@@ -119,7 +133,9 @@ export function offers(tool: ResultTool, results: PollResults) {
   // A sequential poll's ballots carry weights, which only STAR's results
   // count with; a consensus or a split of them would quietly ignore them.
   if (results.weighted && !SEQUENTIAL_KINDS.includes(tool)) return false
-  return tool === 'fractional' || tool === 'consensus'
+  // A calendar's windows are not things anybody buys.
+  if (tool === 'budget' && isCalendar(results.kind)) return false
+  return tool === 'fractional' || tool === 'consensus' || tool === 'budget'
     ? results.option_count >= 2
     : results.option_count >= 3
 }
@@ -128,6 +144,7 @@ export type ChosenResult =
   | { kind: 'ranking' | 'multiple'; entries: RankingEntry[] }
   | { kind: 'fractional'; shares: FractionalShare[] }
   | { kind: 'consensus'; consensus: ConsensusResult }
+  | { kind: 'budget'; budget: BudgetResult }
 
 /**
  * The result a tally opens on, where the question asked for more than STAR's
@@ -139,7 +156,12 @@ export function chosenResult(results: PollResults): ChosenResult | null {
   const { kind, kind_result: result } = results
   if (!result) return null
   if (kind === 'consensus' || kind === 'consensus_time') {
-    return !Array.isArray(result) ? { kind: 'consensus', consensus: result } : null
+    return !Array.isArray(result) && 'floor' in result
+      ? { kind: 'consensus', consensus: result }
+      : null
+  }
+  if (kind === 'budget') {
+    return !Array.isArray(result) && 'spots' in result ? { kind, budget: result } : null
   }
   if (!Array.isArray(result)) return null
   if (kind === 'fractional') {

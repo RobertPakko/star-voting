@@ -284,8 +284,9 @@ export function PollDetail({
       : view && statusFromOpenView(view, retention.current)
     if (status) setStatus(status)
 
+    // A table read, where an option's cost is its column, `kind_value`.
     if (optionsRes && !optionsRes.error && optionsRes.data)
-      setOptions(optionsRes.data as PollOption[])
+      setOptions(optionsRes.data.map(({ kind_value, ...o }) => ({ ...o, cost: kind_value })))
     if (inviteesRes && !inviteesRes.error && inviteesRes.data)
       setInvitees(inviteesRes.data as Invitee[])
 
@@ -479,6 +480,7 @@ export function PollDetail({
                 source={{ kind: 'creator', pollId: poll.id }}
                 options={optionList}
                 schedule={isCalendar(poll.kind) ? poll.schedule : null}
+                costed={poll.kind === 'budget'}
                 isCreator
                 questionStrip={questionStrip}
                 done={{
@@ -516,6 +518,7 @@ export function PollDetail({
                   source={{ kind: 'poll', pollId: poll.id }}
                   options={options}
                   schedule={isCalendar(poll.kind) ? poll.schedule : null}
+                  costed={poll.kind === 'budget'}
                   isCreator={isCreator}
                   questionStrip={questionStrip}
                   confirm={confirmation}

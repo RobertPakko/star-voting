@@ -111,6 +111,7 @@ export function OpenPollPanel({
           source={{ kind: 'open', pollId }}
           options={view.options}
           schedule={schedule}
+          costed={view.poll.kind === 'budget'}
           isCreator={isCreator}
           voterName={needsName ? voterName : undefined}
           questionStrip={questionStrip}
