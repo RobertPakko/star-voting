@@ -23,22 +23,15 @@ import {
 import { useDisclosure } from '@mantine/hooks'
 import {
   ArrowDownIcon,
-  ArrowsLeftRightIcon,
   ArrowsSplitIcon,
   CaretRightIcon,
   ChartPieSliceIcon,
   CoinsIcon,
-  CpuIcon,
   EyeIcon,
-  GiftIcon,
   HandshakeIcon,
-  HourglassIcon,
-  LinkSimpleIcon,
   ListNumbersIcon,
-  PiggyBankIcon,
   RankingIcon,
   RepeatIcon,
-  SwapIcon,
   TrophyIcon,
   UsersThreeIcon,
   WarningIcon,
@@ -312,9 +305,7 @@ export function AllChoices() {
   const budget = budgetOf(DINNER, COSTS, BUDGET)
   const budgetReduced = votersOf(DINNER).filter((voter) => budget.spots[1].weights[voter] < 1)
   const popular = byPopularity(DINNER, COSTS, BUDGET)
-  const compromise = bestSingleOption(DINNER)
   const seated = assignmentOf(DINNER, SEATS)
-  const sharedOut = optionsOf(DINNER).find((o) => o !== winner && o !== compromise)!
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -388,8 +379,8 @@ export function AllChoices() {
           <NotStrategyProof />
           <Text>
             Sometimes the best option is the one that nobody hates: a meeting time everyone can make
-            or a dinner option that no one is allergic to. <strong>Consensus option</strong> picks
-            the option whose worst score is as good as possible:
+            or a dinner that no one is allergic to. <strong>Consensus option</strong> picks the
+            option whose worst score is as good as possible:
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
@@ -415,7 +406,7 @@ export function AllChoices() {
               .join(' and ')}{' '}
             were each given 0 stars by someone. This also shows why this system is easy to game. A
             voter can give every option except their favorite 0 stars to force the group into a
-            specific option. Though hopefully no one would do that for a poll among friends.
+            specific option; though hopefully no one would do that for a poll among friends.
           </Text>
           <Text>
             If several options tie, then the next lowest rating given to each of the tied options is
@@ -637,20 +628,6 @@ export function AllChoices() {
             is the fairest split of the options.
           </Text>
           <Text>
-            Multiplying the satisfactions together is what makes the split fair. Going to {winner}{' '}
-            or {sharedOut} every week leaves someone with 0 stars, which makes the whole product 0,
-            however happy everyone else is. Going to {compromise} every week is the best of the
-            single options, with a product of{' '}
-            {Math.round(productOf(DINNER, onlyOf(DINNER, compromise)))}, but the split does better
-            still: a little {winner} and {sharedOut} raises the satisfaction of the friends who love
-            them by more, proportionally, than it costs everyone else.
-          </Text>
-          <Text>
-            Notice how {winner} has the smallest share even though it would win a STAR election.
-            This is because its fans also gave {compromise} plenty of stars, so weeks of{' '}
-            {compromise} keep them happy too, while the {sharedOut} fans liked {compromise} less.
-          </Text>
-          <Text>
             So the friends split their weeks{' '}
             {sharesInOrder(percent)
               .map((option) => `${percent[option]}% ${option}`)
@@ -659,6 +636,12 @@ export function AllChoices() {
             .
           </Text>
           <Shares percent={percent} />
+          <Text>
+            Notice how {winner} has the smallest share even though it would win a STAR election.
+            This is because alternating between options that different groups prefer can lead to
+            greater satisfaction than picking one compromise to stick with permanently. This is the
+            detail that <strong>fractional winners</strong> tries to capture.
+          </Text>
           <Text>
             This app provides a way to randomly select an option once you have your fractional
             winners. This allows you to just pick an option randomly when you need to make a
@@ -770,12 +753,8 @@ export function AllChoices() {
           </Text>
           <Text>
             Voters aren't shown the cost of each option, they are expected to provide a rating
-            without considering the cost since the procedure automatically accounts for the cost of
-            each option.
-          </Text>
-          <Text>
-            Since the ballots don&rsquo;t depend on the costs, any finished poll can be shared out
-            this way: open <strong>More results</strong>, give each option a cost and set a budget.
+            without considering the cost since the cost is automatically accounted for by the
+            procedure.
           </Text>
           <BudgetFormula />
         </Choice>
@@ -788,23 +767,20 @@ export function AllChoices() {
           algorithms={['Nash']}
           example="assignment"
         >
-          <NotStrategyProof />
           <Requirement icon={EyeIcon}>The poll shows who voted.</Requirement>
           <Text>
-            Sometimes every voter needs a different option of their own: chores shared out between
-            housemates, topics handed out to a class, or shifts split between volunteers.{' '}
-            <strong>Option assignment</strong> gives each voter one option, choosing the assignment
-            that leaves the group as a whole as satisfied as it can be:
+            Sometimes voters should be assigned to different options: separate projects that must be
+            staffed or different activities that can be done simultaneously.{' '}
+            <strong>Option assignment</strong> assigns each voter to an option, choosing the
+            assignment that leaves the group as satisfied as possible:
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
-              Each option can optionally be given a number of places: how many voters it can go to.
-              A chore might need two housemates, or a shift four volunteers. An option with no
-              number set goes to one voter.
+              Each option may be given a capacity: how many voters can be assigned to it.
             </List.Item>
             <List.Item>
-              The assignment chosen is the one where the stars each voter gave their own option,
-              multiplied together, are as large as possible.
+              The assignment chosen is the one where the stars each voter gave their assigned
+              option, multiplied together, are as large as possible.
             </List.Item>
           </List>
           <Text>
@@ -820,254 +796,14 @@ export function AllChoices() {
             rowLabel="Restaurant"
             totalLabel="Seats"
           />
-          <Text>
-            The {ORDINALS[4]} and {ORDINALS[5]} friends both want the one seat at the sushi bar.
-            Giving it to the {ORDINALS[4]} friend sends the {ORDINALS[5]} to tacos, which they gave{' '}
-            {stars(DINNER.tacos[5])}: 5 × {DINNER.tacos[5]} = {5 * DINNER.tacos[5]}. Giving it to
-            the {ORDINALS[5]} sends the {ORDINALS[4]} to tacos, which they gave{' '}
-            {stars(DINNER.tacos[4])}: 5 × {DINNER.tacos[4]} = {5 * DINNER.tacos[4]}. So the{' '}
-            {ORDINALS[5]} friend gets sushi, and the stars everyone gave their own restaurant
-            multiply to {seatedProduct(DINNER, seated).toLocaleString('en-US')}, the most any
-            seating can.
+          <Text size="xs" c="dimmed" ta="center">
+            5,625 is the highest possible product of the friends&rsquo; satisfaction scores, so this
+            is the fairest assignment.
           </Text>
           <Text>
-            Multiplying rather than adding stops the assignment from handing one voter an option
-            they gave 0 stars so that the others can do slightly better. Nobody is ever given an
-            option they gave 0 stars.
-          </Text>
-          <Text>
-            The numbers don&rsquo;t have to match. If there are more voters than places, as many
-            voters as possible are given an option and the rest go without. If there are more places
-            than voters, every voter gets one and some places are left empty.
-          </Text>
-          <Text>
-            Since the ballots don&rsquo;t depend on the places, any finished poll that shows who
-            voted can be assigned this way: open <strong>More results</strong> and give each option
-            its places.
-          </Text>
-        </Choice>
-
-        <Choice
-          id={CHOICES.fractionalBudget}
-          icon={PiggyBankIcon}
-          color="lime"
-          title="Fractional budget"
-          unbuilt
-          algorithms={['Nash', 'Cost adjustment']}
-        >
-          <ComingSoon name="Fractional budget" />
-          <NeedsCost />
-          <NotStrategyProof />
-          <Text>
-            Sometimes a budget can be split between options in any amounts, but each option only
-            needs so much: donations shared between charities, hours of help shared between
-            projects, or a grant shared between teams. <strong>Fractional budget</strong> is
-            Fractional winners with a cost on every option:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Every option is given a cost: the most it can use. A charity might be able to use
-              $2,000 of a $10,000 fund.
-            </List.Item>
-            <List.Item>
-              An option funded part of the way gives its voters that part of their stars, so an
-              option funded halfway counts for half the stars each voter gave it. No option is given
-              more than its cost.
-            </List.Item>
-            <List.Item>
-              A voter&rsquo;s satisfaction is the stars they get from every option, counted this
-              way, added up.
-            </List.Item>
-            <List.Item>
-              The budget is split in the way that makes every voter&rsquo;s satisfaction, multiplied
-              together, as large as possible.
-            </List.Item>
-          </List>
-          <Text>
-            Unlike Proportional budget, which funds an option whole or not at all, this is for
-            options that are still worth something funded part of the way.
-          </Text>
-        </Choice>
-
-        <Choice
-          id={CHOICES.optionAllocation}
-          icon={GiftIcon}
-          color="cyan"
-          title="Option allocation"
-          unbuilt
-          algorithms={['Nash']}
-        >
-          <ComingSoon name="Option allocation" />
-          <HardToSolve />
-          <Text>
-            Sometimes different voters need different options: chores shared out between housemates
-            or shifts split between volunteers. <strong>Option allocation</strong> splits options up
-            between voters, choosing the allocation that leaves the group as a whole as satisfied as
-            possible:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Every voter rates every option as usual, with more stars for the options they would
-              prefer.
-            </List.Item>
-            <List.Item>
-              Each option can optionally be given a capacity: how many voters it can go to. A chore
-              might need two housemates, or a shift four volunteers.
-            </List.Item>
-            <List.Item>
-              Each voter&rsquo;s satisfaction is the sum of the stars that they gave the option(s)
-              they were assigned.
-            </List.Item>
-            <List.Item>
-              The allocation chosen is the one where each voter&rsquo;s satisfaction, multiplied
-              together, is as large as possible.
-            </List.Item>
-          </List>
-          <Text>
-            The system will try to give each voter positive satisfaction if possible, since one 0
-            makes the whole product 0. If this isn't possible, it will choose the largest possible
-            set of voters that can have positive satisfaction and find the optimal solution for that
-            set of voters.
-          </Text>
-        </Choice>
-
-        <Choice
-          id={CHOICES.groupFormation}
-          icon={UsersThreeIcon}
-          color="pink"
-          title="Group formation"
-          unbuilt
-          algorithms={['Nash']}
-        >
-          <ComingSoon name="Group formation" />
-          <VotersAreOptions />
-          <NotStrategyProof />
-          <HardToSolve />
-          <Text>
-            Sometimes a group needs to split into smaller groups: teams for a project, tables at a
-            dinner, or rooms on a trip. When everyone rates everyone else,{' '}
-            <strong>Group formation</strong> uses those ratings to put people with the people they
-            most want to be with:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Every voter rates every other voter, with more stars for the people they would rather
-              be grouped with.
-            </List.Item>
-            <List.Item>
-              A voter&rsquo;s satisfaction with a split is the stars they gave the others in their
-              own group, on average.
-            </List.Item>
-            <List.Item>
-              The split chosen, into groups of the chosen size, is the one where every voter&rsquo;s
-              satisfaction, multiplied together, is as large as possible.
-            </List.Item>
-          </List>
-          <Text>
-            Multiplying rather than adding means nobody is put in a group of people they gave 0
-            stars to just so that everyone else can be with their favourites.
-          </Text>
-        </Choice>
-
-        <Choice
-          id={CHOICES.optimalSwap}
-          icon={SwapIcon}
-          color="indigo"
-          title="Optimal swap"
-          unbuilt
-          algorithms={['Shapley–Scarf']}
-        >
-          <ComingSoon name="Optimal swap" />
-          <Requirement icon={SwapIcon}>Every voter brings one option of their own.</Requirement>
-          <Text>
-            Sometimes everyone already has something and would happily trade: shifts on a rota,
-            rooms on a trip, or presents at a gift swap. <strong>Optimal swap</strong> finds the
-            trades that leave everyone as happy as they can be without anybody ending up worse off
-            than they started:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Every voter brings one option (their shift, room or present) and rates
-              everyone&rsquo;s options, including their own.
-            </List.Item>
-            <List.Item>
-              Each voter points to whoever brought the option they gave the most stars, among those
-              still to be handed out.
-            </List.Item>
-            <List.Item>
-              Following the pointers always leads round in a loop, which may be one voter pointing
-              at themselves. Everyone in a loop gets the option they pointed to, and leaves with it.
-            </List.Item>
-            <List.Item>Repeat with everyone left until every option has been handed out.</List.Item>
-          </List>
-          <Text>
-            This is{' '}
-            <Ext href="https://en.wikipedia.org/wiki/Top_trading_cycle">
-              Shapley and Scarf&rsquo;s top trading cycles
-            </Ext>
-            . Nobody ends up with an option they like less than the one they brought, no group could
-            do better by trading among themselves instead, and nobody can get a better option by
-            rating dishonestly.
-          </Text>
-        </Choice>
-
-        <Choice
-          id={CHOICES.bipartiteMatching}
-          icon={LinkSimpleIcon}
-          color="red"
-          title="Bipartite matching"
-          unbuilt
-          algorithms={['Gale–Shapley']}
-        >
-          <ComingSoon name="Bipartite matching" />
-          <VotersAreOptions />
-          <Requirement icon={ArrowsLeftRightIcon}>
-            Voters are divided into two groups with the same number of places in total.
-          </Requirement>
-          <Text>
-            Sometimes people need to be paired with people from another group: mentors with mentees,
-            new starters with buddies, or students with project supervisors. Both sides care who
-            they get, so when everyone rates everyone in the other group,{' '}
-            <strong>Bipartite matching</strong> uses those ratings to find a matching that is
-            stable: no two people would both rather be matched with each other than with who they
-            got.
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Every voter rates everyone in the other group, with more stars for the people they
-              would rather be matched with.
-            </List.Item>
-            <List.Item>
-              Each voter has a number of places: how many people from the other group they can be
-              matched with. A mentor might take three mentees while each mentee has one mentor.
-            </List.Item>
-            <List.Item>
-              Everyone in one group proposes to the people they gave the most stars in the other
-              group, as many as they have places.
-            </List.Item>
-            <List.Item>
-              Everyone in the other group holds on to the best proposals they have received, as many
-              as they have places, and turns down the rest.
-            </List.Item>
-            <List.Item>
-              Anyone turned down proposes to the next person on their list, and a held proposal is
-              given up when a better one arrives. This repeats until nobody has anyone left to
-              propose to.
-            </List.Item>
-          </List>
-          <Text>
-            This is the{' '}
-            <Ext href="https://en.wikipedia.org/wiki/Gale%E2%80%93Shapley_algorithm">
-              Gale&ndash;Shapley algorithm
-            </Ext>
-            . It always ends in a stable matching, and because both groups have the same number of
-            places, every place is filled.
-          </Text>
-          <Text>
-            Unlike Option assignment, which looks at everyone&rsquo;s stars together, this is about
-            stability: a pairing that leaves people happier overall could leave two people who would
-            both rather leave their matches for each other. The group that proposes gets the best
-            stable matching it can, so it matters which group goes first.
+            The numbers don&rsquo;t have to match. If there are more voters than the combined option
+            capacities, as many voters as possible are given an option and the rest go without. If
+            there are more places than voters, every voter gets one and some places are left empty.
           </Text>
         </Choice>
       </Accordion>
@@ -1172,18 +908,6 @@ function exampleFor(tool: ResultTool | 'sequential') {
   return pollPath(sampleResultAs(tool))
 }
 
-/** The banner on every choice that is described but not built. */
-function ComingSoon({ name, plural }: { name: string; plural?: boolean }) {
-  return (
-    <Alert variant="light" icon={<HourglassIcon size={20} aria-hidden />} title="Coming soon">
-      <Text size="sm">
-        {name} {plural ? 'aren’t' : 'isn’t'} available yet. This is how {plural ? 'they' : 'it'}{' '}
-        will work.
-      </Text>
-    </Alert>
-  )
-}
-
 /**
  * The warning on a choice a voter can do better under by scoring dishonestly,
  * which STAR's runoff guards against. `easily` where one ballot's extreme
@@ -1193,18 +917,6 @@ function NotStrategyProof() {
   return (
     <Alert variant="light" color="orange" icon={<WarningIcon size={20} aria-hidden />}>
       <Text size="sm">Warning: not resistant to strategic voting.</Text>
-    </Alert>
-  )
-}
-
-/** The warning on a choice whose best answer can take too long to find. */
-function HardToSolve() {
-  return (
-    <Alert variant="light" color="orange" icon={<CpuIcon size={20} aria-hidden />}>
-      <Text size="sm">
-        Finding this solution can be computationally expensive. This app might not be able to find
-        the most optimal possible solution.
-      </Text>
     </Alert>
   )
 }
@@ -1225,14 +937,6 @@ function Requirement({ icon: Glyph, children }: { icon: Icon; children: ReactNod
 
 function NeedsCost() {
   return <Requirement icon={CoinsIcon}>Options have different costs.</Requirement>
-}
-
-function VotersAreOptions() {
-  return (
-    <Requirement icon={UsersThreeIcon}>
-      The set of options is the same as the set of voters.
-    </Requirement>
-  )
 }
 
 /**
@@ -1960,13 +1664,6 @@ function assignmentOf(ratings: Ratings, seats: Record<string, number>): (string 
   return best
 }
 
-/** The product of the stars each seated voter gave their own option. */
-const seatedProduct = (ratings: Ratings, seated: (string | null)[]) =>
-  seated.reduce(
-    (product, option, voter) => (option ? product * ratings[option][voter] : product),
-    1,
-  )
-
 /** The ratings, with each voter's own option circled and each option's seats filled. */
 function seatedRows(
   ratings: Ratings,
@@ -2113,19 +1810,9 @@ function sharesOf(ratings: Ratings): Record<string, number> {
 const satisfactionOf = (ratings: Ratings, voter: number, shares: Record<string, number>) =>
   sum(optionsOf(ratings).map((option) => shares[option] * ratings[option][voter]))
 
-/** All of the weeks to one option. */
-const onlyOf = (ratings: Ratings, option: string) =>
-  Object.fromEntries(optionsOf(ratings).map((o) => [o, o === option ? 1 : 0]))
-
 /** The product of every voter's satisfaction under `shares`. */
 const productOf = (ratings: Ratings, shares: Record<string, number>) =>
   votersOf(ratings).reduce((product, voter) => product * satisfactionOf(ratings, voter, shares), 1)
-
-/** The option whose every-week plan has the largest product: the best compromise. */
-const bestSingleOption = (ratings: Ratings) =>
-  optionsOf(ratings).sort(
-    (x, y) => productOf(ratings, onlyOf(ratings, y)) - productOf(ratings, onlyOf(ratings, x)),
-  )[0]
 
 /** A number as the satisfaction working writes it: to two decimal places at most. */
 const decimal = (n: number) => Math.round(n * 100) / 100
