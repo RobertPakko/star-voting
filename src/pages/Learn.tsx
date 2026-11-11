@@ -1188,19 +1188,19 @@ function BudgetFormula() {
         size="sm"
         fw={600}
         ta="center"
-        aria-label="1 divided by 1 plus the sum, over funded options, of stars over 5 times cost over average cost"
+        aria-label="5 divided by 5 plus the sum, over funded options, of stars times cost over average cost"
       >
         <span className={classes.fraction}>
           <span className={classes.numerator} aria-hidden="true">
-            1
+            5
           </span>
           <span className={classes.denominator} aria-hidden="true">
-            1 + Σ ((N<sub>i</sub>/5) (C<sub>i</sub>/A))
+            5 + Σ N<sub>i</sub> × C<sub>i</sub>/A
           </span>
         </span>
       </Text>
       <Text size="sm">
-        The influence lost for previous winners is N<sub>i</sub>/5 times C<sub>i</sub>/A where N
+        The influence lost for previous winners is N<sub>i</sub> times C<sub>i</sub>/A where N
         <sub>i</sub> is the stars given to the winner of round i, C<sub>i</sub> is the cost of the
         winner of round i, and A is the average cost of every option on the poll. Summing these
         values over all previous winners gives the total influence lost, which we add to the
@@ -1449,13 +1449,13 @@ function WeightFormula() {
       <Text size="sm">
         A ballot&rsquo;s weight, which scales its scores and its runoff vote, is
       </Text>
-      <Text size="sm" fw={600} ta="center" aria-label="1 divided by N over 5 plus 1">
+      <Text size="sm" fw={600} ta="center" aria-label="5 divided by 5 plus N">
         <span className={classes.fraction}>
           <span className={classes.numerator} aria-hidden="true">
-            1
+            5
           </span>
           <span className={classes.denominator} aria-hidden="true">
-            N/5 + 1
+            5 + N
           </span>
         </span>
       </Text>
@@ -1713,7 +1713,7 @@ interface Spot {
 
 /**
  * A ballot's strength once it has given `given` stars to earlier winners:
- * 1 ÷ (1 + given ÷ 5), so a half after one 5, a third after two.
+ * 5 ÷ (5 + given), so a half after one 5, a third after two.
  */
 const weightOf = (given: number) => 1 / (1 + given / MAX_STARS)
 
@@ -1788,7 +1788,7 @@ function ratioOf(x: number) {
 /**
  * Proportional budget, as the page describes it: cost-adjusted STAR once per
  * option funded, among the options that still fit in what is left, with each
- * ballot's strength 1 ÷ (1 + Σ stars ÷ 5 × cost ÷ average cost) over what it
+ * ballot's strength 5 ÷ (5 + Σ stars × cost ÷ average cost) over what it
  * funded so far (`BudgetFormula`). Stops when nothing left fits.
  */
 function budgetOf(ratings: Ratings, costs: Record<string, number>, budget: number) {
@@ -2071,7 +2071,7 @@ function weeksOf(polls: Ratings[]): Week[] {
       .slice(0, 2)
     const winner = runoffWinner(ratings, finalists, weights)
     // A newcomer is charged the stars that would have left them at the
-    // average, from 1 ÷ (1 + given ÷ 5).
+    // average, from 5 ÷ (5 + given).
     given = votersOf(ratings).map(
       (voter) =>
         (voter < given.length ? given[voter] : MAX_STARS / average - MAX_STARS) +

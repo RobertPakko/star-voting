@@ -3227,7 +3227,7 @@ the score order is fixed and each round is the next runoff down it.
 **Multiple winners** is for choosing several at once so each sizeable group
 of voters gets one it likes; the option ranking's top few can all belong to one
 large group. It is a ranking of its own: each spot is a full STAR election
-(scores, then a runoff) in which every ballot counts at 1 ÷ (1 + SUM ÷ 5)
+(scores, then a runoff) in which every ballot counts at 5 ÷ (5 + SUM)
 (D'Hondt's divisors), SUM being the stars it gave the winners so far, **in the runoff as well as the
 scores**, since full-strength runoff votes would let a majority take every
 spot. `n` winners are the top `n`, so no number of winners is asked for and
