@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { openPollRpc } from './samplePoll'
 import { voterKeyFor } from './voterKey'
+import type { OptionNumber } from './choices'
 
 /**
  * Which endpoints a list writes through: an invite poll (session), an open
@@ -20,10 +21,11 @@ export type OptionsSource =
 export type DraftHold = { current: (() => Promise<boolean>) | null }
 
 /**
- * An option as typed: an empty description means none. A cost only on a
- * proportional budget, where every option has one.
+ * An option as typed: an empty description means none. `number` is its cost
+ * on a proportional budget (where every option has one) or its places on an
+ * option assignment, sent under that name (`numbered`).
  */
-type Typed = { name: string; description: string; cost?: number | null }
+type Typed = { name: string; description: string; number?: number | null }
 
 /**
  * Send a draft, typed or painted. The creator's correction is one
@@ -36,18 +38,20 @@ type Typed = { name: string; description: string; cost?: number | null }
 export async function sendDraft(
   source: OptionsSource,
   draft: { added: Typed[]; corrected: (Typed & { id: string })[]; removed: string[] },
+  numbered: OptionNumber | null = null,
 ) {
   // Null, not '', is what the column holds for no description.
+  const number = (o: Typed) => (numbered ? { [numbered]: o.number ?? null } : {})
   const added = draft.added.map((o) => ({
     name: o.name,
     description: o.description || null,
-    cost: o.cost ?? null,
+    ...number(o),
   }))
   const corrected = draft.corrected.map((o) => ({
     id: o.id,
     name: o.name,
     description: o.description || null,
-    cost: o.cost ?? null,
+    ...number(o),
   }))
 
   if (source.kind === 'creator')

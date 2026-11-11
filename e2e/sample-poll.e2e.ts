@@ -342,6 +342,20 @@ test('a budget shares the money out, and says what popularity would have bought'
   await expectAccessible(page, 'a proportional budget')
 })
 
+test('an assignment gives each friend one film, and the popular one to those who would lose most', async ({
+  page,
+}) => {
+  await page.goto('#/sample-sequel-assignment')
+  // Six want The Matrix and four can see it: Ana and Diego, nearly as happy
+  // with their second films, give up their places.
+  await expect(page.getByText('Every voter has an option, in 12 places.')).toBeVisible()
+  await expect(page.getByText('Ben (5), Erin (5), Farid (5), Jules (5)')).toBeVisible()
+  await expect(page.getByText('Ana (4), Chloe (5), Hugo (5)')).toBeVisible()
+  // The recording cannot count again, so nothing offers to.
+  await expect(page.getByRole('button', { name: 'Edit places' })).toHaveCount(0)
+  await expectAccessible(page, 'an option assignment')
+})
+
 test('a mistyped sample link says so', async ({ page }) => {
   await page.goto('#/sample-nothing-here')
   await expect(heading(page)).toHaveText('Poll not found')

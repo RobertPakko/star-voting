@@ -55,7 +55,7 @@ import {
   blankOption,
   blankQuestion,
   carriedOf,
-  costOf,
+  numberOf,
   kindValueOf,
   hasErrors,
   noErrors,
@@ -82,10 +82,14 @@ import {
   CHOICE_ORDER,
   CHOICES,
   isCalendar,
+  optionNumberOf,
   SEQUENTIAL_KINDS,
 } from '../lib/choices'
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
+
+/** Why the voter switch is on and fixed while a question is an option assignment. */
+const ASSIGNMENT_SHOWS_VOTERS = 'An option assignment says who gets which option.'
 
 /** The *Choice* entry that makes a question sequential; its type is a second select. */
 const SEQUENTIAL = 'sequential'
@@ -153,7 +157,11 @@ export function CreatePoll() {
   // ballot's weight on an anonymous sheet would say whose it is. So while any
   // question is sequential the two settings are one switch.
   const anySequential = questions.some((question) => question.sequential)
-  const publishBallots = anySequential ? showVoters : showBallots
+  // An option assignment says who gets which option, so while any question
+  // is one, voters are shown whatever the switch was left at.
+  const anyAssignment = questions.some((q) => !q.sequential && q.kind === 'assignment')
+  const votersShown = showVoters || anyAssignment
+  const publishBallots = anySequential ? votersShown : showBallots
 
   const errors = validate({
     title,
@@ -299,12 +307,12 @@ export function CreatePoll() {
           }
         }
 
-        // A table read, so an option's cost is its column, `kind_value`.
+        // A table read, so an option's cost or places are its column, `kind_value`.
         const drafted = rows.map((o) => ({
           ...blankOption(),
           name: o.name,
           description: o.description,
-          cost: (o as PollOption & { kind_value?: number | null }).kind_value ?? '',
+          number: (o as PollOption & { kind_value?: number | null }).kind_value ?? '',
         }))
         return {
           ...blank,
@@ -557,7 +565,7 @@ export function CreatePoll() {
             .map((o) => ({
               name: o.name.trim(),
               description: o.description?.trim() || null,
-              cost: costOf(question, o),
+              number: numberOf(question, o),
             }))
             .filter((o) => o.name),
         }
@@ -575,7 +583,7 @@ export function CreatePoll() {
         options: enumerateWindows(grid, marked).map((name) => ({
           name,
           description: null,
-          cost: null,
+          number: null,
         })),
       }
     })
@@ -591,10 +599,19 @@ export function CreatePoll() {
           p_title: title.trim(),
           // Required (no DEFAULT in SQL); '' and null end up the same.
           p_description: description.trim(),
-          p_questions: cleaned,
+          // Each option's number goes as what its kind calls it: `cost` or `places`.
+          p_questions: cleaned.map(({ options, ...question }) => {
+            const numbered = optionNumberOf(question.kind)
+            return {
+              ...question,
+              options: options.map(({ number, ...o }) =>
+                numbered ? { ...o, [numbered]: number } : o,
+              ),
+            }
+          }),
           p_emails: isOpen ? [] : allEmails,
           p_mode: mode,
-          p_show_voters: showVoters,
+          p_show_voters: votersShown,
           p_show_ballots: publishBallots,
           p_solicit_options: solicitOptions,
         })
@@ -604,7 +621,7 @@ export function CreatePoll() {
           p_options: only.options.map((o) => o.name),
           p_emails: isOpen ? [] : allEmails,
           p_mode: mode,
-          p_show_voters: showVoters,
+          p_show_voters: votersShown,
           p_show_ballots: publishBallots,
           p_solicit_options: solicitOptions,
           p_carried: only.carried ?? undefined,
@@ -616,8 +633,15 @@ export function CreatePoll() {
           p_option_descriptions: only.options.some((o) => o.description)
             ? only.options.map((o) => o.description ?? '')
             : undefined,
-          // A budget's costs, paired by position like the descriptions.
-          p_option_costs: only.kind === 'budget' ? only.options.map((o) => o.cost ?? 0) : undefined,
+          // A budget's costs or an assignment's places, paired by position
+          // like the descriptions. `numeric[]` can't type nullable elements
+          // either, but the SQL reads a null place as one.
+          p_option_costs:
+            only.kind === 'budget'
+              ? only.options.map((o) => o.number ?? 0)
+              : only.kind === 'assignment'
+                ? (only.options.map((o) => o.number) as number[])
+                : undefined,
         })
     setSubmitting(false)
 
@@ -643,7 +667,7 @@ export function CreatePoll() {
       description: description.trim() || null,
       createdBy: 'you',
       mode,
-      showVoters,
+      showVoters: votersShown,
       showBallots: publishBallots,
       turnout: {
         soliciting: solicitOptions,
@@ -843,6 +867,8 @@ export function CreatePoll() {
                 : 'Use + to add a description to an option.'}
               {question.kind === 'budget' &&
                 ' Give every option a cost. Voters will not see the costs.'}
+              {question.kind === 'assignment' &&
+                ' Give an option more places to let it go to more than one voter; a blank one has one place. Voters will not see the places.'}
             </Text>
 
             {question.options.map((option, index) => (
@@ -884,22 +910,22 @@ export function CreatePoll() {
                       />
                     )}
                   </Stack>
-                  {question.kind === 'budget' && (
+                  {optionNumberOf(question.kind) && (
                     // Voters never see it: they rate each option on its own
-                    // merits, and the count weighs the cost.
+                    // merits, and the count weighs the cost or fills the places.
                     <NumberInput
                       w={110}
-                      value={option.cost}
-                      onChange={(v) => updateOption(questionIndex, index, { cost: v })}
-                      placeholder="Cost"
-                      aria-label={`Option ${index + 1} cost`}
+                      value={option.number}
+                      onChange={(v) => updateOption(questionIndex, index, { number: v })}
+                      placeholder={question.kind === 'budget' ? 'Cost' : 'Places'}
+                      aria-label={`Option ${index + 1} ${question.kind === 'budget' ? 'cost' : 'places'}`}
                       min={1}
                       max={AMOUNT_MAX}
                       allowDecimal={false}
                       allowNegative={false}
                       thousandSeparator=","
                       hideControls
-                      error={shown.optionCosts[optionKey(questionIndex, index)]}
+                      error={shown.optionNumbers[optionKey(questionIndex, index)]}
                     />
                   )}
                   <DescriptionToggle
@@ -1100,7 +1126,8 @@ export function CreatePoll() {
           <Stack gap="sm">
             {anySequential ? (
               <Switch
-                checked={showVoters}
+                checked={votersShown}
+                disabled={anyAssignment}
                 onChange={(e) => {
                   setShowVoters(e.currentTarget.checked)
                   setShowBallots(e.currentTarget.checked)
@@ -1110,13 +1137,16 @@ export function CreatePoll() {
                     ? 'Show voter emails and publish ballots'
                     : 'Show voter names and publish ballots'
                 }
+                description={anyAssignment ? ASSIGNMENT_SHOWS_VOTERS : undefined}
               />
             ) : (
               <>
                 <Switch
-                  checked={showVoters}
+                  checked={votersShown}
+                  disabled={anyAssignment}
                   onChange={(e) => setShowVoters(e.currentTarget.checked)}
                   label={mode === 'invite' ? 'Show voter emails' : 'Show voter names'}
+                  description={anyAssignment ? ASSIGNMENT_SHOWS_VOTERS : undefined}
                 />
 
                 <Switch

@@ -3,6 +3,7 @@ import { forgetAnswered } from './questionMarks'
 import { supabase } from './supabase'
 import type { Database } from './database.types'
 import type {
+  AssignmentResult,
   BallotSheet,
   BudgetResult,
   ConsensusResult,
@@ -57,6 +58,8 @@ interface SampleQuestion {
   consensus?: ConsensusResult
   /** The proportional budget with nothing removed or recosted; see `ProportionalBudget`. */
   budget?: BudgetResult
+  /** The option assignment with nothing removed or given new places; see `OptionAssignment`. */
+  assignment?: AssignmentResult
   scores?: OptionScore[]
   ballots?: BallotSheet
 }
@@ -75,6 +78,8 @@ export const SAMPLE_RESULT_TIME_ID = 'sample-result-when'
 export const SAMPLE_SEQUEL_ID = 'sample-sequel-movie'
 /** The sequel's question 2, a proportional budget of upgrades to the movie nights. */
 export const SAMPLE_SEQUEL_BUDGET_ID = 'sample-sequel-budget'
+/** The sequel's question 3, an option assignment: who watches which film. */
+export const SAMPLE_SEQUEL_ASSIGNMENT_ID = 'sample-sequel-assignment'
 
 /**
  * The finished film question as though it had asked for another result: one
@@ -121,6 +126,7 @@ interface OpenPollArgs {
   p_excluded?: string[]
   p_costs?: Record<string, number | null>
   p_budget?: number
+  p_places?: Record<string, number | null>
 }
 
 /**
@@ -189,8 +195,9 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
     case 'open_poll_ranking':
       return question.ranking ? ok(question.ranking) : failed('Results are not available yet')
     // Recorded with nothing taken out, and only that: the sample cannot count
-    // again, so none of `MultipleWinners`, `FractionalWinners`, `Consensus`
-    // and `ProportionalBudget` offers removal (or new costs) on it.
+    // again, so none of `MultipleWinners`, `FractionalWinners`, `Consensus`,
+    // `ProportionalBudget` and `OptionAssignment` offers removal (or new costs
+    // or places) on it.
     case 'open_poll_multiple_winners':
       return question.multiple_winners && !args.p_excluded?.length
         ? ok(question.multiple_winners)
@@ -206,6 +213,10 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
     case 'open_poll_proportional_budget':
       return question.budget && !args.p_excluded?.length && !args.p_costs && !args.p_budget
         ? ok(question.budget)
+        : failed('Not available on the example poll')
+    case 'open_poll_assignment':
+      return question.assignment && !args.p_excluded?.length && !args.p_places
+        ? ok(question.assignment)
         : failed('Not available on the example poll')
     case 'open_poll_scores':
       return question.scores ? ok(question.scores) : failed('Results are not available yet')

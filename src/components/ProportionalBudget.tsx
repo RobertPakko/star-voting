@@ -3,7 +3,7 @@ import { Button, Group, NumberInput, Stack, Text } from '@mantine/core'
 import { CalculatorIcon, PencilSimpleIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
-import { budgetSchema, optionScoresSchema, parseAnswer } from '../lib/rpcSchemas'
+import { budgetSchema, parseAnswer } from '../lib/rpcSchemas'
 import { amountError } from '../lib/pollForm'
 import { AMOUNT_MAX } from '../lib/limits'
 import { count } from '../lib/plural'
@@ -14,6 +14,7 @@ import { RankingSkeleton } from './Skeletons'
 import type { RankingSource } from './FullRanking'
 import { Spot } from './MultipleWinners'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
+import { useEveryOption } from '../lib/useEveryOption'
 import { useBudgetInputs, useLeftOut, type BudgetInputs } from '../lib/useLeftOut'
 
 /** An amount as the page writes it: whole, with thousands marked, and no unit. */
@@ -410,33 +411,4 @@ function CostEditor({
       </Group>
     </Stack>
   )
-}
-
-/**
- * Every option on the ballot, for the cost editor. The tally holds the top
- * `SCORING_ROWS_MAX`; a longer list is read whole from *All scores*' door,
- * once, when the editor opens.
- */
-function useEveryOption(source: RankingSource, results: PollResults) {
-  const whole = results.options.length >= results.option_count
-  const [read, setRead] = useState<{ id: string; name: string }[] | null>(null)
-
-  useEffect(() => {
-    if (whole) return
-    let cancelled = false
-    const request: PromiseLike<RpcAnswer> =
-      source.kind === 'poll'
-        ? supabase.rpc('get_poll_scores', { p_poll_id: source.pollId })
-        : openPollRpc('open_poll_scores', { p_poll_id: source.pollId })
-    request.then(({ data, error }) => {
-      if (cancelled || error) return
-      const { value } = parseAnswer(optionScoresSchema, 'the scores', data)
-      if (value) setRead(value.map(({ id, name }) => ({ id, name })))
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [whole, source.kind, source.pollId])
-
-  return whole ? results.options.map(({ id, name }) => ({ id, name })) : read
 }

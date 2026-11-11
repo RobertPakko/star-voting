@@ -29,7 +29,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: null,
-        created_at: '2026-11-11T10:41:26.15905-08:00',
+        created_at: '2026-11-11T12:29:36.693744-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -45,6 +45,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '7cd5def7-59be-887c-f52a-c728d011d248',
           cost: null,
           name: '2026-02-20T18:00:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 0,
           description: null,
@@ -53,6 +54,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '5c9f7b59-6022-c9e3-8778-79d45adeed4e',
           cost: null,
           name: '2026-02-21T09:00:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 1,
           description: null,
@@ -61,6 +63,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '05fba8ac-3695-38dc-d4aa-2105ef83635b',
           cost: null,
           name: '2026-02-21T09:30:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 2,
           description: null,
@@ -69,6 +72,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '87c5bebb-9a99-bf0a-fdbe-e293ff421a2c',
           cost: null,
           name: '2026-02-21T10:00:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 3,
           description: null,
@@ -77,6 +81,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '70ec5ff8-e427-c537-3672-91f55cff0727',
           cost: null,
           name: '2026-02-21T10:30:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 4,
           description: null,
@@ -85,6 +90,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'e842b745-b8cd-d5a0-e052-e44655e96e6d',
           cost: null,
           name: '2026-02-21T11:00:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 5,
           description: null,
@@ -93,6 +99,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '5bbfdd68-e514-b432-85d3-4c44922a7a3b',
           cost: null,
           name: '2026-02-21T11:30:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 6,
           description: null,
@@ -101,6 +108,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '669d373c-53ff-ba49-8369-1e33712be269',
           cost: null,
           name: '2026-02-21T12:00:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 7,
           description: null,
@@ -109,6 +117,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '61bcc5d8-2c75-5cd4-01e7-8f07a85f62ab',
           cost: null,
           name: '2026-02-21T12:30:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 8,
           description: null,
@@ -117,6 +126,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'b488702e-5c58-2000-b23f-488824542504',
           cost: null,
           name: '2026-02-21T13:00:00-07:00',
+          places: null,
           poll_id: 'sample-when',
           sort_order: 9,
           description: null,
@@ -160,7 +170,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: 'e0338139-5a10-2e5e-0a17-3511e2a329fd',
         schedule: null,
         closed_at: null,
-        created_at: '2026-11-11T10:41:26.15905-08:00',
+        created_at: '2026-11-11T12:29:36.693744-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -176,6 +186,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'd11848b2-a3e8-f3ca-64c4-e26a6df68d69',
           cost: null,
           name: 'Knives Out',
+          places: null,
           poll_id: 'sample-movie',
           sort_order: 0,
           description:
@@ -185,6 +196,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'e2ebadef-98e8-958d-5afe-b63f4609a8e6',
           cost: null,
           name: 'Spirited Away',
+          places: null,
           poll_id: 'sample-movie',
           sort_order: 1,
           description:
@@ -194,6 +206,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '652fb1be-f52f-fd5a-6334-9f662e8b06d8',
           cost: null,
           name: 'The Matrix',
+          places: null,
           poll_id: 'sample-movie',
           sort_order: 2,
           description:
@@ -203,6 +216,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'ef43c5ae-50c3-03cd-8c14-64b05146386c',
           cost: null,
           name: 'Paddington 2',
+          places: null,
           poll_id: 'sample-movie',
           sort_order: 3,
           description:
@@ -212,6 +226,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '37d6bbad-38b0-2277-0c21-53a78cf0bb06',
           cost: null,
           name: 'Mean Girls',
+          places: null,
           poll_id: 'sample-movie',
           sort_order: 4,
           description:
@@ -221,6 +236,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '02e60972-37c3-14cd-31ad-01bb9d14fd78',
           cost: null,
           name: 'Honeyland',
+          places: null,
           poll_id: 'sample-movie',
           sort_order: 5,
           description:
@@ -273,7 +289,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T10:41:26.15905-08:00',
+        created_at: '2026-11-11T12:29:36.693744-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film and a time to meet.',
         show_voters: true,
@@ -289,6 +305,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '8f21686a-ffc1-f4b2-b2d8-25756b49fc83',
           cost: null,
           name: '2026-02-20T18:00:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 0,
           description: null,
@@ -297,6 +314,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
           cost: null,
           name: '2026-02-21T09:00:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 1,
           description: null,
@@ -305,6 +323,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'f48d56da-cb72-7c1d-9251-86d4bbf9b611',
           cost: null,
           name: '2026-02-21T09:30:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 2,
           description: null,
@@ -313,6 +332,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '71a3c317-1111-21a0-4678-1e724f694c58',
           cost: null,
           name: '2026-02-21T10:00:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 3,
           description: null,
@@ -321,6 +341,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '260c8efa-de57-53a3-3dd9-cfa51da65c44',
           cost: null,
           name: '2026-02-21T10:30:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 4,
           description: null,
@@ -329,6 +350,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
           cost: null,
           name: '2026-02-21T11:00:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 5,
           description: null,
@@ -337,6 +359,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '21a4b989-ea5b-cdc4-ae58-a7a1f25553ea',
           cost: null,
           name: '2026-02-21T11:30:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 6,
           description: null,
@@ -345,6 +368,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '72b623e7-4444-6197-3b84-77f30167d46b',
           cost: null,
           name: '2026-02-21T12:00:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 7,
           description: null,
@@ -353,6 +377,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'a63b4c04-0d08-5a44-091b-68cc9f467905',
           cost: null,
           name: '2026-02-21T12:30:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 8,
           description: null,
@@ -361,6 +386,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '7300d521-7308-b1f4-d682-29f844ad20c5',
           cost: null,
           name: '2026-02-21T13:00:00-07:00',
+          places: null,
           poll_id: 'sample-result-when',
           sort_order: 9,
           description: null,
@@ -1065,6 +1091,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       voter_count: 9,
       closed_early: false,
       option_count: 10,
+      voters_shown: true,
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
@@ -1415,7 +1442,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '0c0ce273-8fac-602a-659a-427718fdd95e',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T10:41:26.15905-08:00',
+        created_at: '2026-11-11T12:29:36.693744-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film and a time to meet.',
         show_voters: true,
@@ -1431,6 +1458,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
           cost: null,
           name: 'Knives Out',
+          places: null,
           poll_id: 'sample-result-movie',
           sort_order: 0,
           description:
@@ -1440,6 +1468,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '283438a5-4cf9-8a00-c399-cf9c72c9b2ac',
           cost: null,
           name: 'Spirited Away',
+          places: null,
           poll_id: 'sample-result-movie',
           sort_order: 1,
           description:
@@ -1449,6 +1478,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
           cost: null,
           name: 'The Matrix',
+          places: null,
           poll_id: 'sample-result-movie',
           sort_order: 2,
           description:
@@ -1458,6 +1488,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
           cost: null,
           name: 'Paddington 2',
+          places: null,
           poll_id: 'sample-result-movie',
           sort_order: 3,
           description:
@@ -1467,6 +1498,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'b50cd426-947e-4697-2dbc-db6c26d1e385',
           cost: null,
           name: 'Mean Girls',
+          places: null,
           poll_id: 'sample-result-movie',
           sort_order: 4,
           description:
@@ -1476,6 +1508,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '39a0de7f-1759-b30e-263f-30c1cb117e16',
           cost: null,
           name: 'Honeyland',
+          places: null,
           poll_id: 'sample-result-movie',
           sort_order: 5,
           description:
@@ -2013,6 +2046,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       voter_count: 9,
       closed_early: false,
       option_count: 6,
+      voters_shown: true,
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
@@ -2287,9 +2321,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '1b5f03ad-97de-c232-e97d-95c2e0c074ef',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T10:41:26.15905-08:00',
+        created_at: '2026-11-11T12:29:36.693744-08:00',
         description:
-          "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. And the friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something.",
+          "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.",
         show_voters: true,
         show_ballots: true,
         question_title: 'Sequential poll',
@@ -2303,6 +2337,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '7f9afbf2-d98a-ef18-ecfe-aea057b0bc62',
           cost: null,
           name: 'Arrival',
+          places: null,
           poll_id: 'sample-sequel-movie',
           sort_order: 0,
           description:
@@ -2312,6 +2347,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '703ffd54-672f-b968-e161-16d90bb8f9bc',
           cost: null,
           name: 'Paddington 2',
+          places: null,
           poll_id: 'sample-sequel-movie',
           sort_order: 1,
           description:
@@ -2321,6 +2357,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '205801f9-8cef-1ced-4ec0-b546c7fac6b1',
           cost: null,
           name: 'Spirited Away',
+          places: null,
           poll_id: 'sample-sequel-movie',
           sort_order: 2,
           description:
@@ -2330,6 +2367,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'dce47c7b-3de0-a979-57c6-6b0020b2b4ff',
           cost: null,
           name: 'The Matrix',
+          places: null,
           poll_id: 'sample-sequel-movie',
           sort_order: 3,
           description:
@@ -2339,6 +2377,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '124debb1-1fa4-70c8-2cab-7f1ab6676b96',
           cost: null,
           name: 'Honeyland',
+          places: null,
           poll_id: 'sample-sequel-movie',
           sort_order: 4,
           description:
@@ -2370,6 +2409,11 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         id: 'sample-sequel-budget',
         question_title: 'Proportional budget',
         question_position: 2,
+      },
+      {
+        id: 'sample-sequel-assignment',
+        question_title: 'Option assignment',
+        question_position: 3,
       },
     ],
     scores: [
@@ -2704,6 +2748,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       voter_count: 10,
       closed_early: false,
       option_count: 5,
+      voters_shown: true,
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
@@ -2894,9 +2939,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '1b5f03ad-97de-c232-e97d-95c2e0c074ef',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T10:41:26.15905-08:00',
+        created_at: '2026-11-11T12:29:36.693744-08:00',
         description:
-          "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. And the friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something.",
+          "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.",
         show_voters: true,
         show_ballots: true,
         question_title: 'Proportional budget',
@@ -2910,6 +2955,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '315d1987-0f43-af34-c21b-02d51ace3d05',
           cost: 500,
           name: 'Projector',
+          places: null,
           poll_id: 'sample-sequel-budget',
           sort_order: 0,
           description: 'A projector and a pull-down screen, for a picture as wide as the wall.',
@@ -2918,6 +2964,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '4cd5471e-665f-87dc-7361-ee8149a67f04',
           cost: 400,
           name: 'Surround sound',
+          places: null,
           poll_id: 'sample-sequel-budget',
           sort_order: 1,
           description:
@@ -2927,6 +2974,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '67adaaa4-7dca-8de9-2466-5b3bfff568cb',
           cost: 200,
           name: 'Beanbags',
+          places: null,
           poll_id: 'sample-sequel-budget',
           sort_order: 2,
           description: 'Four big beanbags, for sinking into for the length of a film.',
@@ -2935,6 +2983,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '4b772b2a-1cc0-5e3b-f57b-1d2acee2a48e',
           cost: 150,
           name: 'Blackout curtains',
+          places: null,
           poll_id: 'sample-sequel-budget',
           sort_order: 3,
           description: 'Curtains that keep the light out, so a film can start before sunset.',
@@ -2943,6 +2992,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: 'bdf2c897-1660-68d5-d5c7-5af369c5c811',
           cost: 100,
           name: 'Popcorn machine',
+          places: null,
           poll_id: 'sample-sequel-budget',
           sort_order: 4,
           description: 'A popcorn machine, for fresh popcorn every movie night.',
@@ -2973,6 +3023,11 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         id: 'sample-sequel-budget',
         question_title: 'Proportional budget',
         question_position: 2,
+      },
+      {
+        id: 'sample-sequel-assignment',
+        question_title: 'Option assignment',
+        question_position: 3,
       },
     ],
     budget: {
@@ -3534,6 +3589,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       voter_count: 10,
       closed_early: false,
       option_count: 5,
+      voters_shown: true,
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
@@ -3710,6 +3766,577 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
       {
         id: '4cd5471e-665f-87dc-7361-ee8149a67f04',
         name: 'Surround sound',
+        share: 0.0,
+      },
+    ],
+  },
+  'sample-sequel-assignment': {
+    view: {
+      poll: {
+        id: 'sample-sequel-assignment',
+        kind: 'assignment',
+        mode: 'open',
+        title: 'Movie night 2',
+        group_id: '1b5f03ad-97de-c232-e97d-95c2e0c074ef',
+        schedule: null,
+        closed_at: '2026-02-13T13:37:00-08:00',
+        created_at: '2026-11-11T12:29:36.693744-08:00',
+        description:
+          "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.",
+        show_voters: true,
+        show_ballots: true,
+        question_title: 'Option assignment',
+        solicit_options: false,
+        question_position: 3,
+      },
+      voted: false,
+      voters: ['Ana', 'Ben', 'Chloe', 'Diego', 'Erin', 'Farid', 'Gina', 'Hugo', 'Iris', 'Jules'],
+      options: [
+        {
+          id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+          cost: null,
+          name: 'The Matrix',
+          places: 4,
+          poll_id: 'sample-sequel-assignment',
+          sort_order: 0,
+          description:
+            'A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI.',
+        },
+        {
+          id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+          cost: null,
+          name: 'Spirited Away',
+          places: 4,
+          poll_id: 'sample-sequel-assignment',
+          sort_order: 1,
+          description:
+            "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts.",
+        },
+        {
+          id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+          cost: null,
+          name: 'Mean Girls',
+          places: 4,
+          poll_id: 'sample-sequel-assignment',
+          sort_order: 2,
+          description:
+            'Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George.',
+        },
+      ],
+      confirmed: false,
+      is_closed: true,
+      your_name: null,
+      sequential: false,
+      soliciting: false,
+      voted_count: 10,
+      winner_name: null,
+      your_scores: null,
+      carried_names: null,
+      confirmations: [],
+      winner_settled: false,
+      confirmed_count: 0,
+      results_available: true,
+      your_confirmed_name: null,
+    },
+    group: [
+      {
+        id: 'sample-sequel-movie',
+        question_title: 'Sequential poll',
+        question_position: 1,
+      },
+      {
+        id: 'sample-sequel-budget',
+        question_title: 'Proportional budget',
+        question_position: 2,
+      },
+      {
+        id: 'sample-sequel-assignment',
+        question_title: 'Option assignment',
+        question_position: 3,
+      },
+    ],
+    scores: [
+      {
+        id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+        name: 'The Matrix',
+        total_score: 38,
+        average_score: 3.8,
+      },
+      {
+        id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+        name: 'Spirited Away',
+        total_score: 27,
+        average_score: 2.7,
+      },
+      {
+        id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+        name: 'Mean Girls',
+        total_score: 26,
+        average_score: 2.6,
+      },
+    ],
+    ballots: {
+      ballots: [
+        {
+          voter: 'Ana',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 1,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 4,
+          },
+        },
+        {
+          voter: 'Ben',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 3,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 2,
+          },
+        },
+        {
+          voter: 'Chloe',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 4,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 0,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 5,
+          },
+        },
+        {
+          voter: 'Diego',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 4,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 1,
+          },
+        },
+        {
+          voter: 'Erin',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 2,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 3,
+          },
+        },
+        {
+          voter: 'Farid',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 2,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 0,
+          },
+        },
+        {
+          voter: 'Gina',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 1,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 5,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 3,
+          },
+        },
+        {
+          voter: 'Hugo',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 3,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 1,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 5,
+          },
+        },
+        {
+          voter: 'Iris',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 0,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 5,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 2,
+          },
+        },
+        {
+          voter: 'Jules',
+          scores: {
+            '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 3,
+            '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 2,
+          },
+        },
+      ],
+      options: [
+        {
+          id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+          name: 'The Matrix',
+        },
+        {
+          id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+          name: 'Spirited Away',
+        },
+        {
+          id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+          name: 'Mean Girls',
+        },
+      ],
+      voters_named: true,
+    },
+    ranking: [
+      {
+        place: 1,
+        runoff: {
+          ties: 0,
+          prefers_a: 6,
+          prefers_b: 4,
+          resolved_by: 'preference',
+          five_stars_a: 6,
+          five_stars_b: 2,
+        },
+        options: [
+          {
+            id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+            name: 'The Matrix',
+            total_score: 38,
+          },
+        ],
+        finalists: ['1f301654-a628-1a0f-bafa-f4ca4da96b90', '9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
+        tiebreaks: [],
+        finalist_names: ['The Matrix', 'Spirited Away'],
+      },
+      {
+        place: 2,
+        runoff: {
+          ties: 0,
+          prefers_a: 4,
+          prefers_b: 6,
+          resolved_by: 'preference',
+          five_stars_a: 2,
+          five_stars_b: 2,
+        },
+        options: [
+          {
+            id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+            name: 'Mean Girls',
+            total_score: 26,
+          },
+        ],
+        finalists: ['9c41ac92-f17d-6df9-15bb-fecebfa1535b', '68e02dc4-64f1-2462-fa68-0a3632a2711e'],
+        tiebreaks: [],
+        finalist_names: ['Spirited Away', 'Mean Girls'],
+      },
+      {
+        place: 3,
+        runoff: null,
+        options: [
+          {
+            id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+            name: 'Spirited Away',
+            total_score: 27,
+          },
+        ],
+        finalists: ['9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
+        tiebreaks: [],
+        finalist_names: ['Spirited Away'],
+      },
+    ],
+    results: {
+      tie: false,
+      kind: 'assignment',
+      mode: 'open',
+      runoff: {
+        ties: 0,
+        prefers_a: 6,
+        prefers_b: 4,
+        resolved_by: 'preference',
+        five_stars_a: 6,
+        five_stars_b: 2,
+      },
+      options: [
+        {
+          id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+          name: 'The Matrix',
+          description:
+            'A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI.',
+          total_score: 38,
+          average_score: 3.8,
+        },
+        {
+          id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+          name: 'Spirited Away',
+          description:
+            "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts.",
+          total_score: 27,
+          average_score: 2.7,
+        },
+        {
+          id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+          name: 'Mean Girls',
+          description:
+            'Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George.',
+          total_score: 26,
+          average_score: 2.6,
+        },
+      ],
+      weighted: false,
+      finalists: ['1f301654-a628-1a0f-bafa-f4ca4da96b90', '9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
+      tiebreaks: [],
+      winner_id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+      kind_value: null,
+      kind_result: {
+        places: 12,
+        options: [
+          {
+            id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+            name: 'The Matrix',
+            places: 4,
+            voters: [
+              {
+                name: 'Ben',
+                stars: 5,
+              },
+              {
+                name: 'Erin',
+                stars: 5,
+              },
+              {
+                name: 'Farid',
+                stars: 5,
+              },
+              {
+                name: 'Jules',
+                stars: 5,
+              },
+            ],
+          },
+          {
+            id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+            name: 'Spirited Away',
+            places: 4,
+            voters: [
+              {
+                name: 'Ana',
+                stars: 4,
+              },
+              {
+                name: 'Chloe',
+                stars: 5,
+              },
+              {
+                name: 'Hugo',
+                stars: 5,
+              },
+            ],
+          },
+          {
+            id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+            name: 'Mean Girls',
+            places: 4,
+            voters: [
+              {
+                name: 'Diego',
+                stars: 4,
+              },
+              {
+                name: 'Gina',
+                stars: 5,
+              },
+              {
+                name: 'Iris',
+                stars: 5,
+              },
+            ],
+          },
+        ],
+        received: {
+          '4': 2,
+          '5': 8,
+        },
+        unplaced: [],
+        stars_shown: true,
+        voter_count: 10,
+      },
+      voter_count: 10,
+      closed_early: false,
+      option_count: 3,
+      voters_shown: true,
+      invited_count: 0,
+      votes_after_reveal: false,
+      options_edited_after_votes: false,
+    },
+    consensus: {
+      floor: 0,
+      options: [
+        {
+          id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+          name: 'The Matrix',
+          floor: 0,
+          total_score: 38,
+        },
+        {
+          id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+          name: 'Spirited Away',
+          floor: 0,
+          total_score: 27,
+        },
+        {
+          id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+          name: 'Mean Girls',
+          floor: 0,
+          total_score: 26,
+        },
+      ],
+      level_ids: [],
+      runner_up: {
+        id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+        name: 'Spirited Away',
+        score: 2,
+      },
+      winner_id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+      decided_at: 3,
+      tied_count: 3,
+      level_names: [],
+      voter_count: 10,
+      option_count: 3,
+      winner_score: 3,
+    },
+    assignment: {
+      places: 12,
+      options: [
+        {
+          id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+          name: 'The Matrix',
+          places: 4,
+          voters: [
+            {
+              name: 'Ben',
+              stars: 5,
+            },
+            {
+              name: 'Erin',
+              stars: 5,
+            },
+            {
+              name: 'Farid',
+              stars: 5,
+            },
+            {
+              name: 'Jules',
+              stars: 5,
+            },
+          ],
+        },
+        {
+          id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+          name: 'Spirited Away',
+          places: 4,
+          voters: [
+            {
+              name: 'Ana',
+              stars: 4,
+            },
+            {
+              name: 'Chloe',
+              stars: 5,
+            },
+            {
+              name: 'Hugo',
+              stars: 5,
+            },
+          ],
+        },
+        {
+          id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+          name: 'Mean Girls',
+          places: 4,
+          voters: [
+            {
+              name: 'Diego',
+              stars: 4,
+            },
+            {
+              name: 'Gina',
+              stars: 5,
+            },
+            {
+              name: 'Iris',
+              stars: 5,
+            },
+          ],
+        },
+      ],
+      received: {
+        '4': 2,
+        '5': 8,
+      },
+      unplaced: [],
+      stars_shown: true,
+      voter_count: 10,
+    },
+    multiple_winners: [
+      {
+        place: 1,
+        runoff: {
+          ties: 0.0,
+          prefers_a: 6.0,
+          prefers_b: 4.0,
+          resolved_by: 'preference',
+          five_stars_a: 6.0,
+          five_stars_b: 2.0,
+        },
+        options: [
+          {
+            id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+            name: 'The Matrix',
+            total_score: 38.0,
+          },
+        ],
+        finalists: ['1f301654-a628-1a0f-bafa-f4ca4da96b90', '9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
+        tiebreaks: [],
+        finalist_names: ['The Matrix', 'Spirited Away'],
+      },
+      {
+        place: 2,
+        runoff: {
+          ties: 0.0,
+          prefers_a: 3.833333,
+          prefers_b: 2.180556,
+          resolved_by: 'preference',
+          five_stars_a: 1.833333,
+          five_stars_b: 1.180556,
+        },
+        options: [
+          {
+            id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+            name: 'Mean Girls',
+            total_score: 17.291667,
+          },
+        ],
+        finalists: ['68e02dc4-64f1-2462-fa68-0a3632a2711e', '9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
+        tiebreaks: [],
+        finalist_names: ['Mean Girls', 'Spirited Away'],
+      },
+      {
+        place: 3,
+        runoff: null,
+        options: [
+          {
+            id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+            name: 'Spirited Away',
+            total_score: 12.882978,
+          },
+        ],
+        finalists: ['9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
+        tiebreaks: [],
+        finalist_names: ['Spirited Away'],
+      },
+    ],
+    fractional_winners: [
+      {
+        id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+        name: 'The Matrix',
+        share: 0.735134,
+      },
+      {
+        id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+        name: 'Mean Girls',
+        share: 0.264866,
+      },
+      {
+        id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+        name: 'Spirited Away',
         share: 0.0,
       },
     ],

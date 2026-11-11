@@ -6,6 +6,7 @@ import {
   CoinsIcon,
   HandshakeIcon,
   ListNumbersIcon,
+  ArrowsSplitIcon,
   TrophyIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
@@ -17,6 +18,7 @@ import { MultipleWinners } from './MultipleWinners'
 import { FractionalWinners } from './FractionalWinners'
 import { Consensus } from './Consensus'
 import { ProportionalBudget } from './ProportionalBudget'
+import { OptionAssignment } from './OptionAssignment'
 import { isSampleId } from '../lib/samplePoll'
 
 type Tool = ResultTool
@@ -40,10 +42,12 @@ export function MoreResults({
   /** The result on the page, left off the menu: `option` where it is STAR's winner. */
   shown: Tool
 }) {
-  // The sample answers from a recording, which holds no budget for a question
-  // that did not ask for one.
+  // The sample answers from a recording, which holds no budget or assignment
+  // for a question that did not ask for one.
   const offered = (tool: Tool) =>
-    tool !== shown && offers(tool, results) && !(tool === 'budget' && isSampleId(source.pollId))
+    tool !== shown &&
+    offers(tool, results) &&
+    !((tool === 'budget' || tool === 'assignment') && isSampleId(source.pollId))
   const [open, setOpen] = useState<Tool | null>(null)
   const close = () => setOpen(null)
 
@@ -77,6 +81,11 @@ export function MoreResults({
       tool: 'budget' as const,
       label: CHOICES.budget.label,
       icon: CoinsIcon,
+    },
+    offered('assignment') && {
+      tool: 'assignment' as const,
+      label: CHOICES.assignment.label,
+      icon: ArrowsSplitIcon,
     },
   ].filter((item) => item !== false)
 
@@ -147,6 +156,14 @@ export function MoreResults({
           source={source}
           results={results}
           opened={open === 'budget'}
+          onClose={close}
+        />
+      )}
+      {offered('assignment') && (
+        <OptionAssignment
+          source={source}
+          results={results}
+          opened={open === 'assignment'}
           onClose={close}
         />
       )}

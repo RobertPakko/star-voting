@@ -20,7 +20,8 @@ export type PollMode = 'invite' | 'open'
  * calendar (`isCalendar`); every other kind is a written list scored 0-5.
  * 'option' and 'time' ask for STAR's winner, 'consensus' and
  * 'consensus_time' for the option whose lowest score is highest, the rest
- * for the option ranking, multiple winners or fractional winners.
+ * for the option ranking, multiple winners or fractional winners, 'budget'
+ * for a proportional budget and 'assignment' for an option assignment.
  */
 export type PollKind =
   | 'option'
@@ -31,6 +32,7 @@ export type PollKind =
   | 'consensus'
   | 'consensus_time'
   | 'budget'
+  | 'assignment'
 
 /**
  * A time poll's grid; null on an ordinary poll. Which days and hours are asked
@@ -132,6 +134,11 @@ export interface PollOption {
    * Optional until 0102 has landed everywhere.
    */
   cost?: number | null
+  /**
+   * The option's places, on an option assignment question; null elsewhere,
+   * and null there means one. Optional until 0103 has landed everywhere.
+   */
+  places?: number | null
 }
 
 export interface PollStatus {
@@ -475,6 +482,32 @@ export interface BudgetResult {
   tied: { id: string; name: string; cost: number }[] | null
 }
 
+/** One voter an option assignment placed, with their stars for it where ballots are published. */
+export interface AssignedVoter {
+  name: string
+  stars?: number
+}
+
+/**
+ * The option assignment, from `get_poll_assignment` / `open_poll_assignment`:
+ * every voter given at most one option, every option to at most its places,
+ * the product of the stars each voter gave their own option as large as it
+ * can be.
+ */
+export interface AssignmentResult {
+  /** Every option counted, the fullest first. */
+  options: { id: string; name: string; places: number; voters: AssignedVoter[] }[]
+  /** The voters given nothing. */
+  unplaced: { name: string }[]
+  /** How many placed voters gave their own option each number of stars, keyed by the stars. */
+  received: Record<string, number>
+  /** Every place counted. */
+  places: number
+  voter_count: number
+  /** Whether each placed voter's stars are given (the poll publishes its ballots). */
+  stars_shown: boolean
+}
+
 export interface PollResults {
   /** The score round's top rows only (`poll_results_rows()`); see `option_count`. */
   options: ResultOption[]
@@ -507,12 +540,23 @@ export interface PollResults {
    * winners, an object for the consensus; `chosenResult` in lib/choices.ts
    * tells them apart.
    */
-  kind_result: RankingEntry[] | FractionalShare[] | ConsensusResult | BudgetResult | null
+  kind_result:
+    | RankingEntry[]
+    | FractionalShare[]
+    | ConsensusResult
+    | BudgetResult
+    | AssignmentResult
+    | null
   /**
    * Whether the ballots carry weights (a sequential poll): every count is
    * then a weighted sum. Optional until 0101 has landed everywhere.
    */
   weighted?: boolean
+  /**
+   * Whether the poll shows who voted, which an option assignment needs.
+   * Optional until 0103 has landed everywhere.
+   */
+  voters_shown?: boolean
 }
 
 /** One voter's scores, keyed by option id. */

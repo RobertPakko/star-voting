@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus, ProportionalBudget — ChosenResult, ChoiceCount, AllScores, CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus, ProportionalBudget, OptionAssignment — ChosenResult, ChoiceCount, AllScores, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), a sequential question's earlier
                  voters on the create form (CarriedVoters), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
@@ -1602,7 +1602,8 @@ is the page.
   *Coming soon* banner and works no example, and one a voter can game by
   scoring dishonestly carries a warning that says so. From *Fractional
   budget* down, the heading also carries a grey *Under construction* badge,
-  for now. Each built choice ends on **See an example** (right-aligned), which
+  for now; *Option allocation* (several options to each of a few voters) is
+  a placeholder there, since it needs a real integer solver. Each built choice ends on **See an example** (right-aligned), which
   opens the finished sample poll as though the question had asked for that
   choice (`exampleFor`): the calendar question for the consensus, since it
   did ask for the consensus time; the film question for the best option;
@@ -1610,8 +1611,9 @@ is the page.
   own (`sampleResultAs`, e.g. `sample-result-movie-as-ranking`), which
   `samplePoll.ts` answers from the same recording with `kind` and
   `kind_result` swapped for the result its *More results* modal records.
-  The two the film question cannot show open the sequel: *Sequential polls*
-  its film question, *Proportional budget* its upgrades question. The page
+  The three the film question cannot show open the sequel: *Sequential polls*
+  its film question, *Proportional budget* its upgrades question, *Option
+  assignment* its last. The page
   restates `/star`'s ballots above the sections, since its readers mostly
   arrive from a result's modal.
   `/ties` and `/extensions` redirect to `/star?section=ties` and `/choices`
@@ -2437,7 +2439,8 @@ The promise is that **everyone who votes scores the same list**:
   grant on `candidates` and `anon` has none anywhere, and one path keeps the
   rules in one place.
 - **On a budget question a suggestion carries a cost**, typed beside its
-  name, since every option a budget counts needs one.
+  name, since every option a budget counts needs one. On an assignment it may
+  carry places, and one without has one place.
 - **Suggestions carry no name.** Who suggested what would be a third
   disclosure question the tags do not answer.
 
@@ -3205,9 +3208,10 @@ say only that voting was closed early, when it was.
 **The answer's banner carries what can be done with it** (`Banner` in
 `Results.tsx`): **More results**, one menu
 ([`MoreResults`](src/components/MoreResults.tsx)) holding **Consensus
-option** (*Consensus time* on a time poll), **Fractional winners** and
-**Proportional budget** (two or more options; the budget not on a time poll),
-and **Option ranking** and **Multiple winners** (three or more), each opening
+option** (*Consensus time* on a time poll), **Fractional winners**,
+**Proportional budget** and **Option assignment** (two or more options; the
+budget and the assignment not on a time poll, the assignment only where the
+poll shows who voted), and **Option ranking** and **Multiple winners** (three or more), each opening
 a modal; then *Add to calendar* under a time poll's
 winner or *Flip a coin* under *No winner*. One menu rather than a
 button each keeps the banner to the name and a control or two. **The modals
@@ -3340,6 +3344,54 @@ example.
   are not bought), and **not on the sample's other questions**, which cannot
   recount. The sample's budget question answers its recorded count.
 
+**Option assignment** is for handing each voter one option of their own —
+chores, topics, shifts, or which film each friend watches — where an option
+can go to as many voters as it has places (one unless it says otherwise).
+It chooses, in order: the most voters placed on an option they gave a star
+(nobody is given an option they gave 0); then the largest product of the
+stars each placed voter gave their own option (maximum Nash welfare); then
+the most stars; then a draw. `/choices` works it on the dinner example with
+seats (`assignmentOf`, by trying every seating); `55_option_assignment`
+counts the same example.
+
+- **Solved exactly in the database** (`get_poll_assignment` /
+  `open_poll_assignment`, via `poll_assignment`), on the same gate and the
+  same press as the others. With one option per voter the product is a sum
+  of one logarithm per voter, so it is an assignment problem with
+  capacities, and `poll_assignment` is the Hungarian method: ballots taken
+  one at a time, each by the cheapest path to an option with a place free or
+  to going without. **Costs are pairs of bigints compared in order**, not
+  floats: the first carries "placed" and the logarithm rounded to 10⁻¹², the
+  second the stars and a 28-bit hash of poll, ballot and option. A star level
+  always rounds to the same integer, so equal products cost exactly the same
+  and fall through to the total and the draw, which is the same on every
+  read. Several options per voter would make the logarithm of a sum, which
+  does not split, and need an integer solver; that is *Option allocation*,
+  not built.
+- **Bounded by its work**, about voters² × options: everyone wanting the
+  same option is the worst case, about a second at 300 voters and 20
+  options. Past `4,000,000` (or 1,000 ballots) it refuses as too large. On
+  an assignment question `poll_tally` catches that and carries no
+  `kind_result`, so the page falls back to STAR's winner and the menu's
+  modal says why.
+- **It names who gets what**, so it needs a poll that shows who voted: an
+  assignment question cannot be made without (`insert_poll_row` refuses
+  it, and the create form holds the switch on, saying why), and the count
+  refuses a poll that hides them. `poll_tally` carries `voters_shown` so
+  `offers` can leave it off the menu. Names are what the roster shows: the
+  typed name on an open poll, the address on an invite poll.
+- **Each voter's stars are shown only where ballots are published**; on a
+  private poll the answer says only how many got an option they gave each
+  number of stars (`received`).
+- **Places can be given after the fact**, like costs: an assignment
+  question stores its own in `candidates.kind_value` (optional, none meaning
+  one); on any other written list every option starts at one place and
+  *Edit places* (`PlacesEditor`) sends `p_places`, held by
+  `usePlacesInputs` and never stored.
+- **Not on a sequential tally, not on a time poll, not on the sample's
+  other questions**, as for the budget. The sample's assignment question
+  answers its recorded count.
+
 **Consensus option** is for a choice everybody has to live with, a meeting
 time above all: the option whose lowest score (its *floor*) is highest, so
 whoever likes it least likes it as much as they can (maximin). Offered from
@@ -3407,7 +3459,8 @@ A question's `kind` is what it asks for, picked on the create form as
 `time` (*Best time*, the calendar ballot), `consensus` (*Consensus
 option*), `consensus_time` (*Consensus time*, the calendar ballot),
 `ranking` (*Option ranking*), `multiple` (*Multiple winners*),
-`fractional` (*Fractional winners*) or `budget` (*Proportional budget*). **Only the two time kinds change the
+`fractional` (*Fractional winners*), `budget` (*Proportional budget*) or
+`assignment` (*Option assignment*). **Only the two time kinds change the
 ballot**, and code asks `isCalendar(kind)`, never `kind === 'time'`; every
 other kind is a written list. In SQL the same question is `kind in ('time',
 'consensus_time')` (`polls_schedule_ck`, `create_poll`,
@@ -3430,7 +3483,7 @@ survives), in place of any explanation on the form itself.
   every read of the result, which the creator asked for.
 - **It takes the winner's place.** `ChosenResult` draws the modal's own body
   (`RankingBody`, `MultipleWinnersBody`, `FractionalWinnersBody`,
-  `ConsensusBody`, `ProportionalBudgetBody`) in a card at the top, handed the carried result, so it
+  `ConsensusBody`, `ProportionalBudgetBody`, `OptionAssignmentBody`) in a card at the top, handed the carried result, so it
   asks for nothing until an option is removed. The runoff and the score round
   follow as usual (they are how the first place was chosen, and on a
   consensus how STAR alone would have chosen); the winner's banner and
@@ -3448,14 +3501,17 @@ survives), in place of any explanation on the form itself.
   of the answer on screen (`cutTo`, a shared place kept whole) and costs no
   request. The *More results* modals have no number and show every place: a
   reader who went looking for the ranking wants the whole of it.
-- **An option has a number too** (`candidates.kind_value`): its cost, on a
-  budget question, where every option must have one and no other kind may
-  (`option_cost`). It is written by every door into `candidates` — creation
-  (`p_option_costs` on `create_poll`, `cost` on each option of a group's
-  question), the plural suggestion doors and the creator's correction — and
-  read back as `cost` beside each option (`open_poll_view`, `poll_page`).
-  The create form and `CollectOptions` draw a cost box beside each name on
-  a budget question; the ballot never shows it.
+- **An option has a number too** (`candidates.kind_value`): its cost on a
+  budget question, where every option must have one, or its places on an
+  assignment question, where none means one; no other kind may have one
+  (`option_cost`). It travels under the name its kind gives it, `cost` or
+  `places` (`option_number`, `optionNumberOf`), through every door into
+  `candidates` — creation (`p_option_costs` on `create_poll`, which carries
+  either; `cost` or `places` on each option of a group's question), the
+  plural suggestion doors and the creator's correction — and is read back
+  under the same name beside each option (`open_poll_view`, `poll_page`).
+  The create form and `CollectOptions` draw one number box beside each name
+  on those two kinds; the ballot never shows it.
 
 `50_a_question_asks_for_its_result` covers the rules and that the carried
 result is the modal's.
@@ -3650,8 +3706,8 @@ the poll **through the app's own functions** (`create_poll_group`,
 `open_poll_submit`, `close_poll`), and recording what `open_poll_view`,
 `open_poll_results`, `open_poll_ranking`, `open_poll_multiple_winners`,
 `open_poll_fractional_winners`, `open_poll_consensus`, `open_poll_scores`
-and `open_poll_ballots` answer, and `open_poll_proportional_budget` of a
-budget question.
+and `open_poll_ballots` answer, `open_poll_proportional_budget` of a
+budget question and `open_poll_assignment` of an assignment question.
 
 `/#/sample-sequel-movie` is "Movie night 2", made from the finished copy as
 *Create sequel poll* makes it (`sample.carried` reads the published sheet as
@@ -3660,9 +3716,12 @@ on weight where a fresh count would elect Arrival. Its second question,
 `/#/sample-sequel-budget`, is a proportional budget: 1,000 for upgrades to
 the movie nights, where the big-screen fans get the projector and the
 comfort seekers the beanbags and popcorn machine, and funding by popularity
-would have bought the projector, surround sound and popcorn. Each question is
-titled with the choice it shows. The home page's *More examples* tile opens
-it, as do the two sections of `/choices`. **No sample id may be twenty-two
+would have bought the projector, surround sound and popcorn. Its third,
+`/#/sample-sequel-assignment`, is an option assignment: three films with
+four places each for ten friends, where Ana and Diego give up The Matrix for
+their 4-star second films. Each question is titled with the choice it
+shows. The home page's *More examples* tile opens it, as do the three
+sections of `/choices`. **No sample id may be twenty-two
 characters long**: that is a short poll id's length, and the app would send
 it to the database (`pollId.test.ts` checks every recorded id).
 

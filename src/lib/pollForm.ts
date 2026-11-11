@@ -25,7 +25,7 @@ import {
   VOTER_NAME_MAX,
 } from './limits'
 import type { DailyWindow, PollKind, PollSchedule } from './types'
-import { CHOICE_NUMBER, DEFAULT_CHOICE_NUMBER, isCalendar } from './choices'
+import { CHOICE_NUMBER, DEFAULT_CHOICE_NUMBER, isCalendar, optionNumberOf } from './choices'
 
 /*
  * The create form's draft model and validation, apart from the page that
@@ -41,18 +41,19 @@ export interface OptionDraft {
   name: string
   description: string | null
   /**
-   * What the option costs, on a proportional budget question: what the number
-   * box holds, '' while it is empty. Kept whatever the kind, like the
-   * calendar, and sent only on a budget.
+   * The option's number: its cost on a proportional budget question, its
+   * places on an option assignment (`optionNumberOf`). What the number box
+   * holds, '' while it is empty. Kept whatever the kind, like the calendar,
+   * and sent only on a kind that reads one.
    */
-  cost: number | string
+  number: number | string
 }
 
 let optionSeq = 0
 
 export function blankOption(): OptionDraft {
   optionSeq += 1
-  return { key: `option-${optionSeq}`, name: '', description: null, cost: '' }
+  return { key: `option-${optionSeq}`, name: '', description: null, number: '' }
 }
 
 /**
@@ -161,10 +162,13 @@ export function kindValueOf(question: QuestionDraft): number | null {
   return CHOICE_NUMBER[question.kind] ? (question.kindNumbers[question.kind] ?? null) : null
 }
 
-/** An option's cost as sent: only on a budget question, and null while empty. */
-export function costOf(question: QuestionDraft, option: OptionDraft): number | null {
-  if (question.kind !== 'budget' || option.cost === '') return null
-  return Number(option.cost)
+/**
+ * An option's number as sent: a budget's cost or an assignment's places, and
+ * null while empty or on any other kind.
+ */
+export function numberOf(question: QuestionDraft, option: OptionDraft): number | null {
+  if (!optionNumberOf(question.kind) || option.number === '') return null
+  return Number(option.number)
 }
 
 /**
@@ -199,7 +203,8 @@ export interface FormErrors {
   /** By `optionKey()`. */
   optionNames: Record<string, string>
   optionDescriptions: Record<string, string>
-  optionCosts: Record<string, string>
+  /** A cost or a number of places, by `optionKey()`. */
+  optionNumbers: Record<string, string>
   /** A proportional budget's budget, by question index. */
   budgets: Record<number, string>
   /** A sequential question's list of earlier voters, by question index. */
@@ -216,7 +221,7 @@ export function noErrors(): FormErrors {
     options: {},
     optionNames: {},
     optionDescriptions: {},
-    optionCosts: {},
+    optionNumbers: {},
     budgets: {},
     carried: {},
     carriedVoters: {},
@@ -235,7 +240,7 @@ export function hasErrors(errors: FormErrors): boolean {
     Object.keys(errors.options).length ||
     Object.keys(errors.optionNames).length ||
     Object.keys(errors.optionDescriptions).length ||
-    Object.keys(errors.optionCosts).length ||
+    Object.keys(errors.optionNumbers).length ||
     Object.keys(errors.budgets).length ||
     Object.keys(errors.carried).length ||
     Object.keys(errors.carriedVoters).length ||
@@ -259,7 +264,7 @@ export function questionHasError(errors: FormErrors, questionIndex: number): boo
   return (
     Object.keys(errors.optionNames).some((key) => key.startsWith(prefix)) ||
     Object.keys(errors.optionDescriptions).some((key) => key.startsWith(prefix)) ||
-    Object.keys(errors.optionCosts).some((key) => key.startsWith(prefix)) ||
+    Object.keys(errors.optionNumbers).some((key) => key.startsWith(prefix)) ||
     Object.keys(errors.carriedVoters).some((key) => key.startsWith(prefix)) ||
     Object.keys(errors.carriedGiven).some((key) => key.startsWith(prefix))
   )
@@ -439,10 +444,15 @@ export function validate(form: {
         )
       }
 
-      // Every option a budget counts has a cost; a blank row is not an option.
+      // Every option a budget counts has a cost; a blank row is not an
+      // option. An assignment's places may be left blank, for one.
       if (question.kind === 'budget' && name) {
-        const cost = amountError(option.cost)
-        if (cost) errors.optionCosts[key] = option.cost === '' ? 'Give it a cost.' : cost
+        const cost = amountError(option.number)
+        if (cost) errors.optionNumbers[key] = option.number === '' ? 'Give it a cost.' : cost
+      }
+      if (question.kind === 'assignment' && name && option.number !== '') {
+        const places = amountError(option.number)
+        if (places) errors.optionNumbers[key] = places
       }
     })
 

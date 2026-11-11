@@ -37,16 +37,18 @@ import css from './CollectOptions.module.css'
 import listRow from './listRow.module.css'
 import { VoterNameField } from './VoterNameField'
 import type { PollOption, PollSchedule } from '../lib/types'
+import type { OptionNumber } from '../lib/choices'
+import { count } from '../lib/plural'
 
 /** Unique within one open card; never leaves it. */
 let draftSeq = 0
 
 /**
  * `description` is null when its field is hidden, which means no description.
- * `cost` is what its number box holds ('' while empty), and is read only on a
- * proportional budget.
+ * `number` is what its number box holds ('' while empty), and is read only
+ * where the kind gives its options one (`OptionNumber`): a cost or places.
  */
-type OptionText = { name: string; description: string | null; cost: number | string }
+type OptionText = { name: string; description: string | null; number: number | string }
 
 /** An option this reader is typing and has not sent. */
 type Draft = OptionText & { key: string }
@@ -54,24 +56,32 @@ type Draft = OptionText & { key: string }
 /** A new draft opens with its description field showing. */
 function blankDraft(): Draft {
   draftSeq += 1
-  return { key: `draft-${draftSeq}`, name: '', description: '', cost: '' }
+  return { key: `draft-${draftSeq}`, name: '', description: '', number: '' }
 }
 
 function isBlank(d: Draft): boolean {
-  return !d.name.trim() && !d.description?.trim() && d.cost === ''
+  return !d.name.trim() && !d.description?.trim() && d.number === ''
 }
 
-function fieldsOf(option: PollOption): OptionText {
-  return { name: option.name, description: option.description || null, cost: option.cost ?? '' }
+/** An option's own number on this kind: its cost or its places. */
+const numberOf = (option: PollOption, numbered: OptionNumber | null) =>
+  numbered ? (option[numbered] ?? null) : null
+
+function fieldsOf(option: PollOption, numbered: OptionNumber | null): OptionText {
+  return {
+    name: option.name,
+    description: option.description || null,
+    number: numberOf(option, numbered) ?? '',
+  }
 }
 
 type Focus = { key: string; field: 'name' | 'description' }
 
 /** A validation problem, marked on the field it is about. */
-type Problem = { field: 'name' | 'description' | 'cost'; message: string }
+type Problem = { field: 'name' | 'description' | 'number'; message: string }
 
 /** An option as checked and ready to send. */
-type Checked = { name: string; description: string; cost: number | null }
+type Checked = { name: string; description: string; number: number | null }
 
 /**
  * How this reader says they are done adding. Absent for the creator's
@@ -101,7 +111,7 @@ export function CollectOptions({
   source,
   options,
   schedule,
-  costed = false,
+  numbered = null,
   isCreator,
   voterName,
   questionStrip,
@@ -115,11 +125,12 @@ export function CollectOptions({
   /** Set on a time poll, which collects by calendar instead of text boxes. */
   schedule?: PollSchedule | null
   /**
-   * A proportional budget: every option carries a cost, typed beside its name
-   * and shown on its row. Readers see the costs here, where the list is being
-   * written, and never on the ballot.
+   * A number every option carries, typed beside its name and shown on its
+   * row: a proportional budget's cost (every option has one) or an option
+   * assignment's places (none meaning one). Readers see them here, where the
+   * list is being written, and never on the ballot.
    */
-  costed?: boolean
+  numbered?: OptionNumber | null
   isCreator: boolean
   /**
    * The name to confirm under: only an open poll that shows respondents asks.
@@ -341,7 +352,7 @@ export function CollectOptions({
           <OptionList
             source={source}
             options={options}
-            costed={costed}
+            numbered={numbered}
             isCreator={isCreator}
             ownSave={!confirm && !done}
             draft={draft}
@@ -359,7 +370,7 @@ export function CollectOptions({
 function OptionList({
   source,
   options,
-  costed,
+  numbered,
   isCreator,
   ownSave,
   draft,
@@ -369,7 +380,7 @@ function OptionList({
 }: {
   source: OptionsSource
   options: PollOption[]
-  costed: boolean
+  numbered: OptionNumber | null
   isCreator: boolean
   /** Draw a *Save options* of its own (only when the card has no closing button). */
   ownSave: boolean
@@ -409,7 +420,8 @@ function OptionList({
       !dropping.has(o.id) &&
       (e.name.trim() !== o.name ||
         (e.description ?? '').trim() !== (o.description ?? '') ||
-        (costed && (e.cost === '' ? null : Number(e.cost)) !== (o.cost ?? null)))
+        (numbered !== null &&
+          (e.number === '' ? null : Number(e.number)) !== numberOf(o, numbered)))
     )
   })
   const staying = options.length - dropping.size
@@ -445,7 +457,7 @@ function OptionList({
    * option added, or false for a correction (which cannot hit the ceiling).
    */
   function checkOption(
-    { name: rawName, description: rawDescription, cost }: OptionText,
+    { name: rawName, description: rawDescription, number }: OptionText,
     { adding, exceptKey }: { adding: number | false; exceptKey?: string },
   ): Checked | Problem {
     const trimmed = rawName.trim()
@@ -468,12 +480,18 @@ function OptionList({
         message: `This poll already holds the ${MAX_OPTIONS} options a ballot can.`,
       }
 
-    if (costed) {
-      const problem = amountError(cost)
-      if (problem) return { field: 'cost', message: cost === '' ? 'Give it a cost.' : problem }
+    // A cost is required; places are not, and none means one.
+    if (numbered === 'cost' && number === '') return { field: 'number', message: 'Give it a cost.' }
+    if (numbered && number !== '') {
+      const problem = amountError(number)
+      if (problem) return { field: 'number', message: problem }
     }
 
-    return { name: trimmed, description: trimmedDescription, cost: costed ? Number(cost) : null }
+    return {
+      name: trimmed,
+      description: trimmedDescription,
+      number: numbered && number !== '' ? Number(number) : null,
+    }
   }
 
   /** Every draft and correction, checked; null (with every problem marked) if any fail. */
@@ -536,7 +554,7 @@ function OptionList({
   }
 
   function openEditor(option: PollOption) {
-    setEditing((prev) => new Map(prev).set(option.id, fieldsOf(option)))
+    setEditing((prev) => new Map(prev).set(option.id, fieldsOf(option, numbered)))
     setFocus({ key: option.id, field: 'name' })
   }
 
@@ -573,11 +591,11 @@ function OptionList({
     if (added.length > 0 || corrected.length > 0 || dropping.size > 0) {
       setError(null)
       setBusy(true)
-      const { error: rpcError } = await sendDraft(source, {
-        added,
-        corrected,
-        removed: [...dropping],
-      })
+      const { error: rpcError } = await sendDraft(
+        source,
+        { added, corrected, removed: [...dropping] },
+        numbered,
+      )
       setBusy(false)
 
       if (rpcError) {
@@ -636,7 +654,7 @@ function OptionList({
       {options.map((option) => {
         const struck = dropping.has(option.id)
         const open = editing.get(option.id)
-        const shown = open ?? fieldsOf(option)
+        const shown = open ?? fieldsOf(option, numbered)
 
         return (
           <div
@@ -648,7 +666,7 @@ function OptionList({
                 {open && !struck ? (
                   <OptionFields
                     value={open}
-                    costed={costed}
+                    numbered={numbered}
                     problem={editProblems.get(option.id) ?? null}
                     focus={focus?.key === option.id ? focus.field : undefined}
                     ariaLabel={`Name of ${option.name}`}
@@ -662,10 +680,12 @@ function OptionList({
                       td={struck ? 'line-through' : undefined}
                     >
                       {shown.name}
-                      {costed && option.cost != null && (
+                      {numbered && numberOf(option, numbered) !== null && (
                         <Text span size="sm" c="dimmed" fw={400}>
-                          {' · cost '}
-                          {option.cost.toLocaleString('en-US')}
+                          {' · '}
+                          {numbered === 'cost'
+                            ? `cost ${numberOf(option, numbered)!.toLocaleString('en-US')}`
+                            : count(numberOf(option, numbered)!, 'place')}
                         </Text>
                       )}
                     </Text>
@@ -741,7 +761,7 @@ function OptionList({
             <Group gap="xs" align="flex-start" wrap="nowrap">
               <OptionFields
                 value={d}
-                costed={costed}
+                numbered={numbered}
                 problem={draftProblems.get(d.key) ?? null}
                 focus={focus?.key === d.key ? focus.field : undefined}
                 placeholder={
@@ -813,7 +833,7 @@ function without<V>(map: ReadonlyMap<string, V>, key: string): ReadonlyMap<strin
 /** One option's two fields, controlled: a draft, or a row opened by its pencil. */
 function OptionFields({
   value,
-  costed,
+  numbered,
   problem,
   focus,
   placeholder,
@@ -821,7 +841,7 @@ function OptionFields({
   onChange,
 }: {
   value: OptionText
-  costed: boolean
+  numbered: OptionNumber | null
   problem: Problem | null
   /** Which field takes the cursor on mount. */
   focus?: 'name' | 'description'
@@ -841,20 +861,20 @@ function OptionFields({
           onChange={(e) => onChange({ ...value, name: e.currentTarget.value })}
           error={problem?.field === 'name' ? problem.message : null}
         />
-        {costed && (
+        {numbered && (
           <NumberInput
             w={110}
-            value={value.cost}
-            onChange={(cost) => onChange({ ...value, cost })}
-            placeholder="Cost"
-            aria-label={`${ariaLabel}: cost`}
+            value={value.number}
+            onChange={(number) => onChange({ ...value, number })}
+            placeholder={numbered === 'cost' ? 'Cost' : 'Places'}
+            aria-label={`${ariaLabel}: ${numbered === 'cost' ? 'cost' : 'places'}`}
             min={1}
             max={AMOUNT_MAX}
             allowDecimal={false}
             allowNegative={false}
             thousandSeparator=","
             hideControls
-            error={problem?.field === 'cost' ? problem.message : null}
+            error={problem?.field === 'number' ? problem.message : null}
           />
         )}
       </Group>

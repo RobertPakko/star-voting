@@ -1,4 +1,5 @@
 import type {
+  AssignmentResult,
   BudgetResult,
   ConsensusResult,
   FractionalShare,
@@ -51,7 +52,23 @@ export const CHOICES: Record<PollKind, { label: string; section: string; blurb: 
     blurb:
       'shares a budget between options of differing costs so that different groups of voters each get something they like.',
   },
+  assignment: {
+    label: 'Option assignment',
+    section: 'option-assignment',
+    blurb:
+      'gives each voter one option, each option going to as many voters as it has places, so that the group as a whole is as satisfied as it can be.',
+  },
 }
+
+/**
+ * The number an option of a kind carries beside its name, and its field when
+ * sent and read: a budget's cost (required), an assignment's places (none
+ * meaning one). Both are `candidates.kind_value`. Null for every other kind.
+ */
+export type OptionNumber = 'cost' | 'places'
+
+export const optionNumberOf = (kind: PollKind): OptionNumber | null =>
+  kind === 'budget' ? 'cost' : kind === 'assignment' ? 'places' : null
 
 /** Where `/choices` explains a kind; each `section` is one of its card ids. */
 export const choicePage = (kind: PollKind) => `/choices?section=${CHOICES[kind].section}`
@@ -79,6 +96,7 @@ export const CHOICE_ORDER: PollKind[] = [
   'multiple',
   'fractional',
   'budget',
+  'assignment',
 ]
 
 /**
@@ -88,7 +106,7 @@ export const CHOICE_ORDER: PollKind[] = [
  */
 export type ResultTool = Extract<
   PollKind,
-  'option' | 'ranking' | 'multiple' | 'fractional' | 'consensus' | 'budget'
+  'option' | 'ranking' | 'multiple' | 'fractional' | 'consensus' | 'budget' | 'assignment'
 >
 
 /** The kind a tool is on a poll of this kind: on a calendar, an option is a time. */
@@ -133,9 +151,11 @@ export function offers(tool: ResultTool, results: PollResults) {
   // A sequential poll's ballots carry weights, which only STAR's results
   // count with; a consensus or a split of them would quietly ignore them.
   if (results.weighted && !SEQUENTIAL_KINDS.includes(tool)) return false
-  // A calendar's windows are not things anybody buys.
-  if (tool === 'budget' && isCalendar(results.kind)) return false
-  return tool === 'fractional' || tool === 'consensus' || tool === 'budget'
+  // A calendar's windows are not things anybody buys, or is handed.
+  if ((tool === 'budget' || tool === 'assignment') && isCalendar(results.kind)) return false
+  // An assignment says who gets what, so it needs a poll that names its voters.
+  if (tool === 'assignment' && !results.voters_shown) return false
+  return tool === 'fractional' || tool === 'consensus' || tool === 'budget' || tool === 'assignment'
     ? results.option_count >= 2
     : results.option_count >= 3
 }
@@ -145,6 +165,7 @@ export type ChosenResult =
   | { kind: 'fractional'; shares: FractionalShare[] }
   | { kind: 'consensus'; consensus: ConsensusResult }
   | { kind: 'budget'; budget: BudgetResult }
+  | { kind: 'assignment'; assignment: AssignmentResult }
 
 /**
  * The result a tally opens on, where the question asked for more than STAR's
@@ -162,6 +183,9 @@ export function chosenResult(results: PollResults): ChosenResult | null {
   }
   if (kind === 'budget') {
     return !Array.isArray(result) && 'spots' in result ? { kind, budget: result } : null
+  }
+  if (kind === 'assignment') {
+    return !Array.isArray(result) && 'unplaced' in result ? { kind, assignment: result } : null
   }
   if (!Array.isArray(result)) return null
   if (kind === 'fractional') {

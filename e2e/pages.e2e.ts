@@ -22,6 +22,7 @@ const PAGES: { path: string; title: string; name: string }[] = [
   { path: '#/sample-result-when', title: 'Movie night', name: 'a calendar result' },
   { path: '#/sample-sequel-movie', title: 'Movie night 2', name: 'a sequential result' },
   { path: '#/sample-sequel-budget', title: 'Movie night 2', name: 'a budget result' },
+  { path: '#/sample-sequel-assignment', title: 'Movie night 2', name: 'an assignment result' },
 ]
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -331,7 +332,7 @@ test.describe('all choices', () => {
   test('opens with every section folded, its algorithms showing', async ({ page }) => {
     await page.goto('#/choices')
     const sections = page.getByRole('heading', { level: 2 }).getByRole('button')
-    await expect(sections).toHaveCount(12)
+    await expect(sections).toHaveCount(13)
     for (const button of await sections.all())
       await expect(button).toHaveAttribute('aria-expanded', 'false')
     const best = page.getByRole('button', { name: /^Best option/ })
@@ -360,6 +361,12 @@ test.describe('all choices', () => {
       'Under construction',
     )
     await expect(page.getByRole('button', { name: /^Proportional budget/ })).not.toContainText(
+      'Under construction',
+    )
+    await expect(page.getByRole('button', { name: /^Option assignment/ })).not.toContainText(
+      'Under construction',
+    )
+    await expect(page.getByRole('button', { name: /^Option allocation/ })).toContainText(
       'Under construction',
     )
   })

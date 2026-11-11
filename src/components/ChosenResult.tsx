@@ -5,8 +5,9 @@ import { RankingBody, type RankingSource } from './FullRanking'
 import { MultipleWinnersBody } from './MultipleWinners'
 import { ConsensusBody } from './Consensus'
 import { ProportionalBudgetBody } from './ProportionalBudget'
+import { OptionAssignmentBody } from './OptionAssignment'
 import type { MeetingEvent } from '../lib/calendarEvent'
-import { useBudgetInputs, useLeftOut } from '../lib/useLeftOut'
+import { useBudgetInputs, useLeftOut, usePlacesInputs } from '../lib/useLeftOut'
 
 /**
  * The result a question asked for (`polls.kind`), where it is more than
@@ -31,6 +32,7 @@ export function ChosenResult({
 }) {
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
   const [inputs, setInputs] = useBudgetInputs(source.pollId)
+  const [places, setPlaces] = usePlacesInputs(source.pollId)
 
   switch (chosen.kind) {
     case 'ranking':
@@ -78,6 +80,18 @@ export function ChosenResult({
           onLeftOut={setLeftOut}
           inputs={inputs}
           onInputs={setInputs}
+        />
+      )
+    case 'assignment':
+      return (
+        <OptionAssignmentBody
+          source={source}
+          results={results}
+          initial={chosen.assignment}
+          leftOut={leftOut}
+          onLeftOut={setLeftOut}
+          places={places}
+          onPlaces={setPlaces}
         />
       )
   }

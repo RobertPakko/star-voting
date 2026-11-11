@@ -19,7 +19,7 @@ import { SmoothHeight } from './SmoothHeight'
 import { VoterNameField } from './VoterNameField'
 import { Banners } from './Banners'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
-import { isCalendar } from '../lib/choices'
+import { isCalendar, optionNumberOf } from '../lib/choices'
 
 /**
  * An open poll at every stage -- collecting, voting, results -- through the
@@ -111,7 +111,7 @@ export function OpenPollPanel({
           source={{ kind: 'open', pollId }}
           options={view.options}
           schedule={schedule}
-          costed={view.poll.kind === 'budget'}
+          numbered={optionNumberOf(view.poll.kind)}
           isCreator={isCreator}
           voterName={needsName ? voterName : undefined}
           questionStrip={questionStrip}

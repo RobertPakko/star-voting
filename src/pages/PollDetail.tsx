@@ -47,7 +47,7 @@ import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import { useFirstQuestionOnResults } from '../lib/resultsLanding'
-import { isCalendar } from '../lib/choices'
+import { isCalendar, optionNumberOf } from '../lib/choices'
 import type {
   PollRead,
   AccountRead,
@@ -238,6 +238,7 @@ export function PollDetail({
   // voted, suggestions and corrections can land from elsewhere. (Open polls'
   // options come with the view; corrections after votes force a whole-page read.)
   const optionsMayMove = poll?.mode === 'invite' && status?.voted_count === 0
+  const pollKind = poll?.kind
 
   // Whether the opening read carried a roster; `poll_invitees` raises rather
   // than answering empty, so only ask where there is one.
@@ -284,16 +285,24 @@ export function PollDetail({
       : view && statusFromOpenView(view, retention.current)
     if (status) setStatus(status)
 
-    // A table read, where an option's cost is its column, `kind_value`.
-    if (optionsRes && !optionsRes.error && optionsRes.data)
-      setOptions(optionsRes.data.map(({ kind_value, ...o }) => ({ ...o, cost: kind_value })))
+    // A table read, where an option's cost or places are its column, `kind_value`.
+    if (optionsRes && !optionsRes.error && optionsRes.data) {
+      const numbered = pollKind && optionNumberOf(pollKind)
+      setOptions(
+        optionsRes.data.map(({ kind_value, ...o }) => ({
+          ...o,
+          cost: numbered === 'cost' ? kind_value : null,
+          places: numbered === 'places' ? kind_value : null,
+        })),
+      )
+    }
     if (inviteesRes && !inviteesRes.error && inviteesRes.data)
       setInvitees(inviteesRes.data as Invitee[])
 
     // Only the status decides whether this read counts; options and roster
     // may lag a tick.
     return !!status
-  }, [pollId, poll?.mode, poll?.id, optionsMayMove, hasRoster, marksFromView])
+  }, [pollId, poll?.mode, poll?.id, pollKind, optionsMayMove, hasRoster, marksFromView])
 
   // Set when the next read must be the whole page: after a creator action
   // (the tick doesn't re-read the poll row or group), and after an invite
@@ -480,7 +489,7 @@ export function PollDetail({
                 source={{ kind: 'creator', pollId: poll.id }}
                 options={optionList}
                 schedule={isCalendar(poll.kind) ? poll.schedule : null}
-                costed={poll.kind === 'budget'}
+                numbered={optionNumberOf(poll.kind)}
                 isCreator
                 questionStrip={questionStrip}
                 done={{
@@ -518,7 +527,7 @@ export function PollDetail({
                   source={{ kind: 'poll', pollId: poll.id }}
                   options={options}
                   schedule={isCalendar(poll.kind) ? poll.schedule : null}
-                  costed={poll.kind === 'budget'}
+                  numbered={optionNumberOf(poll.kind)}
                   isCreator={isCreator}
                   questionStrip={questionStrip}
                   confirm={confirmation}

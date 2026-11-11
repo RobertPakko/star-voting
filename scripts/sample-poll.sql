@@ -170,6 +170,13 @@ $$;
 -- curtains everybody half wants, then the beanbags, and the 550 left buys the
 -- projector rather than the surround sound: the big-screen fans get their
 -- projector, the comfort seekers their beanbags and popcorn, and 50 is left.
+--
+-- The third question is an option assignment: some nights the friends split
+-- up to watch different films, in groups of four or fewer, one film each, so
+-- each film has four places. Six of the ten most want The Matrix. Ana and
+-- Diego are nearly as happy with Spirited Away and Mean Girls (4 stars each),
+-- so they watch those and give their places to the four who would lose more:
+-- Farid gave Spirited Away nothing. The groups come out four, three and three.
 create or replace function sample.sequel() returns jsonb language sql immutable as $$
 select $json${
   "title": "Movie night 2",
@@ -222,6 +229,28 @@ select $json${
         [2, 0, 4, 1, 5],
         [1, 1, 5, 2, 4],
         [4, 3, 2, 2, 2]
+      ]
+    },
+    {
+      "slug": "assignment",
+      "title": "Option assignment",
+      "kind": "assignment",
+      "options": [
+        { "name": "The Matrix", "places": 4, "description": "A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI." },
+        { "name": "Spirited Away", "places": 4, "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts." },
+        { "name": "Mean Girls", "places": 4, "description": "Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George." }
+      ],
+      "ballots": [
+        [5, 4, 1],
+        [5, 2, 3],
+        [4, 5, 0],
+        [5, 1, 4],
+        [5, 3, 2],
+        [5, 0, 2],
+        [1, 3, 5],
+        [3, 5, 1],
+        [0, 2, 5],
+        [5, 2, 3]
       ]
     }
   ]
@@ -407,10 +436,15 @@ begin
         'ballots', open_poll_ballots(v_poll.id)
       );
 
-      -- Only a budget question has costs and a budget to count with.
+      -- Only a budget question has costs and a budget to count with, and only
+      -- an assignment question places to fill.
       if v_poll.kind = 'budget' then
         v_entry := v_entry || jsonb_build_object(
           'budget', open_poll_proportional_budget(v_poll.id, '{}'));
+      end if;
+      if v_poll.kind = 'assignment' then
+        v_entry := v_entry || jsonb_build_object(
+          'assignment', open_poll_assignment(v_poll.id, '{}'));
       end if;
     end if;
 
@@ -465,7 +499,7 @@ begin
   -- the first's results. Closing the first pins nothing yet; see below.
   perform sample.build(
     'sample-sequel',
-    'The next movie night, made as a sequel to the first: everyone''s ballot on the film counts less the more they liked last week''s. And the friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something.',
+    'The next movie night, made as a sequel to the first: everyone''s ballot on the film counts less the more they liked last week''s. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.',
     true,
     sample.sequel(),
     'sample-result'

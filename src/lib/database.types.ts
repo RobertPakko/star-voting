@@ -455,6 +455,10 @@ export type Database = {
         Args: { p_excluded?: string[]; p_poll_id: string }
         Returns: Json
       }
+      get_poll_assignment: {
+        Args: { p_excluded?: string[]; p_places?: Json; p_poll_id: string }
+        Returns: Json
+      }
       get_poll_proportional_budget: {
         Args: { p_budget?: number; p_costs?: Json; p_excluded?: string[]; p_poll_id: string }
         Returns: Json
@@ -567,6 +571,10 @@ export type Database = {
       }
       open_poll_multiple_winners: {
         Args: { p_excluded?: string[]; p_poll_id: string }
+        Returns: Json
+      }
+      open_poll_assignment: {
+        Args: { p_excluded?: string[]; p_places?: Json; p_poll_id: string }
         Returns: Json
       }
       open_poll_proportional_budget: {

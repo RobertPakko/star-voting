@@ -29,6 +29,8 @@ import {
   ChartPieSliceIcon,
   CoinsIcon,
   CpuIcon,
+  EyeIcon,
+  GiftIcon,
   HandshakeIcon,
   HourglassIcon,
   LinkSimpleIcon,
@@ -52,6 +54,7 @@ import { pollPath } from '../lib/pollId'
 import {
   SAMPLE_RESULT_ID,
   SAMPLE_RESULT_TIME_ID,
+  SAMPLE_SEQUEL_ASSIGNMENT_ID,
   SAMPLE_SEQUEL_BUDGET_ID,
   SAMPLE_SEQUEL_ID,
   sampleResultAs,
@@ -310,6 +313,7 @@ export function AllChoices() {
   const budgetReduced = votersOf(DINNER).filter((voter) => budget.spots[1].weights[voter] < 1)
   const popular = byPopularity(DINNER, COSTS, BUDGET)
   const compromise = bestSingleOption(DINNER)
+  const seated = assignmentOf(DINNER, SEATS)
   const sharedOut = optionsOf(DINNER).find((o) => o !== winner && o !== compromise)!
 
   return (
@@ -777,6 +781,73 @@ export function AllChoices() {
         </Choice>
 
         <Choice
+          id={CHOICES.optionAssignment}
+          icon={ArrowsSplitIcon}
+          color="orange"
+          title="Option assignment"
+          algorithms={['Nash']}
+          example="assignment"
+        >
+          <NotStrategyProof />
+          <Requirement icon={EyeIcon}>The poll shows who voted.</Requirement>
+          <Text>
+            Sometimes every voter needs a different option of their own: chores shared out between
+            housemates, topics handed out to a class, or shifts split between volunteers.{' '}
+            <strong>Option assignment</strong> gives each voter one option, choosing the assignment
+            that leaves the group as a whole as satisfied as it can be:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Each option can optionally be given a number of places: how many voters it can go to.
+              A chore might need two housemates, or a shift four volunteers. An option with no
+              number set goes to one voter.
+            </List.Item>
+            <List.Item>
+              The assignment chosen is the one where the stars each voter gave their own option,
+              multiplied together, are as large as possible.
+            </List.Item>
+          </List>
+          <Text>
+            Let&rsquo;s say our six friends are going out to eat, but the restaurants are small:
+          </Text>
+          <Seats seats={SEATS} />
+          <Text>
+            Here are their ballots again, with the restaurant each friend is given circled:
+          </Text>
+          <EmojiTable
+            caption="How many stars each friend gave each restaurant, with the one each friend is given circled"
+            rows={seatedRows(DINNER, SEATS, seated)}
+            rowLabel="Restaurant"
+            totalLabel="Seats"
+          />
+          <Text>
+            The {ORDINALS[4]} and {ORDINALS[5]} friends both want the one seat at the sushi bar.
+            Giving it to the {ORDINALS[4]} friend sends the {ORDINALS[5]} to tacos, which they gave{' '}
+            {stars(DINNER.tacos[5])}: 5 × {DINNER.tacos[5]} = {5 * DINNER.tacos[5]}. Giving it to
+            the {ORDINALS[5]} sends the {ORDINALS[4]} to tacos, which they gave{' '}
+            {stars(DINNER.tacos[4])}: 5 × {DINNER.tacos[4]} = {5 * DINNER.tacos[4]}. So the{' '}
+            {ORDINALS[5]} friend gets sushi, and the stars everyone gave their own restaurant
+            multiply to {seatedProduct(DINNER, seated).toLocaleString('en-US')}, the most any
+            seating can.
+          </Text>
+          <Text>
+            Multiplying rather than adding stops the assignment from handing one voter an option
+            they gave 0 stars so that the others can do slightly better. Nobody is ever given an
+            option they gave 0 stars.
+          </Text>
+          <Text>
+            The numbers don&rsquo;t have to match. If there are more voters than places, as many
+            voters as possible are given an option and the rest go without. If there are more places
+            than voters, every voter gets one and some places are left empty.
+          </Text>
+          <Text>
+            Since the ballots don&rsquo;t depend on the places, any finished poll that shows who
+            voted can be assigned this way: open <strong>More results</strong> and give each option
+            its places.
+          </Text>
+        </Choice>
+
+        <Choice
           id={CHOICES.fractionalBudget}
           icon={PiggyBankIcon}
           color="lime"
@@ -820,8 +891,8 @@ export function AllChoices() {
 
         <Choice
           id={CHOICES.optionAllocation}
-          icon={ArrowsSplitIcon}
-          color="orange"
+          icon={GiftIcon}
+          color="cyan"
           title="Option allocation"
           unbuilt
           algorithms={['Nash']}
@@ -830,37 +901,12 @@ export function AllChoices() {
           <NotStrategyProof />
           <HardToSolve />
           <Text>
-            Sometimes every voter needs a different option of their own: chores shared out between
-            housemates, topics handed out to a class, or shifts split between volunteers.{' '}
-            <strong>Option allocation</strong> gives each voter one option, choosing the allocation
-            that leaves the group as a whole as satisfied as it can be:
+            Sometimes there are many options and only a few voters, and each voter takes several of
+            them: heirlooms shared between heirs, furniture divided between housemates moving out,
+            or toys split between siblings. <strong>Option allocation</strong> will share the
+            options out so that the group as a whole is as satisfied as it can be.
           </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Every voter rates every option as usual, with more stars for the options they would
-              rather have.
-            </List.Item>
-            <List.Item>
-              Each option can optionally be given a number of places: how many voters it can go to.
-              A chore might need two housemates, or a shift four volunteers. An option with no
-              number set goes to one voter.
-            </List.Item>
-            <List.Item>
-              The allocation chosen is the one where the stars each voter gave their own option,
-              multiplied together, are as large as possible.
-            </List.Item>
-          </List>
-          <Text>
-            Multiplying rather than adding stops the allocation from handing one voter an option
-            they gave 0 stars so that the others can do slightly better: anyone left with 0 stars
-            makes the whole product 0.
-          </Text>
-          <Text>
-            The numbers don&rsquo;t have to match. If there are more voters than places across all
-            the options, every place is filled and some voters go without one, and those voters are
-            left out of the product. If there are more places than voters, every voter gets one and
-            some places are left empty.
-          </Text>
+          <Text>More about how it works is on its way.</Text>
         </Choice>
 
         <Choice
@@ -996,7 +1042,7 @@ export function AllChoices() {
             places, every place is filled.
           </Text>
           <Text>
-            Unlike Option allocation, which looks at everyone&rsquo;s stars together, this is about
+            Unlike Option assignment, which looks at everyone&rsquo;s stars together, this is about
             stability: a pairing that leaves people happier overall could leave two people who would
             both rather leave their matches for each other. The group that proposes gets the best
             stable matching it can, so it matters which group goes first.
@@ -1091,12 +1137,14 @@ function Choice({
  * calendar question, which did ask for the consensus time; the best option
  * on the film question, which asked for it; and the rest on the film
  * question recast as that kind (`sampleResultAs`). The two the first poll
- * cannot show are the sequel's questions: its film question is sequential and
- * its upgrades question a proportional budget.
+ * cannot show are the sequel's questions: its film question is sequential,
+ * its upgrades question a proportional budget and its last an option
+ * assignment.
  */
 function exampleFor(tool: ResultTool | 'sequential') {
   if (tool === 'sequential') return pollPath(SAMPLE_SEQUEL_ID)
   if (tool === 'budget') return pollPath(SAMPLE_SEQUEL_BUDGET_ID)
+  if (tool === 'assignment') return pollPath(SAMPLE_SEQUEL_ASSIGNMENT_ID)
   if (tool === 'consensus') return pollPath(SAMPLE_RESULT_TIME_ID)
   if (tool === 'option') return pollPath(SAMPLE_RESULT_ID)
   return pollPath(sampleResultAs(tool))
@@ -1177,6 +1225,7 @@ const CHOICES = {
   sequentialPolls: 'sequential-polls',
   proportionalBudget: 'proportional-budget',
   fractionalWinners: 'fractional-winners',
+  optionAssignment: 'option-assignment',
   optionAllocation: 'option-allocation',
   groupFormation: 'group-formation',
   fractionalBudget: 'fractional-budget',
@@ -1845,6 +1894,90 @@ function byPopularity(ratings: Ratings, costs: Record<string, number>, budget: n
 }
 
 /** Each option's cost, in a row like `OptionKey`'s. */
+/**
+ * *Option assignment*'s example: seats at each restaurant, three, two and one,
+ * so all six friends are seated and two of them want the one sushi seat.
+ */
+const SEATS: Record<string, number> = { pizza: 3, tacos: 2, sushi: 1 }
+
+/**
+ * Each voter's option (null for none), worked out by trying every seating:
+ * the most voters seated on an option they gave a star, then the largest
+ * product of their stars, then the most stars. Six friends and three
+ * restaurants are 4^6 seatings; `poll_assignment` does it properly, and
+ * `55_option_assignment` counts the same example.
+ */
+function assignmentOf(ratings: Ratings, seats: Record<string, number>): (string | null)[] {
+  const options = optionsOf(ratings)
+  const voters = votersOf(ratings)
+  let best: (string | null)[] = voters.map(() => null)
+  let bestScore = [0, 1, 0]
+  const choice: (string | null)[] = voters.map(() => null)
+  const visit = (voter: number) => {
+    if (voter === voters.length) {
+      const given = voters.flatMap((v) => (choice[v] ? [ratings[choice[v]!][v]] : []))
+      const score = [given.length, given.reduce((a, b) => a * b, 1), sum(given)]
+      const better = score.findIndex((s, i) => s !== bestScore[i])
+      if (better !== -1 && score[better] > bestScore[better]) {
+        best = [...choice]
+        bestScore = score
+      }
+      return
+    }
+    for (const option of [...options, null]) {
+      if (option !== null) {
+        if (ratings[option][voter] === 0) continue
+        if (choice.filter((c) => c === option).length >= seats[option]) continue
+      }
+      choice[voter] = option
+      visit(voter + 1)
+    }
+    choice[voter] = null
+  }
+  visit(0)
+  return best
+}
+
+/** The product of the stars each seated voter gave their own option. */
+const seatedProduct = (ratings: Ratings, seated: (string | null)[]) =>
+  seated.reduce(
+    (product, option, voter) => (option ? product * ratings[option][voter] : product),
+    1,
+  )
+
+/** The ratings, with each voter's own option circled and each option's seats filled. */
+function seatedRows(
+  ratings: Ratings,
+  seats: Record<string, number>,
+  seated: (string | null)[],
+): Row[] {
+  return optionsOf(ratings).map((name) => ({
+    name,
+    cells: ratings[name].map((score, voter) => ({
+      ...keycap(score),
+      marked: seated[voter] === name,
+      said: seated[voter] === name ? `${score}, given this one` : String(score),
+    })),
+    total: `${seated.filter((option) => option === name).length}/${seats[name]}`,
+  }))
+}
+
+/** The places at each option, drawn as `Costs` draws costs. */
+function Seats({ seats }: { seats: Record<string, number> }) {
+  return (
+    <Group component="ul" justify="center" gap="lg" className={classes.places}>
+      {Object.keys(seats).map((option) => (
+        <Text component="li" key={option} fw={700}>
+          <span aria-hidden className={classes.emoji}>
+            {ICONS[option]}
+          </span>{' '}
+          {labelOf(option)}: {seats[option] === 1 ? '1 seat' : `${seats[option]} seats`}
+        </Text>
+      ))}
+    </Group>
+  )
+}
+
 function Costs({ costs }: { costs: Record<string, number> }) {
   return (
     <Group component="ul" justify="center" gap="lg" className={classes.places}>
