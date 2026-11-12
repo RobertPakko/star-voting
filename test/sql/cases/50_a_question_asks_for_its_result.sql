@@ -92,11 +92,11 @@ begin
     'Unknown poll kind');
   perform tests.assert_raises('the best option takes no number',
     $q$select create_poll('x', null, array['a', 'b'], null, 'open', p_kind_value => 3)$q$,
-    'Only an option ranking, multiple winners or a proportional budget takes a number');
+    'Only an option ranking, multiple winners, a proportional budget or an option assignment takes a number');
   perform tests.assert_raises('nor do fractional winners',
     $q$select create_poll('x', null, array['a', 'b'], null, 'open',
                           p_kind => 'fractional', p_kind_value => 3)$q$,
-    'Only an option ranking, multiple winners or a proportional budget takes a number');
+    'Only an option ranking, multiple winners, a proportional budget or an option assignment takes a number');
   perform tests.assert_raises('the number stops where the results do',
     $q$select create_poll('x', null, array['a', 'b'], null, 'open',
                           p_kind => 'multiple', p_kind_value => 11)$q$,

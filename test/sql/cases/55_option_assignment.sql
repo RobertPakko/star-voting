@@ -1,7 +1,8 @@
--- Option assignment: every voter given at most one option, every option to
--- at most its places, choosing the assignment that places the most voters on
--- an option they gave a star, then maximises the product of those stars
--- (maximum Nash welfare), then the total.
+-- Option assignment: every option to at most its places and every voter
+-- given at most the question's number of options (one unless it says
+-- otherwise), handed out a round at a time. Each round places the most voters
+-- on their first star, then maximises the gain in the product of every
+-- voter's stars (maximum Nash welfare), then the total.
 --
 -- The ballots are /choices' six friends (48_multiple_winners'), with tables
 -- for three at the pizza place, two at the taco truck and one at the sushi
@@ -105,8 +106,8 @@ begin
     'A number of places is not a number');
 end $$;
 
--- Placing a voter outweighs any product, and nobody is placed on an option
--- they gave 0.
+-- Placing a voter outweighs any product, and an option somebody gave 0 is
+-- still handed out, last.
 do $$
 declare
   v_poll uuid;
@@ -128,9 +129,95 @@ begin
   perform tests.assert_eq('friend 1 at B, on 1 star',
     (select v ->> 'name' from jsonb_array_elements(a -> 'options') o,
        jsonb_array_elements(o -> 'voters') v where o ->> 'name' = 'B'), 'voter1@example.com');
-  perform tests.assert_eq('a voter who gave everything 0 is left out, with C still free',
-    (select array_agg(v ->> 'name') from jsonb_array_elements(a -> 'unplaced') v),
-    array['voter3@example.com']);
+  perform tests.assert_eq('a voter who gave everything 0 still takes the place left',
+    (select v ->> 'name' from jsonb_array_elements(a -> 'options') o,
+       jsonb_array_elements(o -> 'voters') v where o ->> 'name' = 'C'), 'voter3@example.com');
+  perform tests.assert_eq('so nobody goes without', jsonb_array_length(a -> 'unplaced'), 0);
+  perform tests.assert_eq('and a 0 is counted among what was handed out',
+    a -> 'received', '{"5": 1, "1": 1, "0": 1}'::jsonb);
+end $$;
+
+-- Two options each, in rounds. Places: A, B and C one each, D two.
+--
+--            A  B  C  D
+--   voter 1  1  2  3  2
+--   voter 2  3  1  2  4
+--   voter 3  1  3  5  5
+--
+-- Round 1 is the one-option count: voter 1 at C, voters 2 and 3 at D
+-- (3 x 4 x 5 = 60, which nothing else reaches), holding 3, 4 and 5 stars.
+-- Round 2 has A and B left for three voters. Gains in the product:
+--
+--   voter 1: A ln(4/3) = 0.29, B ln(5/3) = 0.51
+--   voter 2: A ln(7/4) = 0.56, B ln(5/4) = 0.22
+--   voter 3: A ln(6/5) = 0.18, B ln(8/5) = 0.47
+--
+-- Voter 1 at B and voter 2 at A gain 1.07, the most: voter 1, holding the
+-- fewest stars, gets B ahead of voter 3, though voter 3 gave it more. (A
+-- round scored on its own stars would give 3 x 3 to voters 2 and 3.) Every
+-- place is then full, so voter 3 ends on one option: 5 x 7 x 5 = 175.
+--
+-- With nine places on every option and three each, nobody competes: each
+-- voter takes their best three (voter 1 C, B and D; voter 2 D, A and C;
+-- voter 3 C, D and B).
+do $$
+declare
+  v_poll uuid;
+  v_places jsonb;
+  a jsonb;
+begin
+  v_poll := tests.seed_poll(
+    array['A', 'B', 'C', 'D'],
+    array[[1, 2, 3, 2],
+          [3, 1, 2, 4],
+          [1, 3, 5, 5]]);
+  perform close_poll(v_poll);
+
+  select jsonb_object_agg(id, case when name = 'D' then 2 else 1 end) into v_places
+  from candidates where poll_id = v_poll;
+
+  a := get_poll_assignment(v_poll, '{}', v_places, 2);
+
+  perform tests.assert_eq('it counts two options each', (a ->> 'per_voter')::int, 2);
+  perform tests.assert_eq('voter 1 at B and C',
+    (select array_agg(o ->> 'name' order by o ->> 'name') from jsonb_array_elements(a -> 'options') o,
+       jsonb_array_elements(o -> 'voters') v where v ->> 'name' = 'voter1@example.com'),
+    array['B', 'C']);
+  perform tests.assert_eq('voter 2 at A and D',
+    (select array_agg(o ->> 'name' order by o ->> 'name') from jsonb_array_elements(a -> 'options') o,
+       jsonb_array_elements(o -> 'voters') v where v ->> 'name' = 'voter2@example.com'),
+    array['A', 'D']);
+  perform tests.assert_eq('voter 3 at D alone',
+    (select array_agg(o ->> 'name') from jsonb_array_elements(a -> 'options') o,
+       jsonb_array_elements(o -> 'voters') v where v ->> 'name' = 'voter3@example.com'),
+    array['D']);
+  perform tests.assert_eq('and said to be short of two',
+    a -> 'short', '[{"name": "voter3@example.com", "count": 1}]'::jsonb);
+  perform tests.assert_eq('nobody is left with nothing', jsonb_array_length(a -> 'unplaced'), 0);
+  perform tests.assert_eq('the options handed out, by the stars they were given',
+    a -> 'received', '{"5": 1, "4": 1, "3": 2, "2": 1}'::jsonb);
+
+  -- With one each, the count is round 1 alone.
+  a := get_poll_assignment(v_poll, '{}', v_places);
+  perform tests.assert_eq('one each by default', (a ->> 'per_voter')::int, 1);
+  perform tests.assert_eq('and that is round 1',
+    a -> 'received', '{"5": 1, "4": 1, "3": 1}'::jsonb);
+
+  -- Nobody is given an option twice, however many places it has.
+  a := get_poll_assignment(v_poll, '{}',
+    (select jsonb_object_agg(id, 9) from candidates where poll_id = v_poll), 3);
+  perform tests.assert_eq('with room everywhere, three each and no repeats',
+    (select count(*) from jsonb_array_elements(a -> 'options') o, jsonb_array_elements(o -> 'voters') v),
+    9::bigint);
+  perform tests.assert_eq('each on their best three',
+    a -> 'received', '{"5": 2, "4": 1, "3": 3, "2": 3}'::jsonb);
+
+  perform tests.assert_raises('the cap is at least 1',
+    format('select get_poll_assignment(%L, ''{}'', null, 0)', v_poll),
+    'Choose from 1 to 10 options per voter');
+  perform tests.assert_raises('and at most what the results show',
+    format('select get_poll_assignment(%L, ''{}'', null, 11)', v_poll),
+    'Choose from 1 to 10 options per voter');
 end $$;
 
 -- An assignment question: places stored with it, and the tally carrying it.
@@ -167,6 +254,8 @@ begin
   perform tests.sign_in('creator@example.com');
 
   t := get_poll_results(v_poll);
+  perform tests.assert_eq('a question with no number gives one each',
+    (t #>> '{kind_result,per_voter}')::int, 1);
   perform tests.assert_eq('the tally says it is an assignment', t ->> 'kind', 'assignment');
   perform tests.assert_eq('and that it shows who voted', (t ->> 'voters_shown')::boolean, true);
   perform tests.assert_eq('and carries the assignment the modal gives',
@@ -183,9 +272,13 @@ begin
   perform tests.assert_raises('places are whole',
     format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_kind => ''assignment'', p_option_costs => array[1, 1.5])', v_emails),
     'The places for "b" must be a whole number from 1 to 1,000,000,000');
-  perform tests.assert_raises('an assignment takes no number of its own',
-    format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_kind => ''assignment'', p_kind_value => 3)', v_emails),
-    'Only an option ranking, multiple winners or a proportional budget takes a number');
+  perform tests.assert_raises('an assignment''s number is the options per voter',
+    format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_kind => ''assignment'', p_kind_value => 1.5)', v_emails),
+    'Choose from 1 to 10 options per voter');
+  v_group := create_poll('Dinner twice', null, array['pizza', 'tacos'], v_emails,
+    p_kind => 'assignment', p_kind_value => 2);
+  perform tests.assert_eq('a question can give each voter two',
+    (select kind_value from polls where id = v_group), 2::numeric);
   perform tests.assert_raises('and is not a sequential kind',
     format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_show_ballots => true, p_kind => ''assignment'', p_carried => %L)',
       v_emails, '[{"voter": "f1@example.com", "given": 5}]'),
@@ -294,11 +387,11 @@ begin
     'Results are not available until');
 
   perform tests.assert_eq('the count is nobody''s to call',
-    has_function_privilege('authenticated', 'poll_assignment(uuid, uuid[], jsonb)', 'execute'), false);
+    has_function_privilege('authenticated', 'poll_assignment(uuid, uuid[], jsonb, integer)', 'execute'), false);
   perform tests.assert_eq('nor which field holds an option''s number',
     has_function_privilege('authenticated', 'option_number(text, jsonb)', 'execute'), false);
   perform tests.assert_eq('the link''s door is open to anybody',
-    has_function_privilege('anon', 'open_poll_assignment(uuid, uuid[], jsonb)', 'execute'), true);
+    has_function_privilege('anon', 'open_poll_assignment(uuid, uuid[], jsonb, integer)', 'execute'), true);
 end $$;
 
 rollback;

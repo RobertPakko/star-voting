@@ -1598,12 +1598,9 @@ is the page.
   Each heading carries an icon and the algorithms the choice runs on as tags
   (`badgeColor.algorithm`), visible while folded. Every section starts
   folded except the one `?section=` names, which the result's modals use;
-  that one opens already expanded. A choice not built yet says so in a
-  *Coming soon* banner and works no example, and one a voter can game by
-  scoring dishonestly carries a warning that says so. From *Fractional
-  budget* down, the heading also carries a grey *Under construction* badge,
-  for now; *Option allocation* (several options to each of a few voters) is
-  a placeholder there, since it needs a real integer solver. Each built choice ends on **See an example** (right-aligned), which
+  that one opens already expanded. Every section is a choice the app
+  counts; a choice a voter can game by scoring dishonestly carries a warning
+  that says so. Each ends on **See an example** (right-aligned), which
   opens the finished sample poll as though the question had asked for that
   choice (`exampleFor`): the calendar question for the consensus, since it
   did ask for the consensus time; the film question for the best option;
@@ -3344,36 +3341,46 @@ example.
   are not bought), and **not on the sample's other questions**, which cannot
   recount. The sample's budget question answers its recorded count.
 
-**Option assignment** is for handing each voter one option of their own —
-chores, topics, shifts, or which film each friend watches — where an option
-can go to as many voters as it has places (one unless it says otherwise).
-It chooses, in order: the most voters placed on an option they gave a star
-(nobody is given an option they gave 0); then the largest product of the
-stars each placed voter gave their own option (maximum Nash welfare); then
-the most stars; then a draw. `/choices` works it on the dinner example with
-seats (`assignmentOf`, by trying every seating); `55_option_assignment`
-counts the same example.
+**Option assignment** is for handing voters options of their own — chores,
+topics, shifts, or which films each friend watches — where an option can go
+to as many voters as it has places (one unless it says otherwise) and a
+voter can be given up to the question's *Max options per voter*
+(`polls.kind_value`, none meaning one). Options are handed out in rounds,
+each voter given at most one more a round and never one they already hold,
+until every place is filled or every voter is at the cap. Each round
+chooses, in order: the most voters given their first star; then the largest
+gain in the product of every voter's stars (maximum Nash welfare, one round
+at a time: ln(stars) for a first star, ln((held + stars) ÷ held) after);
+then the most stars; then a draw. So a voter holding fewer stars is seated
+first, and an option somebody gave 0 is handed out only when nothing they
+starred has a place left. `/choices` works one round on the dinner example
+with seats (`assignmentOf`, by trying every seating); `55_option_assignment`
+counts the same example, and a second worked by hand over two rounds.
 
-- **Solved exactly in the database** (`get_poll_assignment` /
+- **One round is solved exactly in the database** (`get_poll_assignment` /
   `open_poll_assignment`, via `poll_assignment`), on the same gate and the
-  same press as the others. With one option per voter the product is a sum
-  of one logarithm per voter, so it is an assignment problem with
-  capacities, and `poll_assignment` is the Hungarian method: ballots taken
-  one at a time, each by the cheapest path to an option with a place free or
-  to going without. **Costs are pairs of bigints compared in order**, not
-  floats: the first carries "placed" and the logarithm rounded to 10⁻¹², the
-  second the stars and a 28-bit hash of poll, ballot and option. A star level
-  always rounds to the same integer, so equal products cost exactly the same
-  and fall through to the total and the draw, which is the same on every
-  read. Several options per voter would make the logarithm of a sum, which
-  does not split, and need an integer solver; that is *Option allocation*,
-  not built.
-- **Bounded by its work**, about voters² × options: everyone wanting the
-  same option is the worst case, about a second at 300 voters and 20
-  options. Past `4,000,000` (or 1,000 ballots) it refuses as too large. On
-  an assignment question `poll_tally` catches that and carries no
-  `kind_result`, so the page falls back to STAR's winner and the menu's
-  modal says why.
+  same press as the others. Within a round each voter gains one term, so it
+  is an assignment problem with capacities, and each round is the Hungarian
+  method: ballots taken one at a time, each by the cheapest path to an
+  option with a place free or to going without. **Costs are pairs of
+  bigints compared in order**, not floats: the first carries "first star"
+  and the logarithm rounded to 10⁻¹², the second the stars and a 28-bit hash
+  of poll, ballot and option. A gain always rounds to the same integer, so
+  equal gains cost exactly the same and fall through to the total and the
+  draw, which is the same on every read.
+- **More than one round is not guaranteed the best product.** Several
+  options per voter make the logarithm of a sum, which does not split; the
+  exact answer is an integer program. Rounds take the best next step instead,
+  which beats a round robin because each round weighs what voters already
+  hold. `/choices` says so beside *Max options per voter*.
+- **Bounded by its work**, about voters² × options for the first round and
+  about half that for each later one (they get cheaper as options fill).
+  Past `15,000,000` by that reckoning (or 2,000 ballots) it refuses as too
+  large; the worst cases measured locally run three or four seconds, and
+  Supabase's statement timeout (3s for `anon`, 8s for `authenticated` by
+  default) is the real ceiling. On an assignment question `poll_tally`
+  catches the refusal and carries no `kind_result`, so the page falls back
+  to STAR's winner and the menu's modal says why.
 - **It names who gets what**, so it needs a poll that shows who voted: an
   assignment question cannot be made without (`insert_poll_row` refuses
   it, and the create form holds the switch on, saying why), and the count
@@ -3381,13 +3388,16 @@ counts the same example.
   `offers` can leave it off the menu. Names are what the roster shows: the
   typed name on an open poll, the address on an invite poll.
 - **Each voter's stars are shown only where ballots are published**; on a
-  private poll the answer says only how many got an option they gave each
-  number of stars (`received`).
-- **Places can be given after the fact**, like costs: an assignment
-  question stores its own in `candidates.kind_value` (optional, none meaning
-  one); on any other written list every option starts at one place and
-  *Edit places* (`PlacesEditor`) sends `p_places`, held by
-  `usePlacesInputs` and never stored.
+  private poll the answer says only how many options went to a voter who
+  gave them each number of stars (`received`). Voters given fewer than the
+  cap are listed with how many (`short`), and voters given none
+  (`unplaced`).
+- **Places and the cap can be given after the fact**, like costs: an
+  assignment question stores its places in `candidates.kind_value`
+  (optional, none meaning one) and its cap in `polls.kind_value`; on any
+  other written list every option starts at one place and every voter at
+  one option, and *Edit places* (`PlacesEditor`) sends `p_places` and
+  `p_per_voter`, held by `useAssignmentInputs` and never stored.
 - **Not on a sequential tally, not on a time poll, not on the sample's
   other questions**, as for the budget. The sample's assignment question
   answers its recorded count.
@@ -3491,12 +3501,15 @@ survives), in place of any explanation on the form itself.
   are left level, and a consensus time its own *Add to calendar*.
   *More results* offers the others, not the one already on the page.
 - **One number per question** (`polls.kind_value`), whose meaning belongs to
-  the kind: places to rank, winners to choose, the budget. For a ranking or
-  winners, a dropdown of 2 to `SCORING_ROWS_MAX` beside *Choice*, because
-  the database counts no more places than that (`validate_kind`); null means
-  as many as it holds. A budget is a number box and must be given. A kind
-  that takes none must have none (`polls_kind_value_ck`).
-- **The reader can try another number** (`ChoiceCount`), in the card only,
+  the kind: places to rank, winners to choose, the budget, the most options
+  an assignment gives a voter. For a ranking or winners, a dropdown of 2 to
+  `SCORING_ROWS_MAX` beside *Choice*, because the database counts no more
+  places than that (`validate_kind`); null means as many as it holds. An
+  assignment's is a dropdown of 1 to `SCORING_ROWS_MAX`, null meaning one
+  (`CHOICE_NUMBER` holds each kind's list). A budget is a number box and
+  must be given. A kind that takes none must have none
+  (`polls_kind_value_ck`).
+- **The reader can try another ranking or number of winners** (`ChoiceCount`), in the card only,
   opening on the poll's own. Every place is already counted, so it is a cut
   of the answer on screen (`cutTo`, a shared place kept whole) and costs no
   request. The *More results* modals have no number and show every place: a
@@ -3717,9 +3730,10 @@ on weight where a fresh count would elect Arrival. Its second question,
 the movie nights, where the big-screen fans get the projector and the
 comfort seekers the beanbags and popcorn machine, and funding by popularity
 would have bought the projector, surround sound and popcorn. Its third,
-`/#/sample-sequel-assignment`, is an option assignment: three films with
-four places each for ten friends, where Ana and Diego give up The Matrix for
-their 4-star second films. Each question is titled with the choice it
+`/#/sample-sequel-assignment`, is an option assignment with two films each:
+a double feature of five films with four places each for ten friends, where
+Ana and Diego give up The Matrix for their 4-star second films in the first
+round and are seated first for Toy Story in the second. Each question is titled with the choice it
 shows. The home page's *More examples* tile opens it, as do the three
 sections of `/choices`. **No sample id may be twenty-two
 characters long**: that is a short poll id's length, and the app would send

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ActionIcon, Button, Group, NumberInput, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Button, Group, NumberInput, Select, Stack, Text, Tooltip } from '@mantine/core'
 import { CalculatorIcon, PencilSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { assignmentSchema, parseAnswer } from '../lib/rpcSchemas'
 import { amountError } from '../lib/pollForm'
 import { AMOUNT_MAX } from '../lib/limits'
+import { CHOICE_NUMBER, PER_VOTER_NUMBERS } from '../lib/choices'
 import { count, stars, voters } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { AssignmentResult, PollResults } from '../lib/types'
@@ -14,24 +15,26 @@ import { RankingSkeleton } from './Skeletons'
 import type { RankingSource } from './FullRanking'
 import { useEveryOption } from '../lib/useEveryOption'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
-import { useLeftOut, usePlacesInputs, type PlacesInputs } from '../lib/useLeftOut'
+import { useAssignmentInputs, useLeftOut, type AssignmentInputs } from '../lib/useLeftOut'
 
 /**
  * *Option assignment*, opened from the result's *More results* menu
  * (`MoreResults`), or drawn on the results page where the question chose it
- * (`ChosenResult`): every voter given at most one option, every option to at
- * most its places, the product of the stars each voter gave their own option
- * as large as it can be. `/choices` explains it, and `poll_assignment`
- * counts it.
+ * (`ChosenResult`): every voter given at most a number of options (one unless
+ * the question says otherwise), every option to at most its places, handed
+ * out a round at a time so the product of every voter's stars grows as much
+ * as it can each round. `/choices` explains it, and `poll_assignment` counts
+ * it.
  *
  * **It names who gets what**, so it is offered only on a poll that shows who
- * voted (`offers`). Each voter's stars for their own option are shown only
+ * voted (`offers`). Each voter's stars for their own options are shown only
  * where the poll publishes its ballots; otherwise the count says only how
- * many got an option they gave each number of stars.
+ * many options went to a voter who gave them each number of stars.
  *
- * **Places can be given after the fact.** An assignment question has its own
- * (one where it says nothing); on any other list every option starts with one
- * place, and the reader can give them more and count again. Like removals,
+ * **Places and the cap can be given after the fact.** An assignment question
+ * has its own (one place, and one option each, where it says nothing); on any
+ * other list every option starts with one place and every voter with one
+ * option, and the reader can change either and count again. Like removals,
  * they are the reader's alone, never stored, and kept while this poll's
  * results stay on screen.
  *
@@ -51,7 +54,7 @@ export function OptionAssignment({
 }) {
   // Held here rather than in the body, which is mounted only while open.
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
-  const [places, setPlaces] = usePlacesInputs(source.pollId)
+  const [inputs, setInputs] = useAssignmentInputs(source.pollId)
 
   return (
     <ChoiceModal kind="assignment" opened={opened} onClose={onClose}>
@@ -60,8 +63,8 @@ export function OptionAssignment({
         results={results}
         leftOut={leftOut}
         onLeftOut={setLeftOut}
-        places={places}
-        onPlaces={setPlaces}
+        inputs={inputs}
+        onInputs={setInputs}
       />
     </ChoiceModal>
   )
@@ -70,7 +73,7 @@ export function OptionAssignment({
 /**
  * The count itself, in the modal or on the results page. Handed the count the
  * tally carried (`initial`), it asks for nothing until an option is removed
- * or given other places.
+ * or the places or cap are changed.
  */
 export function OptionAssignmentBody({
   source,
@@ -78,23 +81,23 @@ export function OptionAssignmentBody({
   initial = null,
   leftOut,
   onLeftOut,
-  places,
-  onPlaces,
+  inputs,
+  onInputs,
 }: {
   source: RankingSource
   results: PollResults
   initial?: AssignmentResult | null
   leftOut: LeftOut[]
   onLeftOut: (next: LeftOut[]) => void
-  places: PlacesInputs | null
-  onPlaces: (next: PlacesInputs | null) => void
+  inputs: AssignmentInputs | null
+  onInputs: (next: AssignmentInputs | null) => void
 }) {
   const kind = source.kind
   const key = source.pollId
   const sample = isSampleId(key)
 
   const [result, setResult] = useState<AssignmentResult | null>(
-    leftOut.length === 0 && !places ? initial : null,
+    leftOut.length === 0 && !inputs ? initial : null,
   )
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -105,12 +108,12 @@ export function OptionAssignmentBody({
     .map((o) => o.id)
     .sort()
     .join(',')
-  const placesKey = places ? JSON.stringify(places) : ''
+  const inputsKey = inputs ? JSON.stringify(inputs) : ''
 
   useEffect(() => {
     setError(null)
     // The question's own places with nothing removed: the tally carried it.
-    if (!excludedKey && !placesKey && initial) {
+    if (!excludedKey && !inputsKey && initial) {
       setResult(initial)
       setLoading(false)
       return
@@ -119,10 +122,12 @@ export function OptionAssignmentBody({
     setLoading(true)
     let cancelled = false
 
+    const typed = inputsKey ? (JSON.parse(inputsKey) as AssignmentInputs) : null
     const args = {
       p_poll_id: key,
       p_excluded: excludedKey ? excludedKey.split(',') : [],
-      p_places: placesKey ? (JSON.parse(placesKey) as PlacesInputs) : undefined,
+      p_places: typed?.places,
+      p_per_voter: typed?.perVoter,
     }
     const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
@@ -141,7 +146,7 @@ export function OptionAssignmentBody({
     return () => {
       cancelled = true
     }
-  }, [kind, key, excludedKey, placesKey, initial])
+  }, [kind, key, excludedKey, inputsKey, initial])
 
   const remaining = results.option_count - leftOut.length
   const canRemove = !sample && remaining > 1
@@ -150,6 +155,8 @@ export function OptionAssignmentBody({
   const restore = (id: string) => onLeftOut(leftOut.filter((o) => o.id !== id))
 
   const placed = result ? result.voter_count - result.unplaced.length : 0
+  // Voters given as many options as they could be.
+  const full = result ? placed - result.short.length : 0
 
   return (
     <Stack gap="md">
@@ -176,11 +183,15 @@ export function OptionAssignmentBody({
           results={results}
           leftOut={leftOut}
           start={
-            places ??
-            Object.fromEntries((result?.options ?? []).map((o) => [o.id, o.places] as const))
+            inputs ?? {
+              places: Object.fromEntries(
+                (result?.options ?? []).map((o) => [o.id, o.places] as const),
+              ),
+              perVoter: result?.per_voter ?? 1,
+            }
           }
           onCount={(next) => {
-            onPlaces(next)
+            onInputs(next)
             setEditing(false)
           }}
           onCancel={() => setEditing(false)}
@@ -208,14 +219,10 @@ export function OptionAssignmentBody({
           style={{ opacity: loading ? 0.5 : 1, transition: 'opacity var(--motion-fast)' }}
         >
           <Stack gap={2}>
-            <Text fw={600}>
-              {placed === result.voter_count
-                ? `Every voter has an option, in ${count(result.places, 'place')}.`
-                : `${placed} of ${voters(result.voter_count)} have an option, in ${count(result.places, 'place')}.`}
-            </Text>
+            <Text fw={600}>{summary(result, full)}</Text>
             {placed > 0 && (
               <Text size="sm" c="dimmed">
-                {received(result.received)}
+                {received(result.received, result.per_voter)}
               </Text>
             )}
           </Stack>
@@ -256,6 +263,17 @@ export function OptionAssignmentBody({
             </Group>
           ))}
 
+          {result.short.length > 0 && (
+            <Stack gap={2}>
+              <Text size="sm" fw={600}>
+                Fewer than {count(result.per_voter, 'option')}
+              </Text>
+              <Text size="sm" c="dimmed">
+                {result.short.map((v) => `${v.name} (${v.count})`).join(', ')}
+              </Text>
+            </Stack>
+          )}
+
           {result.unplaced.length > 0 && (
             <Stack gap={2}>
               <Text size="sm" fw={600}>
@@ -269,7 +287,9 @@ export function OptionAssignmentBody({
 
           {result.stars_shown && placed > 0 && (
             <Text size="xs" c="dimmed">
-              In brackets, the stars each voter gave their own option.
+              {result.per_voter === 1
+                ? 'In brackets, the stars each voter gave their own option.'
+                : 'In brackets, the stars each voter gave that option.'}
             </Text>
           )}
         </Stack>
@@ -279,18 +299,36 @@ export function OptionAssignmentBody({
 }
 
 /**
- * How many voters got an option they gave each number of stars, best first:
- * "4 voters got an option they gave 5 stars and 2 one they gave 3." All a
- * private ballot gives away about how well the assignment went.
+ * The headline: how many voters have all they could be given, and in how
+ * many places. "Every voter has 2 options, in 20 places."
  */
-function received(counts: Record<string, number>) {
+function summary(result: AssignmentResult, full: number) {
+  const each = result.per_voter === 1 ? 'an option' : count(result.per_voter, 'option')
+  const where = `in ${count(result.places, 'place')}`
+  return full === result.voter_count
+    ? `Every voter has ${each}, ${where}.`
+    : `${full} of ${voters(result.voter_count)} have ${each}, ${where}.`
+}
+
+/**
+ * How many options went to a voter who gave them each number of stars, best
+ * first: "4 voters got an option they gave 5 stars and 2 one they gave 3", or
+ * with several each, "12 options went to voters who gave them 5 stars and 6
+ * to voters who gave them 4". All a private ballot gives away about how well
+ * the assignment went.
+ */
+function received(counts: Record<string, number>, perVoter: number) {
   const levels = Object.entries(counts)
     .map(([given, n]) => [Number(given), n] as const)
     .sort(([a], [b]) => b - a)
   const parts = levels.map(([given, n], i) =>
-    i === 0
-      ? `${voters(n)} got an option they gave ${stars(given)}`
-      : `${n} one they gave ${given}`,
+    perVoter === 1
+      ? i === 0
+        ? `${voters(n)} got an option they gave ${stars(given)}`
+        : `${n} one they gave ${given}`
+      : i === 0
+        ? `${count(n, 'option')} went to voters who gave ${n === 1 ? 'it' : 'them'} ${stars(given)}`
+        : `${n} to voters who gave ${n === 1 ? 'it' : 'them'} ${given}`,
   )
   const joined =
     parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0]
@@ -298,9 +336,9 @@ function received(counts: Record<string, number>) {
 }
 
 /**
- * The reader's places: every option on the ballot (less any removed), a
- * number beside each, and *Count*. A blank box is one place. Nothing typed
- * here is saved.
+ * The reader's places and cap: every option on the ballot (less any
+ * removed), a number beside each, the most options a voter is given, and
+ * *Count*. A blank box is one place. Nothing typed here is saved.
  */
 function PlacesEditor({
   source,
@@ -313,14 +351,15 @@ function PlacesEditor({
   source: RankingSource
   results: PollResults
   leftOut: LeftOut[]
-  start: PlacesInputs
-  onCount: (next: PlacesInputs) => void
+  start: AssignmentInputs
+  onCount: (next: AssignmentInputs) => void
   onCancel: () => void
 }) {
   const options = useEveryOption(source, results)
   const [typed, setTyped] = useState<Record<string, number | string>>(() =>
-    Object.fromEntries(Object.entries(start).map(([id, n]) => [id, n ?? ''])),
+    Object.fromEntries(Object.entries(start.places).map(([id, n]) => [id, n ?? ''])),
   )
+  const [perVoter, setPerVoter] = useState(start.perVoter)
   const [tried, setTried] = useState(false)
 
   const shown = options?.filter((o) => !leftOut.some((l) => l.id === o.id)) ?? null
@@ -335,14 +374,15 @@ function PlacesEditor({
   function submit() {
     setTried(true)
     if (!shown || problems.size > 0) return
-    onCount(
-      Object.fromEntries(
+    onCount({
+      places: Object.fromEntries(
         shown.map((o) => {
           const value = typed[o.id] ?? ''
           return [o.id, value === '' ? null : Number(value)]
         }),
       ),
-    )
+      perVoter,
+    })
   }
 
   return (
@@ -351,6 +391,15 @@ function PlacesEditor({
         Give each option as many places as voters it can go to. An option left blank has one place,
         and nothing you change here is saved.
       </Text>
+
+      <Select
+        label={CHOICE_NUMBER.assignment!.label}
+        allowDeselect={false}
+        w={200}
+        value={String(perVoter)}
+        onChange={(v) => v && setPerVoter(Number(v))}
+        data={PER_VOTER_NUMBERS.map((n) => String(n))}
+      />
 
       {!shown && <RankingSkeleton places={Math.min(results.option_count, SCORING_ROWS_MAX)} />}
 

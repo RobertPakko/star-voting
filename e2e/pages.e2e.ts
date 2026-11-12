@@ -332,7 +332,7 @@ test.describe('all choices', () => {
   test('opens with every section folded, its algorithms showing', async ({ page }) => {
     await page.goto('#/choices')
     const sections = page.getByRole('heading', { level: 2 }).getByRole('button')
-    await expect(sections).toHaveCount(13)
+    await expect(sections).toHaveCount(8)
     for (const button of await sections.all())
       await expect(button).toHaveAttribute('aria-expanded', 'false')
     const best = page.getByRole('button', { name: /^Best option/ })
@@ -352,23 +352,6 @@ test.describe('all choices', () => {
       'false',
     )
     await expectAccessible(page, 'a section of All choices, open')
-  })
-
-  test('marks the choices not built yet, folded', async ({ page }) => {
-    await page.goto('#/choices')
-    await expect(page.getByText('Under construction')).toHaveCount(5)
-    await expect(page.getByRole('button', { name: /^Fractional budget/ })).toContainText(
-      'Under construction',
-    )
-    await expect(page.getByRole('button', { name: /^Proportional budget/ })).not.toContainText(
-      'Under construction',
-    )
-    await expect(page.getByRole('button', { name: /^Option assignment/ })).not.toContainText(
-      'Under construction',
-    )
-    await expect(page.getByRole('button', { name: /^Option allocation/ })).toContainText(
-      'Under construction',
-    )
   })
 
   test('leads each built choice to the sample poll, opening on that choice', async ({ page }) => {

@@ -171,12 +171,14 @@ $$;
 -- projector rather than the surround sound: the big-screen fans get their
 -- projector, the comfort seekers their beanbags and popcorn, and 50 is left.
 --
--- The third question is an option assignment: some nights the friends split
--- up to watch different films, in groups of four or fewer, one film each, so
--- each film has four places. Six of the ten most want The Matrix. Ana and
--- Diego are nearly as happy with Spirited Away and Mean Girls (4 stars each),
--- so they watch those and give their places to the four who would lose more:
--- Farid gave Spirited Away nothing. The groups come out four, three and three.
+-- The third question is an option assignment: a double feature, the friends
+-- split between five films in rooms of four, two films each. Six of the ten
+-- most want The Matrix. In the first round Ana and Diego, nearly as happy
+-- with Spirited Away and Mean Girls (4 stars each), give their places to the
+-- four who would lose more. In the second, five want Toy Story's four
+-- places; Ana and Diego, holding the fewest stars after giving up The
+-- Matrix, are seated first, and Jules, as happy with Mean Girls, takes that.
+-- Every film fills, and every friend sees two.
 create or replace function sample.sequel() returns jsonb language sql immutable as $$
 select $json${
   "title": "Movie night 2",
@@ -235,22 +237,25 @@ select $json${
       "slug": "assignment",
       "title": "Option assignment",
       "kind": "assignment",
+      "kind_value": 2,
       "options": [
         { "name": "The Matrix", "places": 4, "description": "A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI." },
         { "name": "Spirited Away", "places": 4, "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts." },
-        { "name": "Mean Girls", "places": 4, "description": "Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George." }
+        { "name": "Mean Girls", "places": 4, "description": "Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George." },
+        { "name": "Toy Story", "places": 4, "description": "A cowboy doll's place as his boy's favourite toy is threatened by a flashy new space-ranger action figure, and the two rivals end up lost far from home." },
+        { "name": "Amélie", "places": 4, "description": "A shy waitress in Montmartre quietly sets about improving the lives of the people around her, while finding it much harder to chase a happiness of her own." }
       ],
       "ballots": [
-        [5, 4, 1],
-        [5, 2, 3],
-        [4, 5, 0],
-        [5, 1, 4],
-        [5, 3, 2],
-        [5, 0, 2],
-        [1, 3, 5],
-        [3, 5, 1],
-        [0, 2, 5],
-        [5, 2, 3]
+        [5, 4, 1, 3, 2],
+        [5, 2, 1, 3, 1],
+        [4, 5, 0, 2, 4],
+        [5, 1, 4, 3, 0],
+        [5, 3, 2, 2, 3],
+        [5, 0, 2, 3, 1],
+        [1, 3, 5, 2, 4],
+        [3, 5, 1, 1, 2],
+        [0, 2, 5, 3, 4],
+        [5, 2, 3, 3, 1]
       ]
     }
   ]

@@ -30,21 +30,24 @@ export interface BudgetInputs {
 }
 
 /**
- * Places a reader has typed into *Option assignment*, sent with every count
- * and never stored. Null counts the question's own; an option given null has
- * one place.
+ * What a reader has typed into *Option assignment*, sent with every count and
+ * never stored: each option's places (null for one place) and the most
+ * options a voter is given. Null as a whole counts the question's own.
  */
-export type PlacesInputs = Record<string, number | null>
+export interface AssignmentInputs {
+  places: Record<string, number | null>
+  perVoter: number
+}
 
-/** The reader's places for one poll, held as `useLeftOut` holds removals. */
-export function usePlacesInputs(pollId: string) {
-  const [places, setPlaces] = useState<PlacesInputs | null>(null)
-  const [placesFor, setPlacesFor] = useState(pollId)
-  if (placesFor !== pollId) {
-    setPlacesFor(pollId)
-    setPlaces(null)
+/** The reader's places and cap for one poll, held as `useLeftOut` holds removals. */
+export function useAssignmentInputs(pollId: string) {
+  const [inputs, setInputs] = useState<AssignmentInputs | null>(null)
+  const [inputsFor, setInputsFor] = useState(pollId)
+  if (inputsFor !== pollId) {
+    setInputsFor(pollId)
+    setInputs(null)
   }
-  return [places, setPlaces] as const
+  return [inputs, setInputs] as const
 }
 
 /** The reader's costs and budget for one poll, held as `useLeftOut` holds removals. */

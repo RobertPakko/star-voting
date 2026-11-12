@@ -29,7 +29,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: null,
-        created_at: '2026-11-11T12:29:36.693744-08:00',
+        created_at: '2026-11-11T15:53:55.101339-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -170,7 +170,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: 'e0338139-5a10-2e5e-0a17-3511e2a329fd',
         schedule: null,
         closed_at: null,
-        created_at: '2026-11-11T12:29:36.693744-08:00',
+        created_at: '2026-11-11T15:53:55.101339-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -289,7 +289,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T12:29:36.693744-08:00',
+        created_at: '2026-11-11T15:53:55.101339-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film and a time to meet.',
         show_voters: true,
@@ -1442,7 +1442,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '0c0ce273-8fac-602a-659a-427718fdd95e',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T12:29:36.693744-08:00',
+        created_at: '2026-11-11T15:53:55.101339-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film and a time to meet.',
         show_voters: true,
@@ -2321,7 +2321,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '1b5f03ad-97de-c232-e97d-95c2e0c074ef',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T12:29:36.693744-08:00',
+        created_at: '2026-11-11T15:53:55.101339-08:00',
         description:
           "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.",
         show_voters: true,
@@ -2939,7 +2939,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '1b5f03ad-97de-c232-e97d-95c2e0c074ef',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T12:29:36.693744-08:00',
+        created_at: '2026-11-11T15:53:55.101339-08:00',
         description:
           "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.",
         show_voters: true,
@@ -3780,7 +3780,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '1b5f03ad-97de-c232-e97d-95c2e0c074ef',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T12:29:36.693744-08:00',
+        created_at: '2026-11-11T15:53:55.101339-08:00',
         description:
           "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.",
         show_voters: true,
@@ -3821,6 +3821,26 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           sort_order: 2,
           description:
             'Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George.',
+        },
+        {
+          id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+          cost: null,
+          name: 'Toy Story',
+          places: 4,
+          poll_id: 'sample-sequel-assignment',
+          sort_order: 3,
+          description:
+            "A cowboy doll's place as his boy's favourite toy is threatened by a flashy new space-ranger action figure, and the two rivals end up lost far from home.",
+        },
+        {
+          id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+          cost: null,
+          name: 'Amélie',
+          places: 4,
+          poll_id: 'sample-sequel-assignment',
+          sort_order: 4,
+          description:
+            'A shy waitress in Montmartre quietly sets about improving the lives of the people around her, while finding it much harder to chase a happiness of her own.',
         },
       ],
       confirmed: false,
@@ -3869,10 +3889,22 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         average_score: 2.7,
       },
       {
+        id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+        name: 'Toy Story',
+        total_score: 25,
+        average_score: 2.5,
+      },
+      {
         id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
         name: 'Mean Girls',
-        total_score: 26,
-        average_score: 2.6,
+        total_score: 24,
+        average_score: 2.4,
+      },
+      {
+        id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+        name: 'Amélie',
+        total_score: 22,
+        average_score: 2.2,
       },
     ],
     ballots: {
@@ -3880,7 +3912,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Ana',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 3,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 2,
             '68e02dc4-64f1-2462-fa68-0a3632a2711e': 1,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 4,
           },
@@ -3888,15 +3922,19 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Ben',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 3,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
-            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 3,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 1,
+            '68e02dc4-64f1-2462-fa68-0a3632a2711e': 1,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 2,
           },
         },
         {
           voter: 'Chloe',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 2,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 4,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 4,
             '68e02dc4-64f1-2462-fa68-0a3632a2711e': 0,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 5,
           },
@@ -3904,7 +3942,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Diego',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 3,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 0,
             '68e02dc4-64f1-2462-fa68-0a3632a2711e': 4,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 1,
           },
@@ -3912,7 +3952,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Erin',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 2,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 3,
             '68e02dc4-64f1-2462-fa68-0a3632a2711e': 2,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 3,
           },
@@ -3920,7 +3962,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Farid',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 3,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 1,
             '68e02dc4-64f1-2462-fa68-0a3632a2711e': 2,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 0,
           },
@@ -3928,7 +3972,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Gina',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 2,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 1,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 4,
             '68e02dc4-64f1-2462-fa68-0a3632a2711e': 5,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 3,
           },
@@ -3936,7 +3982,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Hugo',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 1,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 3,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 2,
             '68e02dc4-64f1-2462-fa68-0a3632a2711e': 1,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 5,
           },
@@ -3944,7 +3992,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Iris',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 3,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 0,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 4,
             '68e02dc4-64f1-2462-fa68-0a3632a2711e': 5,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 2,
           },
@@ -3952,7 +4002,9 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           voter: 'Jules',
           scores: {
+            '031ea32b-228b-4147-76dd-55cb53bf1fe7': 3,
             '1f301654-a628-1a0f-bafa-f4ca4da96b90': 5,
+            '3657e983-47bf-f394-9ef5-b24a5df3eb93': 1,
             '68e02dc4-64f1-2462-fa68-0a3632a2711e': 3,
             '9c41ac92-f17d-6df9-15bb-fecebfa1535b': 2,
           },
@@ -3970,6 +4022,14 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         {
           id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
           name: 'Mean Girls',
+        },
+        {
+          id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+          name: 'Toy Story',
+        },
+        {
+          id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+          name: 'Amélie',
         },
       ],
       voters_named: true,
@@ -4000,26 +4060,12 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         place: 2,
         runoff: {
           ties: 0,
-          prefers_a: 4,
-          prefers_b: 6,
-          resolved_by: 'preference',
+          prefers_a: 5,
+          prefers_b: 5,
+          resolved_by: 'higher_score',
           five_stars_a: 2,
-          five_stars_b: 2,
+          five_stars_b: 0,
         },
-        options: [
-          {
-            id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
-            name: 'Mean Girls',
-            total_score: 26,
-          },
-        ],
-        finalists: ['9c41ac92-f17d-6df9-15bb-fecebfa1535b', '68e02dc4-64f1-2462-fa68-0a3632a2711e'],
-        tiebreaks: [],
-        finalist_names: ['Spirited Away', 'Mean Girls'],
-      },
-      {
-        place: 3,
-        runoff: null,
         options: [
           {
             id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
@@ -4027,9 +4073,65 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             total_score: 27,
           },
         ],
-        finalists: ['9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
+        finalists: ['9c41ac92-f17d-6df9-15bb-fecebfa1535b', '031ea32b-228b-4147-76dd-55cb53bf1fe7'],
         tiebreaks: [],
-        finalist_names: ['Spirited Away'],
+        finalist_names: ['Spirited Away', 'Toy Story'],
+      },
+      {
+        place: 3,
+        runoff: {
+          ties: 3,
+          prefers_a: 4,
+          prefers_b: 3,
+          resolved_by: 'preference',
+          five_stars_a: 0,
+          five_stars_b: 2,
+        },
+        options: [
+          {
+            id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+            name: 'Toy Story',
+            total_score: 25,
+          },
+        ],
+        finalists: ['031ea32b-228b-4147-76dd-55cb53bf1fe7', '68e02dc4-64f1-2462-fa68-0a3632a2711e'],
+        tiebreaks: [],
+        finalist_names: ['Toy Story', 'Mean Girls'],
+      },
+      {
+        place: 4,
+        runoff: {
+          ties: 1,
+          prefers_a: 5,
+          prefers_b: 4,
+          resolved_by: 'preference',
+          five_stars_a: 2,
+          five_stars_b: 0,
+        },
+        options: [
+          {
+            id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+            name: 'Mean Girls',
+            total_score: 24,
+          },
+        ],
+        finalists: ['68e02dc4-64f1-2462-fa68-0a3632a2711e', '3657e983-47bf-f394-9ef5-b24a5df3eb93'],
+        tiebreaks: [],
+        finalist_names: ['Mean Girls', 'Amélie'],
+      },
+      {
+        place: 5,
+        runoff: null,
+        options: [
+          {
+            id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+            name: 'Amélie',
+            total_score: 22,
+          },
+        ],
+        finalists: ['3657e983-47bf-f394-9ef5-b24a5df3eb93'],
+        tiebreaks: [],
+        finalist_names: ['Amélie'],
       },
     ],
     results: {
@@ -4062,21 +4164,38 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           average_score: 2.7,
         },
         {
+          id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+          name: 'Toy Story',
+          description:
+            "A cowboy doll's place as his boy's favourite toy is threatened by a flashy new space-ranger action figure, and the two rivals end up lost far from home.",
+          total_score: 25,
+          average_score: 2.5,
+        },
+        {
           id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
           name: 'Mean Girls',
           description:
             'Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George.',
-          total_score: 26,
-          average_score: 2.6,
+          total_score: 24,
+          average_score: 2.4,
+        },
+        {
+          id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+          name: 'Amélie',
+          description:
+            'A shy waitress in Montmartre quietly sets about improving the lives of the people around her, while finding it much harder to chase a happiness of her own.',
+          total_score: 22,
+          average_score: 2.2,
         },
       ],
       weighted: false,
       finalists: ['1f301654-a628-1a0f-bafa-f4ca4da96b90', '9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
       tiebreaks: [],
       winner_id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
-      kind_value: null,
+      kind_value: 2,
       kind_result: {
-        places: 12,
+        short: [],
+        places: 20,
         options: [
           {
             id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
@@ -4115,6 +4234,10 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
                 stars: 5,
               },
               {
+                name: 'Erin',
+                stars: 3,
+              },
+              {
                 name: 'Hugo',
                 stars: 5,
               },
@@ -4137,28 +4260,87 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
                 name: 'Iris',
                 stars: 5,
               },
+              {
+                name: 'Jules',
+                stars: 3,
+              },
+            ],
+          },
+          {
+            id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+            name: 'Toy Story',
+            places: 4,
+            voters: [
+              {
+                name: 'Ana',
+                stars: 3,
+              },
+              {
+                name: 'Ben',
+                stars: 3,
+              },
+              {
+                name: 'Diego',
+                stars: 3,
+              },
+              {
+                name: 'Farid',
+                stars: 3,
+              },
+            ],
+          },
+          {
+            id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+            name: 'Amélie',
+            places: 4,
+            voters: [
+              {
+                name: 'Chloe',
+                stars: 4,
+              },
+              {
+                name: 'Gina',
+                stars: 4,
+              },
+              {
+                name: 'Hugo',
+                stars: 2,
+              },
+              {
+                name: 'Iris',
+                stars: 4,
+              },
             ],
           },
         ],
         received: {
-          '4': 2,
+          '2': 1,
+          '3': 6,
+          '4': 5,
           '5': 8,
         },
         unplaced: [],
+        per_voter: 2,
         stars_shown: true,
         voter_count: 10,
       },
       voter_count: 10,
       closed_early: false,
-      option_count: 3,
+      option_count: 5,
       voters_shown: true,
       invited_count: 0,
       votes_after_reveal: false,
       options_edited_after_votes: false,
     },
     consensus: {
-      floor: 0,
+      floor: 1,
       options: [
+        {
+          id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+          name: 'Toy Story',
+          floor: 1,
+          total_score: 25,
+        },
         {
           id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
           name: 'The Matrix',
@@ -4175,25 +4357,32 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
           name: 'Mean Girls',
           floor: 0,
-          total_score: 26,
+          total_score: 24,
+        },
+        {
+          id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+          name: 'Amélie',
+          floor: 0,
+          total_score: 22,
         },
       ],
       level_ids: [],
       runner_up: {
-        id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
-        name: 'Spirited Away',
-        score: 2,
+        id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+        name: 'The Matrix',
+        score: 0,
       },
-      winner_id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
-      decided_at: 3,
-      tied_count: 3,
+      winner_id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+      decided_at: 1,
+      tied_count: 1,
       level_names: [],
       voter_count: 10,
-      option_count: 3,
-      winner_score: 3,
+      option_count: 5,
+      winner_score: 1,
     },
     assignment: {
-      places: 12,
+      short: [],
+      places: 20,
       options: [
         {
           id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
@@ -4232,6 +4421,10 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
               stars: 5,
             },
             {
+              name: 'Erin',
+              stars: 3,
+            },
+            {
               name: 'Hugo',
               stars: 5,
             },
@@ -4254,14 +4447,67 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
               name: 'Iris',
               stars: 5,
             },
+            {
+              name: 'Jules',
+              stars: 3,
+            },
+          ],
+        },
+        {
+          id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+          name: 'Toy Story',
+          places: 4,
+          voters: [
+            {
+              name: 'Ana',
+              stars: 3,
+            },
+            {
+              name: 'Ben',
+              stars: 3,
+            },
+            {
+              name: 'Diego',
+              stars: 3,
+            },
+            {
+              name: 'Farid',
+              stars: 3,
+            },
+          ],
+        },
+        {
+          id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+          name: 'Amélie',
+          places: 4,
+          voters: [
+            {
+              name: 'Chloe',
+              stars: 4,
+            },
+            {
+              name: 'Gina',
+              stars: 4,
+            },
+            {
+              name: 'Hugo',
+              stars: 2,
+            },
+            {
+              name: 'Iris',
+              stars: 4,
+            },
           ],
         },
       ],
       received: {
-        '4': 2,
+        '2': 1,
+        '3': 6,
+        '4': 5,
         '5': 8,
       },
       unplaced: [],
+      per_voter: 2,
       stars_shown: true,
       voter_count: 10,
     },
@@ -4291,52 +4537,104 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         place: 2,
         runoff: {
           ties: 0.0,
-          prefers_a: 3.833333,
-          prefers_b: 2.180556,
+          prefers_a: 2.680556,
+          prefers_b: 3.333333,
           resolved_by: 'preference',
-          five_stars_a: 1.833333,
-          five_stars_b: 1.180556,
+          five_stars_a: 1.180556,
+          five_stars_b: 1.833333,
         },
         options: [
           {
             id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
             name: 'Mean Girls',
-            total_score: 17.291667,
+            total_score: 16.291667,
           },
         ],
-        finalists: ['68e02dc4-64f1-2462-fa68-0a3632a2711e', '9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
+        finalists: ['9c41ac92-f17d-6df9-15bb-fecebfa1535b', '68e02dc4-64f1-2462-fa68-0a3632a2711e'],
         tiebreaks: [],
-        finalist_names: ['Mean Girls', 'Spirited Away'],
+        finalist_names: ['Spirited Away', 'Mean Girls'],
       },
       {
         place: 3,
-        runoff: null,
+        runoff: {
+          ties: 0.0,
+          prefers_a: 2.436869,
+          prefers_b: 2.11297,
+          resolved_by: 'preference',
+          five_stars_a: 1.111111,
+          five_stars_b: 0.0,
+        },
         options: [
           {
             id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
             name: 'Spirited Away',
-            total_score: 12.882978,
+            total_score: 13.022838,
           },
         ],
-        finalists: ['9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
+        finalists: ['9c41ac92-f17d-6df9-15bb-fecebfa1535b', '031ea32b-228b-4147-76dd-55cb53bf1fe7'],
         tiebreaks: [],
-        finalist_names: ['Spirited Away'],
+        finalist_names: ['Spirited Away', 'Toy Story'],
+      },
+      {
+        place: 4,
+        runoff: {
+          ties: 0.0,
+          prefers_a: 1.801282,
+          prefers_b: 1.821429,
+          resolved_by: 'preference',
+          five_stars_a: 0.0,
+          five_stars_b: 0.0,
+        },
+        options: [
+          {
+            id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+            name: 'Amélie',
+            total_score: 8.039377,
+          },
+        ],
+        finalists: ['031ea32b-228b-4147-76dd-55cb53bf1fe7', '3657e983-47bf-f394-9ef5-b24a5df3eb93'],
+        tiebreaks: [],
+        finalist_names: ['Toy Story', 'Amélie'],
+      },
+      {
+        place: 5,
+        runoff: null,
+        options: [
+          {
+            id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+            name: 'Toy Story',
+            total_score: 7.961794,
+          },
+        ],
+        finalists: ['031ea32b-228b-4147-76dd-55cb53bf1fe7'],
+        tiebreaks: [],
+        finalist_names: ['Toy Story'],
       },
     ],
     fractional_winners: [
       {
         id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
         name: 'The Matrix',
-        share: 0.735134,
+        share: 0.757642,
       },
       {
         id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
         name: 'Mean Girls',
-        share: 0.264866,
+        share: 0.242358,
+      },
+      {
+        id: '3657e983-47bf-f394-9ef5-b24a5df3eb93',
+        name: 'Amélie',
+        share: 0.0,
       },
       {
         id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
         name: 'Spirited Away',
+        share: 0.0,
+      },
+      {
+        id: '031ea32b-228b-4147-76dd-55cb53bf1fe7',
+        name: 'Toy Story',
         share: 0.0,
       },
     ],

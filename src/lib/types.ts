@@ -490,17 +490,21 @@ export interface AssignedVoter {
 
 /**
  * The option assignment, from `get_poll_assignment` / `open_poll_assignment`:
- * every voter given at most one option, every option to at most its places,
- * the product of the stars each voter gave their own option as large as it
- * can be.
+ * every voter given at most `per_voter` options, every option to at most its
+ * places, handed out a round at a time so the product of every voter's stars
+ * grows as much as it can each round.
  */
 export interface AssignmentResult {
   /** Every option counted, the fullest first. */
   options: { id: string; name: string; places: number; voters: AssignedVoter[] }[]
   /** The voters given nothing. */
   unplaced: { name: string }[]
-  /** How many placed voters gave their own option each number of stars, keyed by the stars. */
+  /** The voters given something, but fewer than `per_voter`, with how many. */
+  short: { name: string; count: number }[]
+  /** How many options went to a voter who gave them each number of stars, keyed by the stars. */
   received: Record<string, number>
+  /** The most options one voter was to be given. */
+  per_voter: number
   /** Every place counted. */
   places: number
   voter_count: number

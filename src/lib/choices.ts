@@ -56,7 +56,7 @@ export const CHOICES: Record<PollKind, { label: string; section: string; blurb: 
     label: 'Option assignment',
     section: 'option-assignment',
     blurb:
-      'gives each voter one option, each option going to as many voters as it has places, so that the group as a whole is as satisfied as it can be.',
+      'gives each voter one or more options, each option going to as many voters as it has places, so that the group as a whole is as satisfied as it can be.',
   },
 }
 
@@ -120,22 +120,29 @@ export function toolKind(tool: ResultTool, kind: PollKind): PollKind {
 /** A result tool's name on a poll of this kind: a time poll's consensus is a time. */
 export const toolLabel = (tool: ResultTool, kind: PollKind) => CHOICES[toolKind(tool, kind)].label
 
-/**
- * What a kind's number (`kind_value`) counts, for the kinds that take one.
- * The database holds it to 2 – `SCORING_ROWS_MAX` (`validate_kind`).
- */
-export const CHOICE_NUMBER: Partial<Record<PollKind, { label: string }>> = {
-  ranking: { label: 'Places to rank' },
-  multiple: { label: 'Number of winners' },
-}
-
-/** Every number a kind may take, smallest first. */
+/** Every number a ranking or several winners may take, smallest first. */
 export const CHOICE_NUMBERS = Array.from({ length: SCORING_ROWS_MAX - 1 }, (_, i) => i + 2)
+
+/** Every number of options an assignment may give one voter, smallest first. */
+export const PER_VOTER_NUMBERS = Array.from({ length: SCORING_ROWS_MAX }, (_, i) => i + 1)
+
+/**
+ * What a kind's number (`kind_value`) counts, for the kinds that take one
+ * from a dropdown, and the numbers it offers. The database holds a ranking
+ * or several winners to 2 – `SCORING_ROWS_MAX` and an assignment to
+ * 1 – `SCORING_ROWS_MAX` (`validate_kind`).
+ */
+export const CHOICE_NUMBER: Partial<Record<PollKind, { label: string; numbers: number[] }>> = {
+  ranking: { label: 'Places to rank', numbers: CHOICE_NUMBERS },
+  multiple: { label: 'Number of winners', numbers: CHOICE_NUMBERS },
+  assignment: { label: 'Max options per voter', numbers: PER_VOTER_NUMBERS },
+}
 
 /** What a fresh question's number starts at, for the kinds that take one. */
 export const DEFAULT_CHOICE_NUMBER: Partial<Record<PollKind, number>> = {
   ranking: SCORING_ROWS_MAX,
   multiple: 3,
+  assignment: 1,
 }
 
 /**

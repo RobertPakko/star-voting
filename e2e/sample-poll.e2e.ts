@@ -342,15 +342,17 @@ test('a budget shares the money out, and says what popularity would have bought'
   await expectAccessible(page, 'a proportional budget')
 })
 
-test('an assignment gives each friend one film, and the popular one to those who would lose most', async ({
+test('an assignment gives each friend two films, seating first those who gave up the popular one', async ({
   page,
 }) => {
   await page.goto('#/sample-sequel-assignment')
+  await expect(page.getByText('Every voter has 2 options, in 20 places.')).toBeVisible()
   // Six want The Matrix and four can see it: Ana and Diego, nearly as happy
   // with their second films, give up their places.
-  await expect(page.getByText('Every voter has an option, in 12 places.')).toBeVisible()
   await expect(page.getByText('Ben (5), Erin (5), Farid (5), Jules (5)')).toBeVisible()
-  await expect(page.getByText('Ana (4), Chloe (5), Hugo (5)')).toBeVisible()
+  await expect(page.getByText('Ana (4), Chloe (5), Erin (3), Hugo (5)')).toBeVisible()
+  // In the second round, Ana and Diego are seated first for Toy Story.
+  await expect(page.getByText('Ana (3), Ben (3), Diego (3), Farid (3)')).toBeVisible()
   // The recording cannot count again, so nothing offers to.
   await expect(page.getByRole('button', { name: 'Edit places' })).toHaveCount(0)
   await expectAccessible(page, 'an option assignment')

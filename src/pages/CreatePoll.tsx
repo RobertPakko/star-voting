@@ -78,7 +78,6 @@ import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type { Invitee, Poll, PollKind, PollMode, PollOption } from '../lib/types'
 import {
   CHOICE_NUMBER,
-  CHOICE_NUMBERS,
   CHOICE_ORDER,
   CHOICES,
   isCalendar,
@@ -692,7 +691,7 @@ export function CreatePoll() {
   /**
    * What the question asks for (`kind`), and its number where it takes one.
    * The number is a dropdown rather than a number field: the database counts
-   * at most `SCORING_ROWS_MAX` places, so there are only nine answers. What
+   * at most `SCORING_ROWS_MAX` of anything, so there are ten answers at most. What
    * each choice does is explained on `/choices`, behind the info icon, which
    * opens in a new tab so the form is not lost.
    */
@@ -771,14 +770,14 @@ export function CreatePoll() {
             <Select
               label={number.label}
               allowDeselect={false}
-              value={String(question.kindNumbers[question.kind] ?? CHOICE_NUMBERS.at(-1))}
+              value={String(question.kindNumbers[question.kind] ?? number.numbers.at(-1))}
               onChange={(v) =>
                 v &&
                 patchQuestion(questionIndex, {
                   kindNumbers: { ...question.kindNumbers, [question.kind]: Number(v) },
                 })
               }
-              data={CHOICE_NUMBERS.map((n) => String(n))}
+              data={number.numbers.map((n) => String(n))}
             />
           </Stack>
         )}

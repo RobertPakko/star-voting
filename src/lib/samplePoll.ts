@@ -127,6 +127,7 @@ interface OpenPollArgs {
   p_costs?: Record<string, number | null>
   p_budget?: number
   p_places?: Record<string, number | null>
+  p_per_voter?: number
 }
 
 /**
@@ -215,7 +216,7 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
         ? ok(question.budget)
         : failed('Not available on the example poll')
     case 'open_poll_assignment':
-      return question.assignment && !args.p_excluded?.length && !args.p_places
+      return question.assignment && !args.p_excluded?.length && !args.p_places && !args.p_per_voter
         ? ok(question.assignment)
         : failed('Not available on the example poll')
     case 'open_poll_scores':

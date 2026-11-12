@@ -26,6 +26,7 @@ import {
   ArrowsSplitIcon,
   CaretRightIcon,
   ChartPieSliceIcon,
+  CpuIcon,
   CoinsIcon,
   EyeIcon,
   HandshakeIcon,
@@ -804,7 +805,24 @@ export function AllChoices() {
             The numbers don&rsquo;t have to match. If there are more voters than the combined option
             capacities, as many voters as possible are given an option and the rest go without. If
             there are more places than voters, every voter gets one and some places are left empty.
+            A voter is only given an option they gave 0 stars when nothing they starred has a place
+            left.
           </Text>
+          <Text>
+            A poll can also give each voter more than one option, up to its{' '}
+            <strong>Max options per voter</strong>. The options are then handed out in rounds. Each
+            round gives every voter at most one more option, choosing the assignment that raises the
+            product of everyone&rsquo;s total stars the most. Voters with fewer stars so far come
+            first, since a few more stars multiply their satisfaction by more. Rounds continue until
+            every place is filled or every voter has as many options as they can be given.
+          </Text>
+          <Alert variant="light" color="orange" icon={<CpuIcon size={20} aria-hidden />}>
+            <Text size="sm">
+              With more than one option per voter, the assignment found might not have the highest
+              possible product. Finding the best one is computationally infeasible for all but the
+              smallest polls, so each round settles for the best next step.
+            </Text>
+          </Alert>
         </Choice>
       </Accordion>
     </Stack>
@@ -823,7 +841,6 @@ function Choice({
   title,
   algorithms,
   example,
-  unbuilt = false,
   children,
 }: {
   id: string
@@ -837,8 +854,6 @@ function Choice({
    * built; `sequential` is the sample's sequel.
    */
   example?: ResultTool | 'sequential'
-  /** Marked *Under construction* beside the title, so it shows while folded. */
-  unbuilt?: boolean
   children: ReactNode
 }) {
   return (
@@ -852,17 +867,9 @@ function Choice({
       >
         {/* The title and tags together are the icon's 40px: 20 + 2 + 18. */}
         <Stack gap={2}>
-          {/* On a phone the badge drops under the title rather than being cut short. */}
-          <Group gap="xs" style={{ rowGap: 2 }}>
-            <Text fw={700} size="md" lh="20px">
-              {title}
-            </Text>
-            {unbuilt && (
-              <Badge size="sm" variant="light" color="gray">
-                Under construction
-              </Badge>
-            )}
-          </Group>
+          <Text fw={700} size="md" lh="20px">
+            {title}
+          </Text>
           <Group gap={4}>
             <VisuallyHidden>{algorithms.length > 1 ? 'Algorithms:' : 'Algorithm:'}</VisuallyHidden>
             {algorithms.map((name) => (
@@ -952,11 +959,6 @@ const CHOICES = {
   proportionalBudget: 'proportional-budget',
   fractionalWinners: 'fractional-winners',
   optionAssignment: 'option-assignment',
-  optionAllocation: 'option-allocation',
-  groupFormation: 'group-formation',
-  fractionalBudget: 'fractional-budget',
-  optimalSwap: 'optimal-swap',
-  bipartiteMatching: 'bipartite-matching',
 }
 
 /**
