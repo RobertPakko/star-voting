@@ -107,23 +107,99 @@ export function stepOf(schedule: PollSchedule): number {
   return schedule.step ?? schedule.granularity
 }
 
-/**
- * The steps a meeting of this schedule's length can take: every whole number
- * of granules up to the meeting, so the last is back to back. Longer would
- * leave painted hours that no window covers; `validate_schedule` refuses it.
- */
-export function stepsFor(schedule: PollSchedule): number[] {
-  return Array.from({ length: schedule.desired_slots }, (_, i) => (i + 1) * schedule.granularity)
+/** Whether a schedule's windows overlap: they start closer together than a meeting lasts. */
+export function overlaps(schedule: PollSchedule): boolean {
+  return stepOf(schedule) < meetingMinutes(schedule)
 }
 
 /**
- * Where the windows start unless the creator says otherwise: back to back
- * where the question picks several (overlapping windows would make two of
- * its answers nearly the same time), every granule where it picks one (where
- * a start half an hour later can be the one everybody makes).
+ * Whether a meeting this long can be drawn as one cell when its windows are
+ * back to back: a whole number of hours under a day, so every row line falls
+ * on an hour label. Half an hour is already a cell; 90 minutes and whole days
+ * keep their usual cells and step over them instead.
  */
-export function defaultStep(schedule: PollSchedule, several: boolean): number {
-  return several ? meetingMinutes(schedule) : schedule.granularity
+export function fitsOneCell(lengthMinutes: number): boolean {
+  return lengthMinutes >= 60 && lengthMinutes < DAY_MINUTES && lengthMinutes % 60 === 0
+}
+
+/**
+ * The grid a meeting is painted and voted on, from its length and whether its
+ * windows may overlap.
+ *
+ * - **Overlapping**: a cell is half an hour (a day for a meeting of days),
+ *   and a window starts on every cell.
+ * - **Back to back**, at a length that `fitsOneCell`: a cell is the meeting,
+ *   so every cell painted is one option and a voter's rating of it is its
+ *   score exactly.
+ * - **Back to back** otherwise: the usual cells, with a step of the meeting.
+ */
+export function gridFor(
+  base: Pick<PollSchedule, 'timezone' | 'window'>,
+  lengthMinutes: number,
+  overlap: boolean,
+): PollSchedule {
+  const granularity = granularityFor(lengthMinutes)
+  const grid = { timezone: base.timezone, window: base.window }
+  if (overlap || lengthMinutes === granularity) {
+    return { ...grid, granularity, desired_slots: lengthMinutes / granularity }
+  }
+  if (fitsOneCell(lengthMinutes)) return { ...grid, granularity: lengthMinutes, desired_slots: 1 }
+  return { ...grid, granularity, desired_slots: lengthMinutes / granularity, step: lengthMinutes }
+}
+
+/**
+ * The hours a grid of `cell`-minute rows may run between: a whole number of
+ * rows (never fewer than one), the start on a whole hour or, given an
+ * `anchor` (minutes after midnight the rows count from), on that lattice.
+ * The start moves down, and the end down to a whole row. A no-op at half an
+ * hour or a day.
+ */
+export function snapHours(hours: DailyWindow, cell: number, anchor?: number): DailyWindow {
+  if (cell <= 30 || cell >= DAY_MINUTES) return hours
+  let start: number
+  if (anchor === undefined) {
+    // Any whole hour may start the grid, so long as one block fits after it.
+    start = Math.min(Math.floor(toMinutes(hours.start) / 60) * 60, DAY_MINUTES - cell)
+  } else {
+    const offset = ((anchor % cell) + cell) % cell
+    start = Math.floor((toMinutes(hours.start) - offset) / cell) * cell + offset
+    while (start + cell > DAY_MINUTES) start -= cell
+  }
+  const span = Math.max(cell, Math.floor((toMinutes(hours.end) - start) / cell) * cell)
+  const end = Math.min(start + span, start + Math.floor((DAY_MINUTES - start) / cell) * cell)
+  return { start: toTimeOfDay(start), end: toTimeOfDay(end) }
+}
+
+/**
+ * A painting re-cut from one cell size to another, on a day of `anchor`
+ * lattice: a new cell is painted where every half hour it covers was. So a
+ * smaller cell keeps everything, and a larger one keeps only whole blocks.
+ * Days only; a switch to or from a meeting of days is the caller's.
+ */
+export function regrid(marked: Bounds, from: number, to: number, anchor: number): Set<GranuleKey> {
+  const halves = new Set<GranuleKey>()
+  for (const key of marked) {
+    const { day, minutes } = splitGranule(key)
+    for (let at = minutes; at < minutes + from && at < DAY_MINUTES; at += 30) {
+      halves.add(granuleKey(day, at))
+    }
+  }
+  const days = new Set([...halves].map((key) => key.slice(0, 10)))
+  const offset = ((anchor % to) + to) % to
+  const next = new Set<GranuleKey>()
+  for (const day of days) {
+    for (let at = offset; at + to <= DAY_MINUTES; at += to) {
+      let whole = true
+      for (let half = at; half < at + to; half += 30) {
+        if (!halves.has(granuleKey(day, half))) {
+          whole = false
+          break
+        }
+      }
+      if (whole) next.add(granuleKey(day, at))
+    }
+  }
+  return next
 }
 
 /**
@@ -429,11 +505,17 @@ export function averagePainting(
 const LONGEST_MEETING = 8 * 60
 
 /**
- * Every half hour up to eight hours, then whole days up to a fortnight.
- * Nothing between eight hours and a day is offered on purpose.
+ * Half an hour, an hour, an hour and a half, then whole hours up to eight,
+ * then whole days up to a fortnight. Other half hours (2½, 3½ hours…) are not
+ * offered: back to back, a meeting of whole hours is one cell of the grid
+ * (`fitsOneCell`), and ninety minutes is kept as the one length common
+ * enough to be worth the half-hour cells it is painted on.
  */
 export const MEETING_LENGTHS: number[] = [
-  ...Array.from({ length: LONGEST_MEETING / 30 }, (_, i) => (i + 1) * 30),
+  30,
+  60,
+  90,
+  ...Array.from({ length: LONGEST_MEETING / 60 - 1 }, (_, i) => (i + 2) * 60),
   ...Array.from({ length: 14 }, (_, i) => (i + 1) * DAY_MINUTES),
 ]
 

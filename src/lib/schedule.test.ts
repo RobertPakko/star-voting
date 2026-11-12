@@ -28,9 +28,12 @@ import {
   offsetMinutes,
   paintingFromScores,
   scoresFromPainting,
-  defaultStep,
+  fitsOneCell,
+  gridFor,
+  overlaps,
+  regrid,
+  snapHours,
   spanOf,
-  stepsFor,
   startingOn,
   stepGranule,
   todayIn,
@@ -1067,14 +1070,109 @@ describe('the step between window starts', () => {
     const shorter = painted(['2026-09-01'], '10:00', '13:00')
     expect(times(enumerateWindows({ ...twoHours, step: 120 }, shorter, listed))).toEqual(['10:00'])
   })
+})
 
-  test('the steps on offer run from one granule to the whole meeting', () => {
-    expect(stepsFor(twoHours)).toEqual([30, 60, 90, 120])
-    expect(stepsFor(retreat)).toEqual([DAY_MINUTES, 2 * DAY_MINUTES, 3 * DAY_MINUTES])
+describe('the grid a meeting is painted on', () => {
+  const at = { timezone: '-07:00', window: { start: '09:00', end: '17:00' } }
+
+  test('overlapping times are drawn in half hours, a window starting on each', () => {
+    const grid = gridFor(at, 120, true)
+    expect([grid.granularity, grid.desired_slots, grid.step]).toEqual([30, 4, undefined])
+    expect(overlaps(grid)).toBe(true)
   })
 
-  test('a question that picks several times starts back to back by default', () => {
-    expect(defaultStep(twoHours, true)).toBe(120)
-    expect(defaultStep(twoHours, false)).toBe(30)
+  test('back to back, a meeting of whole hours is one cell', () => {
+    const grid = gridFor(at, 120, false)
+    expect([grid.granularity, grid.desired_slots, grid.step]).toEqual([120, 1, undefined])
+    expect(overlaps(grid)).toBe(false)
+    // Every cell painted is one option.
+    const bounds = new Set(['2026-09-01 09:00', '2026-09-01 11:00', '2026-09-01 15:00'])
+    expect(enumerateWindows(grid, bounds).map((s) => s.slice(11, 16))).toEqual([
+      '09:00',
+      '11:00',
+      '15:00',
+    ])
   })
+
+  test('ninety minutes and whole days step over their usual cells instead', () => {
+    expect(fitsOneCell(90)).toBe(false)
+    expect(fitsOneCell(DAY_MINUTES)).toBe(false)
+    const ninety = gridFor(at, 90, false)
+    expect([ninety.granularity, ninety.desired_slots, ninety.step]).toEqual([30, 3, 90])
+    const days = gridFor(at, 2 * DAY_MINUTES, false)
+    expect([days.granularity, days.desired_slots, days.step]).toEqual([
+      DAY_MINUTES,
+      2,
+      2 * DAY_MINUTES,
+    ])
+  })
+
+  test('a meeting of one cell has nothing to overlap', () => {
+    expect(gridFor(at, 30, false)).toEqual(gridFor(at, 30, true))
+    expect(gridFor(at, DAY_MINUTES, false)).toEqual(gridFor(at, DAY_MINUTES, true))
+  })
+
+  test('the lengths on offer are half an hour, an hour and a half, and whole hours', () => {
+    const underADay = MEETING_LENGTHS.filter((minutes) => minutes < DAY_MINUTES)
+    expect(underADay).toEqual([30, 60, 90, 120, 180, 240, 300, 360, 420, 480])
+  })
+})
+
+describe('moving a painting between grids', () => {
+  const day = '2026-09-01'
+  const cells = (keys: string[]) => new Set(keys.map((t) => `${day} ${t}`))
+  const times = (bounds: Set<string>) => [...bounds].map((k) => k.slice(11)).sort()
+
+  test('half hours become the whole blocks they fill, counted from the anchor', () => {
+    const painted = painted_(['09:00', '13:00'])
+    expect(times(regrid(painted, 30, 120, 9 * 60))).toEqual(['09:00', '11:00'])
+    // From 10:00, only 10-12 is whole.
+    expect(times(regrid(painted, 30, 120, 10 * 60))).toEqual(['10:00'])
+  })
+
+  test('blocks become every half hour they cover', () => {
+    expect(times(regrid(cells(['09:00']), 120, 30, 9 * 60))).toEqual([
+      '09:00',
+      '09:30',
+      '10:00',
+      '10:30',
+    ])
+  })
+
+  test('a block moved to a new start keeps only what is still whole', () => {
+    expect(times(regrid(cells(['09:00', '11:00']), 120, 120, 10 * 60))).toEqual(['10:00'])
+  })
+
+  test('the hours are put on whole blocks, never fewer than one', () => {
+    expect(snapHours({ start: '09:30', end: '17:00' }, 120)).toEqual({
+      start: '09:00',
+      end: '17:00',
+    })
+    expect(snapHours({ start: '09:00', end: '18:00' }, 120)).toEqual({
+      start: '09:00',
+      end: '17:00',
+    })
+    expect(snapHours({ start: '09:00', end: '10:00' }, 180)).toEqual({
+      start: '09:00',
+      end: '12:00',
+    })
+    expect(snapHours({ start: '23:00', end: '24:00' }, 120)).toEqual({
+      start: '22:00',
+      end: '24:00',
+    })
+    // On a poll's own lattice: a 3-hour grid counted from 08:00.
+    expect(snapHours({ start: '09:00', end: '17:00' }, 180, 8 * 60)).toEqual({
+      start: '08:00',
+      end: '17:00',
+    })
+    // Half-hour cells are any hours at all.
+    expect(snapHours({ start: '09:30', end: '17:00' }, 30)).toEqual({
+      start: '09:30',
+      end: '17:00',
+    })
+  })
+
+  function painted_(range: [string, string]) {
+    return painted([day], range[0], range[1])
+  }
 })

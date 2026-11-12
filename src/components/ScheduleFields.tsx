@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Group, SegmentedControl, Select, Stack, Text } from '@mantine/core'
+import { Group, SegmentedControl, Select, Stack, Switch, Text } from '@mantine/core'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { PaintCalendar } from './PaintCalendar'
 import { HoursFields } from './HoursFields'
@@ -15,7 +15,6 @@ import {
   meetingMinutes,
   paintingRuns,
   runBounds,
-  stepsFor,
   todayIn,
   formatTimeRange,
   type Bounds,
@@ -93,28 +92,29 @@ function inOrder(days: string[]): string[] {
 
 export function ScheduleFields({
   schedule,
-  step,
+  overlap,
   several,
   count,
-  onStepChange,
+  onLengthChange,
+  onOverlapChange,
   days,
   hours,
   marked,
-  onScheduleChange,
   onDaysChange,
   onHoursChange,
-  onMarkedChange,
   onOffsetChange,
   error,
 }: {
   schedule: PollSchedule
-  /** How far apart the windows start, in minutes; see `stepFor`. */
-  step: number
-  /** Whether the question picks several times, so overlapping windows are a warning. */
+  /** Whether the times may overlap; see `overlapOf`. */
+  overlap: boolean
+  /** Whether the question picks several times, so overlapping times are a warning. */
   several: boolean
-  /** How many windows the painting makes at that step, for the line under the calendar. */
+  /** How many windows the painting makes, for the line under the calendar. */
   count: number
-  onStepChange: (step: number) => void
+  /** A new meeting length; the form carries the painting onto its grid (`reconcileGrid`). */
+  onLengthChange: (minutes: number) => void
+  onOverlapChange: (overlap: boolean) => void
   /**
    * The days the poll asks about, as `YYYY-MM-DD`. Not stored: see
    * PollSchedule. Exactly `daysOf(marked)` -- a day is on the calendar because
@@ -125,19 +125,14 @@ export function ScheduleFields({
   hours: DailyWindow
   /** The cells painted in bounds, which become the options. */
   marked: Bounds
-  onScheduleChange: (schedule: PollSchedule) => void
   /**
    * The painting, and the days it puts the poll on, together.
    *
    * One callback rather than two because the two cannot move apart: a day is
-   * in the poll exactly while something is painted on it. `onMarkedChange`
-   * below is for the changes that cannot add or remove a day -- moving the
-   * default hours, changing how long the meeting is -- and this is for the
-   * gesture that can.
+   * in the poll exactly while something is painted on it.
    */
   onDaysChange: (days: string[], marked: Set<GranuleKey>) => void
   onHoursChange: (hours: DailyWindow) => void
-  onMarkedChange: (marked: Set<GranuleKey>) => void
   /**
    * Picking an offset, which the form handles rather than this component
    * because a poll's dates decide which offset this browser is guessing on --
@@ -150,6 +145,7 @@ export function ScheduleFields({
   const h24 = use24HourTime()
   const ordered = inOrder(days)
   const daily = isDaily(schedule)
+  const length = meetingMinutes(schedule)
   const [brush, setBrush] = useState(1)
 
   /**
@@ -200,34 +196,6 @@ export function ScheduleFields({
   )
 
   /**
-   * Changing how long the meeting is, which decides the resolution with it.
-   *
-   * When the resolution moves between half-hours and whole days the painting
-   * has to move with it, because a cell means something different on each side
-   * of that line. Going up to days, a day with anything marked on it becomes a
-   * day that is in; coming back down, a day that was in gets the default hours
-   * -- which is the same thing picking it in the calendar would have done, and
-   * the nearest thing to the answer they had.
-   */
-  function setLength(minutes: number) {
-    const granularity = granularityFor(minutes)
-    const next = { ...schedule, granularity, desired_slots: minutes / granularity }
-    if (granularity === schedule.granularity) {
-      onScheduleChange(next)
-      return
-    }
-
-    const wasOn = new Set([...marked].map((key) => key.slice(0, 10)))
-    const moved = new Set<GranuleKey>()
-    for (const day of ordered) {
-      if (!wasOn.has(day)) continue
-      for (const key of cellsInHours(day, hours, granularity)) moved.add(key)
-    }
-    onScheduleChange(next)
-    onMarkedChange(moved)
-  }
-
-  /**
    * A stroke, and the days it leaves the poll asking about.
    *
    * Painting is the only thing that adds or removes a day now, so the day list
@@ -269,9 +237,16 @@ export function ScheduleFields({
       <Group grow align="flex-start" wrap="wrap">
         <Select
           label="Length"
-          data={LENGTHS}
-          value={String(meetingMinutes(schedule))}
-          onChange={(v) => v && setLength(Number(v))}
+          // A length no longer offered (a duplicate of an older poll) is kept.
+          data={
+            LENGTHS.some((choice) => choice.value === String(length))
+              ? LENGTHS
+              : [...LENGTHS, { value: String(length), label: describeLength(length) }].sort(
+                  (a, b) => Number(a.value) - Number(b.value),
+                )
+          }
+          value={String(length)}
+          onChange={(v) => v && onLengthChange(Number(v))}
           allowDeselect={false}
           comboboxProps={{ withinPortal: false }}
         />
@@ -294,32 +269,26 @@ export function ScheduleFields({
         />
       </Group>
 
-      {/* How far apart the windows start. Back to back gives fewer, distinct
-          times; every half hour gives the start that suits everybody a chance.
-          The default follows the kind (`stepFor`) until one is picked. */}
-      <Select
-        label="Start a time every"
-        data={stepsFor(schedule).map((minutes) => ({
-          value: String(minutes),
-          label:
-            minutes === meetingMinutes(schedule)
-              ? `${describeLength(minutes)} (back to back)`
-              : describeLength(minutes),
-        }))}
-        value={String(step)}
-        onChange={(v) => v && onStepChange(Number(v))}
-        allowDeselect={false}
-        comboboxProps={{ withinPortal: false }}
-        description={
-          several && step < meetingMinutes(schedule)
-            ? 'These times overlap, so two of the winners may be nearly the same time.'
-            : undefined
-        }
-      />
+      {/* Whether the times overlap. A meeting of one cell (half an hour, a
+          day) cannot, so the switch is not drawn for one. */}
+      {length > granularityFor(length) && (
+        <Switch
+          checked={overlap}
+          onChange={(e) => onOverlapChange(e.currentTarget.checked)}
+          label="Times can overlap"
+          description={
+            !overlap
+              ? 'Times run back to back, so each is a separate meeting.'
+              : several
+                ? `A time starts every ${daily ? 'day' : 'half hour'}, so two of the winners may be nearly the same time.`
+                : `A time starts every ${daily ? 'day' : 'half hour'}, so voters can find the start that suits everyone.`
+          }
+        />
+      )}
 
       {/* Hidden on a poll answered in whole days, where there are no hours to
           be earliest or latest: a day is either in or out. */}
-      {!daily && <HoursFields hours={hours} onChange={onHoursChange} />}
+      {!daily && <HoursFields hours={hours} cell={schedule.granularity} onChange={onHoursChange} />}
 
       {/* The calendar, which is where every day and every hour of this poll is
           said. Always on screen, and not only once a day has been picked

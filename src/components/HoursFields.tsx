@@ -48,14 +48,51 @@ function labelled(values: string[], h24: boolean): { value: string; label: strin
 
 export function HoursFields({
   hours,
+  cell = 30,
+  anchor,
   onChange,
 }: {
   hours: DailyWindow
+  /**
+   * The grid's row, in minutes. Rows longer than half an hour (a back-to-back
+   * meeting drawn as one cell) offer only times a whole number of rows apart,
+   * so every row line falls on an hour label and no row is cut short.
+   */
+  cell?: number
+  /**
+   * Where those rows count from, in minutes after midnight, on a poll whose
+   * cells are already laid down (`PaintTimes`); without one, any whole hour
+   * may start the grid, and the form re-cuts the painting onto it.
+   */
+  anchor?: number
   onChange: (hours: DailyWindow) => void
 }) {
   const h24 = use24HourTime()
-  const starts = labelled(START_VALUES, h24)
-  const ends = labelled(END_VALUES, h24)
+  const block = cell > 30
+  const offset = anchor === undefined ? 0 : ((anchor % cell) + cell) % cell
+  const startValues = block
+    ? START_VALUES.filter((value) => {
+        const at = toMinutes(value)
+        return (
+          at + cell <= 24 * 60 &&
+          (anchor === undefined ? at % 60 === 0 : (at - offset) % cell === 0)
+        )
+      })
+    : START_VALUES
+  const endValues = block
+    ? END_VALUES.filter((value) => (toMinutes(value) - toMinutes(hours.start)) % cell === 0)
+    : END_VALUES
+  const starts = labelled(startValues, h24)
+  const ends = labelled(endValues, h24)
+  // A new start keeps as many whole rows as fit, at least one.
+  const endFor = (start: string) => {
+    if (!block) return null
+    const from = toMinutes(start)
+    const rows = Math.max(1, Math.floor((toMinutes(hours.end) - from) / cell))
+    return toTimeOfDay(
+      Math.min(from + rows * cell, from + Math.floor((24 * 60 - from) / cell) * cell),
+    )
+  }
   return (
     <Group grow align="flex-start" wrap="wrap">
       <Select
@@ -70,9 +107,11 @@ export function HoursFields({
             // time after it: the pair is always a stretch of the day, and a
             // select that could be left saying 18:00 to 09:00 would be one
             // more state for every reader of it to work out.
-            end: ends.some((end) => end.value > v && end.value === hours.end)
-              ? hours.end
-              : (ends.find((end) => end.value > v)?.value ?? hours.end),
+            end:
+              endFor(v) ??
+              (ends.some((end) => end.value > v && end.value === hours.end)
+                ? hours.end
+                : (ends.find((end) => end.value > v)?.value ?? hours.end)),
           })
         }
         allowDeselect={false}

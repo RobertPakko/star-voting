@@ -23,6 +23,7 @@ import '@mantine/schedule/styles.css'
 import dayjs from 'dayjs'
 import {
   boundsOnDay,
+  DAY_MINUTES,
   daysOf,
   formatDay,
   formatTimeOfDay,
@@ -467,6 +468,13 @@ export function PaintCalendar({
   }
 
   const timeColumn = hoursColumn(axis, schedule.granularity)
+  // The library draws a label an hour tall per row, which is right for rows
+  // of an hour or less; a back-to-back meeting drawn as one cell has rows of
+  // several hours, so each label is stretched to its row.
+  const labelHeight =
+    schedule.granularity > 60 && schedule.granularity < DAY_MINUTES
+      ? { height: (HOUR_HEIGHT * schedule.granularity) / 60 }
+      : undefined
 
   const dayStyle = {
     '--day-view-slot-labels-width': timeLabelWidth,
@@ -617,6 +625,7 @@ export function PaintCalendar({
                   ? '1px solid var(--day-view-border-color)'
                   : undefined,
                 ...SLOT_LABEL,
+                ...labelHeight,
               },
             }}
             withAllDaySlot={false}
@@ -647,7 +656,7 @@ export function PaintCalendar({
               styles={{
                 ...STICKY_TIMES,
                 weekViewSlotLabels: { ...STICKY_TIMES.weekViewSlotLabels, ...timeColumn },
-                weekViewSlotLabel: SLOT_LABEL,
+                weekViewSlotLabel: { ...SLOT_LABEL, ...labelHeight },
               }}
               withWeekNumber={false}
               data-paint-calendar={calendarId}

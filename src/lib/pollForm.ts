@@ -2,14 +2,18 @@ import {
   blankSchedule,
   countWindows,
   daysOf,
+  cellsInHours,
   DEFAULT_HOURS,
-  defaultStep,
   describeLength,
   fromDay,
+  gridFor,
+  isDaily,
   meetingMinutes,
+  regrid,
+  snapHours,
   spanOf,
-  stepsFor,
   todayIn,
+  toMinutes,
   type Bounds,
   type GranuleKey,
 } from './schedule'
@@ -93,12 +97,17 @@ export interface QuestionDraft {
    * question to a list and back loses nothing on either side; so are the
    * options.
    */
+  /**
+   * The meeting's length, offset and axis, at the usual cells (half an hour,
+   * or a day): what the *Length* select says. The grid actually painted on
+   * is `gridOf`, which can draw a back-to-back meeting as one cell.
+   */
   schedule: PollSchedule
   /**
-   * The step the creator picked, in minutes, or null while it follows the
-   * kind (`stepFor`). Like the offset, a guess until it is chosen.
+   * Whether the times may overlap, or null while that follows the kind
+   * (`overlapOf`). Like the offset, a guess until it is chosen.
    */
-  step: number | null
+  overlap: boolean | null
   /** An assignment of times: the places every window gets, '' for one. */
   placesPerTime: number | string
   /** The days on the calendar. Not stored. */
@@ -169,7 +178,7 @@ export function blankQuestion(): QuestionDraft {
     budget: '',
     calendar: false,
     schedule: blankSchedule(),
-    step: null,
+    overlap: null,
     placesPerTime: '',
     days: [],
     hours: { ...DEFAULT_HOURS },
@@ -187,29 +196,57 @@ export function isTimeQuestion(question: QuestionDraft): boolean {
 }
 
 /**
- * How far apart a time question's windows start: the creator's pick while
- * the meeting's length still allows it, otherwise back to back where the
- * question picks several times and every half hour (or day) where it picks
- * one. See `defaultStep`.
+ * Whether a time question's times overlap: the creator's choice, or else
+ * back to back where the question picks several (`picksSeveral`) and
+ * overlapping where it picks one, since a start half an hour later can be the
+ * one everybody makes.
  */
-export function stepFor(question: QuestionDraft): number {
-  const { step, schedule } = question
-  if (step !== null && stepsFor(schedule).includes(step)) return step
-  return defaultStep(schedule, picksSeveral(question.kind))
+export function overlapOf(question: QuestionDraft): boolean {
+  return question.overlap ?? !picksSeveral(question.kind)
 }
 
 /**
- * The schedule a time question counts and sends: the form's, with the step
- * it will be enumerated at and, on an assignment, the places each window
- * gets. `window` is settled from the painting separately (`settle`).
+ * The grid a time question is painted on, counted on and sent as
+ * (`gridFor`), with, on an assignment, the places every window gets. `marked`
+ * is in this grid's cells. `window` is settled from the painting separately
+ * (`settle`).
  */
 export function gridOf(question: QuestionDraft): PollSchedule {
-  const { step: _, places: __, ...schedule } = question.schedule
+  const grid = gridFor(question.schedule, meetingMinutes(question.schedule), overlapOf(question))
   const places =
     question.kind === 'assignment' && question.placesPerTime !== ''
       ? Number(question.placesPerTime)
       : null
-  return { ...schedule, step: stepFor(question), ...(places === null ? {} : { places }) }
+  return places === null ? grid : { ...grid, places }
+}
+
+/**
+ * A question after an edit, with its painting carried onto the grid the edit
+ * leaves it on. A length, a kind or the overlap switch can change the cell
+ * size, and with cells of a whole meeting the earliest start is where they
+ * count from; whichever moved, the hours are put on the new lattice
+ * (`snapHours`) and the painting is re-cut onto it (`regrid`), keeping only
+ * whole blocks. Crossing between hours and whole days keeps the days that had
+ * anything on them, or lays the hours down on each.
+ */
+export function reconcileGrid(before: QuestionDraft, after: QuestionDraft): QuestionDraft {
+  const was = gridOf(before)
+  const now = gridOf(after)
+  if (isDaily(was) !== isDaily(now)) {
+    const hours = snapHours(after.hours, now.granularity)
+    const days = [...new Set([...after.marked].map((key) => key.slice(0, 10)))].sort()
+    const marked = new Set<GranuleKey>(
+      days.flatMap((day) => cellsInHours(day, hours, now.granularity)),
+    )
+    return { ...after, hours, marked, days: daysOf(marked) }
+  }
+  if (isDaily(now)) return after
+
+  const hours = snapHours(after.hours, now.granularity)
+  const moved = now.granularity >= 60 && hours.start !== before.hours.start
+  if (was.granularity === now.granularity && !moved) return { ...after, hours }
+  const marked = regrid(after.marked, was.granularity, now.granularity, toMinutes(hours.start))
+  return { ...after, hours, marked, days: daysOf(marked) }
 }
 
 /** The number a question sends with its kind: null where the kind takes none. */
@@ -383,9 +420,13 @@ function validateCarried(
   })
 }
 
-/** The stored schedule: `window` becomes the union of what is actually painted. */
-export function settle(schedule: PollSchedule, marked: Bounds): PollSchedule {
-  return { ...schedule, window: spanOf(marked, schedule) }
+/**
+ * The stored schedule: `window` becomes the union of what is actually
+ * painted, or the creator's hours where nothing is (a poll collecting its
+ * times), so the grid voters add to starts where the creator's did.
+ */
+export function settle(schedule: PollSchedule, marked: Bounds, hours: DailyWindow): PollSchedule {
+  return { ...schedule, window: marked.size === 0 ? hours : spanOf(marked, schedule) }
 }
 
 /**
@@ -475,7 +516,7 @@ export function validate(form: {
           'That leaves one window to choose from. Mark more of the day, shorten the meeting, or add a day.'
       } else if (total > MAX_OPTIONS) {
         errors.schedules[questionIndex] =
-          `That is ${total} windows, and a ballot can hold ${MAX_OPTIONS}. Start the times further apart, or use a longer meeting, fewer days, or a narrower part of the day.`
+          `That is ${total} windows, and a ballot can hold ${MAX_OPTIONS}. ${overlapOf(question) ? 'Turn off overlapping times, or use' : 'Use'} a longer meeting, fewer days, or a narrower part of the day.`
       }
       return
     }

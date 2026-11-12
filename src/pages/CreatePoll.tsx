@@ -33,6 +33,14 @@ import {
   carryForward,
   countWindows,
   daysOf,
+  gridFor,
+  granularityFor,
+  isDaily,
+  meetingMinutes,
+  overlaps,
+  regrid,
+  snapHours,
+  toMinutes,
   enumerateWindows,
   fromDay,
   granuleKey,
@@ -58,7 +66,8 @@ import {
   carriedOf,
   gridOf,
   isTimeQuestion,
-  stepFor,
+  overlapOf,
+  reconcileGrid,
   numberOf,
   kindValueOf,
   hasErrors,
@@ -289,32 +298,49 @@ export function CreatePoll() {
             return { ...blank, calendar: true, title: row.question_title ?? '' }
           }
 
-          // Read the painting off the options, then move it forward whole
-          // weeks past today (on the poll's clock).
-          const copied = boundsOf(
+          // The copy's length, overlap and offset are the source's, and its
+          // grid is the one the form draws for them, which an older poll
+          // (stepped on half-hour cells) may not have been drawn on.
+          const length = meetingMinutes(grid)
+          const base = {
+            timezone: grid.timezone,
+            window: grid.window,
+            granularity: granularityFor(length),
+            desired_slots: length / granularityFor(length),
+          }
+          const overlap = overlaps(grid)
+          const drawn = gridFor(base, length, overlap)
+          const hours = isDaily(drawn) ? grid.window : snapHours(grid.window, drawn.granularity)
+
+          // Read the painting off the options, onto that grid, then move it
+          // forward whole weeks past today (on the poll's clock).
+          const read = boundsOf(
             rows.map((option) => option.name),
             grid,
           )
+          const copied =
+            isDaily(drawn) || drawn.granularity === grid.granularity
+              ? read
+              : regrid(read, grid.granularity, drawn.granularity, toMinutes(hours.start))
           const renewed = carryForward(copied, todayIn(grid.timezone))
           if (copied.size > 0) {
             copiedTimes.set(blank.key, copied)
             clock.today ??= todayIn(grid.timezone)
           }
-          // An assignment's places per time copy as the box it was given in.
-          const { places, ...copiedGrid } = grid
           return {
             ...blank,
             title: row.question_title ?? '',
             calendar: true,
-            // The source's offset and step are choices, so later changes to
-            // the dates or the kind must not move them.
-            schedule: copiedGrid,
-            step: copiedGrid.step ?? copiedGrid.granularity,
-            placesPerTime: places ?? '',
+            // The source's offset and overlap are choices, so later changes
+            // to the dates or the kind must not move them.
+            schedule: base,
+            overlap,
+            // An assignment's places per time copy as the box it was given in.
+            placesPerTime: grid.places ?? '',
             offsetPicked: true,
             marked: renewed.bounds,
             days: daysOf(renewed.bounds),
-            hours: grid.window,
+            hours,
             datesMoved: renewed.weeks,
           }
         }
@@ -475,8 +501,11 @@ export function CreatePoll() {
     else setOpenKey(value)
   }
 
+  /** Every edit goes through `reconcileGrid`, which carries the painting onto any new grid. */
   function patchQuestion(index: number, edit: Partial<QuestionDraft>) {
-    setQuestions((prev) => prev.map((q, i) => (i === index ? { ...q, ...edit } : q)))
+    setQuestions((prev) =>
+      prev.map((q, i) => (i === index ? reconcileGrid(q, { ...q, ...edit }) : q)),
+    )
   }
 
   function pickOffset(index: number, next: string) {
@@ -585,7 +614,7 @@ export function CreatePoll() {
       // Days that have gone (e.g. form left open past midnight) are dropped,
       // as `validate` counted.
       const marked = fromDay(question.marked, todayIn(question.schedule.timezone))
-      const grid = settle(gridOf(question), marked)
+      const grid = settle(gridOf(question), marked, question.hours)
       return {
         title: question.title.trim(),
         kind: question.kind,
@@ -912,21 +941,29 @@ export function CreatePoll() {
               />
             )}
             <ScheduleFields
-              schedule={question.schedule}
-              step={stepFor(question)}
+              schedule={gridOf(question)}
+              overlap={overlapOf(question)}
               several={picksSeveral(question.kind)}
               count={countWindows(
                 gridOf(question),
                 fromDay(question.marked, todayIn(question.schedule.timezone)),
               )}
-              onStepChange={(next) => patchQuestion(questionIndex, { step: next })}
+              onLengthChange={(minutes) => {
+                const granularity = granularityFor(minutes)
+                patchQuestion(questionIndex, {
+                  schedule: {
+                    ...question.schedule,
+                    granularity,
+                    desired_slots: minutes / granularity,
+                  },
+                })
+              }}
+              onOverlapChange={(next) => patchQuestion(questionIndex, { overlap: next })}
               days={question.days}
               hours={question.hours}
               marked={question.marked}
-              onScheduleChange={(next) => patchQuestion(questionIndex, { schedule: next })}
               onDaysChange={(next, marked) => pickDays(questionIndex, next, marked)}
               onHoursChange={(next) => patchQuestion(questionIndex, { hours: next })}
-              onMarkedChange={(next) => patchQuestion(questionIndex, { marked: next })}
               onOffsetChange={(next) => pickOffset(questionIndex, next)}
               error={shown.schedules[questionIndex]}
             />

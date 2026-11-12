@@ -16,6 +16,7 @@ import {
   isDaily,
   paintingRuns,
   runBounds,
+  snapHours,
   toMinutes,
   formatTimeOfDay,
   type GranuleKey,
@@ -140,8 +141,23 @@ export function PaintTimes({
   // somebody says otherwise -- except on a list nobody has painted yet, whose
   // stored axis is the whole day (`spanOf` of nothing), so it opens on the
   // create form's default instead.
+  //
+  // Where a back-to-back meeting is one cell, the rows count from the poll's
+  // own axis, and the hours stay on that lattice (`snapHours`, and
+  // `HoursFields`' `anchor`), so a window suggested here never straddles two
+  // already on the list.
+  const anchor = toMinutes(schedule.window.start)
   const [hours, setHours] = useState<DailyWindow>(() =>
-    offered.size === 0 && !daily ? { ...DEFAULT_HOURS } : schedule.window,
+    snapHours(
+      offered.size === 0 &&
+        !daily &&
+        schedule.window.start === '00:00' &&
+        schedule.window.end === '24:00'
+        ? { ...DEFAULT_HOURS }
+        : schedule.window,
+      schedule.granularity,
+      anchor,
+    ),
   )
   const zone = useMemo(() => {
     const first = daysOf(offered)[0]
@@ -251,7 +267,14 @@ export function PaintTimes({
 
       {/* Hidden on a poll answered in whole days, where there are no hours to
           be earliest or latest: a day is either in or out. */}
-      {!daily && <HoursFields hours={hours} onChange={setHours} />}
+      {!daily && (
+        <HoursFields
+          hours={hours}
+          cell={schedule.granularity}
+          anchor={anchor}
+          onChange={setHours}
+        />
+      )}
 
       <Text size="xs" c="dimmed">
         All times are {describeOffset(schedule.timezone, zone)}

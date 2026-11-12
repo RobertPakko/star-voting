@@ -1,8 +1,9 @@
 -- A calendar is a ballot, not a kind: any question but a proportional budget
 -- may be asked of painted meeting windows, and the tally says which it was.
 --
--- Here three interview slots, back to back (a step as long as the meeting),
--- one place each, for three candidates:
+-- Here three interview slots, back to back, one place each, for three
+-- candidates. Back to back, a meeting of whole hours is one cell of the grid
+-- (`gridFor` in src/lib/schedule.ts), so the schedule has no step:
 --
 --              09:00 10:00 11:00
 --   voter 1      5     4     0
@@ -17,7 +18,7 @@ begin;
 do $$
 declare
   v_schedule jsonb := '{"timezone":"-07:00","window":{"start":"09:00","end":"12:00"},'
-                      '"desired_slots":2,"granularity":30,"step":60,"places":1}'::jsonb;
+                      '"desired_slots":1,"granularity":60,"places":1}'::jsonb;
   v_emails text[] := array['voter1@example.com', 'voter2@example.com', 'voter3@example.com'];
   v_ballots int[][] := array[[5, 4, 0], [5, 0, 0], [0, 2, 5]];
   v_poll uuid;
@@ -41,8 +42,9 @@ begin
 
   -- A window suggested later is given the places by whoever paints it; the
   -- schedule is where they read how many.
-  perform tests.assert_eq('the schedule keeps the step and the places',
-    (select schedule ->> 'step' || ' ' || (schedule ->> 'places') from polls where id = v_poll), '60 1');
+  perform tests.assert_eq('the schedule keeps the places, on cells a meeting long',
+    (select (schedule ->> 'granularity') || ' ' || (schedule ->> 'places') from polls where id = v_poll),
+    '60 1');
 
   for i in 1 .. 3 loop
     perform tests.sign_in(v_emails[i]);

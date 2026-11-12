@@ -680,9 +680,11 @@ every grid. (A window off the axis would be an option nobody can see, rub out,
 or score.)
 
 A meeting's length is `desired_slots * granularity`. **Granularity is
-derived** (`granularityFor`): half an hour under a day, a whole day at or above
-one. A window may be longer than a day; `stepGranule` carries a cell into the
-next date.
+derived**: half an hour under a day, a whole day at or above one
+(`granularityFor`), or the meeting itself when its times run back to back in
+whole hours (see [How far apart the windows
+start](#how-far-apart-the-windows-start)). A window may be longer than a day;
+`stepGranule` carries a cell into the next date.
 
 **A fixed UTC offset, never a named zone.** A named zone across a DST change
 gives a day 23 or 25 hours and an ambiguous 1am. One poll, one offset;
@@ -729,25 +731,53 @@ window contributes nothing, and the create form says so.
 #### How far apart the windows start
 
 `schedule.step`, in minutes: a whole number of granules no longer than the
-meeting (`validate_schedule`). Missing means every granule, which is every
-poll made before it could be chosen. **Windows are taken greedily from the
-earliest cell** (`enumerateWindows`), so each painted stretch is cut from
-where it starts: 10:00–16:00 at a two-hour step is 10, 12 and 14.
+meeting (`validate_schedule`). Missing means every granule. **Windows are
+taken greedily from the earliest cell** (`enumerateWindows`), so each painted
+stretch is cut from where it starts.
 
-**The default follows the kind until the creator picks one** (`stepFor`, as
-the offset follows the dates): back to back where the kind picks several
-times (`picksSeveral`: multiple winners, consensus winners, fractional
-winners, an assignment), since overlapping windows would make two of its
-answers nearly the same time — the counts know nothing of overlap; every
-granule where it picks one, since a start half an hour later can be the one
-everybody makes. A step shorter than the meeting on a kind that picks
-several is allowed, with a line under the select saying what it costs.
+**The creator says only whether times may overlap** (*Times can overlap* in
+`ScheduleFields`; `overlap` on the draft), and `gridFor` turns the length and
+that answer into a grid:
+
+- **Overlapping**: half-hour cells (a day for a meeting of days), a window
+  starting on every one.
+- **Back to back, at a whole number of hours under a day**: **one cell is the
+  meeting** (`fitsOneCell`; `granularity` the length, `desired_slots` 1, no
+  step). Every cell painted is one option, and a voter's rating of a cell is
+  that option's score exactly, so nothing blurs on the way back
+  (`paintingFromScores`).
+- **Back to back otherwise** (ninety minutes, days): the usual cells, with a
+  step of the meeting.
+
+A grid of hour-plus rows lines up with the hour labels only if it starts on a
+whole hour and runs a whole number of rows, so `HoursFields` offers only those
+times and `snapHours` moves the hours onto them; `PaintCalendar` stretches
+each label to its row. **Lengths are half an hour, an hour, ninety minutes,
+then whole hours** (`MEETING_LENGTHS`): other half-hour lengths would be back
+to back on half-hour cells, and ninety minutes is kept as the one common
+enough to be worth that.
+
+**The overlap follows the kind until it is set** (`overlapOf`, as the offset
+follows the dates): back to back where the kind picks several times
+(`picksSeveral`: multiple winners, consensus winners, fractional winners, an
+assignment), since the counts know nothing of overlap and two answers could
+be nearly the same time; overlapping where it picks one, since a start half
+an hour later can be the one everybody makes. The switch's line says what
+overlap costs on a kind that picks several.
+
+**A change of grid carries the painting with it** (`reconcileGrid`, run on
+every edit of a question): a length, a kind, the switch or, with cells of a
+meeting, the earliest start can each move the cells, and the painting is
+re-cut onto the new ones (`regrid`), keeping only whole blocks. Crossing
+between hours and days keeps the days that had anything on them.
 
 **A poll collecting its times keeps its windows where they are**: `PaintTimes`
 passes the list to `enumerateWindows` as `keep`, so a window on the list
 stands while it is still painted whole and a new one goes only where it
-crowds none of them. Without it, an hour painted before a stretch would
-re-cut the whole stretch from the new start.
+crowds none of them, and its hour selects stay on the poll's own lattice
+(`HoursFields`' `anchor`, from `window.start`). A poll created with nothing
+painted stores the creator's hours as its `window` (`settle`), which is where
+that lattice starts.
 
 **An assignment of times gives every window the same places**, *Places per
 time* on the form, sent as each window's `kind_value` and kept as
@@ -773,9 +803,9 @@ a step. That is the cost of storing windows rather than granules.
 ### Making one
 
 [`ScheduleFields`](src/components/ScheduleFields.tsx) asks for the meeting
-length, the offset, the step and the hours a whole-day fill lays down, over
-one `PaintCalendar`, with a line under it counting the times the painting
-makes.
+length, the offset, whether times overlap and the hours a whole-day fill lays
+down, over one `PaintCalendar` drawn on `gridOf` the draft, with a line under
+it counting the times the painting makes.
 
 - **A day is in the poll exactly while something is painted on it.** There is
   no separate date picker; `daysOf(marked)` gives the days, and
@@ -792,8 +822,9 @@ makes.
   today is not cut off. `CreatePoll` re-reads the floor when it counts and
   builds the windows (`fromDay`), so a form left open across midnight sends
   only valid days. `carryForward` uses the same clock.
-- **Meeting lengths** run in half hours up to eight hours, then whole days
-  (`MEETING_LENGTHS`); lengths in between are not real questions.
+- **Meeting lengths** run to eight hours (see above), then whole days
+  (`MEETING_LENGTHS`); lengths in between are not real questions. A
+  duplicate keeps a length no longer on the list.
 
 ### The ballot
 
