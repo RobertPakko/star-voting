@@ -28,7 +28,9 @@ import {
   offsetMinutes,
   paintingFromScores,
   scoresFromPainting,
+  defaultStep,
   spanOf,
+  stepsFor,
   startingOn,
   stepGranule,
   todayIn,
@@ -995,5 +997,84 @@ describe('a drawn block and the cells under it', () => {
     const painting: Record<GranuleKey, number> = {}
     for (const key of wholeDays(['2026-09-01'])) painting[key] = 3
     expect(roundTrip(painting, retreat)).toEqual([[...wholeDays(['2026-09-01'])]])
+  })
+})
+
+describe('the step between window starts', () => {
+  const twoHours: PollSchedule = { ...threeHours, desired_slots: 4 }
+  const times = (starts: string[]) => starts.map((s) => s.slice(11, 16))
+
+  test('a schedule with none starts a window on every granule, as every poll always has', () => {
+    expect(times(enumerateWindows(twoHours, painted(['2026-09-01'], '10:00', '13:00')))).toEqual([
+      '10:00',
+      '10:30',
+      '11:00',
+    ])
+  })
+
+  test('back to back, a stretch is cut into meetings from where it starts', () => {
+    const backToBack = { ...twoHours, step: 120 }
+    expect(times(enumerateWindows(backToBack, painted(['2026-09-01'], '10:00', '16:00')))).toEqual([
+      '10:00',
+      '12:00',
+      '14:00',
+    ])
+    // A stretch too short for the last meeting ends with the one before it.
+    expect(times(enumerateWindows(backToBack, painted(['2026-09-01'], '10:00', '15:30')))).toEqual([
+      '10:00',
+      '12:00',
+    ])
+  })
+
+  test('each painted stretch counts from its own start', () => {
+    const bounds = new Set([
+      ...painted(['2026-09-01'], '09:00', '13:00'),
+      ...painted(['2026-09-01'], '14:30', '18:30'),
+    ])
+    expect(times(enumerateWindows({ ...twoHours, step: 120 }, bounds))).toEqual([
+      '09:00',
+      '11:00',
+      '14:30',
+      '16:30',
+    ])
+  })
+
+  test('an hourly step on a two-hour meeting overlaps by half', () => {
+    expect(
+      times(enumerateWindows({ ...twoHours, step: 60 }, painted(['2026-09-01'], '10:00', '14:00'))),
+    ).toEqual(['10:00', '11:00', '12:00'])
+  })
+
+  test('windows already on the list stay put, and new ones fit around them', () => {
+    const backToBack = { ...twoHours, step: 120 }
+    const listed = new Set(['2026-09-01T10:00:00-07:00', '2026-09-01T12:00:00-07:00'])
+    // An hour painted before the stretch fits no meeting without crowding 10:00.
+    const hourBefore = painted(['2026-09-01'], '09:00', '14:00')
+    expect(times(enumerateWindows(backToBack, hourBefore, listed))).toEqual(['10:00', '12:00'])
+    // Two hours before it fit one.
+    const twoBefore = painted(['2026-09-01'], '08:00', '14:00')
+    expect(times(enumerateWindows(backToBack, twoBefore, listed))).toEqual([
+      '08:00',
+      '10:00',
+      '12:00',
+    ])
+    // Without a list, the same painting is cut from where it starts.
+    expect(times(enumerateWindows(backToBack, hourBefore))).toEqual(['09:00', '11:00'])
+  })
+
+  test('a window on the list that is no longer painted whole goes', () => {
+    const listed = new Set(['2026-09-01T10:00:00-07:00', '2026-09-01T12:00:00-07:00'])
+    const shorter = painted(['2026-09-01'], '10:00', '13:00')
+    expect(times(enumerateWindows({ ...twoHours, step: 120 }, shorter, listed))).toEqual(['10:00'])
+  })
+
+  test('the steps on offer run from one granule to the whole meeting', () => {
+    expect(stepsFor(twoHours)).toEqual([30, 60, 90, 120])
+    expect(stepsFor(retreat)).toEqual([DAY_MINUTES, 2 * DAY_MINUTES, 3 * DAY_MINUTES])
+  })
+
+  test('a question that picks several times starts back to back by default', () => {
+    expect(defaultStep(twoHours, true)).toBe(120)
+    expect(defaultStep(twoHours, false)).toBe(30)
   })
 })

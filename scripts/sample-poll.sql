@@ -112,7 +112,7 @@ select $json${
     {
       "slug": "when",
       "title": "When are we meeting?",
-      "kind": "consensus_time",
+      "kind": "consensus",
       "schedule": {
         "timezone": "-07:00",
         "window": { "start": "09:00", "end": "22:00" },

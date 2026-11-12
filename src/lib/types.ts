@@ -15,28 +15,23 @@ export type PollMode = 'invite' | 'open'
 
 /**
  * What a question asks for, and so which result it opens on (the create
- * form's *Choice*; see lib/choices.ts). 'time', 'consensus_time' and
- * 'consensus_times' are meeting-slot polls whose options are window starts
- * and whose ballot is a calendar (`isCalendar`); every other kind is a
- * written list scored 0-5. 'option' and 'time' ask for STAR's winner,
- * 'consensus' and 'consensus_time' for the option whose lowest score is
- * highest, 'consensus_winners' and 'consensus_times' for the set of options
- * that serves its worst-served voter best, the rest for the option ranking,
- * multiple winners or fractional winners, 'budget' for a proportional budget
- * and 'assignment' for an option assignment.
+ * form's *Choice*; see lib/choices.ts): 'option' STAR's winner, 'consensus'
+ * the option whose lowest score is highest, 'consensus_winners' the set of
+ * options that serves its worst-served voter best, the rest the option
+ * ranking, multiple winners or fractional winners, 'budget' a proportional
+ * budget and 'assignment' an option assignment. Whether the ballot is a
+ * calendar is not part of the kind: it is whether the question has a
+ * `schedule`, which every kind but a budget may.
  */
 export type PollKind =
   | 'option'
-  | 'time'
   | 'ranking'
   | 'multiple'
   | 'fractional'
   | 'consensus'
-  | 'consensus_time'
   | 'budget'
   | 'assignment'
   | 'consensus_winners'
-  | 'consensus_times'
 
 /**
  * A time poll's grid; null on an ordinary poll. Which days and hours are asked
@@ -56,6 +51,13 @@ export type PollSchedule = {
   desired_slots: number
   /** Minutes per granule; 1440 for a meeting of a day or more. See `granularityFor`. */
   granularity: number
+  /**
+   * Minutes from one window's start to the next, a whole number of granules
+   * no longer than the meeting. Missing means every granule. See `stepOf`.
+   */
+  step?: number
+  /** On an option assignment, the places every window is given. */
+  places?: number
 }
 
 export type DailyWindow = PollSchedule['window']
@@ -595,6 +597,8 @@ export interface PollResults {
    * Optional until 0103 has landed everywhere.
    */
   voters_shown?: boolean
+  /** Whether the options are a calendar's windows (the question has a schedule). */
+  calendar: boolean
 }
 
 /** One voter's scores, keyed by option id. */

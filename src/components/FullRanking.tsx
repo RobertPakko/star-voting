@@ -60,7 +60,7 @@ export function FullRanking({
   onClose: () => void
 }) {
   return (
-    <ChoiceModal kind="ranking" opened={opened} onClose={onClose}>
+    <ChoiceModal kind="ranking" calendar={results.calendar} opened={opened} onClose={onClose}>
       {/* Mounted only while open, so the read is made on the press. */}
       <RankingBody source={source} results={results} />
     </ChoiceModal>

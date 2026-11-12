@@ -1,5 +1,4 @@
 import { Stack, Text } from '@mantine/core'
-import { toolKind } from '../lib/choices'
 import type { PollResults } from '../lib/types'
 import type { ResultsSource } from './Results'
 import { StarRounds } from './StarRounds'
@@ -29,7 +28,7 @@ export function BestOption({
     : null
 
   return (
-    <ChoiceModal kind={toolKind('option', results.kind)} opened={opened} onClose={onClose}>
+    <ChoiceModal kind="option" calendar={results.calendar} opened={opened} onClose={onClose}>
       <Stack gap="md">
         <Text fw={700} size="lg" ta="center" style={{ overflowWrap: 'anywhere' }}>
           {winner ?? 'No winner'}

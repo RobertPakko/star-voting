@@ -15,6 +15,7 @@ import {
   meetingMinutes,
   paintingRuns,
   runBounds,
+  stepsFor,
   todayIn,
   formatTimeRange,
   type Bounds,
@@ -92,6 +93,10 @@ function inOrder(days: string[]): string[] {
 
 export function ScheduleFields({
   schedule,
+  step,
+  several,
+  count,
+  onStepChange,
   days,
   hours,
   marked,
@@ -103,6 +108,13 @@ export function ScheduleFields({
   error,
 }: {
   schedule: PollSchedule
+  /** How far apart the windows start, in minutes; see `stepFor`. */
+  step: number
+  /** Whether the question picks several times, so overlapping windows are a warning. */
+  several: boolean
+  /** How many windows the painting makes at that step, for the line under the calendar. */
+  count: number
+  onStepChange: (step: number) => void
   /**
    * The days the poll asks about, as `YYYY-MM-DD`. Not stored: see
    * PollSchedule. Exactly `daysOf(marked)` -- a day is on the calendar because
@@ -282,6 +294,29 @@ export function ScheduleFields({
         />
       </Group>
 
+      {/* How far apart the windows start. Back to back gives fewer, distinct
+          times; every half hour gives the start that suits everybody a chance.
+          The default follows the kind (`stepFor`) until one is picked. */}
+      <Select
+        label="Start a time every"
+        data={stepsFor(schedule).map((minutes) => ({
+          value: String(minutes),
+          label:
+            minutes === meetingMinutes(schedule)
+              ? `${describeLength(minutes)} (back to back)`
+              : describeLength(minutes),
+        }))}
+        value={String(step)}
+        onChange={(v) => v && onStepChange(Number(v))}
+        allowDeselect={false}
+        comboboxProps={{ withinPortal: false }}
+        description={
+          several && step < meetingMinutes(schedule)
+            ? 'These times overlap, so two of the winners may be nearly the same time.'
+            : undefined
+        }
+      />
+
       {/* Hidden on a poll answered in whole days, where there are no hours to
           be earliest or latest: a day is either in or out. */}
       {!daily && <HoursFields hours={hours} onChange={onHoursChange} />}
@@ -332,10 +367,16 @@ export function ScheduleFields({
           buildEvents={buildEvents}
           fillOnDay={(day) => cellsInHours(day, hours, schedule.granularity)}
         />
-        {error && (
+        {error ? (
           <Text role="alert" size="sm" c="red" fw={500}>
             {error}
           </Text>
+        ) : (
+          count > 0 && (
+            <Text size="sm" c="dimmed">
+              {count === 1 ? '1 time' : `${count} times`} to choose from.
+            </Text>
+          )
         )}
       </Stack>
     </Stack>

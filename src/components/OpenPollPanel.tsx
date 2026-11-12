@@ -19,7 +19,7 @@ import { SmoothHeight } from './SmoothHeight'
 import { VoterNameField } from './VoterNameField'
 import { Banners } from './Banners'
 import type { BallotSheet, OpenPollView, PollOption, PollResults } from '../lib/types'
-import { isCalendar, optionNumberOf } from '../lib/choices'
+import { optionNumberOf } from '../lib/choices'
 
 /**
  * An open poll at every stage -- collecting, voting, results -- through the
@@ -69,7 +69,7 @@ export function OpenPollPanel({
   // A share link has no account, so a poll that shows respondents asks for a
   // name; one that hides them stores none whatever is sent.
   const needsName = view.poll.show_voters
-  const schedule = isCalendar(view.poll.kind) ? view.poll.schedule : null
+  const schedule = view.poll.schedule ?? null
 
   // Watches are filed per group, so every question agrees. See lib/push.ts.
   const watchKey = view.poll.group_id ?? pollId
@@ -145,9 +145,7 @@ export function OpenPollPanel({
           <Results
             source={{ kind: 'open', pollId }}
             meeting={
-              isCalendar(view.poll.kind) && view.poll.schedule
-                ? { title: view.poll.title, schedule: view.poll.schedule }
-                : null
+              view.poll.schedule ? { title: view.poll.title, schedule: view.poll.schedule } : null
             }
             initial={results}
           />
@@ -405,7 +403,7 @@ function OpenBallot({
     <VoterNameField name={voterName} suggestions={revising ? undefined : carried} />
   )
 
-  if (isCalendar(poll.kind) && poll.schedule) {
+  if (poll.schedule) {
     return (
       <Suspense
         fallback={

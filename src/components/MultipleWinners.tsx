@@ -7,7 +7,7 @@ import { countBadge } from '../lib/badgeColors'
 import { relabelRanking } from '../lib/schedule'
 import { parseAnswer, rankingSchema } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
-import { CHOICE_NUMBER, cutTo } from '../lib/choices'
+import { choiceNumberLabel, cutTo } from '../lib/choices'
 import type { PollResults, RankingEntry } from '../lib/types'
 import { ChoiceCount } from './ChoiceCount'
 import { ChoiceModal } from './ChoiceBlurb'
@@ -58,7 +58,7 @@ export function MultipleWinners({
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
 
   return (
-    <ChoiceModal kind="multiple" opened={opened} onClose={onClose}>
+    <ChoiceModal kind="multiple" calendar={results.calendar} opened={opened} onClose={onClose}>
       <MultipleWinnersBody
         source={source}
         results={results}
@@ -161,7 +161,7 @@ export function MultipleWinnersBody({
 
       {counted && (
         <ChoiceCount
-          label={CHOICE_NUMBER.multiple!.label}
+          label={choiceNumberLabel('multiple', results.calendar)}
           value={winners}
           optionCount={remaining}
           onChange={setWinners}

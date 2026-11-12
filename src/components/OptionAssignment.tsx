@@ -6,7 +6,9 @@ import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { assignmentSchema, parseAnswer } from '../lib/rpcSchemas'
 import { amountError } from '../lib/pollForm'
 import { AMOUNT_MAX } from '../lib/limits'
-import { CHOICE_NUMBER, PER_VOTER_NUMBERS } from '../lib/choices'
+import { choiceNumberLabel, PER_VOTER_NUMBERS } from '../lib/choices'
+import { use24HourTime } from '../lib/clock'
+import { formatWindow } from '../lib/schedule'
 import { count, stars, voters } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { AssignmentResult, PollResults } from '../lib/types'
@@ -57,7 +59,7 @@ export function OptionAssignment({
   const [inputs, setInputs] = useAssignmentInputs(source.pollId)
 
   return (
-    <ChoiceModal kind="assignment" opened={opened} onClose={onClose}>
+    <ChoiceModal kind="assignment" calendar={results.calendar} opened={opened} onClose={onClose}>
       <OptionAssignmentBody
         source={source}
         results={results}
@@ -95,6 +97,8 @@ export function OptionAssignmentBody({
   const kind = source.kind
   const key = source.pollId
   const sample = isSampleId(key)
+  // An assignment of times names its windows as times; anything else passes through.
+  const h24 = use24HourTime()
 
   const [result, setResult] = useState<AssignmentResult | null>(
     leftOut.length === 0 && !inputs ? initial : null,
@@ -232,7 +236,7 @@ export function OptionAssignmentBody({
               <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
                 <Group gap="xs" wrap="nowrap" align="center">
                   <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
-                    {option.name}
+                    {formatWindow(option.name, h24)}
                   </Text>
                   <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
                     {option.voters.length} of {count(option.places, 'place')}
@@ -244,8 +248,10 @@ export function OptionAssignmentBody({
                         color="gray"
                         size="sm"
                         ml="auto"
-                        aria-label={`Remove ${option.name}`}
-                        onClick={() => remove({ id: option.id, name: option.name })}
+                        aria-label={`Remove ${formatWindow(option.name, h24)}`}
+                        onClick={() =>
+                          remove({ id: option.id, name: formatWindow(option.name, h24) })
+                        }
                       >
                         <XIcon size={14} aria-hidden />
                       </ActionIcon>
@@ -356,6 +362,7 @@ function PlacesEditor({
   onCancel: () => void
 }) {
   const options = useEveryOption(source, results)
+  const h24 = use24HourTime()
   const [typed, setTyped] = useState<Record<string, number | string>>(() =>
     Object.fromEntries(Object.entries(start.places).map(([id, n]) => [id, n ?? ''])),
   )
@@ -393,7 +400,7 @@ function PlacesEditor({
       </Text>
 
       <Select
-        label={CHOICE_NUMBER.assignment!.label}
+        label={choiceNumberLabel('assignment', results.calendar)}
         allowDeselect={false}
         w={200}
         value={String(perVoter)}
@@ -411,12 +418,12 @@ function PlacesEditor({
           {shown.map((option) => (
             <Group key={option.id} gap="sm" wrap="nowrap" align="flex-start">
               <Text size="sm" style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }} pt={6}>
-                {option.name}
+                {formatWindow(option.name, h24)}
               </Text>
               <NumberInput
                 w={120}
                 size="sm"
-                aria-label={`Places for ${option.name}`}
+                aria-label={`Places for ${formatWindow(option.name, h24)}`}
                 placeholder="1"
                 value={typed[option.id] ?? ''}
                 onChange={(v) => setTyped((prev) => ({ ...prev, [option.id]: v }))}

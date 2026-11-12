@@ -47,7 +47,7 @@ import { winnerLabel } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import { useFirstQuestionOnResults } from '../lib/resultsLanding'
-import { isCalendar, optionNumberOf } from '../lib/choices'
+import { optionNumberOf } from '../lib/choices'
 import type {
   PollRead,
   AccountRead,
@@ -488,7 +488,7 @@ export function PollDetail({
               <CollectOptions
                 source={{ kind: 'creator', pollId: poll.id }}
                 options={optionList}
-                schedule={isCalendar(poll.kind) ? poll.schedule : null}
+                schedule={poll.schedule ?? null}
                 numbered={optionNumberOf(poll.kind)}
                 isCreator
                 questionStrip={questionStrip}
@@ -526,7 +526,7 @@ export function PollDetail({
                 <CollectOptions
                   source={{ kind: 'poll', pollId: poll.id }}
                   options={options}
-                  schedule={isCalendar(poll.kind) ? poll.schedule : null}
+                  schedule={poll.schedule ?? null}
                   numbered={optionNumberOf(poll.kind)}
                   isCreator={isCreator}
                   questionStrip={questionStrip}
@@ -551,11 +551,7 @@ export function PollDetail({
                 <Suspense fallback={<ResultsSkeleton options={optionList.length || undefined} />}>
                   <Results
                     source={{ kind: 'poll', pollId: poll.id }}
-                    meeting={
-                      isCalendar(poll.kind) && poll.schedule
-                        ? { title: poll.title, schedule: poll.schedule }
-                        : null
-                    }
+                    meeting={poll.schedule ? { title: poll.title, schedule: poll.schedule } : null}
                     initial={results}
                   />
                 </Suspense>
@@ -638,7 +634,7 @@ export function PollDetail({
           fallback={
             <BallotsSkeleton
               rows={status.voted_count || undefined}
-              schedule={isCalendar(poll.kind) ? poll.schedule : null}
+              schedule={poll.schedule ?? null}
             />
           }
         >
@@ -647,7 +643,7 @@ export function PollDetail({
             title={poll.title}
             question={poll.question_title}
             initial={ballots}
-            schedule={isCalendar(poll.kind) ? poll.schedule : null}
+            schedule={poll.schedule ?? null}
           />
         </Suspense>
       )}
@@ -658,7 +654,7 @@ export function PollDetail({
           fallback={
             <YourBallotSkeleton
               rows={optionList.length || undefined}
-              schedule={isCalendar(poll.kind) ? poll.schedule : null}
+              schedule={poll.schedule ?? null}
             />
           }
         >
@@ -666,7 +662,7 @@ export function PollDetail({
             pollId={poll.id}
             options={optionList}
             initial={yourScores}
-            schedule={isCalendar(poll.kind) ? poll.schedule : null}
+            schedule={poll.schedule ?? null}
           />
         </Suspense>
       )}
@@ -793,7 +789,7 @@ function VoteForm({
     if (error) throw new Error(error.message)
   }
 
-  if (isCalendar(poll.kind) && poll.schedule) {
+  if (poll.schedule) {
     return (
       <Suspense fallback={<QuestionSkeleton schedule={poll.schedule} strip={questionStrip} />}>
         <TimeBallotCard

@@ -7,7 +7,7 @@ import { formatWindow } from '../lib/schedule'
 import { consensusWinnersSchema, parseAnswer } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
 import { count, stars } from '../lib/plural'
-import { CHOICE_NUMBER, CHOICE_NUMBERS, consensusWinnersFor, toolKind } from '../lib/choices'
+import { CHOICE_NUMBERS, choiceNumberLabel, consensusWinnersFor } from '../lib/choices'
 import { ChoiceModal } from './ChoiceBlurb'
 import type { MeetingEvent } from '../lib/calendarEvent'
 import type { ConsensusWinnersResult, PollResults } from '../lib/types'
@@ -52,7 +52,8 @@ export function ConsensusWinners({
 
   return (
     <ChoiceModal
-      kind={toolKind('consensus_winners', results.kind)}
+      kind="consensus_winners"
+      calendar={results.calendar}
       opened={opened}
       onClose={onClose}
     >
@@ -167,7 +168,7 @@ export function ConsensusWinnersBody({
 
       {!sample && (
         <WinnerCount
-          label={CHOICE_NUMBER[toolKindOf(results)]!.label}
+          label={choiceNumberLabel('consensus_winners', results.calendar)}
           value={winners}
           optionCount={remaining}
           onChange={onWinners}
@@ -205,9 +206,6 @@ export function ConsensusWinnersBody({
     </Stack>
   )
 }
-
-/** Which kind's wording the number takes: winners on a list, times on a calendar. */
-const toolKindOf = (results: PollResults) => toolKind('consensus_winners', results.kind)
 
 /**
  * How many to choose. No *All*, unlike `ChoiceCount`: every option is no

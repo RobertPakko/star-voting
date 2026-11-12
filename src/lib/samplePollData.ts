@@ -15,7 +15,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     view: {
       poll: {
         id: 'sample-when',
-        kind: 'consensus_time',
+        kind: 'consensus',
         mode: 'open',
         title: 'Movie night',
         group_id: 'e0338139-5a10-2e5e-0a17-3511e2a329fd',
@@ -29,7 +29,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: null,
-        created_at: '2026-11-11T15:53:55.101339-08:00',
+        created_at: '2026-11-11T22:56:32.905474-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -170,7 +170,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: 'e0338139-5a10-2e5e-0a17-3511e2a329fd',
         schedule: null,
         closed_at: null,
-        created_at: '2026-11-11T15:53:55.101339-08:00',
+        created_at: '2026-11-11T22:56:32.905474-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -275,7 +275,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     view: {
       poll: {
         id: 'sample-result-when',
-        kind: 'consensus_time',
+        kind: 'consensus',
         mode: 'open',
         title: 'Movie night',
         group_id: '0c0ce273-8fac-602a-659a-427718fdd95e',
@@ -289,7 +289,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T15:53:55.101339-08:00',
+        created_at: '2026-11-11T22:56:32.905474-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film and a time to meet.',
         show_voters: true,
@@ -923,7 +923,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
     ],
     results: {
       tie: false,
-      kind: 'consensus_time',
+      kind: 'consensus',
       mode: 'open',
       runoff: {
         ties: 6,
@@ -1005,6 +1005,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           average_score: 1.89,
         },
       ],
+      calendar: true,
       weighted: false,
       finalists: ['a40a3397-abdd-d3d1-3b4d-0110ab392f37', '71a3c317-1111-21a0-4678-1e724f694c58'],
       tiebreaks: [],
@@ -1470,7 +1471,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '0c0ce273-8fac-602a-659a-427718fdd95e',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T15:53:55.101339-08:00',
+        created_at: '2026-11-11T22:56:32.905474-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film and a time to meet.',
         show_voters: true,
@@ -2013,6 +2014,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           average_score: 1.22,
         },
       ],
+      calendar: false,
       weighted: false,
       finalists: ['08726bf7-0f4d-190a-d5ed-c00d0565abbe', '7ddc6826-8f1e-3e14-ac34-e915a79c202e'],
       tiebreaks: [
@@ -2377,7 +2379,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '1b5f03ad-97de-c232-e97d-95c2e0c074ef',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T15:53:55.101339-08:00',
+        created_at: '2026-11-11T22:56:32.905474-08:00',
         description:
           "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.",
         show_voters: true,
@@ -2795,6 +2797,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           average_score: 1.16,
         },
       ],
+      calendar: false,
       weighted: true,
       finalists: ['703ffd54-672f-b968-e161-16d90bb8f9bc', '7f9afbf2-d98a-ef18-ecfe-aea057b0bc62'],
       tiebreaks: [],
@@ -3023,7 +3026,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '1b5f03ad-97de-c232-e97d-95c2e0c074ef',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T15:53:55.101339-08:00',
+        created_at: '2026-11-11T22:56:32.905474-08:00',
         description:
           "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.",
         show_voters: true,
@@ -3544,6 +3547,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           average_score: 2.0,
         },
       ],
+      calendar: false,
       weighted: false,
       finalists: ['315d1987-0f43-af34-c21b-02d51ace3d05', '4cd5471e-665f-87dc-7361-ee8149a67f04'],
       tiebreaks: [],
@@ -3892,7 +3896,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '1b5f03ad-97de-c232-e97d-95c2e0c074ef',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-11T15:53:55.101339-08:00',
+        created_at: '2026-11-11T22:56:32.905474-08:00',
         description:
           "The next movie night, made as a sequel to the first: everyone's ballot on the film counts less the more they liked last week's. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.",
         show_voters: true,
@@ -4300,6 +4304,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           average_score: 2.2,
         },
       ],
+      calendar: false,
       weighted: false,
       finalists: ['1f301654-a628-1a0f-bafa-f4ca4da96b90', '9c41ac92-f17d-6df9-15bb-fecebfa1535b'],
       tiebreaks: [],

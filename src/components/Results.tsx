@@ -17,7 +17,7 @@ import { MoreResults } from './MoreResults'
 import { Reveal } from './Reveal'
 import { ResultsSkeleton } from './Skeletons'
 import { StarRounds } from './StarRounds'
-import { CHOICES, chosenResult, toolKind } from '../lib/choices'
+import { choiceLabel, chosenResult } from '../lib/choices'
 import { ChoiceBlurb } from './ChoiceBlurb'
 import classes from './Results.module.css'
 
@@ -110,7 +110,7 @@ export function Results({
   // page is the best option's.
   const chosen = chosenResult(results)
   const tool = chosen?.kind ?? 'option'
-  const barKind = toolKind(tool, shown.kind)
+  const calendar = shown.calendar
 
   // What a reader can do with the answer, in the bar that gives it.
   const answers = <MoreResults source={source} results={shown} shown={tool} />
@@ -124,7 +124,12 @@ export function Results({
     const event = winnerId ? eventFor(winnerId) : null
     const level = levelOptions(chosen.consensus, h24)
     bar = (
-      <AnswerBar kind={barKind} name={raw ? formatWindow(raw, h24) : null} event={event}>
+      <AnswerBar
+        kind={tool}
+        calendar={calendar}
+        name={raw ? formatWindow(raw, h24) : null}
+        event={event}
+      >
         {answers}
         {event && <AddToCalendar event={event} />}
         {level.length >= 2 && (
@@ -134,18 +139,27 @@ export function Results({
     )
   } else if (chosen) {
     // Several options are the answer, so the bar names only the kind.
-    bar = <AnswerBar kind={barKind}>{answers}</AnswerBar>
+    bar = (
+      <AnswerBar kind={tool} calendar={calendar}>
+        {answers}
+      </AnswerBar>
+    )
   } else if (shown.winner_id) {
     const event = eventFor(shown.winner_id)
     bar = (
-      <AnswerBar kind={barKind} name={nameById.get(shown.winner_id) ?? null} event={event}>
+      <AnswerBar
+        kind={tool}
+        calendar={calendar}
+        name={nameById.get(shown.winner_id) ?? null}
+        event={event}
+      >
         {answers}
         {event && <AddToCalendar event={event} />}
       </AnswerBar>
     )
   } else {
     bar = (
-      <AnswerBar kind={barKind} name={null}>
+      <AnswerBar kind={tool} calendar={calendar} name={null}>
         {answers}
         {shown.finalists.length === 2 && (
           <CoinFlip
@@ -207,17 +221,20 @@ export function Results({
  */
 function AnswerBar({
   kind,
+  calendar,
   name,
   event = null,
   children,
 }: {
   kind: PollKind
+  /** Whether the options are a calendar's, which names the kind as times. */
+  calendar: boolean
   name?: string | null
   /** A time poll's winner, whose meeting length the title carries. */
   event?: MeetingEvent | null
   children: ReactNode
 }) {
-  const { label } = CHOICES[kind]
+  const label = choiceLabel(kind, calendar)
   const none = name === null
 
   return (
@@ -258,7 +275,7 @@ function AnswerBar({
               </ActionIcon>
             </Popover.Target>
             <Popover.Dropdown>
-              <ChoiceBlurb kind={kind} />
+              <ChoiceBlurb kind={kind} calendar={calendar} />
             </Popover.Dropdown>
           </Popover>
         </Group>

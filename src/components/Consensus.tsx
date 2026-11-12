@@ -7,7 +7,6 @@ import { formatWindow, relabelScores } from '../lib/schedule'
 import { consensusSchema, parseAnswer } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
 import { count, stars } from '../lib/plural'
-import { toolKind } from '../lib/choices'
 import { ChoiceModal } from './ChoiceBlurb'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { MeetingEvent } from '../lib/calendarEvent'
@@ -52,7 +51,7 @@ export function Consensus({
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
 
   return (
-    <ChoiceModal kind={toolKind('consensus', results.kind)} opened={opened} onClose={onClose}>
+    <ChoiceModal kind="consensus" calendar={results.calendar} opened={opened} onClose={onClose}>
       <ConsensusBody source={source} results={results} leftOut={leftOut} onLeftOut={setLeftOut} />
     </ChoiceModal>
   )

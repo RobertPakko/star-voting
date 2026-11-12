@@ -616,11 +616,15 @@ real project each is preceded by a CORS preflight. Count requests against
 
 ## A poll that finds a time
 
-A poll has a `kind`, which is also what it asks for (see [A question asks
-for the result it opens on](#a-question-asks-for-the-result-it-opens-on)).
-Every kind but the three calendar kinds, `time`, `consensus_time` and
-`consensus_times` (`isCalendar` in [`lib/choices.ts`](src/lib/choices.ts)),
-is a list somebody wrote, scored 0–5; *a time poll* below means any of them. A time poll is a poll
+A poll has a `kind`, which is what it asks for (see [A question asks for
+the result it opens on](#a-question-asks-for-the-result-it-opens-on)), and
+separately a ballot: a list somebody wrote, scored 0–5, or a calendar. **A
+question is a calendar exactly when it has a `schedule`**, which the create
+form's *Find a time* switch gives it; every kind but a proportional budget
+may have one (a meeting time is not bought). *A time poll* below means any
+question with a schedule. A calendar is not a kind of its own because each
+kind would need a time twin (a best time, a consensus time, consensus
+times…), and every new kind another. A time poll is a poll
 looking for a meeting slot: the creator says how long the meeting is
 and which UTC offset the poll is held at, then **paints a calendar** to say
 which hours of which days are in bounds. Every window of that length that fits
@@ -644,17 +648,24 @@ one header, one set of rules.
 
 ### What is stored
 
-`polls.kind` and `polls.schedule`, tied by a check constraint: `schedule` is
-null if and only if `kind <> 'time'`.
+`polls.schedule`, null on a written list. `polls_schedule_ck` refuses one
+only on a budget (`validate_calendar_kind` says so in words first), and the
+database asks `schedule is not null` wherever it needs to know; the browser
+asks `poll.schedule`, or `results.calendar`, which `poll_tally` carries.
 
 ```json
 {
   "timezone": "-07:00",
   "window": { "start": "09:00", "end": "22:00" },
   "desired_slots": 6,
-  "granularity": 30
+  "granularity": 30,
+  "step": 180,
+  "places": 2
 }
 ```
+
+`step` and `places` are optional; see [How far apart the windows
+start](#how-far-apart-the-windows-start).
 
 **Which days and hours a poll asks about are not stored.** They are exactly
 the cells the options cover, so the browser reads them back off the option
@@ -711,8 +722,36 @@ All of it is [`src/lib/schedule.ts`](src/lib/schedule.ts), pure and tested by
 `npm run test:unit` — the only election logic not in Postgres.
 
 **Creation.** Enumerate every start such that **every cell the window covers
-was painted**. A gap in the painting is a gap in the options. A day painted
-too short for one window contributes nothing, and the create form says so.
+was painted** and it is at least the step after the window before it. A gap
+in the painting is a gap in the options. A day painted too short for one
+window contributes nothing, and the create form says so.
+
+#### How far apart the windows start
+
+`schedule.step`, in minutes: a whole number of granules no longer than the
+meeting (`validate_schedule`). Missing means every granule, which is every
+poll made before it could be chosen. **Windows are taken greedily from the
+earliest cell** (`enumerateWindows`), so each painted stretch is cut from
+where it starts: 10:00–16:00 at a two-hour step is 10, 12 and 14.
+
+**The default follows the kind until the creator picks one** (`stepFor`, as
+the offset follows the dates): back to back where the kind picks several
+times (`picksSeveral`: multiple winners, consensus winners, fractional
+winners, an assignment), since overlapping windows would make two of its
+answers nearly the same time — the counts know nothing of overlap; every
+granule where it picks one, since a start half an hour later can be the one
+everybody makes. A step shorter than the meeting on a kind that picks
+several is allowed, with a line under the select saying what it costs.
+
+**A poll collecting its times keeps its windows where they are**: `PaintTimes`
+passes the list to `enumerateWindows` as `keep`, so a window on the list
+stands while it is still painted whole and a new one goes only where it
+crowds none of them. Without it, an hour painted before a stretch would
+re-cut the whole stretch from the new start.
+
+**An assignment of times gives every window the same places**, *Places per
+time* on the form, sent as each window's `kind_value` and kept as
+`schedule.places` so a window painted later (`TimeList`) is given the same.
 
 **Reading the bounds back.** `boundsOf` is the cells the options cover. It is
 lossy at the edges, correctly: a cell no window covers is one a voter could
@@ -734,8 +773,9 @@ a step. That is the cost of storing windows rather than granules.
 ### Making one
 
 [`ScheduleFields`](src/components/ScheduleFields.tsx) asks for the meeting
-length, the hours a whole-day fill lays down, and the offset, over one
-`PaintCalendar`.
+length, the offset, the step and the hours a whole-day fill lays down, over
+one `PaintCalendar`, with a line under it counting the times the painting
+makes.
 
 - **A day is in the poll exactly while something is painted on it.** There is
   no separate date picker; `daysOf(marked)` gives the days, and
@@ -3207,8 +3247,8 @@ say only that voting was closed early, when it was.
 ([`MoreResults`](src/components/MoreResults.tsx)) holding **Consensus
 option** (*Consensus time* on a time poll), **Fractional winners**,
 **Proportional budget** and **Option assignment** (two or more options; the
-budget and the assignment not on a time poll, the assignment only where the
-poll shows who voted), and **Consensus winners** (*Consensus times*),
+budget not on a time poll, the assignment only where the poll shows who
+voted), and **Consensus winners** (*Consensus times*),
 **Option ranking** and **Multiple winners** (three or more), each opening
 a modal; then *Add to calendar* under a time poll's
 winner or *Flip a coin* under *No winner*. One menu rather than a
@@ -3399,9 +3439,12 @@ counts the same example, and a second worked by hand over two rounds.
   other written list every option starts at one place and every voter at
   one option, and *Edit places* (`PlacesEditor`) sends `p_places` and
   `p_per_voter`, held by `useAssignmentInputs` and never stored.
-- **Not on a sequential tally, not on a time poll, not on the sample's
-  other questions**, as for the budget. The sample's assignment question
-  answers its recorded count.
+- **Not on a sequential tally, and not on the sample's other questions**,
+  as for the budget. The sample's assignment question answers its recorded
+  count. **On a time poll it hands out times** (interview slots, shifts),
+  each window given the same places; see [How far apart the windows
+  start](#how-far-apart-the-windows-start), whose back-to-back default is
+  what stops it seating two voters in overlapping slots.
 
 **Consensus option** is for a choice everybody has to live with, a meeting
 time above all: the option whose lowest score (its *floor*) is highest, so
@@ -3515,22 +3558,17 @@ The modal states two consequences:
 
 A question's `kind` is what it asks for, picked on the create form as
 *Choice* and frozen at creation: `option` (*Best option*, the default),
-`time` (*Best time*, the calendar ballot), `consensus` (*Consensus
-option*), `consensus_time` (*Consensus time*, the calendar ballot),
-`consensus_winners` (*Consensus winners*), `consensus_times` (*Consensus
-times*, the calendar ballot), `ranking` (*Option ranking*), `multiple`
-(*Multiple winners*), `fractional` (*Fractional winners*), `budget`
-(*Proportional budget*) or `assignment` (*Option assignment*). **Only the
-three time kinds change the ballot**, and code asks `isCalendar(kind)`,
-never `kind === 'time'`; every other kind is a written list. In SQL the same
-question is `is_calendar_kind(kind)` (`create_poll`, `create_poll_group`,
-and the two creator doors that refuse a typed name; `polls_schedule_ck`
-spells the list out). The consensus and consensus winners are the results
-with a calendar of their own, because they are the ones most worth asking
-of a meeting time. **Several best times are not a
-kind**: a time poll's *More results* offers them. One column,
-because one dropdown: a separate ballot-shape setting and result setting were
-two questions where the creator has one. The names are in
+`consensus` (*Consensus option*), `consensus_winners` (*Consensus
+winners*), `ranking` (*Option ranking*), `multiple` (*Multiple winners*),
+`fractional` (*Fractional winners*), `budget` (*Proportional budget*) or
+`assignment` (*Option assignment*). **The kind never changes the ballot**:
+whether it is a calendar is the schedule, *Find a time* on the form, so
+every kind but a budget can be asked of a meeting time (see [A poll that
+finds a time](#a-poll-that-finds-a-time)). On a calendar some kinds read
+as times (*Best time*, *Consensus time*, *Consensus times*, *Time
+assignment*; `choiceOf` and `choiceLabel`), wherever a kind is named — the
+form, the answer's bar, the modals, *More results* — and so do the
+numbers' labels (`choiceNumberLabel`). The names are in
 [`lib/choices.ts`](src/lib/choices.ts), with `offers`, the option counts
 each result is offered from. The form's *Choice* label carries an info icon
 opening a popover that links to `/choices` (in a new tab, so the form

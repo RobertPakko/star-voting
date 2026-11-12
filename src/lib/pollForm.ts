@@ -3,10 +3,12 @@ import {
   countWindows,
   daysOf,
   DEFAULT_HOURS,
+  defaultStep,
   describeLength,
   fromDay,
   meetingMinutes,
   spanOf,
+  stepsFor,
   todayIn,
   type Bounds,
   type GranuleKey,
@@ -25,7 +27,13 @@ import {
   VOTER_NAME_MAX,
 } from './limits'
 import type { DailyWindow, PollKind, PollSchedule } from './types'
-import { CHOICE_NUMBER, DEFAULT_CHOICE_NUMBER, isCalendar, optionNumberOf } from './choices'
+import {
+  canBeCalendar,
+  CHOICE_NUMBER,
+  DEFAULT_CHOICE_NUMBER,
+  optionNumberOf,
+  picksSeveral,
+} from './choices'
 
 /*
  * The create form's draft model and validation, apart from the page that
@@ -74,11 +82,25 @@ export interface QuestionDraft {
   kindNumbers: Partial<Record<PollKind, number>>
   /** A proportional budget's budget, as the number box holds it: '' while empty. */
   budget: number | string
+  /**
+   * *Find a time*: the options are the windows of a painted calendar rather
+   * than a written list. Read through `isTimeQuestion`, since a budget is
+   * never one whatever this says.
+   */
+  calendar: boolean
   /*
-   * The time-poll fields are kept whatever the kind, so switching a question
-   * to a list and back loses nothing on either side; so are the options.
+   * The time-poll fields are kept whatever the toggle, so switching a
+   * question to a list and back loses nothing on either side; so are the
+   * options.
    */
   schedule: PollSchedule
+  /**
+   * The step the creator picked, in minutes, or null while it follows the
+   * kind (`stepFor`). Like the offset, a guess until it is chosen.
+   */
+  step: number | null
+  /** An assignment of times: the places every window gets, '' for one. */
+  placesPerTime: number | string
   /** The days on the calendar. Not stored. */
   days: string[]
   /** What a whole-day fill lays down. Not stored. */
@@ -145,7 +167,10 @@ export function blankQuestion(): QuestionDraft {
     kind: 'option',
     kindNumbers: { ...DEFAULT_CHOICE_NUMBER },
     budget: '',
+    calendar: false,
     schedule: blankSchedule(),
+    step: null,
+    placesPerTime: '',
     days: [],
     hours: { ...DEFAULT_HOURS },
     marked: new Set(),
@@ -154,6 +179,37 @@ export function blankQuestion(): QuestionDraft {
     sequential: false,
     carried: [blankCarried()],
   }
+}
+
+/** Whether a question's options are a calendar's windows: *Find a time*, on any kind but a budget. */
+export function isTimeQuestion(question: QuestionDraft): boolean {
+  return question.calendar && canBeCalendar(question.kind)
+}
+
+/**
+ * How far apart a time question's windows start: the creator's pick while
+ * the meeting's length still allows it, otherwise back to back where the
+ * question picks several times and every half hour (or day) where it picks
+ * one. See `defaultStep`.
+ */
+export function stepFor(question: QuestionDraft): number {
+  const { step, schedule } = question
+  if (step !== null && stepsFor(schedule).includes(step)) return step
+  return defaultStep(schedule, picksSeveral(question.kind))
+}
+
+/**
+ * The schedule a time question counts and sends: the form's, with the step
+ * it will be enumerated at and, on an assignment, the places each window
+ * gets. `window` is settled from the painting separately (`settle`).
+ */
+export function gridOf(question: QuestionDraft): PollSchedule {
+  const { step: _, places: __, ...schedule } = question.schedule
+  const places =
+    question.kind === 'assignment' && question.placesPerTime !== ''
+      ? Number(question.placesPerTime)
+      : null
+  return { ...schedule, step: stepFor(question), ...(places === null ? {} : { places }) }
 }
 
 /** The number a question sends with its kind: null where the kind takes none. */
@@ -207,6 +263,8 @@ export interface FormErrors {
   optionNumbers: Record<string, string>
   /** A proportional budget's budget, by question index. */
   budgets: Record<number, string>
+  /** An assignment of times' places per time, by question index. */
+  places: Record<number, string>
   /** A sequential question's list of earlier voters, by question index. */
   carried: Record<number, string>
   /** One earlier voter's name and stars, by `optionKey()` (question, row). */
@@ -223,6 +281,7 @@ export function noErrors(): FormErrors {
     optionDescriptions: {},
     optionNumbers: {},
     budgets: {},
+    places: {},
     carried: {},
     carriedVoters: {},
     carriedGiven: {},
@@ -242,6 +301,7 @@ export function hasErrors(errors: FormErrors): boolean {
     Object.keys(errors.optionDescriptions).length ||
     Object.keys(errors.optionNumbers).length ||
     Object.keys(errors.budgets).length ||
+    Object.keys(errors.places).length ||
     Object.keys(errors.carried).length ||
     Object.keys(errors.carriedVoters).length ||
     Object.keys(errors.carriedGiven).length,
@@ -255,6 +315,7 @@ export function questionHasError(errors: FormErrors, questionIndex: number): boo
     errors.options[questionIndex] ||
     errors.schedules[questionIndex] ||
     errors.budgets[questionIndex] ||
+    errors.places[questionIndex] ||
     errors.carried[questionIndex]
   ) {
     return true
@@ -385,12 +446,17 @@ export function validate(form: {
       }
     }
 
-    if (isCalendar(question.kind)) {
+    if (isTimeQuestion(question)) {
       // Counted from the same set the submit enumerates (past days dropped),
       // so the numbers quoted here match the options made.
       const marked = fromDay(question.marked, todayIn(question.schedule.timezone))
       const days = daysOf(marked)
-      const total = countWindows(question.schedule, marked)
+      const total = countWindows(gridOf(question), marked)
+
+      if (question.kind === 'assignment' && question.placesPerTime !== '') {
+        const places = amountError(question.placesPerTime)
+        if (places) errors.places[questionIndex] = places
+      }
       const length = describeLength(meetingMinutes(question.schedule))
 
       // A question collecting its times may start empty.
@@ -409,7 +475,7 @@ export function validate(form: {
           'That leaves one window to choose from. Mark more of the day, shorten the meeting, or add a day.'
       } else if (total > MAX_OPTIONS) {
         errors.schedules[questionIndex] =
-          `That is ${total} windows, and a ballot can hold ${MAX_OPTIONS}. Use a longer meeting, fewer days, or a narrower part of the day.`
+          `That is ${total} windows, and a ballot can hold ${MAX_OPTIONS}. Start the times further apart, or use a longer meeting, fewer days, or a narrower part of the day.`
       }
       return
     }

@@ -1,6 +1,5 @@
 import { createElement, use, type ComponentType } from 'react'
 import type { PollRead } from '../lib/types'
-import { isCalendar } from '../lib/choices'
 
 /**
  * What `lazy()` does, with one thing it cannot: a chunk fetched ahead of time
@@ -151,13 +150,13 @@ export function preloadCards(page: PollRead): Promise<void> {
       ? {
           finished: page.status.results_available,
           published: page.poll.show_ballots,
-          time: isCalendar(page.poll.kind),
+          time: page.poll.schedule != null,
         }
       : page.kind === 'open'
         ? {
             finished: page.view.results_available,
             published: page.view.poll.show_ballots,
-            time: isCalendar(page.view.poll.kind),
+            time: page.view.poll.schedule != null,
           }
         : null
   if (!facts) return Promise.resolve()

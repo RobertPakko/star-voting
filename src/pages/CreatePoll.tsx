@@ -31,6 +31,7 @@ import { ScheduleFields } from '../components/ScheduleFields'
 import {
   boundsOf,
   carryForward,
+  countWindows,
   daysOf,
   enumerateWindows,
   fromDay,
@@ -55,6 +56,9 @@ import {
   blankOption,
   blankQuestion,
   carriedOf,
+  gridOf,
+  isTimeQuestion,
+  stepFor,
   numberOf,
   kindValueOf,
   hasErrors,
@@ -77,11 +81,13 @@ import { AMOUNT_MAX, MAX_OPTIONS, MAX_QUESTIONS } from '../lib/limits'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
 import type { Invitee, Poll, PollKind, PollMode, PollOption } from '../lib/types'
 import {
+  canBeCalendar,
   CHOICE_NUMBER,
   CHOICE_ORDER,
-  CHOICES,
-  isCalendar,
+  choiceLabel,
+  choiceNumberLabel,
   optionNumberOf,
+  picksSeveral,
   SEQUENTIAL_KINDS,
 } from '../lib/choices'
 import { usePageTitle } from '../lib/pageTitle'
@@ -271,15 +277,16 @@ export function CreatePoll() {
               : { ...fresh.kindNumbers, [row.kind]: number },
           budget: row.kind === 'budget' && number !== null ? number : '',
         }
-        const parsed = isCalendar(row.kind) ? pollScheduleSchema.safeParse(row.schedule) : null
+        const timed = row.schedule != null
+        const parsed = timed ? pollScheduleSchema.safeParse(row.schedule) : null
         const grid = parsed?.success ? parsed.data : null
 
-        if (isCalendar(row.kind)) {
+        if (timed) {
           if (!grid) {
             setError(
               "That poll's calendar could not be read, so this copy has its title and settings but none of its times. Mark the days and hours below.",
             )
-            return { ...blank, title: row.question_title ?? '' }
+            return { ...blank, calendar: true, title: row.question_title ?? '' }
           }
 
           // Read the painting off the options, then move it forward whole
@@ -293,11 +300,17 @@ export function CreatePoll() {
             copiedTimes.set(blank.key, copied)
             clock.today ??= todayIn(grid.timezone)
           }
+          // An assignment's places per time copy as the box it was given in.
+          const { places, ...copiedGrid } = grid
           return {
             ...blank,
             title: row.question_title ?? '',
-            // The source's offset is a choice, so later date changes must not move it.
-            schedule: grid,
+            calendar: true,
+            // The source's offset and step are choices, so later changes to
+            // the dates or the kind must not move them.
+            schedule: copiedGrid,
+            step: copiedGrid.step ?? copiedGrid.granularity,
+            placesPerTime: places ?? '',
             offsetPicked: true,
             marked: renewed.bounds,
             days: daysOf(renewed.bounds),
@@ -553,7 +566,7 @@ export function CreatePoll() {
     // A time question's options are its enumerated windows, sent as ordinary
     // options. Blank option rows are dropped, with their descriptions.
     const cleaned = questions.map((question) => {
-      if (!isCalendar(question.kind)) {
+      if (!isTimeQuestion(question)) {
         return {
           title: question.title.trim(),
           kind: question.kind,
@@ -572,17 +585,18 @@ export function CreatePoll() {
       // Days that have gone (e.g. form left open past midnight) are dropped,
       // as `validate` counted.
       const marked = fromDay(question.marked, todayIn(question.schedule.timezone))
-      const grid = settle(question.schedule, marked)
+      const grid = settle(gridOf(question), marked)
       return {
         title: question.title.trim(),
         kind: question.kind,
-        kind_value: null,
+        kind_value: kindValueOf(question),
         schedule: grid,
         carried: carriedOf(question, isOpen),
         options: enumerateWindows(grid, marked).map((name) => ({
           name,
           description: null,
-          number: null,
+          // An assignment's windows each carry the places per time.
+          number: question.kind === 'assignment' ? (grid.places ?? null) : null,
         })),
       }
     })
@@ -697,6 +711,7 @@ export function CreatePoll() {
    */
   function choiceFields(question: QuestionDraft, questionIndex: number) {
     const number = CHOICE_NUMBER[question.kind]
+    const timed = isTimeQuestion(question)
     const id = `choice-${question.key}`
     const budget = question.kind === 'budget'
     const columns = 1 + (question.sequential ? 1 : 0) + (number || budget ? 1 : 0)
@@ -748,7 +763,13 @@ export function CreatePoll() {
             value={question.sequential ? SEQUENTIAL : question.kind}
             onChange={(v) => v && choose(v)}
             data={[
-              ...CHOICE_ORDER.map((kind) => ({ value: kind, label: CHOICES[kind].label })),
+              // On a calendar each reads as times, and a budget is not on
+              // offer: a meeting time is not something anybody buys.
+              ...CHOICE_ORDER.map((kind) => ({
+                value: kind,
+                label: choiceLabel(kind, timed),
+                disabled: question.calendar && !canBeCalendar(kind),
+              })),
               { value: SEQUENTIAL, label: 'Sequential poll' },
             ]}
           />
@@ -760,7 +781,10 @@ export function CreatePoll() {
               allowDeselect={false}
               value={question.kind}
               onChange={(v) => v && patchQuestion(questionIndex, { kind: v as PollKind })}
-              data={SEQUENTIAL_KINDS.map((kind) => ({ value: kind, label: CHOICES[kind].label }))}
+              data={SEQUENTIAL_KINDS.map((kind) => ({
+                value: kind,
+                label: choiceLabel(kind, timed),
+              }))}
             />
           </Stack>
         )}
@@ -768,7 +792,7 @@ export function CreatePoll() {
           // Its label sits on the choice's label row, so the two boxes line up.
           <Stack gap={2} justify="flex-end">
             <Select
-              label={number.label}
+              label={choiceNumberLabel(question.kind, timed)}
               allowDeselect={false}
               value={String(question.kindNumbers[question.kind] ?? number.numbers.at(-1))}
               onChange={(v) =>
@@ -803,6 +827,29 @@ export function CreatePoll() {
     )
   }
 
+  /**
+   * *Find a time*: whether the options are written or painted on a calendar.
+   * A setting of the ballot rather than another *Choice*, so every result
+   * can be asked of a meeting time; a budget is the one that cannot, and
+   * while it is chosen the switch says why.
+   */
+  function calendarSwitch(question: QuestionDraft, questionIndex: number) {
+    const allowed = canBeCalendar(question.kind)
+    return (
+      <Switch
+        checked={isTimeQuestion(question)}
+        disabled={!allowed}
+        onChange={(e) => patchQuestion(questionIndex, { calendar: e.currentTarget.checked })}
+        label="Find a time"
+        description={
+          allowed
+            ? 'Voters mark a calendar instead of scoring a written list.'
+            : 'A proportional budget buys its options, and a meeting time is not bought.'
+        }
+      />
+    )
+  }
+
   /** One question's fields, the same whether in a tab panel or the bare form. */
   function questionFields(question: QuestionDraft, questionIndex: number) {
     return (
@@ -818,6 +865,8 @@ export function CreatePoll() {
           />
         )}
 
+        {calendarSwitch(question, questionIndex)}
+
         {choiceFields(question, questionIndex)}
 
         {question.sequential && (
@@ -831,7 +880,7 @@ export function CreatePoll() {
           />
         )}
 
-        {isCalendar(question.kind) ? (
+        {isTimeQuestion(question) ? (
           <>
             {question.datesMoved > 0 && (
               <Alert color="blue" title="These dates have moved">
@@ -845,8 +894,32 @@ export function CreatePoll() {
                 Voters will be able to add more times to the calendar later.
               </Text>
             )}
+            {question.kind === 'assignment' && (
+              // One number for every window, since there is no row to type
+              // one beside; kept in the schedule for windows added later.
+              <NumberInput
+                label="Places per time"
+                description="How many voters each time can go to. Voters will not see it."
+                placeholder="1"
+                value={question.placesPerTime}
+                onChange={(v) => patchQuestion(questionIndex, { placesPerTime: v })}
+                min={1}
+                max={AMOUNT_MAX}
+                allowDecimal={false}
+                allowNegative={false}
+                thousandSeparator=","
+                error={shown.places[questionIndex]}
+              />
+            )}
             <ScheduleFields
               schedule={question.schedule}
+              step={stepFor(question)}
+              several={picksSeveral(question.kind)}
+              count={countWindows(
+                gridOf(question),
+                fromDay(question.marked, todayIn(question.schedule.timezone)),
+              )}
+              onStepChange={(next) => patchQuestion(questionIndex, { step: next })}
               days={question.days}
               hours={question.hours}
               marked={question.marked}
@@ -955,7 +1028,7 @@ export function CreatePoll() {
         {/* Removing a question is a named button at the foot of the question,
             kept apart from the option rows' × so the two never look alike. */}
         <Group gap="sm" align="center" justify="space-between">
-          {isCalendar(question.kind) ? (
+          {isTimeQuestion(question) ? (
             <span />
           ) : (
             <Button
@@ -999,7 +1072,7 @@ export function CreatePoll() {
           setQuestions((prev) =>
             prev.map((question) => {
               const copied = datePick.copied.get(question.key)
-              if (!isCalendar(question.kind) || !copied) return question
+              if (!isTimeQuestion(question) || !copied) return question
               const marked = startingOn(copied, first, datePick.from)
               return { ...question, marked, days: daysOf(marked), datesMoved: 0 }
             }),

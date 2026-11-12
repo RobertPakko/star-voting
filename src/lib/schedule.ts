@@ -100,26 +100,85 @@ export function stepGranule(key: GranuleKey, by: number): GranuleKey {
 }
 
 /**
- * Every window on offer, in order: one per start such that every cell the
- * window covers was painted. A gap in the painting is a gap in the options.
+ * How far apart the windows start, in minutes: the schedule's own `step`, or
+ * every granule where it says none (every poll made before it could).
  */
-export function enumerateWindows(schedule: PollSchedule, bounds: Bounds): WindowStart[] {
-  const starts: WindowStart[] = []
+export function stepOf(schedule: PollSchedule): number {
+  return schedule.step ?? schedule.granularity
+}
 
-  for (const key of [...bounds].sort()) {
+/**
+ * The steps a meeting of this schedule's length can take: every whole number
+ * of granules up to the meeting, so the last is back to back. Longer would
+ * leave painted hours that no window covers; `validate_schedule` refuses it.
+ */
+export function stepsFor(schedule: PollSchedule): number[] {
+  return Array.from({ length: schedule.desired_slots }, (_, i) => (i + 1) * schedule.granularity)
+}
+
+/**
+ * Where the windows start unless the creator says otherwise: back to back
+ * where the question picks several (overlapping windows would make two of
+ * its answers nearly the same time), every granule where it picks one (where
+ * a start half an hour later can be the one everybody makes).
+ */
+export function defaultStep(schedule: PollSchedule, several: boolean): number {
+  return several ? meetingMinutes(schedule) : schedule.granularity
+}
+
+/**
+ * Every window on offer, in order: one per start such that every cell the
+ * window covers was painted, and no closer to the window before it than the
+ * step. A gap in the painting is a gap in the options.
+ *
+ * Taken greedily from the earliest cell, so a stretch's windows count from
+ * where it starts: 10:00-16:00 at a two-hour step is 10, 12 and 14. `keep`
+ * is windows already on the list (a poll collecting its times): they stand
+ * where they are while they are still painted, and a new window goes only
+ * where it crowds none of them, so painting an hour beside a stretch never
+ * moves the windows already offered there.
+ */
+export function enumerateWindows(
+  schedule: PollSchedule,
+  bounds: Bounds,
+  keep: ReadonlySet<WindowStart> = new Set(),
+): WindowStart[] {
+  const step = stepOf(schedule)
+  const startOf = (key: GranuleKey): WindowStart => {
+    const { day, minutes } = splitGranule(key)
+    return `${day}T${toTimeOfDay(minutes)}:00${schedule.timezone}`
+  }
+  const whole = (key: GranuleKey) => {
     let at = key
-    let whole = true
     for (let slot = 1; slot < schedule.desired_slots; slot++) {
       at = stepGranule(at, schedule.granularity)
-      if (!bounds.has(at)) {
-        whole = false
-        break
-      }
+      if (!bounds.has(at)) return false
     }
-    if (!whole) continue
+    return true
+  }
 
-    const { day, minutes } = splitGranule(key)
-    starts.push(`${day}T${toTimeOfDay(minutes)}:00${schedule.timezone}`)
+  const cells = [...bounds].sort()
+  // The windows already offered that are still whole stand regardless; the
+  // greedy pass places the rest around them.
+  const kept = cells.filter((key) => keep.has(startOf(key)) && whole(key))
+  const keptSet = new Set(kept)
+  const starts: WindowStart[] = []
+  // The earliest cell the next window may start on, and the next kept window
+  // a new one must not crowd.
+  let free: GranuleKey = ''
+  let k = 0
+
+  for (const key of cells) {
+    while (k < kept.length && kept[k] < key) k++
+    if (keptSet.has(key)) {
+      starts.push(startOf(key))
+      free = stepGranule(key, step)
+      continue
+    }
+    if (key < free || !whole(key)) continue
+    if (k < kept.length && stepGranule(key, step) > kept[k]) continue
+    starts.push(startOf(key))
+    free = stepGranule(key, step)
   }
   return starts
 }

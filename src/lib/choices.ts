@@ -12,15 +12,15 @@ import { SCORING_ROWS_MAX } from './resultsRows'
 
 /**
  * What a question can ask for, named once for the create form's *Choice*,
- * the results and the *More results* menu. Stored as `polls.kind`: the
- * three time kinds (`isCalendar`) change the ballot to a calendar, every other
- * kind is a written list, and each opens its results on its own answer.
- * Several best times are a time poll's *More results*, not a kind of their
- * own.
+ * the results and the *More results* menu. Stored as `polls.kind`, and each
+ * opens its results on its own answer. Whether the ballot is a calendar is
+ * not part of the kind but the question's schedule (*Find a time* on the
+ * form), which every kind but a budget may have; on a calendar the three
+ * kinds a meeting time is most often asked for read as times
+ * (`CALENDAR_NAMES`).
  */
 export const CHOICES: Record<PollKind, { label: string; section: string; blurb: string }> = {
   option: { label: 'Best option', section: 'best-option', blurb: 'picks one option using STAR.' },
-  time: { label: 'Best time', section: 'best-option', blurb: 'picks one time using STAR.' },
   ranking: {
     label: 'Option ranking',
     section: 'option-ranking',
@@ -42,22 +42,11 @@ export const CHOICES: Record<PollKind, { label: string; section: string; blurb: 
     section: 'consensus-option',
     blurb: 'picks the option whose worst score is as good as possible.',
   },
-  consensus_time: {
-    label: 'Consensus time',
-    section: 'consensus-option',
-    blurb: 'picks the time whose worst score is as good as possible.',
-  },
   consensus_winners: {
     label: 'Consensus winners',
     section: 'consensus-winners',
     blurb:
       'picks several options together so that the voter they serve worst is served as well as possible.',
-  },
-  consensus_times: {
-    label: 'Consensus times',
-    section: 'consensus-winners',
-    blurb:
-      'picks several times together so that everybody can make at least one of them as comfortably as possible.',
   },
   budget: {
     label: 'Proportional budget',
@@ -73,6 +62,33 @@ export const CHOICES: Record<PollKind, { label: string; section: string; blurb: 
   },
 }
 
+/** What a kind is called on a calendar, where it reads as a time rather than an option. */
+const CALENDAR_NAMES: Partial<Record<PollKind, { label: string; blurb: string }>> = {
+  option: { label: 'Best time', blurb: 'picks one time using STAR.' },
+  consensus: {
+    label: 'Consensus time',
+    blurb: 'picks the time whose worst score is as good as possible.',
+  },
+  consensus_winners: {
+    label: 'Consensus times',
+    blurb:
+      'picks several times together so that everybody can make at least one of them as comfortably as possible.',
+  },
+  assignment: {
+    label: 'Time assignment',
+    blurb:
+      'gives each voter one or more times, each time going to as many voters as it has places, so that the group as a whole is as satisfied as it can be.',
+  },
+}
+
+/** A kind's name and sentence, as times where the options are a calendar's. */
+export function choiceOf(kind: PollKind, calendar: boolean) {
+  return { ...CHOICES[kind], ...(calendar ? CALENDAR_NAMES[kind] : undefined) }
+}
+
+/** A kind's name, as a time where the options are a calendar's. */
+export const choiceLabel = (kind: PollKind, calendar: boolean) => choiceOf(kind, calendar).label
+
 /**
  * The number an option of a kind carries beside its name, and its field when
  * sent and read: a budget's cost (required), an assignment's places (none
@@ -87,28 +103,34 @@ export const optionNumberOf = (kind: PollKind): OptionNumber | null =>
 export const choicePage = (kind: PollKind) => `/choices?section=${CHOICES[kind].section}`
 
 /**
- * Whether a kind's ballot is a calendar: its options are the starts of
- * meeting windows and it carries a schedule. Ask this rather than
- * `kind === 'time'`, which misses the consensus kinds. `is_calendar_kind`
- * holds the same list in the database.
+ * Whether a kind may be asked of a calendar: every one but a budget, whose
+ * options are bought, which a meeting time is not. `validate_calendar_kind`
+ * holds the same rule.
  */
-export const isCalendar = (kind: PollKind) =>
-  kind === 'time' || kind === 'consensus_time' || kind === 'consensus_times'
+export const canBeCalendar = (kind: PollKind) => kind !== 'budget'
+
+/**
+ * Whether a kind picks several times at once, so that windows overlapping
+ * one another would make two of its answers nearly the same time. Their
+ * windows start back to back unless the creator says otherwise (`defaultStep`).
+ */
+export const picksSeveral = (kind: PollKind) =>
+  kind === 'multiple' ||
+  kind === 'consensus_winners' ||
+  kind === 'fractional' ||
+  kind === 'assignment'
 
 /**
  * The kinds a sequential poll can be: the results STAR decides, which count
  * each ballot at its weight. `insert_carried_weights` holds the same list.
  */
-export const SEQUENTIAL_KINDS: PollKind[] = ['option', 'time', 'ranking', 'multiple']
+export const SEQUENTIAL_KINDS: PollKind[] = ['option', 'ranking', 'multiple']
 
 /** In the order the create form offers them. */
 export const CHOICE_ORDER: PollKind[] = [
   'option',
-  'time',
   'consensus',
-  'consensus_time',
   'consensus_winners',
-  'consensus_times',
   'ranking',
   'multiple',
   'fractional',
@@ -121,29 +143,10 @@ export const CHOICE_ORDER: PollKind[] = [
  * page opens on. `option` is STAR's own answer: the winner, the runoff and
  * the scoring round.
  */
-export type ResultTool = Extract<
-  PollKind,
-  | 'option'
-  | 'ranking'
-  | 'multiple'
-  | 'fractional'
-  | 'consensus'
-  | 'consensus_winners'
-  | 'budget'
-  | 'assignment'
->
+export type ResultTool = PollKind
 
-/** The kind a tool is on a poll of this kind: on a calendar, an option is a time. */
-export function toolKind(tool: ResultTool, kind: PollKind): PollKind {
-  if (!isCalendar(kind)) return tool
-  if (tool === 'option') return 'time'
-  if (tool === 'consensus') return 'consensus_time'
-  if (tool === 'consensus_winners') return 'consensus_times'
-  return tool
-}
-
-/** A result tool's name on a poll of this kind: a time poll's consensus is a time. */
-export const toolLabel = (tool: ResultTool, kind: PollKind) => CHOICES[toolKind(tool, kind)].label
+/** A result tool's name on a poll whose options are, or are not, a calendar's. */
+export const toolLabel = (tool: ResultTool, calendar: boolean) => choiceLabel(tool, calendar)
 
 /** Every number a ranking or several winners (of either kind) may take, smallest first. */
 export const CHOICE_NUMBERS = Array.from({ length: SCORING_ROWS_MAX - 1 }, (_, i) => i + 2)
@@ -162,16 +165,25 @@ export const CHOICE_NUMBER: Partial<Record<PollKind, { label: string; numbers: n
   ranking: { label: 'Places to rank', numbers: CHOICE_NUMBERS },
   multiple: { label: 'Number of winners', numbers: CHOICE_NUMBERS },
   consensus_winners: { label: 'Number of winners', numbers: CHOICE_NUMBERS },
-  consensus_times: { label: 'Number of times', numbers: CHOICE_NUMBERS },
   assignment: { label: 'Max options per voter', numbers: PER_VOTER_NUMBERS },
 }
+
+/** What a kind's number is called on a calendar, where its options are times. */
+const CALENDAR_NUMBER_LABELS: Partial<Record<PollKind, string>> = {
+  multiple: 'Number of winning times',
+  consensus_winners: 'Number of times',
+  assignment: 'Max times per voter',
+}
+
+/** `CHOICE_NUMBER`'s label for a kind, as times where the options are a calendar's. */
+export const choiceNumberLabel = (kind: PollKind, calendar: boolean) =>
+  (calendar ? CALENDAR_NUMBER_LABELS[kind] : undefined) ?? CHOICE_NUMBER[kind]?.label ?? ''
 
 /** What a fresh question's number starts at, for the kinds that take one. */
 export const DEFAULT_CHOICE_NUMBER: Partial<Record<PollKind, number>> = {
   ranking: SCORING_ROWS_MAX,
   multiple: 3,
   consensus_winners: 3,
-  consensus_times: 3,
   assignment: 1,
 }
 
@@ -182,8 +194,7 @@ export const DEFAULT_CHOICE_NUMBER: Partial<Record<PollKind, number>> = {
  * records the same number (`scripts/sample-poll.sql`).
  */
 export const consensusWinnersFor = (results: PollResults) =>
-  (results.kind === 'consensus_winners' || results.kind === 'consensus_times') &&
-  results.kind_value !== null
+  results.kind === 'consensus_winners' && results.kind_value !== null
     ? results.kind_value
     : Math.max(2, Math.min(DEFAULT_CHOICE_NUMBER.consensus_winners!, results.option_count - 1))
 
@@ -200,8 +211,8 @@ export function offers(tool: ResultTool, results: PollResults) {
   // A sequential poll's ballots carry weights, which only STAR's results
   // count with; a consensus or a split of them would quietly ignore them.
   if (results.weighted && !SEQUENTIAL_KINDS.includes(tool)) return false
-  // A calendar's windows are not things anybody buys, or is handed.
-  if ((tool === 'budget' || tool === 'assignment') && isCalendar(results.kind)) return false
+  // A calendar's windows are not things anybody buys.
+  if (tool === 'budget' && results.calendar) return false
   // An assignment says who gets what, so it needs a poll that names its voters.
   if (tool === 'assignment' && !results.voters_shown) return false
   return tool === 'fractional' || tool === 'consensus' || tool === 'budget' || tool === 'assignment'
@@ -226,12 +237,12 @@ export type ChosenResult =
 export function chosenResult(results: PollResults): ChosenResult | null {
   const { kind, kind_result: result } = results
   if (!result) return null
-  if (kind === 'consensus' || kind === 'consensus_time') {
+  if (kind === 'consensus') {
     return !Array.isArray(result) && 'tied_count' in result
       ? { kind: 'consensus', consensus: result }
       : null
   }
-  if (kind === 'consensus_winners' || kind === 'consensus_times') {
+  if (kind === 'consensus_winners') {
     return !Array.isArray(result) && 'served' in result
       ? { kind: 'consensus_winners', winners: result }
       : null

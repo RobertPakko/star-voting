@@ -366,8 +366,9 @@ export function AllChoices() {
             explains why it's so powerful.
           </Text>
           <Text>
-            The app also has a <strong>best time</strong> option. It uses exactly the same procedure
-            but the options are presented on a calendar to make voting easier.
+            Turn on <strong>Find a time</strong> and the options are times on a calendar, which
+            voters mark rather than score one by one; this is the <strong>best time</strong>. Every
+            choice except a proportional budget can find a time this way.
           </Text>
         </Choice>
 
@@ -420,8 +421,8 @@ export function AllChoices() {
             lets you flip a coin to choose one.
           </Text>
           <Text>
-            The app also has a <strong>consensus time</strong> option. It uses exactly the same
-            procedure but the options are presented on a calendar to make voting easier.
+            With <strong>Find a time</strong> on, this is the <strong>consensus time</strong>: the
+            same procedure, with the options presented on a calendar to make voting easier.
           </Text>
         </Choice>
 
@@ -479,8 +480,8 @@ export function AllChoices() {
             gives everything but their favorite 0 stars can force that favorite into the set.
           </Text>
           <Text>
-            The app also has a <strong>consensus times</strong> option, which picks several times on
-            a calendar, so that everyone can make at least one.
+            With <strong>Find a time</strong> on, this is <strong>consensus times</strong>, which
+            picks several times on a calendar, so that everyone can make at least one.
           </Text>
         </Choice>
 
@@ -877,6 +878,10 @@ export function AllChoices() {
             product of everyone&rsquo;s total stars the most. Voters with fewer stars so far come
             first, since a few more stars multiply their satisfaction by more. Rounds continue until
             every place is filled or every voter has as many options as they can be given.
+          </Text>
+          <Text>
+            With <strong>Find a time</strong> on, the options are times on a calendar, such as
+            interview slots or shifts, each with the same number of places.
           </Text>
           <Alert variant="light" color="orange" icon={<CpuIcon size={20} aria-hidden />}>
             <Text size="sm">

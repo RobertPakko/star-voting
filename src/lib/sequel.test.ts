@@ -5,6 +5,7 @@ import type { BallotSheet, PollResults } from './types'
 const results = (over: Partial<PollResults>): PollResults => ({
   options: [],
   option_count: 3,
+  calendar: false,
   finalists: [],
   tie: false,
   tiebreaks: [],

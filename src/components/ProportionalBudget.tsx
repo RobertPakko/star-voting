@@ -54,7 +54,7 @@ export function ProportionalBudget({
   const [inputs, setInputs] = useBudgetInputs(source.pollId)
 
   return (
-    <ChoiceModal kind="budget" opened={opened} onClose={onClose}>
+    <ChoiceModal kind="budget" calendar={results.calendar} opened={opened} onClose={onClose}>
       <ProportionalBudgetBody
         source={source}
         results={results}

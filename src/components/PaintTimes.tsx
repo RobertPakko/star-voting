@@ -197,7 +197,14 @@ export function PaintTimes({
    * cells, so marking one cell beside an existing stretch creates windows that
    * span both, and no per-cell bookkeeping would find them.
    */
-  const target = useMemo(() => new Set(enumerateWindows(schedule, wanted)), [schedule, wanted])
+  // The windows already on the list stand where they are while they are
+  // still painted, so at a step longer than a granule a new stretch beside
+  // them does not shift them (`enumerateWindows`).
+  const listed = useMemo(() => new Set(options.map((o) => o.name)), [options])
+  const target = useMemo(
+    () => new Set(enumerateWindows(schedule, wanted, listed)),
+    [schedule, wanted, listed],
+  )
   const adding = useMemo(
     () => [...target].filter((name) => !options.some((o) => o.name === name)),
     [target, options],

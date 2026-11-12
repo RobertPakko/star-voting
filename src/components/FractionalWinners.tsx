@@ -88,7 +88,7 @@ export function FractionalWinners({
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
 
   return (
-    <ChoiceModal kind="fractional" opened={opened} onClose={onClose}>
+    <ChoiceModal kind="fractional" calendar={results.calendar} opened={opened} onClose={onClose}>
       <FractionalWinnersBody
         source={source}
         results={results}

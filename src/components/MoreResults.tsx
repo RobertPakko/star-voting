@@ -56,17 +56,17 @@ export function MoreResults({
   const items = [
     offered('option') && {
       tool: 'option' as const,
-      label: toolLabel('option', results.kind),
+      label: toolLabel('option', results.calendar),
       icon: TrophyIcon,
     },
     offered('consensus') && {
       tool: 'consensus' as const,
-      label: toolLabel('consensus', results.kind),
+      label: toolLabel('consensus', results.calendar),
       icon: HandshakeIcon,
     },
     offered('consensus_winners') && {
       tool: 'consensus_winners' as const,
-      label: toolLabel('consensus_winners', results.kind),
+      label: toolLabel('consensus_winners', results.calendar),
       icon: CirclesThreeIcon,
     },
     offered('ranking') && {
@@ -91,7 +91,7 @@ export function MoreResults({
     },
     offered('assignment') && {
       tool: 'assignment' as const,
-      label: CHOICES.assignment.label,
+      label: toolLabel('assignment', results.calendar),
       icon: ArrowsSplitIcon,
     },
   ].filter((item) => item !== false)

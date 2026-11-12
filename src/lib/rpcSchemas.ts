@@ -66,16 +66,13 @@ import type {
 const pollMode = z.enum(['invite', 'open'])
 const pollKind = z.enum([
   'option',
-  'time',
   'ranking',
   'multiple',
   'fractional',
   'consensus',
-  'consensus_time',
   'budget',
   'assignment',
   'consensus_winners',
-  'consensus_times',
 ])
 
 /** The vertical axis of a grid: the earliest and latest a day may run. */
@@ -93,6 +90,8 @@ export const pollScheduleSchema = z.object({
   window: dailyWindow,
   desired_slots: z.number(),
   granularity: z.number(),
+  step: z.number().optional(),
+  places: z.number().optional(),
 })
 
 const pollOption = z.object({
@@ -383,6 +382,7 @@ export const pollResultsSchema = z.object({
     .nullable(),
   weighted: z.boolean().optional(),
   voters_shown: z.boolean().optional(),
+  calendar: z.boolean(),
 }) satisfies z.ZodType<PollResults>
 
 export const optionScoresSchema = z.array(

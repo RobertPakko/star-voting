@@ -56,11 +56,18 @@ export function TimeList({
     if (add.length === 0 && removeIds.length === 0) return landed(add, removeIds, quiet)
     setError(null)
     setBusy(true)
-    const { error: rpcError } = await sendDraft(source, {
-      added: add.map((name) => ({ name, description: '' })),
-      corrected: [],
-      removed: removeIds,
-    })
+    // On an assignment of times a new window gets the places every window
+    // was given at creation, which the schedule keeps for exactly this.
+    const places = schedule.places ?? null
+    const { error: rpcError } = await sendDraft(
+      source,
+      {
+        added: add.map((name) => ({ name, description: '', number: places })),
+        corrected: [],
+        removed: removeIds,
+      },
+      places === null ? null : 'places',
+    )
     setBusy(false)
 
     if (rpcError) {
