@@ -306,7 +306,7 @@ export function AllChoices() {
   const budget = budgetOf(DINNER, COSTS, BUDGET)
   const budgetReduced = votersOf(DINNER).filter((voter) => budget.spots[1].weights[voter] < 1)
   const popular = byPopularity(DINNER, COSTS, BUDGET)
-  const seated = assignmentOf(DINNER, SEATS)
+  const given = assignmentOf(DINNER, SERVINGS)
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -412,8 +412,10 @@ export function AllChoices() {
           <Text>
             If several options tie, then the next lowest rating given to each of the tied options is
             used to break the tie. This continues until a winner is found. If all scores are
-            exhausted and several options still tie, then there is no winner. The app lets you flip
-            a coin to choose one.
+            exhausted and several options still tie, then there is no winner. Comparing options this
+            way is called the{' '}
+            <Ext href="https://en.wikipedia.org/wiki/Leximin_order">leximin order</Ext>. The app
+            lets you flip a coin to choose one.
           </Text>
           <Text>
             The app also has a <strong>consensus time</strong> option. It uses exactly the same
@@ -584,7 +586,7 @@ export function AllChoices() {
           color="grape"
           title="Fractional winners"
           example="fractional"
-          algorithms={['Nash']}
+          algorithms={['Nash', 'Newton’s method']}
         >
           <Text>
             Sometimes options can be taken partially rather than entirely: a playlist shared between
@@ -765,7 +767,7 @@ export function AllChoices() {
           icon={ArrowsSplitIcon}
           color="orange"
           title="Option assignment"
-          algorithms={['Nash']}
+          algorithms={['Nash', 'Hungarian method']}
           example="assignment"
         >
           <Requirement icon={EyeIcon}>The poll shows who voted.</Requirement>
@@ -785,17 +787,16 @@ export function AllChoices() {
             </List.Item>
           </List>
           <Text>
-            Let&rsquo;s say our six friends are going out to eat, but the restaurants are small:
+            Let&rsquo;s say our six friends have ordered food to share, one serving each, but there
+            isn&rsquo;t much of each:
           </Text>
-          <Seats seats={SEATS} />
-          <Text>
-            Here are their ballots again, with the restaurant each friend is given circled:
-          </Text>
+          <Servings servings={SERVINGS} />
+          <Text>Here are their ballots again, with the food each friend is given circled:</Text>
           <EmojiTable
-            caption="How many stars each friend gave each restaurant, with the one each friend is given circled"
-            rows={seatedRows(DINNER, SEATS, seated)}
-            rowLabel="Restaurant"
-            totalLabel="Seats"
+            caption="How many stars each friend gave each food, with the one each friend is given circled"
+            rows={givenRows(DINNER, SERVINGS, given)}
+            rowLabel="Food"
+            totalLabel="Given"
           />
           <Text size="xs" c="dimmed" ta="center">
             5,625 is the highest possible product of the friends&rsquo; satisfaction scores, so this
@@ -819,10 +820,15 @@ export function AllChoices() {
           <Alert variant="light" color="orange" icon={<CpuIcon size={20} aria-hidden />}>
             <Text size="sm">
               With more than one option per voter, the assignment found might not have the highest
-              possible product. Finding the best one is computationally infeasible for all but the
-              smallest polls, so each round settles for the best next step.
+              possible product. Finding the best one is an{' '}
+              <Ext href="https://en.wikipedia.org/wiki/Integer_programming">
+                integer programming
+              </Ext>{' '}
+              problem, computationally infeasible for all but the smallest polls, so each round
+              settles for the best next step.
             </Text>
           </Alert>
+          <AssignmentFormula />
         </Choice>
       </Accordion>
     </Stack>
@@ -1260,8 +1266,13 @@ function WeightFormula() {
       <Text size="sm">
         This is the{' '}
         <Ext href="https://en.wikipedia.org/wiki/D%27Hondt_method">D&rsquo;Hondt method</Ext> for
-        proportional representation, modified slightly to accomodate STAR. It&rsquo;s used by dozens
-        of countries around the world to apportion seats in parliamentary elections.
+        proportional representation, modified slightly to accommodate STAR. It&rsquo;s used by
+        dozens of countries around the world to apportion seats in parliamentary elections. Applied
+        to score voting without STAR&rsquo;s runoff, the same weight is known as{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Reweighted_range_voting">
+          reweighted range voting
+        </Ext>
+        .
       </Text>
     </Folded>
   )
@@ -1303,6 +1314,58 @@ function NashFormula() {
           cooperative bargaining
         </Ext>{' '}
         problem.
+      </Text>
+      <Text size="sm" fw={700}>
+        How the shares are found
+      </Text>
+      <Text size="sm">
+        The logarithm of the product is a{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Concave_function">concave function</Ext> of the
+        shares, so it has a single peak and climbing uphill from anywhere reaches it. The app climbs
+        with{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Newton%27s_method_in_optimization">
+          Newton&rsquo;s method
+        </Ext>
+        , which uses the curvature of the product to jump most of the way to the peak in each step.
+        A share that would drop below 0 is set to 0 and that option leaves the split, and an option
+        left out comes back in if a little of it would raise the product. A handful of steps is
+        usually enough. To keep it fast, only the ten options with the most stars are shared
+        between.
+      </Text>
+    </Folded>
+  )
+}
+
+/**
+ * How *Option assignment* is solved, folded away at the foot of its card as
+ * `NashFormula` is at the foot of *Fractional winners*. It says what
+ * `poll_assignment` does: one round is an assignment problem solved exactly
+ * by the Hungarian method on logarithms of stars, and several rounds are a
+ * greedy run of those.
+ */
+function AssignmentFormula() {
+  return (
+    <Folded label="How it’s solved">
+      <Text size="sm">
+        With one option per voter, this is the{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Assignment_problem">assignment problem</Ext>:
+        matching voters to places so that a total is as large as possible. Taking the logarithm of
+        each voter&rsquo;s stars turns the product into a total, since log(a × b) = log a + log b,
+        so the largest product is the largest total of logarithms.
+      </Text>
+      <Text size="sm">
+        The app solves that exactly with the{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Hungarian_algorithm">Hungarian method</Ext>. It
+        adds voters one at a time, and for each finds the cheapest chain of swaps that frees a place
+        for them. Before the product, it gives as many voters as possible an option they starred,
+        since a voter with 0 stars would make the whole product 0.
+      </Text>
+      <Text size="sm">
+        With several options per voter, each round is an assignment problem of its own, scored by
+        how much each new option multiplies the stars its voter already holds. Taking the best round
+        each time is a{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Greedy_algorithm">greedy algorithm</Ext>: quick,
+        and usually close to the best answer, but not always the best.
       </Text>
     </Folded>
   )
@@ -1623,19 +1686,27 @@ function byPopularity(ratings: Ratings, costs: Record<string, number>, budget: n
 
 /** Each option's cost, in a row like `OptionKey`'s. */
 /**
- * *Option assignment*'s example: seats at each restaurant, three, two and one,
- * so all six friends are seated and two of them want the one sushi seat.
+ * *Option assignment*'s example: food the friends ordered to share, three
+ * slices of pizza, two tacos and one sushi roll, so all six friends get one
+ * and two of them want the one roll.
  */
-const SEATS: Record<string, number> = { pizza: 3, tacos: 2, sushi: 1 }
+const SERVINGS: Record<string, number> = { pizza: 3, tacos: 2, sushi: 1 }
+
+/** What one serving and several of each food are called, for `Servings`. */
+const SERVING_WORDS: Record<string, [string, string]> = {
+  pizza: ['slice of pizza', 'slices of pizza'],
+  tacos: ['taco', 'tacos'],
+  sushi: ['sushi roll', 'sushi rolls'],
+}
 
 /**
- * Each voter's option (null for none), worked out by trying every seating:
- * the most voters seated on an option they gave a star, then the largest
- * product of their stars, then the most stars. Six friends and three
- * restaurants are 4^6 seatings; `poll_assignment` does it properly, and
+ * Each voter's option (null for none), worked out by trying every way of
+ * handing them out: the most voters given an option they gave a star, then
+ * the largest product of their stars, then the most stars. Six friends and
+ * three foods are 4^6 ways; `poll_assignment` does it properly, and
  * `55_option_assignment` counts the same example.
  */
-function assignmentOf(ratings: Ratings, seats: Record<string, number>): (string | null)[] {
+function assignmentOf(ratings: Ratings, places: Record<string, number>): (string | null)[] {
   const options = optionsOf(ratings)
   const voters = votersOf(ratings)
   let best: (string | null)[] = voters.map(() => null)
@@ -1655,7 +1726,7 @@ function assignmentOf(ratings: Ratings, seats: Record<string, number>): (string 
     for (const option of [...options, null]) {
       if (option !== null) {
         if (ratings[option][voter] === 0) continue
-        if (choice.filter((c) => c === option).length >= seats[option]) continue
+        if (choice.filter((c) => c === option).length >= places[option]) continue
       }
       choice[voter] = option
       visit(voter + 1)
@@ -1666,33 +1737,33 @@ function assignmentOf(ratings: Ratings, seats: Record<string, number>): (string 
   return best
 }
 
-/** The ratings, with each voter's own option circled and each option's seats filled. */
-function seatedRows(
+/** The ratings, with each voter's own option circled and each option's places filled. */
+function givenRows(
   ratings: Ratings,
-  seats: Record<string, number>,
-  seated: (string | null)[],
+  places: Record<string, number>,
+  given: (string | null)[],
 ): Row[] {
   return optionsOf(ratings).map((name) => ({
     name,
     cells: ratings[name].map((score, voter) => ({
       ...keycap(score),
-      marked: seated[voter] === name,
-      said: seated[voter] === name ? `${score}, given this one` : String(score),
+      marked: given[voter] === name,
+      said: given[voter] === name ? `${score}, given this one` : String(score),
     })),
-    total: `${seated.filter((option) => option === name).length}/${seats[name]}`,
+    total: `${given.filter((option) => option === name).length}/${places[name]}`,
   }))
 }
 
-/** The places at each option, drawn as `Costs` draws costs. */
-function Seats({ seats }: { seats: Record<string, number> }) {
+/** How much there is of each food, drawn as `Costs` draws costs. */
+function Servings({ servings }: { servings: Record<string, number> }) {
   return (
     <Group component="ul" justify="center" gap="lg" className={classes.places}>
-      {Object.keys(seats).map((option) => (
+      {Object.keys(servings).map((option) => (
         <Text component="li" key={option} fw={700}>
           <span aria-hidden className={classes.emoji}>
             {ICONS[option]}
           </span>{' '}
-          {labelOf(option)}: {seats[option] === 1 ? '1 seat' : `${seats[option]} seats`}
+          {servings[option]} {SERVING_WORDS[option][servings[option] === 1 ? 0 : 1]}
         </Text>
       ))}
     </Group>
