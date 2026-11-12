@@ -4,6 +4,7 @@ import type {
   BallotSheet,
   BudgetResult,
   ConsensusResult,
+  ConsensusWinnersResult,
   FractionalShare,
   OpenPollView,
   OptionScore,
@@ -73,6 +74,8 @@ const pollKind = z.enum([
   'consensus_time',
   'budget',
   'assignment',
+  'consensus_winners',
+  'consensus_times',
 ])
 
 /** The vertical axis of a grid: the earliest and latest a day may run. */
@@ -282,6 +285,23 @@ export const consensusSchema = z.object({
   ),
 }) satisfies z.ZodType<ConsensusResult>
 
+export const consensusWinnersSchema = z.object({
+  winners: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      total_score: z.number(),
+      best_for: z.number(),
+    }),
+  ),
+  winner_count: z.number(),
+  floor: z.number(),
+  served: z.array(z.number()),
+  single_floor: z.number(),
+  option_count: z.number(),
+  voter_count: z.number(),
+}) satisfies z.ZodType<ConsensusWinnersResult>
+
 const budgetOption = z.object({ id: z.string(), name: z.string(), cost: z.number() })
 
 export const budgetSchema = z.object({
@@ -349,9 +369,17 @@ export const pollResultsSchema = z.object({
   kind_value: z.number().nullable(),
   // Shares first: an entry of a ranking has no `share`, so it falls through
   // to the ranking; an empty list is either, and either reads as nothing. The
-  // consensus, the budget and the assignment are the objects.
+  // consensus, consensus winners, the budget and the assignment are the
+  // objects.
   kind_result: z
-    .union([consensusSchema, budgetSchema, assignmentSchema, fractionalSharesSchema, rankingSchema])
+    .union([
+      consensusSchema,
+      consensusWinnersSchema,
+      budgetSchema,
+      assignmentSchema,
+      fractionalSharesSchema,
+      rankingSchema,
+    ])
     .nullable(),
   weighted: z.boolean().optional(),
   voters_shown: z.boolean().optional(),

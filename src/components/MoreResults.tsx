@@ -5,6 +5,7 @@ import {
   ChartPieSliceIcon,
   CoinsIcon,
   HandshakeIcon,
+  CirclesThreeIcon,
   ListNumbersIcon,
   ArrowsSplitIcon,
   TrophyIcon,
@@ -17,6 +18,7 @@ import { FullRanking } from './FullRanking'
 import { MultipleWinners } from './MultipleWinners'
 import { FractionalWinners } from './FractionalWinners'
 import { Consensus } from './Consensus'
+import { ConsensusWinners } from './ConsensusWinners'
 import { ProportionalBudget } from './ProportionalBudget'
 import { OptionAssignment } from './OptionAssignment'
 import { isSampleId } from '../lib/samplePoll'
@@ -61,6 +63,11 @@ export function MoreResults({
       tool: 'consensus' as const,
       label: toolLabel('consensus', results.kind),
       icon: HandshakeIcon,
+    },
+    offered('consensus_winners') && {
+      tool: 'consensus_winners' as const,
+      label: toolLabel('consensus_winners', results.kind),
+      icon: CirclesThreeIcon,
     },
     offered('ranking') && {
       tool: 'ranking' as const,
@@ -124,6 +131,14 @@ export function MoreResults({
           source={source}
           results={results}
           opened={open === 'consensus'}
+          onClose={close}
+        />
+      )}
+      {offered('consensus_winners') && (
+        <ConsensusWinners
+          source={source}
+          results={results}
+          opened={open === 'consensus_winners'}
           onClose={close}
         />
       )}

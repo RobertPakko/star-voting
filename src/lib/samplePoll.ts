@@ -7,6 +7,7 @@ import type {
   BallotSheet,
   BudgetResult,
   ConsensusResult,
+  ConsensusWinnersResult,
   FractionalShare,
   OpenGroupQuestion,
   OpenPollView,
@@ -56,6 +57,8 @@ interface SampleQuestion {
   fractional_winners?: FractionalShare[]
   /** The consensus with nothing removed; see `Consensus`. */
   consensus?: ConsensusResult
+  /** Consensus winners at the modal's opening number, nothing removed; see `ConsensusWinners`. */
+  consensus_winners?: ConsensusWinnersResult
   /** The proportional budget with nothing removed or recosted; see `ProportionalBudget`. */
   budget?: BudgetResult
   /** The option assignment with nothing removed or given new places; see `OptionAssignment`. */
@@ -88,7 +91,7 @@ export const SAMPLE_SEQUEL_ASSIGNMENT_ID = 'sample-sequel-assignment'
  * that kind's. Nothing is computed: the swapped-in result is the one the
  * recording's *More results* modal answers with.
  */
-const SAMPLE_AS_KINDS = ['ranking', 'multiple', 'fractional'] as const
+const SAMPLE_AS_KINDS = ['ranking', 'multiple', 'fractional', 'consensus_winners'] as const
 type SampleAsKind = (typeof SAMPLE_AS_KINDS)[number]
 
 /** The finished film question, opening on `kind`'s result. */
@@ -128,6 +131,7 @@ interface OpenPollArgs {
   p_budget?: number
   p_places?: Record<string, number | null>
   p_per_voter?: number
+  p_winners?: number
 }
 
 /**
@@ -197,8 +201,8 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
       return question.ranking ? ok(question.ranking) : failed('Results are not available yet')
     // Recorded with nothing taken out, and only that: the sample cannot count
     // again, so none of `MultipleWinners`, `FractionalWinners`, `Consensus`,
-    // `ProportionalBudget` and `OptionAssignment` offers removal (or new costs
-    // or places) on it.
+    // `ConsensusWinners`, `ProportionalBudget` and `OptionAssignment` offers
+    // removal (or new costs, places or numbers of winners) on it.
     case 'open_poll_multiple_winners':
       return question.multiple_winners && !args.p_excluded?.length
         ? ok(question.multiple_winners)
@@ -210,6 +214,12 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
     case 'open_poll_consensus':
       return question.consensus && !args.p_excluded?.length
         ? ok(question.consensus)
+        : failed('Not available on the example poll')
+    case 'open_poll_consensus_winners':
+      return question.consensus_winners &&
+        !args.p_excluded?.length &&
+        (args.p_winners === undefined || args.p_winners === question.consensus_winners.winner_count)
+        ? ok(question.consensus_winners)
         : failed('Not available on the example poll')
     case 'open_poll_proportional_budget':
       return question.budget && !args.p_excluded?.length && !args.p_costs && !args.p_budget
@@ -248,8 +258,13 @@ function recast(payloads: SamplePayloads, pollId: string): SampleQuestion | unde
     ranking: base.ranking,
     multiple: base.multiple_winners,
     fractional: base.fractional_winners,
+    consensus_winners: base.consensus_winners,
   }[kind]
-  const kindValue = DEFAULT_CHOICE_NUMBER[kind] ?? null
+  // Consensus winners must have a number, and it is the one recorded.
+  const kindValue =
+    kind === 'consensus_winners'
+      ? (base.consensus_winners?.winner_count ?? null)
+      : (DEFAULT_CHOICE_NUMBER[kind] ?? null)
   return {
     ...base,
     view: {

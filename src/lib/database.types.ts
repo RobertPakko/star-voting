@@ -447,6 +447,10 @@ export type Database = {
         Args: { p_excluded?: string[]; p_poll_id: string }
         Returns: Json
       }
+      get_poll_consensus_winners: {
+        Args: { p_excluded?: string[]; p_poll_id: string; p_winners?: number }
+        Returns: Json
+      }
       get_poll_fractional_winners: {
         Args: { p_excluded?: string[]; p_poll_id: string }
         Returns: Json
@@ -563,6 +567,10 @@ export type Database = {
       open_poll_group: { Args: { p_poll_id: string }; Returns: Json }
       open_poll_consensus: {
         Args: { p_excluded?: string[]; p_poll_id: string }
+        Returns: Json
+      }
+      open_poll_consensus_winners: {
+        Args: { p_excluded?: string[]; p_poll_id: string; p_winners?: number }
         Returns: Json
       }
       open_poll_fractional_winners: {
@@ -712,6 +720,10 @@ export type Database = {
       }
       poll_consensus: {
         Args: { p_excluded: string[]; p_poll_id: string }
+        Returns: Json
+      }
+      poll_consensus_winners: {
+        Args: { p_excluded: string[]; p_poll_id: string; p_winners: number }
         Returns: Json
       }
       poll_fractional_winners: {

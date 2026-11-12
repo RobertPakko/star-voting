@@ -4,10 +4,12 @@ import { FractionalWinnersBody } from './FractionalWinners'
 import { RankingBody, type RankingSource } from './FullRanking'
 import { MultipleWinnersBody } from './MultipleWinners'
 import { ConsensusBody } from './Consensus'
+import { ConsensusWinnersBody } from './ConsensusWinners'
+import { consensusWinnersFor } from '../lib/choices'
 import { ProportionalBudgetBody } from './ProportionalBudget'
 import { OptionAssignmentBody } from './OptionAssignment'
 import type { MeetingEvent } from '../lib/calendarEvent'
-import { useBudgetInputs, useLeftOut, useAssignmentInputs } from '../lib/useLeftOut'
+import { useBudgetInputs, useLeftOut, useAssignmentInputs, useWinnerCount } from '../lib/useLeftOut'
 
 /**
  * The result a question asked for (`polls.kind`), where it is more than
@@ -27,12 +29,13 @@ export function ChosenResult({
   source: RankingSource
   results: PollResults
   chosen: Chosen
-  /** A time poll's window as a calendar event, for the consensus time. */
+  /** A time poll's window as a calendar event, for the consensus time or times. */
   eventFor?: (id: string) => MeetingEvent | null
 }) {
   const [leftOut, setLeftOut] = useLeftOut(source.pollId)
   const [inputs, setInputs] = useBudgetInputs(source.pollId)
   const [assignment, setAssignment] = useAssignmentInputs(source.pollId)
+  const [winners, setWinners] = useWinnerCount(source.pollId, consensusWinnersFor(results))
 
   switch (chosen.kind) {
     case 'ranking':
@@ -68,6 +71,19 @@ export function ChosenResult({
           onLeftOut={setLeftOut}
           eventFor={eventFor}
           bannered
+        />
+      )
+    case 'consensus_winners':
+      return (
+        <ConsensusWinnersBody
+          source={source}
+          results={results}
+          initial={chosen.winners}
+          leftOut={leftOut}
+          onLeftOut={setLeftOut}
+          winners={winners}
+          onWinners={setWinners}
+          eventFor={eventFor}
         />
       )
     case 'budget':

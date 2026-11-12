@@ -164,6 +164,7 @@ test('the results show the rounds, the tie-break and the option ranking', async 
   // holding something other than items.
   await expect(page.getByRole('menuitem')).toHaveText([
     'Consensus option',
+    'Consensus winners',
     'Option ranking',
     'Multiple winners',
     'Fractional winners',
@@ -356,6 +357,19 @@ test('an assignment gives each friend two films, seating first those who gave up
   // The recording cannot count again, so nothing offers to.
   await expect(page.getByRole('button', { name: 'Edit places' })).toHaveCount(0)
   await expectAccessible(page, 'an option assignment')
+})
+
+test('consensus winners serve every voter a film they gave 3 or more', async ({ page }) => {
+  await page.goto('#/sample-result-movie-as-consensus_winners')
+  // Knives Out, The Matrix and Paddington 2 between them leave nobody below
+  // 3 stars, where no one film is given more than 2 by everybody.
+  await expect(page.getByText('Everyone gave at least one of these 3 stars or more.')).toBeVisible()
+  for (const film of ['Knives Out', 'The Matrix', 'Paddington 2'])
+    await expect(page.getByText(film, { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Best for 4 voters · 29 stars')).toBeVisible()
+  // The recording cannot count again, so nothing offers to.
+  await expect(page.getByLabel('Number of winners')).toHaveCount(0)
+  await expectAccessible(page, 'consensus winners')
 })
 
 test('a mistyped sample link says so', async ({ page }) => {

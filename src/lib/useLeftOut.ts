@@ -60,3 +60,17 @@ export function useBudgetInputs(pollId: string) {
   }
   return [inputs, setInputs] as const
 }
+
+/**
+ * How many consensus winners a reader has asked for, for one poll, held as
+ * `useLeftOut` holds removals; a new poll starts from its own number.
+ */
+export function useWinnerCount(pollId: string, start: number) {
+  const [winners, setWinners] = useState(start)
+  const [winnersFor, setWinnersFor] = useState(pollId)
+  if (winnersFor !== pollId) {
+    setWinnersFor(pollId)
+    setWinners(start)
+  }
+  return [winners, setWinners] as const
+}

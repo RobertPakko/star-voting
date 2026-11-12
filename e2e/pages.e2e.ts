@@ -332,7 +332,7 @@ test.describe('all choices', () => {
   test('opens with every section folded, its algorithms showing', async ({ page }) => {
     await page.goto('#/choices')
     const sections = page.getByRole('heading', { level: 2 }).getByRole('button')
-    await expect(sections).toHaveCount(8)
+    await expect(sections).toHaveCount(9)
     for (const button of await sections.all())
       await expect(button).toHaveAttribute('aria-expanded', 'false')
     const best = page.getByRole('button', { name: /^Best option/ })

@@ -15,13 +15,15 @@ export type PollMode = 'invite' | 'open'
 
 /**
  * What a question asks for, and so which result it opens on (the create
- * form's *Choice*; see lib/choices.ts). 'time' and 'consensus_time' are
- * meeting-slot polls whose options are window starts and whose ballot is a
- * calendar (`isCalendar`); every other kind is a written list scored 0-5.
- * 'option' and 'time' ask for STAR's winner, 'consensus' and
- * 'consensus_time' for the option whose lowest score is highest, the rest
- * for the option ranking, multiple winners or fractional winners, 'budget'
- * for a proportional budget and 'assignment' for an option assignment.
+ * form's *Choice*; see lib/choices.ts). 'time', 'consensus_time' and
+ * 'consensus_times' are meeting-slot polls whose options are window starts
+ * and whose ballot is a calendar (`isCalendar`); every other kind is a
+ * written list scored 0-5. 'option' and 'time' ask for STAR's winner,
+ * 'consensus' and 'consensus_time' for the option whose lowest score is
+ * highest, 'consensus_winners' and 'consensus_times' for the set of options
+ * that serves its worst-served voter best, the rest for the option ranking,
+ * multiple winners or fractional winners, 'budget' for a proportional budget
+ * and 'assignment' for an option assignment.
  */
 export type PollKind =
   | 'option'
@@ -33,6 +35,8 @@ export type PollKind =
   | 'consensus_time'
   | 'budget'
   | 'assignment'
+  | 'consensus_winners'
+  | 'consensus_times'
 
 /**
  * A time poll's grid; null on an ordinary poll. Which days and hours are asked
@@ -445,6 +449,35 @@ export interface ConsensusResult {
   options: { id: string; name: string; floor: number; total_score: number }[]
 }
 
+/**
+ * Consensus winners, from `get_poll_consensus_winners` /
+ * `open_poll_consensus_winners`: the set of options that serves the voter it
+ * serves worst as well as possible, each voter served by the option in the
+ * set they gave the most stars. Sets level on that are compared on the next
+ * worst-served voter, and so on; then on total stars; then a fixed draw.
+ */
+export interface ConsensusWinnersResult {
+  /** The set, the option serving the most voters first. */
+  winners: {
+    id: string
+    name: string
+    total_score: number
+    /** Voters who gave it the most stars of any winner (each, where several tie). */
+    best_for: number
+  }[]
+  /** How many were chosen: the number asked for, or every option if fewer. */
+  winner_count: number
+  /** The stars the worst-served voter gave their best winner. */
+  floor: number
+  /** Voters by the stars their best winner has: [at 0, at 1, …, at 5]. */
+  served: number[]
+  /** The best floor any one option could give: the consensus option's. */
+  single_floor: number
+  /** How many options were counted (the poll's, less any left out). */
+  option_count: number
+  voter_count: number
+}
+
 /** One funded option of a proportional budget, with its cost. */
 export interface BudgetOption {
   id: string
@@ -548,6 +581,7 @@ export interface PollResults {
     | RankingEntry[]
     | FractionalShare[]
     | ConsensusResult
+    | ConsensusWinnersResult
     | BudgetResult
     | AssignmentResult
     | null

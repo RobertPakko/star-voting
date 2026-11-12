@@ -25,6 +25,7 @@ import {
   ArrowDownIcon,
   ArrowsSplitIcon,
   CaretRightIcon,
+  CirclesThreeIcon,
   ChartPieSliceIcon,
   CpuIcon,
   CoinsIcon,
@@ -299,6 +300,7 @@ export function AllChoices() {
   const spots = spotsOf(DINNER)
   const reduced = votersOf(DINNER).filter((voter) => spots[1].weights[voter] < 1)
   const consensus = floorRows(DINNER).find((row) => row.won)!.name
+  const [pair, ...otherPairs] = consensusSetsOf(DINNER, 2)
   const weeks = weeksOf([DINNER, DINNER, DINNER, WITH_LATECOMER])
   const latecomer = votersOf(DINNER).length
   const shares = sharesOf(DINNER)
@@ -420,6 +422,65 @@ export function AllChoices() {
           <Text>
             The app also has a <strong>consensus time</strong> option. It uses exactly the same
             procedure but the options are presented on a calendar to make voting easier.
+          </Text>
+        </Choice>
+
+        <Choice
+          id={CHOICES.consensusWinners}
+          icon={CirclesThreeIcon}
+          color="cyan"
+          title="Consensus winners"
+          example="consensus_winners"
+          algorithms={['Egalitarian Chamberlin–Courant']}
+        >
+          <NotStrategyProof />
+          <Text>
+            Sometimes a group picks several options and each person only needs one of them: a few
+            sessions of a class so everyone can make one, or several dinners so everyone gets one
+            they enjoy. <strong>Consensus winners</strong> picks several options together so that
+            the voter they serve worst is served as well as possible:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Each voter is served by the option in the set that they gave the most stars.
+            </List.Item>
+            <List.Item>
+              The set whose worst-served voter has the most stars wins. If several sets tie, the
+              next worst-served voter is compared, and so on (the{' '}
+              <Ext href="https://en.wikipedia.org/wiki/Leximin_order">leximin order</Ext> again).
+            </List.Item>
+            <List.Item>Sets that still tie go to the one with the most stars in total.</List.Item>
+          </List>
+          <Text>
+            Say our six friends will go out for dinner twice. Here are their ballots for{' '}
+            {pair.names.join(' and ')}, with the option that serves each friend circled:
+          </Text>
+          <EmojiTable
+            caption={`Each friend's favorite of ${pair.names.join(' and ')}`}
+            rows={servedRows(DINNER, pair.names)}
+            rowLabel="Restaurant"
+          />
+          <Text>
+            Everyone gets a dinner they gave at least {stars(Math.min(...pair.served))}.{' '}
+            {otherPairs
+              .map(
+                (other) =>
+                  `${other.names.join(' and ')} would leave someone with only ${stars(Math.min(...other.served))}`,
+              )
+              .join(', and ')}
+            . Notice that {consensus}, the consensus option, is not one of the two: a pair can serve
+            everyone better than any one option can.
+          </Text>
+          <Text>
+            Unlike multiple winners, the best three are not always the best two plus one more, so
+            each number of winners is worked out on its own. Finding the best set is a hard problem
+            in general: the app checks every set it has to, and on very large polls asks for fewer
+            winners rather than guess. Like the consensus option, it is easy to game: a voter who
+            gives everything but their favorite 0 stars can force that favorite into the set.
+          </Text>
+          <Text>
+            The app also has a <strong>consensus times</strong> option, which picks several times on
+            a calendar, so that everyone can make at least one.
           </Text>
         </Choice>
 
@@ -959,6 +1020,7 @@ function NeedsCost() {
 const CHOICES = {
   bestOption: 'best-option',
   consensusOption: 'consensus-option',
+  consensusWinners: 'consensus-winners',
   optionRanking: 'option-ranking',
   multipleWinners: 'multiple-winners',
   sequentialPolls: 'sequential-polls',
@@ -1946,6 +2008,48 @@ function floorRows(ratings: Ratings): Row[] {
       }
     }),
   )
+}
+
+/**
+ * Every set of `size` options, best first by consensus winners' rules: each
+ * voter served by their favorite in the set, sets compared on the
+ * worst-served voter, then the next (leximin), then on total stars.
+ * `56_consensus_winners` counts the same dinner.
+ */
+function consensusSetsOf(ratings: Ratings, size: number) {
+  const options = optionsOf(ratings)
+  const sets: string[][] = []
+  const grow = (from: number, set: string[]) => {
+    if (set.length === size) return void sets.push(set)
+    for (let i = from; i < options.length; i++) grow(i + 1, [...set, options[i]])
+  }
+  grow(0, [])
+  const judged = sets.map((names) => ({
+    names,
+    served: votersOf(ratings).map((voter) => Math.max(...names.map((n) => ratings[n][voter]))),
+    stars: sum(names.flatMap((n) => ratings[n])),
+  }))
+  const ladder = (served: number[]) => [...served].sort((a, b) => a - b)
+  return judged.sort((a, b) => {
+    const [x, y] = [ladder(a.served), ladder(b.served)]
+    const at = x.findIndex((v, i) => v !== y[i])
+    return at >= 0 ? y[at] - x[at] : b.stars - a.stars
+  })
+}
+
+/** The ratings of `names`, each voter's favorite among them circled. */
+function servedRows(ratings: Ratings, names: string[]): Row[] {
+  return names.map((name) => ({
+    name,
+    cells: ratings[name].map((score, voter) => {
+      const best = Math.max(...names.map((n) => ratings[n][voter]))
+      return {
+        ...keycap(score),
+        marked: score === best,
+        said: score === best ? `${score}, their favorite of these` : String(score),
+      }
+    }),
+  }))
 }
 
 /**

@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus, ProportionalBudget, OptionAssignment — ChosenResult, ChoiceCount, AllScores, CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus, ConsensusWinners, ProportionalBudget, OptionAssignment — ChosenResult, ChoiceCount, AllScores, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), a sequential question's earlier
                  voters on the create form (CarriedVoters), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
@@ -618,9 +618,9 @@ real project each is preceded by a CORS preflight. Count requests against
 
 A poll has a `kind`, which is also what it asks for (see [A question asks
 for the result it opens on](#a-question-asks-for-the-result-it-opens-on)).
-Every kind but the two calendar kinds, `time` and `consensus_time`
-(`isCalendar` in [`lib/choices.ts`](src/lib/choices.ts)), is a list somebody
-wrote, scored 0–5; *a time poll* below means either. A time poll is a poll
+Every kind but the three calendar kinds, `time`, `consensus_time` and
+`consensus_times` (`isCalendar` in [`lib/choices.ts`](src/lib/choices.ts)),
+is a list somebody wrote, scored 0–5; *a time poll* below means any of them. A time poll is a poll
 looking for a meeting slot: the creator says how long the meeting is
 and which UTC offset the poll is held at, then **paints a calendar** to say
 which hours of which days are in bounds. Every window of that length that fits
@@ -1604,7 +1604,7 @@ is the page.
   opens the finished sample poll as though the question had asked for that
   choice (`exampleFor`): the calendar question for the consensus, since it
   did ask for the consensus time; the film question for the best option;
-  and for the rest the film question recast as that kind under an id of its
+  and for the rest (consensus winners included) the film question recast as that kind under an id of its
   own (`sampleResultAs`, e.g. `sample-result-movie-as-ranking`), which
   `samplePoll.ts` answers from the same recording with `kind` and
   `kind_result` swapped for the result its *More results* modal records.
@@ -3208,7 +3208,8 @@ say only that voting was closed early, when it was.
 option** (*Consensus time* on a time poll), **Fractional winners**,
 **Proportional budget** and **Option assignment** (two or more options; the
 budget and the assignment not on a time poll, the assignment only where the
-poll shows who voted), and **Option ranking** and **Multiple winners** (three or more), each opening
+poll shows who voted), and **Consensus winners** (*Consensus times*),
+**Option ranking** and **Multiple winners** (three or more), each opening
 a modal; then *Add to calendar* under a time poll's
 winner or *Flip a coin* under *No winner*. One menu rather than a
 button each keeps the banner to the name and a control or two. **The modals
@@ -3440,6 +3441,54 @@ two options, where it can already differ from STAR's winner.
   one *Can't* hour in it scores 1–4, not 0, and only a window somebody cannot
   make at all has a floor of 0. `/choices` words it that way.
 
+**Consensus winners** generalises the consensus to several options: a set
+chosen together, each voter served by the option in it they gave the most
+stars, so that the voter it serves worst is served as well as possible —
+the egalitarian Chamberlin–Courant rule. For a few sessions of something
+where each person needs only one, a meeting time above all (*Consensus
+times* on a calendar). [`ConsensusWinners`](src/components/ConsensusWinners.tsx)
+is the modal and the card; `56_consensus_winners` holds the rules below and
+checks the search against trying every set.
+
+- **Sets are compared as the consensus compares options**: fewest voters
+  served 0 stars, then fewest served 1 or fewer, and so on (leximin on what
+  each voter is served); then most stars in total; then a draw that is the
+  same every time (a 28-bit hash of poll and option, summed over the set).
+- **Each number is its own count.** The best three need not include the best
+  two, so there is no counting every place once and cutting it
+  (`ChoiceCount`'s trick). The number is required on the kind (`validate_kind`,
+  2 to `SCORING_ROWS_MAX`), the modal opens on three or one fewer than the
+  options (`consensusWinnersFor`), and changing it asks again. Offered from
+  three options; asking for as many as there are chooses them all.
+- **Counted exactly in the database** (`get_poll_consensus_winners` /
+  `open_poll_consensus_winners`, via `poll_consensus_winners`), on the same
+  gate and the same press as the others. Choosing the set is NP-hard (it is
+  set cover underneath), so `consensus_set_search` is branch and bound:
+  each option's voters are five bit masks (one per star level), what an
+  option adds is a weighted `bit_count`, and the weights are powers of
+  voters + 1, so one sum compares leximin. The worth is submodular (a voter's
+  gain only shrinks as the set grows), which makes the bounds safe: the r
+  largest gains, each level capped by what everything left could reach, and
+  at the last pick only the head of the sorted list. **The masks live in a
+  temp table, not an array**: subscripting a `varbit[]` inside a query walks
+  it from the start every time, which made every node quadratic.
+- **Bounded by its work** (`p_budget`, options looked at), refusing past it
+  rather than answering with a set it has not shown to be best. Measured
+  locally on painted calendars of 20 voters: 125 windows choose two times in
+  20ms, three in 60ms and four in under a second; 500 windows choose three in
+  0.6s and refuse four, in under two seconds. The budget is kept under
+  Supabase's 3s `anon` statement timeout. On a consensus winners question
+  `poll_tally` catches the refusal as it does the assignment's, and carries
+  no `kind_result`. Over 5,000 ballots is refused outright, since the weights
+  must fit a bigint.
+- **It names no one winner**, so a question of the kind is never settled
+  with one (`poll_names_one_winner`) and reads *Results ready*, below three
+  options STAR's winner standing.
+- **Removing works as in Multiple winners**, stopping at three options left.
+  The sample can neither remove nor change the number: it answers the count
+  `scripts/sample-poll.sql` recorded at the modal's opening number.
+- Like the consensus it is easily gamed, and `/choices` says so.
+
 **It is a separate request, made when the button is pressed**
 (`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the
 ladder is the most expensive thing the app asks the database for and most
@@ -3468,15 +3517,17 @@ A question's `kind` is what it asks for, picked on the create form as
 *Choice* and frozen at creation: `option` (*Best option*, the default),
 `time` (*Best time*, the calendar ballot), `consensus` (*Consensus
 option*), `consensus_time` (*Consensus time*, the calendar ballot),
-`ranking` (*Option ranking*), `multiple` (*Multiple winners*),
-`fractional` (*Fractional winners*), `budget` (*Proportional budget*) or
-`assignment` (*Option assignment*). **Only the two time kinds change the
-ballot**, and code asks `isCalendar(kind)`, never `kind === 'time'`; every
-other kind is a written list. In SQL the same question is `kind in ('time',
-'consensus_time')` (`polls_schedule_ck`, `create_poll`,
-`create_poll_group`, and the two creator doors that refuse a typed name).
-The consensus is the one result with a calendar of its own, because it is
-the one most worth asking of a meeting time. **Several best times are not a
+`consensus_winners` (*Consensus winners*), `consensus_times` (*Consensus
+times*, the calendar ballot), `ranking` (*Option ranking*), `multiple`
+(*Multiple winners*), `fractional` (*Fractional winners*), `budget`
+(*Proportional budget*) or `assignment` (*Option assignment*). **Only the
+three time kinds change the ballot**, and code asks `isCalendar(kind)`,
+never `kind === 'time'`; every other kind is a written list. In SQL the same
+question is `is_calendar_kind(kind)` (`create_poll`, `create_poll_group`,
+and the two creator doors that refuse a typed name; `polls_schedule_ck`
+spells the list out). The consensus and consensus winners are the results
+with a calendar of their own, because they are the ones most worth asking
+of a meeting time. **Several best times are not a
 kind**: a time poll's *More results* offers them. One column,
 because one dropdown: a separate ballot-shape setting and result setting were
 two questions where the creator has one. The names are in
@@ -3493,18 +3544,20 @@ survives), in place of any explanation on the form itself.
   every read of the result, which the creator asked for.
 - **It takes the winner's place.** `ChosenResult` draws the modal's own body
   (`RankingBody`, `MultipleWinnersBody`, `FractionalWinnersBody`,
-  `ConsensusBody`, `ProportionalBudgetBody`, `OptionAssignmentBody`) in a card at the top, handed the carried result, so it
+  `ConsensusBody`, `ConsensusWinnersBody`, `ProportionalBudgetBody`, `OptionAssignmentBody`) in a card at the top, handed the carried result, so it
   asks for nothing until an option is removed. The runoff and the score round
   follow as usual (they are how the first place was chosen, and on a
   consensus how STAR alone would have chosen); the winner's banner and
   STAR's coin are not drawn. A consensus carries its own coin where options
-  are left level, and a consensus time its own *Add to calendar*.
+  are left level, and a consensus time (or each consensus time of several)
+  its own *Add to calendar*.
   *More results* offers the others, not the one already on the page.
 - **One number per question** (`polls.kind_value`), whose meaning belongs to
   the kind: places to rank, winners to choose, the budget, the most options
   an assignment gives a voter. For a ranking or winners, a dropdown of 2 to
   `SCORING_ROWS_MAX` beside *Choice*, because the database counts no more
-  places than that (`validate_kind`); null means as many as it holds. An
+  places than that (`validate_kind`); null means as many as it holds, except
+  on consensus winners, which must have one. An
   assignment's is a dropdown of 1 to `SCORING_ROWS_MAX`, null meaning one
   (`CHOICE_NUMBER` holds each kind's list). A budget is a number box and
   must be given. A kind that takes none must have none
@@ -3718,8 +3771,9 @@ both ballots are shown. Neither exists in Supabase: both are answered from
 the poll **through the app's own functions** (`create_poll_group`,
 `open_poll_submit`, `close_poll`), and recording what `open_poll_view`,
 `open_poll_results`, `open_poll_ranking`, `open_poll_multiple_winners`,
-`open_poll_fractional_winners`, `open_poll_consensus`, `open_poll_scores`
-and `open_poll_ballots` answer, `open_poll_proportional_budget` of a
+`open_poll_fractional_winners`, `open_poll_consensus`,
+`open_poll_consensus_winners`, `open_poll_scores` and `open_poll_ballots`
+answer, `open_poll_proportional_budget` of a
 budget question and `open_poll_assignment` of an assignment question.
 
 `/#/sample-sequel-movie` is "Movie night 2", made from the finished copy as

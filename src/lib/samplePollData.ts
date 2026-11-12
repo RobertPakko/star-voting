@@ -1379,6 +1379,34 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         finalist_names: ['2026-02-20T18:00:00-07:00'],
       },
     ],
+    consensus_winners: {
+      floor: 4,
+      served: [0, 0, 0, 0, 2, 7],
+      winners: [
+        {
+          id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
+          name: '2026-02-21T09:00:00-07:00',
+          best_for: 6,
+          total_score: 39,
+        },
+        {
+          id: '99ed5407-1a00-3a37-8e1d-435e4e6e76ec',
+          name: '2026-02-21T11:00:00-07:00',
+          best_for: 4,
+          total_score: 37,
+        },
+        {
+          id: '8f21686a-ffc1-f4b2-b2d8-25756b49fc83',
+          name: '2026-02-20T18:00:00-07:00',
+          best_for: 3,
+          total_score: 17,
+        },
+      ],
+      voter_count: 9,
+      option_count: 10,
+      single_floor: 4,
+      winner_count: 3,
+    },
     fractional_winners: [
       {
         id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
@@ -2278,6 +2306,34 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         finalist_names: ['Honeyland'],
       },
     ],
+    consensus_winners: {
+      floor: 3,
+      served: [0, 0, 0, 2, 2, 5],
+      winners: [
+        {
+          id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
+          name: 'Knives Out',
+          best_for: 4,
+          total_score: 29,
+        },
+        {
+          id: '240967c0-62e5-88a7-a662-5dc029b84eaf',
+          name: 'The Matrix',
+          best_for: 3,
+          total_score: 26,
+        },
+        {
+          id: '7ddc6826-8f1e-3e14-ac34-e915a79c202e',
+          name: 'Paddington 2',
+          best_for: 2,
+          total_score: 26,
+        },
+      ],
+      voter_count: 9,
+      option_count: 6,
+      single_floor: 2,
+      winner_count: 3,
+    },
     fractional_winners: [
       {
         id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
@@ -2901,6 +2957,34 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         finalist_names: ['Honeyland'],
       },
     ],
+    consensus_winners: {
+      floor: 4,
+      served: [0, 0, 0, 0, 3, 7],
+      winners: [
+        {
+          id: '703ffd54-672f-b968-e161-16d90bb8f9bc',
+          name: 'Paddington 2',
+          best_for: 5,
+          total_score: 35,
+        },
+        {
+          id: '7f9afbf2-d98a-ef18-ecfe-aea057b0bc62',
+          name: 'Arrival',
+          best_for: 5,
+          total_score: 34,
+        },
+        {
+          id: '205801f9-8cef-1ced-4ec0-b546c7fac6b1',
+          name: 'Spirited Away',
+          best_for: 2,
+          total_score: 32,
+        },
+      ],
+      voter_count: 10,
+      option_count: 5,
+      single_floor: 2,
+      winner_count: 3,
+    },
     fractional_winners: [
       {
         id: '703ffd54-672f-b968-e161-16d90bb8f9bc',
@@ -3742,6 +3826,34 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         finalist_names: ['Blackout curtains'],
       },
     ],
+    consensus_winners: {
+      floor: 4,
+      served: [0, 0, 0, 0, 2, 8],
+      winners: [
+        {
+          id: '315d1987-0f43-af34-c21b-02d51ace3d05',
+          name: 'Projector',
+          best_for: 6,
+          total_score: 34,
+        },
+        {
+          id: '67adaaa4-7dca-8de9-2466-5b3bfff568cb',
+          name: 'Beanbags',
+          best_for: 3,
+          total_score: 26,
+        },
+        {
+          id: 'bdf2c897-1660-68d5-d5c7-5af369c5c811',
+          name: 'Popcorn machine',
+          best_for: 2,
+          total_score: 24,
+        },
+      ],
+      voter_count: 10,
+      option_count: 5,
+      single_floor: 1,
+      winner_count: 3,
+    },
     fractional_winners: [
       {
         id: '315d1987-0f43-af34-c21b-02d51ace3d05',
@@ -4611,6 +4723,34 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         finalist_names: ['Toy Story'],
       },
     ],
+    consensus_winners: {
+      floor: 5,
+      served: [0, 0, 0, 0, 0, 10],
+      winners: [
+        {
+          id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
+          name: 'The Matrix',
+          best_for: 6,
+          total_score: 38,
+        },
+        {
+          id: '9c41ac92-f17d-6df9-15bb-fecebfa1535b',
+          name: 'Spirited Away',
+          best_for: 2,
+          total_score: 27,
+        },
+        {
+          id: '68e02dc4-64f1-2462-fa68-0a3632a2711e',
+          name: 'Mean Girls',
+          best_for: 2,
+          total_score: 24,
+        },
+      ],
+      voter_count: 10,
+      option_count: 5,
+      single_floor: 1,
+      winner_count: 3,
+    },
     fractional_winners: [
       {
         id: '1f301654-a628-1a0f-bafa-f4ca4da96b90',
