@@ -86,7 +86,7 @@ declare
 begin
   perform tests.sign_in('creator@example.com');
   v_poll := create_poll('Standup', null, v_names, v_emails, 'invite', true, false, null, false,
-                        'time',
+                        'option',
                         '{"timezone":"-07:00","window":{"start":"08:00","end":"22:00"},
                           "desired_slots":3,"granularity":60}'::jsonb);
 
@@ -186,7 +186,7 @@ declare
 begin
   perform tests.sign_in('creator@example.com');
   v_poll := create_poll('Retro', null, v_names, v_emails, 'invite', true, false, null, false,
-                        'time',
+                        'option',
                         '{"timezone":"-07:00","window":{"start":"08:00","end":"22:00"},
                           "desired_slots":3,"granularity":60}'::jsonb);
   select array_agg(id order by sort_order) into v_cands from candidates where poll_id = v_poll;

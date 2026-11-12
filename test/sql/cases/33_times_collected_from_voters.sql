@@ -30,7 +30,7 @@ begin
   -- the group says when.
   v_poll := create_poll('When are we all free?', null, array[]::text[],
                         array['voter1@example.com', 'voter2@example.com'],
-                        'invite', true, false, null, true, 'time', v_schedule);
+                        'invite', true, false, null, true, 'option', v_schedule);
 
   perform tests.assert_eq('a time poll may collect its times',
     (select solicit_options from polls where id = v_poll), true);
@@ -71,7 +71,7 @@ begin
   -- ---- and one behind a link ---------------------------------------------
 
   v_open := create_poll('When, publicly', null, array[]::text[], array[]::text[],
-                        'open', true, false, null, true, 'time', v_schedule);
+                        'open', true, false, null, true, 'option', v_schedule);
 
   perform tests.sign_in('nobody@example.com');
   perform tests.assert_eq('a link holder paints the same way',
@@ -92,7 +92,7 @@ begin
   perform tests.sign_in('creator@example.com');
   v_first := create_poll_group('Offsite', null,
     ('[{"title":"Where?","options":[{"name":"The barn"},{"name":"The lake"}]},'
-     '{"title":"When?","kind":"time","schedule":' || v_schedule::text || ','
+     '{"title":"When?","kind":"option","schedule":' || v_schedule::text || ','
      '"options":[{"name":"2026-09-01T09:00:00-07:00"},'
                 '{"name":"2026-09-01T10:00:00-07:00"}]}]')::jsonb,
     array['voter1@example.com'], 'invite', true, false, false);
@@ -103,26 +103,27 @@ begin
   perform tests.assert_eq('the first question is an ordinary one',
     (select kind from polls where id = v_first), 'option');
   perform tests.assert_eq('and the second is a calendar',
-    (select kind from polls where id = v_when), 'time');
+    (select schedule is not null from polls where id = v_when), true);
   perform tests.assert_eq('carrying the grid it is drawn on',
     (select schedule from polls where id = v_when), v_schedule);
 
   -- The same two rules `create_poll` applies to its own arguments, said again
   -- on this path because it is the other way into `insert_poll_row`.
-  perform tests.assert_raises('a time question without a grid is refused here too',
+  perform tests.assert_raises('a grid is checked here too',
     format('select create_poll_group(%L, null, %L::jsonb, array[%L], %L, true, false, false)',
            'Offsite', '[{"title":"Where?","options":[{"name":"A"},{"name":"B"}]},'
-                      '{"title":"When?","kind":"time","options":[{"name":"x"},{"name":"y"}]}]',
+                      '{"title":"When?","schedule":{"timezone":"+00:00"},"options":[{"name":"x"},{"name":"y"}]}]',
            'voter1@example.com', 'invite'),
-    'A time poll needs a schedule');
+    'daily window');
 
-  perform tests.assert_raises('and an ordinary question is not handed one',
+  perform tests.assert_raises('and a budget question is not handed one, naming the question',
     format('select create_poll_group(%L, null, %L::jsonb, array[%L], %L, true, false, false)',
-           'Offsite', '[{"title":"Where?","options":[{"name":"A"},{"name":"B"}],"schedule":'
-                      || v_schedule::text || '},'
-                      '{"title":"When?","options":[{"name":"x"},{"name":"y"}]}]',
+           'Offsite', '[{"title":"Where?","options":[{"name":"A"},{"name":"B"}]},'
+                      '{"title":"When?","kind":"budget","kind_value":100,"schedule":'
+                      || v_schedule::text || ','
+                      '"options":[{"name":"x","cost":1},{"name":"y","cost":1}]}]',
            'voter1@example.com', 'invite'),
-    'Only a time question has a schedule');
+    'cannot be a time poll (question 2)');
 
   -- ---- the plural doors are no wider than the singular ones ---------------
 

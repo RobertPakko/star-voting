@@ -190,7 +190,7 @@ begin
   v_list := create_poll('Dinner', null, array['A', 'B', 'C', 'D'], v_emails,
                         p_kind => 'consensus_winners', p_kind_value => 2);
   v_time := create_poll('Standup', null, v_windows, v_emails,
-                        'invite', true, false, null, false, 'consensus_times', v_schedule, 2);
+                        'invite', true, false, null, false, 'consensus_winners', v_schedule, 2);
   v_three := create_poll('Dinner', null, array['A', 'D'], v_emails,
                          p_kind => 'consensus_winners', p_kind_value => 2);
 
@@ -242,21 +242,9 @@ begin
     format('insert into polls (title, created_by, kind, kind_value) values (%L, %L, %L, 1)',
            'Lunch', auth.uid(), 'consensus_winners'),
     'polls_kind_value_ck');
-  perform tests.assert_raises('consensus times need a grid',
-    format('select create_poll(%L, null, array[%L, %L], array[%L], %L, true, false, null, false, %L, null, 2)',
-           'Standup', v_windows[1], v_windows[2], 'voter1@example.com', 'invite', 'consensus_times'),
-    'A time poll needs a schedule');
-  perform tests.assert_raises('and consensus winners have none',
-    format('select create_poll(%L, null, array[%L, %L], array[%L], %L, true, false, null, false, %L, %L::jsonb, 2)',
-           'Lunch', 'Pizza', 'Sushi', 'voter1@example.com', 'invite', 'consensus_winners', v_schedule::text),
-    'Only a time poll has a schedule');
-  perform tests.assert_raises('the table holds the grid to the calendar kinds',
-    format('insert into polls (title, created_by, kind, kind_value) values (%L, %L, %L, 2)',
-           'Standup', auth.uid(), 'consensus_times'),
-    'polls_schedule_ck');
 
   v_time := create_poll('Standup', null, v_windows, v_emails,
-                        'invite', true, false, null, false, 'consensus_times', v_schedule, 2);
+                        'invite', true, false, null, false, 'consensus_winners', v_schedule, 2);
   perform tests.assert_raises('consensus times take no typed option',
     format('select creator_add_option(%L, %L)', v_time, 'Whenever suits'),
     'A time poll''s options are its windows; change its schedule instead');
@@ -265,13 +253,13 @@ begin
     jsonb_build_object('title', 'Where?', 'kind', 'consensus_winners', 'kind_value', 2,
                        'options', jsonb_build_array(jsonb_build_object('name', 'A'), jsonb_build_object('name', 'B'),
                                                     jsonb_build_object('name', 'C'))),
-    jsonb_build_object('title', 'When?', 'kind', 'consensus_times', 'kind_value', 3, 'schedule', v_schedule,
+    jsonb_build_object('title', 'When?', 'kind', 'consensus_winners', 'kind_value', 3, 'schedule', v_schedule,
                        'options', (select jsonb_agg(jsonb_build_object('name', w)) from unnest(v_windows) w)));
   v_list := create_poll_group('Offsite', null, t, v_emails);
   perform tests.assert_eq('a group''s questions keep their kinds',
     (select array_agg(kind order by question_position) from polls
       where group_id = (select group_id from polls where id = v_list)),
-    array['consensus_winners', 'consensus_times']);
+    array['consensus_winners', 'consensus_winners']);
 end $$;
 
 -- The doors are the tally's.

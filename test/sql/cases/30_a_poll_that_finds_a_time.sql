@@ -26,39 +26,40 @@ declare
 begin
   perform tests.sign_in('creator@example.com');
 
-  -- ---- the two columns are tied together ---------------------------------
+  -- ---- a schedule makes any kind a calendar, but a budget --------------
 
   -- Written against the table rather than through create_poll, because what
   -- is being checked here is the constraint itself: create_poll refuses these
   -- combinations earlier and in better words, and a constraint that only ever
   -- fires behind a function that has already refused is a constraint nobody
   -- ever finds out is missing.
-  perform tests.assert_raises('a time poll without a schedule has a grid nobody can draw',
-    format('insert into polls (title, created_by, kind) values (%L, %L, %L)',
-           'Standup', auth.uid(), 'time'),
+  perform tests.assert_raises('a budget is not bought in meeting windows',
+    format('insert into polls (title, created_by, kind, kind_value, schedule) values (%L, %L, %L, 100, %L)',
+           'Standup', auth.uid(), 'budget', v_schedule::text),
     'polls_schedule_ck');
 
-  perform tests.assert_raises('and an option poll with one is carrying a ballot it does not have',
-    format('insert into polls (title, created_by, schedule) values (%L, %L, %L)',
-           'Lunch', auth.uid(), v_schedule::text),
-    'polls_schedule_ck');
-
-  perform tests.assert_raises('a poll is one of the two kinds there are',
+  perform tests.assert_raises('a poll is one of the kinds there are',
     format('insert into polls (title, created_by, kind) values (%L, %L, %L)',
            'Lunch', auth.uid(), 'vibes'),
+    'polls_kind_ck');
+
+  -- The calendar kinds are gone: a calendar is a schedule, not a kind.
+  perform tests.assert_raises('and a time is not one of them any more',
+    format('insert into polls (title, created_by, kind, schedule) values (%L, %L, %L, %L)',
+           'Standup', auth.uid(), 'time', v_schedule::text),
     'polls_kind_ck');
 
   -- ---- what create_poll will accept as a schedule ------------------------
 
   perform tests.assert_raises('a timezone is a fixed offset, never a named zone',
     format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
-           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'option',
            jsonb_set(v_schedule, '{timezone}', '"America/Los_Angeles"')::text),
     'fixed UTC offset');
 
   perform tests.assert_raises('a daily window ends after it starts',
     format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
-           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'option',
            jsonb_set(v_schedule, '{window,end}', '"07:00"')::text),
     'end after it starts');
 
@@ -66,7 +67,7 @@ begin
   -- draws grid lines that do not line up with the labels beside them.
   perform tests.assert_raises('a granularity divides the hour',
     format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
-           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'time',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'option',
            jsonb_set(v_schedule, '{granularity}', '25')::text),
     'divides an hour evenly');
 
@@ -80,7 +81,7 @@ begin
   -- always been to this function.
   v_rich := create_poll('Weekend', null,
     array['2026-09-04T18:00:00-07:00', '2026-09-05T09:00:00-07:00'],
-    array['voter1@example.com'], 'invite', true, false, null, false, 'time',
+    array['voter1@example.com'], 'invite', true, false, null, false, 'option',
     jsonb_set(v_schedule, '{day_windows}', '{"Friday": {"start": "18:00", "end": "22:00"}}'));
 
   perform tests.assert_eq('a key nothing reads is stored and not obeyed',
@@ -92,7 +93,7 @@ begin
   -- grid actually needs. Every option on such a poll starts at midnight.
   v_rich := create_poll('Retreat', null,
     array['2026-09-04T00:00:00-07:00', '2026-09-05T00:00:00-07:00'],
-    array['voter1@example.com'], 'invite', true, false, null, false, 'time',
+    array['voter1@example.com'], 'invite', true, false, null, false, 'option',
     '{"timezone":"-07:00","window":{"start":"00:00","end":"24:00"},'
     '"desired_slots":2,"granularity":1440}'::jsonb);
 
@@ -101,18 +102,53 @@ begin
   perform tests.assert_eq('and a window of several days is two ordinary options',
     (select count(*)::int from candidates where poll_id = v_rich), 2);
 
-  perform tests.assert_raises('and an ordinary poll is not handed a schedule',
-    format('select create_poll(%L, null, array[%L, %L], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
-           'Lunch', 'Pizza', 'Sushi', 'voter1@example.com', 'invite', 'option', v_schedule::text),
-    'Only a time poll has a schedule');
+  perform tests.assert_raises('a proportional budget is never a calendar',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb, 100, null, array[10, 10, 10])',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'budget', v_schedule::text),
+    'cannot be a time poll');
+
+  -- Any other result may be asked of a calendar: here, a ranking of times.
+  v_rich := create_poll('Standup', null, v_windows, array['voter1@example.com'],
+                        'invite', true, false, null, false, 'ranking', v_schedule);
+  perform tests.assert_eq('a ranking of times is a ranking with a schedule',
+    (select kind || ' ' || (schedule is not null) from polls where id = v_rich), 'ranking true');
+
+  -- ---- how far apart the windows start ------------------------------------
+
+  -- The browser enumerates the windows, so the step is a fact the schedule
+  -- keeps for whoever paints next (PaintTimes); the database checks only
+  -- that it is one the grid can draw.
+  v_rich := create_poll('Standup', null, v_windows, array['voter1@example.com'],
+                        'invite', true, false, null, false, 'option',
+                        jsonb_set(v_schedule, '{step}', '60'));
+  perform tests.assert_eq('a step a whole number of granules long is kept',
+    (select (schedule ->> 'step')::int from polls where id = v_rich), 60);
+
+  perform tests.assert_raises('a step is a whole number of granules',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'option',
+           jsonb_set(v_schedule, '{step}', '45')::text),
+    'no longer than the meeting');
+
+  perform tests.assert_raises('and no longer than the meeting, which would leave hours no window covers',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'option',
+           jsonb_set(v_schedule, '{step}', '240')::text),
+    'no longer than the meeting');
+
+  perform tests.assert_raises('places per time are a whole number',
+    format('select create_poll(%L, null, %L::text[], array[%L], %L, true, false, null, false, %L, %L::jsonb)',
+           'Standup', v_windows::text, 'voter1@example.com', 'invite', 'assignment',
+           jsonb_set(v_schedule, '{places}', '0')::text),
+    'The places per time');
 
   -- ---- and one that is made, read back ------------------------------------
 
   v_poll := create_poll('Standup', null, v_windows, array['voter1@example.com'],
-                        'invite', true, false, null, false, 'time', v_schedule);
+                        'invite', true, false, null, false, 'option', v_schedule);
 
-  perform tests.assert_eq('a time poll is stored as one',
-    (select kind from polls where id = v_poll), 'time');
+  perform tests.assert_eq('a time poll asks for the best option',
+    (select kind from polls where id = v_poll), 'option');
   perform tests.assert_eq('with the grid its ballot is drawn on',
     (select schedule from polls where id = v_poll), v_schedule);
   perform tests.assert_eq('and its windows as ordinary options',
@@ -131,17 +167,17 @@ begin
   -- arrive with it; this is what the calendar on the ballot is drawn from.
   v_page := poll_page(v_poll);
   perform tests.assert_eq('the read that opens the page says which kind it is',
-    v_page #>> '{poll,kind}', 'time');
+    v_page #>> '{poll,kind}', 'option');
   perform tests.assert_eq('and carries the schedule with it',
     v_page #> '{poll,schedule}', v_schedule);
 
   -- The share-link reading builds its poll object a field at a time, so it is
   -- the one that can silently lose them.
   v_open := create_poll('Standup, publicly', null, v_windows, array[]::text[],
-                        'open', true, false, null, false, 'time', v_schedule);
+                        'open', true, false, null, false, 'option', v_schedule);
   v_view := open_poll_view(v_open);
   perform tests.assert_eq('a link holder is told the same thing',
-    v_view #>> '{poll,kind}', 'time');
+    v_view #>> '{poll,kind}', 'option');
   perform tests.assert_eq('and handed the same grid',
     v_view #> '{poll,schedule}', v_schedule);
 

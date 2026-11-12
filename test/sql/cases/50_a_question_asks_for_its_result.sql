@@ -109,10 +109,10 @@ begin
     $q$select create_poll('x', null, array['a', 'b'], null, 'open',
                           p_kind => 'ranking', p_kind_value => 1)$q$,
     'Choose a number from 2 to 10');
-  perform tests.assert_raises('only a time poll has a schedule',
+  perform tests.assert_raises('a ranking may be a calendar, but its schedule is checked',
     $q$select create_poll('x', null, array['a', 'b'], null, 'open', p_kind => 'ranking',
                           p_schedule => '{"timezone": "+00:00"}')$q$,
-    'Only a time poll has a schedule');
+    'daily window');
 
   -- A group sets each question's kind on its own, and names the question it
   -- refuses.
