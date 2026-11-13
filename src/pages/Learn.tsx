@@ -369,10 +369,58 @@ export function AllChoices() {
         </Choice>
 
         <Choice
+          id={CHOICES.consensusOption}
+          icon={HandshakeIcon}
+          color="teal"
+          title="Consensus option"
+          example="consensus"
+          algorithms={['Leximin']}
+        >
+          <NotStrategyProof />
+          <Text>
+            Sometimes the best option is the one that nobody hates: a meeting time everyone can make
+            or a dinner that no one is allergic to. <strong>Consensus option</strong> picks the
+            option whose worst score is as good as possible:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Each option gets a score equal to the fewest stars it was given by any one voter.
+            </List.Item>
+            <List.Item>The option with the highest score wins.</List.Item>
+          </List>
+          <Text>
+            Here are our six friends&rsquo; ballots again, with each option's lowest score(s)
+            circled:
+          </Text>
+          <EmojiTable
+            caption="Each restaurant's fewest stars from any one friend"
+            rows={floorRows(DINNER)}
+            rowLabel="Restaurant"
+            totalLabel="Lowest"
+          />
+          <Text>
+            For our six friends, {consensus} is the consensus option since everyone gave it at least{' '}
+            {stars(Math.min(...DINNER[consensus]))}, while{' '}
+            {optionsOf(DINNER)
+              .filter((option) => option !== consensus)
+              .join(' and ')}{' '}
+            were each given 0 stars by someone. This also shows why this system is easy to game. A
+            voter can give every option except their favorite 0 stars to force the group into their
+            top choice; though hopefully no one would do that for a poll among friends.
+          </Text>
+          <Text>
+            If several options tie, then the next lowest rating given to each of the tied options is
+            used to break the tie. This continues until a winner is found. If all scores are
+            exhausted and several options still tie, then there is no winner. The app lets you flip
+            a coin to choose one.
+          </Text>
+        </Choice>
+
+        <Choice
           id={CHOICES.optionRanking}
           icon={ListNumbersIcon}
           color="blue"
-          title="Option ranking"
+          title="Multiple winners"
           example="ranking"
           algorithms={['Iterative STAR']}
         >
@@ -409,7 +457,7 @@ export function AllChoices() {
           id={CHOICES.multipleWinners}
           icon={RankingIcon}
           color="violet"
-          title="Multiple winners"
+          title="Proportional winners"
           example="multiple"
           algorithms={['Iterative STAR', 'Ballot reweighting']}
         >
@@ -473,6 +521,62 @@ export function AllChoices() {
         </Choice>
 
         <Choice
+          id={CHOICES.consensusWinners}
+          icon={CirclesThreeIcon}
+          color="cyan"
+          title="Consensus winners"
+          example="consensus_winners"
+          algorithms={['Egalitarian Chamberlin–Courant']}
+        >
+          <NotStrategyProof />
+          <Text>
+            Sometimes a group picks several options but each person only needs one: a few sessions
+            of a training so everyone can make one or a group splitting up to do a few different
+            things. <strong>Consensus winners</strong> picks multiple options such that the voter
+            they serve worst is served as well as possible:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Each voter is served by the option in the set that they gave the most stars.
+            </List.Item>
+            <List.Item>
+              The set whose worst-served voter has the most stars wins. If several sets tie, the
+              next worst-served voter is compared.
+            </List.Item>
+            <List.Item>Sets that still tie go to the one with the most stars in total.</List.Item>
+          </List>
+          <Text>
+            Say our six friends are splitting up into two different groups that will each go to a
+            separate restaurant. Here, the consensus winners are {pair.names.join(' and ')}:
+          </Text>
+          <EmojiTable
+            caption={`Each friend's favorite of ${pair.names.join(' and ')}`}
+            rows={servedRows(DINNER, pair.names)}
+            rowLabel="Restaurant"
+          />
+          <Text>
+            Everyone gets a dinner they gave at least {stars(Math.min(...pair.served))}.{' '}
+            {otherPairs
+              .map(
+                (other) =>
+                  `${other.names.join(' and ')} would leave someone with only ${stars(Math.min(...other.served))}`,
+              )
+              .join(', while ')}
+            . Notice that {consensus}, the consensus option, is not one of the two: a pair of
+            options can serve everyone better than any one option.
+          </Text>
+          <Text>
+            Unlike <strong>multiple winners</strong>, the best three are not always the best two
+            plus one more, so each number of winners is worked out on its own.
+          </Text>
+          <Text>
+            Like the consensus option, it is easy to game: a voter who gives everything but their
+            favorite 0 stars can force that favorite into the set of winners.
+          </Text>
+          <ConsensusWinnersFormula />
+        </Choice>
+
+        <Choice
           id={CHOICES.sequentialPolls}
           icon={RepeatIcon}
           color="cyan"
@@ -529,7 +633,7 @@ export function AllChoices() {
           id={CHOICES.proportionalBudget}
           icon={CoinsIcon}
           color="green"
-          title="Proportional budget"
+          title="Budget polls"
           algorithms={['Iterative STAR', 'Ballot reweighting', 'Cost adjustment']}
           example="budget"
         >
@@ -759,110 +863,6 @@ export function AllChoices() {
             product of everyone&rsquo;s total stars the most.
           </Text>
           <AssignmentFormula />
-        </Choice>
-
-        <Choice
-          id={CHOICES.consensusOption}
-          icon={HandshakeIcon}
-          color="teal"
-          title="Consensus option"
-          example="consensus"
-          algorithms={['Leximin']}
-        >
-          <NotStrategyProof />
-          <Text>
-            Sometimes the best option is the one that nobody hates: a meeting time everyone can make
-            or a dinner that no one is allergic to. <strong>Consensus option</strong> picks the
-            option whose worst score is as good as possible:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Each option gets a score equal to the fewest stars it was given by any one voter.
-            </List.Item>
-            <List.Item>The option with the highest score wins.</List.Item>
-          </List>
-          <Text>
-            Here are our six friends&rsquo; ballots again, with each option's lowest score(s)
-            circled:
-          </Text>
-          <EmojiTable
-            caption="Each restaurant's fewest stars from any one friend"
-            rows={floorRows(DINNER)}
-            rowLabel="Restaurant"
-            totalLabel="Lowest"
-          />
-          <Text>
-            For our six friends, {consensus} is the consensus option since everyone gave it at least{' '}
-            {stars(Math.min(...DINNER[consensus]))}, while{' '}
-            {optionsOf(DINNER)
-              .filter((option) => option !== consensus)
-              .join(' and ')}{' '}
-            were each given 0 stars by someone. This also shows why this system is easy to game. A
-            voter can give every option except their favorite 0 stars to force the group into their
-            top choice; though hopefully no one would do that for a poll among friends.
-          </Text>
-          <Text>
-            If several options tie, then the next lowest rating given to each of the tied options is
-            used to break the tie. This continues until a winner is found. If all scores are
-            exhausted and several options still tie, then there is no winner. The app lets you flip
-            a coin to choose one.
-          </Text>
-        </Choice>
-
-        <Choice
-          id={CHOICES.consensusWinners}
-          icon={CirclesThreeIcon}
-          color="cyan"
-          title="Consensus winners"
-          example="consensus_winners"
-          algorithms={['Egalitarian Chamberlin–Courant']}
-        >
-          <NotStrategyProof />
-          <Text>
-            Sometimes a group picks several options but each person only needs one: a few sessions
-            of a training so everyone can make one or a group splitting up to do a few different
-            things. <strong>Consensus winners</strong> picks multiple options such that the voter
-            they serve worst is served as well as possible:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Each voter is served by the option in the set that they gave the most stars.
-            </List.Item>
-            <List.Item>
-              The set whose worst-served voter has the most stars wins. If several sets tie, the
-              next worst-served voter is compared.
-            </List.Item>
-            <List.Item>Sets that still tie go to the one with the most stars in total.</List.Item>
-          </List>
-          <Text>
-            Say our six friends are splitting up into two different groups that will each go to a
-            separate restaurant. Here, the consensus winners are {pair.names.join(' and ')}:
-          </Text>
-          <EmojiTable
-            caption={`Each friend's favorite of ${pair.names.join(' and ')}`}
-            rows={servedRows(DINNER, pair.names)}
-            rowLabel="Restaurant"
-          />
-          <Text>
-            Everyone gets a dinner they gave at least {stars(Math.min(...pair.served))}.{' '}
-            {otherPairs
-              .map(
-                (other) =>
-                  `${other.names.join(' and ')} would leave someone with only ${stars(Math.min(...other.served))}`,
-              )
-              .join(', while ')}
-            . Notice that {consensus}, the consensus option, is not one of the two: a pair of
-            options can serve everyone better than any one option.
-          </Text>
-          <Text>
-            Unlike <strong>multiple winners</strong>, the best three are not always the best two
-            plus one more, so each number of winners is worked out on its own.
-          </Text>
-          <Text>
-            Like the consensus option, it is easy to game: a voter who gives everything but their
-            favorite 0 stars can force that favorite into the set of winners.
-          </Text>
-          <ConsensusWinnersFormula />
         </Choice>
       </Accordion>
     </Stack>
