@@ -27,7 +27,6 @@ import {
   CaretRightIcon,
   CirclesThreeIcon,
   ChartPieSliceIcon,
-  CpuIcon,
   CoinsIcon,
   EyeIcon,
   HandshakeIcon,
@@ -256,8 +255,7 @@ export function WhatIsStar() {
             <Text>
               If the finalists are level on all three, the election has no winner. A poll&rsquo;s
               results then offer a <strong>Flip a coin</strong> button, which picks one of the two
-              finalists. The coin lands the same way for everyone who flips it, but it isn&rsquo;t
-              part of the election: the poll still says it has no winner.
+              finalists.
             </Text>
           </Stack>
         </RoundCard>
@@ -352,136 +350,21 @@ export function AllChoices() {
         >
           <Text>
             Sometimes a group has many options and must pick one. <strong>Best option</strong> picks
-            one option using STAR, a very clever procedure that ameliorates many of the issues found
-            in other voting methods.
+            one option using STAR. In STAR, the two options with the highest scores are compared and
+            the one preferred by more voters wins.
           </Text>
+          <Text>TODO: Example</Text>
           <Text>
             <Anchor component={Link} to="/star" inherit>
               What is STAR?
             </Anchor>{' '}
-            walks through the procedure one step at a time, and{' '}
+            walks through the procedure one step at a time and covers tie-break situations.
+          </Text>
+          <Text>
             <Anchor component={Link} to="/why-star" inherit>
               Why STAR?
             </Anchor>{' '}
-            explains why it's so powerful.
-          </Text>
-          <Text>
-            Turn on <strong>Find a time</strong> and the options are times on a calendar, which
-            voters mark rather than score one by one; this is the <strong>best time</strong>. Every
-            choice except a proportional budget can find a time this way.
-          </Text>
-        </Choice>
-
-        <Choice
-          id={CHOICES.consensusOption}
-          icon={HandshakeIcon}
-          color="teal"
-          title="Consensus option"
-          example="consensus"
-          algorithms={['Maximin']}
-        >
-          <NotStrategyProof />
-          <Text>
-            Sometimes the best option is the one that nobody hates: a meeting time everyone can make
-            or a dinner that no one is allergic to. <strong>Consensus option</strong> picks the
-            option whose worst score is as good as possible:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Each option gets a score equal to the fewest stars it was given by any one voter.
-            </List.Item>
-            <List.Item>The option with the highest score wins.</List.Item>
-          </List>
-          <Text>
-            Here are our six friends&rsquo; ballots again, with each option's lowest score(s)
-            circled:
-          </Text>
-          <EmojiTable
-            caption="Each restaurant's fewest stars from any one friend"
-            rows={floorRows(DINNER)}
-            rowLabel="Restaurant"
-            totalLabel="Lowest"
-          />
-          <Text>
-            For our six friends, {consensus} is the consensus option since everyone gave it at least{' '}
-            {stars(Math.min(...DINNER[consensus]))}, while{' '}
-            {optionsOf(DINNER)
-              .filter((option) => option !== consensus)
-              .join(' and ')}{' '}
-            were each given 0 stars by someone. This also shows why this system is easy to game. A
-            voter can give every option except their favorite 0 stars to force the group into a
-            specific option; though hopefully no one would do that for a poll among friends.
-          </Text>
-          <Text>
-            If several options tie, then the next lowest rating given to each of the tied options is
-            used to break the tie. This continues until a winner is found. If all scores are
-            exhausted and several options still tie, then there is no winner. Comparing options this
-            way is called the{' '}
-            <Ext href="https://en.wikipedia.org/wiki/Leximin_order">leximin order</Ext>. The app
-            lets you flip a coin to choose one.
-          </Text>
-          <Text>
-            With <strong>Find a time</strong> on, this is the <strong>consensus time</strong>: the
-            same procedure, with the options presented on a calendar to make voting easier.
-          </Text>
-        </Choice>
-
-        <Choice
-          id={CHOICES.consensusWinners}
-          icon={CirclesThreeIcon}
-          color="cyan"
-          title="Consensus winners"
-          example="consensus_winners"
-          algorithms={['Egalitarian Chamberlin–Courant']}
-        >
-          <NotStrategyProof />
-          <Text>
-            Sometimes a group picks several options and each person only needs one of them: a few
-            sessions of a class so everyone can make one, or several dinners so everyone gets one
-            they enjoy. <strong>Consensus winners</strong> picks several options together so that
-            the voter they serve worst is served as well as possible:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Each voter is served by the option in the set that they gave the most stars.
-            </List.Item>
-            <List.Item>
-              The set whose worst-served voter has the most stars wins. If several sets tie, the
-              next worst-served voter is compared, and so on (the{' '}
-              <Ext href="https://en.wikipedia.org/wiki/Leximin_order">leximin order</Ext> again).
-            </List.Item>
-            <List.Item>Sets that still tie go to the one with the most stars in total.</List.Item>
-          </List>
-          <Text>
-            Say our six friends will go out for dinner twice. Here are their ballots for{' '}
-            {pair.names.join(' and ')}, with the option that serves each friend circled:
-          </Text>
-          <EmojiTable
-            caption={`Each friend's favorite of ${pair.names.join(' and ')}`}
-            rows={servedRows(DINNER, pair.names)}
-            rowLabel="Restaurant"
-          />
-          <Text>
-            Everyone gets a dinner they gave at least {stars(Math.min(...pair.served))}.{' '}
-            {otherPairs
-              .map(
-                (other) =>
-                  `${other.names.join(' and ')} would leave someone with only ${stars(Math.min(...other.served))}`,
-              )
-              .join(', and ')}
-            . Notice that {consensus}, the consensus option, is not one of the two: a pair can serve
-            everyone better than any one option can.
-          </Text>
-          <Text>
-            Unlike multiple winners, the best three are not always the best two plus one more, so
-            each number of winners is worked out on its own. Finding the best set is a hard problem
-            in general: the app checks every set it has to, and on very large polls asks for fewer
-            winners rather than guess. Like the consensus option, it is easy to game: a voter who
-            gives everything but their favorite 0 stars can force that favorite into the set.
-          </Text>
-          <Text>
-            With <strong>Find a time</strong> on, this is <strong>consensus times</strong>, which
-            picks several times on a calendar, so that everyone can make at least one.
+            explains why this system is used and why it works well.
           </Text>
         </Choice>
 
@@ -643,80 +526,6 @@ export function AllChoices() {
         </Choice>
 
         <Choice
-          id={CHOICES.fractionalWinners}
-          icon={ChartPieSliceIcon}
-          color="grape"
-          title="Fractional winners"
-          example="fractional"
-          algorithms={['Nash', 'Newton’s method']}
-        >
-          <Text>
-            Sometimes options can be taken partially rather than entirely: a playlist shared between
-            genres or a permanent split between different dinner options.{' '}
-            <strong>Fractional winners</strong> computes the fairest split of options when it's
-            possible to take a little of each.
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Consider a voter&rsquo;s satisfaction with each option's result to be the fraction it
-              won multiplied by what they rated that option.
-            </List.Item>
-            <List.Item>
-              Consider a voter&rsquo;s total satisfaction to be the sum of their satisfaction for
-              each option's result.
-            </List.Item>
-            <List.Item>
-              The split is then chosen such that every voter&rsquo;s total satisfaction, multiplied
-              together, is as large as possible.
-            </List.Item>
-          </List>
-          <Text>
-            Let&rsquo;s show what happens with our six friends if they now meet for dinner every
-            week and want to decide how often to go to each place. Here are their ballots again,
-            with each restaurant&rsquo;s share of the weeks in the last column:
-          </Text>
-          <EmojiTable
-            caption="How many stars each friend gave each restaurant, and each restaurant's share of the weeks"
-            rows={shareRows(DINNER, percent)}
-            rowLabel="Restaurant"
-            totalLabel="Share"
-          />
-          <Then>Each friend&rsquo;s satisfaction</Then>
-          <EmojiTable
-            caption="Each friend's stars times each restaurant's share, added up, and those sums multiplied together"
-            rows={satisfactionRows(DINNER, percent)}
-            rowLabel="Restaurant"
-            totalLabel="Product"
-          />
-          <Text size="xs" c="dimmed" ta="center">
-            332 is the highest possible product of the friends&rsquo; satisfaction scores, so this
-            is the fairest split of the options.
-          </Text>
-          <Text>
-            So the friends split their weeks{' '}
-            {sharesInOrder(percent)
-              .map((option) => `${percent[option]}% ${option}`)
-              .join(', ')
-              .replace(/, ([^,]*)$/, ' and $1')}
-            .
-          </Text>
-          <Shares percent={percent} />
-          <Text>
-            Notice how {winner} has the smallest share even though it would win a STAR election.
-            This is because alternating between options that different groups prefer can lead to
-            greater satisfaction than picking one compromise to stick with permanently. This is the
-            detail that <strong>fractional winners</strong> tries to capture.
-          </Text>
-          <Text>
-            This app provides a way to randomly select an option once you have your fractional
-            winners. This allows you to just pick an option randomly when you need to make a
-            decision rather than having everyone fill out a poll each time. Across many decisions
-            the set of randomized results approaches the optimal split.
-          </Text>
-          <NashFormula />
-        </Choice>
-
-        <Choice
           id={CHOICES.proportionalBudget}
           icon={CoinsIcon}
           color="green"
@@ -817,11 +626,85 @@ export function AllChoices() {
             unspent.
           </Text>
           <Text>
-            Voters aren't shown the cost of each option, they are expected to provide a rating
+            Voters aren't shown the cost of each option. They are expected to provide a rating
             without considering the cost since the cost is automatically accounted for by the
             procedure.
           </Text>
           <BudgetFormula />
+        </Choice>
+
+        <Choice
+          id={CHOICES.fractionalWinners}
+          icon={ChartPieSliceIcon}
+          color="grape"
+          title="Fractional winners"
+          example="fractional"
+          algorithms={['Nash', 'Newton’s method']}
+        >
+          <Text>
+            Sometimes options can be taken partially rather than entirely: a playlist shared between
+            genres or a permanent split between different dinner options.{' '}
+            <strong>Fractional winners</strong> computes the fairest split of options when it's
+            possible to take a little of each.
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Consider a voter&rsquo;s satisfaction with each option's result to be the fraction it
+              won multiplied by what they rated that option.
+            </List.Item>
+            <List.Item>
+              Consider a voter&rsquo;s total satisfaction to be the sum of their satisfaction for
+              each option's result.
+            </List.Item>
+            <List.Item>
+              The split is then chosen such that every voter&rsquo;s total satisfaction, multiplied
+              together, is as large as possible.
+            </List.Item>
+          </List>
+          <Text>
+            Let&rsquo;s show what happens with our six friends if they now meet for dinner every
+            week and want to decide how often to go to each place. Here are their ballots again,
+            with each restaurant&rsquo;s share of the weeks in the last column:
+          </Text>
+          <EmojiTable
+            caption="How many stars each friend gave each restaurant, and each restaurant's share of the weeks"
+            rows={shareRows(DINNER, percent)}
+            rowLabel="Restaurant"
+            totalLabel="Share"
+          />
+          <Then>Each friend&rsquo;s satisfaction</Then>
+          <EmojiTable
+            caption="Each friend's stars times each restaurant's share, added up, and those sums multiplied together"
+            rows={satisfactionRows(DINNER, percent)}
+            rowLabel="Restaurant"
+            totalLabel="Product"
+          />
+          <Text size="xs" c="dimmed" ta="center">
+            332 is the highest possible product of the friends&rsquo; satisfaction scores, so this
+            is the fairest split of the options.
+          </Text>
+          <Text>
+            So the friends split their weeks{' '}
+            {sharesInOrder(percent)
+              .map((option) => `${percent[option]}% ${option}`)
+              .join(', ')
+              .replace(/, ([^,]*)$/, ' and $1')}
+            .
+          </Text>
+          <Shares percent={percent} />
+          <Text>
+            Notice how {winner} has the smallest share even though it would win a STAR election.
+            This is because alternating between options that different groups prefer can lead to
+            greater satisfaction than picking one compromise to stick with permanently. This is the
+            detail that <strong>fractional winners</strong> tries to capture.
+          </Text>
+          <Text>
+            This app provides a way to randomly select an option once you have your fractional
+            winners. This allows you to just pick an option randomly when you need to make a
+            decision rather than having everyone fill out a poll each time. Across many decisions
+            the set of randomized results approaches the optimal split.
+          </Text>
+          <NashFormula />
         </Choice>
 
         <Choice
@@ -835,9 +718,9 @@ export function AllChoices() {
           <Requirement icon={EyeIcon}>The poll shows who voted.</Requirement>
           <Text>
             Sometimes voters should be assigned to different options: separate projects that must be
-            staffed or different activities that can be done simultaneously.{' '}
-            <strong>Option assignment</strong> assigns each voter to an option, choosing the
-            assignment that leaves the group as satisfied as possible:
+            staffed or a bag of Halloween candy that must be distributed.{' '}
+            <strong>Option assignment</strong> assigns each voter to one or more options, choosing
+            the assignment that leaves the group as satisfied as possible:
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
@@ -849,8 +732,8 @@ export function AllChoices() {
             </List.Item>
           </List>
           <Text>
-            Let&rsquo;s say our six friends have ordered food to share, one serving each, but there
-            isn&rsquo;t much of each:
+            Let&rsquo;s say our six friends have ordered food to share but there isn&rsquo;t much of
+            each:
           </Text>
           <Servings servings={SERVINGS} />
           <Text>Here are their ballots again, with the food each friend is given circled:</Text>
@@ -861,40 +744,125 @@ export function AllChoices() {
             totalLabel="Given"
           />
           <Text size="xs" c="dimmed" ta="center">
-            5,625 is the highest possible product of the friends&rsquo; satisfaction scores, so this
-            is the fairest assignment.
+            5,625 is the highest possible product of the friends&rsquo; stars, so this is the
+            fairest assignment.
           </Text>
           <Text>
             The numbers don&rsquo;t have to match. If there are more voters than the combined option
             capacities, as many voters as possible are given an option and the rest go without. If
             there are more places than voters, every voter gets one and some places are left empty.
-            A voter is only given an option they gave 0 stars when nothing they starred has a place
-            left.
           </Text>
           <Text>
             A poll can also give each voter more than one option, up to its{' '}
             <strong>Max options per voter</strong>. The options are then handed out in rounds. Each
             round gives every voter at most one more option, choosing the assignment that raises the
-            product of everyone&rsquo;s total stars the most. Voters with fewer stars so far come
-            first, since a few more stars multiply their satisfaction by more. Rounds continue until
-            every place is filled or every voter has as many options as they can be given.
+            product of everyone&rsquo;s total stars the most.
+          </Text>
+          <AssignmentFormula />
+        </Choice>
+
+        <Choice
+          id={CHOICES.consensusOption}
+          icon={HandshakeIcon}
+          color="teal"
+          title="Consensus option"
+          example="consensus"
+          algorithms={['Leximin']}
+        >
+          <NotStrategyProof />
+          <Text>
+            Sometimes the best option is the one that nobody hates: a meeting time everyone can make
+            or a dinner that no one is allergic to. <strong>Consensus option</strong> picks the
+            option whose worst score is as good as possible:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Each option gets a score equal to the fewest stars it was given by any one voter.
+            </List.Item>
+            <List.Item>The option with the highest score wins.</List.Item>
+          </List>
+          <Text>
+            Here are our six friends&rsquo; ballots again, with each option's lowest score(s)
+            circled:
+          </Text>
+          <EmojiTable
+            caption="Each restaurant's fewest stars from any one friend"
+            rows={floorRows(DINNER)}
+            rowLabel="Restaurant"
+            totalLabel="Lowest"
+          />
+          <Text>
+            For our six friends, {consensus} is the consensus option since everyone gave it at least{' '}
+            {stars(Math.min(...DINNER[consensus]))}, while{' '}
+            {optionsOf(DINNER)
+              .filter((option) => option !== consensus)
+              .join(' and ')}{' '}
+            were each given 0 stars by someone. This also shows why this system is easy to game. A
+            voter can give every option except their favorite 0 stars to force the group into their
+            top choice; though hopefully no one would do that for a poll among friends.
           </Text>
           <Text>
-            With <strong>Find a time</strong> on, the options are times on a calendar, such as
-            interview slots or shifts, each with the same number of places.
+            If several options tie, then the next lowest rating given to each of the tied options is
+            used to break the tie. This continues until a winner is found. If all scores are
+            exhausted and several options still tie, then there is no winner. The app lets you flip
+            a coin to choose one.
           </Text>
-          <Alert variant="light" color="orange" icon={<CpuIcon size={20} aria-hidden />}>
-            <Text size="sm">
-              With more than one option per voter, the assignment found might not have the highest
-              possible product. Finding the best one is an{' '}
-              <Ext href="https://en.wikipedia.org/wiki/Integer_programming">
-                integer programming
-              </Ext>{' '}
-              problem, computationally infeasible for all but the smallest polls, so each round
-              settles for the best next step.
-            </Text>
-          </Alert>
-          <AssignmentFormula />
+        </Choice>
+
+        <Choice
+          id={CHOICES.consensusWinners}
+          icon={CirclesThreeIcon}
+          color="cyan"
+          title="Consensus winners"
+          example="consensus_winners"
+          algorithms={['Egalitarian Chamberlin–Courant']}
+        >
+          <NotStrategyProof />
+          <Text>
+            Sometimes a group picks several options but each person only needs one: a few sessions
+            of a training so everyone can make one or a group splitting up to do a few different
+            things. <strong>Consensus winners</strong> picks multiple options such that the voter
+            they serve worst is served as well as possible:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Each voter is served by the option in the set that they gave the most stars.
+            </List.Item>
+            <List.Item>
+              The set whose worst-served voter has the most stars wins. If several sets tie, the
+              next worst-served voter is compared.
+            </List.Item>
+            <List.Item>Sets that still tie go to the one with the most stars in total.</List.Item>
+          </List>
+          <Text>
+            Say our six friends are splitting up into two different groups that will each go to a
+            separate restaurant. Here, the consensus winners are {pair.names.join(' and ')}:
+          </Text>
+          <EmojiTable
+            caption={`Each friend's favorite of ${pair.names.join(' and ')}`}
+            rows={servedRows(DINNER, pair.names)}
+            rowLabel="Restaurant"
+          />
+          <Text>
+            Everyone gets a dinner they gave at least {stars(Math.min(...pair.served))}.{' '}
+            {otherPairs
+              .map(
+                (other) =>
+                  `${other.names.join(' and ')} would leave someone with only ${stars(Math.min(...other.served))}`,
+              )
+              .join(', while ')}
+            . Notice that {consensus}, the consensus option, is not one of the two: a pair of
+            options can serve everyone better than any one option.
+          </Text>
+          <Text>
+            Unlike <strong>multiple winners</strong>, the best three are not always the best two
+            plus one more, so each number of winners is worked out on its own.
+          </Text>
+          <Text>
+            Like the consensus option, it is easy to game: a voter who gives everything but their
+            favorite 0 stars can force that favorite into the set of winners.
+          </Text>
+          <ConsensusWinnersFormula />
         </Choice>
       </Accordion>
     </Stack>
@@ -1334,12 +1302,7 @@ function WeightFormula() {
         This is the{' '}
         <Ext href="https://en.wikipedia.org/wiki/D%27Hondt_method">D&rsquo;Hondt method</Ext> for
         proportional representation, modified slightly to accommodate STAR. It&rsquo;s used by
-        dozens of countries around the world to apportion seats in parliamentary elections. Applied
-        to score voting without STAR&rsquo;s runoff, the same weight is known as{' '}
-        <Ext href="https://en.wikipedia.org/wiki/Reweighted_range_voting">
-          reweighted range voting
-        </Ext>
-        .
+        dozens of countries around the world to apportion seats in parliamentary elections.
       </Text>
     </Folded>
   )
@@ -1374,7 +1337,7 @@ function NashFormula() {
         Multiplying makes the shares proportional. If the voters split into groups that each give
         their own favorite 5 stars and everything else 0, every option&rsquo;s share is exactly the
         fraction of voters in its group. A group that also likes other options gives up some of its
-        share to them, since it is satisfied by those too. This is the{' '}
+        share to them, since it's satisfied by those too. This is the{' '}
         <Ext href="https://en.wikipedia.org/wiki/Nash_welfare_rule">Nash welfare</Ext> solution to
         the{' '}
         <Ext href="https://en.wikipedia.org/wiki/Cooperative_bargaining">
@@ -1386,18 +1349,27 @@ function NashFormula() {
         How the shares are found
       </Text>
       <Text size="sm">
-        The logarithm of the product is a{' '}
+        The logarithm of the product of the satisfaction scores is a{' '}
         <Ext href="https://en.wikipedia.org/wiki/Concave_function">concave function</Ext> of the
-        shares, so it has a single peak and climbing uphill from anywhere reaches it. The app climbs
-        with{' '}
+        shares, so it can be solved with{' '}
         <Ext href="https://en.wikipedia.org/wiki/Newton%27s_method_in_optimization">
           Newton&rsquo;s method
         </Ext>
-        , which uses the curvature of the product to jump most of the way to the peak in each step.
-        A share that would drop below 0 is set to 0 and that option leaves the split, and an option
-        left out comes back in if a little of it would raise the product. A handful of steps is
-        usually enough. To keep it fast, only the ten options with the most stars are shared
-        between.
+        . To keep it fast, only the ten options with the most stars are used. Note that this can
+        lead to slightly sub-optimal shares in rare cases.
+      </Text>
+    </Folded>
+  )
+}
+
+function ConsensusWinnersFormula() {
+  return (
+    <Folded label="How it's solved">
+      <Text size="sm">
+        The app finds the solution by checking every possible set of winners and picking the best
+        one. This is computationally expensive, but it's a feasible approach for most polls. In the
+        rare case that your poll is too complex for the app to find the solution, it will ask you to
+        try again with a smaller number of winners.
       </Text>
     </Folded>
   )
@@ -1412,27 +1384,23 @@ function NashFormula() {
  */
 function AssignmentFormula() {
   return (
-    <Folded label="How it’s solved">
+    <Folded label="How it's solved">
       <Text size="sm">
         With one option per voter, this is the{' '}
-        <Ext href="https://en.wikipedia.org/wiki/Assignment_problem">assignment problem</Ext>:
-        matching voters to places so that a total is as large as possible. Taking the logarithm of
-        each voter&rsquo;s stars turns the product into a total, since log(a × b) = log a + log b,
-        so the largest product is the largest total of logarithms.
-      </Text>
-      <Text size="sm">
-        The app solves that exactly with the{' '}
-        <Ext href="https://en.wikipedia.org/wiki/Hungarian_algorithm">Hungarian method</Ext>. It
-        adds voters one at a time, and for each finds the cheapest chain of swaps that frees a place
-        for them. Before the product, it gives as many voters as possible an option they starred,
-        since a voter with 0 stars would make the whole product 0.
+        <Ext href="https://en.wikipedia.org/wiki/Assignment_problem">assignment problem</Ext>. The
+        app solves it exactly with the{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Hungarian_algorithm">Hungarian method</Ext>.
       </Text>
       <Text size="sm">
         With several options per voter, each round is an assignment problem of its own, scored by
-        how much each new option multiplies the stars its voter already holds. Taking the best round
-        each time is a{' '}
-        <Ext href="https://en.wikipedia.org/wiki/Greedy_algorithm">greedy algorithm</Ext>: quick,
-        and usually close to the best answer, but not always the best.
+        how much the new assignments increase the product of all voters' total stars.
+      </Text>
+      <Text size="sm">
+        When it's possible for each voter to get more than one option, finding the optimal
+        assignment is famously computationally difficult (it becomes the{' '}
+        <Ext href="https://en.wikipedia.org/wiki/Knapsack_problem">knapsack problem</Ext>).
+        Splitting the assignment into rounds like this makes it much easier to compute. The solution
+        will still be very good, but it may not be the best assignment possible.
       </Text>
     </Folded>
   )
