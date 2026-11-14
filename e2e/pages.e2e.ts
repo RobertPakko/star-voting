@@ -278,12 +278,12 @@ test.describe('the intro', () => {
   test('steps through the features by hand, and holds still', async ({ page }) => {
     await page.goto('#/intro')
     const features = page.getByRole('region', { name: 'What else ChoiceLab does' })
-    await expect(features.getByText('Low-friction open polls', { exact: true })).toBeVisible()
+    await expect(features.getByText('Low-friction polls', { exact: true })).toBeVisible()
     // Less motion asked for: no turning, so nothing to pause.
     await expect(features.getByRole('button', { name: /Pause|Play/ })).toHaveCount(0)
     await features.getByRole('button', { name: 'Next feature' }).click()
     await expect(features.getByText('Email-authenticated polls', { exact: true })).toBeVisible()
-    await expect(features.getByText('Low-friction open polls', { exact: true })).toBeHidden()
+    await expect(features.getByText('Low-friction polls', { exact: true })).toBeHidden()
     await features.getByRole('button', { name: 'Previous feature' }).click()
     await features.getByRole('button', { name: 'Previous feature' }).click()
     await expect(features.getByText('Free', { exact: true })).toBeVisible()

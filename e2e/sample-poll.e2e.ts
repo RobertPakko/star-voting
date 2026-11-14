@@ -275,8 +275,12 @@ for (const scheme of ['light', 'dark'] as const) {
     await setColorScheme(page, scheme)
     await page.goto('#/sample-result-when')
     // The question asked for the consensus time, which takes the winner's
-    // place: not STAR's 9:00, which Chloe can only half make.
-    await expect(page.getByText('Consensus time: 10:00am, Sat Feb 21 (4 hours)')).toBeVisible()
+    // place: not STAR's 9:00, which Chloe can only half make. The page waits
+    // for the calendar's code as well as the sample's, the heaviest first
+    // paint in the suite: about a second alone, past five beside other workers.
+    await expect(page.getByText('Consensus time: 10:00am, Sat Feb 21 (4 hours)')).toBeVisible({
+      timeout: 15_000,
+    })
     await expect(page.getByRole('heading', { name: 'Ballots' })).toBeVisible()
     // The calendar stands where the table would have, and the download is
     // still beside the heading.
