@@ -8,6 +8,7 @@ import {
   CirclesThreeIcon,
   ListNumbersIcon,
   ArrowsSplitIcon,
+  RepeatIcon,
   TrophyIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
@@ -19,7 +20,8 @@ import { MultipleWinners } from './MultipleWinners'
 import { FractionalWinners } from './FractionalWinners'
 import { Consensus } from './Consensus'
 import { ConsensusWinners } from './ConsensusWinners'
-import { ProportionalBudget } from './ProportionalBudget'
+import { BudgetVariant } from './BudgetVariant'
+import { SequentialVariant } from './SequentialVariant'
 import { OptionAssignment } from './OptionAssignment'
 import { isSampleId } from '../lib/samplePoll'
 
@@ -31,7 +33,8 @@ type Tool = ResultTool
  * and one control. Each item opens its own modal; which are offered is
  * decided by `offers` in lib/choices.ts. The result the page already draws
  * (the question's kind, `shown`) is not offered again. `/choices` is the
- * page that explains them all.
+ * page that explains them all, and `/variants` the two variants at the
+ * foot: counts the reader sets up, with costs or with weights.
  */
 export function MoreResults({
   source,
@@ -44,12 +47,16 @@ export function MoreResults({
   /** The result on the page, left off the menu: `option` where it is STAR's winner. */
   shown: Tool
 }) {
-  // The sample answers from a recording, which holds no budget or assignment
-  // for a question that did not ask for one.
+  // The sample answers from a recording, which holds no assignment for a
+  // question that did not ask for one, and cannot count with costs or weights
+  // a reader types.
   const offered = (tool: Tool) =>
     tool !== shown &&
     offers(tool, results) &&
-    !((tool === 'budget' || tool === 'assignment') && isSampleId(source.pollId))
+    !(
+      (tool === 'budget_variant' || tool === 'sequential_variant' || tool === 'assignment') &&
+      isSampleId(source.pollId)
+    )
   const [open, setOpen] = useState<Tool | null>(null)
   const close = () => setOpen(null)
 
@@ -84,15 +91,20 @@ export function MoreResults({
       label: CHOICES.fractional.label,
       icon: ChartPieSliceIcon,
     },
-    offered('budget') && {
-      tool: 'budget' as const,
-      label: CHOICES.budget.label,
-      icon: CoinsIcon,
-    },
     offered('assignment') && {
       tool: 'assignment' as const,
       label: toolLabel('assignment', results.calendar),
       icon: ArrowsSplitIcon,
+    },
+    offered('budget_variant') && {
+      tool: 'budget_variant' as const,
+      label: toolLabel('budget_variant', results.calendar),
+      icon: CoinsIcon,
+    },
+    offered('sequential_variant') && {
+      tool: 'sequential_variant' as const,
+      label: toolLabel('sequential_variant', results.calendar),
+      icon: RepeatIcon,
     },
   ].filter((item) => item !== false)
 
@@ -166,11 +178,19 @@ export function MoreResults({
           onClose={close}
         />
       )}
-      {offered('budget') && (
-        <ProportionalBudget
+      {offered('budget_variant') && (
+        <BudgetVariant
           source={source}
           results={results}
-          opened={open === 'budget'}
+          opened={open === 'budget_variant'}
+          onClose={close}
+        />
+      )}
+      {offered('sequential_variant') && (
+        <SequentialVariant
+          source={source}
+          results={results}
+          opened={open === 'sequential_variant'}
           onClose={close}
         />
       )}

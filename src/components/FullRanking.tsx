@@ -40,7 +40,7 @@ export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; p
  * options and a hundred voters takes 8ms without it, and one that took 527ms
  * on fifty options takes 19ms. Almost nobody presses the button, so almost
  * nobody should pay for it — unless the poll chose the ranking, when the tally
- * carries it. See AGENTS.md, "Results and the option ranking".
+ * carries it. See AGENTS.md, "Results and the other answers".
  *
  * The answer is not held on to, because the votes under it can move: a
  * creator can open a closed poll again, or correct its options over the votes

@@ -1,15 +1,32 @@
 import { useEffect, useState } from 'react'
-import { Button, Group, NumberInput, Stack, Text } from '@mantine/core'
-import { CalculatorIcon, PencilSimpleIcon } from '@phosphor-icons/react'
+import {
+  ActionIcon,
+  Button,
+  Group,
+  NumberInput,
+  Progress,
+  SegmentedControl,
+  Stack,
+  Text,
+  Tooltip,
+} from '@mantine/core'
+import { CalculatorIcon, PencilSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
-import { budgetSchema, parseAnswer } from '../lib/rpcSchemas'
+import { budgetSchema, fractionalBudgetSchema, parseAnswer } from '../lib/rpcSchemas'
 import { amountError } from '../lib/pollForm'
 import { AMOUNT_MAX } from '../lib/limits'
 import { count } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
-import type { BudgetResult, PollResults } from '../lib/types'
-import { ChoiceModal } from './ChoiceBlurb'
+import type { BudgetResult, FractionalBudgetResult, PollResults } from '../lib/types'
+import { VariantModal } from './ChoiceBlurb'
+import {
+  BUDGET_COUNTS,
+  CHOICES,
+  budgetCountOf,
+  isBudgetKind,
+  type BudgetCount,
+} from '../lib/choices'
 import { RankingSkeleton } from './Skeletons'
 import type { RankingSource } from './FullRanking'
 import { Spot } from './MultipleWinners'
@@ -17,20 +34,55 @@ import { RemovedOptions, type LeftOut } from './RemovedOptions'
 import { useEveryOption } from '../lib/useEveryOption'
 import { useBudgetInputs, useLeftOut, type BudgetInputs } from '../lib/useLeftOut'
 
-/** An amount as the page writes it: whole, with thousands marked, and no unit. */
-const amount = (n: number) => n.toLocaleString('en-US')
+/**
+ * An amount as the page writes it, with thousands marked and no unit: whole
+ * where it is (every cost and budget), else to two places (a part funded).
+ */
+const amount = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+
+/** What each count is called in the switch, and the line under it. */
+const COUNT_LINES: Record<BudgetCount, string> = {
+  ranking: 'Funds the most popular options, skipping any that no longer fit.',
+  multiple: 'Funds options so that different groups of voters each get something they like.',
+  fractional:
+    'Funds options in part, up to what each costs, so that the budget is split as fairly as it can be.',
+}
+
+/** Either count's answer, with the count that gave it. */
+type Counted =
+  | { count: 'ranking' | 'multiple'; value: BudgetResult }
+  | { count: 'fractional'; value: FractionalBudgetResult }
+
+/** A count the tally carried, as `Counted`. */
+const countedOf = (
+  count: BudgetCount,
+  value: BudgetResult | FractionalBudgetResult | null,
+): Counted | null =>
+  !value
+    ? null
+    : count === 'fractional'
+      ? 'outside' in value
+        ? { count, value }
+        : null
+      : 'spots' in value
+        ? { count, value }
+        : null
 
 /**
- * *Proportional budget*, opened from the result's *More results* menu
- * (`MoreResults`), or drawn on the results page where the question chose it
- * (`ChosenResult`): cost-adjusted STAR once per option funded, among the
- * options that still fit, each ballot weakened by the stars it gave what was
- * funded, scaled by cost. `/choices` explains it, and
- * `poll_proportional_budget` counts it.
+ * The *Budget variant*, opened from the result's *More results* menu
+ * (`MoreResults`), or drawn on the results page where the question is a
+ * budget poll (`ChosenResult`): options funded out of a budget, by one of
+ * three counts. *Proportional winners* is cost-adjusted STAR once per option
+ * funded, among the options that still fit, each ballot weakened by the stars
+ * it gave what was funded, scaled by cost; *Multiple winners* is plain STAR
+ * again and again over what still fits, charging nobody; *Fractional winners*
+ * funds every option in part, up to its cost, to make the product of what
+ * every voter is served as large as it can be. `/variants` explains them,
+ * and `poll_budget_count` counts them.
  *
  * **Costs can be given after the fact.** A budget question has its own; on
  * any other written list the reader types a cost per option and a budget,
- * and the count runs on those. Either way the reader can change them and
+ * and chooses which count to run, and the count runs on those. Either way the reader can change them and
  * count again. Like removals, they are the reader's alone, never stored, and
  * kept while this poll's results stay on screen. Voters never saw a cost, so
  * nothing about the ballots depends on when one was given.
@@ -38,7 +90,7 @@ const amount = (n: number) => n.toLocaleString('en-US')
  * **The sample cannot recount**: it answers from a recording, which holds
  * the count with the question's own costs and nothing removed.
  */
-export function ProportionalBudget({
+export function BudgetVariant({
   source,
   results,
   opened,
@@ -54,8 +106,8 @@ export function ProportionalBudget({
   const [inputs, setInputs] = useBudgetInputs(source.pollId)
 
   return (
-    <ChoiceModal kind="budget" calendar={results.calendar} opened={opened} onClose={onClose}>
-      <ProportionalBudgetBody
+    <VariantModal variant="budget" opened={opened} onClose={onClose}>
+      <BudgetBody
         source={source}
         results={results}
         leftOut={leftOut}
@@ -63,7 +115,7 @@ export function ProportionalBudget({
         inputs={inputs}
         onInputs={setInputs}
       />
-    </ChoiceModal>
+    </VariantModal>
   )
 }
 
@@ -72,7 +124,7 @@ export function ProportionalBudget({
  * tally carried (`initial`), it asks for nothing until an option is removed
  * or a cost changed.
  */
-export function ProportionalBudgetBody({
+export function BudgetBody({
   source,
   results,
   initial = null,
@@ -83,7 +135,7 @@ export function ProportionalBudgetBody({
 }: {
   source: RankingSource
   results: PollResults
-  initial?: BudgetResult | null
+  initial?: BudgetResult | FractionalBudgetResult | null
   leftOut: LeftOut[]
   onLeftOut: (next: LeftOut[]) => void
   inputs: BudgetInputs | null
@@ -93,11 +145,14 @@ export function ProportionalBudgetBody({
   const key = source.pollId
   const sample = isSampleId(key)
   // A budget question costs its own options; any other asks the reader first.
-  const ownCosts = results.kind === 'budget'
+  const ownCosts = isBudgetKind(results.kind)
   const needsCosts = !ownCosts && !inputs
+  // Which count runs: the reader's, or the question's own.
+  const ownCount = budgetCountOf(results.kind)
+  const budgetCount = inputs?.count ?? ownCount
 
-  const [result, setResult] = useState<BudgetResult | null>(
-    leftOut.length === 0 && !inputs ? initial : null,
+  const [result, setResult] = useState<Counted | null>(
+    leftOut.length === 0 && !inputs ? countedOf(ownCount, initial) : null,
   )
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -119,8 +174,9 @@ export function ProportionalBudgetBody({
       return
     }
     // The question's own costs with nothing removed: the tally carried it.
-    if (!excludedKey && !inputsKey && initial) {
-      setResult(initial)
+    const own = countedOf(ownCount, initial)
+    if (!excludedKey && !inputsKey && own) {
+      setResult(own)
       setLoading(false)
       return
     }
@@ -134,25 +190,32 @@ export function ProportionalBudgetBody({
       p_excluded: excludedKey ? excludedKey.split(',') : [],
       p_costs: typed?.costs,
       p_budget: typed?.budget,
+      p_choice: budgetCount,
     }
     const request: PromiseLike<RpcAnswer> =
       kind === 'poll'
-        ? supabase.rpc('get_poll_proportional_budget', args)
-        : openPollRpc('open_poll_proportional_budget', args)
+        ? supabase.rpc('get_poll_budget', args)
+        : openPollRpc('open_poll_budget', args)
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
       setLoading(false)
       if (rpcError) return setError(rpcError.message)
-      const { value, error: shape } = parseAnswer(budgetSchema, 'the budget', data)
-      if (value) setResult(value)
-      else setError(shape)
+      if (budgetCount === 'fractional') {
+        const { value, error: shape } = parseAnswer(fractionalBudgetSchema, 'the budget', data)
+        if (value) setResult({ count: budgetCount, value })
+        else setError(shape)
+      } else {
+        const { value, error: shape } = parseAnswer(budgetSchema, 'the budget', data)
+        if (value) setResult({ count: budgetCount, value })
+        else setError(shape)
+      }
     })
 
     return () => {
       cancelled = true
     }
-  }, [kind, key, excludedKey, inputsKey, initial, needsCosts])
+  }, [kind, key, excludedKey, inputsKey, initial, ownCount, needsCosts, budgetCount])
 
   const remaining = results.option_count - leftOut.length
   const canRemove = !sample && remaining > 1
@@ -163,9 +226,14 @@ export function ProportionalBudgetBody({
   // Every cost the count was given, for the cost beside each option and for
   // the editor to start from.
   const costById = new Map<string, number>()
-  for (const spot of result?.spots ?? []) for (const o of spot.options) costById.set(o.id, o.cost)
-  for (const o of result?.unfunded ?? []) costById.set(o.id, o.cost)
-  for (const o of result?.tied ?? []) costById.set(o.id, o.cost)
+  if (result?.count === 'fractional') {
+    const { options, unfunded, outside } = result.value
+    for (const o of [...options, ...unfunded, ...outside]) costById.set(o.id, o.cost)
+  } else if (result) {
+    const { spots, unfunded, tied } = result.value
+    for (const spot of spots) for (const o of spot.options) costById.set(o.id, o.cost)
+    for (const o of [...unfunded, ...(tied ?? [])]) costById.set(o.id, o.cost)
+  }
 
   return (
     <Stack gap="md">
@@ -194,7 +262,8 @@ export function ProportionalBudgetBody({
           start={
             inputs ?? {
               costs: Object.fromEntries(costById),
-              budget: result?.budget ?? 0,
+              budget: result?.value.budget ?? 0,
+              count: budgetCount,
             }
           }
           ownCosts={ownCosts}
@@ -227,56 +296,162 @@ export function ProportionalBudgetBody({
           aria-busy={loading}
           style={{ opacity: loading ? 0.5 : 1, transition: 'opacity var(--motion-fast)' }}
         >
-          <Text fw={600}>
-            {amount(result.spent)} of {amount(result.budget)} spent, {amount(result.left)} left
-            over.
-          </Text>
+          <Stack gap={2}>
+            <Text fw={600}>
+              {amount(result.value.spent)} of {amount(result.value.budget)} spent,{' '}
+              {amount(result.value.left)} left over.
+            </Text>
+            <Text size="sm" c="dimmed">
+              Counted as {CHOICES[result.count].label.toLowerCase()}.
+            </Text>
+          </Stack>
 
-          {result.spots.length === 0 && !result.tied && (
-            <Text size="sm">Nothing fits in the budget.</Text>
-          )}
-
-          {result.spots.map((spot) => (
-            <Spot
-              key={spot.place}
-              spot={spot}
+          {result.count === 'fractional' ? (
+            <FundedList result={result.value} removable={canRemove && !loading} onRemove={remove} />
+          ) : (
+            <SpotList
+              result={result.value}
+              costById={costById}
               removable={canRemove && !loading}
               onRemove={remove}
-              aside={(id) => (
-                <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                  · costs {amount(costById.get(id) ?? 0)}
-                </Text>
-              )}
             />
-          ))}
-
-          {result.tied && (
-            <Text size="sm" c="orange">
-              {result.tied.map((o) => o.name).join(' and ')} tied on every rule, and only one fits
-              in the {amount(result.spots.at(-1)?.left ?? result.budget)} left, so neither is funded
-              and the count stops there.
-            </Text>
           )}
 
-          {result.unfunded.length > 0 && (
+          {result.value.unfunded.length > 0 && (
             <Stack gap={2}>
               <Text size="sm" fw={600}>
                 Not funded
               </Text>
               <Text size="sm" c="dimmed">
-                {result.unfunded.map((o) => `${o.name} (${amount(o.cost)})`).join(', ')}
+                {result.value.unfunded.map((o) => `${o.name} (${amount(o.cost)})`).join(', ')}
               </Text>
             </Stack>
           )}
 
-          {result.uncosted.length > 0 && (
+          {result.count === 'fractional' && result.value.outside.length > 0 && (
             <Text size="sm" c="dimmed">
-              {count(result.uncosted.length, 'option')} with no cost{' '}
-              {result.uncosted.length === 1 ? 'was' : 'were'} not counted.
+              {count(result.value.outside.length, 'more option')}{' '}
+              {result.value.outside.length === 1 ? 'was' : 'were'} not considered: only the{' '}
+              {SCORING_ROWS_MAX} with the most stars are funded. Remove one to let the next in.
+            </Text>
+          )}
+
+          {result.value.uncosted.length > 0 && (
+            <Text size="sm" c="dimmed">
+              {count(result.value.uncosted.length, 'option')} with no cost{' '}
+              {result.value.uncosted.length === 1 ? 'was' : 'were'} not counted.
             </Text>
           )}
         </Stack>
       )}
+    </Stack>
+  )
+}
+
+/** Multiple or proportional winners with a budget: a spot per round, each with its cost. */
+function SpotList({
+  result,
+  costById,
+  removable,
+  onRemove,
+}: {
+  result: BudgetResult
+  costById: Map<string, number>
+  removable: boolean
+  onRemove: (option: LeftOut) => void
+}) {
+  return (
+    <>
+      {result.spots.length === 0 && !result.tied && (
+        <Text size="sm">Nothing fits in the budget.</Text>
+      )}
+
+      {result.spots.map((spot) => (
+        <Spot
+          key={spot.place}
+          spot={spot}
+          removable={removable}
+          onRemove={onRemove}
+          aside={(id) => (
+            <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+              · costs {amount(costById.get(id) ?? 0)}
+            </Text>
+          )}
+        />
+      ))}
+
+      {result.tied && (
+        <Text size="sm" c="orange">
+          {result.tied.map((o) => o.name).join(' and ')} tied on every rule, and only one fits in
+          the {amount(result.spots.at(-1)?.left ?? result.budget)} left, so neither is funded and
+          the count stops there.
+        </Text>
+      )}
+    </>
+  )
+}
+
+/**
+ * Fractional winners with a budget: every option given something, the most
+ * first, with what it was given out of what it costs and a bar of how much of
+ * it that funds. The bar repeats the figures beside it, so it carries nothing
+ * alone.
+ */
+function FundedList({
+  result,
+  removable,
+  onRemove,
+}: {
+  result: FractionalBudgetResult
+  removable: boolean
+  onRemove: (option: LeftOut) => void
+}) {
+  if (result.options.length === 0) {
+    return (
+      <Text size="sm">Nobody gave any of these options a star, so there is nothing to fund.</Text>
+    )
+  }
+
+  return (
+    <Stack component="ul" gap="sm" m={0} p={0} style={{ listStyle: 'none' }}>
+      {result.options.map((o) => {
+        const percent = Math.round(o.funded * 100)
+        return (
+          <Stack component="li" key={o.id} gap={4}>
+            <Group gap="xs" wrap="nowrap" align="center">
+              <Text fw={600} style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+                {o.name}
+              </Text>
+              <Text size="sm" style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                {amount(o.amount)} of {amount(o.cost)}
+              </Text>
+              <Text
+                size="sm"
+                fw={600}
+                w={72}
+                ta="right"
+                style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+              >
+                {o.funded >= 1 ? 'In full' : percent === 0 ? 'Under 1%' : `${percent}%`}
+              </Text>
+              {removable && (
+                <Tooltip label="Remove and count again">
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    size="sm"
+                    aria-label={`Remove ${o.name}`}
+                    onClick={() => onRemove({ id: o.id, name: o.name })}
+                  >
+                    <XIcon size={14} aria-hidden />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+            </Group>
+            <Progress value={o.funded * 100} size="sm" aria-hidden />
+          </Stack>
+        )
+      })}
     </Stack>
   )
 }
@@ -307,6 +482,7 @@ function CostEditor({
 }) {
   const options = useEveryOption(source, results)
   const [budget, setBudget] = useState<number | string>(start.budget || '')
+  const [budgetCount, setBudgetCount] = useState(start.count)
   const [costs, setCosts] = useState<Record<string, number | string>>(() =>
     Object.fromEntries(Object.entries(start.costs).map(([id, c]) => [id, c ?? ''])),
   )
@@ -328,6 +504,7 @@ function CostEditor({
     if (!shown || budgetError || costErrors.size > 0 || !anyCost) return
     onCount({
       budget: Number(budget),
+      count: budgetCount,
       costs: Object.fromEntries(
         shown.map((o) => [
           o.id,
@@ -343,6 +520,21 @@ function CostEditor({
         {ownCosts
           ? 'Try other costs or another budget. Nothing you change here is saved.'
           : 'Give the options their costs and a budget to share out. Options left without a cost are not counted, and nothing you type here is saved.'}
+      </Text>
+
+      {/* Each label is its choice's first word, so three fit across a phone. */}
+      <SegmentedControl
+        fullWidth
+        aria-label="Count as"
+        value={budgetCount}
+        onChange={(v) => setBudgetCount(v as BudgetCount)}
+        data={BUDGET_COUNTS.map((c) => ({
+          value: c,
+          label: CHOICES[c].label.split(' ')[0],
+        }))}
+      />
+      <Text size="xs" c="dimmed" mt={-6}>
+        {CHOICES[budgetCount].label}: {COUNT_LINES[budgetCount].toLowerCase()}
       </Text>
 
       <NumberInput

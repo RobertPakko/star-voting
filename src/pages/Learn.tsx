@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useState, type ReactNode } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import {
   Accordion,
   Alert,
@@ -24,6 +24,7 @@ import { useDisclosure } from '@mantine/hooks'
 import {
   ArrowDownIcon,
   ArrowsSplitIcon,
+  CalendarIcon,
   CaretRightIcon,
   CirclesThreeIcon,
   ChartPieSliceIcon,
@@ -46,21 +47,22 @@ import { percentagesOf } from '../lib/shares'
 import { stars } from '../lib/plural'
 import { pollPath } from '../lib/pollId'
 import {
+  SAMPLE_BUDGET_ID,
   SAMPLE_RESULT_ID,
+  SAMPLE_RESULT_SNACKS_ID,
   SAMPLE_RESULT_TIME_ID,
-  SAMPLE_SEQUEL_ASSIGNMENT_ID,
-  SAMPLE_SEQUEL_BUDGET_ID,
-  SAMPLE_SEQUEL_ID,
+  SAMPLE_SEQUENTIAL_ID,
   sampleResultAs,
 } from '../lib/samplePoll'
-import type { ResultTool } from '../lib/choices'
+import { CHOICES as CHOICE_NAMES, VARIANTS, type Choice as ChoiceKind } from '../lib/choices'
 import vseByStrategy from '../assets/why-star/vse-by-strategy.png'
 import winnerDistribution from '../assets/why-star/winner-distribution.webp'
 import classes from './Learn.module.css'
 
 /**
- * The four pages that explain: what STAR voting is and how it settles a tie
- * (`/star`), what else the same ballots can answer (`/choices`), why use it
+ * The pages that explain: what STAR voting is and how it settles a tie
+ * (`/star`), what else the same ballots can answer (`/choices`), what a
+ * question can take on top of its choice (`/variants`), why use it
  * (`/why-star`), and what this site does with it (`/features`). Each is a
  * home-page tile of its own, so each is one short page rather than a tab of
  * a longer one. Public, because
@@ -282,15 +284,8 @@ export function WhatIsStar() {
  */
 export function AllChoices() {
   usePageTitle('All choices')
-  const section = useSection()
-  const [open, setOpen] = useState<string[]>(() => (section ? [section] : []))
-  // A new `?section=` while mounted opens that section too, during render
-  // rather than in an effect, so it is open on the frame the page scrolls.
-  const [opened, setOpened] = useState(section)
-  if (section !== opened) {
-    setOpened(section)
-    if (section && !open.includes(section)) setOpen([...open, section])
-  }
+  const [section, open, setOpen] = useOpenSections()
+  const moved = section ? MOVED_SECTIONS[section] : undefined
   const finalists = finalistsOf(DINNER)
   const winner = runoffWinner(DINNER, finalists)
   const ranking = rankingOf(DINNER)
@@ -299,14 +294,12 @@ export function AllChoices() {
   const reduced = votersOf(DINNER).filter((voter) => spots[1].weights[voter] < 1)
   const consensus = floorRows(DINNER).find((row) => row.won)!.name
   const [pair, ...otherPairs] = consensusSetsOf(DINNER, 2)
-  const weeks = weeksOf([DINNER, DINNER, DINNER, WITH_LATECOMER])
-  const latecomer = votersOf(DINNER).length
   const shares = sharesOf(DINNER)
   const percent = percentagesOf(shares)
-  const budget = budgetOf(DINNER, COSTS, BUDGET)
-  const budgetReduced = votersOf(DINNER).filter((voter) => budget.spots[1].weights[voter] < 1)
-  const popular = byPopularity(DINNER, COSTS, BUDGET)
   const given = assignmentOf(DINNER, SERVINGS)
+
+  // The sections that became variants, for links already shared.
+  if (moved) return <Navigate to={moved} replace />
 
   return (
     <Stack maw={720} mx="auto" gap="md">
@@ -327,26 +320,14 @@ export function AllChoices() {
         />
       </Stack>
 
-      <Accordion
-        multiple
-        value={open}
-        onChange={setOpen}
-        variant="separated"
-        order={2}
-        classNames={{
-          item: classes.choice,
-          control: classes.choiceControl,
-          label: classes.choiceLabel,
-          content: classes.choiceContent,
-        }}
-      >
+      <Sections open={open} onChange={setOpen}>
         <Choice
           id={CHOICES.bestOption}
           icon={TrophyIcon}
           color="yellow"
           title="Best option"
-          example="option"
-          algorithms={['STAR']}
+          example={exampleFor('option')}
+          tags={['STAR']}
         >
           <Text>
             Sometimes a group has many options and must pick one. <strong>Best option</strong> picks
@@ -373,8 +354,8 @@ export function AllChoices() {
           icon={HandshakeIcon}
           color="teal"
           title="Consensus option"
-          example="consensus"
-          algorithms={['Leximin']}
+          example={exampleFor('consensus')}
+          tags={['Leximin']}
         >
           <NotStrategyProof />
           <Text>
@@ -417,19 +398,19 @@ export function AllChoices() {
         </Choice>
 
         <Choice
-          id={CHOICES.optionRanking}
+          id={CHOICES.multipleWinners}
           icon={ListNumbersIcon}
           color="blue"
           title="Multiple winners"
-          example="ranking"
-          algorithms={['Iterative STAR']}
+          example={exampleFor('ranking')}
+          tags={['Iterative STAR']}
         >
           <Text>
             STAR picks one winner, but sometimes you need a plan B: the restaurant that won is fully
             booked or the person you picked for the job turns it down.{' '}
-            <strong>Option ranking</strong> puts every option in order by running STAR again without
-            the winner. The winner steps aside, and the next two highest scorers go to a runoff for
-            second place. Then second place steps aside, and so on down the list.
+            <strong>Multiple winners</strong> picks several winners by running STAR again without
+            the options already chosen. The winner steps aside, and the next two highest scorers go
+            to a runoff for second place. Then second place steps aside, and so on down the list.
           </Text>
           <Text>
             Let&rsquo;s show what happens with our six friends if the {winner} place is fully
@@ -449,24 +430,23 @@ export function AllChoices() {
             rowLabel="Restaurant"
             totalLabel="Votes"
           />
-          <Then>The option ranking</Then>
+          <Then>The multiple winners, in order</Then>
           <Places names={ranking} />
         </Choice>
 
         <Choice
-          id={CHOICES.multipleWinners}
+          id={CHOICES.proportionalWinners}
           icon={RankingIcon}
           color="violet"
           title="Proportional winners"
-          example="multiple"
-          algorithms={['Iterative STAR', 'Ballot reweighting']}
+          example={exampleFor('multiple')}
+          tags={['Iterative STAR', 'Ballot reweighting']}
         >
           <Text>
             Sometimes a group wants more than one winner: choosing two dinners on a weekend away or
-            three films for a movie marathon. Taking the top of the option ranking for this can
-            result in every spot going to the biggest group. <strong>Multiple winners</strong> gives
-            a ranking that shares top spots so that different groups of voters each get something
-            they like:
+            three films for a movie marathon. Taking the top few <strong>multiple winners</strong>{' '}
+            for this can give every spot to the biggest group. <strong>Proportional winners</strong>{' '}
+            shares the top spots so that different groups of voters each get something they like:
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>Run STAR as usual to select a winner.</List.Item>
@@ -509,7 +489,7 @@ export function AllChoices() {
             totalLabel="Votes"
             reduced={reduced}
           />
-          <Then>The multiple-winner ranking</Then>
+          <Then>The proportional winners, in order</Then>
           <Places names={spots.map((spot) => spot.winner)} />
           <Text>
             So the two dinners are {spots[0].winner} and {spots[1].winner}. The {spots[0].winner}{' '}
@@ -525,8 +505,8 @@ export function AllChoices() {
           icon={CirclesThreeIcon}
           color="cyan"
           title="Consensus winners"
-          example="consensus_winners"
-          algorithms={['Egalitarian Chamberlin–Courant']}
+          example={exampleFor('consensus_winners')}
+          tags={['Egalitarian Chamberlin–Courant']}
         >
           <NotStrategyProof />
           <Text>
@@ -566,8 +546,9 @@ export function AllChoices() {
             options can serve everyone better than any one option.
           </Text>
           <Text>
-            Unlike <strong>multiple winners</strong>, the best three are not always the best two
-            plus one more, so each number of winners is worked out on its own.
+            Unlike <strong>multiple winners</strong> and <strong>proportional winners</strong>, the
+            best three are not always the best two plus one more, so each number of winners is
+            worked out on its own.
           </Text>
           <Text>
             Like the consensus option, it is easy to game: a voter who gives everything but their
@@ -577,12 +558,226 @@ export function AllChoices() {
         </Choice>
 
         <Choice
-          id={CHOICES.sequentialPolls}
+          id={CHOICES.fractionalWinners}
+          icon={ChartPieSliceIcon}
+          color="grape"
+          title="Fractional winners"
+          example={exampleFor('fractional')}
+          tags={['Nash', 'Newton’s method']}
+        >
+          <Text>
+            Sometimes options can be taken partially rather than entirely: a playlist shared between
+            genres or a permanent split between different dinner options.{' '}
+            <strong>Fractional winners</strong> computes the fairest split of options when it's
+            possible to take a little of each.
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Consider a voter&rsquo;s satisfaction with each option's result to be the fraction it
+              won multiplied by what they rated that option.
+            </List.Item>
+            <List.Item>
+              Consider a voter&rsquo;s total satisfaction to be the sum of their satisfaction for
+              each option's result.
+            </List.Item>
+            <List.Item>
+              The split is then chosen such that every voter&rsquo;s total satisfaction, multiplied
+              together, is as large as possible.
+            </List.Item>
+          </List>
+          <Text>
+            Let&rsquo;s show what happens with our six friends if they now meet for dinner every
+            week and want to decide how often to go to each place. Here are their ballots again,
+            with each restaurant&rsquo;s share of the weeks in the last column:
+          </Text>
+          <EmojiTable
+            caption="How many stars each friend gave each restaurant, and each restaurant's share of the weeks"
+            rows={shareRows(DINNER, percent)}
+            rowLabel="Restaurant"
+            totalLabel="Share"
+          />
+          <Then>Each friend&rsquo;s satisfaction</Then>
+          <EmojiTable
+            caption="Each friend's stars times each restaurant's share, added up, and those sums multiplied together"
+            rows={satisfactionRows(DINNER, percent)}
+            rowLabel="Restaurant"
+            totalLabel="Product"
+          />
+          <Text size="xs" c="dimmed" ta="center">
+            332 is the highest possible product of the friends&rsquo; satisfaction scores, so this
+            is the fairest split of the options.
+          </Text>
+          <Text>
+            So the friends split their weeks{' '}
+            {sharesInOrder(percent)
+              .map((option) => `${percent[option]}% ${option}`)
+              .join(', ')
+              .replace(/, ([^,]*)$/, ' and $1')}
+            .
+          </Text>
+          <Shares percent={percent} />
+          <Text>
+            Notice how {winner} has the smallest share even though it would win a STAR election.
+            This is because alternating between options that different groups prefer can lead to
+            greater satisfaction than picking one compromise to stick with permanently. This is the
+            detail that <strong>fractional winners</strong> tries to capture.
+          </Text>
+          <Text>
+            This app provides a way to randomly select an option once you have your fractional
+            winners. This allows you to just pick an option randomly when you need to make a
+            decision rather than having everyone fill out a poll each time. Across many decisions
+            the set of randomized results approaches the optimal split.
+          </Text>
+          <NashFormula />
+        </Choice>
+
+        <Choice
+          id={CHOICES.optionAssignment}
+          icon={ArrowsSplitIcon}
+          color="orange"
+          title="Option assignment"
+          tags={['Nash', 'Hungarian method']}
+          example={exampleFor('assignment')}
+        >
+          <Requirement icon={EyeIcon}>The poll shows who voted.</Requirement>
+          <Text>
+            Sometimes voters should be assigned to different options: separate projects that must be
+            staffed or a bag of Halloween candy that must be distributed.{' '}
+            <strong>Option assignment</strong> assigns each voter to one or more options, choosing
+            the assignment that leaves the group as satisfied as possible:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              Each option may be given a capacity: how many voters can be assigned to it.
+            </List.Item>
+            <List.Item>
+              The assignment chosen is the one where the stars each voter gave their assigned
+              option, multiplied together, are as large as possible.
+            </List.Item>
+          </List>
+          <Text>
+            Let&rsquo;s say our six friends have ordered food to share but there isn&rsquo;t much of
+            each:
+          </Text>
+          <Servings servings={SERVINGS} />
+          <Text>Here are their ballots again, with the food each friend is given circled:</Text>
+          <EmojiTable
+            caption="How many stars each friend gave each food, with the one each friend is given circled"
+            rows={givenRows(DINNER, SERVINGS, given)}
+            rowLabel="Food"
+            totalLabel="Given"
+          />
+          <Text size="xs" c="dimmed" ta="center">
+            5,625 is the highest possible product of the friends&rsquo; stars, so this is the
+            fairest assignment.
+          </Text>
+          <Text>
+            The numbers don&rsquo;t have to match. If there are more voters than the combined option
+            capacities, as many voters as possible are given an option and the rest go without. If
+            there are more places than voters, every voter gets one and some places are left empty.
+          </Text>
+          <Text>
+            A poll can also give each voter more than one option, up to its{' '}
+            <strong>Max options per voter</strong>. The options are then handed out in rounds. Each
+            round gives every voter at most one more option, choosing the assignment that raises the
+            product of everyone&rsquo;s total stars the most.
+          </Text>
+          <AssignmentFormula />
+        </Choice>
+      </Sections>
+    </Stack>
+  )
+}
+
+/**
+ * What a question can take on top of its choice (`/variants`), one section
+ * each, folded as `AllChoices` folds its choices and opened the same way by
+ * `?section=`. A question takes one variant at most; each section names the
+ * choices it works with as tags, and ends on its example in the sample poll:
+ * the calendar question, the film question weighed as a sequel, and the
+ * snacks bought out of a budget.
+ */
+export function PollVariants() {
+  usePageTitle('Poll variants')
+  const [, open, setOpen] = useOpenSections()
+  const winner = runoffWinner(DINNER, finalistsOf(DINNER))
+  const weeks = weeksOf([DINNER, DINNER, DINNER, WITH_LATECOMER])
+  const latecomer = votersOf(DINNER).length
+  const budget = budgetOf(DINNER, COSTS, BUDGET)
+  const budgetReduced = votersOf(DINNER).filter((voter) => budget.spots[1].weights[voter] < 1)
+  const popular = byPopularity(DINNER, COSTS, BUDGET)
+  const funded = fundedOf(DINNER, COSTS, BUDGET)
+  const inFull = optionsOf(DINNER).filter((o) => funded[o] >= COSTS[o] - 1e-6)
+  const inPart = optionsOf(DINNER).filter((o) => funded[o] > 1e-6 && funded[o] < COSTS[o] - 1e-6)
+
+  return (
+    <Stack maw={720} mx="auto" gap="md">
+      <Title order={1}>Poll variants</Title>
+      <Stack gap="sm">
+        <Text>
+          A question&rsquo;s{' '}
+          <Anchor component={Link} to="/choices" inherit>
+            choice
+          </Anchor>{' '}
+          says what it asks for. On top of that, a question can take one variant, which changes what
+          voters answer or how their ballots are counted. A question can take at most one. The
+          examples carry on with{' '}
+          <Anchor component={Link} to="/star" inherit>
+            our six friends
+          </Anchor>{' '}
+          choosing dinner:
+        </Text>
+        <OptionKey ratings={DINNER} />
+        <EmojiTable
+          caption="How many stars each friend gave each restaurant"
+          rows={ratingRows(DINNER, true)}
+          rowLabel="Restaurant"
+        />
+      </Stack>
+
+      <Sections open={open} onChange={setOpen}>
+        <Choice
+          id={VARIANTS.time.section}
+          icon={CalendarIcon}
+          color="blue"
+          title="Time polls"
+          tags={['Every choice']}
+          tagsLabel="Works with"
+          example={pollPath(SAMPLE_RESULT_TIME_ID)}
+        >
+          <Text>
+            Sometimes the options are times: when to meet, or which interview slots to hand out. A{' '}
+            <strong>time poll</strong> has voters mark a calendar instead of scoring a written list:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              The poll&rsquo;s creator says how long the meeting is and marks the days and hours it
+              could happen in.
+            </List.Item>
+            <List.Item>
+              Every window of that length that fits inside what was marked becomes an option.
+            </List.Item>
+            <List.Item>
+              Voters mark how good each hour is for them, and each window is scored by the average
+              of the hours it covers.
+            </List.Item>
+          </List>
+          <Text>
+            Any choice can be asked of a calendar: the best time, a consensus time everybody can
+            make, a few sessions of a training, or interview slots handed out by option assignment.
+            Times can overlap or run back to back. A choice that picks several runs them back to
+            back unless you say otherwise, so two winners are never nearly the same time.
+          </Text>
+        </Choice>
+
+        <Choice
+          id={VARIANTS.sequential.section}
           icon={RepeatIcon}
           color="cyan"
           title="Sequential polls"
-          algorithms={['Iterative STAR', 'Ballot reweighting']}
-          example="sequential"
+          tags={['Best option', 'Multiple winners', 'Proportional winners']}
+          tagsLabel="Works with"
+          example={pollPath(SAMPLE_SEQUENTIAL_ID)}
         >
           <Requirement icon={UsersThreeIcon}>
             We have the voters and ballots from a previous poll
@@ -594,8 +789,8 @@ export function AllChoices() {
             every ballot reweighted by how much its voter liked the previous winners.
           </Text>
           <Text>
-            This uses exactly the same procedure as <strong>multiple winners</strong>, but spread
-            across several polls. Over time wins are shared out among different groups.
+            This uses exactly the same procedure as <strong>proportional winners</strong>, but
+            spread across several polls. Over time wins are shared out among different groups.
           </Text>
           <Text>
             Let&rsquo;s say our six friends now have dinner every week and run a poll each time,
@@ -626,24 +821,51 @@ export function AllChoices() {
             Ballots are also re-normalized for display purposes. This doesn't change the result, but
             makes it easier to read if the weights have become very small over time.
           </Text>
+          <Text>
+            There are two ways to make one. On a finished poll that publishes its ballots with names
+            on them, <strong>Create sequel poll</strong> starts the next poll with every
+            voter&rsquo;s stars for the winners carried forward. And on any such poll,{' '}
+            <strong>More results</strong> has a <strong>Sequential variant</strong>, where you type
+            in the stars each voter gave earlier winners and see the result as though the poll had
+            been sequential.
+          </Text>
           <WeightFormula />
         </Choice>
 
         <Choice
-          id={CHOICES.proportionalBudget}
+          id={VARIANTS.budget.section}
           icon={CoinsIcon}
           color="green"
           title="Budget polls"
-          algorithms={['Iterative STAR', 'Ballot reweighting', 'Cost adjustment']}
-          example="budget"
+          tags={['Multiple winners', 'Proportional winners', 'Fractional winners']}
+          tagsLabel="Works with"
+          example={pollPath(SAMPLE_BUDGET_ID)}
         >
           <NeedsCost />
           <Text>
-            Sometimes options can have differing costs: activities for a trip with a fixed budget or
-            talks at a one-day conference. Funding the most popular options in order lets the
-            biggest group spend the whole budget. <strong>Proportional budget</strong> shares the
-            budget so that different groups of voters each get something they like:
+            Sometimes options have differing costs: activities for a trip with a fixed budget or
+            talks at a one-day conference. A <strong>budget poll</strong> gives every option a cost
+            and spends a budget on them. It works with three choices:
           </Text>
+          <List spacing={4} withPadding>
+            <List.Item>
+              <strong>Multiple winners</strong> with a budget runs STAR again and again, funding
+              each winner and skipping any option that no longer fits. It buys what is most popular.
+            </List.Item>
+            <List.Item>
+              <strong>Proportional winners</strong> with a budget shares the budget so that
+              different groups of voters each get something they like.
+            </List.Item>
+            <List.Item>
+              <strong>Fractional winners</strong> with a budget can fund an option in part, for when
+              that makes sense: a share of a grant, or fewer hours of a class.
+            </List.Item>
+          </List>
+          <Text>
+            With multiple or proportional winners, each option is either fully funded or left out,
+            and winners are chosen until nothing left fits, so some of the budget can be left over.
+          </Text>
+          <Text>Proportional winners with a budget works like this:</Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
               Run STAR to select a winner, with scores reweighted to adjust for cost.
@@ -717,154 +939,38 @@ export function AllChoices() {
           </Text>
           <Places names={budget.spots.map((spot) => spot.winner)} />
           <Text>
-            Funding the most popular options in order would have bought {popular.join(' and ')},
-            spending the whole budget on the options the {budget.spots[0].winner} fans like most.
-            Instead, both groups get their favorite.
+            <strong>Multiple winners</strong> with the same budget would have bought{' '}
+            {popular.join(' and ')}, spending the whole budget on the options the{' '}
+            {budget.spots[0].winner} fans like most. Instead, both groups get their favorite.
+          </Text>
+          <Text>
+            <strong>Fractional winners</strong> with a budget funds each option up to what it costs.
+            Each friend is served by the stars they gave each option times how much of it is funded,
+            and the money is split to make the product of what everyone is served as large as
+            possible, as fractional winners splits its shares. A cheaper option buys its fans more
+            for each dollar, and no option is given more than it costs. With the same ${BUDGET}, it
+            funds {inFull.join(' and ')} in full
+            {inPart.length > 0 &&
+              `, and gives the last ${inPart.map((o) => decimal(funded[o])).join(', ')} to ${inPart.join(' and ')}`}
+            . The whole budget is spent unless everything somebody starred can be funded in full.
           </Text>
           <Text>
             Including cost in the reweighting step means a group that gets one expensive option
             funded has spent as much of its influence as a group that gets several cheap ones.
           </Text>
           <Text>
-            Each option is either fully funded or left out, so some of the budget can be left
-            unspent.
-          </Text>
-          <Text>
             Voters aren't shown the cost of each option. They are expected to provide a rating
             without considering the cost since the cost is automatically accounted for by the
             procedure.
           </Text>
+          <Text>
+            Costs can also be given after the fact: on any finished poll,{' '}
+            <strong>More results</strong> has a <strong>Budget variant</strong>, where you type in
+            each option&rsquo;s cost and a budget and choose which of the three to count.
+          </Text>
           <BudgetFormula />
         </Choice>
-
-        <Choice
-          id={CHOICES.fractionalWinners}
-          icon={ChartPieSliceIcon}
-          color="grape"
-          title="Fractional winners"
-          example="fractional"
-          algorithms={['Nash', 'Newton’s method']}
-        >
-          <Text>
-            Sometimes options can be taken partially rather than entirely: a playlist shared between
-            genres or a permanent split between different dinner options.{' '}
-            <strong>Fractional winners</strong> computes the fairest split of options when it's
-            possible to take a little of each.
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Consider a voter&rsquo;s satisfaction with each option's result to be the fraction it
-              won multiplied by what they rated that option.
-            </List.Item>
-            <List.Item>
-              Consider a voter&rsquo;s total satisfaction to be the sum of their satisfaction for
-              each option's result.
-            </List.Item>
-            <List.Item>
-              The split is then chosen such that every voter&rsquo;s total satisfaction, multiplied
-              together, is as large as possible.
-            </List.Item>
-          </List>
-          <Text>
-            Let&rsquo;s show what happens with our six friends if they now meet for dinner every
-            week and want to decide how often to go to each place. Here are their ballots again,
-            with each restaurant&rsquo;s share of the weeks in the last column:
-          </Text>
-          <EmojiTable
-            caption="How many stars each friend gave each restaurant, and each restaurant's share of the weeks"
-            rows={shareRows(DINNER, percent)}
-            rowLabel="Restaurant"
-            totalLabel="Share"
-          />
-          <Then>Each friend&rsquo;s satisfaction</Then>
-          <EmojiTable
-            caption="Each friend's stars times each restaurant's share, added up, and those sums multiplied together"
-            rows={satisfactionRows(DINNER, percent)}
-            rowLabel="Restaurant"
-            totalLabel="Product"
-          />
-          <Text size="xs" c="dimmed" ta="center">
-            332 is the highest possible product of the friends&rsquo; satisfaction scores, so this
-            is the fairest split of the options.
-          </Text>
-          <Text>
-            So the friends split their weeks{' '}
-            {sharesInOrder(percent)
-              .map((option) => `${percent[option]}% ${option}`)
-              .join(', ')
-              .replace(/, ([^,]*)$/, ' and $1')}
-            .
-          </Text>
-          <Shares percent={percent} />
-          <Text>
-            Notice how {winner} has the smallest share even though it would win a STAR election.
-            This is because alternating between options that different groups prefer can lead to
-            greater satisfaction than picking one compromise to stick with permanently. This is the
-            detail that <strong>fractional winners</strong> tries to capture.
-          </Text>
-          <Text>
-            This app provides a way to randomly select an option once you have your fractional
-            winners. This allows you to just pick an option randomly when you need to make a
-            decision rather than having everyone fill out a poll each time. Across many decisions
-            the set of randomized results approaches the optimal split.
-          </Text>
-          <NashFormula />
-        </Choice>
-
-        <Choice
-          id={CHOICES.optionAssignment}
-          icon={ArrowsSplitIcon}
-          color="orange"
-          title="Option assignment"
-          algorithms={['Nash', 'Hungarian method']}
-          example="assignment"
-        >
-          <Requirement icon={EyeIcon}>The poll shows who voted.</Requirement>
-          <Text>
-            Sometimes voters should be assigned to different options: separate projects that must be
-            staffed or a bag of Halloween candy that must be distributed.{' '}
-            <strong>Option assignment</strong> assigns each voter to one or more options, choosing
-            the assignment that leaves the group as satisfied as possible:
-          </Text>
-          <List type="ordered" spacing={4} withPadding>
-            <List.Item>
-              Each option may be given a capacity: how many voters can be assigned to it.
-            </List.Item>
-            <List.Item>
-              The assignment chosen is the one where the stars each voter gave their assigned
-              option, multiplied together, are as large as possible.
-            </List.Item>
-          </List>
-          <Text>
-            Let&rsquo;s say our six friends have ordered food to share but there isn&rsquo;t much of
-            each:
-          </Text>
-          <Servings servings={SERVINGS} />
-          <Text>Here are their ballots again, with the food each friend is given circled:</Text>
-          <EmojiTable
-            caption="How many stars each friend gave each food, with the one each friend is given circled"
-            rows={givenRows(DINNER, SERVINGS, given)}
-            rowLabel="Food"
-            totalLabel="Given"
-          />
-          <Text size="xs" c="dimmed" ta="center">
-            5,625 is the highest possible product of the friends&rsquo; stars, so this is the
-            fairest assignment.
-          </Text>
-          <Text>
-            The numbers don&rsquo;t have to match. If there are more voters than the combined option
-            capacities, as many voters as possible are given an option and the rest go without. If
-            there are more places than voters, every voter gets one and some places are left empty.
-          </Text>
-          <Text>
-            A poll can also give each voter more than one option, up to its{' '}
-            <strong>Max options per voter</strong>. The options are then handed out in rounds. Each
-            round gives every voter at most one more option, choosing the assignment that raises the
-            product of everyone&rsquo;s total stars the most.
-          </Text>
-          <AssignmentFormula />
-        </Choice>
-      </Accordion>
+      </Sections>
     </Stack>
   )
 }
@@ -879,7 +985,8 @@ function Choice({
   icon: Glyph,
   color,
   title,
-  algorithms,
+  tags,
+  tagsLabel = 'Algorithms',
   example,
   children,
 }: {
@@ -888,12 +995,12 @@ function Choice({
   /** The icon's colour, a different one per section so the folded list is easy to scan. */
   color: MantineColor
   title: string
-  algorithms: string[]
-  /**
-   * The result in the sample poll that shows this choice, for a choice that is
-   * built; `sequential` is the sample's sequel.
-   */
-  example?: ResultTool | 'sequential'
+  /** A choice's algorithms, or the choices a variant works with. */
+  tags: string[]
+  /** What the tags are, said to a screen reader before them. */
+  tagsLabel?: string
+  /** The sample poll's question that shows this choice or variant. */
+  example?: string
   children: ReactNode
 }) {
   return (
@@ -911,8 +1018,8 @@ function Choice({
             {title}
           </Text>
           <Group gap={4}>
-            <VisuallyHidden>{algorithms.length > 1 ? 'Algorithms:' : 'Algorithm:'}</VisuallyHidden>
-            {algorithms.map((name) => (
+            <VisuallyHidden>{`${tagsLabel}:`}</VisuallyHidden>
+            {tags.map((name) => (
               <Badge key={name} size="sm" variant="light" color={badgeColor.algorithm}>
                 {name}
               </Badge>
@@ -925,7 +1032,7 @@ function Choice({
           {children}
           {example && (
             <Group justify="flex-end">
-              <Button component={Link} to={exampleFor(example)} variant="light">
+              <Button component={Link} to={example} variant="light">
                 See an example
               </Button>
             </Group>
@@ -941,15 +1048,11 @@ function Choice({
  * choice as though the question had asked for it: the consensus on its
  * calendar question, which did ask for the consensus time; the best option
  * on the film question, which asked for it; and the rest on the film
- * question recast as that kind (`sampleResultAs`). The two the first poll
- * cannot show are the sequel's questions: its film question is sequential,
- * its upgrades question a proportional budget and its last an option
- * assignment.
+ * question recast as that kind (`sampleResultAs`), except the assignment,
+ * which is the snack question's own.
  */
-function exampleFor(tool: ResultTool | 'sequential') {
-  if (tool === 'sequential') return pollPath(SAMPLE_SEQUEL_ID)
-  if (tool === 'budget') return pollPath(SAMPLE_SEQUEL_BUDGET_ID)
-  if (tool === 'assignment') return pollPath(SAMPLE_SEQUEL_ASSIGNMENT_ID)
+function exampleFor(tool: ChoiceKind) {
+  if (tool === 'assignment') return pollPath(SAMPLE_RESULT_SNACKS_ID)
   if (tool === 'consensus') return pollPath(SAMPLE_RESULT_TIME_ID)
   if (tool === 'option') return pollPath(SAMPLE_RESULT_ID)
   return pollPath(sampleResultAs(tool))
@@ -987,27 +1090,82 @@ function NeedsCost() {
 }
 
 /**
- * The ids of `AllChoices`' sections, which `?section=` opens the page at.
- * The result's modals link to them by these words, so keep them.
+ * The ids of `AllChoices`' sections, which `?section=` opens the page at:
+ * each choice's `section` in lib/choices.ts, which the result's modals link
+ * to.
  */
 const CHOICES = {
-  bestOption: 'best-option',
-  consensusOption: 'consensus-option',
-  consensusWinners: 'consensus-winners',
-  optionRanking: 'option-ranking',
-  multipleWinners: 'multiple-winners',
-  sequentialPolls: 'sequential-polls',
-  proportionalBudget: 'proportional-budget',
-  fractionalWinners: 'fractional-winners',
-  optionAssignment: 'option-assignment',
+  bestOption: CHOICE_NAMES.option.section,
+  consensusOption: CHOICE_NAMES.consensus.section,
+  consensusWinners: CHOICE_NAMES.consensus_winners.section,
+  multipleWinners: CHOICE_NAMES.ranking.section,
+  proportionalWinners: CHOICE_NAMES.multiple.section,
+  fractionalWinners: CHOICE_NAMES.fractional.section,
+  optionAssignment: CHOICE_NAMES.assignment.section,
 }
 
 /**
- * *Proportional budget*'s weight, folded away at the foot of its section as
- * `WeightFormula` is under *Multiple winners*: the same divisor, with each
+ * Where links to the sections `/choices` used to hold go now: the two that
+ * became variants, and the old option ranking, which is *Multiple winners*.
+ */
+const MOVED_SECTIONS: Record<string, string> = {
+  'option-ranking': `/choices?section=${CHOICES.multipleWinners}`,
+  'sequential-polls': `/variants?section=${VARIANTS.sequential.section}`,
+  'proportional-budget': `/variants?section=${VARIANTS.budget.section}`,
+}
+
+/**
+ * The folded sections of `AllChoices` and `PollVariants`, and which are open:
+ * none, except the one `?section=` names, which opens already expanded. A new
+ * `?section=` while mounted opens that section too, during render rather than
+ * in an effect, so it is open on the frame the page scrolls.
+ */
+function useOpenSections() {
+  const section = useSection()
+  const [open, setOpen] = useState<string[]>(() => (section ? [section] : []))
+  const [opened, setOpened] = useState(section)
+  if (section !== opened) {
+    setOpened(section)
+    if (section && !open.includes(section)) setOpen([...open, section])
+  }
+  return [section, open, setOpen] as const
+}
+
+/** The accordion both pages fold their sections in. */
+function Sections({
+  open,
+  onChange,
+  children,
+}: {
+  open: string[]
+  onChange: (next: string[]) => void
+  children: ReactNode
+}) {
+  return (
+    <Accordion
+      multiple
+      value={open}
+      onChange={onChange}
+      variant="separated"
+      order={2}
+      classNames={{
+        item: classes.choice,
+        control: classes.choiceControl,
+        label: classes.choiceLabel,
+        content: classes.choiceContent,
+      }}
+    >
+      {children}
+    </Accordion>
+  )
+}
+
+/**
+ * The budget poll's weight, folded away at the foot of its section as
+ * `WeightFormula` is under *Proportional winners*: the same divisor, with each
  * funded option's stars scaled by its cost over the average cost of every
  * option on the poll, so an option of average cost charges a ballot exactly
- * as a Multiple winners spot does.
+ * as a Proportional winners spot does.
  */
 function BudgetFormula() {
   return (
@@ -1039,9 +1197,9 @@ function BudgetFormula() {
       </Text>
       <Text size="sm">
         Note that if every option costs the same, this expression collapses to the exact same
-        expression used in <strong>multiple winners</strong>. Giving 5 stars to an option that costs
-        half the average loses half as much influence. Giving 5 stars to an option that costs twice
-        the average loses twice as much influence.
+        expression used in <strong>proportional winners</strong>. Giving 5 stars to an option that
+        costs half the average loses half as much influence. Giving 5 stars to an option that costs
+        twice the average loses twice as much influence.
       </Text>
     </Folded>
   )
@@ -1266,7 +1424,7 @@ export function WhyStar() {
 
 /**
  * The exact weight and where it comes from, folded away at the foot of the
- * *Multiple winners* card: the steps say only that a voter counts for less,
+ * *Proportional winners* card: the steps say only that a voter counts for less,
  * which is all most readers need.
  *
  * The weight is Reweighted Range Voting's, with Kok and Smith's K = 1. The
@@ -1310,7 +1468,7 @@ function WeightFormula() {
 
 /**
  * The Nash welfare written out, folded away at the foot of the *Fractional
- * winners* card as `WeightFormula` is at the foot of *Multiple winners*.
+ * winners* card as `WeightFormula` is at the foot of *Proportional winners*.
  *
  * The claim made for it is narrow and checkable: where voters split into
  * groups that each give their own option 5 and every other 0, maximising
@@ -1479,7 +1637,7 @@ type Ratings = Record<string, number[]>
  * consensus option: everybody gave it at least 1, and pizza and sushi were
  * each given 0 by somebody; raising pizza with it keeps that friend
  * undecided in the runoff. The full ranking then puts tacos second (the pizza
- * lovers' second choice), while multiple winners gives the second of two
+ * lovers' second choice), while proportional winners gives the second of two
  * dinners to sushi. The pizza lovers all gave pizza 5, so the second spot
  * weighs their ballots at 1/2 (and the last friend's at 5/6); with
  * full-strength runoff votes they would hand the second spot to tacos, which
@@ -1585,7 +1743,7 @@ function rankingOf(ratings: Ratings) {
   return placed
 }
 
-/** One spot of a multiple-winner count, or one option funded from a proportional budget. */
+/** One spot of a proportional-winners count, or one option funded from a budget. */
 interface Spot {
   /** Each voter's strength going in, from what they gave the winners before this one. */
   weights: number[]
@@ -1613,7 +1771,7 @@ function fractionOf(given: number) {
 }
 
 /**
- * Multiple winners, as the page describes it and `poll_multiple_winners`
+ * Proportional winners, as the page describes it and `poll_multiple_winners`
  * counts it (stopping at ten spots): STAR once per spot, with each
  * ballot counted, in the scores and the runoff alike, at a strength that falls
  * with the stars it gave the winners so far. Two winners are the first two
@@ -1638,7 +1796,7 @@ function spotsOf(ratings: Ratings): Spot[] {
 }
 
 /**
- * The example budget for *Proportional budget*: each restaurant's platter
+ * The example budget for *Budget polls*: each restaurant's platter
  * for a party. Chosen so the order matters: pizza is funded first, and the
  * last $30 then goes to sushi rather than tacos, where funding the options
  * by popularity alone would buy pizza and tacos.
@@ -1674,7 +1832,7 @@ function ratioOf(x: number) {
 }
 
 /**
- * Proportional budget, as the page describes it: cost-adjusted STAR once per
+ * Proportional winners with a budget, as the page describes it: cost-adjusted STAR once per
  * option funded, among the options that still fit in what is left, with each
  * ballot's strength 5 ÷ (5 + Σ stars × cost ÷ average cost) over what it
  * funded so far (`BudgetFormula`). Stops when nothing left fits.
@@ -1706,17 +1864,72 @@ function budgetOf(ratings: Ratings, costs: Record<string, number>, budget: numbe
   return { adjusted, spots, left }
 }
 
-/** What funding the options in STAR's ranking order, while they fit, would buy instead. */
+/**
+ * What *Multiple winners* with a budget buys instead: STAR again and again
+ * over the options that still fit, funding each winner, as
+ * `poll_budget(..., false)` counts it.
+ */
 function byPopularity(ratings: Ratings, costs: Record<string, number>, budget: number) {
   const bought: string[] = []
   let left = budget
-  for (const option of rankingOf(ratings)) {
-    if (costs[option] <= left) {
-      bought.push(option)
-      left -= costs[option]
-    }
+  for (;;) {
+    const out = optionsOf(ratings).filter((o) => bought.includes(o) || costs[o] > left)
+    if (out.length === optionsOf(ratings).length) break
+    const pair = finalistsOf(ratings, out)
+    const winner = pair.length === 1 ? pair[0] : runoffWinner(ratings, pair)
+    bought.push(winner)
+    left -= costs[winner]
   }
   return bought
+}
+
+/**
+ * Fractional winners with a budget, as the page describes it: the amount for
+ * each option, at most its cost, that makes the product of every voter's
+ * stars-times-fraction-funded largest, as `poll_fractional_budget` counts it.
+ * Tried for every set of options funded in full, the money left shared between
+ * the rest by the multiplicative update `sharesOf` uses; the best set whose
+ * share fits under every cost wins. Three options make eight sets.
+ */
+function fundedOf(
+  ratings: Ratings,
+  costs: Record<string, number>,
+  budget: number,
+): Record<string, number> {
+  const options = optionsOf(ratings)
+  const voters = votersOf(ratings).filter((voter) => options.some((o) => ratings[o][voter] > 0))
+  const starred = options.filter((o) => voters.some((voter) => ratings[o][voter] > 0))
+  const none = Object.fromEntries(options.map((o) => [o, 0]))
+  if (sum(starred.map((o) => costs[o])) <= budget) {
+    return { ...none, ...Object.fromEntries(starred.map((o) => [o, costs[o]])) }
+  }
+  const served = (amounts: Record<string, number>, voter: number) =>
+    sum(options.map((o) => (ratings[o][voter] * amounts[o]) / costs[o]))
+  let best: Record<string, number> | null = null
+  let bestWelfare = -Infinity
+  for (let mask = 0; mask < 1 << starred.length; mask++) {
+    const full = starred.filter((_, j) => mask & (1 << j))
+    const rest = starred.filter((_, j) => !(mask & (1 << j)))
+    const money = budget - sum(full.map((o) => costs[o]))
+    if (money < 0 || rest.length === 0) continue
+    const amounts = { ...none, ...Object.fromEntries(full.map((o) => [o, costs[o]])) }
+    for (const o of rest) amounts[o] = money / rest.length
+    for (let step = 0; step < 2000; step++) {
+      const u = voters.map((voter) => served(amounts, voter))
+      const gain = rest.map((o) =>
+        sum(voters.map((voter, i) => ratings[o][voter] / costs[o] / u[i])),
+      )
+      const level = sum(rest.map((o, j) => amounts[o] * gain[j])) / money
+      rest.forEach((o, j) => (amounts[o] = (amounts[o] * gain[j]) / level))
+    }
+    if (rest.some((o) => amounts[o] > costs[o] + 1e-9)) continue
+    const welfare = sum(voters.map((voter) => Math.log(served(amounts, voter))))
+    if (welfare > bestWelfare) {
+      best = amounts
+      bestWelfare = welfare
+    }
+  }
+  return best ?? none
 }
 
 /** Each option's cost, in a row like `OptionKey`'s. */
@@ -2049,7 +2262,7 @@ interface Week {
 }
 
 /**
- * Sequential polls: Multiple winners spread across polls, so every option is
+ * Sequential polls: Proportional winners spread across polls, so every option is
  * on every poll, an earlier winner included, and each ballot counts at the
  * strength the winners before it leave it (`weightOf`). A poll may have more
  * voters than the one before (the extra columns of `ratings`); each newcomer
@@ -2125,7 +2338,7 @@ function Weeks({ weeks }: { weeks: Week[] }) {
  * Options already placed or chosen, drawn faded with their trophy and nothing
  * else. `ratings` keeps their stars on show instead of blanks, where those
  * stars are what the next round turns on: the ballots before the
- * multiple-winner reweighting, whose weights come from them.
+ * proportional-winners reweighting, whose weights come from them.
  */
 function setAside(rows: Row[], names: readonly string[], ratings?: Ratings): Row[] {
   return rows.map((row) =>

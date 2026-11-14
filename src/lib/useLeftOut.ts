@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { LeftOut } from '../components/RemovedOptions'
+import type { BudgetCount } from './choices'
 
 /**
  * The options a reader has taken out of a count (*Multiple winners*,
@@ -19,14 +20,16 @@ export function useLeftOut(pollId: string) {
 }
 
 /**
- * Costs and a budget a reader has typed into *Proportional budget*, sent with
- * every count and never stored. Null counts the question's own (a budget
- * question has them; any other has none, and asks for them first). A cost of
+ * Costs, a budget and a count a reader has chosen in the *Budget variant*,
+ * sent with every count and never stored. Null counts the question's own (a
+ * budget question has them; any other has none, and asks for them first). A cost of
  * null takes that option's cost away, leaving it out of the count.
  */
 export interface BudgetInputs {
   costs: Record<string, number | null>
   budget: number
+  /** Which count the budget runs. */
+  count: BudgetCount
 }
 
 /**

@@ -260,7 +260,7 @@ begin
   perform tests.assert_raises('a consensus takes no number',
     format('select create_poll(%L, null, array[%L, %L], array[%L], p_kind => %L, p_kind_value => 3)',
            'Lunch', 'Pizza', 'Sushi', 'voter1@example.com', 'consensus'),
-    'Only an option ranking, multiple winners, consensus winners, a proportional budget or an option assignment takes a number');
+    'Only multiple winners, proportional winners, consensus winners, a budget poll or an option assignment takes a number');
 
   -- A typed name is not a window, on either calendar.
   v_time := create_poll('Standup', null, v_windows, v_emails,

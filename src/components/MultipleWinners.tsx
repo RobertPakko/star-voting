@@ -230,7 +230,7 @@ const weightedVotes = (n: number, places = 1) =>
 
 /**
  * One spot: its options, how it was settled, and its tie-breaks. Shared with
- * `ProportionalBudget`, whose rounds are spots with a cost beside each option
+ * `BudgetVariant`, whose rounds are spots with a cost beside each option
  * (`aside`).
  */
 export function Spot({

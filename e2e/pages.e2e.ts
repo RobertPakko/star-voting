@@ -10,6 +10,7 @@ const PAGES: { path: string; title: string; name: string }[] = [
   { path: '#/sign-in', title: 'Sign in', name: 'the sign-in screen' },
   { path: '#/star', title: 'What is STAR?', name: 'What is STAR?' },
   { path: '#/choices', title: 'All choices', name: 'All choices' },
+  { path: '#/variants', title: 'Poll variants', name: 'Poll variants' },
   { path: '#/why-star', title: 'Why use STAR?', name: 'Why use STAR?' },
   { path: '#/features', title: 'App features', name: 'App features' },
   { path: '#/app', title: 'Install the app', name: 'the install guide' },
@@ -17,12 +18,17 @@ const PAGES: { path: string; title: string; name: string }[] = [
   { path: '#/donate', title: 'Donate', name: 'the donate page' },
   { path: '#/contact', title: 'Contact', name: 'the contact page' },
   { path: '#/sample-movie', title: 'Movie night', name: 'a ballot' },
+  { path: '#/sample-snacks', title: 'Movie night', name: 'an assignment ballot' },
   { path: '#/sample-when', title: 'Movie night', name: 'a calendar ballot' },
   { path: '#/sample-result-movie', title: 'Movie night', name: 'a result' },
   { path: '#/sample-result-when', title: 'Movie night', name: 'a calendar result' },
-  { path: '#/sample-sequel-movie', title: 'Movie night 2', name: 'a sequential result' },
-  { path: '#/sample-sequel-budget', title: 'Movie night 2', name: 'a budget result' },
-  { path: '#/sample-sequel-assignment', title: 'Movie night 2', name: 'an assignment result' },
+  { path: '#/sample-result-snacks', title: 'Movie night', name: 'an assignment result' },
+  {
+    path: '#/sample-result-movie-as-sequential',
+    title: 'Movie night',
+    name: 'a sequential result',
+  },
+  { path: '#/sample-result-snacks-as-budget', title: 'Movie night', name: 'a budget result' },
 ]
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -332,7 +338,7 @@ test.describe('all choices', () => {
   test('opens with every section folded, its algorithms showing', async ({ page }) => {
     await page.goto('#/choices')
     const sections = page.getByRole('heading', { level: 2 }).getByRole('button')
-    await expect(sections).toHaveCount(9)
+    await expect(sections).toHaveCount(7)
     for (const button of await sections.all())
       await expect(button).toHaveAttribute('aria-expanded', 'false')
     const best = page.getByRole('button', { name: /^Best option/ })
@@ -355,12 +361,12 @@ test.describe('all choices', () => {
   })
 
   test('leads each built choice to the sample poll, opening on that choice', async ({ page }) => {
-    // The film question, recast as a question that asked for the ranking:
-    // the ranking is the page's own card, not a modal.
-    await page.goto('#/choices?section=option-ranking')
+    // The film question, recast as a question that asked for multiple
+    // winners: they are the page's own card, not a modal.
+    await page.goto('#/choices?section=multiple-winners')
     await page.getByRole('link', { name: 'See an example' }).click()
     await expect(page).toHaveURL(/#\/sample-result-movie-as-ranking$/)
-    await expect(page.getByText(/^Option ranking$/).first()).toBeVisible()
+    await expect(page.getByText(/^Multiple winners$/).first()).toBeVisible()
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await expect(page.getByText('Honeyland').first()).toBeVisible()
 
@@ -369,5 +375,28 @@ test.describe('all choices', () => {
     await page.getByRole('link', { name: 'See an example' }).click()
     await expect(page).toHaveURL(/#\/sample-result-when$/)
     await expect(page.getByText(/^Consensus time: /)).toBeVisible()
+  })
+
+  test('sends the sections that became variants to the variants page', async ({ page }) => {
+    await page.goto('#/choices?section=proportional-budget')
+    await expect(page).toHaveURL(/#\/variants\?section=budget-polls$/)
+    await expect(page.getByRole('button', { name: /^Budget polls/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+  })
+})
+
+test.describe('poll variants', () => {
+  test('folds its three variants, each naming the choices it works with', async ({ page }) => {
+    await page.goto('#/variants')
+    const sections = page.getByRole('heading', { level: 2 }).getByRole('button')
+    await expect(sections).toHaveCount(3)
+    await expect(page.getByRole('button', { name: /^Budget polls/ })).toContainText(
+      'Proportional winners',
+    )
+    await page.getByRole('button', { name: /^Time polls/ }).click()
+    await page.getByRole('link', { name: 'See an example' }).click()
+    await expect(page).toHaveURL(/#\/sample-result-when$/)
   })
 })

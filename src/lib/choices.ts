@@ -1,6 +1,7 @@
 import type {
   AssignmentResult,
   BudgetResult,
+  FractionalBudgetResult,
   ConsensusResult,
   ConsensusWinnersResult,
   FractionalShare,
@@ -13,24 +14,27 @@ import { SCORING_ROWS_MAX } from './resultsRows'
 /**
  * What a question can ask for, named once for the create form's *Choice*,
  * the results and the *More results* menu. Stored as `polls.kind`, and each
- * opens its results on its own answer. Whether the ballot is a calendar is
- * not part of the kind but the question's schedule (*Find a time* on the
- * form), which every kind but a budget may have; on a calendar the three
- * kinds a meeting time is most often asked for read as times
+ * opens its results on its own answer. On top of its choice a question may
+ * take one variant (`Variant`): a calendar, a sequence or a budget. A
+ * calendar is the question's schedule and a sequence its carried voters, but
+ * a budget changes the count, so each choice that takes one has a stored kind
+ * of its own: `ranking_budget`, `budget` and `fractional_budget`
+ * (`budgetKindOf`). On a calendar
+ * the kinds a meeting time is most often asked for read as times
  * (`CALENDAR_NAMES`).
  */
 export const CHOICES: Record<PollKind, { label: string; section: string; blurb: string }> = {
   option: { label: 'Best option', section: 'best-option', blurb: 'picks one option using STAR.' },
   ranking: {
-    label: 'Option ranking',
-    section: 'option-ranking',
-    blurb: 'puts every option in order by running STAR again without the winner.',
-  },
-  multiple: {
     label: 'Multiple winners',
     section: 'multiple-winners',
     blurb:
-      'gives a ranking that shares top spots so that different groups of voters each get something they like.',
+      'picks several winners by running STAR again and again without the options already chosen.',
+  },
+  multiple: {
+    label: 'Proportional winners',
+    section: 'proportional-winners',
+    blurb: 'picks several winners so that different groups of voters each get something they like.',
   },
   fractional: {
     label: 'Fractional winners',
@@ -49,10 +53,22 @@ export const CHOICES: Record<PollKind, { label: string; section: string; blurb: 
       'picks several options together so that the voter they serve worst is served as well as possible.',
   },
   budget: {
-    label: 'Proportional budget',
-    section: 'proportional-budget',
+    label: 'Proportional winners with a budget',
+    section: 'proportional-winners',
     blurb:
-      'shares a budget between options of differing costs so that different groups of voters each get something they like.',
+      'picks winners of differing costs until the budget runs out, so that different groups of voters each get something they like.',
+  },
+  ranking_budget: {
+    label: 'Multiple winners with a budget',
+    section: 'multiple-winners',
+    blurb:
+      'picks winners of differing costs by running STAR again and again until the budget runs out.',
+  },
+  fractional_budget: {
+    label: 'Fractional winners with a budget',
+    section: 'fractional-winners',
+    blurb:
+      'funds options of differing costs in part, up to what each costs, so that the budget is split as fairly as it can be.',
   },
   assignment: {
     label: 'Option assignment',
@@ -97,17 +113,104 @@ export const choiceLabel = (kind: PollKind, calendar: boolean) => choiceOf(kind,
 export type OptionNumber = 'cost' | 'places'
 
 export const optionNumberOf = (kind: PollKind): OptionNumber | null =>
-  kind === 'budget' ? 'cost' : kind === 'assignment' ? 'places' : null
+  isBudgetKind(kind) ? 'cost' : kind === 'assignment' ? 'places' : null
 
 /** Where `/choices` explains a kind; each `section` is one of its card ids. */
-export const choicePage = (kind: PollKind) => `/choices?section=${CHOICES[kind].section}`
+export const choicePage = (kind: PollKind) =>
+  isBudgetKind(kind) ? variantPage('budget') : `/choices?section=${CHOICES[kind].section}`
+
+/** Whether a kind is a choice counted against a budget: its options carry costs. */
+export const isBudgetKind = (kind: PollKind) =>
+  kind === 'budget' || kind === 'ranking_budget' || kind === 'fractional_budget'
+
+/**
+ * What a question can be asked for on the create form: every kind but the
+ * budgeted ones, which are a choice with the budget variant.
+ */
+export type Choice = Exclude<PollKind, 'budget' | 'ranking_budget' | 'fractional_budget'>
+
+/** The choice a stored kind is, with the budget taken off. */
+export const choiceOfKind = (kind: PollKind): Choice =>
+  kind === 'budget'
+    ? 'multiple'
+    : kind === 'ranking_budget'
+      ? 'ranking'
+      : kind === 'fractional_budget'
+        ? 'fractional'
+        : kind
+
+/** The kind a choice is stored as with a budget. */
+export const budgetKindOf = (choice: Choice): PollKind =>
+  choice === 'ranking' ? 'ranking_budget' : choice === 'fractional' ? 'fractional_budget' : 'budget'
+
+/**
+ * The counts a budget can be shared out by, each a choice: `p_choice` on
+ * `get_poll_budget` / `open_poll_budget`. In the order the *Budget variant*
+ * offers them.
+ */
+export type BudgetCount = 'ranking' | 'multiple' | 'fractional'
+
+export const BUDGET_COUNTS: BudgetCount[] = ['ranking', 'multiple', 'fractional']
+
+/**
+ * The count a question's budget runs: a budget question's own, else
+ * proportional winners, where the *Budget variant* starts.
+ */
+export const budgetCountOf = (kind: PollKind): BudgetCount =>
+  kind === 'ranking_budget' ? 'ranking' : kind === 'fractional_budget' ? 'fractional' : 'multiple'
+
+/**
+ * What a question may take on top of its choice, one at most: its options are
+ * the windows of a painted calendar, its ballots are weighted by what their
+ * voters won in earlier polls, or its options cost something and the winners
+ * are bought out of a budget. The database holds the same rule
+ * (`validate_calendar_kind`, `insert_carried_weights`).
+ */
+export type Variant = 'time' | 'sequential' | 'budget'
+
+/** In the order the create form offers them, after *None*. */
+export const VARIANT_ORDER: Variant[] = ['time', 'sequential', 'budget']
+
+/** What each variant is called, and where `/variants` explains it. */
+export const VARIANTS: Record<Variant, { label: string; section: string; blurb: string }> = {
+  time: {
+    label: 'Time poll',
+    section: 'time-polls',
+    blurb: 'has voters mark a calendar, so that every option is a time the meeting could start.',
+  },
+  sequential: {
+    label: 'Sequential poll',
+    section: 'sequential-polls',
+    blurb:
+      'weighs each ballot by what its voter got from earlier polls, so that over a run of polls everybody gets a turn.',
+  },
+  budget: {
+    label: 'Budget poll',
+    section: 'budget-polls',
+    blurb: 'gives every option a cost and spends a budget on them, until it runs out.',
+  },
+}
+
+/** Where `/variants` explains a variant. */
+export const variantPage = (variant: Variant) => `/variants?section=${VARIANTS[variant].section}`
+
+/**
+ * Whether a choice may take a variant. Any may be a calendar; only what STAR
+ * decides can weigh its ballots (`SEQUENTIAL_KINDS`); and only a choice of
+ * several winners, or a split, can spend a budget.
+ */
+export function variantAllowed(variant: Variant, choice: Choice): boolean {
+  if (variant === 'time') return true
+  if (variant === 'sequential') return SEQUENTIAL_KINDS.includes(choice)
+  return choice === 'ranking' || choice === 'multiple' || choice === 'fractional'
+}
 
 /**
  * Whether a kind may be asked of a calendar: every one but a budget, whose
  * options are bought, which a meeting time is not. `validate_calendar_kind`
  * holds the same rule.
  */
-export const canBeCalendar = (kind: PollKind) => kind !== 'budget'
+export const canBeCalendar = (kind: PollKind) => !isBudgetKind(kind)
 
 /**
  * Whether a kind picks several times at once, so that windows overlapping
@@ -115,6 +218,7 @@ export const canBeCalendar = (kind: PollKind) => kind !== 'budget'
  * windows start back to back unless the creator says otherwise (`defaultStep`).
  */
 export const picksSeveral = (kind: PollKind) =>
+  kind === 'ranking' ||
   kind === 'multiple' ||
   kind === 'consensus_winners' ||
   kind === 'fractional' ||
@@ -127,26 +231,31 @@ export const picksSeveral = (kind: PollKind) =>
 export const SEQUENTIAL_KINDS: PollKind[] = ['option', 'ranking', 'multiple']
 
 /** In the order the create form offers them. */
-export const CHOICE_ORDER: PollKind[] = [
+export const CHOICE_ORDER: Choice[] = [
   'option',
   'consensus',
   'consensus_winners',
   'ranking',
   'multiple',
   'fractional',
-  'budget',
   'assignment',
 ]
 
 /**
  * The results a tally can offer, each a modal where it is not the one the
  * page opens on. `option` is STAR's own answer: the winner, the runoff and
- * the scoring round.
+ * the scoring round. The two variants are counts the reader sets up: a budget
+ * with costs they type, or weights for every ballot of a published sheet.
  */
-export type ResultTool = PollKind
+export type ResultTool = Choice | 'budget_variant' | 'sequential_variant'
 
 /** A result tool's name on a poll whose options are, or are not, a calendar's. */
-export const toolLabel = (tool: ResultTool, calendar: boolean) => choiceLabel(tool, calendar)
+export const toolLabel = (tool: ResultTool, calendar: boolean) =>
+  tool === 'budget_variant'
+    ? 'Budget variant'
+    : tool === 'sequential_variant'
+      ? 'Sequential variant'
+      : choiceLabel(tool, calendar)
 
 /** Every number a ranking or several winners (of either kind) may take, smallest first. */
 export const CHOICE_NUMBERS = Array.from({ length: SCORING_ROWS_MAX - 1 }, (_, i) => i + 2)
@@ -162,7 +271,7 @@ export const PER_VOTER_NUMBERS = Array.from({ length: SCORING_ROWS_MAX }, (_, i)
  * the others may be left at *All* (null).
  */
 export const CHOICE_NUMBER: Partial<Record<PollKind, { label: string; numbers: number[] }>> = {
-  ranking: { label: 'Places to rank', numbers: CHOICE_NUMBERS },
+  ranking: { label: 'Number of winners', numbers: CHOICE_NUMBERS },
   multiple: { label: 'Number of winners', numbers: CHOICE_NUMBERS },
   consensus_winners: { label: 'Number of winners', numbers: CHOICE_NUMBERS },
   assignment: { label: 'Max options per voter', numbers: PER_VOTER_NUMBERS },
@@ -170,6 +279,7 @@ export const CHOICE_NUMBER: Partial<Record<PollKind, { label: string; numbers: n
 
 /** What a kind's number is called on a calendar, where its options are times. */
 const CALENDAR_NUMBER_LABELS: Partial<Record<PollKind, string>> = {
+  ranking: 'Number of winning times',
   multiple: 'Number of winning times',
   consensus_winners: 'Number of times',
   assignment: 'Max times per voter',
@@ -181,7 +291,7 @@ export const choiceNumberLabel = (kind: PollKind, calendar: boolean) =>
 
 /** What a fresh question's number starts at, for the kinds that take one. */
 export const DEFAULT_CHOICE_NUMBER: Partial<Record<PollKind, number>> = {
-  ranking: SCORING_ROWS_MAX,
+  ranking: 3,
   multiple: 3,
   consensus_winners: 3,
   assignment: 1,
@@ -208,14 +318,23 @@ export const consensusWinnersFor = (results: PollResults) =>
  */
 export function offers(tool: ResultTool, results: PollResults) {
   if (tool === 'option') return true
+  // A question takes one variant at most, so neither is offered on a
+  // calendar or on a question that already has one.
+  if (tool === 'budget_variant' || tool === 'sequential_variant') {
+    if (results.calendar || results.weighted || isBudgetKind(results.kind)) return false
+    if (results.option_count < 2) return false
+    // Weighing a ballot by its voter discloses nothing only where the sheet
+    // already shows every ballot with a name on it (`poll_sequential`).
+    return (
+      tool === 'budget_variant' || (results.voters_shown === true && results.ballots_shown === true)
+    )
+  }
   // A sequential poll's ballots carry weights, which only STAR's results
   // count with; a consensus or a split of them would quietly ignore them.
   if (results.weighted && !SEQUENTIAL_KINDS.includes(tool)) return false
-  // A calendar's windows are not things anybody buys.
-  if (tool === 'budget' && results.calendar) return false
   // An assignment says who gets what, so it needs a poll that names its voters.
   if (tool === 'assignment' && !results.voters_shown) return false
-  return tool === 'fractional' || tool === 'consensus' || tool === 'budget' || tool === 'assignment'
+  return tool === 'fractional' || tool === 'consensus' || tool === 'assignment'
     ? results.option_count >= 2
     : results.option_count >= 3
 }
@@ -225,7 +344,8 @@ export type ChosenResult =
   | { kind: 'fractional'; shares: FractionalShare[] }
   | { kind: 'consensus'; consensus: ConsensusResult }
   | { kind: 'consensus_winners'; winners: ConsensusWinnersResult }
-  | { kind: 'budget'; budget: BudgetResult }
+  | { kind: 'budget' | 'ranking_budget'; budget: BudgetResult }
+  | { kind: 'fractional_budget'; budget: FractionalBudgetResult }
   | { kind: 'assignment'; assignment: AssignmentResult }
 
 /**
@@ -247,8 +367,11 @@ export function chosenResult(results: PollResults): ChosenResult | null {
       ? { kind: 'consensus_winners', winners: result }
       : null
   }
-  if (kind === 'budget') {
+  if (kind === 'budget' || kind === 'ranking_budget') {
     return !Array.isArray(result) && 'spots' in result ? { kind, budget: result } : null
+  }
+  if (kind === 'fractional_budget') {
+    return !Array.isArray(result) && 'outside' in result ? { kind, budget: result } : null
   }
   if (kind === 'assignment') {
     return !Array.isArray(result) && 'unplaced' in result ? { kind, assignment: result } : null

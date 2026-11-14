@@ -3,6 +3,7 @@ import type {
   AssignmentResult,
   BallotSheet,
   BudgetResult,
+  FractionalBudgetResult,
   ConsensusResult,
   ConsensusWinnersResult,
   FractionalShare,
@@ -71,6 +72,8 @@ const pollKind = z.enum([
   'fractional',
   'consensus',
   'budget',
+  'ranking_budget',
+  'fractional_budget',
   'assignment',
   'consensus_winners',
 ])
@@ -324,6 +327,16 @@ export const budgetSchema = z.object({
   tied: z.array(budgetOption).nullable(),
 }) satisfies z.ZodType<BudgetResult>
 
+export const fractionalBudgetSchema = z.object({
+  budget: z.number(),
+  spent: z.number(),
+  left: z.number(),
+  options: z.array(budgetOption.extend({ amount: z.number(), funded: z.number() })),
+  unfunded: z.array(budgetOption),
+  outside: z.array(budgetOption),
+  uncosted: z.array(z.object({ id: z.string(), name: z.string() })),
+}) satisfies z.ZodType<FractionalBudgetResult>
+
 export const assignmentSchema = z.object({
   options: z.array(
     z.object({
@@ -375,6 +388,7 @@ export const pollResultsSchema = z.object({
       consensusSchema,
       consensusWinnersSchema,
       budgetSchema,
+      fractionalBudgetSchema,
       assignmentSchema,
       fractionalSharesSchema,
       rankingSchema,
@@ -382,6 +396,7 @@ export const pollResultsSchema = z.object({
     .nullable(),
   weighted: z.boolean().optional(),
   voters_shown: z.boolean().optional(),
+  ballots_shown: z.boolean().optional(),
   calendar: z.boolean(),
 }) satisfies z.ZodType<PollResults>
 

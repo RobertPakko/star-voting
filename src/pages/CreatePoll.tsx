@@ -65,7 +65,10 @@ import {
   blankQuestion,
   carriedOf,
   gridOf,
+  isBudgetQuestion,
   isTimeQuestion,
+  sentKind,
+  variantOf,
   overlapOf,
   reconcileGrid,
   numberOf,
@@ -88,16 +91,22 @@ import styles from './CreatePoll.module.css'
 import listRow from '../components/listRow.module.css'
 import { AMOUNT_MAX, MAX_OPTIONS, MAX_QUESTIONS } from '../lib/limits'
 import { pollIdFromParam, pollPath } from '../lib/pollId'
-import type { Invitee, Poll, PollKind, PollMode, PollOption } from '../lib/types'
+import type { Invitee, Poll, PollMode, PollOption } from '../lib/types'
 import {
-  canBeCalendar,
   CHOICE_NUMBER,
   CHOICE_ORDER,
   choiceLabel,
   choiceNumberLabel,
+  choiceOfKind,
+  isBudgetKind,
   optionNumberOf,
   picksSeveral,
   SEQUENTIAL_KINDS,
+  VARIANT_ORDER,
+  VARIANTS,
+  variantAllowed,
+  type Choice,
+  type Variant,
 } from '../lib/choices'
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
@@ -105,8 +114,8 @@ import { announce } from '../lib/announce'
 /** Why the voter switch is on and fixed while a question is an option assignment. */
 const ASSIGNMENT_SHOWS_VOTERS = 'An option assignment says who gets which option.'
 
-/** The *Choice* entry that makes a question sequential; its type is a second select. */
-const SEQUENTIAL = 'sequential'
+/** The *Variant* select's value for none, which a Select needs as a string. */
+const NO_VARIANT = 'none'
 
 /** The `+` tab's value. Question keys are `question-N`, so it cannot collide. */
 const ADD_QUESTION = 'add-question'
@@ -170,10 +179,10 @@ export function CreatePoll() {
   // A sequential question shows who voted and the ballots, or neither: a
   // ballot's weight on an anonymous sheet would say whose it is. So while any
   // question is sequential the two settings are one switch.
-  const anySequential = questions.some((question) => question.sequential)
+  const anySequential = questions.some((question) => variantOf(question) === 'sequential')
   // An option assignment says who gets which option, so while any question
   // is one, voters are shown whatever the switch was left at.
-  const anyAssignment = questions.some((q) => !q.sequential && q.kind === 'assignment')
+  const anyAssignment = questions.some((q) => q.kind === 'assignment')
   const votersShown = showVoters || anyAssignment
   const publishBallots = anySequential ? votersShown : showBallots
 
@@ -208,7 +217,8 @@ export function CreatePoll() {
     row: Poll,
     invitees: string[] | null,
   ): Promise<{ voter: string; given: number }[] | string | null> {
-    if (!SEQUENTIAL_KINDS.includes(row.kind)) return null
+    // A question takes one variant at most, so a time question stays one.
+    if (!SEQUENTIAL_KINDS.includes(row.kind) || row.schedule != null) return null
     const [sheetRes, resultsRes, skippedRes] = await Promise.all([
       supabase.rpc('poll_ballots', { p_poll_id: row.id }),
       supabase.rpc('get_poll_results', { p_poll_id: row.id }),
@@ -275,18 +285,21 @@ export function CreatePoll() {
         const fresh = blankQuestion()
         // The source's kind and number come across; a number it did not set
         // leaves the form's default for that kind. A budget's number is its
-        // budget, which has a box of its own.
+        // budget, which has a box of its own, and its kind is a choice with
+        // the budget variant.
         const number = row.kind_value ?? null
+        const budgeted = isBudgetKind(row.kind)
+        const timed = row.schedule != null
         const blank: QuestionDraft = {
           ...fresh,
-          kind: row.kind,
+          kind: choiceOfKind(row.kind),
           kindNumbers:
-            number === null || row.kind === 'budget'
+            number === null || budgeted
               ? fresh.kindNumbers
               : { ...fresh.kindNumbers, [row.kind]: number },
-          budget: row.kind === 'budget' && number !== null ? number : '',
+          budget: budgeted && number !== null ? number : '',
+          variant: budgeted ? 'budget' : timed ? 'time' : null,
         }
-        const timed = row.schedule != null
         const parsed = timed ? pollScheduleSchema.safeParse(row.schedule) : null
         const grid = parsed?.success ? parsed.data : null
 
@@ -295,7 +308,7 @@ export function CreatePoll() {
             setError(
               "That poll's calendar could not be read, so this copy has its title and settings but none of its times. Mark the days and hours below.",
             )
-            return { ...blank, calendar: true, title: row.question_title ?? '' }
+            return { ...blank, title: row.question_title ?? '' }
           }
 
           // The copy's length, overlap and offset are the source's, and its
@@ -330,7 +343,6 @@ export function CreatePoll() {
           return {
             ...blank,
             title: row.question_title ?? '',
-            calendar: true,
             // The source's offset and overlap are choices, so later changes
             // to the dates or the kind must not move them.
             schedule: base,
@@ -413,7 +425,7 @@ export function CreatePoll() {
             if (!Array.isArray(rows)) return question
             return {
               ...question,
-              sequential: true,
+              variant: 'sequential',
               carried: rows.length
                 ? rows.map((row) => blankCarried(row.voter, row.given))
                 : [blankCarried()],
@@ -598,7 +610,7 @@ export function CreatePoll() {
       if (!isTimeQuestion(question)) {
         return {
           title: question.title.trim(),
-          kind: question.kind,
+          kind: sentKind(question),
           kind_value: kindValueOf(question),
           schedule: null,
           carried: carriedOf(question, isOpen),
@@ -617,7 +629,7 @@ export function CreatePoll() {
       const grid = settle(gridOf(question), marked, question.hours)
       return {
         title: question.title.trim(),
-        kind: question.kind,
+        kind: sentKind(question),
         kind_value: kindValueOf(question),
         schedule: grid,
         carried: carriedOf(question, isOpen),
@@ -678,12 +690,11 @@ export function CreatePoll() {
           // A budget's costs or an assignment's places, paired by position
           // like the descriptions. `numeric[]` can't type nullable elements
           // either, but the SQL reads a null place as one.
-          p_option_costs:
-            only.kind === 'budget'
-              ? only.options.map((o) => o.number ?? 0)
-              : only.kind === 'assignment'
-                ? (only.options.map((o) => o.number) as number[])
-                : undefined,
+          p_option_costs: isBudgetKind(only.kind)
+            ? only.options.map((o) => o.number ?? 0)
+            : only.kind === 'assignment'
+              ? (only.options.map((o) => o.number) as number[])
+              : undefined,
         })
     setSubmitting(false)
 
@@ -732,28 +743,23 @@ export function CreatePoll() {
   }
 
   /**
-   * What the question asks for (`kind`), and its number where it takes one.
-   * The number is a dropdown rather than a number field: the database counts
-   * at most `SCORING_ROWS_MAX` of anything, so there are ten answers at most. What
-   * each choice does is explained on `/choices`, behind the info icon, which
+   * What the question asks for (`kind`), the variant it takes on top (one at
+   * most, and only those its choice can take), and its number where it takes
+   * one: a dropdown of winners or places, or a budget poll's budget, which is
+   * how many winners it can buy. The number is a dropdown rather than a
+   * number field: the database counts at most `SCORING_ROWS_MAX` of anything,
+   * so there are ten answers at most. What each choice and variant does is
+   * explained on `/choices` and `/variants`, behind the info icon, which
    * opens in a new tab so the form is not lost.
    */
   function choiceFields(question: QuestionDraft, questionIndex: number) {
-    const number = CHOICE_NUMBER[question.kind]
+    const variant = variantOf(question)
+    const budget = variant === 'budget'
+    const number = budget ? undefined : CHOICE_NUMBER[question.kind]
     const timed = isTimeQuestion(question)
     const id = `choice-${question.key}`
-    const budget = question.kind === 'budget'
-    const columns = 1 + (question.sequential ? 1 : 0) + (number || budget ? 1 : 0)
-
-    // Sequential is a choice of its own with a type under it; the type is
-    // the question's kind, so a sequential best time is still a time poll.
-    const choose = (value: string) =>
-      value === SEQUENTIAL
-        ? patchQuestion(questionIndex, {
-            sequential: true,
-            kind: SEQUENTIAL_KINDS.includes(question.kind) ? question.kind : 'option',
-          })
-        : patchQuestion(questionIndex, { sequential: false, kind: value as PollKind })
+    const columns = 2 + (number || budget ? 1 : 0)
+    const variants = VARIANT_ORDER.filter((v) => variantAllowed(v, question.kind))
 
     return (
       <SimpleGrid cols={{ base: 1, xs: columns }} spacing="xs">
@@ -769,7 +775,7 @@ export function CreatePoll() {
                   color="gray"
                   size="sm"
                   radius="xl"
-                  aria-label="What each choice does"
+                  aria-label="What each choice and variant does"
                 >
                   <InfoIcon size={16} aria-hidden />
                 </ActionIcon>
@@ -781,6 +787,10 @@ export function CreatePoll() {
                   <Anchor component={Link} to="/choices" target="_blank" inherit>
                     list of choices
                   </Anchor>{' '}
+                  and the{' '}
+                  <Anchor component={Link} to="/variants" target="_blank" inherit>
+                    poll variants
+                  </Anchor>{' '}
                   to learn about what these options mean.
                 </Text>
               </Popover.Dropdown>
@@ -789,36 +799,29 @@ export function CreatePoll() {
           <Select
             id={id}
             allowDeselect={false}
-            value={question.sequential ? SEQUENTIAL : question.kind}
-            onChange={(v) => v && choose(v)}
+            value={question.kind}
+            onChange={(v) => v && patchQuestion(questionIndex, { kind: v as Choice })}
+            // On a calendar each reads as times.
+            data={CHOICE_ORDER.map((kind) => ({ value: kind, label: choiceLabel(kind, timed) }))}
+          />
+        </Stack>
+        {/* Its label sits on the choice's label row, so the boxes line up. */}
+        <Stack gap={2} justify="flex-end">
+          <Select
+            label="Variant"
+            allowDeselect={false}
+            value={variant ?? NO_VARIANT}
+            onChange={(v) =>
+              v &&
+              patchQuestion(questionIndex, { variant: v === NO_VARIANT ? null : (v as Variant) })
+            }
             data={[
-              // On a calendar each reads as times, and a budget is not on
-              // offer: a meeting time is not something anybody buys.
-              ...CHOICE_ORDER.map((kind) => ({
-                value: kind,
-                label: choiceLabel(kind, timed),
-                disabled: question.calendar && !canBeCalendar(kind),
-              })),
-              { value: SEQUENTIAL, label: 'Sequential poll' },
+              { value: NO_VARIANT, label: 'None' },
+              ...variants.map((v) => ({ value: v, label: VARIANTS[v].label })),
             ]}
           />
         </Stack>
-        {question.sequential && (
-          <Stack gap={2} justify="flex-end">
-            <Select
-              label="Sequential poll type"
-              allowDeselect={false}
-              value={question.kind}
-              onChange={(v) => v && patchQuestion(questionIndex, { kind: v as PollKind })}
-              data={SEQUENTIAL_KINDS.map((kind) => ({
-                value: kind,
-                label: choiceLabel(kind, timed),
-              }))}
-            />
-          </Stack>
-        )}
         {number && (
-          // Its label sits on the choice's label row, so the two boxes line up.
           <Stack gap={2} justify="flex-end">
             <Select
               label={choiceNumberLabel(question.kind, timed)}
@@ -836,7 +839,8 @@ export function CreatePoll() {
         )}
         {budget && (
           // A number field rather than a dropdown: a budget is any amount, in
-          // whatever unit the poll is about, so it says none.
+          // whatever unit the poll is about, so it says none. It stands where
+          // the number of winners would: the winners are what it buys.
           <Stack gap={2} justify="flex-end">
             <NumberInput
               label="Budget"
@@ -856,29 +860,6 @@ export function CreatePoll() {
     )
   }
 
-  /**
-   * *Find a time*: whether the options are written or painted on a calendar.
-   * A setting of the ballot rather than another *Choice*, so every result
-   * can be asked of a meeting time; a budget is the one that cannot, and
-   * while it is chosen the switch says why.
-   */
-  function calendarSwitch(question: QuestionDraft, questionIndex: number) {
-    const allowed = canBeCalendar(question.kind)
-    return (
-      <Switch
-        checked={isTimeQuestion(question)}
-        disabled={!allowed}
-        onChange={(e) => patchQuestion(questionIndex, { calendar: e.currentTarget.checked })}
-        label="Find a time"
-        description={
-          allowed
-            ? 'Voters mark a calendar instead of scoring a written list.'
-            : 'A proportional budget buys its options, and a meeting time is not bought.'
-        }
-      />
-    )
-  }
-
   /** One question's fields, the same whether in a tab panel or the bare form. */
   function questionFields(question: QuestionDraft, questionIndex: number) {
     return (
@@ -894,11 +875,9 @@ export function CreatePoll() {
           />
         )}
 
-        {calendarSwitch(question, questionIndex)}
-
         {choiceFields(question, questionIndex)}
 
-        {question.sequential && (
+        {variantOf(question) === 'sequential' && (
           <CarriedVoters
             rows={question.carried}
             isOpen={isOpen}
@@ -974,7 +953,7 @@ export function CreatePoll() {
               {solicitOptions
                 ? 'Voters will be able to add to this list later.'
                 : 'Use + to add a description to an option.'}
-              {question.kind === 'budget' &&
+              {isBudgetQuestion(question) &&
                 ' Give every option a cost. Voters will not see the costs.'}
               {question.kind === 'assignment' &&
                 ' Give an option more places to let it go to more than one voter; a blank one has one place. Voters will not see the places.'}
@@ -1019,15 +998,15 @@ export function CreatePoll() {
                       />
                     )}
                   </Stack>
-                  {optionNumberOf(question.kind) && (
+                  {optionNumberOf(sentKind(question)) && (
                     // Voters never see it: they rate each option on its own
                     // merits, and the count weighs the cost or fills the places.
                     <NumberInput
                       w={110}
                       value={option.number}
                       onChange={(v) => updateOption(questionIndex, index, { number: v })}
-                      placeholder={question.kind === 'budget' ? 'Cost' : 'Places'}
-                      aria-label={`Option ${index + 1} ${question.kind === 'budget' ? 'cost' : 'places'}`}
+                      placeholder={isBudgetQuestion(question) ? 'Cost' : 'Places'}
+                      aria-label={`Option ${index + 1} ${isBudgetQuestion(question) ? 'cost' : 'places'}`}
                       min={1}
                       max={AMOUNT_MAX}
                       allowDecimal={false}

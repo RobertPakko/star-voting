@@ -19,10 +19,13 @@ import type {
 /**
  * The sample poll the About page links to, and the one place that serves it.
  *
- * It is a real two-question poll -- "Movie night" -- in two states: one copy
+ * It is a real three-question poll -- "Movie night" -- in two states: one copy
  * still taking votes, and one that nine people finished. The first question
- * is a list and the second a calendar asking for the consensus time, so the
- * sample shows both ballots this app has. Both are answered out of
+ * is a list, the second an option assignment (a snack each) and the third a
+ * calendar asking for the consensus time, so the sample shows both ballots
+ * this app has. The finished copy also carries the two variant examples,
+ * recorded as the *More results* menu makes them: the film weighed as a
+ * sequential poll, and the snacks bought out of a budget. Both are answered out of
  * `samplePollData.ts`, which `scripts/sample-poll.sh` records by building the
  * poll in a throwaway database and asking the real RPCs about it.
  *
@@ -59,12 +62,27 @@ interface SampleQuestion {
   consensus?: ConsensusResult
   /** Consensus winners at the modal's opening number, nothing removed; see `ConsensusWinners`. */
   consensus_winners?: ConsensusWinnersResult
-  /** The proportional budget with nothing removed or recosted; see `ProportionalBudget`. */
+  /**
+   * The *Budget variant* example, on a question that writes its prices down:
+   * proportional winners at those costs and that budget; see `BudgetVariant`.
+   */
   budget?: BudgetResult
   /** The option assignment with nothing removed or given new places; see `OptionAssignment`. */
   assignment?: AssignmentResult
   scores?: OptionScore[]
   ballots?: BallotSheet
+  /**
+   * The *Sequential variant* example: everything the results page reads,
+   * recorded with every ballot weighed by the stars its voter gave earlier
+   * winners.
+   */
+  sequential?: {
+    results: PollResults
+    ranking: RankingEntry[]
+    multiple_winners: RankingEntry[]
+    scores: OptionScore[]
+    ballots: BallotSheet
+  }
 }
 
 export type SamplePayloads = Record<string, SampleQuestion>
@@ -72,17 +90,25 @@ export type SamplePayloads = Record<string, SampleQuestion>
 /** Question 1 of each copy: where the About page's two links point. */
 export const SAMPLE_POLL_ID = 'sample-movie'
 export const SAMPLE_RESULT_ID = 'sample-result-movie'
-/** The finished copy's question 2, the calendar asking for the consensus time. */
+/** The finished copy's question 2, the option assignment: a snack each. */
+export const SAMPLE_RESULT_SNACKS_ID = 'sample-result-snacks'
+/** The finished copy's question 3, the calendar asking for the consensus time. */
 export const SAMPLE_RESULT_TIME_ID = 'sample-result-when'
+/** The film question weighed as a sequential poll: the *Sequential variant* example. */
+export const SAMPLE_SEQUENTIAL_ID = 'sample-result-movie-as-sequential'
+/** The snacks bought out of a budget: the *Budget variant* example. */
+export const SAMPLE_BUDGET_ID = 'sample-result-snacks-as-budget'
+
 /**
- * The next movie night, made as a sequel to the finished one: its film
- * question is a sequential poll. Shown on *More examples*.
+ * Where the links to the sample's old sequel ("Movie night 2") go now that
+ * there is one sample poll: each to the example that shows the same thing.
+ * `PollPage` redirects them, for links already shared.
  */
-export const SAMPLE_SEQUEL_ID = 'sample-sequel-movie'
-/** The sequel's question 2, a proportional budget of upgrades to the movie nights. */
-export const SAMPLE_SEQUEL_BUDGET_ID = 'sample-sequel-budget'
-/** The sequel's question 3, an option assignment: who watches which film. */
-export const SAMPLE_SEQUEL_ASSIGNMENT_ID = 'sample-sequel-assignment'
+export const SAMPLE_ALIASES: Record<string, string> = {
+  'sample-sequel-movie': SAMPLE_SEQUENTIAL_ID,
+  'sample-sequel-budget': SAMPLE_BUDGET_ID,
+  'sample-sequel-assignment': SAMPLE_RESULT_SNACKS_ID,
+}
 
 /**
  * The finished film question as though it had asked for another result: one
@@ -132,6 +158,9 @@ interface OpenPollArgs {
   p_places?: Record<string, number | null>
   p_per_voter?: number
   p_winners?: number
+  p_choice?: string
+  p_kind?: string
+  p_given?: number[]
 }
 
 /**
@@ -201,7 +230,7 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
       return question.ranking ? ok(question.ranking) : failed('Results are not available yet')
     // Recorded with nothing taken out, and only that: the sample cannot count
     // again, so none of `MultipleWinners`, `FractionalWinners`, `Consensus`,
-    // `ConsensusWinners`, `ProportionalBudget` and `OptionAssignment` offers
+    // `ConsensusWinners`, `BudgetVariant` and `OptionAssignment` offers
     // removal (or new costs, places or numbers of winners) on it.
     case 'open_poll_multiple_winners':
       return question.multiple_winners && !args.p_excluded?.length
@@ -221,7 +250,7 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
         (args.p_winners === undefined || args.p_winners === question.consensus_winners.winner_count)
         ? ok(question.consensus_winners)
         : failed('Not available on the example poll')
-    case 'open_poll_proportional_budget':
+    case 'open_poll_budget':
       return question.budget && !args.p_excluded?.length && !args.p_costs && !args.p_budget
         ? ok(question.budget)
         : failed('Not available on the example poll')
@@ -250,6 +279,8 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
  * recording's own.
  */
 function recast(payloads: SamplePayloads, pollId: string): SampleQuestion | undefined {
+  if (pollId === SAMPLE_SEQUENTIAL_ID) return weighed(payloads)
+  if (pollId === SAMPLE_BUDGET_ID) return budgetted(payloads)
   const kind = SAMPLE_AS_KINDS.find((k) => sampleResultAs(k) === pollId)
   const base = payloads[SAMPLE_RESULT_ID]
   if (!kind || !base?.results) return undefined
@@ -274,6 +305,68 @@ function recast(payloads: SamplePayloads, pollId: string): SampleQuestion | unde
     },
     group: base.group.map((q) => (q.id === SAMPLE_RESULT_ID ? { ...q, id: pollId } : q)),
     results: { ...base.results, kind, kind_value: kindValue, kind_result: carried ?? null },
+  }
+}
+
+/** A finished question answered under another id, which its place in the group takes. */
+function renamed(base: SampleQuestion, from: string, pollId: string): SampleQuestion {
+  return {
+    ...base,
+    view: {
+      ...base.view,
+      poll: { ...base.view.poll, id: pollId },
+      options: base.view.options.map((o) => ({ ...o, poll_id: pollId })),
+    },
+    group: base.group.map((q) => (q.id === from ? { ...q, id: pollId } : q)),
+  }
+}
+
+/** The film question with every read answered as the *Sequential variant* recorded it. */
+function weighed(payloads: SamplePayloads): SampleQuestion | undefined {
+  const base = payloads[SAMPLE_RESULT_ID]
+  const weights = base?.sequential
+  if (!base || !weights) return undefined
+  return {
+    ...renamed(base, SAMPLE_RESULT_ID, SAMPLE_SEQUENTIAL_ID),
+    ...weights,
+    // Nothing else was recorded weighed, so nothing else is offered on it.
+    fractional_winners: undefined,
+    consensus: undefined,
+    consensus_winners: undefined,
+    sequential: undefined,
+  }
+}
+
+/**
+ * The snack question as a budget question: proportional winners with the
+ * prices and the budget the *Budget variant* was counted with, so the page
+ * opens on that count.
+ */
+function budgetted(payloads: SamplePayloads): SampleQuestion | undefined {
+  const base = payloads[SAMPLE_RESULT_SNACKS_ID]
+  const budget = base?.budget
+  if (!base?.results || !budget) return undefined
+  const costs = new Map<string, number>()
+  for (const spot of budget.spots) for (const o of spot.options) costs.set(o.id, o.cost)
+  for (const o of budget.unfunded) costs.set(o.id, o.cost)
+  const renamedBase = renamed(base, SAMPLE_RESULT_SNACKS_ID, SAMPLE_BUDGET_ID)
+  return {
+    ...renamedBase,
+    view: {
+      ...renamedBase.view,
+      poll: { ...renamedBase.view.poll, kind: 'budget' },
+      options: renamedBase.view.options.map(({ places: _places, ...o }) => ({
+        ...o,
+        cost: costs.get(o.id) ?? null,
+      })),
+    },
+    results: {
+      ...base.results,
+      kind: 'budget',
+      kind_value: budget.budget,
+      kind_result: budget,
+    },
+    assignment: undefined,
   }
 }
 

@@ -17,7 +17,7 @@ import { MoreResults } from './MoreResults'
 import { Reveal } from './Reveal'
 import { ResultsSkeleton } from './Skeletons'
 import { StarRounds } from './StarRounds'
-import { choiceLabel, chosenResult } from '../lib/choices'
+import { choiceLabel, choiceOfKind, chosenResult, isBudgetKind } from '../lib/choices'
 import { ChoiceBlurb } from './ChoiceBlurb'
 import classes from './Results.module.css'
 
@@ -113,7 +113,13 @@ export function Results({
   const calendar = shown.calendar
 
   // What a reader can do with the answer, in the bar that gives it.
-  const answers = <MoreResults source={source} results={shown} shown={tool} />
+  const answers = (
+    <MoreResults
+      source={source}
+      results={shown}
+      shown={isBudgetKind(tool) ? 'budget_variant' : choiceOfKind(tool)}
+    />
+  )
 
   let bar: ReactNode
   if (chosen?.kind === 'consensus') {

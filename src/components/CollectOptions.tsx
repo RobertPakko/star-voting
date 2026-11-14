@@ -126,7 +126,7 @@ export function CollectOptions({
   schedule?: PollSchedule | null
   /**
    * A number every option carries, typed beside its name and shown on its
-   * row: a proportional budget's cost (every option has one) or an option
+   * row: a budget poll's cost (every option has one) or an option
    * assignment's places (none meaning one). Readers see them here, where the
    * list is being written, and never on the ballot.
    */

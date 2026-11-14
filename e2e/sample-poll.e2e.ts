@@ -30,11 +30,11 @@ async function scoreAll(page: Page) {
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 const politeAnnouncement = (page: Page) => page.locator('[data-announcer="polite"]')
 
-test('a voter can answer both questions and is taken to the result', async ({ page }) => {
+test('a voter can answer every question and is taken to the result', async ({ page }) => {
   await page.goto('#/sample-movie')
   await expect(heading(page)).toHaveText('Movie night')
   await expect(page).toHaveTitle('Movie night')
-  await expect(page.getByText('Question 1 of 2', { exact: true })).toBeVisible()
+  await expect(page.getByText('Question 1 of 3', { exact: true })).toBeVisible()
 
   await page.getByLabel('Your name').fill('Sam')
   await scoreAll(page)
@@ -43,10 +43,16 @@ test('a voter can answer both questions and is taken to the result', async ({ pa
   // A first ballot carries the voter on to the next question by itself, and
   // a screen reader is told where they have been taken. The name typed once
   // is offered again rather than asked for twice.
-  await expect(page.getByText('Question 2 of 2', { exact: true })).toBeVisible()
-  await expect(page).toHaveURL(/#\/sample-when$/)
-  await expect(politeAnnouncement(page)).toHaveText(/^Question 2 of 2: /)
+  await expect(page.getByText('Question 2 of 3', { exact: true })).toBeVisible()
+  await expect(page).toHaveURL(/#\/sample-snacks$/)
+  await expect(politeAnnouncement(page)).toHaveText(/^Question 2 of 3: /)
   await expect(page.getByLabel('Your name')).toHaveValue('Sam')
+
+  // The snacks, scored like the films.
+  await scoreAll(page)
+  await page.getByRole('button', { name: 'Submit vote' }).click()
+  await expect(page.getByText('Question 3 of 3', { exact: true })).toBeVisible()
+  await expect(page).toHaveURL(/#\/sample-when$/)
 
   // The calendar. Untouched is a real answer — every time a 0 — so the ballot
   // goes in as it stands; filling one day is enough to show the brush works.
@@ -67,7 +73,7 @@ test('a vote can be changed before the results are out', async ({ page }) => {
   await scoreAll(page)
   await page.getByRole('button', { name: 'Submit vote' }).click()
   // Not the last question, so on to the next one owed; back to this one.
-  await expect(page.getByText('Question 2 of 2', { exact: true })).toBeVisible()
+  await expect(page.getByText('Question 2 of 3', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: /What are we watching/ }).click()
 
   await expect(page.getByText('Your vote is in')).toBeVisible()
@@ -77,7 +83,7 @@ test('a vote can be changed before the results are out', async ({ page }) => {
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByText('Your vote is in')).toBeVisible()
   // A revision does not move anybody on.
-  await expect(page.getByText('Question 1 of 2', { exact: true })).toBeVisible()
+  await expect(page.getByText('Question 1 of 3', { exact: true })).toBeVisible()
   await expectAccessible(page, 'the card after voting')
 })
 
@@ -85,17 +91,17 @@ test('the ballot asks for a name before it is sent', async ({ page }) => {
   await page.goto('#/sample-movie')
   await scoreAll(page)
   await page.getByRole('button', { name: 'Submit vote' }).click()
-  await expect(page.getByText('Question 1 of 2', { exact: true })).toBeVisible()
+  await expect(page.getByText('Question 1 of 3', { exact: true })).toBeVisible()
   await expect(page).toHaveURL(/#\/sample-movie$/)
 })
 
 test('the questions can be walked with the strip', async ({ page }) => {
   await page.goto('#/sample-movie')
   await page.getByRole('link', { name: 'Next →' }).click()
-  await expect(page.getByText('Question 2 of 2', { exact: true })).toBeVisible()
-  await expect(politeAnnouncement(page)).toHaveText('Question 2 of 2: When are we meeting?')
+  await expect(page.getByText('Question 2 of 3', { exact: true })).toBeVisible()
+  await expect(politeAnnouncement(page)).toHaveText('Question 2 of 3: What snack do you want?')
   await page.getByRole('link', { name: '← Previous' }).click()
-  await expect(page.getByText('Question 1 of 2', { exact: true })).toBeVisible()
+  await expect(page.getByText('Question 1 of 3', { exact: true })).toBeVisible()
   // The poll is the page, whichever question is open.
   await expect(page).toHaveTitle('Movie night')
 })
@@ -110,9 +116,9 @@ test('a ballot left half done is there to come back to', async ({ page }) => {
   // Walking to another question unmounts this ballot; its scores come back
   // with it rather than going with it. See lib/ballotDraft.ts.
   await page.getByRole('link', { name: 'Next →' }).click()
-  await expect(page.getByText('Question 2 of 2', { exact: true })).toBeVisible()
+  await expect(page.getByText('Question 2 of 3', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: '← Previous' }).click()
-  await expect(page.getByText('Question 1 of 2', { exact: true })).toBeVisible()
+  await expect(page.getByText('Question 1 of 3', { exact: true })).toBeVisible()
   await expect(fourStars).toBeChecked()
 })
 
@@ -128,7 +134,10 @@ test('a name typed and not yet sent survives a refresh', async ({ page }) => {
   await expect(page.getByLabel('Your name')).toHaveValue('')
 })
 
-test('the results show the rounds, the tie-break and the option ranking', async ({ page }) => {
+test('the results show the rounds, the tie-break and the other answers', async ({ page }) => {
+  // Six modals and a four-second wheel spin: more than the default budget
+  // when the whole suite runs at once.
+  test.slow()
   await page.goto('#/sample-result-movie')
   await expect(page.getByText('Best option: Knives Out')).toBeVisible()
   // The bar names what the question asked for, and its info mark says what
@@ -165,19 +174,19 @@ test('the results show the rounds, the tie-break and the option ranking', async 
   await expect(page.getByRole('menuitem')).toHaveText([
     'Consensus option',
     'Consensus winners',
-    'Option ranking',
     'Multiple winners',
+    'Proportional winners',
     'Fractional winners',
   ])
-  await page.getByRole('menuitem', { name: 'Option ranking' }).click()
-  const ranking = page.getByRole('dialog', { name: 'Option ranking' })
+  await page.getByRole('menuitem', { name: 'Multiple winners' }).click()
+  const ranking = page.getByRole('dialog', { name: 'Multiple winners' })
   await expect(ranking).toBeVisible()
   // Every option placed, the last included: the ranking is the whole field.
   for (const option of ['Knives Out', 'Paddington 2', 'The Matrix', 'Honeyland'])
     await expect(ranking).toContainText(option)
   // Opened from the menu, it is the whole ranking, with no number to pick.
-  await expect(ranking.getByLabel('Places to rank')).toHaveCount(0)
-  await expectAccessible(page, 'the option ranking')
+  await expect(ranking.getByLabel('Number of winners')).toHaveCount(0)
+  await expectAccessible(page, 'multiple winners')
   await page.keyboard.press('Escape')
   await expect(ranking).toBeHidden()
 
@@ -186,7 +195,7 @@ test('the results show the rounds, the tie-break and the option ranking', async 
   const answers = {
     // Nobody gave Paddington 2 fewer than 2 stars.
     'Consensus option': 'Paddington 2',
-    'Multiple winners': 'Knives Out',
+    'Proportional winners': 'Knives Out',
   }
   for (const [name, says] of Object.entries(answers)) {
     await openMore()
@@ -228,8 +237,8 @@ test('the results show the rounds, the tie-break and the option ranking', async 
   // The Matrix's second spot is a close weighted runoff: written to one
   // decimal place both sides would read 2.5, a tie with no tie-break.
   await openMore()
-  await page.getByRole('menuitem', { name: 'Multiple winners' }).click()
-  const spots = page.getByRole('dialog', { name: 'Multiple winners' })
+  await page.getByRole('menuitem', { name: 'Proportional winners' }).click()
+  const spots = page.getByRole('dialog', { name: 'Proportional winners' })
   await expect(spots).toContainText('Preferred over Paddington 2 by 2.51 votes to 2.48.')
   await page.keyboard.press('Escape')
   await expect(spots).toBeHidden()
@@ -312,51 +321,52 @@ test('a tie-break can be opened over its round', async ({ page }) => {
   await expectAccessible(page, 'an open tie-break')
 })
 
-test('a sequel counts each ballot at its weight, and says so on the sheet', async ({ page }) => {
-  await page.goto('#/')
-  await page.getByRole('link', { name: 'More examples' }).click()
-  // Counted fresh, Arrival would win; counted as a sequel, last week's film's
-  // fans count for less and Paddington 2 takes the runoff.
+test('the sequential example counts each ballot at its weight, and says so on the sheet', async ({
+  page,
+}) => {
+  await page.goto('#/variants?section=sequential-polls')
+  await page.getByRole('link', { name: 'See an example' }).click()
+  await expect(page).toHaveURL(/#\/sample-result-movie-as-sequential$/)
+  // Counted fresh, Knives Out wins; weighed by last month's movie night,
+  // its fans count for less and Paddington 2 wins.
   await expect(page.getByText('Best option: Paddington 2')).toBeVisible()
   const sheet = page.getByRole('region', { name: 'Ballots' })
   await expect(sheet.getByRole('columnheader', { name: 'Weight', exact: true })).toBeVisible()
-  // Hugo gave Knives Out 1 star, so he is the strongest ballot; Ana gave it
-  // 5, so hers counts at (5 + 1) / (5 + 5).
-  await expect(sheet.getByRole('row', { name: /^Hugo 1 / })).toBeVisible()
-  await expect(sheet.getByRole('row', { name: /^Ana 3\/5 / })).toBeVisible()
+  // Gina gave last month's winners nothing, so she is the strongest ballot;
+  // Ana gave them 9, so hers counts at 5 / (5 + 9).
+  await expect(sheet.getByRole('row', { name: /^Gina 1 / })).toBeVisible()
+  await expect(sheet.getByRole('row', { name: /^Ana 5\/14 / })).toBeVisible()
   await expect(sheet.getByText('Weighted total')).toBeVisible()
-  await expectAccessible(page, 'a sequel and its weighted sheet')
+  await expectAccessible(page, 'a sequential count and its weighted sheet')
 })
 
-test('a budget shares the money out, and says what popularity would have bought', async ({
-  page,
-}) => {
-  await page.goto('#/sample-sequel-budget')
-  // The projector for the big-screen fans; the beanbags and popcorn for the
-  // comfort seekers, where funding by popularity would have bought surround
-  // sound with the projector.
-  const card = page.getByText('950 of 1,000 spent, 50 left over.')
-  await expect(card).toBeVisible()
-  await expect(page.getByText('Surround sound (400)')).toBeVisible()
+test('the budget example shares the money out', async ({ page }) => {
+  await page.goto('#/variants?section=budget-polls')
+  await page.getByRole('link', { name: 'See an example' }).click()
+  await expect(page).toHaveURL(/#\/sample-result-snacks-as-budget$/)
+  // The cheap gummy bears go first, then popcorn, chocolate and pretzels.
+  await expect(page.getByText('18 of 20 spent, 2 left over.')).toBeVisible()
+  await expect(page.getByText('Nachos (8), Ice cream (9)')).toBeVisible()
   // The recording cannot count again, so nothing offers to.
   await expect(page.getByRole('button', { name: 'Edit costs' })).toHaveCount(0)
-  await expectAccessible(page, 'a proportional budget')
+  await expectAccessible(page, 'a budget poll')
 })
 
-test('an assignment gives each friend two films, seating first those who gave up the popular one', async ({
-  page,
-}) => {
-  await page.goto('#/sample-sequel-assignment')
-  await expect(page.getByText('Every voter has 2 options, in 20 places.')).toBeVisible()
-  // Six want The Matrix and four can see it: Ana and Diego, nearly as happy
-  // with their second films, give up their places.
-  await expect(page.getByText('Ben (5), Erin (5), Farid (5), Jules (5)')).toBeVisible()
-  await expect(page.getByText('Ana (4), Chloe (5), Erin (3), Hugo (5)')).toBeVisible()
-  // In the second round, Ana and Diego are seated first for Toy Story.
-  await expect(page.getByText('Ana (3), Ben (3), Diego (3), Farid (3)')).toBeVisible()
+test('an assignment gives each friend a snack, as far as each snack goes', async ({ page }) => {
+  await page.goto('#/sample-result-snacks')
+  await expect(page.getByText('Every voter has an option, in 11 places.')).toBeVisible()
+  // Gina and Iris both most want the one tub of ice cream; Iris gets it, and
+  // Gina the gummy bears she gave 4.
+  await expect(page.getByText('Iris (5)', { exact: true })).toBeVisible()
+  await expect(page.getByText('Gina (4), Hugo (5)')).toBeVisible()
   // The recording cannot count again, so nothing offers to.
   await expect(page.getByRole('button', { name: 'Edit places' })).toHaveCount(0)
   await expectAccessible(page, 'an option assignment')
+})
+
+test('the sequel’s old links go to the examples that replaced them', async ({ page }) => {
+  await page.goto('#/sample-sequel-budget')
+  await expect(page).toHaveURL(/#\/sample-result-snacks-as-budget$/)
 })
 
 test('consensus winners serve every voter a film they gave 3 or more', async ({ page }) => {

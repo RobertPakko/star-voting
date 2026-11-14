@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Anchor, Modal, Text } from '@mantine/core'
 import { Link } from 'react-router-dom'
-import { choiceOf, choicePage } from '../lib/choices'
+import { choiceOf, choicePage, VARIANTS, variantPage, type Variant } from '../lib/choices'
 import type { PollKind } from '../lib/types'
 
 /**
@@ -47,6 +47,44 @@ export function ChoiceModal({
       size="lg"
       centered
       title={<ChoiceBlurb kind={kind} calendar={calendar} />}
+    >
+      {children}
+    </Modal>
+  )
+}
+
+/** A variant's name and sentence, as `ChoiceBlurb` gives a choice's, linking to `/variants`. */
+export function VariantBlurb({ variant }: { variant: Variant }) {
+  const { label, blurb } = VARIANTS[variant]
+  return (
+    <Text size="sm">
+      <strong>{label}</strong> {blurb}{' '}
+      <Anchor component={Link} to={variantPage(variant)} inherit>
+        Learn more
+      </Anchor>
+    </Text>
+  )
+}
+
+/** A *More results* modal for a variant, as `ChoiceModal` is for a choice. */
+export function VariantModal({
+  variant,
+  opened,
+  onClose,
+  children,
+}: {
+  variant: Variant
+  opened: boolean
+  onClose: () => void
+  children: ReactNode
+}) {
+  return (
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      size="lg"
+      centered
+      title={<VariantBlurb variant={variant} />}
     >
       {children}
     </Modal>

@@ -32,11 +32,14 @@ import {
 } from './limits'
 import type { DailyWindow, PollKind, PollSchedule } from './types'
 import {
-  canBeCalendar,
+  budgetKindOf,
   CHOICE_NUMBER,
   DEFAULT_CHOICE_NUMBER,
   optionNumberOf,
   picksSeveral,
+  variantAllowed,
+  type Choice,
+  type Variant,
 } from './choices'
 
 /*
@@ -53,10 +56,10 @@ export interface OptionDraft {
   name: string
   description: string | null
   /**
-   * The option's number: its cost on a proportional budget question, its
-   * places on an option assignment (`optionNumberOf`). What the number box
-   * holds, '' while it is empty. Kept whatever the kind, like the calendar,
-   * and sent only on a kind that reads one.
+   * The option's number: its cost on a budget question, its places on an
+   * option assignment (`optionNumberOf`). What the number box holds, '' while
+   * it is empty. Kept whatever the kind, like the calendar, and sent only on a
+   * kind that reads one.
    */
   number: number | string
 }
@@ -77,21 +80,25 @@ export interface QuestionDraft {
   key: string
   title: string
   options: OptionDraft[]
-  /** What the question asks for: the form's *Choice*. */
-  kind: PollKind
+  /**
+   * What the question asks for: the form's *Choice*. A budget poll is stored
+   * as a kind of its own (`sentKind`), so this is never a budget kind.
+   */
+  kind: Choice
   /**
    * The kind's number (winners, places), kept per kind so switching between
    * them and back loses nothing. Only the chosen kind's is sent.
    */
   kindNumbers: Partial<Record<PollKind, number>>
-  /** A proportional budget's budget, as the number box holds it: '' while empty. */
+  /** A budget poll's budget, as the number box holds it: '' while empty. */
   budget: number | string
   /**
-   * *Find a time*: the options are the windows of a painted calendar rather
-   * than a written list. Read through `isTimeQuestion`, since a budget is
-   * never one whatever this says.
+   * The form's *Variant*, or null for none: a time poll, a sequential poll or
+   * a budget poll, one at most. Kept whatever the choice, like everything
+   * below, and read through `variantOf`, since a choice that cannot take it
+   * leaves the question without one.
    */
-  calendar: boolean
+  variant: Variant | null
   /*
    * The time-poll fields are kept whatever the toggle, so switching a
    * question to a list and back loses nothing on either side; so are the
@@ -121,11 +128,9 @@ export interface QuestionDraft {
   /** Weeks a duplicate's dates were moved forward; 0 otherwise. */
   datesMoved: number
   /**
-   * A sequential poll: `kind` is then its *Sequential poll type*, and every
-   * ballot counts at the weight its voter's stars for earlier winners leave
-   * it (`carried`). Kept whatever the choice, like the calendar.
+   * A sequential poll's earlier voters: every ballot counts at the weight its
+   * voter's stars for earlier winners leave it. Kept whatever the variant.
    */
-  sequential: boolean
   carried: CarriedDraft[]
 }
 
@@ -156,7 +161,7 @@ export function carriedOf(
   question: QuestionDraft,
   isOpen: boolean,
 ): { voter: string; given: number }[] | null {
-  if (!question.sequential) return null
+  if (variantOf(question) !== 'sequential') return null
   return question.carried
     .filter((row) => !isBlankCarried(row))
     .map((row) => ({
@@ -176,7 +181,7 @@ export function blankQuestion(): QuestionDraft {
     kind: 'option',
     kindNumbers: { ...DEFAULT_CHOICE_NUMBER },
     budget: '',
-    calendar: false,
+    variant: null,
     schedule: blankSchedule(),
     overlap: null,
     placesPerTime: '',
@@ -185,14 +190,30 @@ export function blankQuestion(): QuestionDraft {
     marked: new Set(),
     offsetPicked: false,
     datesMoved: 0,
-    sequential: false,
     carried: [blankCarried()],
   }
 }
 
-/** Whether a question's options are a calendar's windows: *Find a time*, on any kind but a budget. */
+/** The variant a question takes: the one picked, where its choice can take it. */
+export function variantOf(question: QuestionDraft): Variant | null {
+  return question.variant && variantAllowed(question.variant, question.kind)
+    ? question.variant
+    : null
+}
+
+/** Whether a question's options are a calendar's windows: the *Time poll* variant. */
 export function isTimeQuestion(question: QuestionDraft): boolean {
-  return question.calendar && canBeCalendar(question.kind)
+  return variantOf(question) === 'time'
+}
+
+/** Whether a question's options carry costs bought out of a budget: the *Budget poll* variant. */
+export function isBudgetQuestion(question: QuestionDraft): boolean {
+  return variantOf(question) === 'budget'
+}
+
+/** The kind a question is stored as: its choice, or that choice with a budget. */
+export function sentKind(question: QuestionDraft): PollKind {
+  return isBudgetQuestion(question) ? budgetKindOf(question.kind) : question.kind
 }
 
 /**
@@ -251,7 +272,7 @@ export function reconcileGrid(before: QuestionDraft, after: QuestionDraft): Ques
 
 /** The number a question sends with its kind: null where the kind takes none. */
 export function kindValueOf(question: QuestionDraft): number | null {
-  if (question.kind === 'budget') return question.budget === '' ? null : Number(question.budget)
+  if (isBudgetQuestion(question)) return question.budget === '' ? null : Number(question.budget)
   return CHOICE_NUMBER[question.kind] ? (question.kindNumbers[question.kind] ?? null) : null
 }
 
@@ -260,7 +281,7 @@ export function kindValueOf(question: QuestionDraft): number | null {
  * null while empty or on any other kind.
  */
 export function numberOf(question: QuestionDraft, option: OptionDraft): number | null {
-  if (!optionNumberOf(question.kind) || option.number === '') return null
+  if (!optionNumberOf(sentKind(question)) || option.number === '') return null
   return Number(option.number)
 }
 
@@ -298,7 +319,7 @@ export interface FormErrors {
   optionDescriptions: Record<string, string>
   /** A cost or a number of places, by `optionKey()`. */
   optionNumbers: Record<string, string>
-  /** A proportional budget's budget, by question index. */
+  /** A budget poll's budget, by question index. */
   budgets: Record<number, string>
   /** An assignment of times' places per time, by question index. */
   places: Record<number, string>
@@ -472,7 +493,9 @@ export function validate(form: {
   )
 
   form.questions.forEach((question, questionIndex) => {
-    if (question.sequential) validateCarried(question, questionIndex, form.isOpen, invited, errors)
+    if (variantOf(question) === 'sequential') {
+      validateCarried(question, questionIndex, form.isOpen, invited, errors)
+    }
 
     if (form.multiQuestion) {
       const questionTitle = question.title.trim()
@@ -521,7 +544,7 @@ export function validate(form: {
       return
     }
 
-    if (question.kind === 'budget') {
+    if (isBudgetQuestion(question)) {
       const budget = amountError(question.budget)
       if (budget) {
         errors.budgets[questionIndex] = question.budget === '' ? 'Give the budget.' : budget
@@ -553,7 +576,7 @@ export function validate(form: {
 
       // Every option a budget counts has a cost; a blank row is not an
       // option. An assignment's places may be left blank, for one.
-      if (question.kind === 'budget' && name) {
+      if (isBudgetQuestion(question) && name) {
         const cost = amountError(option.number)
         if (cost) errors.optionNumbers[key] = option.number === '' ? 'Give it a cost.' : cost
       }

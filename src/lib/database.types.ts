@@ -463,8 +463,18 @@ export type Database = {
         Args: { p_excluded?: string[]; p_per_voter?: number; p_places?: Json; p_poll_id: string }
         Returns: Json
       }
-      get_poll_proportional_budget: {
-        Args: { p_budget?: number; p_costs?: Json; p_excluded?: string[]; p_poll_id: string }
+      get_poll_budget: {
+        Args: {
+          p_budget?: number
+          p_costs?: Json
+          p_excluded?: string[]
+          p_poll_id: string
+          p_choice?: string
+        }
+        Returns: Json
+      }
+      get_poll_sequential: {
+        Args: { p_given: number[]; p_kind: string; p_poll_id: string }
         Returns: Json
       }
       get_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }
@@ -585,8 +595,18 @@ export type Database = {
         Args: { p_excluded?: string[]; p_per_voter?: number; p_places?: Json; p_poll_id: string }
         Returns: Json
       }
-      open_poll_proportional_budget: {
-        Args: { p_budget?: number; p_costs?: Json; p_excluded?: string[]; p_poll_id: string }
+      open_poll_budget: {
+        Args: {
+          p_budget?: number
+          p_costs?: Json
+          p_excluded?: string[]
+          p_poll_id: string
+          p_choice?: string
+        }
+        Returns: Json
+      }
+      open_poll_sequential: {
+        Args: { p_given: number[]; p_kind: string; p_poll_id: string }
         Returns: Json
       }
       open_poll_ranking: { Args: { p_poll_id: string }; Returns: Json }

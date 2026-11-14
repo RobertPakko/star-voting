@@ -19,6 +19,7 @@ import {
   SettingsSkeleton,
 } from './components/Skeletons'
 import { isPollParam } from './lib/pollId'
+import { SAMPLE_ALIASES } from './lib/samplePoll'
 import { refreshAccountPush, useNotificationRoutes } from './lib/push'
 import { useLaunchRoutes } from './lib/launch'
 
@@ -30,6 +31,7 @@ import { useLaunchRoutes } from './lib/launch'
 const CreatePoll = lazy(() => import('./pages/CreatePoll').then((m) => ({ default: m.CreatePoll })))
 const WhatIsStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhatIsStar })))
 const AllChoices = lazy(() => import('./pages/Learn').then((m) => ({ default: m.AllChoices })))
+const PollVariants = lazy(() => import('./pages/Learn').then((m) => ({ default: m.PollVariants })))
 const WhyStar = lazy(() => import('./pages/Learn').then((m) => ({ default: m.WhyStar })))
 const Features = lazy(() => import('./pages/Learn').then((m) => ({ default: m.Features })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
@@ -105,6 +107,14 @@ function App() {
             element={
               <Suspense fallback={<LearnSkeleton />}>
                 <AllChoices />
+              </Suspense>
+            }
+          />
+          <Route
+            path="variants"
+            element={
+              <Suspense fallback={<LearnSkeleton />}>
+                <PollVariants />
               </Suspense>
             }
           />
@@ -206,6 +216,9 @@ function App() {
 /** A poll if the segment is shaped like a poll id, otherwise not found. See `isPollParam`. */
 function PollRoute() {
   const { pollId: param } = useParams<{ pollId: string }>()
+  // The sample's old sequel ids, for links already shared.
+  const alias = param ? SAMPLE_ALIASES[param] : undefined
+  if (alias) return <Navigate to={`/${alias}`} replace />
   return param && isPollParam(param) ? <PollPage /> : <NotFound />
 }
 

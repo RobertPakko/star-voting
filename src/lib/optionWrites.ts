@@ -22,7 +22,7 @@ export type DraftHold = { current: (() => Promise<boolean>) | null }
 
 /**
  * An option as typed: an empty description means none. `number` is its cost
- * on a proportional budget (where every option has one) or its places on an
+ * on a budget poll (where every option has one) or its places on an
  * option assignment, sent under that name (`numbered`).
  */
 type Typed = { name: string; description: string; number?: number | null }

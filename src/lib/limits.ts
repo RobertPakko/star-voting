@@ -64,7 +64,7 @@ export const MAX_CARRIED = 500
 export const GIVEN_MAX = 10000
 
 /**
- * A proportional budget and each option's cost: whole numbers from 1 to
+ * A budget poll's budget and each option's cost: whole numbers from 1 to
  * this. Matches `validate_amount`; the ceiling is only there to catch a typo
  * of extra zeros, since the count compares amounts and never sums enough of
  * them to strain a number.

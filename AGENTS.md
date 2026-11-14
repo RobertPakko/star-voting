@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus, ConsensusWinners, ProportionalBudget, OptionAssignment — ChosenResult, ChoiceCount, AllScores, CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus, ConsensusWinners, OptionAssignment, BudgetVariant, SequentialVariant — ChosenResult, ChoiceCount, AllScores, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), a sequential question's earlier
                  voters on the create form (CarriedVoters), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
@@ -486,7 +486,7 @@ first — never copied from a passing run.
 ### What it does and does not cover
 
 The SQL suite covers the tally end to end (score round, finalists, every
-tie-break, the runoff, the genuine tie, the option ranking) and the rules around
+tie-break, the runoff, the genuine tie, multiple winners) and the rules around
 it: the write paths, the option-list windows, confirming, reopening, revising,
 the reveal gates on results and ballot sheets, the two readings of an open
 poll, the poll list's paging, removed polls, who each email and push would go
@@ -620,8 +620,8 @@ A poll has a `kind`, which is what it asks for (see [A question asks for
 the result it opens on](#a-question-asks-for-the-result-it-opens-on)), and
 separately a ballot: a list somebody wrote, scored 0–5, or a calendar. **A
 question is a calendar exactly when it has a `schedule`**, which the create
-form's *Find a time* switch gives it; every kind but a proportional budget
-may have one (a meeting time is not bought). *A time poll* below means any
+form's *Time poll* variant gives it (see [Poll variants](#poll-variants));
+every kind but a budget may have one (a meeting time is not bought). *A time poll* below means any
 question with a schedule. A calendar is not a kind of its own because each
 kind would need a time twin (a best time, a consensus time, consensus
 times…), and every new kind another. A time poll is a poll
@@ -759,8 +759,8 @@ enough to be worth that.
 
 **The overlap follows the kind until it is set** (`overlapOf`, as the offset
 follows the dates): back to back where the kind picks several times
-(`picksSeveral`: multiple winners, consensus winners, fractional winners, an
-assignment), since the counts know nothing of overlap and two answers could
+(`picksSeveral`: multiple winners, proportional winners, consensus winners,
+fractional winners, an assignment), since the counts know nothing of overlap and two answers could
 be nearly the same time; overlapping where it picks one, since a start half
 an hour later can be the one everybody makes. The switch's line says what
 overlap costs on a kind that picks several.
@@ -1621,8 +1621,7 @@ account. About fifteen minutes a shape at 60fps (`--fps 30` halves it).
 decisions** over *using STAR voting*, a ballot being scored, one sentence, and
 fourteen tiles in pairs — the intro and a new poll, signing in (or out) and the
 reader's polls, the sample poll and its result, what STAR is and why use it,
-all choices and more examples (the sequel's results; see [The sample
-poll](#the-sample-poll)), installing the app (the code, once it is installed) and the features, contact
+all choices and the poll variants, installing the app (the code, once it is installed) and the features, contact
 and donate. [`pages/Home.tsx`](src/pages/Home.tsx)
 is the page.
 
@@ -1658,8 +1657,9 @@ is the page.
   1280×600 stage scaled to its box; it stops while out of sight, and under
   reduced motion it is one still frame of a filled-in ballot. Decorative
   (`aria-hidden`): the sentence under it says what it shows.
-- **The explainers are four pages** — `/star` (*What is STAR?*, ending on the
-  tie-break rules), `/choices` (*All choices*), `/why-star`, `/features` — in
+- **The explainers are five pages** — `/star` (*What is STAR?*, ending on the
+  tie-break rules), `/choices` (*All choices*), `/variants` (*Poll
+  variants*), `/why-star`, `/features` — in
   [`pages/Learn.tsx`](src/pages/Learn.tsx), one lazy chunk. `/star` and
   `/why-star` are drawn as the results page is, a heading over each card, and
   work an example election through emoji tables computed from its ratings.
@@ -1675,17 +1675,23 @@ is the page.
   opens the finished sample poll as though the question had asked for that
   choice (`exampleFor`): the calendar question for the consensus, since it
   did ask for the consensus time; the film question for the best option;
-  and for the rest (consensus winners included) the film question recast as that kind under an id of its
+  the snack question for the assignment; and for the rest (consensus
+  winners included) the film question recast as that kind under an id of its
   own (`sampleResultAs`, e.g. `sample-result-movie-as-ranking`), which
   `samplePoll.ts` answers from the same recording with `kind` and
   `kind_result` swapped for the result its *More results* modal records.
-  The three the film question cannot show open the sequel: *Sequential polls*
-  its film question, *Proportional budget* its upgrades question, *Option
-  assignment* its last. The page
-  restates `/star`'s ballots above the sections, since its readers mostly
-  arrive from a result's modal.
-  `/ties` and `/extensions` redirect to `/star?section=ties` and `/choices`
-  for links already shared. *App features* links the install guide.
+  The page restates `/star`'s ballots above the sections, since its readers
+  mostly arrive from a result's modal.
+- **`/variants` is folded the same way** (`useOpenSections` and `Sections`
+  are shared), one section per variant, tagged with the choices it works
+  with rather than algorithms. Its examples are the calendar question and
+  the two variant examples recorded on the finished sample poll (see [The
+  sample poll](#the-sample-poll)).
+- **Old addresses redirect**: `/ties` and `/extensions` to
+  `/star?section=ties` and `/choices`; `/choices?section=` of the sections
+  that became variants to `/variants`, and `option-ranking` to
+  `multiple-winners` (`MOVED_SECTIONS`). *App features* links the install
+  guide.
 
 ## The donate page
 
@@ -2276,7 +2282,7 @@ Rules:
 - **They belong to the ballot.** Both ballots show them under the option's
   name. The score round shows one dimmed mark beside options that have one,
   opening a popover (a tooltip cannot be opened on a phone); `poll_tally`
-  carries the text, on the same terms as the results. The option ranking and
+  carries the text, on the same terms as the results. Multiple winners and the
   ballot grid do not.
 - **URLs become links**: `OptionDescription` turns `http(s)://` and `www.`
   runs into anchors as React elements, never parsed HTML, so a description
@@ -3264,7 +3270,7 @@ things:
 
 It is behind a button; a scannable code is too big to sit in the block.
 
-### Results and the option ranking
+### Results and the other answers
 
 The results show the winner, then the runoff between the two finalists, then
 the top ten score-round totals, each round with its tie-break if it needed
@@ -3276,11 +3282,12 @@ say only that voting was closed early, when it was.
 **The answer's banner carries what can be done with it** (`Banner` in
 `Results.tsx`): **More results**, one menu
 ([`MoreResults`](src/components/MoreResults.tsx)) holding **Consensus
-option** (*Consensus time* on a time poll), **Fractional winners**,
-**Proportional budget** and **Option assignment** (two or more options; the
-budget not on a time poll, the assignment only where the poll shows who
-voted), and **Consensus winners** (*Consensus times*),
-**Option ranking** and **Multiple winners** (three or more), each opening
+option** (*Consensus time* on a time poll), **Fractional winners** and
+**Option assignment** (two or more options; the assignment only where the
+poll shows who voted), **Consensus winners** (*Consensus times*),
+**Multiple winners** and **Proportional winners** (three or more), and the
+two variants a finished question can be counted with after the fact, the
+**Budget variant** and the **Sequential variant** (see below), each opening
 a modal; then *Add to calendar* under a time poll's
 winner or *Flip a coin* under *No winner*. One menu rather than a
 button each keeps the banner to the name and a control or two. **The modals
@@ -3294,15 +3301,16 @@ otherwise, kept to the right (`ml="auto"`); `TallyShape` draws *More
 results* beside the name. A
 round's *Show tie-break* stays over its round, since it slides that card.
 
-**Option ranking** is the top ten places (see below), for when the winner
-falls through. STAR names only a winner, so the rest comes from running it
-again on what is left: the winner steps out, the two highest remaining scorers
-go to a runoff for the next place, and so on. Score totals are absolute, so
-the score order is fixed and each round is the next runoff down it.
+**Multiple winners** (`kind` `ranking`) is the top ten places (see below),
+for when several are wanted or the winner falls through. STAR names only a
+winner, so the rest comes from running it again on what is left: the winner
+steps out, the two highest remaining scorers go to a runoff for the next
+place, and so on. Score totals are absolute, so the score order is fixed and
+each round is the next runoff down it.
 
-**Multiple winners** is for choosing several at once so each sizeable group
-of voters gets one it likes; the option ranking's top few can all belong to one
-large group. It is a ranking of its own: each spot is a full STAR election
+**Proportional winners** (`kind` `multiple`) is for choosing several at once
+so each sizeable group of voters gets one it likes; multiple winners' top few
+can all belong to one large group. It is a ranking of its own: each spot is a full STAR election
 (scores, then a runoff) in which every ballot counts at 5 ÷ (5 + SUM)
 (D'Hondt's divisors), SUM being the stars it gave the winners so far, **in the runoff as well as the
 scores**, since full-strength runoff votes would let a majority take every
@@ -3319,8 +3327,8 @@ methods' second places differ; `48_multiple_winners` counts the same example.
   count a weighted sum, rounded to six places so equal sums compare equal.
   `star_round` itself is untouched, so no single-winner tally depends on it.
   `weighted_star_round` is `scaled_star_round` at a scale of one; see
-  *Proportional budget* below.
-- **A runoff level on every rule shares the spot**, as in the option ranking,
+  *The budget variant* below.
+- **A runoff level on every rule shares the spot**, as in multiple winners,
   and both options are charged to the ballots that starred them.
 - **The reader can remove options and count again**, as many times as they
   like (`p_excluded`): the count runs as though those options were never on
@@ -3353,7 +3361,7 @@ between two is still a question. `/choices` works it on the same example
   and Newton on the shares above 0 a handful. Ballots are folded into
   distinct score patterns first. The suite checks the answer against the
   optimality conditions rather than against a second solver.
-- **Removing works as in Multiple winners** (`p_excluded`, held by
+- **Removing works as in Proportional winners** (`p_excluded`, held by
   `FractionalWinners`, never stored, stopping at two options left, and not on
   the sample, which answers `fractional_winners` in `samplePollData.ts`).
 - **A pie and a list.** The pie is inert decoration; the list names every
@@ -3370,25 +3378,39 @@ between two is still a question. `/choices` works it on the same example
   be enjoyed: it turns for four seconds on a decelerating curve of its own,
   and under reduced motion jumps straight to where it stops.
 
-**Proportional budget** is for options of differing costs bought out of one
-budget, so each sizeable group of voters gets something it likes rather than
-the largest spending all of it. It is multiple winners with the cost let in
-twice: every star is scaled by the average cost over the option's cost (in
+**The budget variant** is for options of differing costs bought out of one
+budget. It is a variant of three choices, and each budgeted choice is a
+stored kind of its own, `ranking_budget`, `budget` and `fractional_budget`
+(see [Poll variants](#poll-variants)), since unlike a calendar or a sequence
+it changes the count. The two that choose winners choose them until nothing
+left fits, each funded whole or not at all, so some of the budget can be left
+over:
+
+- **Multiple winners with a budget** is STAR again and again over the
+  options that still fit, funding each winner and charging nobody, so it
+  buys what is most popular and skips whatever no longer fits.
+- **Proportional winners with a budget** is for each sizeable group of
+  voters getting something it likes rather than the largest spending all of
+  it. It is proportional winners with the cost let in twice: every star is scaled by the average cost over the option's cost (in
 the scores, the tie-breaks and the runoff), and a ballot is charged each
 funded option's stars times its cost over the average, so its strength is
 5 ÷ (5 + Σ N × C ÷ A). Each round is STAR over the options that still fit in
-what is left, and the count stops when nothing does. Options are funded whole
-or not at all, so some of the budget can be left over. `/choices` works it on
-the dinner example (`budgetOf`); `54_proportional_budget` counts the same
-example.
+what is left, and the count stops when nothing does.
 
-- **Counted in the database** (`get_poll_proportional_budget` /
-  `open_poll_proportional_budget`, via `poll_proportional_budget`), on the
-  same gate and the same press as the others. Each round is
+`/variants` works all three on the dinner example (`budgetOf`,
+`byPopularity`, `fundedOf`); `54_proportional_budget` and
+`58_poll_variants` count the same example.
+
+- **Counted in the database** (`get_poll_budget` / `open_poll_budget`, via
+  `poll_budget_count`, whose `p_choice` picks the count: `ranking`,
+  `multiple` or `fractional`), on the same gate and the same press as the
+  others. Multiple winners with a budget is `poll_budget`'s loop with every
+  scale one and no charge, fractional winners `poll_fractional_budget`.
+  Each round of the other two is
   `scaled_star_round`, which is `weighted_star_round` with a scale per
   option; a vote for an option counts its ballot's weight times that option's
   scale, and voters scoring the two finalists equally are counted unscaled.
-  The answer is multiple winners' spots with a `cost` on each option and
+  The answer is proportional winners' spots with a `cost` on each option and
   the budget `left` after each, plus what was spent, the options left
   unfunded or uncosted, and `tied`.
 - **The average cost is over the options counted**, so a removed option
@@ -3400,18 +3422,71 @@ example.
   `AMOUNT_MAX` (`validate_amount`); the ceiling only catches a typo.
 - **Any written list can be costed after the fact.** Voters never see a
   cost, so nothing about the ballots depends on when one was given. A
-  budget question (`kind` `budget`) stores its own: the budget is its
-  `polls.kind_value` and each option's cost its `candidates.kind_value`.
-  On any other the modal opens on a cost per option and a budget
-  (`CostEditor`), and the count runs on those (`p_costs`, `p_budget`);
-  *Edit costs* lets a reader try others on a budget question too. Like
+  budget question stores its own: the budget is its `polls.kind_value` (it
+  stands where the number of winners would, since the winners are what it
+  buys) and each option's cost its `candidates.kind_value`. On any other the
+  *Budget variant* opens on a cost per option, a budget and which of the three
+  counts to run (`CostEditor`), and the count runs on those (`p_costs`,
+  `p_budget`, `p_choice`); *Edit costs* lets a reader try others on a
+  budget question too. Like
   removals, they are held by `useBudgetInputs` for as long as the poll's
   results are on screen and never stored. An option given no cost is left
   out of the count, and said to be.
-- **Not on a sequential tally** (its ballots carry weights the budget would
-  ignore; refused in the database too), **not on a time poll** (its windows
-  are not bought), and **not on the sample's other questions**, which cannot
-  recount. The sample's budget question answers its recorded count.
+- **Not on a sequential tally or a time poll**, since a question takes one
+  variant at most (and the database refuses a weighted one: the budget would
+  ignore its weights), **not on a budget question**, which draws the count
+  already, and **not on the sample**, which cannot recount. The sample's
+  budget example answers its recorded count.
+
+**Fractional winners with a budget** funds every option in part, up to its
+cost: a voter is served the stars they gave each option times the fraction
+of it funded, and the amounts make the product of what every voter is served
+as large as it can be (the Nash welfare, as fractional winners). So a group
+wanting only its own option gets it funded in proportion to the group's size
+unless it costs less than that, and a cheaper option buys its fans more per
+unit. The whole budget is spent unless everything anybody starred is funded
+in full. `59_fractional_budget` holds the rules below.
+
+- **It is fractional winners' problem with a cap on each share.** With a
+  budget B, an option costing C and x its share of the budget, x ≤ C ÷ B and
+  a voter is served the sum of S × B ÷ C × x, so scaling every score by the
+  average cost over its option's cost makes it the fractional problem with
+  caps. `nash_capped_shares` solves it as `poll_fractional_winners` does,
+  Newton's method on the shares strictly between 0 and their cap, a share
+  leaving the set when a step takes it to either bound and coming back when
+  its gradient says it should. It is a function of its own rather than a
+  change to `poll_fractional_winners`, so no unbudgeted result moves.
+- **Only the ten costed options with the most stars are funded**
+  (`outside`), as fractional winners shares between ten.
+- **Amounts are not whole**: a part of a cost is the answer. One within a
+  millionth of the budget of its cost is funded in full, one within a
+  millionth of nothing gets nothing.
+
+**The sequential variant** counts a finished question as though it had been a
+sequential poll (see [Sequential polls](#sequential-polls)): the reader types,
+beside every ballot of the published sheet, the stars that voter gave earlier
+winners, picks the best option, multiple winners or proportional winners, and
+`get_poll_sequential` / `open_poll_sequential` (via `poll_sequential`) count
+it. [`SequentialVariant`](src/components/SequentialVariant.tsx) is the modal.
+
+- **Only where ballots are published with names on them** (`ballots_shown`
+  and `voters_shown` on the tally; refused in the database too). Weighing
+  one voter's ballot and comparing the results would otherwise isolate it;
+  on a named sheet every ballot is in plain view already.
+- **The N go in the sheet's order**, one per ballot, so two voters who typed
+  one name are two rows rather than an ambiguity. `ballot_sheet` orders by
+  name and then ballot id, and `poll_sequential` takes the ballots in the
+  same order.
+- **The weights reach the count through `ballot_given`**, which reads a
+  transaction-local setting (`app.sequential_given`) that `poll_sequential`
+  sets and clears; `poll_is_weighted`, `poll_ballot_weights`,
+  `poll_multiple_winners` and `ballot_sheet` all read through it, so every
+  weighted count works unchanged. `ballot_given` is granted to nobody.
+- **The best option is the ranking's first place**: `option` and `ranking`
+  both answer `poll_ranking`.
+- **Nothing is stored**, and the typed N live only while the modal is
+  mounted. Not on a time poll, a budget question or a sequential one (it is
+  the count already), nor on the sample.
 
 **Option assignment** is for handing voters options of their own — chores,
 topics, shifts, or which films each friend watches — where an option can go
@@ -3508,7 +3583,7 @@ two options, where it can already differ from STAR's winner.
 - **The card says how the tie was broken**: on which score the winner
   pulled ahead and the runner-up's score there. The table stays to *Fewest
   stars*.
-- **Removing works as in Multiple winners** (`p_excluded`, held by
+- **Removing works as in Proportional winners** (`p_excluded`, held by
   `Consensus`, never stored, stopping at two options left). Not on the
   sample, which answers `consensus` in `samplePollData.ts`.
 - **On a time poll a window is the mean of its granules**, so a window with
@@ -3558,7 +3633,7 @@ checks the search against trying every set.
 - **It names no one winner**, so a question of the kind is never settled
   with one (`poll_names_one_winner`) and reads *Results ready*, below three
   options STAR's winner standing.
-- **Removing works as in Multiple winners**, stopping at three options left.
+- **Removing works as in Proportional winners**, stopping at three options left.
   The sample can neither remove nor change the number: it answers the count
   `scripts/sample-poll.sql` recorded at the modal's opening number.
 - Like the consensus it is easily gamed, and `/choices` says so.
@@ -3590,10 +3665,12 @@ The modal states two consequences:
 A question's `kind` is what it asks for, picked on the create form as
 *Choice* and frozen at creation: `option` (*Best option*, the default),
 `consensus` (*Consensus option*), `consensus_winners` (*Consensus
-winners*), `ranking` (*Option ranking*), `multiple` (*Multiple winners*),
-`fractional` (*Fractional winners*), `budget` (*Proportional budget*) or
+winners*), `ranking` (*Multiple winners*), `multiple` (*Proportional winners*),
+`fractional` (*Fractional winners*), `budget`, `ranking_budget` and
+`fractional_budget` (the budget variant of proportional, multiple and
+fractional winners) or
 `assignment` (*Option assignment*). **The kind never changes the ballot**:
-whether it is a calendar is the schedule, *Find a time* on the form, so
+whether it is a calendar is the schedule, the *Time poll* variant on the form, so
 every kind but a budget can be asked of a meeting time (see [A poll that
 finds a time](#a-poll-that-finds-a-time)). On a calendar some kinds read
 as times (*Best time*, *Consensus time*, *Consensus times*, *Time
@@ -3602,8 +3679,8 @@ form, the answer's bar, the modals, *More results* — and so do the
 numbers' labels (`choiceNumberLabel`). The names are in
 [`lib/choices.ts`](src/lib/choices.ts), with `offers`, the option counts
 each result is offered from. The form's *Choice* label carries an info icon
-opening a popover that links to `/choices` (in a new tab, so the form
-survives), in place of any explanation on the form itself.
+opening a popover that links to `/choices` and `/variants` (in a new tab, so
+the form survives), in place of any explanation on the form itself.
 
 - **The tally carries the asked-for result** (`kind_result`), so a finished
   poll still opens in one read and the wait is one shape. `poll_tally` calls
@@ -3613,7 +3690,7 @@ survives), in place of any explanation on the form itself.
   every read of the result, which the creator asked for.
 - **It takes the winner's place.** `ChosenResult` draws the modal's own body
   (`RankingBody`, `MultipleWinnersBody`, `FractionalWinnersBody`,
-  `ConsensusBody`, `ConsensusWinnersBody`, `ProportionalBudgetBody`, `OptionAssignmentBody`) in a card at the top, handed the carried result, so it
+  `ConsensusBody`, `ConsensusWinnersBody`, `BudgetBody`, `OptionAssignmentBody`) in a card at the top, handed the carried result, so it
   asks for nothing until an option is removed. The runoff and the score round
   follow as usual (they are how the first place was chosen, and on a
   consensus how STAR alone would have chosen); the winner's banner and
@@ -3709,21 +3786,54 @@ on the bottom edge of a half-height box. It sweeps in except under reduced
 motion (it animates from JavaScript, so it checks `useReducedMotion`). Its
 stylesheet is imported in `Results.tsx`, so ballots never fetch it.
 
+### Poll variants
+
+A question asks for one result (its *Choice*, the `kind`) and may take **one
+variant at most** on top: a **time poll** (a calendar ballot), a **sequential
+poll** (ballots weighed by what their voters won before) or a **budget poll**
+(options with costs, winners bought out of a budget). The create form draws a
+*Variant* select beside *Choice type* listing only the variants that choice
+can take (`variantAllowed` in [`lib/choices.ts`](src/lib/choices.ts)), and
+`/variants` explains them.
+
+- **Each is stored where it already was.** A time poll is a `schedule` and a
+  sequential poll its `carried_weights`. A budget changes the count, so each
+  choice that takes one is a kind of its own: multiple winners with a budget
+  is `ranking_budget`, proportional winners with a budget `budget`,
+  fractional winners with a budget `fractional_budget` (`budgetKindOf`,
+  `choiceOfKind`). On each the question's number is the budget, standing
+  where the number of winners would.
+- **Which choices take which.** A calendar: every one. A sequence: what STAR
+  decides (best option, multiple winners, proportional winners;
+  `SEQUENTIAL_KINDS`). A budget: multiple, proportional and fractional
+  winners.
+- **Not combined**, so no pairing needs a meaning of its own: the database
+  refuses a schedule on a budget kind (`validate_calendar_kind`,
+  `polls_schedule_ck`) and carried voters on a schedule
+  (`insert_carried_weights`), and a budget kind is never one STAR's weights
+  apply to. A question made before the rule that has both keeps both.
+- **The form keeps every variant's fields** whatever is picked, as it keeps
+  the calendar, and sends only the one that applies (`variantOf`); a choice
+  that cannot take the picked variant leaves the question with none.
+- **Two can be tried after the fact** from *More results*: the *Budget
+  variant* and the *Sequential variant* (see [Results and the other
+  answers](#results-and-the-other-answers)). A calendar cannot, since it is
+  the ballot.
+
 ### Sequential polls
 
-A sequential question counts every ballot at the strength multiple winners
-would give it, 5 ÷ (5 + N), N being the stars its voter gave the winners
-of earlier polls, so over a run of polls the wins are shared out instead of
-the largest group taking each one. `/choices` explains it; `53_sequential_polls`
-holds the rules below.
+A sequential question counts every ballot at the strength proportional
+winners would give it, 5 ÷ (5 + N), N being the stars its voter gave the
+winners of earlier polls, so over a run of polls the wins are shared out
+instead of the largest group taking each one. `/variants` explains it;
+`53_sequential_polls` holds the rules below.
 
 - **Nothing links one poll to the next.** A question is sequential exactly
   when it carries earlier voters (`carried_weights`: a name on an open poll, an
-  invitee's address on an invite poll, and N), typed on the create form as
-  *Choice* → *Sequential poll*, with a *Sequential poll type* under it. The
-  type is the question's `kind`, and only the four STAR decides can be one
+  invitee's address on an invite poll, and N), typed on the create form under
+  the *Sequential poll* variant. Only the choices STAR decides can take it
   (`SEQUENTIAL_KINDS`, `insert_carried_weights`): a consensus or a split
-  would ignore the weights. *More results* leaves those two out on a weighted
+  would ignore the weights. *More results* leaves those out on a weighted
   tally for the same reason.
 - **A ballot takes its N when it is cast and keeps it** (`ballots.given`,
   `claim_carried_weight`): the row matching the invitee's address, or the
@@ -3734,7 +3844,7 @@ holds the rules below.
 - **The tally reads the weights off the ballots** (`poll_is_weighted`,
   `poll_round`, which picks `weighted_star_round` over `star_round`), so a
   question that carries nobody is counted exactly as before. The head round,
-  the kept winner, the option ranking, *All scores* and multiple winners
+  the kept winner, multiple winners, *All scores* and proportional winners
   (which starts each ballot from its N and charges on top) all go through
   it; the tally says `weighted`, and every count is then a weighted sum, read
   out to two places (`figure` in `plural.ts`).
@@ -3763,9 +3873,9 @@ holds the rules below.
 the create form at `#/new?sequel=<id>`, which is *Duplicate* plus, for each
 STAR question, the earlier voters worked out by `carriedFrom` in
 [`lib/sequel.ts`](src/lib/sequel.ts): every published ballot's N plus the
-stars it gave this poll's winners (multiple winners: the places the question
+stars it gave this poll's winners (several winners: the places the question
 asked for, else the first), then the voters who skipped. Other questions copy
-as ordinary ones. It reads every voter's own scores, so **it fills in only
+as ordinary ones, and so does a time question, which cannot be sequential too. It reads every voter's own scores, so **it fills in only
 from a poll that publishes ballots with names on them**; on any other poll the
 button opens a modal saying why, and the creator can still type the voters
 in. Everything it fills in stays editable: it does nothing the creator could
@@ -3830,42 +3940,53 @@ The home page's *Example poll* and *Example result* tiles open it.
 
 #### The sample poll is a recording, not rows
 
-`/#/sample-movie` is a two-question poll ("Movie night") still taking
+`/#/sample-movie` is a three-question poll ("Movie night") still taking
 votes; `/#/sample-result-movie` is the same poll after nine people finished
-it. The first question is a list with descriptions, the second a calendar (a
-Friday evening and a Saturday daytime) asking for the consensus time, so
-both ballots are shown. Neither exists in Supabase: both are answered from
-[`src/lib/samplePollData.ts`](src/lib/samplePollData.ts), which
+it. The first question is a list with descriptions, the second an option
+assignment (`/#/sample-snacks`: a snack each, with only so much of each, so
+Gina and Iris cannot both have the one tub of ice cream), the third a
+calendar (a Friday evening and a Saturday daytime) asking for the consensus
+time, so both ballots are shown. None of it exists in Supabase: it is
+answered from [`src/lib/samplePollData.ts`](src/lib/samplePollData.ts), which
 `scripts/sample-poll.sh` generates by building the throwaway database, making
 the poll **through the app's own functions** (`create_poll_group`,
 `open_poll_submit`, `close_poll`), and recording what `open_poll_view`,
 `open_poll_results`, `open_poll_ranking`, `open_poll_multiple_winners`,
 `open_poll_fractional_winners`, `open_poll_consensus`,
 `open_poll_consensus_winners`, `open_poll_scores` and `open_poll_ballots`
-answer, `open_poll_proportional_budget` of a
-budget question and `open_poll_assignment` of an assignment question.
+answer, and `open_poll_assignment` of the assignment question.
 
-`/#/sample-sequel-movie` is "Movie night 2", made from the finished copy as
-*Create sequel poll* makes it (`sample.carried` reads the published sheet as
-`carriedFrom` does): its film question is sequential, and Paddington 2 wins
-on weight where a fresh count would elect Arrival. Its second question,
-`/#/sample-sequel-budget`, is a proportional budget: 1,000 for upgrades to
-the movie nights, where the big-screen fans get the projector and the
-comfort seekers the beanbags and popcorn machine, and funding by popularity
-would have bought the projector, surround sound and popcorn. Its third,
-`/#/sample-sequel-assignment`, is an option assignment with two films each:
-a double feature of five films with four places each for ten friends, where
-Ana and Diego give up The Matrix for their 4-star second films in the first
-round and are seated first for Toy Story in the second. Each question is titled with the choice it
-shows. The home page's *More examples* tile opens it, as do the three
-sections of `/choices`. **No sample id may be twenty-two
-characters long**: that is a short poll id's length, and the app would send
-it to the database (`pollId.test.ts` checks every recorded id).
+**The finished copy also carries the two variant examples**, recorded as the
+*More results* menu makes them and served under ids of their own
+(`weighed` and `budgetted` in `samplePoll.ts`):
+
+- `/#/sample-result-movie-as-sequential`: the film question weighed as a
+  sequential poll, with the stars each voter gave last month's winners
+  written beside the question in the generator (`example_given`). Every read
+  the page makes is recorded under those weights (the generator sets
+  `app.sequential_given` as `poll_sequential` does), so the whole page,
+  sheet included, is the weighted count: Paddington 2 wins where the plain
+  count elects Knives Out.
+- `/#/sample-result-snacks-as-budget`: the snack question as a budget poll,
+  its prices and budget written in the generator (`cost`, `budget`) and
+  counted with `open_poll_budget` as proportional winners, the page opening
+  on that count.
+
+`/variants` links both, and the calendar question. The old sequel's ids
+(`sample-sequel-*`) redirect to them (`SAMPLE_ALIASES`). **No sample id may
+be twenty-two characters long**: that is a short poll id's length, and the app
+would send it to the database (`pollId.test.ts` checks every recorded id).
 
 - **Nothing about the sample is computed in the browser.** Every number came
   from `star_round()` and `poll_ranking()`. To change what it shows, change
   the ballots in [`scripts/sample-poll.sql`](scripts/sample-poll.sql) and
   regenerate.
+- **No count on the sample may come down to a draw.** Ballot and question
+  ids are random on every run, and the draws that settle the last ties (the
+  assignment's, the score round's by id) are hashed from them, so a tie
+  would change the answer from one regeneration to the next. Iris gives
+  chocolate 3 rather than 4 for that reason: at 4 her seating and Gina's
+  tie exactly.
 - **Nothing about the sample is in the database**, where it would be purged
   at six months and votable by anyone holding the link.
 

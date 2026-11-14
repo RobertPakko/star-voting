@@ -340,7 +340,7 @@ begin
 
   perform tests.assert_raises('a cost is still no business of an assignment''s',
     format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_option_costs => array[1, 2])', v_emails),
-    'Only a proportional budget gives its options a cost');
+    'Only a budget poll gives its options a cost');
 end $$;
 
 -- An assignment says who gets what, so it is only for a poll that shows who

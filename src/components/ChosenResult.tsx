@@ -6,7 +6,7 @@ import { MultipleWinnersBody } from './MultipleWinners'
 import { ConsensusBody } from './Consensus'
 import { ConsensusWinnersBody } from './ConsensusWinners'
 import { consensusWinnersFor } from '../lib/choices'
-import { ProportionalBudgetBody } from './ProportionalBudget'
+import { BudgetBody } from './BudgetVariant'
 import { OptionAssignmentBody } from './OptionAssignment'
 import type { MeetingEvent } from '../lib/calendarEvent'
 import { useBudgetInputs, useLeftOut, useAssignmentInputs, useWinnerCount } from '../lib/useLeftOut'
@@ -87,8 +87,10 @@ export function ChosenResult({
         />
       )
     case 'budget':
+    case 'ranking_budget':
+    case 'fractional_budget':
       return (
-        <ProportionalBudgetBody
+        <BudgetBody
           source={source}
           results={results}
           initial={chosen.budget}

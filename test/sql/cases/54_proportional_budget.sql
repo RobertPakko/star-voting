@@ -58,7 +58,7 @@ begin
   v_costs := jsonb_build_object(v_pizza, 20, v_tacos, 30, v_sushi, 25);
 
   -- An ordinary question, costed by the reader: nothing is stored.
-  b := get_poll_proportional_budget(v_poll, '{}', v_costs, 50);
+  b := get_poll_budget(v_poll, '{}', v_costs, 50);
 
   perform tests.assert_eq('two options funded', jsonb_array_length(b -> 'spots'), 2);
   perform tests.assert_eq('pizza first', tests.placed_at(b -> 'spots', 1), array['pizza']);
@@ -100,7 +100,7 @@ begin
     (select max(kind_value) from candidates where poll_id = v_poll));
 
   -- Left out, the average is over the options still counted.
-  b := get_poll_proportional_budget(v_poll, array[v_pizza], v_costs, 50);
+  b := get_poll_budget(v_poll, array[v_pizza], v_costs, 50);
   perform tests.assert_eq('without pizza, tacos alone',
     jsonb_array_length(b -> 'spots'), 1);
   perform tests.assert_eq('tacos funded', tests.placed_at(b -> 'spots', 1), array['tacos']);
@@ -113,7 +113,7 @@ begin
     (select array_agg(x ->> 'name') from jsonb_array_elements(b -> 'unfunded') x), array['sushi']);
 
   -- An option given no cost is left out, and said to be.
-  b := get_poll_proportional_budget(v_poll, '{}',
+  b := get_poll_budget(v_poll, '{}',
     jsonb_build_object(v_pizza, 20, v_tacos, 30), 50);
   perform tests.assert_eq('sushi uncosted',
     (select array_agg(x ->> 'name') from jsonb_array_elements(b -> 'uncosted') x), array['sushi']);
@@ -122,26 +122,26 @@ begin
      from jsonb_array_elements(b -> 'spots') s), array['pizza', 'tacos']);
 
   -- A budget too small for anything funds nothing.
-  b := get_poll_proportional_budget(v_poll, '{}', v_costs, 10);
+  b := get_poll_budget(v_poll, '{}', v_costs, 10);
   perform tests.assert_eq('nothing fits in 10', jsonb_array_length(b -> 'spots'), 0);
   perform tests.assert_eq('so all three are unfunded', jsonb_array_length(b -> 'unfunded'), 3);
 
   perform tests.assert_raises('an ordinary question has no budget of its own',
-    format('select get_poll_proportional_budget(%L, ''{}'', %L)', v_poll, v_costs),
+    format('select get_poll_budget(%L, ''{}'', %L)', v_poll, v_costs),
     'Give the budget');
   perform tests.assert_raises('a cost is a whole number',
-    format('select get_poll_proportional_budget(%L, ''{}'', %L, 50)', v_poll,
+    format('select get_poll_budget(%L, ''{}'', %L, 50)', v_poll,
       jsonb_build_object(v_pizza, 2.5)),
     'A cost must be a whole number from 1 to 1,000,000,000');
   perform tests.assert_raises('and at least 1',
-    format('select get_poll_proportional_budget(%L, ''{}'', %L, 50)', v_poll,
+    format('select get_poll_budget(%L, ''{}'', %L, 50)', v_poll,
       jsonb_build_object(v_pizza, 0)),
     'A cost must be a whole number from 1 to 1,000,000,000');
   perform tests.assert_raises('so is a budget',
-    format('select get_poll_proportional_budget(%L, ''{}'', %L, -1)', v_poll, v_costs),
+    format('select get_poll_budget(%L, ''{}'', %L, -1)', v_poll, v_costs),
     'The budget must be a whole number from 1 to 1,000,000,000');
   perform tests.assert_raises('a count needs a costed option',
-    format('select get_poll_proportional_budget(%L, ''{}'', ''{}'', 50)', v_poll),
+    format('select get_poll_budget(%L, ''{}'', ''{}'', 50)', v_poll),
     'Give at least one option a cost');
 end $$;
 
@@ -162,13 +162,13 @@ begin
   perform close_poll(v_poll);
   select jsonb_object_agg(id, 10) into v_costs from candidates where poll_id = v_poll;
 
-  b := get_poll_proportional_budget(v_poll, '{}', v_costs, 20);
+  b := get_poll_budget(v_poll, '{}', v_costs, 20);
   perform tests.assert_eq('the tied pair share the spot',
     tests.placed_at(b -> 'spots', 1), array['Apple', 'Banana']);
   perform tests.assert_eq('and spend the budget', (b ->> 'left')::numeric, 0::numeric);
   perform tests.assert_null('which is not a stopping tie', b ->> 'tied');
 
-  b := get_poll_proportional_budget(v_poll, '{}', v_costs, 15);
+  b := get_poll_budget(v_poll, '{}', v_costs, 15);
   perform tests.assert_eq('with room for one, nothing is funded',
     jsonb_array_length(b -> 'spots'), 0);
   perform tests.assert_eq('and the tie is named',
@@ -209,7 +209,7 @@ begin
   t := get_poll_results(v_poll);
   perform tests.assert_eq('the tally says it is a budget', t ->> 'kind', 'budget');
   perform tests.assert_eq('and carries the count the modal gives',
-    t -> 'kind_result', get_poll_proportional_budget(v_poll, '{}'));
+    t -> 'kind_result', get_poll_budget(v_poll, '{}'));
   perform tests.assert_eq('pizza and sushi',
     (select array_agg(s #>> '{options,0,name}' order by (s ->> 'place')::int)
      from jsonb_array_elements(t #> '{kind_result,spots}') s), array['pizza', 'sushi']);
@@ -219,10 +219,10 @@ begin
   -- A reader's costs and budget go over the stored ones.
   select id into v_tacos from candidates where poll_id = v_poll and name = 'tacos';
   perform tests.assert_eq('a reader can try another budget',
-    jsonb_array_length(get_poll_proportional_budget(v_poll, '{}', null, 75) -> 'spots'), 3);
+    jsonb_array_length(get_poll_budget(v_poll, '{}', null, 75) -> 'spots'), 3);
   perform tests.assert_eq('or take a cost away',
     (select array_agg(x ->> 'name')
-     from jsonb_array_elements(get_poll_proportional_budget(v_poll, '{}',
+     from jsonb_array_elements(get_poll_budget(v_poll, '{}',
        jsonb_build_object(v_tacos, null)) -> 'uncosted') x), array['tacos']);
 
   -- The rules at creation.
@@ -237,10 +237,10 @@ begin
     'The cost of "b" must be a whole number from 1 to 1,000,000,000');
   perform tests.assert_raises('no other kind stores a cost',
     format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_option_costs => array[1, 2])', v_emails),
-    'Only a proportional budget gives its options a cost');
+    'Only a budget poll gives its options a cost');
   perform tests.assert_raises('nor takes a budget',
     format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_kind => ''fractional'', p_kind_value => 5)', v_emails),
-    'Only an option ranking, multiple winners, consensus winners, a proportional budget or an option assignment takes a number');
+    'Only multiple winners, proportional winners, consensus winners, a budget poll or an option assignment takes a number');
   perform tests.assert_raises('a budget is not a sequential kind',
     format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_kind => ''budget'', p_kind_value => 5, p_option_costs => array[1, 2], p_carried => %L)',
       v_emails, '[{"voter": "f1@example.com", "given": 5}]'),
@@ -315,7 +315,7 @@ begin
   perform close_poll(v_poll);
 
   perform tests.assert_raises('a sequential question is not counted on a budget',
-    format('select get_poll_proportional_budget(%L, ''{}'', ''{}'', 50)', v_poll),
+    format('select get_poll_budget(%L, ''{}'', ''{}'', 50)', v_poll),
     'A sequential poll''s ballots carry weights a budget would ignore');
 end $$;
 
@@ -331,18 +331,18 @@ begin
   perform tests.cast_ballot(v_poll, array[5, 0]);
 
   perform tests.assert_raises('an unfinished invite poll keeps its budget',
-    format('select get_poll_proportional_budget(%L, ''{}'', ''{}'', 50)', v_poll),
+    format('select get_poll_budget(%L, ''{}'', ''{}'', 50)', v_poll),
     'Results are not available until');
 
   perform tests.assert_eq('the count is nobody''s to call',
     has_function_privilege('authenticated',
-      'poll_proportional_budget(uuid, uuid[], jsonb, numeric)', 'execute'), false);
+      'poll_budget(uuid, uuid[], jsonb, numeric, boolean)', 'execute'), false);
   perform tests.assert_eq('nor the scaled round',
     has_function_privilege('authenticated',
       'scaled_star_round(uuid, uuid[], uuid[], numeric[], numeric[])', 'execute'), false);
   perform tests.assert_eq('the link''s door is open to anybody',
     has_function_privilege('anon',
-      'open_poll_proportional_budget(uuid, uuid[], jsonb, numeric)', 'execute'), true);
+      'open_poll_budget(uuid, uuid[], jsonb, numeric, text)', 'execute'), true);
 end $$;
 
 rollback;

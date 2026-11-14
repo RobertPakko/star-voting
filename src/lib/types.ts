@@ -18,10 +18,11 @@ export type PollMode = 'invite' | 'open'
  * form's *Choice*; see lib/choices.ts): 'option' STAR's winner, 'consensus'
  * the option whose lowest score is highest, 'consensus_winners' the set of
  * options that serves its worst-served voter best, the rest the option
- * ranking, multiple winners or fractional winners, 'budget' a proportional
- * budget and 'assignment' an option assignment. Whether the ballot is a
- * calendar is not part of the kind: it is whether the question has a
- * `schedule`, which every kind but a budget may.
+ * ranking (*Multiple winners*), proportional winners or fractional winners,
+ * 'budget', 'ranking_budget' and 'fractional_budget' proportional, multiple or
+ * fractional winners counted against a budget, and 'assignment' an option
+ * assignment. Whether the ballot is a calendar is not part of the kind: it is
+ * whether the question has a `schedule`, which every kind but a budget may.
  */
 export type PollKind =
   | 'option'
@@ -30,6 +31,8 @@ export type PollKind =
   | 'fractional'
   | 'consensus'
   | 'budget'
+  | 'ranking_budget'
+  | 'fractional_budget'
   | 'assignment'
   | 'consensus_winners'
 
@@ -76,7 +79,7 @@ export interface Poll {
   kind: PollKind
   schedule: PollSchedule | null
   /**
-   * The kind's number: places to rank, or winners to choose. Null where the
+   * The kind's number: winners to choose, or a budget poll's budget. Null where the
    * kind takes none, or for as many as the results hold.
    */
   kind_value: number | null
@@ -136,7 +139,7 @@ export interface PollOption {
   description: string | null
   sort_order: number
   /**
-   * The option's cost, on a proportional budget question; null elsewhere.
+   * The option's cost, on a budget question; null elsewhere.
    * Optional until 0102 has landed everywhere.
    */
   cost?: number | null
@@ -480,7 +483,7 @@ export interface ConsensusWinnersResult {
   voter_count: number
 }
 
-/** One funded option of a proportional budget, with its cost. */
+/** One funded option of a budget poll, with its cost. */
 export interface BudgetOption {
   id: string
   name: string
@@ -489,7 +492,7 @@ export interface BudgetOption {
   total_score: number
 }
 
-/** One round of a proportional budget: a multiple-winners spot, with costs. */
+/** One round of a budget poll: a winners spot, with costs. */
 export interface BudgetSpot extends Omit<RankingEntry, 'options'> {
   options: BudgetOption[]
   /** The budget still unspent after this round. */
@@ -497,10 +500,10 @@ export interface BudgetSpot extends Omit<RankingEntry, 'options'> {
 }
 
 /**
- * The proportional budget, from `get_poll_proportional_budget` /
- * `open_poll_proportional_budget`: cost-adjusted STAR once per option funded,
- * among the options that still fit, every ballot weakened by what it has
- * already been given.
+ * A budget poll's count, from `get_poll_budget` / `open_poll_budget`: STAR
+ * once per option funded, among the options that still fit. Counted as
+ * proportional winners, every star is scaled by cost and every ballot weakened
+ * by what it has already been given; as multiple winners, neither.
  */
 export interface BudgetResult {
   budget: number
@@ -515,6 +518,28 @@ export interface BudgetResult {
   uncosted: { id: string; name: string }[]
   /** A runoff level on every rule with room for only one of the pair: the count stops there. */
   tied: { id: string; name: string; cost: number }[] | null
+}
+
+/**
+ * Fractional winners with a budget, from `get_poll_budget` /
+ * `open_poll_budget` with `p_choice` `fractional`: every option funded in
+ * part, up to its cost, so that the product of what every voter is served
+ * (their stars times the fraction of each option funded) is as large as it
+ * can be.
+ */
+export interface FractionalBudgetResult {
+  budget: number
+  spent: number
+  /** Left over only where everything somebody starred is funded in full. */
+  left: number
+  /** Every option given something, the most first. */
+  options: { id: string; name: string; cost: number; amount: number; funded: number }[]
+  /** Counted options given nothing, which nobody starred enough to fund. */
+  unfunded: { id: string; name: string; cost: number }[]
+  /** Costed options outside the ten with the most stars, so not considered. */
+  outside: { id: string; name: string; cost: number }[]
+  /** Options given no cost, so not counted. */
+  uncosted: { id: string; name: string }[]
 }
 
 /** One voter an option assignment placed, with their stars for it where ballots are published. */
@@ -585,6 +610,7 @@ export interface PollResults {
     | ConsensusResult
     | ConsensusWinnersResult
     | BudgetResult
+    | FractionalBudgetResult
     | AssignmentResult
     | null
   /**
@@ -597,6 +623,11 @@ export interface PollResults {
    * Optional until 0103 has landed everywhere.
    */
   voters_shown?: boolean
+  /**
+   * Whether the ballots are published, so the sheet names every ballot and
+   * the *Sequential variant* may weigh them. Optional until 0107 has landed.
+   */
+  ballots_shown?: boolean
   /** Whether the options are a calendar's windows (the question has a schedule). */
   calendar: boolean
 }

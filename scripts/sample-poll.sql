@@ -52,7 +52,7 @@ create table if not exists sample.link (
 -- The poll
 -- ---------------------------------------------------------------------------
 --
--- Two questions, the second asking more of the reader than the first:
+-- Three questions, each asking more of the reader than the one before:
 --
 --   movie   a list with a paragraph under each option, and a three-way tie
 --           for the second finalist slot, settled on five-star votes:
@@ -63,6 +63,21 @@ create table if not exists sample.link (
 --           own rather than handing the whole evening to Knives Out. Multiple
 --           winners and the full ranking also disagree here -- The Matrix takes
 --           the second spot, Paddington 2 the second place.
+--
+--           It is also the *Sequential variant* example: weighed as though
+--           last month's movie night had gone to the Knives Out fans
+--           (`example_given`, the stars each gave last month's winners),
+--           Ana, Ben, Chloe, Erin, Farid and Iris count for less, and
+--           Paddington 2 wins the runoff on weight.
+--   snacks  an option assignment: one snack each, with only so much of each
+--           (`places`). Gina and Iris both most want the one tub of ice
+--           cream; the draw gives it to Iris, and Gina gets the gummy bears
+--           she gave 4. Everybody else gets a 5.
+--
+--           It is also the *Budget variant* example: with the prices written
+--           down (`cost`) and 20 to spend, counted as proportional winners,
+--           the cheap gummy bears go first, then popcorn, chocolate and the
+--           pretzels, and 2 is left.
 --   when    a different ballot altogether: a calendar, painted rather than
 --           scored, asking for the consensus time -- the window whose
 --           least-keen voter is keenest -- since a meeting is a choice
@@ -89,6 +104,7 @@ select $json${
     {
       "slug": "movie",
       "title": "What are we watching?",
+      "example_given": { "Ana": 9, "Ben": 7, "Chloe": 6, "Diego": 1, "Erin": 9, "Farid": 6, "Gina": 0, "Hugo": 2, "Iris": 6 },
       "options": [
         { "name": "Knives Out", "description": "When renowned crime novelist Harlan Thrombey is found dead at his estate just after his 85th birthday, the inquisitive and debonair Detective Benoit Blanc is mysteriously enlisted to investigate." },
         { "name": "Spirited Away", "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts." },
@@ -107,6 +123,31 @@ select $json${
         [2, 2, 1, 5, 2, 0],
         [1, 3, 3, 2, 1, 1],
         [3, 0, 2, 2, 2, 1]
+      ]
+    },
+    {
+      "slug": "snacks",
+      "title": "What snack do you want?",
+      "kind": "assignment",
+      "budget": 20,
+      "options": [
+        { "name": "Popcorn", "places": 3, "cost": 6, "description": "A big bowl of buttered popcorn, enough for three." },
+        { "name": "Nachos", "places": 2, "cost": 8, "description": "Tortilla chips under melted cheese and salsa, enough for two." },
+        { "name": "Chocolate", "places": 2, "cost": 5, "description": "A slab of milk chocolate, enough for two." },
+        { "name": "Ice cream", "places": 1, "cost": 9, "description": "A tub of vanilla ice cream, for one." },
+        { "name": "Gummy bears", "places": 2, "cost": 4, "description": "A bag of gummy bears, enough for two." },
+        { "name": "Pretzels", "places": 1, "cost": 3, "description": "A bag of salted pretzels, for one." }
+      ],
+      "ballots": [
+        [5, 3, 4, 2, 1, 2],
+        [5, 4, 2, 3, 1, 1],
+        [4, 1, 5, 3, 2, 0],
+        [2, 5, 1, 1, 4, 3],
+        [5, 2, 3, 4, 1, 1],
+        [3, 5, 1, 2, 3, 4],
+        [1, 2, 3, 5, 4, 0],
+        [4, 3, 2, 1, 5, 2],
+        [2, 1, 3, 5, 2, 3]
       ]
     },
     {
@@ -147,134 +188,6 @@ select $json${
 }$json$::jsonb
 $$;
 
--- The sequel: the next movie night, made from the finished one as *Create
--- sequel poll* makes it (see src/lib/sequel.ts). The film question is
--- sequential: each of the nine carries the stars they gave last time's
--- winner, Knives Out, so its fans -- Ana and Erin gave it 5 -- count at half
--- strength or so, and Hugo, who gave it 1, at nearly full. Jules is new, and
--- votes at the average weight. Each question is titled with the choice it
--- shows, since *More examples* is this poll's results.
---
--- Knives Out is off the list (they have seen it) and Arrival is on. Counted
--- as a fresh poll, Arrival would win: Ana, Ben, Chloe and Erin prefer it to
--- Paddington 2, against Diego, Gina and Hugo. Counted as a sequel, those four
--- had their film last week, and Paddington 2 wins the runoff on weight.
---
--- The second question is a proportional budget: 1,000 to spend on upgrades
--- for the movie nights, the average option costing 270. Ana, Ben, Chloe,
--- Erin, Farid and Jules want the big screen (projector, surround sound);
--- Diego, Gina, Hugo and Iris want to be comfortable (beanbags, popcorn).
--- Funded in STAR's order while they fit, the money would buy the projector,
--- surround sound and the popcorn machine. Counted proportionally, the cheap
--- popcorn machine goes first (its stars count 2.7 times over), then the
--- curtains everybody half wants, then the beanbags, and the 550 left buys the
--- projector rather than the surround sound: the big-screen fans get their
--- projector, the comfort seekers their beanbags and popcorn, and 50 is left.
---
--- The third question is an option assignment: a double feature, the friends
--- split between five films in rooms of four, two films each. Six of the ten
--- most want The Matrix. In the first round Ana and Diego, nearly as happy
--- with Spirited Away and Mean Girls (4 stars each), give their places to the
--- four who would lose more. In the second, five want Toy Story's four
--- places; Ana and Diego, holding the fewest stars after giving up The
--- Matrix, are seated first, and Jules, as happy with Mean Girls, takes that.
--- Every film fills, and every friend sees two.
-create or replace function sample.sequel() returns jsonb language sql immutable as $$
-select $json${
-  "title": "Movie night 2",
-  "voters": ["Ana", "Ben", "Chloe", "Diego", "Erin", "Farid", "Gina", "Hugo", "Iris", "Jules"],
-  "questions": [
-    {
-      "slug": "movie",
-      "title": "Sequential poll",
-      "carried_from": "movie",
-      "options": [
-        { "name": "Arrival", "description": "When twelve mysterious spacecraft appear around the world, a linguist is brought in to find out whether they come in peace." },
-        { "name": "Paddington 2", "description": "Paddington, now happily settled with the Brown family and a popular member of the local community, picks up a series of odd jobs to buy the perfect present for his Aunt Lucy's 100th birthday, only for the gift to be stolen." },
-        { "name": "Spirited Away", "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts." },
-        { "name": "The Matrix", "description": "A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI." },
-        { "name": "Honeyland", "description": "The last female bee-hunter in Europe must save the bees and return the natural balance in Honeyland, when a family of nomadic beekeepers invade her land and threaten her livelihood." }
-      ],
-      "ballots": [
-        [5, 2, 4, 3, 0],
-        [5, 2, 3, 4, 1],
-        [4, 3, 5, 2, 4],
-        [1, 5, 2, 4, 0],
-        [5, 3, 4, 2, 1],
-        [4, 4, 3, 4, 2],
-        [1, 5, 2, 1, 0],
-        [2, 4, 3, 3, 1],
-        [4, 4, 1, 2, 1],
-        [3, 3, 5, 1, 2]
-      ]
-    },
-    {
-      "slug": "budget",
-      "title": "Proportional budget",
-      "kind": "budget",
-      "kind_value": 1000,
-      "options": [
-        { "name": "Projector", "cost": 500, "description": "A projector and a pull-down screen, for a picture as wide as the wall." },
-        { "name": "Surround sound", "cost": 400, "description": "Five speakers and a subwoofer, so the spaceships sound like they are in the room." },
-        { "name": "Beanbags", "cost": 200, "description": "Four big beanbags, for sinking into for the length of a film." },
-        { "name": "Blackout curtains", "cost": 150, "description": "Curtains that keep the light out, so a film can start before sunset." },
-        { "name": "Popcorn machine", "cost": 100, "description": "A popcorn machine, for fresh popcorn every movie night." }
-      ],
-      "ballots": [
-        [5, 5, 1, 2, 0],
-        [5, 4, 0, 3, 1],
-        [5, 5, 1, 2, 0],
-        [2, 0, 5, 1, 5],
-        [5, 4, 1, 2, 1],
-        [4, 4, 2, 3, 2],
-        [1, 1, 5, 2, 4],
-        [2, 0, 4, 1, 5],
-        [1, 1, 5, 2, 4],
-        [4, 3, 2, 2, 2]
-      ]
-    },
-    {
-      "slug": "assignment",
-      "title": "Option assignment",
-      "kind": "assignment",
-      "kind_value": 2,
-      "options": [
-        { "name": "The Matrix", "places": 4, "description": "A computer hacker discovers that his life is nothing more than an elaborate simulation run by an evil AI." },
-        { "name": "Spirited Away", "places": 4, "description": "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches and spirits, and where humans are changed into beasts." },
-        { "name": "Mean Girls", "places": 4, "description": "Cady Heron is a hit with The Plastics, the A-list girl clique at her new school, until she makes the mistake of falling for Aaron Samuels, the ex-boyfriend of alpha Plastic Regina George." },
-        { "name": "Toy Story", "places": 4, "description": "A cowboy doll's place as his boy's favourite toy is threatened by a flashy new space-ranger action figure, and the two rivals end up lost far from home." },
-        { "name": "Amélie", "places": 4, "description": "A shy waitress in Montmartre quietly sets about improving the lives of the people around her, while finding it much harder to chase a happiness of her own." }
-      ],
-      "ballots": [
-        [5, 4, 1, 3, 2],
-        [5, 2, 1, 3, 1],
-        [4, 5, 0, 2, 4],
-        [5, 1, 4, 3, 0],
-        [5, 3, 2, 2, 3],
-        [5, 0, 2, 3, 1],
-        [1, 3, 5, 2, 4],
-        [3, 5, 1, 1, 2],
-        [0, 2, 5, 3, 4],
-        [5, 2, 3, 3, 1]
-      ]
-    }
-  ]
-}$json$::jsonb
-$$;
-
--- A sequential question's earlier voters, read off the finished question it
--- follows exactly as the create form reads them (carriedFrom in
--- src/lib/sequel.ts): every published ballot's N, plus the stars it gave the
--- winner; a tie charges nobody.
-create or replace function sample.carried(p_poll_id uuid) returns jsonb language sql as $$
-  select coalesce(jsonb_agg(jsonb_build_object(
-           'voter', b ->> 'voter',
-           'given', coalesce((b ->> 'given')::numeric, 0)
-                    + coalesce((b -> 'scores' ->> (r.tally ->> 'winner_id'))::numeric, 0))), '[]')
-  from jsonb_array_elements(open_poll_ballots(p_poll_id) -> 'ballots') b,
-       (select open_poll_results(p_poll_id) as tally) r
-$$;
-
 -- ---------------------------------------------------------------------------
 -- Building one copy of it
 -- ---------------------------------------------------------------------------
@@ -289,7 +202,7 @@ $$;
 -- because they are meant to be read as one poll seen at two moments.
 create or replace function sample.build(
   p_prefix text, p_description text, p_vote boolean,
-  p_poll jsonb default sample.poll(), p_follows text default null)
+  p_poll jsonb default sample.poll())
 returns void language plpgsql as $$
 declare
   v_poll jsonb := p_poll;
@@ -314,19 +227,13 @@ begin
     -- them be a calendar; see 0056_schedule_options.sql. A question that is not
     -- one sends neither, and create_poll_group defaults it to an ordinary poll
     -- exactly as it always did.
-    --
-    -- A sequel's question names the question it follows (`carried_from`),
-    -- whose voters it carries; see sample.carried.
     (select jsonb_agg(
               jsonb_build_object('title', x ->> 'title', 'options', x -> 'options')
               || jsonb_strip_nulls(
                    jsonb_build_object(
                      'kind', x -> 'kind',
                      'kind_value', x -> 'kind_value',
-                     'schedule', x -> 'schedule',
-                     'carried', case when x ? 'carried_from' then sample.carried(
-                       (select poll_id from sample.link
-                        where name = p_follows || '-' || (x ->> 'carried_from'))) end))
+                     'schedule', x -> 'schedule'))
             order by ord)
      from jsonb_array_elements(v_poll -> 'questions') with ordinality as t(x, ord)),
     null,
@@ -415,6 +322,7 @@ declare
   v_poll polls;
   v_name text;
   v_entry jsonb;
+  v_json jsonb;
 begin
   -- Read as the page's reader is: a stranger holding the link, signed out.
   -- Signed in, the group would carry that account's marks.
@@ -445,15 +353,42 @@ begin
         'ballots', open_poll_ballots(v_poll.id)
       );
 
-      -- Only a budget question has costs and a budget to count with, and only
-      -- an assignment question places to fill.
-      if v_poll.kind = 'budget' then
-        v_entry := v_entry || jsonb_build_object(
-          'budget', open_poll_proportional_budget(v_poll.id, '{}'));
-      end if;
+      -- Only an assignment question has places to fill.
       if v_poll.kind = 'assignment' then
         v_entry := v_entry || jsonb_build_object(
           'assignment', open_poll_assignment(v_poll.id, '{}'));
+      end if;
+
+      -- The two variant examples, each made as the *More results* menu makes
+      -- it. A question with a budget written down (the snacks) is counted with
+      -- the *Budget variant*: its options at their costs, proportionally.
+      v_json := (select x from jsonb_array_elements(sample.poll() -> 'questions') x
+                 where (select name from sample.link where poll_id = v_poll.id)
+                       = 'sample-result-' || (x ->> 'slug'));
+      if v_json ? 'budget' then
+        v_entry := v_entry || jsonb_build_object(
+          'budget', open_poll_budget(v_poll.id, '{}',
+            (select jsonb_object_agg(c.id, (v_json -> 'options' -> c.sort_order ->> 'cost')::numeric)
+             from candidates c where c.poll_id = v_poll.id),
+            (v_json ->> 'budget')::numeric, 'multiple'));
+      end if;
+
+      -- A question with earlier stars written down (the film) is weighed with
+      -- the *Sequential variant*: every ballot at the N its voter is given,
+      -- and everything the page reads recorded under those weights, as
+      -- poll_sequential sets them.
+      if v_json ? 'example_given' then
+        perform set_config('app.sequential_given', jsonb_build_object(
+          'poll', v_poll.id,
+          'given', (select jsonb_object_agg(b.id, (v_json -> 'example_given' ->> b.voter_name)::numeric)
+                    from ballots b where b.poll_id = v_poll.id))::text, true);
+        v_entry := v_entry || jsonb_build_object('sequential', jsonb_build_object(
+          'results', open_poll_results(v_poll.id),
+          'ranking', open_poll_ranking(v_poll.id),
+          'multiple_winners', open_poll_multiple_winners(v_poll.id, '{}'),
+          'scores', open_poll_scores(v_poll.id),
+          'ballots', open_poll_ballots(v_poll.id)));
+        perform set_config('app.sequential_given', '', true);
       end if;
     end if;
 
@@ -501,17 +436,8 @@ begin
   );
   perform sample.build(
     'sample-result',
-    'An example of the results from a poll. Nine people voted on a film and a time to meet.',
+    'An example of the results from a poll. Nine people voted on a film, a snack each and a time to meet.',
     true
-  );
-  -- Made once the first has finished, since its film question is read from
-  -- the first's results. Closing the first pins nothing yet; see below.
-  perform sample.build(
-    'sample-sequel',
-    'The next movie night, made as a sequel to the first: everyone''s ballot on the film counts less the more they liked last week''s. The friends have 1,000 to spend on upgrades for their movie nights, shared out so that everybody gets something. And on nights they split up, they watch three films in groups of four or fewer.',
-    true,
-    sample.sequel(),
-    'sample-result'
   );
 end $$;
 
