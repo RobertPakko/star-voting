@@ -316,16 +316,12 @@ export function AllChoices() {
         <Text>
           The same set of ballots can answer a wide variety of interesting questions about a given
           group. This page shows all of the choices supported by this app, when it makes sense to
-          use them, and how they work. To help explain them we'll look at each one through the lens
-          of our six friends deciding between three options for dinner:
+          use them, and how they work. You can also check out poll{' '}
+          <Anchor component={Link} to="/variants" inherit>
+            variants
+          </Anchor>{' '}
+          to see how these choices can be customized further.
         </Text>
-        <OptionKey ratings={DINNER} />
-        <Text>Here's how they voted:</Text>
-        <EmojiTable
-          caption="How many stars each friend gave each restaurant"
-          rows={ratingRows(DINNER, true)}
-          rowLabel="Restaurant"
-        />
       </Stack>
 
       <ChoiceGuide example={exampleFor} onRead={readAbout} />
@@ -725,24 +721,14 @@ export function PollVariants() {
       <Title order={1}>Poll variants</Title>
       <Stack gap="sm">
         <Text>
-          A question&rsquo;s{' '}
+          In addition to a selected{' '}
           <Anchor component={Link} to="/choices" inherit>
-            choice
+            choice type
           </Anchor>{' '}
-          says what it asks for. On top of that, a question can take one variant, which changes what
-          voters answer or how their ballots are counted. A question can take at most one. The
-          examples carry on with{' '}
-          <Anchor component={Link} to="/star" inherit>
-            our six friends
-          </Anchor>{' '}
-          choosing dinner:
+          , polls can optionally take a variant. Poll variants generally answer the same question
+          but might change how voters respond or how their ballots are counted. Read on to learn
+          about the variants supported by this app.
         </Text>
-        <OptionKey ratings={DINNER} />
-        <EmojiTable
-          caption="How many stars each friend gave each restaurant"
-          rows={ratingRows(DINNER, true)}
-          rowLabel="Restaurant"
-        />
       </Stack>
 
       <Sections open={open} onChange={setOpen}>
@@ -757,28 +743,23 @@ export function PollVariants() {
           example={pollPath(SAMPLE_RESULT_TIME_ID)}
         >
           <Text>
-            Sometimes the options are times: when to meet, or which interview slots to hand out. A{' '}
+            Sometimes the options are times: when to meet or which interview slots to hand out. A{' '}
             <strong>time poll</strong> has voters mark a calendar instead of scoring a written list:
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
-              The poll&rsquo;s creator says how long the meeting is and marks the days and hours it
-              could happen in.
+              The poll&rsquo;s creator defines the length of time we're looking for and marks
+              potential times on a calendar.
             </List.Item>
             <List.Item>
-              Every window of that length that fits inside what was marked becomes an option.
+              Voters mark their preferences on their own calendar as ballots. An average score is
+              computed for each potential time.
             </List.Item>
             <List.Item>
-              Voters mark how good each hour is for them, and each window is scored by the average
-              of the hours it covers.
+              Each potential time is considered to be an 'option' in the poll. The poll is then
+              resolved in exactly the same way as a corresponding non-time poll would be.
             </List.Item>
           </List>
-          <Text>
-            Any choice can be asked of a calendar: the best time, a consensus time everybody can
-            make, a few sessions of a training, or interview slots handed out by option assignment.
-            Times can overlap or run back to back. A choice that picks several runs them back to
-            back unless you say otherwise, so two winners are never nearly the same time.
-          </Text>
         </Choice>
 
         <Choice
@@ -834,12 +815,10 @@ export function PollVariants() {
             makes it easier to read if the weights have become very small over time.
           </Text>
           <Text>
-            There are two ways to make one. On a finished poll that publishes its ballots with names
-            on them, <strong>Create sequel poll</strong> starts the next poll with every
-            voter&rsquo;s stars for the winners carried forward. And on any such poll,{' '}
-            <strong>More results</strong> has a <strong>Sequential variant</strong>, where you type
-            in the stars each voter gave earlier winners and see the result as though the poll had
-            been sequential.
+            There are two ways to make one. On a finished poll with public ballots and voter names,{' '}
+            <strong>Create sequel poll</strong> starts the next poll with every voter&rsquo;s stars
+            for the winners carried forward. You can also create a sequential poll from the poll
+            creation screen and manually enter the stars each voter gave to earlier winners.
           </Text>
           <WeightFormula />
         </Choice>
@@ -862,23 +841,26 @@ export function PollVariants() {
           </Text>
           <List spacing={4} withPadding>
             <List.Item>
-              <strong>Multiple winners</strong> with a budget runs STAR again and again, funding
-              each winner and skipping any option that no longer fits. It buys what is most popular.
+              <strong>Multiple winners</strong> with a budget continually runs STAR, funding each
+              winner and skipping any option that no longer fits. It buys what is most popular.
             </List.Item>
             <List.Item>
               <strong>Proportional winners</strong> with a budget shares the budget so that
               different groups of voters each get something they like.
             </List.Item>
             <List.Item>
-              <strong>Fractional winners</strong> with a budget can fund an option in part, for when
-              that makes sense: a share of a grant, or fewer hours of a class.
+              <strong>Fractional winners</strong> with a budget can fund options partially for when
+              that's possible.
             </List.Item>
           </List>
           <Text>
             With multiple or proportional winners, each option is either fully funded or left out,
             and winners are chosen until nothing left fits, so some of the budget can be left over.
           </Text>
-          <Text>Proportional winners with a budget works like this:</Text>
+          <Text>
+            Let's look at an example of proportional winners with a budget, the most complex of the
+            three:
+          </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
               Run STAR to select a winner, with scores reweighted to adjust for cost.
@@ -952,34 +934,25 @@ export function PollVariants() {
           </Text>
           <Places names={budget.spots.map((spot) => spot.winner)} />
           <Text>
+            Including cost in the reweighting step means a group that gets one expensive option
+            funded has spent as much of its influence as a group that gets several cheap ones.
+          </Text>
+          <Text>
             <strong>Multiple winners</strong> with the same budget would have bought{' '}
             {popular.join(' and ')}, spending the whole budget on the options the{' '}
             {budget.spots[0].winner} fans like most. Instead, both groups get their favorite.
           </Text>
           <Text>
             <strong>Fractional winners</strong> with a budget funds each option up to what it costs.
-            Each friend is served by the stars they gave each option times how much of it is funded,
-            and the money is split to make the product of what everyone is served as large as
-            possible, as fractional winners splits its shares. A cheaper option buys its fans more
-            for each dollar, and no option is given more than it costs. With the same ${BUDGET}, it
-            funds {inFull.join(' and ')} in full
+            With the same ${BUDGET}, it funds {inFull.join(' and ')} in full
             {inPart.length > 0 &&
-              `, and gives the last ${inPart.map((o) => decimal(funded[o])).join(', ')} to ${inPart.join(' and ')}`}
-            . The whole budget is spent unless everything somebody starred can be funded in full.
-          </Text>
-          <Text>
-            Including cost in the reweighting step means a group that gets one expensive option
-            funded has spent as much of its influence as a group that gets several cheap ones.
+              `, and gives the last ${inPart.map((o) => decimal(funded[o])).join(', ')} dollars to ${inPart.join(' and ')}`}
+            . The whole budget is spent unless everything wanted can be funded in full.
           </Text>
           <Text>
             Voters aren't shown the cost of each option. They are expected to provide a rating
-            without considering the cost since the cost is automatically accounted for by the
+            without considering the cost since the cost is automatically accounted for by each
             procedure.
-          </Text>
-          <Text>
-            Costs can also be given after the fact: on any finished poll,{' '}
-            <strong>More results</strong> has a <strong>Budget variant</strong>, where you type in
-            each option&rsquo;s cost and a budget and choose which of the three to count.
           </Text>
           <BudgetFormula />
         </Choice>

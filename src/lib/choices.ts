@@ -28,8 +28,7 @@ export const CHOICES: Record<PollKind, { label: string; section: string; blurb: 
   ranking: {
     label: 'Multiple winners',
     section: 'multiple-winners',
-    blurb:
-      'picks several winners by running STAR again and again without the options already chosen.',
+    blurb: 'picks several winners by continually running STAR without the options already chosen.',
   },
   multiple: {
     label: 'Proportional winners',
@@ -62,19 +61,19 @@ export const CHOICES: Record<PollKind, { label: string; section: string; blurb: 
     label: 'Multiple winners with a budget',
     section: 'multiple-winners',
     blurb:
-      'picks winners of differing costs by running STAR again and again until the budget runs out.',
+      'picks winners of differing costs by continually running STAR until the budget runs out.',
   },
   fractional_budget: {
     label: 'Fractional winners with a budget',
     section: 'fractional-winners',
     blurb:
-      'funds options of differing costs in part, up to what each costs, so that the budget is split as fairly as it can be.',
+      'funds options of differing costs in part, up to what each costs, so that the budget is split as fairly as possible.',
   },
   assignment: {
     label: 'Option assignment',
     section: 'option-assignment',
     blurb:
-      'gives each voter one or more options, each option going to as many voters as it has places, so that the group as a whole is as satisfied as it can be.',
+      'assigns each voter to one or more options, choosing the assignment that leaves the group as satisfied as possible.',
   },
 }
 
@@ -93,7 +92,7 @@ const CALENDAR_NAMES: Partial<Record<PollKind, { label: string; blurb: string }>
   assignment: {
     label: 'Time assignment',
     blurb:
-      'gives each voter one or more times, each time going to as many voters as it has places, so that the group as a whole is as satisfied as it can be.',
+      'gives each voter one or more times, choosing the assignment that leaves the group as satisfied as possible.',
   },
 }
 
