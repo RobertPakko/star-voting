@@ -8,7 +8,6 @@ import {
   Stack,
   Text,
   ThemeIcon,
-  Title,
   UnstyledButton,
   VisuallyHidden,
 } from '@mantine/core'
@@ -78,10 +77,6 @@ export function ChoiceGuide({
   return (
     <Card withBorder radius="md" padding="lg">
       <Stack gap="md">
-        <Title order={2} size="h4">
-          Which choice do I need?
-        </Title>
-
         {steps.map(({ question, answer }, depth) => (
           <UnstyledButton
             key={question.question}
@@ -134,7 +129,7 @@ export function ChoiceGuide({
             aria-controls={treeId}
             onClick={() => setWholeTree((open) => !open)}
           >
-            {wholeTree ? 'Hide the decision tree' : 'See the whole decision tree'}
+            {wholeTree ? 'Hide the decision tree' : 'See the decision tree'}
           </Button>
           {taken.length > 0 && (
             <Button

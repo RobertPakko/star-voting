@@ -365,8 +365,7 @@ export function AllChoices() {
           />
           <Text>
             {labelOf(winner)} is the best option. It had fewer stars than{' '}
-            {finalists.find((name) => name !== winner)}, but more of the friends prefer it to{' '}
-            {finalists.find((name) => name !== winner)}.
+            {finalists.find((name) => name !== winner)}, but more of the friends prefer it.
           </Text>
           <Text>
             <Anchor component={Link} to="/star" inherit>
@@ -752,7 +751,7 @@ export function PollVariants() {
           In addition to a selected{' '}
           <Anchor component={Link} to="/choices" inherit>
             choice type
-          </Anchor>{' '}
+          </Anchor>
           , polls can optionally take a variant. Poll variants generally answer the same question
           but might change how voters respond or how their ballots are counted. Read on to learn
           about the variants supported by this app.
@@ -909,10 +908,9 @@ export function PollVariants() {
           </Text>
           <Costs costs={COSTS} />
           <Text>
-            The average cost is ${averageCost(COSTS)}. The ballots stay exactly as the friends
-            filled them in. Only each option&rsquo;s total is adjusted: it is multiplied by the
-            average cost divided by the option&rsquo;s cost, so a cheaper option&rsquo;s stars count
-            for more:{' '}
+            The average cost is ${averageCost(COSTS)}. Each option&rsquo;s score is multiplied by
+            the average cost divided by the option&rsquo;s cost, so a cheaper option&rsquo;s stars
+            count for more:{' '}
             {optionsOf(DINNER)
               .map((option) => `${option} ×${decimal(averageCost(COSTS) / COSTS[option])}`)
               .join(', ')}
@@ -944,9 +942,7 @@ export function PollVariants() {
             {labelOf(budget.spots[0].winner)} is funded, leaving $
             {BUDGET - COSTS[budget.spots[0].winner]}. Then every ballot is reweighted by how many
             stars it gave {budget.spots[0].winner}, scaled by {budget.spots[0].winner}&rsquo;s cost,
-            and STAR runs again on the options that still fit. The stars below are each
-            friend&rsquo;s own, at their ballot&rsquo;s new strength; the cost adjustment is again
-            applied only to the totals:
+            and STAR runs again on the options that still fit.
           </Text>
           <EmojiTable
             caption={`The stars for the second option funded, at each ballot's new strength, with ${budget.spots[0].winner} already funded`}
@@ -2580,7 +2576,7 @@ function EmojiTable({
                   {unadjusted}
                 </th>
                 <th scope="col" className={classes.total}>
-                  For cost
+                  Cost
                 </th>
               </>
             )}
