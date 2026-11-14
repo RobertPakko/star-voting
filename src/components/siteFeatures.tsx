@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { Anchor } from '@mantine/core'
 import {
   BellIcon,
-  CalendarDotsIcon,
   CodeIcon,
   DeviceMobileIcon,
   EnvelopeSimpleIcon,
@@ -16,6 +15,7 @@ import {
   ScalesIcon,
   ShieldCheckIcon,
   SignInIcon,
+  SparkleIcon,
   type Icon,
 } from '@phosphor-icons/react'
 import { CODE_URL } from '../lib/sourceCode'
@@ -35,7 +35,7 @@ export interface SiteFeature {
 export const SITE_FEATURES: SiteFeature[] = [
   {
     icon: LinkIcon,
-    title: 'Low-friction open polls',
+    title: 'Low-friction polls',
     text: <>Share a link and anyone can vote without needing to sign in.</>,
   },
   {
@@ -45,7 +45,7 @@ export const SITE_FEATURES: SiteFeature[] = [
   },
   {
     icon: ListNumbersIcon,
-    title: 'Multi-question polls',
+    title: 'Multi-question support',
     text: <>Make several decisions at once using a single link.</>,
   },
   {
@@ -54,9 +54,21 @@ export const SITE_FEATURES: SiteFeature[] = [
     text: <>Let voters suggest options prior to voting.</>,
   },
   {
-    icon: CalendarDotsIcon,
-    title: 'Time selection polls',
-    text: <>Find a time to meet using the same STAR voting system.</>,
+    icon: SparkleIcon,
+    title: 'Diverse choices',
+    text: (
+      <>
+        See{' '}
+        <Anchor component={Link} to="/choices" inherit>
+          all choices
+        </Anchor>{' '}
+        and{' '}
+        <Anchor component={Link} to="/variants" inherit>
+          poll variants
+        </Anchor>{' '}
+        for everything you can decide using this app.
+      </>
+    ),
   },
   {
     icon: EyeSlashIcon,
@@ -80,7 +92,7 @@ export const SITE_FEATURES: SiteFeature[] = [
   },
   {
     icon: DeviceMobileIcon,
-    title: 'Support for any device',
+    title: 'Runs anywhere',
     text: (
       <>
         Works on any device and can be{' '}
@@ -94,7 +106,7 @@ export const SITE_FEATURES: SiteFeature[] = [
   {
     icon: ScalesIcon,
     title: 'Fair results',
-    text: <>Get better group decisions due to the advantages of STAR.</>,
+    text: <>Get better results with mathematically proven decision making procedures.</>,
   },
   {
     icon: ShieldCheckIcon,
