@@ -410,9 +410,16 @@ test.describe('all choices', () => {
 
     await guide.getByRole('button', { name: 'Start over' }).click()
     await expect(guide.getByRole('button', { name: 'Pick an option' })).toBeVisible()
-    await guide.getByRole('button', { name: 'See every path' }).click()
-    await expect(guide.getByRole('listitem')).toHaveCount(18)
-    await expectAccessible(page, 'every path through the choice guide')
+    await guide.getByRole('button', { name: 'See the whole decision tree' }).click()
+    // Every answer of every question, each under the question it answers.
+    await expect(guide.getByRole('listitem')).toHaveCount(11)
+    await expect(guide.getByText('Can we just take a little of each option?')).toBeVisible()
+    await expectAccessible(page, 'the whole decision tree of the choice guide')
+    await guide.getByRole('button', { name: 'Consensus winners' }).click()
+    await expect(page.getByRole('button', { name: /^Consensus winners/ }).last()).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
   })
 
   test('starts the create form on the choice a section is about', async ({ page }) => {

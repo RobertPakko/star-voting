@@ -1694,9 +1694,11 @@ is the page.
   the choice with *Read about it* (opens and scrolls to its section), *See an
   example* and *Try it out*. An answered question stays on screen as its
   question and answer, and pressing it asks it again; that is the trail, with
-  no breadcrumb. *See every path* unfolds every way through as a list. It is
-  not a drawn flowchart because the answers are sentences and the tree does
-  not fit a phone. `choiceGuide.test.ts` checks every choice is reachable
+  no breadcrumb. *See the whole decision tree* unfolds the same questions as
+  an indented outline, each answer under its question and ending on the next
+  question or a choice (which opens its section). It is not a drawn
+  flowchart because the answers are sentences and the tree does not fit a
+  phone; an outline indented about 22px a level does. `choiceGuide.test.ts` checks every choice is reachable
   exactly once, so a new choice must be given a place in the tree.
 - **`/variants` is folded the same way** (`useOpenSections` and `Sections`
   are shared), one section per variant, tagged with the choices it works

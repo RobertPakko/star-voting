@@ -340,7 +340,34 @@ export function AllChoices() {
             one option using STAR. In STAR, the two options with the highest scores are compared and
             the one preferred by more voters wins.
           </Text>
-          <Text>TODO: Example</Text>
+          <Text>
+            Let&rsquo;s look at an example: six friends choosing between three options for dinner.
+          </Text>
+          <OptionKey ratings={DINNER} />
+          <Text>
+            Each friend gives every restaurant 0 to 5 stars. The stars are added up, and the two
+            restaurants with the highest scores become the finalists:
+          </Text>
+          <EmojiTable
+            caption="How many stars each friend gave each restaurant, added up; the top two are the finalists"
+            rows={starRows(DINNER)}
+            rowLabel="Restaurant"
+            totalLabel="Score"
+          />
+          <Then>
+            {labelOf(finalists[0])} and {finalists[1]} go to a runoff
+          </Then>
+          <EmojiTable
+            caption="The runoff: each friend's vote goes to the finalist they gave more stars"
+            rows={pluralityRows(DINNER, finalists, true)}
+            rowLabel="Restaurant"
+            totalLabel="Votes"
+          />
+          <Text>
+            {labelOf(winner)} is the best option. It had fewer stars than{' '}
+            {finalists.find((name) => name !== winner)}, but more of the friends prefer it to{' '}
+            {finalists.find((name) => name !== winner)}.
+          </Text>
           <Text>
             <Anchor component={Link} to="/star" inherit>
               What is STAR?
@@ -863,15 +890,15 @@ export function PollVariants() {
           </Text>
           <List type="ordered" spacing={4} withPadding>
             <List.Item>
-              Run STAR to select a winner, with scores reweighted to adjust for cost.
+              Run STAR to select a winner, with each option&rsquo;s score adjusted for its cost.
             </List.Item>
             <List.Item>
               All ballots are reweighted based on how many stars they gave the funded options and
               the cost of those options.
             </List.Item>
             <List.Item>
-              Run cost-adjusted STAR again on the options left, with ballots at their new strength,
-              to select the next winner.
+              Run cost-adjusted STAR again on the options that still fit, with ballots at their new
+              strength, to select the next winner.
             </List.Item>
             <List.Item>Repeat until nothing left fits in the budget.</List.Item>
           </List>
@@ -881,39 +908,50 @@ export function PollVariants() {
           </Text>
           <Costs costs={COSTS} />
           <Text>
-            The average cost is ${averageCost(COSTS)}. Each star is multiplied by the average cost
-            divided by the option&rsquo;s cost, so a cheaper option&rsquo;s stars count for more:{' '}
+            The average cost is ${averageCost(COSTS)}. The ballots stay exactly as the friends
+            filled them in. Only each option&rsquo;s total is adjusted: it is multiplied by the
+            average cost divided by the option&rsquo;s cost, so a cheaper option&rsquo;s stars count
+            for more:{' '}
             {optionsOf(DINNER)
               .map((option) => `${option} ×${decimal(averageCost(COSTS) / COSTS[option])}`)
               .join(', ')}
-            . The scoring round adds up the scaled stars:
+            .
           </Text>
           <EmojiTable
-            caption="Everyone's stars, scaled by each restaurant's cost"
-            rows={spotScoreRows(budget.adjusted, budget.spots[0])}
+            caption="Everyone's stars added up, then each restaurant's total adjusted for its cost"
+            rows={spotScoreRows(DINNER, budget.spots[0])}
             rowLabel="Restaurant"
+            unadjusted="Stars"
             totalLabel="Score"
           />
           <Then>
             {labelOf(budget.spots[0].finalists[0])} and {budget.spots[0].finalists[1]} go to a
             runoff
           </Then>
+          <Text>
+            In the runoff, each friend votes for the finalist they gave more stars, and each
+            finalist&rsquo;s votes are adjusted for its cost in the same way:
+          </Text>
           <EmojiTable
-            caption="The runoff for the first option funded"
+            caption="The runoff for the first option funded, each finalist's votes adjusted for its cost"
             rows={spotRunoffRows(DINNER, budget.spots[0])}
             rowLabel="Restaurant"
-            totalLabel="Votes"
+            unadjusted="Votes"
+            totalLabel="Score"
           />
           <Text>
             {labelOf(budget.spots[0].winner)} is funded, leaving $
             {BUDGET - COSTS[budget.spots[0].winner]}. Then every ballot is reweighted by how many
             stars it gave {budget.spots[0].winner}, scaled by {budget.spots[0].winner}&rsquo;s cost,
-            and STAR runs again on the options that still fit:
+            and STAR runs again on the options that still fit. The stars below are each
+            friend&rsquo;s own, at their ballot&rsquo;s new strength; the cost adjustment is again
+            applied only to the totals:
           </Text>
           <EmojiTable
-            caption={`The scaled stars for the second option funded, with ${budget.spots[0].winner} already funded`}
-            rows={spotScoreRows(budget.adjusted, budget.spots[1])}
+            caption={`The stars for the second option funded, at each ballot's new strength, with ${budget.spots[0].winner} already funded`}
+            rows={spotScoreRows(DINNER, budget.spots[1])}
             rowLabel="Restaurant"
+            unadjusted="Stars"
             totalLabel="Score"
             reduced={budgetReduced}
           />
@@ -922,10 +960,11 @@ export function PollVariants() {
             runoff
           </Then>
           <EmojiTable
-            caption="The runoff for the second option funded"
+            caption="The runoff for the second option funded, each finalist's votes adjusted for its cost"
             rows={spotRunoffRows(DINNER, budget.spots[1])}
             rowLabel="Restaurant"
-            totalLabel="Votes"
+            unadjusted="Votes"
+            totalLabel="Score"
             reduced={budgetReduced}
           />
           <Text>
@@ -1739,7 +1778,7 @@ interface Spot {
   weights: number[]
   /** The same strengths as the page writes them: exact fractions. */
   fractions: string[]
-  /** Under a budget, what each option's runoff votes are multiplied by: average cost over its cost. */
+  /** Under a budget, what each option's totals are multiplied by: average cost over its cost. */
   scale?: Record<string, number>
   /** Who won the spots before this one. */
   chosen: string[]
@@ -1798,19 +1837,6 @@ const BUDGET = 50
 const averageCost = (costs: Record<string, number>) =>
   sum(Object.values(costs)) / Object.keys(costs).length
 
-/**
- * Every star scaled by the average cost over the option's cost, so an option
- * costing half the average counts each star twice. The scoring round is run
- * on these; the runoff takes each voter's preference from their own stars and
- * scales the vote by the same factor (`Spot.scale`).
- */
-function costAdjusted(ratings: Ratings, costs: Record<string, number>): Ratings {
-  const average = averageCost(costs)
-  return Object.fromEntries(
-    optionsOf(ratings).map((o) => [o, ratings[o].map((stars) => (stars * average) / costs[o])]),
-  )
-}
-
 /** A strength as an exact fraction where a small one is exact, else to two decimal places. */
 function ratioOf(x: number) {
   if (x === 1) return '1/1'
@@ -1828,7 +1854,6 @@ function ratioOf(x: number) {
  * funded so far (`BudgetFormula`). Stops when nothing left fits.
  */
 function budgetOf(ratings: Ratings, costs: Record<string, number>, budget: number) {
-  const adjusted = costAdjusted(ratings, costs)
   const average = averageCost(costs)
   const scale = Object.fromEntries(optionsOf(ratings).map((o) => [o, average / costs[o]]))
   let lost = votersOf(ratings).map(() => 0)
@@ -1837,7 +1862,7 @@ function budgetOf(ratings: Ratings, costs: Record<string, number>, budget: numbe
   for (;;) {
     const weights = lost.map((l) => 1 / (1 + l))
     const chosen = spots.map((spot) => spot.winner)
-    const total = (option: string) => weightedTotal(adjusted, option, weights)
+    const total = (option: string) => weightedTotal(ratings, option, weights) * scale[option]
     const finalists = optionsOf(ratings)
       .filter((option) => !chosen.includes(option) && costs[option] <= left)
       .sort((x, y) => total(y) - total(x))
@@ -1851,7 +1876,7 @@ function budgetOf(ratings: Ratings, costs: Record<string, number>, budget: numbe
       (l, voter) => l + (ratings[winner][voter] / MAX_STARS) * (costs[winner] / average),
     )
   }
-  return { adjusted, spots, left }
+  return { spots, left }
 }
 
 /**
@@ -2029,31 +2054,32 @@ const weightedTotal = (ratings: Ratings, option: string, weights: readonly numbe
 /** A number of stars or votes as the page writes it: whole, or to one decimal place. */
 const shown = (n: number) => Math.round(n * 10) / 10
 
-/**
- * A ballot's score at its strength: a keycap where it comes out whole, a
- * figure otherwise, or a figure always where `plain` (a table that is almost
- * all figures, where a few keycaps among them read as a different kind of cell).
- */
-function weighted(score: number, weight: number, plain = false): Cell {
+/** A ballot's score at its strength: a keycap where it comes out whole, a figure otherwise. */
+function weighted(score: number, weight: number): Cell {
   const worth = score * weight
-  if (Number.isInteger(worth) && !plain) return keycap(worth)
+  if (Number.isInteger(worth)) return keycap(worth)
   return { emoji: shown(worth), said: String(shown(worth)), figure: true }
 }
 
 /**
  * A spot's scoring round: every ballot at its strength, earlier winners set
- * aside. Under a budget every cell is scaled by cost, so nearly all are
- * fractional and all are written as figures.
+ * aside. Under a budget the cells stay the ballots' own stars (at their
+ * strength), and only each option's total is adjusted for cost, shown as the
+ * plain total and its multiplier beside the score: the same sum, since every
+ * star of one option is scaled alike, but one adjustment to follow at a time.
  */
 function spotScoreRows(ratings: Ratings, spot: Spot): Row[] {
-  const rows = optionsOf(ratings).map((name): Row => ({
-    name,
-    cells: ratings[name].map((score, voter) =>
-      weighted(score, spot.weights[voter], Boolean(spot.scale)),
-    ),
-    total: shown(weightedTotal(ratings, name, spot.weights)),
-    out: !spot.finalists.includes(name),
-  }))
+  const rows = optionsOf(ratings).map((name): Row => {
+    const before = weightedTotal(ratings, name, spot.weights)
+    const factor = spot.scale?.[name] ?? 1
+    return {
+      name,
+      cells: ratings[name].map((score, voter) => weighted(score, spot.weights[voter])),
+      total: shown(before * factor),
+      adjusting: spot.scale && { before, factor },
+      out: !spot.finalists.includes(name),
+    }
+  })
   return setAside(rows, spot.chosen)
 }
 
@@ -2061,7 +2087,8 @@ function spotScoreRows(ratings: Ratings, spot: Spot): Row[] {
  * A spot's runoff: each ballot backs the finalist it scored higher, at its
  * strength, so a vote at less than full strength is drawn as that much of a
  * square: the square cut off on the right (`partVote`), keeping its box so
- * the columns stay in line.
+ * the columns stay in line. Under a budget the finalist's votes are then
+ * adjusted for cost in the total, never in the squares.
  */
 function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
   const votes = runoffVotes(ratings, spot.finalists, spot.weights, spot.scale)
@@ -2070,12 +2097,6 @@ function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
     if (at < 0) return { name, out: true, cells: votersOf(ratings).map(() => blank('eliminated')) }
     const cells = votersOf(ratings).map((voter): Cell => {
       if (favoriteOf(ratings, voter, spot.finalists) !== name) return blank('no vote')
-      // Under a budget a vote can be worth more than one, so it is written as
-      // the figure it counts for rather than drawn as part of a square.
-      if (spot.scale) {
-        const worth = spot.weights[voter] * spot.scale[name]
-        return { emoji: decimal(worth), said: `${decimal(worth)} of a vote`, figure: true }
-      }
       if (spot.weights[voter] === 1) return VOTE
       const unspent = `${(1 - spot.weights[voter]) * 100}%`
       return {
@@ -2087,7 +2108,15 @@ function spotRunoffRows(ratings: Ratings, spot: Spot): Row[] {
         said: `${spot.fractions[voter]} of a vote`,
       }
     })
-    return { name, cells, total: shown(votes[at]) }
+    // Under a budget the votes are counted plainly and the total adjusted
+    // for cost, as in the scoring round.
+    const factor = spot.scale?.[name] ?? 1
+    return {
+      name,
+      cells,
+      total: shown(votes[at]),
+      adjusting: spot.scale && { before: votes[at] / factor, factor },
+    }
   })
   return withWinner(setAside(rows, spot.chosen))
 }
@@ -2371,6 +2400,12 @@ interface Row {
   out?: boolean
   /** Already placed or chosen, so out of this round without having lost it. */
   aside?: boolean
+  /**
+   * Under a budget: the plain total before it is adjusted for cost, and what
+   * it is multiplied by, drawn as two columns before `total` (`EmojiTable`'s
+   * `unadjusted`).
+   */
+  adjusting?: { before: number; factor: number }
 }
 
 const keycap = (n: number): Cell => ({ emoji: `${n}️⃣`, said: String(n) })
@@ -2437,6 +2472,12 @@ function starScoreRows(): Row[] {
   }))
 }
 
+/** The ratings totalled, everyone but the finalists out. */
+function starRows(ratings: Ratings): Row[] {
+  const finalists = finalistsOf(ratings)
+  return ratingRows(ratings, true).map((row) => ({ ...row, out: !finalists.includes(row.name) }))
+}
+
 /** The totals alone, highest first, with everyone but the finalists out. */
 function finalistRows(ratings: Ratings): Row[] {
   const finalists = finalistsOf(ratings)
@@ -2485,6 +2526,7 @@ function EmojiTable({
   rows,
   rowLabel = 'Option',
   totalLabel,
+  unadjusted,
   reduced = [],
 }: {
   caption: string
@@ -2494,6 +2536,12 @@ function EmojiTable({
   rowLabel?: string
   /** The last column's heading; no label, no column. */
   totalLabel?: string
+  /**
+   * The heading over each row's total before the cost adjustment, which is
+   * then drawn with the multiplier beside it (`Row.adjusting`); no label, no
+   * columns.
+   */
+  unadjusted?: string
   /** Voters whose ballots count for less, their faces faded. */
   reduced?: readonly number[]
 }) {
@@ -2518,6 +2566,16 @@ function EmojiTable({
                 <VisuallyHidden>Voter {voter + 1}</VisuallyHidden>
               </th>
             ))}
+            {unadjusted && (
+              <>
+                <th scope="col" className={classes.total}>
+                  {unadjusted}
+                </th>
+                <th scope="col" className={classes.total}>
+                  For cost
+                </th>
+              </>
+            )}
             {totalLabel && (
               <th scope="col" className={classes.total}>
                 {totalLabel}
@@ -2558,6 +2616,21 @@ function EmojiTable({
                   <VisuallyHidden>{cell.said}</VisuallyHidden>
                 </td>
               ))}
+              {unadjusted && (
+                <>
+                  <td className={`${classes.total} ${row.aside ? classes.aside : ''}`}>
+                    {row.adjusting && !row.aside && shown(row.adjusting.before)}
+                  </td>
+                  <td className={`${classes.total} ${row.aside ? classes.aside : ''}`}>
+                    {row.adjusting && !row.aside && (
+                      <>
+                        <span aria-hidden>×{decimal(row.adjusting.factor)}</span>
+                        <VisuallyHidden>times {decimal(row.adjusting.factor)}</VisuallyHidden>
+                      </>
+                    )}
+                  </td>
+                </>
+              )}
               {totalLabel && (
                 <td className={`${classes.total} ${row.aside ? classes.aside : ''}`}>
                   {row.aside ? (

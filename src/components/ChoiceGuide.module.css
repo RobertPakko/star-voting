@@ -35,3 +35,42 @@
   text-align: left;
   line-height: 1.4;
 }
+
+/* The whole tree: each level's answers indented a step under their question,
+   with a line down the side so a reader can see which question an answer
+   belongs to however far down the outline it is. */
+.branches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 2px solid var(--mantine-color-default-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+}
+
+.branch {
+  padding-left: 8px;
+}
+
+.elbow {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--mantine-color-dimmed);
+}
+
+/* What an answer leads to sits under it, a little in from the elbow; each
+   level costs about 22px, so the deepest choice still fits a phone. */
+.next {
+  margin-top: 4px;
+  padding-left: 12px;
+}
+
+.leaf {
+  border-radius: var(--mantine-radius-sm);
+  padding: 2px 6px 2px 2px;
+}
+
+.leaf:hover {
+  background-color: var(--mantine-color-default-hover);
+}

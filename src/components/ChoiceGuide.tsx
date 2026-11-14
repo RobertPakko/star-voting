@@ -5,7 +5,6 @@ import {
   Card,
   Collapse,
   Group,
-  List,
   Stack,
   Text,
   ThemeIcon,
@@ -16,11 +15,12 @@ import {
 import {
   ArrowCounterClockwiseIcon,
   ArrowDownIcon,
+  ArrowElbowDownRightIcon,
   CaretRightIcon,
   PencilSimpleIcon,
 } from '@phosphor-icons/react'
 import { CHOICES, type Choice } from '../lib/choices'
-import { CHOICE_GUIDE, guidePaths, isChoice, type GuideQuestion } from '../lib/choiceGuide'
+import { CHOICE_GUIDE, isChoice, type GuideQuestion } from '../lib/choiceGuide'
 import { CHOICE_ICONS } from './choiceIcons'
 import { Reveal } from './Reveal'
 import { TryItButton } from './NewPollButton'
@@ -32,11 +32,14 @@ import classes from './ChoiceGuide.module.css'
  * (its section, its example, the create form). An answered question stays on
  * screen, folded to its question and the answer given, and pressing it asks it
  * again, dropping everything after; so the questions answered are the trail
- * back, with no breadcrumb of their own. *See every path* unfolds every way
- * through as a list, for a reader who would rather scan than answer.
+ * back, with no breadcrumb of their own. *See the whole decision tree*
+ * unfolds the same questions as an outline (`Tree`), every answer indented
+ * under its question and ending on the next question or a choice, for a
+ * reader who would rather scan than answer.
  *
  * Not a drawn flowchart: the answers are sentences, and a tree four deep with
- * seven ends does not fit a phone. The card grows by a line or two a step.
+ * seven ends does not fit a phone, where an outline indented a step a level
+ * does. The card grows by a line or two a step.
  */
 export function ChoiceGuide({
   example,
@@ -49,8 +52,8 @@ export function ChoiceGuide({
 }) {
   // The index of the answer given to each question so far.
   const [taken, setTaken] = useState<number[]>([])
-  const [allPaths, setAllPaths] = useState(false)
-  const pathsId = useId()
+  const [wholeTree, setWholeTree] = useState(false)
+  const treeId = useId()
   // The step just reached takes focus, since the button pressed is gone;
   // nothing does on the page's first render.
   const current = useRef<HTMLDivElement>(null)
@@ -127,11 +130,11 @@ export function ChoiceGuide({
           <Button
             variant="subtle"
             size="compact-sm"
-            aria-expanded={allPaths}
-            aria-controls={pathsId}
-            onClick={() => setAllPaths((open) => !open)}
+            aria-expanded={wholeTree}
+            aria-controls={treeId}
+            onClick={() => setWholeTree((open) => !open)}
           >
-            {allPaths ? 'Hide every path' : 'See every path'}
+            {wholeTree ? 'Hide the decision tree' : 'See the whole decision tree'}
           </Button>
           {taken.length > 0 && (
             <Button
@@ -145,22 +148,66 @@ export function ChoiceGuide({
           )}
         </Group>
 
-        <Collapse expanded={allPaths} id={pathsId}>
-          <Stack gap="sm">
-            {guidePaths().map(({ answers, choice }) => (
-              <div key={choice}>
-                <Text fw={700}>{CHOICES[choice].label}</Text>
-                <List type="ordered" size="sm" spacing={2} withPadding>
-                  {answers.map((answer) => (
-                    <List.Item key={answer}>{answer}</List.Item>
-                  ))}
-                </List>
-              </div>
-            ))}
-          </Stack>
+        {/* Unmounted while folded, so its copies of the questions are not on the
+            page twice. */}
+        <Collapse expanded={wholeTree} id={treeId} keepMounted={false}>
+          <Tree question={CHOICE_GUIDE} onRead={onRead} />
         </Collapse>
       </Stack>
     </Card>
+  )
+}
+
+/**
+ * The whole guide as an outline: a question, then each of its answers
+ * indented under it with a line down the side, and under each answer the
+ * question it leads to or the choice it ends on. A nested list, so a screen
+ * reader hears the levels. A choice is a button that opens its section, as
+ * *Read about it* does.
+ */
+function Tree({ question, onRead }: { question: GuideQuestion; onRead: (choice: Choice) => void }) {
+  return (
+    <Stack gap={4}>
+      <Text fw={700} size="sm">
+        {question.question}
+      </Text>
+      <ul className={classes.branches}>
+        {question.answers.map(({ answer, next }) => (
+          <li key={answer} className={classes.branch}>
+            <Group gap={6} wrap="nowrap" align="flex-start">
+              <ArrowElbowDownRightIcon size={14} aria-hidden className={classes.elbow} />
+              <Text size="sm" c="dimmed">
+                {answer}
+              </Text>
+            </Group>
+            <div className={classes.next}>
+              {isChoice(next) ? (
+                <Leaf choice={next} onRead={() => onRead(next)} />
+              ) : (
+                <Tree question={next} onRead={onRead} />
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Stack>
+  )
+}
+
+/** Where a branch of `Tree` ends: the choice, which opens its section. */
+function Leaf({ choice, onRead }: { choice: Choice; onRead: () => void }) {
+  const { icon: Glyph, color } = CHOICE_ICONS[choice]
+  return (
+    <UnstyledButton className={classes.leaf} onClick={onRead}>
+      <Group gap="xs" wrap="nowrap">
+        <ThemeIcon size={24} radius="sm" variant="light" color={color}>
+          <Glyph size={14} aria-hidden />
+        </ThemeIcon>
+        <Text size="sm" fw={700}>
+          {CHOICES[choice].label}
+        </Text>
+      </Group>
+    </UnstyledButton>
   )
 }
 
