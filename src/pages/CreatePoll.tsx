@@ -920,7 +920,7 @@ export function CreatePoll() {
               // One number for every window, since there is no row to type
               // one beside; kept in the schedule for windows added later.
               <NumberInput
-                label="Places per time"
+                label="Capacity per time"
                 description="How many voters each time can go to. Voters will not see it."
                 placeholder="1"
                 value={question.placesPerTime}
@@ -970,7 +970,7 @@ export function CreatePoll() {
               {isBudgetQuestion(question) &&
                 ' Give every option a cost. Voters will not see the costs.'}
               {question.kind === 'assignment' &&
-                ' Give an option more places to let it go to more than one voter; a blank one has one place. Voters will not see the places.'}
+                ' Give an option a capacity above 1 to let it go to more than one voter; a blank one has a capacity of 1. Voters will not see the capacities.'}
             </Text>
 
             {question.options.map((option, index) => (
@@ -1019,8 +1019,8 @@ export function CreatePoll() {
                       w={110}
                       value={option.number}
                       onChange={(v) => updateOption(questionIndex, index, { number: v })}
-                      placeholder={isBudgetQuestion(question) ? 'Cost' : 'Places'}
-                      aria-label={`Option ${index + 1} ${isBudgetQuestion(question) ? 'cost' : 'places'}`}
+                      placeholder={isBudgetQuestion(question) ? 'Cost' : 'Capacity'}
+                      aria-label={`Option ${index + 1} ${isBudgetQuestion(question) ? 'cost' : 'capacity'}`}
                       min={1}
                       max={AMOUNT_MAX}
                       allowDecimal={false}

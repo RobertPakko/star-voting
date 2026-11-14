@@ -353,13 +353,15 @@ test('the budget example shares the money out', async ({ page }) => {
 
 test('an assignment gives each friend a snack, as far as each snack goes', async ({ page }) => {
   await page.goto('#/sample-result-snacks')
-  await expect(page.getByText('Every voter has an option, in 11 places.')).toBeVisible()
   // Gina and Iris both most want the one tub of ice cream; Iris gets it, and
   // Gina the gummy bears she gave 4.
   await expect(page.getByText('Iris (5)', { exact: true })).toBeVisible()
   await expect(page.getByText('Gina (4), Hugo (5)')).toBeVisible()
+  // The voter view turns the same answer round: each friend and their snack.
+  await page.getByText('Voter view').click()
+  await expect(page.getByText('Ice cream (5)', { exact: true })).toBeVisible()
   // The recording cannot count again, so nothing offers to.
-  await expect(page.getByRole('button', { name: 'Edit places' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Edit capacity' })).toHaveCount(0)
   await expectAccessible(page, 'an option assignment')
 })
 

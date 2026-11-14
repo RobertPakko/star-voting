@@ -707,7 +707,7 @@ export function AllChoices() {
           <Text>
             The numbers don&rsquo;t have to match. If there are more voters than the combined option
             capacities, as many voters as possible are given an option and the rest go without. If
-            there are more places than voters, every voter gets one and some places are left empty.
+            there are more slots than voters, every voter gets one and some slots are left empty.
           </Text>
           <Text>
             A poll can also give each voter more than one option, up to its{' '}

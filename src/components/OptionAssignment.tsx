@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react'
-import { ActionIcon, Button, Group, NumberInput, Select, Stack, Text, Tooltip } from '@mantine/core'
+import {
+  ActionIcon,
+  Button,
+  Group,
+  NumberInput,
+  SegmentedControl,
+  Select,
+  Stack,
+  Text,
+  Tooltip,
+} from '@mantine/core'
 import { CalculatorIcon, PencilSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
@@ -34,15 +44,20 @@ import { OptionNote } from './OptionNote'
  * where the poll publishes its ballots; otherwise the count says only how
  * many options went to a voter who gave them each number of stars.
  *
- * **Places and the cap can be given after the fact.** An assignment question
- * has its own (one place, and one option each, where it says nothing); on any
- * other list every option starts with one place and every voter with one
+ * **Capacities and the cap can be given after the fact.** An assignment
+ * question has its own (a capacity of one, and one option each, where it says
+ * nothing); on any other list every option starts with a capacity of one and every voter with one
  * option, and the reader can change either and count again. Like removals,
  * they are the reader's alone, never stored, and kept while this poll's
  * results stay on screen.
  *
  * **The sample cannot recount**: it answers from a recording, which holds the
- * count with the question's own places and nothing removed.
+ * count with the question's own capacities and nothing removed.
+ *
+ * **Two views of one answer**: by option (who fills each option's slots) and
+ * by voter (what each voter was given). The database calls a capacity
+ * `places`; on screen it is a *capacity* where it is set and *slots* where
+ * they are filled.
  */
 export function OptionAssignment({
   source,
@@ -76,7 +91,7 @@ export function OptionAssignment({
 /**
  * The count itself, in the modal or on the results page. Handed the count the
  * tally carried (`initial`), it asks for nothing until an option is removed
- * or the places or cap are changed.
+ * or the capacities or cap are changed.
  */
 export function OptionAssignmentBody({
   source,
@@ -107,6 +122,7 @@ export function OptionAssignmentBody({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [view, setView] = useState<'options' | 'voters'>('options')
 
   // Sorted, so the same set asked for twice is the same request.
   const excludedKey = leftOut
@@ -117,7 +133,7 @@ export function OptionAssignmentBody({
 
   useEffect(() => {
     setError(null)
-    // The question's own places with nothing removed: the tally carried it.
+    // The question's own capacities with nothing removed: the tally carried it.
     if (!excludedKey && !inputsKey && initial) {
       setResult(initial)
       setLoading(false)
@@ -128,8 +144,8 @@ export function OptionAssignmentBody({
     let cancelled = false
 
     const typed = inputsKey ? (JSON.parse(inputsKey) as AssignmentInputs) : null
-    // An option given no places goes to nobody, which is the count without
-    // it: it is sent as left out, since a stored number of places is at
+    // An option given a capacity of 0 goes to nobody, which is the count
+    // without it: it is sent as left out, since a stored capacity is at
     // least one (`validate_amount`).
     const placed = Object.entries(typed?.places ?? {})
     const unplaced = placed.filter(([, n]) => n === 0).map(([id]) => id)
@@ -165,8 +181,7 @@ export function OptionAssignmentBody({
   const restore = (id: string) => onLeftOut(leftOut.filter((o) => o.id !== id))
 
   const placed = result ? result.voter_count - result.unplaced.length : 0
-  // Voters given as many options as they could be.
-  const full = result ? placed - result.short.length : 0
+  const optionWord = results.calendar ? 'Time' : 'Option'
 
   return (
     <Stack gap="md">
@@ -182,7 +197,7 @@ export function OptionAssignmentBody({
             onClick={() => setEditing(true)}
             style={{ flexShrink: 0 }}
           >
-            Edit places
+            Edit capacity
           </Button>
         </Group>
       )}
@@ -228,55 +243,59 @@ export function OptionAssignmentBody({
           aria-busy={loading}
           style={{ opacity: loading ? 0.5 : 1, transition: 'opacity var(--motion-fast)' }}
         >
-          <Stack gap={2}>
-            <Text fw={600}>{summary(result, full)}</Text>
-            {placed > 0 && (
-              <Text size="sm" c="dimmed">
-                {received(result.received, result.per_voter)}
-              </Text>
-            )}
-          </Stack>
+          <SegmentedControl
+            value={view}
+            onChange={(v) => setView(v as 'options' | 'voters')}
+            data={[
+              { label: `${optionWord} view`, value: 'options' },
+              { label: 'Voter view', value: 'voters' },
+            ]}
+            style={{ alignSelf: 'flex-start' }}
+          />
 
-          {result.options.map((option) => (
-            <Group key={option.id} align="flex-start" wrap="nowrap" gap="sm">
-              <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-                <Group gap="xs" wrap="nowrap" align="center">
-                  <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
-                    {formatWindow(option.name, h24)}
-                  </Text>
-                  <OptionNote id={option.id} name={formatWindow(option.name, h24)} />
-                  <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                    {option.voters.length} of {count(option.places, 'place')}
-                  </Text>
-                  {canRemove && !loading && (
-                    <Tooltip label="Remove and assign again">
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        size="sm"
-                        ml="auto"
-                        aria-label={`Remove ${formatWindow(option.name, h24)}`}
-                        onClick={() =>
-                          remove({ id: option.id, name: formatWindow(option.name, h24) })
-                        }
-                      >
-                        <XIcon size={14} aria-hidden />
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
-                </Group>
-                <Text size="sm" c={option.voters.length === 0 ? 'dimmed' : undefined}>
-                  {option.voters.length === 0
-                    ? 'Nobody'
-                    : option.voters
-                        .map((v) => (v.stars === undefined ? v.name : `${v.name} (${v.stars})`))
-                        .join(', ')}
-                </Text>
-              </Stack>
-            </Group>
-          ))}
+          {view === 'voters' && <VoterView result={result} h24={h24} />}
 
-          {result.short.length > 0 && (
+          {view === 'options' &&
+            result.options.map((option) => (
+              <Group key={option.id} align="flex-start" wrap="nowrap" gap="sm">
+                <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+                  <Group gap="xs" wrap="nowrap" align="center">
+                    <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+                      {formatWindow(option.name, h24)}
+                    </Text>
+                    <OptionNote id={option.id} name={formatWindow(option.name, h24)} />
+                    <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                      {option.voters.length} of {count(option.places, 'slot')}
+                    </Text>
+                    {canRemove && !loading && (
+                      <Tooltip label="Remove and assign again">
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          size="sm"
+                          ml="auto"
+                          aria-label={`Remove ${formatWindow(option.name, h24)}`}
+                          onClick={() =>
+                            remove({ id: option.id, name: formatWindow(option.name, h24) })
+                          }
+                        >
+                          <XIcon size={14} aria-hidden />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                  </Group>
+                  <Text size="sm" c={option.voters.length === 0 ? 'dimmed' : undefined}>
+                    {option.voters.length === 0
+                      ? 'Nobody'
+                      : option.voters
+                          .map((v) => (v.stars === undefined ? v.name : `${v.name} (${v.stars})`))
+                          .join(', ')}
+                  </Text>
+                </Stack>
+              </Group>
+            ))}
+
+          {view === 'options' && result.short.length > 0 && (
             <Stack gap={2}>
               <Text size="sm" fw={600}>
                 Fewer than {count(result.per_voter, 'option')}
@@ -287,7 +306,7 @@ export function OptionAssignmentBody({
             </Stack>
           )}
 
-          {result.unplaced.length > 0 && (
+          {view === 'options' && result.unplaced.length > 0 && (
             <Stack gap={2}>
               <Text size="sm" fw={600}>
                 No option
@@ -298,11 +317,10 @@ export function OptionAssignmentBody({
             </Stack>
           )}
 
-          {result.stars_shown && placed > 0 && (
-            <Text size="xs" c="dimmed">
-              {result.per_voter === 1
-                ? 'In brackets, the stars each voter gave their own option.'
-                : 'In brackets, the stars each voter gave that option.'}
+          {/* A private poll shows no voter's stars, so this is all it says of them. */}
+          {!result.stars_shown && placed > 0 && (
+            <Text size="sm" c="dimmed">
+              {received(result.received, result.per_voter)}
             </Text>
           )}
         </Stack>
@@ -312,15 +330,40 @@ export function OptionAssignmentBody({
 }
 
 /**
- * The headline: how many voters have all they could be given, and in how
- * many places. "Every voter has 2 options, in 20 places."
+ * Every voter, alphabetically, with the options they were given (and, where
+ * ballots are published, the stars they gave each). The answer names voters
+ * as the roster does, so two open-poll voters who typed one name are listed
+ * as one.
  */
-function summary(result: AssignmentResult, full: number) {
-  const each = result.per_voter === 1 ? 'an option' : count(result.per_voter, 'option')
-  const where = `in ${count(result.places, 'place')}`
-  return full === result.voter_count
-    ? `Every voter has ${each}, ${where}.`
-    : `${full} of ${voters(result.voter_count)} have ${each}, ${where}.`
+function VoterView({ result, h24 }: { result: AssignmentResult; h24: boolean }) {
+  const given = new Map<string, { id: string; name: string; stars?: number }[]>()
+  for (const option of result.options)
+    for (const voter of option.voters) {
+      const held = given.get(voter.name) ?? []
+      held.push({ id: option.id, name: formatWindow(option.name, h24), stars: voter.stars })
+      given.set(voter.name, held)
+    }
+  for (const voter of result.unplaced) if (!given.has(voter.name)) given.set(voter.name, [])
+  const rows = [...given].sort(([a], [b]) => a.localeCompare(b))
+
+  return (
+    <Stack gap="sm">
+      {rows.map(([name, held]) => (
+        <Stack key={name} gap={2}>
+          <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+            {name}
+          </Text>
+          <Text size="sm" c={held.length === 0 ? 'dimmed' : undefined}>
+            {held.length === 0
+              ? 'No option'
+              : held
+                  .map((o) => (o.stars === undefined ? o.name : `${o.name} (${o.stars})`))
+                  .join(', ')}
+          </Text>
+        </Stack>
+      ))}
+    </Stack>
+  )
 }
 
 /**
@@ -349,9 +392,9 @@ function received(counts: Record<string, number>, perVoter: number) {
 }
 
 /**
- * The reader's places and cap: every option on the ballot (less any
- * removed), a number beside each, the most options a voter is given, and
- * *Count*. A blank box is one place, and 0 none, which is quicker than
+ * The reader's capacities and cap: every option on the ballot (less any
+ * removed), a capacity beside each, the most options a voter is given, and
+ * *Count*. A blank box is a capacity of one, and 0 none, which is quicker than
  * removing options one at a time. Nothing typed here is saved.
  */
 function PlacesEditor({
@@ -408,8 +451,8 @@ function PlacesEditor({
   return (
     <Stack gap="sm">
       <Text size="sm" c="dimmed">
-        Give each option as many places as voters it can go to. An option left blank has one place,
-        an option given 0 goes to nobody, and nothing you change here is saved.
+        Give each option a capacity: how many voters it can go to. An option left blank has a
+        capacity of 1, an option given 0 goes to nobody, and nothing you change here is saved.
       </Text>
 
       <Select
@@ -426,7 +469,7 @@ function PlacesEditor({
       {shown && (
         <Stack gap={6}>
           <Text size="sm" fw={500}>
-            Places
+            Capacity
           </Text>
           {shown.map((option) => (
             <Group key={option.id} gap="sm" wrap="nowrap" align="flex-start">
@@ -436,7 +479,7 @@ function PlacesEditor({
               <NumberInput
                 w={120}
                 size="sm"
-                aria-label={`Places for ${formatWindow(option.name, h24)}`}
+                aria-label={`Capacity of ${formatWindow(option.name, h24)}`}
                 placeholder="1"
                 value={typed[option.id] ?? ''}
                 onChange={(v) => setTyped((prev) => ({ ...prev, [option.id]: v }))}

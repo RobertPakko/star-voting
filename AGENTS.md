@@ -779,8 +779,8 @@ crowds none of them, and its hour selects stay on the poll's own lattice
 painted stores the creator's hours as its `window` (`settle`), which is where
 that lattice starts.
 
-**An assignment of times gives every window the same places**, *Places per
-time* on the form, sent as each window's `kind_value` and kept as
+**An assignment of times gives every window the same capacity**, *Capacity
+per time* on the form, sent as each window's `kind_value` and kept as
 `schedule.places` so a window painted later (`TimeList`) is given the same.
 
 **Reading the bounds back.** `boundsOf` is the cells the options cover. It is
@@ -3558,25 +3558,31 @@ counts the same example, and a second worked by hand over two rounds.
   refuses a poll that hides them. `poll_tally` carries `voters_shown` so
   `offers` can leave it off the menu. Names are what the roster shows: the
   typed name on an open poll, the address on an invite poll.
-- **Each voter's stars are shown only where ballots are published**; on a
-  private poll the answer says only how many options went to a voter who
-  gave them each number of stars (`received`). Voters given fewer than the
-  cap are listed with how many (`short`), and voters given none
-  (`unplaced`).
-- **Places and the cap can be given after the fact**, like costs: an
-  assignment question stores its places in `candidates.kind_value`
+- **On screen an option has a *capacity*, and fills *slots***: the
+  database's word for both is `places`. The answer is one card with two
+  views, **Option view** (each option, *2 of 3 slots*, and who fills them)
+  and **Voter view** (each voter alphabetically, and what they were given);
+  it carries no headline count of who was placed, since both views show it.
+- **Each voter's stars are shown only where ballots are published**, in
+  brackets after their name or option; on a private poll the answer says
+  only how many options went to a voter who gave them each number of stars
+  (`received`). The option view lists voters given fewer than the cap with
+  how many (`short`), and voters given none (`unplaced`).
+- **Capacities and the cap can be given after the fact**, like costs: an
+  assignment question stores its capacities in `candidates.kind_value`
   (optional, none meaning one) and its cap in `polls.kind_value`; on any
-  other written list every option starts at one place and every voter at
-  one option, and *Edit places* (`PlacesEditor`) sends `p_places` and
-  `p_per_voter`, held by `useAssignmentInputs` and never stored. **A reader
-  may give an option 0 places**, which is quicker than removing options one at
-  a time; such an option is sent in `p_excluded` rather than `p_places`, since
-  `validate_amount` holds a number of places to at least one, and nobody can
-  be given an option with no places, so the count is the same.
+  other written list every option starts at a capacity of one and every
+  voter at one option, and *Edit capacity* (`PlacesEditor`) sends
+  `p_places` and `p_per_voter`, held by `useAssignmentInputs` and never
+  stored. **A reader may give an option a capacity of 0**, which is quicker
+  than removing options one at a time; such an option is sent in
+  `p_excluded` rather than `p_places`, since `validate_amount` holds a
+  capacity to at least one, and nobody can be given an option with no
+  capacity, so the count is the same.
 - **Not on a sequential tally, and not on the sample's other questions**,
   as for the budget. The sample's assignment question answers its recorded
   count. **On a time poll it hands out times** (interview slots, shifts),
-  each window given the same places; see [How far apart the windows
+  each window given the same capacity; see [How far apart the windows
   start](#how-far-apart-the-windows-start), whose back-to-back default is
   what stops it seating two voters in overlapping slots.
 
