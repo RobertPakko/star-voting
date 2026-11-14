@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ActionIcon, Card, Group, Popover, Stack, Text } from '@mantine/core'
 import { InfoIcon, WarningIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
@@ -19,6 +19,7 @@ import { ResultsSkeleton } from './Skeletons'
 import { StarRounds } from './StarRounds'
 import { choiceLabel, choiceOfKind, chosenResult, isBudgetKind } from '../lib/choices'
 import { ChoiceBlurb } from './ChoiceBlurb'
+import { OptionDescriptions } from '../lib/optionDescriptions'
 import classes from './Results.module.css'
 
 /** Which tally endpoint to read: a session for invite polls, the link for open ones. */
@@ -35,8 +36,14 @@ export function Results({
   source,
   initial = null,
   meeting = null,
+  options = [],
 }: {
   source: ResultsSource
+  /**
+   * The question's options as the page holds them, for each description's
+   * info mark beside the option's name in whichever result names it.
+   */
+  options?: readonly { id: string; description: string | null }[]
   /** A time poll's title and schedule, for *Add to calendar*. Null otherwise. */
   meeting?: { title: string; schedule: PollSchedule } | null
   /** The tally `poll_page` already carried; null means read it here. */
@@ -50,6 +57,10 @@ export function Results({
   // its options corrected, unannounced to a tally held here.
   const [results, setResults] = useState<PollResults | null>(initial)
   const [error, setError] = useState<string | null>(null)
+  const descriptions = useMemo(
+    () => new Map(options.flatMap((o) => (o.description ? [[o.id, o.description] as const] : []))),
+    [options],
+  )
   // The handed-over tally, used once; a later re-read must not reuse it.
   const handoff = useRef(initial)
 
@@ -179,39 +190,50 @@ export function Results({
   }
 
   return (
-    <Reveal>
-      <Stack gap="md">
-        {/* Its own entrance, since a poll that finishes while watched grows
+    <OptionDescriptions value={descriptions}>
+      <Reveal>
+        <Stack gap="md">
+          {/* Its own entrance, since a poll that finishes while watched grows
             this card without the rest remounting. */}
-        <Reveal rise={false}>{bar}</Reveal>
+          <Reveal rise={false}>{bar}</Reveal>
 
-        {chosen && (
-          <Card withBorder>
+          {/* The consensus draws its own cards, as STAR's rounds do. */}
+          {chosen && chosen.kind === 'consensus' && (
             <ChosenResult
               source={source}
               results={shown}
               chosen={chosen}
               eventFor={meeting ? eventFor : undefined}
             />
-          </Card>
-        )}
+          )}
+          {chosen && chosen.kind !== 'consensus' && (
+            <Card withBorder>
+              <ChosenResult
+                source={source}
+                results={shown}
+                chosen={chosen}
+                eventFor={meeting ? eventFor : undefined}
+              />
+            </Card>
+          )}
 
-        {shown.options_edited_after_votes && (
-          <Caveat>
-            The options for this poll were edited after votes had been cast; so the integrity of
-            this poll is a little suspect.
-          </Caveat>
-        )}
-        {shown.votes_after_reveal && (
-          <Caveat>
-            Votes were added or changed after the results were revealed; so the integrity of this
-            poll is a little suspect.
-          </Caveat>
-        )}
+          {shown.options_edited_after_votes && (
+            <Caveat>
+              The options for this poll were edited after votes had been cast; so the integrity of
+              this poll is a little suspect.
+            </Caveat>
+          )}
+          {shown.votes_after_reveal && (
+            <Caveat>
+              Votes were added or changed after the results were revealed; so the integrity of this
+              poll is a little suspect.
+            </Caveat>
+          )}
 
-        {!chosen && <StarRounds source={source} results={shown} />}
-      </Stack>
-    </Reveal>
+          {!chosen && <StarRounds source={source} results={shown} />}
+        </Stack>
+      </Reveal>
+    </OptionDescriptions>
   )
 }
 

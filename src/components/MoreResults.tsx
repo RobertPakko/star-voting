@@ -34,7 +34,8 @@ type Tool = ResultTool
  * decided by `offers` in lib/choices.ts. The result the page already draws
  * (the question's kind, `shown`) is not offered again. `/choices` is the
  * page that explains them all, and `/variants` the two variants at the
- * foot: counts the reader sets up, with costs or with weights.
+ * foot: counts the reader sets up, with weights or with costs. The order is
+ * the order those two pages list them in.
  */
 export function MoreResults({
   source,
@@ -71,11 +72,6 @@ export function MoreResults({
       label: toolLabel('consensus', results.calendar),
       icon: HandshakeIcon,
     },
-    offered('consensus_winners') && {
-      tool: 'consensus_winners' as const,
-      label: toolLabel('consensus_winners', results.calendar),
-      icon: CirclesThreeIcon,
-    },
     offered('ranking') && {
       tool: 'ranking' as const,
       label: CHOICES.ranking.label,
@@ -85,6 +81,11 @@ export function MoreResults({
       tool: 'multiple' as const,
       label: CHOICES.multiple.label,
       icon: UsersThreeIcon,
+    },
+    offered('consensus_winners') && {
+      tool: 'consensus_winners' as const,
+      label: toolLabel('consensus_winners', results.calendar),
+      icon: CirclesThreeIcon,
     },
     offered('fractional') && {
       tool: 'fractional' as const,
@@ -96,15 +97,15 @@ export function MoreResults({
       label: toolLabel('assignment', results.calendar),
       icon: ArrowsSplitIcon,
     },
-    offered('budget_variant') && {
-      tool: 'budget_variant' as const,
-      label: toolLabel('budget_variant', results.calendar),
-      icon: CoinsIcon,
-    },
     offered('sequential_variant') && {
       tool: 'sequential_variant' as const,
       label: toolLabel('sequential_variant', results.calendar),
       icon: RepeatIcon,
+    },
+    offered('budget_variant') && {
+      tool: 'budget_variant' as const,
+      label: toolLabel('budget_variant', results.calendar),
+      icon: CoinsIcon,
     },
   ].filter((item) => item !== false)
 

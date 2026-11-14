@@ -1,26 +1,16 @@
-import { useEffect, useState } from 'react'
-import {
-  ActionIcon,
-  Badge,
-  Box,
-  Button,
-  Divider,
-  Group,
-  Popover,
-  Progress,
-  Stack,
-  Text,
-} from '@mantine/core'
+import { useState } from 'react'
+import { Badge, Box, Button, Divider, Group, Progress, Stack, Text } from '@mantine/core'
 import { PieChart } from '@mantine/charts'
 import { useReducedMotion } from '@mantine/hooks'
 // Imported here so the chart CSS ships in the results chunk, never a ballot's.
 import '@mantine/charts/styles.css'
-import { InfoIcon, ListBulletsIcon } from '@phosphor-icons/react'
+import { ListBulletsIcon } from '@phosphor-icons/react'
 import { badgeColor } from '../lib/badgeColors'
 import type { FiveStarStep, HeadToHeadStep, PollResults, Runoff, Tiebreak } from '../lib/types'
 import { AllScores } from './AllScores'
 import { NameList } from './NameList'
-import { OptionDescription } from './OptionDescription'
+import { OptionNote } from './OptionNote'
+import { useGrown } from '../lib/useGrown'
 import { RoundCard } from './RoundCard'
 import { count, stars, voters } from '../lib/plural'
 import { capRows, RESULTS_ROWS_MAX } from '../lib/resultsRows'
@@ -52,21 +42,8 @@ export function StarRounds({
   const unshown = shown.option_count - shown.options.length
   const [allScoresOpen, setAllScoresOpen] = useState(false)
 
-  // Bars render at zero, then grow. Stays true so a live update moves bars
-  // from where they were instead of replaying the reveal.
-  const [grown, setGrown] = useState(false)
-  useEffect(() => {
-    // Two frames: the zero width must actually be painted before the
-    // transition, and one rAF after an effect doesn't guarantee that.
-    let second = 0
-    const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => setGrown(true))
-    })
-    return () => {
-      cancelAnimationFrame(first)
-      cancelAnimationFrame(second)
-    }
-  }, [])
+  // Bars render at zero, then grow.
+  const grown = useGrown()
 
   return (
     <Stack gap="md">
@@ -102,7 +79,7 @@ export function StarRounds({
                   <Text size="sm" fw={shown.finalists.includes(o.id) ? 700 : 400} truncate>
                     {o.name}
                   </Text>
-                  {o.description && <OptionNote name={o.name} description={o.description} />}
+                  <OptionNote id={o.id} name={o.name} description={o.description} />
                 </Group>
                 <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
                   {stars(o.total_score)} (avg {o.average_score})
@@ -477,35 +454,5 @@ function renderAdvancedNames(
       <NameList names={advanced} />
       {suffix}
     </>
-  )
-}
-
-/**
- * An option's description, folded into a popover beside its name (a tooltip
- * can't be opened on a phone). Shown only for options that have one.
- */
-function OptionNote({ name, description }: { name: string; description: string }) {
-  return (
-    <Popover width={280} position="bottom-start" withArrow shadow="md">
-      <Popover.Target>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          size="sm"
-          radius="xl"
-          aria-label={`What ${name} said`}
-        >
-          <InfoIcon size={14} aria-hidden />
-        </ActionIcon>
-      </Popover.Target>
-      <Popover.Dropdown>
-        <Stack gap={4}>
-          <Text size="sm" fw={500}>
-            {name}
-          </Text>
-          <OptionDescription description={description} />
-        </Stack>
-      </Popover.Dropdown>
-    </Popover>
   )
 }

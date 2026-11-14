@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Badge, Group, Stack, Text } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
@@ -15,6 +15,7 @@ import { RankingSkeleton } from './Skeletons'
 import { count, stars, voters } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import { splitAdvanced } from '../lib/tiebreak'
+import { OptionNote } from './OptionNote'
 
 /**
  * Which ranking endpoint to read. Same split as ResultsSource and
@@ -185,7 +186,13 @@ function Place({ entry }: { entry: RankingEntry }) {
             and the second name is the one a reader opened this to learn. */}
         <Group gap="xs" wrap="nowrap" align="baseline">
           <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
-            {entry.options.map((o) => o.name).join(' and ')}
+            {entry.options.map((o, i) => (
+              <Fragment key={o.id}>
+                {i > 0 && ' and '}
+                {o.name}
+                <OptionNote id={o.id} name={o.name} />
+              </Fragment>
+            ))}
           </Text>
           <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
             {stars(total)}

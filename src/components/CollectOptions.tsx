@@ -38,7 +38,6 @@ import listRow from './listRow.module.css'
 import { VoterNameField } from './VoterNameField'
 import type { PollOption, PollSchedule } from '../lib/types'
 import type { OptionNumber } from '../lib/choices'
-import { count } from '../lib/plural'
 
 /** Unique within one open card; never leaves it. */
 let draftSeq = 0
@@ -685,7 +684,7 @@ function OptionList({
                           {' · '}
                           {numbered === 'cost'
                             ? `cost ${numberOf(option, numbered)!.toLocaleString('en-US')}`
-                            : count(numberOf(option, numbered)!, 'place')}
+                            : `capacity ${numberOf(option, numbered)!.toLocaleString('en-US')}`}
                         </Text>
                       )}
                     </Text>
@@ -866,8 +865,8 @@ function OptionFields({
             w={110}
             value={value.number}
             onChange={(number) => onChange({ ...value, number })}
-            placeholder={numbered === 'cost' ? 'Cost' : 'Places'}
-            aria-label={`${ariaLabel}: ${numbered === 'cost' ? 'cost' : 'places'}`}
+            placeholder={numbered === 'cost' ? 'Cost' : 'Capacity'}
+            aria-label={`${ariaLabel}: ${numbered === 'cost' ? 'cost' : 'capacity'}`}
             min={1}
             max={AMOUNT_MAX}
             allowDecimal={false}

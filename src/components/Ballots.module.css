@@ -30,7 +30,7 @@
 }
 
 /* The frame is the bottom edge. */
-.table tfoot tr:last-child > * {
+.table tbody tr:last-child > * {
   border-bottom: none;
 }
 

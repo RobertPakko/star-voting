@@ -241,6 +241,20 @@ export const CHOICE_ORDER: Choice[] = [
 ]
 
 /**
+ * In the order `/choices` lists them, which the choice guide reaches them in
+ * and *More results* offers them in.
+ */
+export const CHOICE_PAGE_ORDER: Choice[] = [
+  'option',
+  'consensus',
+  'ranking',
+  'multiple',
+  'consensus_winners',
+  'fractional',
+  'assignment',
+]
+
+/**
  * The results a tally can offer, each a modal where it is not the one the
  * page opens on. `option` is STAR's own answer: the winner, the runoff and
  * the scoring round. The two variants are counts the reader sets up: a budget

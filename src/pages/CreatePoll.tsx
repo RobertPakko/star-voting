@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { CopyIcon, InfoIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -65,6 +65,7 @@ import {
   blankQuestion,
   startingQuestion,
   carriedOf,
+  carriedForInvitees,
   gridOf,
   isBudgetQuestion,
   isTimeQuestion,
@@ -189,6 +190,33 @@ export function CreatePoll() {
   const anyAssignment = questions.some((q) => q.kind === 'assignment')
   const votersShown = showVoters || anyAssignment
   const publishBallots = anySequential ? votersShown : showBallots
+
+  // An invite poll's earlier voters are its invitees: each sequential
+  // question's rows follow the invite list, so no address is typed twice.
+  const invitedList = isOpen
+    ? null
+    : Array.from(
+        new Set(
+          [...emails, ...(includeSelf && myEmail ? [myEmail] : [])]
+            .map((e) => e.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      )
+  const invitedKey = invitedList?.join('\n') ?? null
+  useEffect(() => {
+    if (invitedKey === null) return
+    const invited = invitedKey ? invitedKey.split('\n') : []
+    setQuestions((prev) => {
+      let changed = false
+      const next = prev.map((question) => {
+        const carried = carriedForInvitees(question.carried, invited)
+        if (carried === question.carried) return question
+        changed = true
+        return { ...question, carried }
+      })
+      return changed ? next : prev
+    })
+  }, [invitedKey, questions])
 
   const errors = validate({
     title,
@@ -753,8 +781,8 @@ export function CreatePoll() {
    * how many winners it can buy. The number is a dropdown rather than a
    * number field: the database counts at most `SCORING_ROWS_MAX` of anything,
    * so there are ten answers at most. What each choice and variant does is
-   * explained on `/choices` and `/variants`, behind the info icon, which
-   * opens in a new tab so the form is not lost.
+   * explained on `/choices` and `/variants`, each behind the info icon on its
+   * own label, which opens in a new tab so the form is not lost.
    */
   function choiceFields(question: QuestionDraft, questionIndex: number) {
     const variant = variantOf(question)
@@ -762,44 +790,20 @@ export function CreatePoll() {
     const number = budget ? undefined : CHOICE_NUMBER[question.kind]
     const timed = isTimeQuestion(question)
     const id = `choice-${question.key}`
+    const variantId = `variant-${question.key}`
     const columns = 2 + (number || budget ? 1 : 0)
     const variants = VARIANT_ORDER.filter((v) => variantAllowed(v, question.kind))
 
     return (
       <SimpleGrid cols={{ base: 1, xs: columns }} spacing="xs">
         <Stack gap={2}>
-          <Group gap={4} wrap="nowrap">
-            <Text component="label" htmlFor={id} size="sm" fw={500}>
-              Choice type
-            </Text>
-            <Popover width={260} position="bottom-start" withArrow shadow="md" trapFocus>
-              <Popover.Target>
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  size="sm"
-                  radius="xl"
-                  aria-label="What each choice and variant does"
-                >
-                  <InfoIcon size={16} aria-hidden />
-                </ActionIcon>
-              </Popover.Target>
-              <Popover.Dropdown>
-                {/* A new tab, so the form being filled in survives. */}
-                <Text size="sm">
-                  Visit the{' '}
-                  <Anchor component={Link} to="/choices" target="_blank" inherit>
-                    list of choices
-                  </Anchor>{' '}
-                  and the{' '}
-                  <Anchor component={Link} to="/variants" target="_blank" inherit>
-                    poll variants
-                  </Anchor>{' '}
-                  to learn about what these options mean.
-                </Text>
-              </Popover.Dropdown>
-            </Popover>
-          </Group>
+          <InfoLabel htmlFor={id} label="Choice type" about="What each choice does">
+            Visit the{' '}
+            <Anchor component={Link} to="/choices" target="_blank" inherit>
+              list of choices
+            </Anchor>{' '}
+            to learn about what these options mean.
+          </InfoLabel>
           <Select
             id={id}
             allowDeselect={false}
@@ -809,10 +813,16 @@ export function CreatePoll() {
             data={CHOICE_ORDER.map((kind) => ({ value: kind, label: choiceLabel(kind, timed) }))}
           />
         </Stack>
-        {/* Its label sits on the choice's label row, so the boxes line up. */}
-        <Stack gap={2} justify="flex-end">
+        <Stack gap={2}>
+          <InfoLabel htmlFor={variantId} label="Variant" about="What each variant does">
+            Visit the{' '}
+            <Anchor component={Link} to="/variants" target="_blank" inherit>
+              poll variants
+            </Anchor>{' '}
+            to learn about what these options mean.
+          </InfoLabel>
           <Select
-            label="Variant"
+            id={variantId}
             allowDeselect={false}
             value={variant ?? NO_VARIANT}
             onChange={(v) =>
@@ -910,7 +920,7 @@ export function CreatePoll() {
               // One number for every window, since there is no row to type
               // one beside; kept in the schedule for windows added later.
               <NumberInput
-                label="Places per time"
+                label="Capacity per time"
                 description="How many voters each time can go to. Voters will not see it."
                 placeholder="1"
                 value={question.placesPerTime}
@@ -960,7 +970,7 @@ export function CreatePoll() {
               {isBudgetQuestion(question) &&
                 ' Give every option a cost. Voters will not see the costs.'}
               {question.kind === 'assignment' &&
-                ' Give an option more places to let it go to more than one voter; a blank one has one place. Voters will not see the places.'}
+                ' Give an option a capacity above 1 to let it go to more than one voter; a blank one has a capacity of 1. Voters will not see the capacities.'}
             </Text>
 
             {question.options.map((option, index) => (
@@ -1009,8 +1019,8 @@ export function CreatePoll() {
                       w={110}
                       value={option.number}
                       onChange={(v) => updateOption(questionIndex, index, { number: v })}
-                      placeholder={isBudgetQuestion(question) ? 'Cost' : 'Places'}
-                      aria-label={`Option ${index + 1} ${isBudgetQuestion(question) ? 'cost' : 'places'}`}
+                      placeholder={isBudgetQuestion(question) ? 'Cost' : 'Capacity'}
+                      aria-label={`Option ${index + 1} ${isBudgetQuestion(question) ? 'cost' : 'capacity'}`}
                       min={1}
                       max={AMOUNT_MAX}
                       allowDecimal={false}
@@ -1345,5 +1355,41 @@ export function CreatePoll() {
         </Button>
       </Group>
     </Stack>
+  )
+}
+
+/**
+ * A field's label with an info mark beside it, opening a popover that points
+ * at the page explaining the field. Its links open a new tab, so the form
+ * being filled in survives.
+ */
+function InfoLabel({
+  htmlFor,
+  label,
+  about,
+  children,
+}: {
+  htmlFor: string
+  label: string
+  /** The info mark's accessible name. */
+  about: string
+  children: ReactNode
+}) {
+  return (
+    <Group gap={4} wrap="nowrap">
+      <Text component="label" htmlFor={htmlFor} size="sm" fw={500}>
+        {label}
+      </Text>
+      <Popover width={260} position="bottom-start" withArrow shadow="md" trapFocus>
+        <Popover.Target>
+          <ActionIcon variant="subtle" color="gray" size="sm" radius="xl" aria-label={about}>
+            <InfoIcon size={16} aria-hidden />
+          </ActionIcon>
+        </Popover.Target>
+        <Popover.Dropdown>
+          <Text size="sm">{children}</Text>
+        </Popover.Dropdown>
+      </Popover>
+    </Group>
   )
 }

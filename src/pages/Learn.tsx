@@ -707,7 +707,7 @@ export function AllChoices() {
           <Text>
             The numbers don&rsquo;t have to match. If there are more voters than the combined option
             capacities, as many voters as possible are given an option and the rest go without. If
-            there are more places than voters, every voter gets one and some places are left empty.
+            there are more slots than voters, every voter gets one and some slots are left empty.
           </Text>
           <Text>
             A poll can also give each voter more than one option, up to its{' '}
@@ -1073,9 +1073,10 @@ function Choice({
  * Where a built choice is shown on the finished sample poll, opening on that
  * choice as though the question had asked for it: the consensus on its
  * calendar question, which did ask for the consensus time; the best option
- * on the film question, which asked for it; and the rest on the film
- * question recast as that kind (`sampleResultAs`), except the assignment,
- * which is the snack question's own.
+ * on the film question, which asked for it; the assignment on the snack
+ * question, which asked for it; and the rest recast as that kind
+ * (`sampleResultAs`): fractional winners on the snack question, the others on
+ * the film question.
  */
 function exampleFor(tool: ChoiceKind) {
   if (tool === 'assignment') return pollPath(SAMPLE_RESULT_SNACKS_ID)

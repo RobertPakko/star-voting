@@ -173,9 +173,9 @@ test('the results show the rounds, the tie-break and the other answers', async (
   // holding something other than items.
   await expect(page.getByRole('menuitem')).toHaveText([
     'Consensus option',
-    'Consensus winners',
     'Multiple winners',
     'Proportional winners',
+    'Consensus winners',
     'Fractional winners',
   ])
   await page.getByRole('menuitem', { name: 'Multiple winners' }).click()
@@ -336,7 +336,6 @@ test('the sequential example counts each ballot at its weight, and says so on th
   // Ana gave them 9, so hers counts at 5 / (5 + 9).
   await expect(sheet.getByRole('row', { name: /^Gina 1 / })).toBeVisible()
   await expect(sheet.getByRole('row', { name: /^Ana 5\/14 / })).toBeVisible()
-  await expect(sheet.getByText('Weighted total')).toBeVisible()
   await expectAccessible(page, 'a sequential count and its weighted sheet')
 })
 
@@ -354,13 +353,15 @@ test('the budget example shares the money out', async ({ page }) => {
 
 test('an assignment gives each friend a snack, as far as each snack goes', async ({ page }) => {
   await page.goto('#/sample-result-snacks')
-  await expect(page.getByText('Every voter has an option, in 11 places.')).toBeVisible()
   // Gina and Iris both most want the one tub of ice cream; Iris gets it, and
   // Gina the gummy bears she gave 4.
   await expect(page.getByText('Iris (5)', { exact: true })).toBeVisible()
   await expect(page.getByText('Gina (4), Hugo (5)')).toBeVisible()
+  // The voter view turns the same answer round: each friend and their snack.
+  await page.getByText('Voter view').click()
+  await expect(page.getByText('Ice cream (5)', { exact: true })).toBeVisible()
   // The recording cannot count again, so nothing offers to.
-  await expect(page.getByRole('button', { name: 'Edit places' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Edit capacity' })).toHaveCount(0)
   await expectAccessible(page, 'an option assignment')
 })
 
@@ -373,10 +374,12 @@ test('consensus winners serve every voter a film they gave 3 or more', async ({ 
   await page.goto('#/sample-result-movie-as-consensus-winners')
   // Knives Out, The Matrix and Paddington 2 between them leave nobody below
   // 3 stars, where no one film is given more than 2 by everybody.
-  await expect(page.getByText('Everyone gave at least one of these 3 stars or more.')).toBeVisible()
   for (const film of ['Knives Out', 'The Matrix', 'Paddington 2'])
     await expect(page.getByText(film, { exact: true }).first()).toBeVisible()
-  await expect(page.getByText('Best for 4 voters · 29 stars')).toBeVisible()
+  // Knives Out's 29 stars over nine ballots.
+  await expect(
+    page.getByText('Best (or tied for best) for 4 voters · avg 3.22 stars'),
+  ).toBeVisible()
   // The recording cannot count again, so nothing offers to.
   await expect(page.getByLabel('Number of winners')).toHaveCount(0)
   await expectAccessible(page, 'consensus winners')

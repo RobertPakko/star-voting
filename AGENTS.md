@@ -779,8 +779,8 @@ crowds none of them, and its hour selects stay on the poll's own lattice
 painted stores the creator's hours as its `window` (`settle`), which is where
 that lattice starts.
 
-**An assignment of times gives every window the same places**, *Places per
-time* on the form, sent as each window's `kind_value` and kept as
+**An assignment of times gives every window the same capacity**, *Capacity
+per time* on the form, sent as each window's `kind_value` and kept as
 `schedule.places` so a window painted later (`TimeList`) is given the same.
 
 **Reading the bounds back.** `boundsOf` is the cells the options cover. It is
@@ -1676,10 +1676,12 @@ is the page.
   opens the finished sample poll as though the question had asked for that
   choice (`exampleFor`): the calendar question for the consensus, since it
   did ask for the consensus time; the film question for the best option;
-  the snack question for the assignment; and for the rest (consensus
-  winners included) the film question recast as that kind under an id of its
-  own (`sampleResultAs`, e.g. `sample-result-movie-as-multiple-winners`), which
-  `samplePoll.ts` answers from the same recording with `kind` and
+  the snack question for the assignment; and for the rest a question recast
+  as that kind under an id of its own (`sampleResultAs`, e.g.
+  `sample-result-movie-as-multiple-winners`): the snack question for
+  fractional winners, which reads best as a split of one shared order, and
+  the film question for the others, consensus winners included.
+  `samplePoll.ts` answers each from the same recording with `kind` and
   `kind_result` swapped for the result its *More results* modal records.
   Beside it, **Try it out** (`TryItButton`) opens the create form with its
   first question on that choice (`tryPath`: `#/new?choice=…`, or
@@ -2298,10 +2300,12 @@ Rules:
   description" is `null`, so a poll never carries a description its creator
   cannot see.
 - **They belong to the ballot.** Both ballots show them under the option's
-  name. The score round shows one dimmed mark beside options that have one,
-  opening a popover (a tooltip cannot be opened on a phone); `poll_tally`
-  carries the text, on the same terms as the results. Multiple winners and the
-  ballot grid do not.
+  name. Every result that names an option (the score round, and each other
+  choice's card and modal) shows one dimmed mark beside options that have
+  one, opening a popover (a tooltip cannot be opened on a phone): `OptionNote`.
+  `poll_tally` carries the text for the score round; elsewhere it comes from
+  the option list the page already holds, which `Results` hands down through
+  `OptionDescriptions`, so no count carries it. The ballot grid does not.
 - **URLs become links**: `OptionDescription` turns `http(s)://` and `www.`
   runs into anchors as React elements, never parsed HTML, so a description
   cannot produce a `javascript:` link.
@@ -2459,8 +2463,9 @@ so).
 - **Not published** (the default) — results are an aggregate tally only.
   Nobody, the creator included, can read an individual ballot.
 - **Published** — once the results unlock, every ballot is readable as a grid
-  (one row per voter, one column per option, column totals matching the score
-  round), so anyone in the poll can check the arithmetic.
+  (one row per voter, one column per option), so anyone in the poll can check
+  the arithmetic. **The grid has no totals row**: where a choice counts
+  totals its result shows them already, and where it does not they distract.
 
 |  | **Ballots not published** | **Ballots published** |
 | --- | --- | --- |
@@ -3292,8 +3297,8 @@ It is behind a button; a scannable code is too big to sit in the block.
 
 The results show the winner, then the runoff between the two finalists, then
 the top ten score-round totals, each round with its tie-break if it needed
-one. On a poll that publishes its ballots, the ballot grid follows (with
-column totals); on an invite poll that does not, the reader's own ballot.
+one. On a poll that publishes its ballots, the ballot grid follows; on an
+invite poll that does not, the reader's own ballot.
 The participation card is last and is where turnout is stated; the results
 say only that voting was closed early, when it was.
 
@@ -3306,7 +3311,8 @@ poll shows who voted), **Consensus winners** (*Consensus times*),
 **Multiple winners** and **Proportional winners** (three or more), and the
 two variants a finished question can be counted with after the fact, the
 **Budget variant** and the **Sequential variant** (see below), each opening
-a modal; then *Add to calendar* under a time poll's
+a modal, in the order `/choices` and `/variants` list them
+(`CHOICE_PAGE_ORDER`); then *Add to calendar* under a time poll's
 winner or *Flip a coin* under *No winner*. One menu rather than a
 button each keeps the banner to the name and a control or two. **The modals
 are short**: no title, but the sentence that kind's card on `/choices` opens
@@ -3552,21 +3558,31 @@ counts the same example, and a second worked by hand over two rounds.
   refuses a poll that hides them. `poll_tally` carries `voters_shown` so
   `offers` can leave it off the menu. Names are what the roster shows: the
   typed name on an open poll, the address on an invite poll.
-- **Each voter's stars are shown only where ballots are published**; on a
-  private poll the answer says only how many options went to a voter who
-  gave them each number of stars (`received`). Voters given fewer than the
-  cap are listed with how many (`short`), and voters given none
-  (`unplaced`).
-- **Places and the cap can be given after the fact**, like costs: an
-  assignment question stores its places in `candidates.kind_value`
+- **On screen an option has a *capacity*, and fills *slots***: the
+  database's word for both is `places`. The answer is one card with two
+  views, **Option view** (each option, *2 of 3 slots*, and who fills them)
+  and **Voter view** (each voter alphabetically, and what they were given);
+  it carries no headline count of who was placed, since both views show it.
+- **Each voter's stars are shown only where ballots are published**, in
+  brackets after their name or option; on a private poll the answer says
+  only how many options went to a voter who gave them each number of stars
+  (`received`). The option view lists voters given fewer than the cap with
+  how many (`short`), and voters given none (`unplaced`).
+- **Capacities and the cap can be given after the fact**, like costs: an
+  assignment question stores its capacities in `candidates.kind_value`
   (optional, none meaning one) and its cap in `polls.kind_value`; on any
-  other written list every option starts at one place and every voter at
-  one option, and *Edit places* (`PlacesEditor`) sends `p_places` and
-  `p_per_voter`, held by `useAssignmentInputs` and never stored.
+  other written list every option starts at a capacity of one and every
+  voter at one option, and *Edit capacity* (`PlacesEditor`) sends
+  `p_places` and `p_per_voter`, held by `useAssignmentInputs` and never
+  stored. **A reader may give an option a capacity of 0**, which is quicker
+  than removing options one at a time; such an option is sent in
+  `p_excluded` rather than `p_places`, since `validate_amount` holds a
+  capacity to at least one, and nobody can be given an option with no
+  capacity, so the count is the same.
 - **Not on a sequential tally, and not on the sample's other questions**,
   as for the budget. The sample's assignment question answers its recorded
   count. **On a time poll it hands out times** (interview slots, shifts),
-  each window given the same places; see [How far apart the windows
+  each window given the same capacity; see [How far apart the windows
   start](#how-far-apart-the-windows-start), whose back-to-back default is
   what stops it seating two voters in overlapping slots.
 
@@ -3598,9 +3614,11 @@ two options, where it can already differ from STAR's winner.
   with its floor and total stars. Each option's scores sorted lowest first
   are an `int[]`, and Postgres compares arrays element by element, so the
   whole order is one `order by`.
-- **The card says how the tie was broken**: on which score the winner
-  pulled ahead and the runner-up's score there. The table stays to *Fewest
-  stars*.
+- **The card is drawn as STAR's rounds are**: the winner centred under the
+  kind's name (*Consensus option: …*), a **Tie-break** card where options
+  shared the highest floor (on which score the winner pulled ahead and the
+  runner-up's score there), then **Minimum scores**, every option's floor as
+  a bar out of five.
 - **Removing works as in Proportional winners** (`p_excluded`, held by
   `Consensus`, never stored, stopping at two options left). Not on the
   sample, which answers `consensus` in `samplePollData.ts`.
@@ -3696,9 +3714,10 @@ assignment*; `choiceOf` and `choiceLabel`), wherever a kind is named — the
 form, the answer's bar, the modals, *More results* — and so do the
 numbers' labels (`choiceNumberLabel`). The names are in
 [`lib/choices.ts`](src/lib/choices.ts), with `offers`, the option counts
-each result is offered from. The form's *Choice* label carries an info icon
-opening a popover that links to `/choices` and `/variants` (in a new tab, so
-the form survives), in place of any explanation on the form itself.
+each result is offered from. The form's *Choice type* and *Variant* labels
+each carry an info icon opening a popover that links to `/choices` or
+`/variants` (in a new tab, so the form survives), in place of any
+explanation on the form itself.
 
 - **The tally carries the asked-for result** (`kind_result`), so a finished
   poll still opens in one read and the wait is one shape. `poll_tally` calls
@@ -3848,8 +3867,10 @@ instead of the largest group taking each one. `/variants` explains it;
 
 - **Nothing links one poll to the next.** A question is sequential exactly
   when it carries earlier voters (`carried_weights`: a name on an open poll, an
-  invitee's address on an invite poll, and N), typed on the create form under
-  the *Sequential poll* variant. Only the choices STAR decides can take it
+  invitee's address on an invite poll, and N), given on the create form under
+  the *Sequential poll* variant. On an invite poll the rows are the invite
+  list (`carriedForInvitees`), so the creator types only stars, and an
+  invitee left without any is new to the run. Only the choices STAR decides can take it
   (`SEQUENTIAL_KINDS`, `insert_carried_weights`): a consensus or a split
   would ignore the weights. *More results* leaves those out on a weighted
   tally for the same reason.
@@ -3868,8 +3889,8 @@ instead of the largest group taking each one. `/variants` explains it;
   out to two places (`figure` in `plural.ts`).
 - **Weights are scaled so the strongest ballot counts as one**
   (`poll_ballot_weights`). No comparison changes, the figures stay readable
-  after many polls, and the published sheet's *Weight* column and
-  *Weighted total* row (`lib/ballotWeight.ts`) are the tally's own numbers. A
+  after many polls, and the published sheet's *Weight* column
+  (`lib/ballotWeight.ts`) is the tally's own numbers. A
   weight is an exact fraction where N is whole.
 - **A sequential question shows who voted and the ballots, or neither**
   (refused otherwise, and one switch on the create form): a weight is a

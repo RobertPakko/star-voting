@@ -5,7 +5,6 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { ballotsCsv, ballotsFileName, downloadCsv } from '../lib/ballotCsv'
 import { formatWeight, lowestGiven, sheetWeights } from '../lib/ballotWeight'
-import { figure } from '../lib/plural'
 import { Reveal } from './Reveal'
 import { BallotsSkeleton, ReadCalendarSkeleton } from './Skeletons'
 import { ScheduleBallots } from './deferred'
@@ -129,12 +128,10 @@ export function Ballots({
   // it as 0 keeps the columns adding up to what the tally says.
   const scoreOn = (scores: Record<string, number>, optionId: string) => scores[optionId] ?? 0
   // On a sequential poll each ballot counts at its weight, which is drawn
-  // beside its name, and the totals are the weighted ones the tally counted.
+  // beside its name. There is no totals row: where a choice counts totals the
+  // result already shows them, and where it does not they are a distraction.
   const weights = sheetWeights(shown)
   const low = weights ? lowestGiven(shown) : 0
-  const totals = shown.options.map((o) =>
-    shown.ballots.reduce((sum, b, i) => sum + scoreOn(b.scores, o.id) * (weights?.[i] ?? 1), 0),
-  )
 
   // Faded in over the shape that was standing in for it; see Reveal.
   return (
@@ -227,19 +224,6 @@ export function Ballots({
                     </Table.Tr>
                   ))}
                 </Table.Tbody>
-                <Table.Tfoot>
-                  <Table.Tr>
-                    <Table.Th className={classes.label}>
-                      {weights ? 'Weighted total' : 'Total'}
-                    </Table.Th>
-                    {weights && <Table.Td />}
-                    {totals.map((total, i) => (
-                      <Table.Th key={shown.options[i].id} ta="right">
-                        {figure(total)}
-                      </Table.Th>
-                    ))}
-                  </Table.Tr>
-                </Table.Tfoot>
               </Table>
             </Table.ScrollContainer>
           </>
