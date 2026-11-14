@@ -60,6 +60,20 @@ const theme = createTheme({
     Tooltip: { defaultProps: { transitionProps: { transition: 'fade', duration: 120 } } },
     Menu: { defaultProps: { transitionProps: { transition: 'pop', duration: 200 } } },
     Popover: { defaultProps: { transitionProps: { transition: 'pop', duration: 200 } } },
+    // The list under every Select, Autocomplete and MultiSelect, which on a
+    // phone opened with the page jumping and shut as soon as it was scrolled.
+    //
+    //  - **Only a press outside closes it**, not a touch. Mantine's default
+    //    also listens for `touchstart`, which is the first touch of a scroll,
+    //    so a list partly off screen shut as the reader went to scroll to it.
+    //    A tap still closes it: a phone fires `mousedown` for a tap, and not
+    //    for a scroll.
+    //  - **It is positioned against the window** (`fixed`). On opening, the
+    //    list scrolls its chosen option into view, and an absolute list not
+    //    yet placed sits at the top of the document — on a slow phone, far
+    //    above the field, so the page scrolled to it. A fixed one not yet
+    //    placed is at the top of the screen, already in view.
+    Combobox: { defaultProps: { clickOutsideEvents: ['mousedown'], floatingStrategy: 'fixed' } },
     // Every one of these is a creator being asked whether they mean it — see
     // CreatorControls — so it arrives at the same speed as everything else
     // rather than sliding in like something being announced.
