@@ -34,12 +34,14 @@ import type { DailyWindow, PollKind, PollSchedule } from './types'
 import {
   budgetKindOf,
   CHOICE_NUMBER,
+  CHOICE_ORDER,
   DEFAULT_CHOICE_NUMBER,
   optionNumberOf,
   picksSeveral,
   variantAllowed,
   type Choice,
   type Variant,
+  VARIANT_ORDER,
 } from './choices'
 
 /*
@@ -192,6 +194,23 @@ export function blankQuestion(): QuestionDraft {
     datesMoved: 0,
     carried: [blankCarried()],
   }
+}
+
+/**
+ * A blank question started on the choice and variant a *Try it out* button
+ * names (`tryPath`), each ignored unless it is one the form offers. A variant
+ * its choice cannot take moves the choice rather than dropping the variant:
+ * the press was about the variant, so a budget starts on proportional winners
+ * (where the *Variant* select would start it) and a sequence on the best
+ * option.
+ */
+export function startingQuestion(choice: string | null, variant: string | null): QuestionDraft {
+  const blank = blankQuestion()
+  const picked = CHOICE_ORDER.find((c) => c === choice) ?? blank.kind
+  const taken = VARIANT_ORDER.find((v) => v === variant) ?? null
+  const kind =
+    !taken || variantAllowed(taken, picked) ? picked : taken === 'budget' ? 'multiple' : 'option'
+  return reconcileGrid(blank, { ...blank, kind, variant: taken })
 }
 
 /** The variant a question takes: the one picked, where its choice can take it. */

@@ -1635,9 +1635,10 @@ is the page.
   one row with *Archived* and *New poll* together on the right (each down
   to its icon, Archived first, only when the row is measured too narrow for
   the words), its heading kept for screen readers; the archived view goes
-  back to the list. *What is STAR?*, *Why use STAR?* and *All choices* carry
-  **New poll** at the right of the same row (`NewPollButton`, which gives a
-  reader with no session one on the press, as the home page's tile does).
+  back to the list. *What is STAR?* and *Why use STAR?* carry **New poll**
+  at the right of the same row (`NewPollButton`, which gives a reader with
+  no session one on the press, as the home page's tile does). *All choices*
+  and *Poll variants* do not: every section there has its own *Try it out*.
   A poll draws its
   own: **Your polls** for a reader with a list (the list is one step nearer
   home and leads back here), **Back to homepage** for anybody else and on the
@@ -1680,8 +1681,23 @@ is the page.
   own (`sampleResultAs`, e.g. `sample-result-movie-as-ranking`), which
   `samplePoll.ts` answers from the same recording with `kind` and
   `kind_result` swapped for the result its *More results* modal records.
+  Beside it, **Try it out** (`TryItButton`) opens the create form with its
+  first question on that choice (`tryPath`: `#/new?choice=…`, or
+  `?variant=…` on `/variants`). The form reads both as defaults for a blank
+  first question (`startingQuestion`), ignores a value it does not offer, and
+  moves the choice rather than dropping a variant the choice cannot take.
   The page restates `/star`'s ballots above the sections, since its readers
   mostly arrive from a result's modal.
+- **`/choices` opens on *Which choice do I need?*** ([`ChoiceGuide`](src/components/ChoiceGuide.tsx)),
+  above the sections: the questions of `CHOICE_GUIDE`
+  ([`lib/choiceGuide.ts`](src/lib/choiceGuide.ts)) one at a time, ending on
+  the choice with *Read about it* (opens and scrolls to its section), *See an
+  example* and *Try it out*. An answered question stays on screen as its
+  question and answer, and pressing it asks it again; that is the trail, with
+  no breadcrumb. *See every path* unfolds every way through as a list. It is
+  not a drawn flowchart because the answers are sentences and the tree does
+  not fit a phone. `choiceGuide.test.ts` checks every choice is reachable
+  exactly once, so a new choice must be given a place in the tree.
 - **`/variants` is folded the same way** (`useOpenSections` and `Sections`
   are shared), one section per variant, tagged with the choices it works
   with rather than algorithms. Its examples are the calendar question and

@@ -23,18 +23,11 @@ import {
 import { useDisclosure } from '@mantine/hooks'
 import {
   ArrowDownIcon,
-  ArrowsSplitIcon,
   CalendarIcon,
   CaretRightIcon,
-  CirclesThreeIcon,
-  ChartPieSliceIcon,
   CoinsIcon,
   EyeIcon,
-  HandshakeIcon,
-  ListNumbersIcon,
-  RankingIcon,
   RepeatIcon,
-  TrophyIcon,
   UsersThreeIcon,
   WarningIcon,
   type Icon,
@@ -54,7 +47,15 @@ import {
   SAMPLE_SEQUENTIAL_ID,
   sampleResultAs,
 } from '../lib/samplePoll'
-import { CHOICES as CHOICE_NAMES, VARIANTS, type Choice as ChoiceKind } from '../lib/choices'
+import {
+  CHOICES as CHOICE_NAMES,
+  VARIANTS,
+  type Choice as ChoiceKind,
+  type Variant,
+} from '../lib/choices'
+import { CHOICE_ICONS } from '../components/choiceIcons'
+import { ChoiceGuide } from '../components/ChoiceGuide'
+import { TryItButton } from '../components/NewPollButton'
 import vseByStrategy from '../assets/why-star/vse-by-strategy.png'
 import winnerDistribution from '../assets/why-star/winner-distribution.webp'
 import classes from './Learn.module.css'
@@ -298,6 +299,13 @@ export function AllChoices() {
   const percent = percentagesOf(shares)
   const given = assignmentOf(DINNER, SERVINGS)
 
+  // The guide's *Read about it*: open the choice's section and bring it up.
+  function readAbout(choice: ChoiceKind) {
+    const id = CHOICE_NAMES[choice].section
+    setOpen((was) => (was.includes(id) ? was : [...was, id]))
+    requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView())
+  }
+
   // The sections that became variants, for links already shared.
   if (moved) return <Navigate to={moved} replace />
 
@@ -320,13 +328,15 @@ export function AllChoices() {
         />
       </Stack>
 
+      <ChoiceGuide example={exampleFor} onRead={readAbout} />
+
       <Sections open={open} onChange={setOpen}>
         <Choice
           id={CHOICES.bestOption}
-          icon={TrophyIcon}
-          color="yellow"
+          {...CHOICE_ICONS.option}
           title="Best option"
           example={exampleFor('option')}
+          tryIt={{ choice: 'option' }}
           tags={['STAR']}
         >
           <Text>
@@ -351,10 +361,10 @@ export function AllChoices() {
 
         <Choice
           id={CHOICES.consensusOption}
-          icon={HandshakeIcon}
-          color="teal"
+          {...CHOICE_ICONS.consensus}
           title="Consensus option"
           example={exampleFor('consensus')}
+          tryIt={{ choice: 'consensus' }}
           tags={['Leximin']}
         >
           <NotStrategyProof />
@@ -399,10 +409,10 @@ export function AllChoices() {
 
         <Choice
           id={CHOICES.multipleWinners}
-          icon={ListNumbersIcon}
-          color="blue"
+          {...CHOICE_ICONS.ranking}
           title="Multiple winners"
           example={exampleFor('ranking')}
+          tryIt={{ choice: 'ranking' }}
           tags={['Iterative STAR']}
         >
           <Text>
@@ -436,10 +446,10 @@ export function AllChoices() {
 
         <Choice
           id={CHOICES.proportionalWinners}
-          icon={RankingIcon}
-          color="violet"
+          {...CHOICE_ICONS.multiple}
           title="Proportional winners"
           example={exampleFor('multiple')}
+          tryIt={{ choice: 'multiple' }}
           tags={['Iterative STAR', 'Ballot reweighting']}
         >
           <Text>
@@ -502,10 +512,10 @@ export function AllChoices() {
 
         <Choice
           id={CHOICES.consensusWinners}
-          icon={CirclesThreeIcon}
-          color="cyan"
+          {...CHOICE_ICONS.consensus_winners}
           title="Consensus winners"
           example={exampleFor('consensus_winners')}
+          tryIt={{ choice: 'consensus_winners' }}
           tags={['Egalitarian Chamberlin–Courant']}
         >
           <NotStrategyProof />
@@ -559,10 +569,10 @@ export function AllChoices() {
 
         <Choice
           id={CHOICES.fractionalWinners}
-          icon={ChartPieSliceIcon}
-          color="grape"
+          {...CHOICE_ICONS.fractional}
           title="Fractional winners"
           example={exampleFor('fractional')}
+          tryIt={{ choice: 'fractional' }}
           tags={['Nash', 'Newton’s method']}
         >
           <Text>
@@ -633,11 +643,11 @@ export function AllChoices() {
 
         <Choice
           id={CHOICES.optionAssignment}
-          icon={ArrowsSplitIcon}
-          color="orange"
+          {...CHOICE_ICONS.assignment}
           title="Option assignment"
           tags={['Nash', 'Hungarian method']}
           example={exampleFor('assignment')}
+          tryIt={{ choice: 'assignment' }}
         >
           <Requirement icon={EyeIcon}>The poll shows who voted.</Requirement>
           <Text>
@@ -738,6 +748,7 @@ export function PollVariants() {
       <Sections open={open} onChange={setOpen}>
         <Choice
           id={VARIANTS.time.section}
+          tryIt={{ variant: 'time' }}
           icon={CalendarIcon}
           color="blue"
           title="Time polls"
@@ -772,6 +783,7 @@ export function PollVariants() {
 
         <Choice
           id={VARIANTS.sequential.section}
+          tryIt={{ variant: 'sequential' }}
           icon={RepeatIcon}
           color="cyan"
           title="Sequential polls"
@@ -834,6 +846,7 @@ export function PollVariants() {
 
         <Choice
           id={VARIANTS.budget.section}
+          tryIt={{ variant: 'budget' }}
           icon={CoinsIcon}
           color="green"
           title="Budget polls"
@@ -988,6 +1001,7 @@ function Choice({
   tags,
   tagsLabel = 'Algorithms',
   example,
+  tryIt,
   children,
 }: {
   id: string
@@ -1001,6 +1015,8 @@ function Choice({
   tagsLabel?: string
   /** The sample poll's question that shows this choice or variant. */
   example?: string
+  /** What *Try it out* starts the create form's first question on. */
+  tryIt: { choice?: ChoiceKind; variant?: Variant }
   children: ReactNode
 }) {
   return (
@@ -1030,13 +1046,14 @@ function Choice({
       <Accordion.Panel>
         <Stack gap="sm">
           {children}
-          {example && (
-            <Group justify="flex-end">
+          <Group justify="flex-end" align="flex-start" gap="sm">
+            {example && (
               <Button component={Link} to={example} variant="light">
                 See an example
               </Button>
-            </Group>
-          )}
+            )}
+            <TryItButton {...tryIt} />
+          </Group>
         </Stack>
       </Accordion.Panel>
     </Accordion.Item>

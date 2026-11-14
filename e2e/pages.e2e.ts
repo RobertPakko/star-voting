@@ -377,6 +377,57 @@ test.describe('all choices', () => {
     await expect(page.getByText(/^Consensus time: /)).toBeVisible()
   })
 
+  test('guides a reader to a choice, one question at a time', async ({ page }) => {
+    await page.goto('#/choices')
+    // Its every-section New poll is gone: each section has a Try it out.
+    await expect(page.getByRole('link', { name: 'New poll' })).toHaveCount(0)
+    const guide = page.locator('.mantine-Card-root', {
+      has: page.getByRole('heading', { name: 'Which choice do I need?' }),
+    })
+    await guide.getByRole('button', { name: 'Pick multiple options' }).click()
+    await guide.getByRole('button', { name: 'No, picking an option is all-or-nothing' }).click()
+    await expect(guide.getByText('Do all winners affect all voters?')).toBeVisible()
+    await expectAccessible(page, 'the choice guide, part way')
+    await guide.getByRole('button', { name: /^Yes, everyone will be affected/ }).click()
+    await guide.getByRole('button', { name: /^Yes, let’s keep a majority/ }).click()
+    await expect(guide.getByText(/^Proportional winners picks several winners/)).toBeVisible()
+    await expect(guide.getByRole('link', { name: 'Try it out' })).toHaveAttribute(
+      'href',
+      '#/new?choice=multiple',
+    )
+    await expectAccessible(page, 'the choice guide, answered')
+
+    // An answered question asks itself again, dropping what came after.
+    await guide.getByRole('button', { name: /^Can we just take a little of each option\?/ }).click()
+    await guide.getByRole('button', { name: 'Sure, we could do that' }).click()
+    await expect(guide.getByText(/^Fractional winners computes/)).toBeVisible()
+    await expect(guide.getByText('Do all winners affect all voters?')).toHaveCount(0)
+
+    await guide.getByRole('button', { name: 'Read about it' }).click()
+    const section = page.getByRole('button', { name: /^Fractional winners/ })
+    await expect(section).toHaveAttribute('aria-expanded', 'true')
+    await expect(section).toBeInViewport()
+
+    await guide.getByRole('button', { name: 'Start over' }).click()
+    await expect(guide.getByRole('button', { name: 'Pick an option' })).toBeVisible()
+    await guide.getByRole('button', { name: 'See every path' }).click()
+    await expect(guide.getByRole('listitem')).toHaveCount(18)
+    await expectAccessible(page, 'every path through the choice guide')
+  })
+
+  test('starts the create form on the choice a section is about', async ({ page }) => {
+    await page.goto('#/choices?section=consensus-option')
+    await expect(page.getByRole('link', { name: 'Try it out' })).toHaveAttribute(
+      'href',
+      '#/new?choice=consensus',
+    )
+    await page.goto('#/variants?section=budget-polls')
+    await expect(page.getByRole('link', { name: 'Try it out' })).toHaveAttribute(
+      'href',
+      '#/new?variant=budget',
+    )
+  })
+
   test('sends the sections that became variants to the variants page', async ({ page }) => {
     await page.goto('#/choices?section=proportional-budget')
     await expect(page).toHaveURL(/#\/variants\?section=budget-polls$/)

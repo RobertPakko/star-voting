@@ -63,6 +63,7 @@ import {
   blankCarried,
   blankOption,
   blankQuestion,
+  startingQuestion,
   carriedOf,
   gridOf,
   isBudgetQuestion,
@@ -141,9 +142,12 @@ export function CreatePoll() {
   // Where a new poll's title flies from.
   const titleField = useRef<HTMLInputElement>(null)
   const [description, setDescription] = useState('')
-  const [questions, setQuestions] = useState<QuestionDraft[]>(() =>
-    defaults.multiQuestion ? [blankQuestion(), blankQuestion()] : [blankQuestion()],
-  )
+  // A *Try it out* button names the first question's choice or variant
+  // (`tryPath`); a duplicate replaces the questions once its source is read.
+  const [questions, setQuestions] = useState<QuestionDraft[]>(() => {
+    const first = startingQuestion(searchParams.get('choice'), searchParams.get('variant'))
+    return defaults.multiQuestion ? [first, blankQuestion()] : [first]
+  })
   // The option row just added (for its entrance and the cursor), and rows
   // animating out.
   const [arriving, setArriving] = useState<string | null>(null)

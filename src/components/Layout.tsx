@@ -205,7 +205,11 @@ function showsBackToHome(pathname: string): boolean {
   return pathname !== '/' && pathname !== '/polls' && pageKey(pathname) !== '/:pollId'
 }
 
-/** The explainers that end a reader wanting to try one, which carry *New poll* beside the way home. */
+/**
+ * The explainers that end a reader wanting to try one, which carry *New poll*
+ * beside the way home. `/choices` and `/variants` are not among them: every
+ * section there has a *Try it out* of its own.
+ */
 function offersNewPoll(pathname: string): boolean {
-  return pathname === '/star' || pathname === '/why-star' || pathname === '/choices'
+  return pathname === '/star' || pathname === '/why-star'
 }

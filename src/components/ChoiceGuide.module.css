@@ -1,0 +1,37 @@
+/* An answered question: pressing it asks it again. */
+.answered {
+  display: block;
+  width: 100%;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+  border-radius: var(--mantine-radius-sm);
+  border-left: 3px solid var(--mantine-primary-color-filled);
+}
+
+.change {
+  flex-shrink: 0;
+}
+
+.answered:hover .change {
+  color: var(--mantine-primary-color-filled);
+}
+
+/* Takes focus when it arrives; the ring would frame the whole step for nothing. */
+.step:focus {
+  outline: none;
+}
+
+/* The answers are sentences, so a button wraps rather than clipping. */
+.option {
+  height: auto;
+  padding-block: var(--mantine-spacing-xs);
+}
+
+.optionInner {
+  justify-content: space-between;
+}
+
+.optionLabel {
+  white-space: normal;
+  text-align: left;
+  line-height: 1.4;
+}

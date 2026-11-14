@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
+import type { Choice, Variant } from './choices'
 
 /**
  * "Make your own poll" from a page anybody can reach — the home page, the
@@ -17,17 +18,18 @@ import { useAuth } from './auth'
  * `/new` without one is the sign-in screen.
  *
  * `start` is undefined for a reader who already has a session, whose press is
- * an ordinary link to the form.
+ * an ordinary link to the form. `to` is the form's address, which can carry
+ * a choice or variant to start on (`tryPath`).
  */
-export function useMakePoll() {
+export function useMakePoll(to = '/new') {
   const { session, continueWithoutAccount } = useAuth()
   const navigate = useNavigate()
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (starting && session) navigate('/new')
-  }, [starting, session, navigate])
+    if (starting && session) navigate(to)
+  }, [starting, session, navigate, to])
 
   async function start() {
     setError(null)
@@ -41,4 +43,17 @@ export function useMakePoll() {
   }
 
   return { start: session ? undefined : start, starting, error }
+}
+
+/**
+ * The create form, starting its first question on a choice or a variant:
+ * *Try it out* on `/choices`, `/variants` and the choice guide. The form reads
+ * both as a default (`startingQuestion` in lib/pollForm.ts), so a value it
+ * does not know is ignored.
+ */
+export function tryPath({ choice, variant }: { choice?: Choice; variant?: Variant }) {
+  const params = new URLSearchParams()
+  if (choice) params.set('choice', choice)
+  if (variant) params.set('variant', variant)
+  return `/new?${params}`
 }
