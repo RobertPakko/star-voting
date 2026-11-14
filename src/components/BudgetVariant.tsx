@@ -240,7 +240,7 @@ export function BudgetBody({
       {!sample && !editing && (
         <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
           <Text size="sm" c="dimmed">
-            If an option is not available, remove it and the budget is shared out again without it.
+            If an option is not available, remove it and the budget is allocated again without it.
           </Text>
           <Button
             variant="default"

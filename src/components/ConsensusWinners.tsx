@@ -259,9 +259,7 @@ function Answer({
   onRemove: (option: LeftOut) => void
   eventFor?: (id: string) => MeetingEvent | null
 }) {
-  const { floor, served, single_floor: single, voter_count: total } = answer
-  const blank = served[0] ?? 0
-  // Best served first: "3 voters get an option they gave 5 stars".
+  const { served } = answer
   const levels = served
     .map((voters, level) => ({ level, voters }))
     .filter((row) => row.level > 0 && row.voters > 0)
@@ -280,7 +278,7 @@ function Answer({
                   {name}
                 </Text>
                 <Text size="sm" c="dimmed">
-                  Best for {count(w.best_for, 'voter')} · {stars(w.total_score)}
+                  Best (or tied for best) for {count(w.best_for, 'voter')} · {stars(w.total_score)}
                 </Text>
               </Stack>
               {event && <AddToCalendar event={event} />}
@@ -302,28 +300,11 @@ function Answer({
         })}
       </Stack>
 
-      <Stack gap={4}>
-        {floor > 0 ? (
-          <Text size="sm">
-            Everyone gave at least one of these {stars(floor)} or more.
-            {single < floor && (
-              <> No single option was given more than {stars(single)} by everyone.</>
-            )}
-          </Text>
-        ) : (
-          <Text size="sm">
-            {blank === total
-              ? 'Nobody gave any of these a star.'
-              : `${count(blank, 'voter')} gave none of these a star; no set of ${answer.winner_count} could do better.`}
-          </Text>
-        )}
-      </Stack>
-
       {levels.length > 0 && (
         <Stack gap={4}>
           <Group gap="sm" wrap="nowrap">
             <Text size="xs" c="dimmed" style={{ flex: 1 }}>
-              Their best winner has
+              Best winner has
             </Text>
             <Text size="xs" c="dimmed">
               Voters

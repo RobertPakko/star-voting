@@ -240,7 +240,7 @@ function Answer({
         </Group>
       )}
 
-      <Stack gap={4}>
+      <Stack gap="sm">
         {tied === 1 && winner && (
           <Text size="sm">
             <strong>{winner.name}</strong> had the highest minimum score at {stars(floor)}.
@@ -249,15 +249,16 @@ function Answer({
         {tied > 1 && (
           <Text size="sm">
             {tied === consensus.option_count
-              ? `Every option was given at least ${stars(floor)} by everyone`
-              : `${count(tied, 'option')} were given at least ${stars(floor)} by everyone`}
+              ? `Every option was given a minimum score of ${floor}`
+              : `${count(tied, 'option')} were given a minimum score of ${floor}`}
             , so their next-lowest scores were compared.
           </Text>
         )}
         {winner && at !== null && at > 1 && runnerUp && consensus.winner_score !== null && (
           <Text size="sm">
-            <strong>{winner.name}</strong> pulled ahead on its {lowest(at)} score:{' '}
-            {stars(consensus.winner_score)} to {formatWindow(runnerUp.name, h24)}&rsquo;s{' '}
+            <strong>{winner.name}</strong> pulled ahead on its {lowest(at)} score. Its second lowest
+            score was {consensus.winner_score} while{' '}
+            <strong>{formatWindow(runnerUp.name, h24)}</strong> had a second lowest score of{' '}
             {runnerUp.score}.
           </Text>
         )}
@@ -277,7 +278,7 @@ function Answer({
             Option
           </Text>
           <Text size="xs" c="dimmed">
-            Fewest stars
+            Minimum score
           </Text>
           {/* Keeps the column over the numbers when rows carry a remove button. */}
           {removable && <span style={{ width: 22, flexShrink: 0 }} />}
