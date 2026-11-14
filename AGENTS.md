@@ -1678,7 +1678,7 @@ is the page.
   did ask for the consensus time; the film question for the best option;
   the snack question for the assignment; and for the rest (consensus
   winners included) the film question recast as that kind under an id of its
-  own (`sampleResultAs`, e.g. `sample-result-movie-as-ranking`), which
+  own (`sampleResultAs`, e.g. `sample-result-movie-as-multiple-winners`), which
   `samplePoll.ts` answers from the same recording with `kind` and
   `kind_result` swapped for the result its *More results* modal records.
   Beside it, **Try it out** (`TryItButton`) opens the create form with its

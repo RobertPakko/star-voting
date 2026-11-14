@@ -370,7 +370,7 @@ test('the sequel’s old links go to the examples that replaced them', async ({ 
 })
 
 test('consensus winners serve every voter a film they gave 3 or more', async ({ page }) => {
-  await page.goto('#/sample-result-movie-as-consensus_winners')
+  await page.goto('#/sample-result-movie-as-consensus-winners')
   // Knives Out, The Matrix and Paddington 2 between them leave nobody below
   // 3 stars, where no one film is given more than 2 by everybody.
   await expect(page.getByText('Everyone gave at least one of these 3 stars or more.')).toBeVisible()

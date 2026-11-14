@@ -365,7 +365,7 @@ test.describe('all choices', () => {
     // winners: they are the page's own card, not a modal.
     await page.goto('#/choices?section=multiple-winners')
     await page.getByRole('link', { name: 'See an example' }).click()
-    await expect(page).toHaveURL(/#\/sample-result-movie-as-ranking$/)
+    await expect(page).toHaveURL(/#\/sample-result-movie-as-multiple-winners$/)
     await expect(page.getByText(/^Multiple winners$/).first()).toBeVisible()
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await expect(page.getByText('Honeyland').first()).toBeVisible()

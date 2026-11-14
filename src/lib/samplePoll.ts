@@ -1,4 +1,4 @@
-import { DEFAULT_CHOICE_NUMBER } from './choices'
+import { CHOICES, DEFAULT_CHOICE_NUMBER } from './choices'
 import { forgetAnswered } from './questionMarks'
 import { supabase } from './supabase'
 import type { Database } from './database.types'
@@ -120,8 +120,13 @@ export const SAMPLE_ALIASES: Record<string, string> = {
 const SAMPLE_AS_KINDS = ['ranking', 'multiple', 'fractional', 'consensus_winners'] as const
 type SampleAsKind = (typeof SAMPLE_AS_KINDS)[number]
 
-/** The finished film question, opening on `kind`'s result. */
-export const sampleResultAs = (kind: SampleAsKind) => `${SAMPLE_RESULT_ID}-as-${kind}`
+/**
+ * The finished film question, opening on `kind`'s result, under the slug of
+ * that choice's section on `/choices` (`sample-result-movie-as-multiple-winners`),
+ * so the address names the choice by the name the reader knows it by.
+ */
+export const sampleResultAs = (kind: SampleAsKind) =>
+  `${SAMPLE_RESULT_ID}-as-${CHOICES[kind].section}`
 
 /**
  * A real poll id is a v4 UUID, so nothing the database can mint begins with

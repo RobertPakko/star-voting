@@ -131,12 +131,12 @@ select $json${
       "kind": "assignment",
       "budget": 20,
       "options": [
-        { "name": "Popcorn", "places": 3, "cost": 6, "description": "A big bowl of buttered popcorn, enough for three." },
-        { "name": "Nachos", "places": 2, "cost": 8, "description": "Tortilla chips under melted cheese and salsa, enough for two." },
-        { "name": "Chocolate", "places": 2, "cost": 5, "description": "A slab of milk chocolate, enough for two." },
-        { "name": "Ice cream", "places": 1, "cost": 9, "description": "A tub of vanilla ice cream, for one." },
-        { "name": "Gummy bears", "places": 2, "cost": 4, "description": "A bag of gummy bears, enough for two." },
-        { "name": "Pretzels", "places": 1, "cost": 3, "description": "A bag of salted pretzels, for one." }
+        { "name": "Popcorn", "places": 3, "cost": 6 },
+        { "name": "Nachos", "places": 2, "cost": 8 },
+        { "name": "Chocolate", "places": 2, "cost": 5 },
+        { "name": "Ice cream", "places": 1, "cost": 9 },
+        { "name": "Gummy bears", "places": 2, "cost": 4 },
+        { "name": "Pretzels", "places": 1, "cost": 3 }
       ],
       "ballots": [
         [5, 3, 4, 2, 1, 2],

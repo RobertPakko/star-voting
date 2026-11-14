@@ -560,10 +560,11 @@ export function AllChoices() {
           </List>
           <Text>
             Say our six friends are splitting up into two different groups that will each go to a
-            separate restaurant. Here, the consensus winners are {pair.names.join(' and ')}:
+            separate restaurant. Here, the consensus winners are {pair.names.join(' and ')}. Each
+            friend&rsquo;s favorite of the two is circled:
           </Text>
           <EmojiTable
-            caption={`Each friend's favorite of ${pair.names.join(' and ')}`}
+            caption={`How many stars each friend gave each restaurant, with each friend's favorite of ${pair.names.join(' and ')} circled`}
             rows={servedRows(DINNER, pair.names)}
             rowLabel="Restaurant"
           />
@@ -2242,19 +2243,26 @@ function consensusSetsOf(ratings: Ratings, size: number) {
   })
 }
 
-/** The ratings of `names`, each voter's favorite among them circled. */
+/** Every option's ratings, each voter's favorite among `names` circled and the rest struck through. */
 function servedRows(ratings: Ratings, names: string[]): Row[] {
-  return names.map((name) => ({
-    name,
-    cells: ratings[name].map((score, voter) => {
-      const best = Math.max(...names.map((n) => ratings[n][voter]))
-      return {
-        ...keycap(score),
-        marked: score === best,
-        said: score === best ? `${score}, their favorite of these` : String(score),
-      }
-    }),
-  }))
+  return optionsOf(ratings).map((name) => {
+    const chosen = names.includes(name)
+    return {
+      name,
+      // An option left out of the set is still drawn, struck through, so the
+      // table is the whole ballot and the reader sees what it was given.
+      out: !chosen,
+      cells: ratings[name].map((score, voter) => {
+        const best = Math.max(...names.map((n) => ratings[n][voter]))
+        const marked = chosen && score === best
+        return {
+          ...keycap(score),
+          marked,
+          said: marked ? `${score}, their favorite of these` : String(score),
+        }
+      }),
+    }
+  })
 }
 
 /**
