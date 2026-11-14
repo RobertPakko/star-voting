@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActionIcon, Group, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Group, Progress, Stack, Text, Tooltip } from '@mantine/core'
 import { XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
 import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
@@ -18,6 +18,11 @@ import { CoinFlip } from './CoinFlip'
 import { levelOptions } from '../lib/consensus'
 import { useLeftOut } from '../lib/useLeftOut'
 import { ScoresSkeleton } from './Skeletons'
+import { RoundCard } from './RoundCard'
+import { OptionNote } from './OptionNote'
+import { useGrown } from '../lib/useGrown'
+import { choiceLabel } from '../lib/choices'
+import classes from './Results.module.css'
 
 /**
  * The consensus option (or time), opened from the result's *More results*
@@ -171,6 +176,7 @@ export function ConsensusBody({
         >
           <Answer
             consensus={consensus}
+            calendar={results.calendar}
             h24={h24}
             removable={canRemove && !loading}
             onRemove={remove}
@@ -195,9 +201,14 @@ function lowest(position: number): string {
   return `${position}${suffix}-lowest`
 }
 
-/** The winner, how it was reached, and every option's lowest score. */
+/**
+ * The winner under its kind's name, then how a tie on the minimum was broken
+ * (its own card, only where there was one), then every option's minimum score
+ * as a bar, as STAR's scoring round draws its totals.
+ */
 function Answer({
   consensus,
+  calendar,
   h24,
   removable,
   onRemove,
@@ -206,6 +217,8 @@ function Answer({
   pollId,
 }: {
   consensus: ConsensusResult
+  /** Whether the options are a calendar's, which names the kind as times. */
+  calendar: boolean
   h24: boolean
   removable: boolean
   onRemove: (option: LeftOut) => void
@@ -221,102 +234,112 @@ function Answer({
   const level = levelOptions(consensus, h24)
   const runnerUp = consensus.runner_up
   const unshown = consensus.option_count - options.length
+  const label = choiceLabel('consensus', calendar)
+  const grown = useGrown()
+
+  const pulledAhead = winner && at !== null && at > 1 && runnerUp && consensus.winner_score !== null
+  const tieBreak = tied > 1 || level.length >= 2
 
   return (
     <>
-      {!named ? null : winner ? (
-        <Group justify="space-between" align="center" gap="sm">
-          <Text fw={700} size="lg" style={{ overflowWrap: 'anywhere' }}>
-            {winner.name}
+      {named && (
+        <Stack gap="xs" align="center">
+          <Text fw={700} size="lg" ta="center" style={{ overflowWrap: 'anywhere' }}>
+            {label}: {winner ? winner.name : 'no winner'}
           </Text>
-          {event && <AddToCalendar event={event} />}
-        </Group>
-      ) : (
-        <Group justify="space-between" align="center" gap="sm">
-          <Text fw={700} size="lg">
-            No winner
-          </Text>
-          {level.length >= 2 && <CoinFlip pollId={pollId} finalists={level} eventFor={eventFor} />}
-        </Group>
+          {winner
+            ? event && <AddToCalendar event={event} />
+            : level.length >= 2 && (
+                <CoinFlip pollId={pollId} finalists={level} eventFor={eventFor} />
+              )}
+        </Stack>
       )}
 
-      <Stack gap="sm">
-        {tied === 1 && winner && (
-          <Text size="sm">
-            <strong>{winner.name}</strong> had the highest minimum score at {stars(floor)}.
-          </Text>
-        )}
-        {tied > 1 && (
-          <Text size="sm">
-            {tied === consensus.option_count
-              ? `Every option was given a minimum score of ${floor}`
-              : `${count(tied, 'option')} were given a minimum score of ${floor}`}
-            , so their next-lowest scores were compared.
-          </Text>
-        )}
-        {winner && at !== null && at > 1 && runnerUp && consensus.winner_score !== null && (
-          <Text size="sm">
-            <strong>{winner.name}</strong> pulled ahead on its {lowest(at)} score. Its second lowest
-            score was {consensus.winner_score} while{' '}
-            <strong>{formatWindow(runnerUp.name, h24)}</strong> had a second lowest score of{' '}
-            {runnerUp.score}.
-          </Text>
-        )}
-        {level.length >= 2 && (
-          <Text size="sm">
-            {level.length === consensus.option_count
-              ? 'Every option was'
-              : `${count(level.length, 'option')} were`}{' '}
-            given exactly the same scores, so there is no winner.
-          </Text>
-        )}
-      </Stack>
+      {tieBreak && (
+        <RoundCard title="Tie-break">
+          <Stack gap="xs">
+            {tied > 1 && (
+              <Text size="sm">
+                {tied === consensus.option_count
+                  ? `Every option was given a minimum score of ${floor}`
+                  : `${count(tied, 'option')} were given a minimum score of ${floor}`}
+                , so their next-lowest scores were compared.
+              </Text>
+            )}
+            {pulledAhead && (
+              <Text size="sm">
+                <strong>{winner.name}</strong> pulled ahead on its {lowest(at)} score. Its{' '}
+                {lowest(at)} score was {consensus.winner_score} while{' '}
+                <strong>{formatWindow(runnerUp.name, h24)}</strong> had a {lowest(at)} score of{' '}
+                {runnerUp.score}.
+              </Text>
+            )}
+            {level.length >= 2 && (
+              <Text size="sm">
+                {level.length === consensus.option_count
+                  ? 'Every option was'
+                  : `${count(level.length, 'option')} were`}{' '}
+                given exactly the same scores, so there is no winner.
+              </Text>
+            )}
+          </Stack>
+        </RoundCard>
+      )}
 
-      <Stack gap={4}>
-        <Group gap="sm" wrap="nowrap">
-          <Text size="xs" c="dimmed" style={{ flex: 1 }}>
-            Option
-          </Text>
-          <Text size="xs" c="dimmed">
-            Minimum score
-          </Text>
-          {/* Keeps the column over the numbers when rows carry a remove button. */}
-          {removable && <span style={{ width: 22, flexShrink: 0 }} />}
-        </Group>
-        <Stack component="ul" gap={4} m={0} p={0} style={{ listStyle: 'none' }}>
-          {options.map((o) => (
-            <Group component="li" key={o.id} gap="sm" wrap="nowrap" align="center">
-              <Text
-                fw={o.id === winnerId ? 700 : 400}
-                style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}
-              >
-                {o.name}
-              </Text>
-              <Text size="sm" style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                {o.floor}
-              </Text>
-              {removable && (
-                <Tooltip label="Remove and count again">
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    size="sm"
-                    aria-label={`Remove ${o.name}`}
-                    onClick={() => onRemove({ id: o.id, name: o.name })}
-                  >
-                    <XIcon size={14} aria-hidden />
-                  </ActionIcon>
-                </Tooltip>
-              )}
-            </Group>
-          ))}
+      <RoundCard title="Minimum scores">
+        <Stack gap="xs">
+          {tied === 1 && winner && (
+            <Text size="sm">
+              <strong>{winner.name}</strong> had the highest minimum score at {stars(floor)}.
+            </Text>
+          )}
+          <Stack component="ul" gap="xs" m={0} p={0} style={{ listStyle: 'none' }}>
+            {options.map((o, index) => (
+              <li key={o.id}>
+                <Group justify="space-between" mb={2} wrap="nowrap" gap="xs">
+                  <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+                    <Text size="sm" fw={o.id === winnerId ? 700 : 400} truncate>
+                      {o.name}
+                    </Text>
+                    <OptionNote id={o.id} name={o.name} />
+                  </Group>
+                  <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
+                    <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                      {stars(o.floor)}
+                    </Text>
+                    {removable && (
+                      <Tooltip label="Remove and count again">
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          size="sm"
+                          aria-label={`Remove ${o.name}`}
+                          onClick={() => onRemove({ id: o.id, name: o.name })}
+                        >
+                          <XIcon size={14} aria-hidden />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                  </Group>
+                </Group>
+                {/* The score is already in words above. */}
+                <Progress
+                  aria-hidden
+                  value={grown ? (o.floor / 5) * 100 : 0}
+                  color={o.id === winnerId ? 'blue' : 'var(--muted-bar)'}
+                  classNames={{ root: classes.bar, section: classes.section }}
+                  style={{ '--row': index } as React.CSSProperties}
+                />
+              </li>
+            ))}
+          </Stack>
+          {unshown > 0 && (
+            <Text size="sm" c="dimmed">
+              The top {options.length} of {consensus.option_count} options.
+            </Text>
+          )}
         </Stack>
-        {unshown > 0 && (
-          <Text size="sm" c="dimmed">
-            The top {options.length} of {consensus.option_count} options.
-          </Text>
-        )}
-      </Stack>
+      </RoundCard>
     </>
   )
 }

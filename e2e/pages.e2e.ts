@@ -375,6 +375,12 @@ test.describe('all choices', () => {
     await page.getByRole('link', { name: 'See an example' }).click()
     await expect(page).toHaveURL(/#\/sample-result-when$/)
     await expect(page.getByText(/^Consensus time: /)).toBeVisible()
+
+    // Fractional winners is the snack question, recast: a shared order split.
+    await page.goto('#/choices?section=fractional-winners')
+    await page.getByRole('link', { name: 'See an example' }).click()
+    await expect(page).toHaveURL(/#\/sample-result-snacks-as-fractional-winners$/)
+    await expect(page.getByText(/^Fractional winners$/).first()).toBeVisible()
   })
 
   test('guides a reader to a choice, one question at a time', async ({ page }) => {
@@ -382,7 +388,7 @@ test.describe('all choices', () => {
     // Its every-section New poll is gone: each section has a Try it out.
     await expect(page.getByRole('link', { name: 'New poll' })).toHaveCount(0)
     const guide = page.locator('.mantine-Card-root', {
-      has: page.getByRole('heading', { name: 'Which choice do I need?' }),
+      has: page.getByText('What does your group want to do?'),
     })
     await guide.getByRole('button', { name: 'Pick multiple options' }).click()
     await guide.getByRole('button', { name: 'No, picking an option is all-or-nothing' }).click()
@@ -410,7 +416,7 @@ test.describe('all choices', () => {
 
     await guide.getByRole('button', { name: 'Start over' }).click()
     await expect(guide.getByRole('button', { name: 'Pick an option' })).toBeVisible()
-    await guide.getByRole('button', { name: 'See the whole decision tree' }).click()
+    await guide.getByRole('button', { name: 'See the decision tree' }).click()
     // Every answer of every question, each under the question it answers.
     await expect(guide.getByRole('listitem')).toHaveCount(11)
     await expect(guide.getByText('Can we just take a little of each option?')).toBeVisible()

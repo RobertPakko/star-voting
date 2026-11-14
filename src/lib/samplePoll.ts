@@ -111,22 +111,31 @@ export const SAMPLE_ALIASES: Record<string, string> = {
 }
 
 /**
- * The finished film question as though it had asked for another result: one
- * id per kind `/choices` links an example to, each answered from the same
- * recording with `kind` and the carried result (`kind_result`) swapped for
- * that kind's. Nothing is computed: the swapped-in result is the one the
- * recording's *More results* modal answers with.
+ * A finished question as though it had asked for another result: one id per
+ * kind `/choices` links an example to, each answered from the same recording
+ * with `kind` and the carried result (`kind_result`) swapped for that kind's.
+ * Nothing is computed: the swapped-in result is the one the recording's *More
+ * results* modal answers with. Each kind is recast from the question it reads
+ * best on: the snacks for fractional winners (a split of a shared order), the
+ * film question for the rest.
  */
 const SAMPLE_AS_KINDS = ['ranking', 'multiple', 'fractional', 'consensus_winners'] as const
 type SampleAsKind = (typeof SAMPLE_AS_KINDS)[number]
 
+const SAMPLE_AS_BASE: Record<SampleAsKind, string> = {
+  ranking: SAMPLE_RESULT_ID,
+  multiple: SAMPLE_RESULT_ID,
+  fractional: SAMPLE_RESULT_SNACKS_ID,
+  consensus_winners: SAMPLE_RESULT_ID,
+}
+
 /**
- * The finished film question, opening on `kind`'s result, under the slug of
- * that choice's section on `/choices` (`sample-result-movie-as-multiple-winners`),
+ * A finished question, opening on `kind`'s result, under the slug of that
+ * choice's section on `/choices` (`sample-result-movie-as-multiple-winners`),
  * so the address names the choice by the name the reader knows it by.
  */
 export const sampleResultAs = (kind: SampleAsKind) =>
-  `${SAMPLE_RESULT_ID}-as-${CHOICES[kind].section}`
+  `${SAMPLE_AS_BASE[kind]}-as-${CHOICES[kind].section}`
 
 /**
  * A real poll id is a v4 UUID, so nothing the database can mint begins with
@@ -278,17 +287,19 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
 }
 
 /**
- * One of `sampleResultAs`' ids: the film question under that id, with its
- * kind and carried result swapped. Its place in the group takes the new id,
- * so the strip marks it as the question on screen; question 2 is the
- * recording's own.
+ * One of `sampleResultAs`' ids: its question under that id, with its kind and
+ * carried result swapped. Its place in the group takes the new id, so the
+ * strip marks it as the question on screen; the others are the recording's
+ * own.
  */
 function recast(payloads: SamplePayloads, pollId: string): SampleQuestion | undefined {
   if (pollId === SAMPLE_SEQUENTIAL_ID) return weighed(payloads)
   if (pollId === SAMPLE_BUDGET_ID) return budgetted(payloads)
   const kind = SAMPLE_AS_KINDS.find((k) => sampleResultAs(k) === pollId)
-  const base = payloads[SAMPLE_RESULT_ID]
-  if (!kind || !base?.results) return undefined
+  if (!kind) return undefined
+  const from = SAMPLE_AS_BASE[kind]
+  const base = payloads[from]
+  if (!base?.results) return undefined
 
   const carried = {
     ranking: base.ranking,
@@ -301,15 +312,17 @@ function recast(payloads: SamplePayloads, pollId: string): SampleQuestion | unde
     kind === 'consensus_winners'
       ? (base.consensus_winners?.winner_count ?? null)
       : (DEFAULT_CHOICE_NUMBER[kind] ?? null)
+  const renamedBase = renamed(base, from, pollId)
   return {
-    ...base,
+    ...renamedBase,
     view: {
-      ...base.view,
-      poll: { ...base.view.poll, id: pollId, kind },
-      options: base.view.options.map((o) => ({ ...o, poll_id: pollId })),
+      ...renamedBase.view,
+      poll: { ...renamedBase.view.poll, kind },
+      // An assignment's places mean nothing to another kind.
+      options: renamedBase.view.options.map(({ places: _places, ...o }) => o),
     },
-    group: base.group.map((q) => (q.id === SAMPLE_RESULT_ID ? { ...q, id: pollId } : q)),
     results: { ...base.results, kind, kind_value: kindValue, kind_result: carried ?? null },
+    assignment: undefined,
   }
 }
 

@@ -148,6 +148,7 @@ export function OpenPollPanel({
               view.poll.schedule ? { title: view.poll.title, schedule: view.poll.schedule } : null
             }
             initial={results}
+            options={view.options}
           />
         </Suspense>
         {participation}

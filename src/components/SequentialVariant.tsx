@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
 import { ballotSheetSchema, parseAnswer, rankingSchema } from '../lib/rpcSchemas'
 import { GIVEN_MAX } from '../lib/limits'
-import { CHOICES } from '../lib/choices'
+import { CHOICES, choiceLabel } from '../lib/choices'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { BallotSheet, PollResults, RankingEntry } from '../lib/types'
 import { VariantModal } from './ChoiceBlurb'
@@ -184,11 +184,16 @@ function SequentialBody({ source, results }: { source: RankingSource; results: P
           </Group>
         </Stack>
       ) : (
-        <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
-          <Text size="sm" c="dimmed">
-            Counted as {CHOICES[countedKind].label.toLowerCase()}, every ballot weighed by the stars
-            its voter gave earlier winners.
-          </Text>
+        // Headed as the choice's own result is: the best option by its
+        // winner, centred, as the *Best option* modal does; the others by the
+        // choice's name.
+        <Group
+          justify={countedKind === 'option' ? 'flex-end' : 'space-between'}
+          align="center"
+          wrap="nowrap"
+          gap="sm"
+        >
+          {countedKind !== 'option' && <Text fw={700}>{CHOICES[countedKind].label}</Text>}
           <Button
             variant="default"
             size="compact-sm"
@@ -199,6 +204,13 @@ function SequentialBody({ source, results }: { source: RankingSource; results: P
             Edit stars
           </Button>
         </Group>
+      )}
+
+      {!editing && countedKind === 'option' && shown?.[0] && (
+        <Text fw={700} size="lg" ta="center" style={{ overflowWrap: 'anywhere' }}>
+          {choiceLabel('option', results.calendar)}:{' '}
+          {shown[0].options.map((o) => o.name).join(' and ')}
+        </Text>
       )}
 
       {error && (

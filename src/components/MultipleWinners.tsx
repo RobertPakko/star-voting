@@ -17,6 +17,7 @@ import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import { TiebreakNote, type RankingSource } from './FullRanking'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
 import { useLeftOut } from '../lib/useLeftOut'
+import { OptionNote } from './OptionNote'
 
 /**
  * Several winners from one set of ballots, opened from the result's *More
@@ -256,6 +257,7 @@ export function Spot({
             <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
               {option.name}
             </Text>
+            <OptionNote id={option.id} name={option.name} />
             <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
               {weightedStars(option.total_score)}
             </Text>

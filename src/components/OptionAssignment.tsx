@@ -18,6 +18,7 @@ import type { RankingSource } from './FullRanking'
 import { useEveryOption } from '../lib/useEveryOption'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
 import { useAssignmentInputs, useLeftOut, type AssignmentInputs } from '../lib/useLeftOut'
+import { OptionNote } from './OptionNote'
 
 /**
  * *Option assignment*, opened from the result's *More results* menu
@@ -127,10 +128,15 @@ export function OptionAssignmentBody({
     let cancelled = false
 
     const typed = inputsKey ? (JSON.parse(inputsKey) as AssignmentInputs) : null
+    // An option given no places goes to nobody, which is the count without
+    // it: it is sent as left out, since a stored number of places is at
+    // least one (`validate_amount`).
+    const placed = Object.entries(typed?.places ?? {})
+    const unplaced = placed.filter(([, n]) => n === 0).map(([id]) => id)
     const args = {
       p_poll_id: key,
-      p_excluded: excludedKey ? excludedKey.split(',') : [],
-      p_places: typed?.places,
+      p_excluded: [...(excludedKey ? excludedKey.split(',') : []), ...unplaced],
+      p_places: typed ? Object.fromEntries(placed.filter(([, n]) => n !== 0)) : undefined,
       p_per_voter: typed?.perVoter,
     }
     const request: PromiseLike<RpcAnswer> =
@@ -238,6 +244,7 @@ export function OptionAssignmentBody({
                   <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
                     {formatWindow(option.name, h24)}
                   </Text>
+                  <OptionNote id={option.id} name={formatWindow(option.name, h24)} />
                   <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
                     {option.voters.length} of {count(option.places, 'place')}
                   </Text>
@@ -344,7 +351,8 @@ function received(counts: Record<string, number>, perVoter: number) {
 /**
  * The reader's places and cap: every option on the ballot (less any
  * removed), a number beside each, the most options a voter is given, and
- * *Count*. A blank box is one place. Nothing typed here is saved.
+ * *Count*. A blank box is one place, and 0 none, which is quicker than
+ * removing options one at a time. Nothing typed here is saved.
  */
 function PlacesEditor({
   source,
@@ -373,7 +381,12 @@ function PlacesEditor({
   const problems = new Map(
     (shown ?? []).flatMap((o) => {
       const value = typed[o.id] ?? ''
-      const problem = value === '' ? null : amountError(value)
+      // 0 is allowed here, unlike on a stored option: it takes the option
+      // out of this count without removing it from the list.
+      const problem =
+        value === '' || Number(value) === 0
+          ? null
+          : amountError(value) && `A whole number from 0 to ${AMOUNT_MAX.toLocaleString('en-US')}.`
       return problem ? [[o.id, problem] as const] : []
     }),
   )
@@ -396,7 +409,7 @@ function PlacesEditor({
     <Stack gap="sm">
       <Text size="sm" c="dimmed">
         Give each option as many places as voters it can go to. An option left blank has one place,
-        and nothing you change here is saved.
+        an option given 0 goes to nobody, and nothing you change here is saved.
       </Text>
 
       <Select
@@ -427,7 +440,7 @@ function PlacesEditor({
                 placeholder="1"
                 value={typed[option.id] ?? ''}
                 onChange={(v) => setTyped((prev) => ({ ...prev, [option.id]: v }))}
-                min={1}
+                min={0}
                 max={AMOUNT_MAX}
                 allowDecimal={false}
                 allowNegative={false}

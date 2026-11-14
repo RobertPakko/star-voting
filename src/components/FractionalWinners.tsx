@@ -20,6 +20,7 @@ import { RemovedOptions, type LeftOut } from './RemovedOptions'
 import { useLeftOut } from '../lib/useLeftOut'
 import { SharesSkeleton } from './Skeletons'
 import { ChoiceModal } from './ChoiceBlurb'
+import { OptionNote } from './OptionNote'
 
 /**
  * A slice colour per share, largest first. Ten, one for each option the
@@ -271,9 +272,12 @@ function Shares({
                   backgroundColor: cssColor(colorOf.get(s.id)!),
                 }}
               />
-              <Text fw={600} style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
-                {s.name}
-              </Text>
+              <Group gap={4} wrap="nowrap" align="center" style={{ flex: 1, minWidth: 0 }}>
+                <Text fw={600} style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                  {s.name}
+                </Text>
+                <OptionNote id={s.id} name={s.name} />
+              </Group>
               <Text
                 size="sm"
                 fw={600}

@@ -4,8 +4,8 @@ import type { BallotSheet } from './types'
  * What a ballot on a sequential poll counts as, drawn from the stars it had
  * given earlier winners (`given`, N): 5 / (5 + N), scaled so the
  * strongest ballot on the sheet counts as one. The scale is the database's
- * (`poll_ballot_weights`), so the weighted totals under the grid are the
- * tally's own, and it changes no result: every count is a sum of weights.
+ * (`poll_ballot_weights`), so the weights beside the grid are the tally's
+ * own, and it changes no result: every count is a sum of weights.
  */
 
 /** Each ballot's weight, in the sheet's order; null on a sheet that carries none. */

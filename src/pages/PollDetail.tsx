@@ -553,6 +553,7 @@ export function PollDetail({
                     source={{ kind: 'poll', pollId: poll.id }}
                     meeting={poll.schedule ? { title: poll.title, schedule: poll.schedule } : null}
                     initial={results}
+                    options={optionList}
                   />
                 </Suspense>
               </Stack>

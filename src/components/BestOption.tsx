@@ -3,6 +3,7 @@ import type { PollResults } from '../lib/types'
 import type { ResultsSource } from './Results'
 import { StarRounds } from './StarRounds'
 import { ChoiceModal } from './ChoiceBlurb'
+import { choiceLabel } from '../lib/choices'
 
 /**
  * STAR's own answer, opened from *More results* on a question that asked for
@@ -31,7 +32,7 @@ export function BestOption({
     <ChoiceModal kind="option" calendar={results.calendar} opened={opened} onClose={onClose}>
       <Stack gap="md">
         <Text fw={700} size="lg" ta="center" style={{ overflowWrap: 'anywhere' }}>
-          {winner ?? 'No winner'}
+          {choiceLabel('option', results.calendar)}: {winner ?? 'no winner'}
         </Text>
         <StarRounds source={source} results={results} />
       </Stack>

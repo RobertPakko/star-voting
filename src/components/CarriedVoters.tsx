@@ -19,6 +19,10 @@ import { blankCarried, type CarriedDraft } from '../lib/pollForm'
  * ballot counts at 5 ÷ (5 + stars); anyone not listed votes at the
  * average weight of those who are. *Create sequel poll* fills this in from a
  * finished poll, and it stays editable.
+ *
+ * On an invite poll the voters are the invite list (`carriedForInvitees`
+ * keeps a row per invitee), so only the stars are typed here: an address is
+ * never typed twice, and one left without stars is new to the run.
  */
 export function CarriedVoters({
   rows,
@@ -45,7 +49,9 @@ export function CarriedVoters({
         Earlier voters
       </Text>
       <Text size="xs" c="dimmed">
-        Provide the stars each voter gave to previous winners so their ballot can be reweighted.{' '}
+        {isOpen
+          ? 'Provide the stars each voter gave to previous winners so their ballot can be reweighted.'
+          : 'Provide the stars each invitee gave to previous winners so their ballot can be reweighted. Leave it empty for anyone new, who counts at the average weight.'}{' '}
         <Anchor component={Link} to="/choices?section=sequential-polls" target="_blank" inherit>
           How this works
         </Anchor>
@@ -60,26 +66,41 @@ export function CarriedVoters({
         <Text size="xs" fw={500} w={{ base: 110, xs: 200 }} lh={1.2}>
           Stars given to previous winners
         </Text>
-        <span style={{ width: 28 }} />
+        {isOpen && <span style={{ width: 28 }} />}
       </Group>
+
+      {!isOpen && rows.length === 0 && (
+        <Text size="sm" c="dimmed">
+          Add people to the invite list to give their stars here.
+        </Text>
+      )}
 
       {rows.map((row, index) => (
         <Group key={row.key} gap="xs" align="flex-start" wrap="nowrap">
-          <TextInput
-            style={{ flex: 1 }}
-            aria-label={`Earlier voter ${index + 1}`}
-            placeholder={isOpen ? `Voter ${index + 1}` : 'them@example.com'}
-            value={row.voter}
-            onChange={(e) => patch(index, { voter: e.currentTarget.value })}
-            error={voterError(index)}
-            maxLength={isOpen ? VOTER_NAME_MAX : undefined}
-            inputMode={isOpen ? undefined : 'email'}
-            autoCapitalize={isOpen ? undefined : 'none'}
-          />
+          {isOpen ? (
+            <TextInput
+              style={{ flex: 1 }}
+              aria-label={`Earlier voter ${index + 1}`}
+              placeholder={`Voter ${index + 1}`}
+              value={row.voter}
+              onChange={(e) => patch(index, { voter: e.currentTarget.value })}
+              error={voterError(index)}
+              maxLength={VOTER_NAME_MAX}
+            />
+          ) : (
+            // The invite list's own address; changed there, not here.
+            <Text size="sm" mt={7} style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+              {row.voter}
+            </Text>
+          )}
           <NumberInput
             w={{ base: 110, xs: 200 }}
-            aria-label={`Stars voter ${index + 1} gave to previous winners`}
-            placeholder="0"
+            aria-label={
+              isOpen
+                ? `Stars voter ${index + 1} gave to previous winners`
+                : `Stars ${row.voter} gave to previous winners`
+            }
+            placeholder={isOpen ? '0' : 'New'}
             value={row.given}
             onChange={(value) => patch(index, { given: value })}
             error={givenError(index)}
@@ -89,15 +110,17 @@ export function CarriedVoters({
             allowNegative={false}
             hideControls
           />
-          <ActionIcon
-            variant="subtle"
-            color="red"
-            mt={6}
-            onClick={() => onChange(rows.filter((_, i) => i !== index))}
-            aria-label={`Remove earlier voter ${index + 1}`}
-          >
-            &times;
-          </ActionIcon>
+          {isOpen && (
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              mt={6}
+              onClick={() => onChange(rows.filter((_, i) => i !== index))}
+              aria-label={`Remove earlier voter ${index + 1}`}
+            >
+              &times;
+            </ActionIcon>
+          )}
         </Group>
       ))}
 
@@ -107,16 +130,18 @@ export function CarriedVoters({
         </Text>
       )}
 
-      <Button
-        variant="light"
-        size="xs"
-        w="fit-content"
-        onClick={() => onChange([...rows, blankCarried()])}
-        disabled={rows.length >= MAX_CARRIED}
-        leftSection={<PlusIcon size={14} aria-hidden />}
-      >
-        Add voter
-      </Button>
+      {isOpen && (
+        <Button
+          variant="light"
+          size="xs"
+          w="fit-content"
+          onClick={() => onChange([...rows, blankCarried()])}
+          disabled={rows.length >= MAX_CARRIED}
+          leftSection={<PlusIcon size={14} aria-hidden />}
+        >
+          Add voter
+        </Button>
+      )}
     </Stack>
   )
 }

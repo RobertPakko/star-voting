@@ -33,6 +33,7 @@ import { Spot } from './MultipleWinners'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
 import { useEveryOption } from '../lib/useEveryOption'
 import { useBudgetInputs, useLeftOut, type BudgetInputs } from '../lib/useLeftOut'
+import { OptionNote } from './OptionNote'
 
 /**
  * An amount as the page writes it, with thousands marked and no unit: whole
@@ -297,12 +298,13 @@ export function BudgetBody({
           style={{ opacity: loading ? 0.5 : 1, transition: 'opacity var(--motion-fast)' }}
         >
           <Stack gap={2}>
-            <Text fw={600}>
+            {/* On a budget question the bar above names its own count. */}
+            {!(ownCosts && result.count === ownCount) && (
+              <Text fw={700}>{CHOICES[result.count].label}</Text>
+            )}
+            <Text size="sm">
               {amount(result.value.spent)} of {amount(result.value.budget)} spent,{' '}
               {amount(result.value.left)} left over.
-            </Text>
-            <Text size="sm" c="dimmed">
-              Counted as {CHOICES[result.count].label.toLowerCase()}.
             </Text>
           </Stack>
 
@@ -395,7 +397,7 @@ function SpotList({
  * Fractional winners with a budget: every option given something, the most
  * first, with what it was given out of what it costs and a bar of how much of
  * it that funds. The bar repeats the figures beside it, so it carries nothing
- * alone.
+ * alone, and no percentage restates them a third time.
  */
 function FundedList({
   result,
@@ -415,24 +417,17 @@ function FundedList({
   return (
     <Stack component="ul" gap="sm" m={0} p={0} style={{ listStyle: 'none' }}>
       {result.options.map((o) => {
-        const percent = Math.round(o.funded * 100)
         return (
           <Stack component="li" key={o.id} gap={4}>
             <Group gap="xs" wrap="nowrap" align="center">
-              <Text fw={600} style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
-                {o.name}
-              </Text>
+              <Group gap={4} wrap="nowrap" align="center" style={{ flex: 1, minWidth: 0 }}>
+                <Text fw={600} style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                  {o.name}
+                </Text>
+                <OptionNote id={o.id} name={o.name} />
+              </Group>
               <Text size="sm" style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                 {amount(o.amount)} of {amount(o.cost)}
-              </Text>
-              <Text
-                size="sm"
-                fw={600}
-                w={72}
-                ta="right"
-                style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
-              >
-                {o.funded >= 1 ? 'In full' : percent === 0 ? 'Under 1%' : `${percent}%`}
               </Text>
               {removable && (
                 <Tooltip label="Remove and count again">

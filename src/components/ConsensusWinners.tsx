@@ -12,6 +12,7 @@ import { ChoiceModal } from './ChoiceBlurb'
 import type { MeetingEvent } from '../lib/calendarEvent'
 import type { ConsensusWinnersResult, PollResults } from '../lib/types'
 import type { RankingSource } from './FullRanking'
+import { OptionNote } from './OptionNote'
 import { RemovedOptions, type LeftOut } from './RemovedOptions'
 import { AddToCalendar } from './AddToCalendar'
 import { useLeftOut, useWinnerCount } from '../lib/useLeftOut'
@@ -274,11 +275,15 @@ function Answer({
           return (
             <Group component="li" key={w.id} gap="sm" wrap="nowrap" align="center">
               <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
-                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
-                  {name}
-                </Text>
+                <Group gap={4} wrap="nowrap">
+                  <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+                    {name}
+                  </Text>
+                  <OptionNote id={w.id} name={name} />
+                </Group>
                 <Text size="sm" c="dimmed">
-                  Best (or tied for best) for {count(w.best_for, 'voter')} · {stars(w.total_score)}
+                  Best (or tied for best) for {count(w.best_for, 'voter')} · avg{' '}
+                  {stars(answer.voter_count ? w.total_score / answer.voter_count : 0)}
                 </Text>
               </Stack>
               {event && <AddToCalendar event={event} />}

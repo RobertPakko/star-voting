@@ -155,8 +155,28 @@ export function blankCarried(voter = '', given: number | string = ''): CarriedDr
   return { key: `carried-${carriedSeq}`, voter, given }
 }
 
-/** Whether a row was left empty, and so is ignored rather than refused. */
-const isBlankCarried = (row: CarriedDraft) => !row.voter.trim() && row.given === ''
+/**
+ * Whether a row was left empty, and so is ignored rather than refused. On an
+ * invite poll every invitee has a row (`carriedForInvitees`), so one with no
+ * stars is somebody new to the run, counted at the average weight.
+ */
+const isBlankCarried = (row: CarriedDraft, isOpen: boolean) =>
+  row.given === '' && (!isOpen || !row.voter.trim())
+
+/**
+ * An invite poll's earlier voters are its invitees, so the rows are the
+ * invite list, in its order, each keeping the stars already typed for that
+ * address. Rows for anybody not invited go. Returns `rows` itself when
+ * nothing would change, so a caller can tell.
+ */
+export function carriedForInvitees(rows: CarriedDraft[], invited: string[]): CarriedDraft[] {
+  const byVoter = new Map(rows.map((row) => [row.voter.trim().toLowerCase(), row]))
+  const next = invited.map(
+    (email) => byVoter.get(email) ?? { key: `carried-invitee-${email}`, voter: email, given: '' },
+  )
+  const same = next.length === rows.length && next.every((row, i) => row === rows[i])
+  return same ? rows : next
+}
 
 /** The earlier voters a question sends, or null for a question that is not sequential. */
 export function carriedOf(
@@ -165,7 +185,7 @@ export function carriedOf(
 ): { voter: string; given: number }[] | null {
   if (variantOf(question) !== 'sequential') return null
   return question.carried
-    .filter((row) => !isBlankCarried(row))
+    .filter((row) => !isBlankCarried(row, isOpen))
     .map((row) => ({
       voter: isOpen ? row.voter.trim() : row.voter.trim().toLowerCase(),
       given: Number(row.given),
@@ -411,7 +431,8 @@ export function questionHasError(errors: FormErrors, questionIndex: number): boo
 /**
  * A sequential question's earlier voters. Mirrors `insert_carried_weights`:
  * named, once each, an invitee on an invite poll, with stars from 0 to
- * `GIVEN_MAX`. A row left wholly empty is ignored.
+ * `GIVEN_MAX`. A row left wholly empty is ignored, as is an invitee's row
+ * with no stars.
  */
 function validateCarried(
   question: QuestionDraft,
@@ -420,9 +441,11 @@ function validateCarried(
   invited: Set<string>,
   errors: FormErrors,
 ) {
-  const rows = question.carried.filter((row) => !isBlankCarried(row))
+  const rows = question.carried.filter((row) => !isBlankCarried(row, isOpen))
   if (rows.length === 0) {
-    errors.carried[questionIndex] = 'Add the voters from earlier polls, or choose another Choice.'
+    errors.carried[questionIndex] = isOpen
+      ? 'Add the voters from earlier polls, or choose another Choice.'
+      : 'Give the stars of at least one invitee who voted in earlier polls, or choose another Choice.'
     return
   }
   if (rows.length > MAX_CARRIED) {
@@ -432,7 +455,7 @@ function validateCarried(
 
   const seen = new Map<string, number>()
   question.carried.forEach((row, index) => {
-    if (isBlankCarried(row)) return
+    if (isBlankCarried(row, isOpen)) return
     const key = optionKey(questionIndex, index)
     const voter = row.voter.trim()
     const folded = voter.toLowerCase()
