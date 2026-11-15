@@ -190,14 +190,30 @@ export function CreatorControls({
     navigate('/polls')
   }
 
-  const canClose = !status.is_closed && !status.is_complete && status.voted_count > 0
+  // Closing and reopening act on every question, so on a poll that asks
+  // several they are decided from every question rather than the one on
+  // screen: a poll whose first question everybody had answered and whose
+  // second nobody had offered Close on neither page. Each question's count
+  // comes with the group; a database that does not send it yet leaves this
+  // deciding from the question on screen, as it used to.
+  const counts = questions.map((question) => question.voted_count)
+  const wholePoll = counts.length > 0 && counts.every((count) => count !== undefined)
+  const votes = wholePoll
+    ? counts.reduce<number>((sum, count) => sum + (count ?? 0), 0)
+    : status.voted_count
+  // Full turnout on every question, which reveals an invite poll without a
+  // close. The invite list is the same on every question.
+  const everyoneVoted = wholePoll
+    ? status.invited_count > 0 && counts.every((count) => (count ?? 0) >= status.invited_count)
+    : status.is_complete
+  const canClose = !status.is_closed && !everyoneVoted && votes > 0
   // The way back, and the only state it means anything in. An invite poll
   // everyone has voted in is revealed by its turnout rather than by its close
   // -- see poll_gate_open -- so reopening one would put the poll back to
   // taking votes it has nobody left to take, and leave its results on screen
   // throughout. The database would allow it and change nothing visible, which
   // is the worst of both; the button says no instead.
-  const canReopen = status.is_closed && !status.is_complete
+  const canReopen = status.is_closed && !everyoneVoted
   // Ending the collecting stage, and the floor it has to clear: the same two
   // options `create_poll` demands of a poll whose creator wrote the list.
   const canOpen = status.soliciting && !status.is_closed
@@ -467,13 +483,23 @@ export function CreatorControls({
           centered
         >
           <Stack gap="md">
-            <Text size="sm">
-              The poll will be closed and results will be revealed using the {status.voted_count}{' '}
-              current vote
-              {status.voted_count === 1 ? '' : 's'}.
-              {pending > 0 &&
-                ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
-            </Text>
+            {questions.length > 0 ? (
+              // Turnout differs from question to question, so no one number
+              // describes what is being closed.
+              <Text size="sm">
+                All {questions.length} questions will be closed and results will be revealed using
+                the votes cast so far. Anyone who has not answered every question won&rsquo;t get
+                to.
+              </Text>
+            ) : (
+              <Text size="sm">
+                The poll will be closed and results will be revealed using the {status.voted_count}{' '}
+                current vote
+                {status.voted_count === 1 ? '' : 's'}.
+                {pending > 0 &&
+                  ` ${pending} invited ${pending === 1 ? 'person' : 'people'} won't get to vote.`}
+              </Text>
+            )}
             <Group justify="flex-end">
               <Button variant="default" onClick={closeModal.close}>
                 Cancel

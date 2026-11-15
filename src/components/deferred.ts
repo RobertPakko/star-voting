@@ -113,6 +113,18 @@ export const TimeBallotCard = deferred('TimeBallotCard', () =>
 )
 
 /**
+ * And the calendar a poll's times are collected on, for the same reason.
+ * `CollectOptions` is drawn by both poll pages for every poll that collects
+ * anything, so `TimeList` importing `PaintTimes` outright put the calendar
+ * library in the bundle every reader starts with. `TimeList` asks for the
+ * chunk when it mounts, which only a time poll collecting its times does, so
+ * it is usually in by the time *Add times* is pressed.
+ */
+export const PaintTimes = deferred('PaintTimes', () =>
+  import('./PaintTimes').then((m) => m.PaintTimes),
+)
+
+/**
  * And the results' calendars, which stand in for the two cards above on a
  * time poll: the reader's own ballot and the published sheet, read back onto
  * the calendar they were painted on. Behind a `deferred()` of their own rather

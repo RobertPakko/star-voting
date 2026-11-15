@@ -99,9 +99,12 @@ export function Respondents({
     }
 
     setBusy(true)
-    const { error: insertError } = await supabase
-      .from('invited_voters')
-      .insert({ poll_id: pollId, email })
+    // Through a function, which adds them to every question of the poll: the
+    // invite list is the poll's, whichever question this card is drawn under.
+    const { error: insertError } = await supabase.rpc('invite_voter', {
+      p_poll_id: pollId,
+      p_email: email,
+    })
     setBusy(false)
 
     if (insertError) {
@@ -119,11 +122,12 @@ export function Respondents({
   async function removeInvitee(email: string) {
     setError(null)
     setBusy(true)
-    const { error: deleteError } = await supabase
-      .from('invited_voters')
-      .delete()
-      .eq('poll_id', pollId)
-      .eq('email', email)
+    // Off every question, or none: the database refuses the lot if they have
+    // voted in any question, including ones this card cannot see.
+    const { error: deleteError } = await supabase.rpc('uninvite_voter', {
+      p_poll_id: pollId,
+      p_email: email,
+    })
     setBusy(false)
 
     if (deleteError) {

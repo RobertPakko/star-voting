@@ -134,6 +134,9 @@ const groupQuestion = z.object({
   question_position: z.number(),
   question_title: z.string(),
   option_count: z.number(),
+  // Optional while a browser can be a deploy ahead of the migration that
+  // adds it; the creator's controls fall back to the question on screen.
+  voted_count: z.number().optional(),
   voted: z.boolean(),
   confirmed: z.boolean(),
 })

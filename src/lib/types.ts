@@ -112,6 +112,11 @@ export interface GroupQuestion {
   question_title: string
   /** For the creator's *Open poll* button, which needs every question at two or more. */
   option_count: number
+  /**
+   * How many ballots the question holds, for *Close poll* and *Reopen poll*,
+   * which act on every question. Missing from a database that predates it.
+   */
+  voted_count?: number
   /** The signed-in reader has voted in this question. */
   voted: boolean
   /** The signed-in reader has confirmed its options. */

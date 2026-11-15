@@ -38,6 +38,21 @@ begin
 end $$;
 
 
+-- The other nightly job: anonymous accounts that are older than a poll can
+-- be and own nothing. See purge_stale_anonymous_accounts().
+DO $$
+begin
+  if to_regnamespace('cron') is null then
+    return;
+  end if;
+
+  perform cron.unschedule(jobid) from cron.job where jobname = 'purge-stale-anonymous-accounts';
+
+  perform cron.schedule('purge-stale-anonymous-accounts', '47 4 * * *',
+    $cron$select public.purge_stale_anonymous_accounts()$cron$);
+end $$;
+
+
 -- Who may receive live updates, and that nobody but the database may send
 -- them (0085). A policy on realtime.messages is outside the public schema,
 -- which the squash does not dump, so it is restated here. Idempotent: dropped

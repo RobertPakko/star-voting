@@ -61,7 +61,9 @@ create table if not exists auth.users (
   email text,
   -- Supabase's own column: an account made by anonymous sign-in, which has
   -- no email until it is linked to one.
-  is_anonymous boolean not null default false
+  is_anonymous boolean not null default false,
+  -- Supabase's own column too; the anonymous-account purge reads it.
+  created_at timestamptz not null default now()
 );
 
 -- Who is "signed in" right now. Supabase derives this from the request's JWT;

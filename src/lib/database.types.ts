@@ -359,6 +359,8 @@ export type Database = {
       broadcast_poll_change: { Args: { p_poll_id: string }; Returns: undefined }
       begin_account_carry_over: { Args: never; Returns: string }
       close_poll: { Args: { p_poll_id: string }; Returns: undefined }
+      invite_voter: { Args: { p_email: string; p_poll_id: string }; Returns: undefined }
+      uninvite_voter: { Args: { p_email: string; p_poll_id: string }; Returns: undefined }
       confirm_options: { Args: { p_poll_id: string }; Returns: undefined }
       confirming_invitee: {
         Args: { p_poll_id: string }

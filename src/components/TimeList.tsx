@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button, Group, Stack, Text } from '@mantine/core'
 import { PencilSimpleIcon, PlusIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
-import { PaintTimes } from './PaintTimes'
+// The calendar and the library under it, as a chunk of its own; see deferred.ts.
+import { PaintTimes } from './deferred'
 import type { PaintedEdit } from './PaintTimes'
+import { ReadCalendarSkeleton } from './Skeletons'
 import { RollingBadge } from './PollTags'
 import { describeLength, formatDay, meetingMinutes, parseWindowStart } from '../lib/schedule'
 import { sendDraft } from '../lib/optionWrites'
@@ -45,6 +47,12 @@ export function TimeList({
   const [editing, setEditing] = useState(source.kind === 'creator')
   // Opening the calendar is starting an edit, as opening a text field is.
   const started = painted !== null || (editing && source.kind !== 'creator')
+
+  // Fetched as the list arrives, so the press that opens the calendar rarely
+  // has to wait for it.
+  useEffect(() => {
+    void PaintTimes.preload().catch(() => {})
+  }, [])
 
   const noteDraft = useCallback((edit: PaintedEdit | null) => {
     setPainted(edit)
@@ -128,15 +136,17 @@ export function TimeList({
   return (
     <Stack gap="sm">
       {editing ? (
-        <PaintTimes
-          schedule={schedule}
-          options={options}
-          canRemove={isCreator}
-          saving={busy}
-          showSave={ownSave}
-          onSave={save}
-          onDraftChange={noteDraft}
-        />
+        <Suspense fallback={<ReadCalendarSkeleton schedule={schedule} />}>
+          <PaintTimes
+            schedule={schedule}
+            options={options}
+            canRemove={isCreator}
+            saving={busy}
+            showSave={ownSave}
+            onSave={save}
+            onDraftChange={noteDraft}
+          />
+        </Suspense>
       ) : (
         <TimesSummary options={options} schedule={schedule} />
       )}

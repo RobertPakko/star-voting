@@ -144,7 +144,7 @@ docs](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-gith
    with `main` as the production branch. Migrations are then applied for you —
    see [Database migrations](#database-migrations). The `anon` role's access
    is granted entirely by the migrations, and is limited to the `open_poll_*`
-   functions and `send_contact_message` — it has no table grants.
+   functions, `poll_page` and `send_contact_message` — it has no table grants.
 3. Under **Project Settings → API**, copy the Project URL and `anon` key.
 4. The **Email** provider is on by default. Two settings under it are not:
    - **Authentication → Email Templates → Magic Link**: replace the stock
@@ -162,8 +162,9 @@ docs](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-gith
    [Why the marker goes
    missing](#why-the-marker-goes-missing-and-why-it-goes-missing-quietly).
 6. Under **Database → Extensions**, check that `pg_cron` is enabled. Without
-   it the nightly purge is defined and never runs — see [Polls are deleted
-   after six months](#polls-are-deleted-after-six-months).
+   it the two nightly purges (old polls, and anonymous accounts nobody is
+   using) are defined and never run — see [Polls are deleted after six
+   months](#polls-are-deleted-after-six-months).
 7. Under **Authentication → Sign In / Providers**, turn on **Allow anonymous
    sign-ins** (what **Continue without an account** calls). Check the rate
    limit on anonymous sign-ins under **Authentication → Rate Limits**. Leave
@@ -935,7 +936,11 @@ chronological and load-bearing.
 **Loaded lazily** through [`components/deferred.ts`](src/components/deferred.ts),
 with its stylesheet imported inside it so Vite splits the CSS too.
 `@mantine/schedule` and `rrule` are about 139 kB of JS and 79 kB of CSS,
-fetched only by a time ballot or the create form. Because it arrives after the
+fetched only by a time ballot, a calendar being painted or the create form.
+**Nothing both poll pages always draw may import `PaintCalendar` outright**:
+`CollectOptions` is in the bundle every reader starts with, so its `TimeList`
+takes `PaintTimes` through `deferred.ts` and asks for the chunk when it
+mounts. Because the ballot's calendar arrives after the
 page's own fade, it is **the one ballot with an entrance of its own**
 (`BallotFrame`'s `arriving`), and the entrance wraps the body only — the name
 box and question strip in `QuestionSkeleton` are real and must not fade.
@@ -1021,6 +1026,20 @@ The ceiling is 500 options per poll (`MAX_OPTIONS` in
 index the tie-break lookups use; do not add a duplicate. The tally is linear
 in options and ballots: a tie of three or more is settled on five-star votes,
 and head-to-head only ever compares one pair (see [Tie-breaks](#tie-breaks)).
+
+**The weighted round is linear too, by an index on its own temporary table**
+(`_wscores` in `scaled_star_round`): its runoff looks one ballot's score for
+one option up at a time, and without the index each lookup reads the whole
+table, which makes proportional winners, the budget counts and a sequential
+tally quadratic in the ballots.
+
+**A question holds at most 250,000 scores.** An invite poll by its ceilings
+(500 invitees, 500 options); an open one because `open_poll_submit` refuses a
+new ballot at 2000 ballots or at 250,000 ÷ options, whichever is lower — so a
+calendar of 500 windows takes 500 votes and a list of up to 125 options takes
+2000. `62_an_open_poll_takes_so_many_ballots` holds it. At that size the
+tally and the ranking answer well inside a request; proportional winners runs
+ten weighted rounds and on the very largest polls still may not.
 
 ### Collecting times, and a calendar among several questions
 
@@ -2121,6 +2140,12 @@ good for a day, so a link opened in another browser cannot redeem it. See
 way back to. The polls keep running and are purged at six months. The line on
 the poll list says this up front.
 
+**An anonymous account nobody is using is deleted**, nightly, by
+`purge_stale_anonymous_accounts` (pg_cron, `purge-stale-anonymous-accounts`):
+older than the retention window, and with no poll, link ballot or
+confirmation to its name, so deleting it loses nothing. A browser still
+holding that session finds itself signed out.
+
 #### What an anonymous session can reach
 
 An anonymous session holds the `authenticated` role with an **empty email
@@ -2339,7 +2364,9 @@ another browser or after clearing site data. The random key in
 `localStorage` (`src/lib/voterKey.ts`) stops accidental double-submits and is
 not a guard. Open polls are for picking a movie; invite polls for anything
 where the outcome matters. Results stay hidden until they unlock in both
-modes.
+modes. What an open question does bound is how many ballots it takes; see
+[The option ceiling, and what the tally
+costs](#the-option-ceiling-and-what-the-tally-costs).
 
 ### An open ballot cast signed in follows the account
 
@@ -2881,7 +2908,11 @@ The creator's **Manage poll** block holds everything done to the *poll*:
   the editor is open.
 - **Close voting** — reveals results from the votes so far.
 - **Reopen poll** — on a closed poll that is not at full turnout; see
-  [Reopening a closed poll](#reopening-a-closed-poll).
+  [Reopening a closed poll](#reopening-a-closed-poll). Both act on every
+  question, so both are offered by asking every question: `poll_group` gives
+  each one's `voted_count`, and *full turnout* means every question's. Decided
+  from the question on screen, a poll whose first question everybody had
+  answered and whose second nobody had offered **Close voting** on neither.
 - **Send reminder** — on an invite poll taking votes; once per poll, then
   disabled as *Reminder sent*. See [Reminding the voters a poll is waiting
   on](#reminding-the-voters-a-poll-is-waiting-on).
@@ -2927,7 +2958,13 @@ Three things belong to the set:
 1. **One invitation.** Every question carries the whole invite list (RLS on
    options and ballots reads it), and `trg_send_invite_email` fires for the
    first question only, via a `WHEN` clause calling `poll_is_first_question`.
-   One email per person, linking to question 1.
+   One email per person, linking to question 1. **After creation the list is
+   changed only through `invite_voter` and `uninvite_voter`**, which walk the
+   group; `authenticated` has no `INSERT` or `DELETE` on `invited_voters`,
+   because a row written for the question on screen leaves its voter invited
+   to that question alone. A removal is refused whole if they have voted in
+   any question, and `guard_invitee_changes` asks whether the results are out
+   of the poll, not of the question. `61_the_invite_list_is_the_polls`.
 2. **One reveal.** `poll_results_revealed()` asks the *gate* of every question
    in the group, so no question's result is readable while another is taking
    votes. **"Has anyone answered" stays per question**: a poll closed before
@@ -3104,8 +3141,8 @@ in its usual words. `NO KEY` avoids blocking foreign-key checks on inserted
 child rows; it does conflict with the `UPDATE`s of `close_poll` and
 `reopen_poll`. **Reads take nothing and wait for nothing.**
 
-The tables the browser writes directly (invitees, option deletes) are queued
-by their guard triggers, and the three reconcilers (`settle_winner`,
+The invite list and the option list are queued by their guard triggers as
+well, whichever function or grant reaches them, and the three reconcilers (`settle_winner`,
 `notify_results_ready`, `open_options_when_all_confirmed`) lock as well.
 
 ### What a poll writes to people
@@ -3286,6 +3323,21 @@ select cron.schedule('purge-old-polls', '17 4 * * *', 'select public.purge_old_p
 
 `select * from cron.job_run_details order by start_time desc limit 10;` shows
 whether it runs, and `select purge_old_polls();` runs it by hand.
+
+**Deleting an account takes its polls with it** (`polls.created_by` cascades,
+as **Delete poll** does) and its confirmations, and **leaves its ballots in
+other people's polls counted**, with no owner (`ballots.voter_id` is set
+null): a result somebody has read does not change because a voter left.
+There is no button for it; it is what **Authentication → Users → Delete**
+does in the dashboard, and what the nightly job does to anonymous accounts
+nobody is using (see [Polls made without an
+account](#polls-made-without-an-account)), scheduled the same way:
+
+```sql
+select cron.schedule('purge-stale-anonymous-accounts', '47 4 * * *', 'select public.purge_stale_anonymous_accounts()');
+```
+
+`63_deleting_accounts` covers both.
 
 The date reaches the app as `expires_at` on `poll_status()`. **`RetentionNote`**
 (`src/components/RetentionNote.tsx`) shows it at the foot of the poll page,

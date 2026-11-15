@@ -30,9 +30,10 @@ begin
     -- the creator's
     'creator_add_option', 'creator_add_options', 'creator_edit_options',
     'finalize_options', 'close_poll', 'reopen_poll', 'send_poll_reminder',
+    'invite_voter', 'uninvite_voter',
     -- the reconcilers
     'settle_winner', 'notify_results_ready', 'open_options_when_all_confirmed',
-    -- and the guards in front of the two tables the browser writes directly
+    -- and the guards in front of the invite list and the option list
     'guard_invitee_changes', 'guard_options_frozen'
   ] loop
     select p.prosrc into v_src
