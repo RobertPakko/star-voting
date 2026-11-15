@@ -314,9 +314,10 @@ export function AllChoices() {
       <Title order={1}>All choices</Title>
       <Stack gap="sm">
         <Text>
-          The same set of ballots can answer a wide variety of interesting questions about a given
-          group. This page shows all of the choices supported by this app, when it makes sense to
-          use them, and how they work. You can also check out poll{' '}
+          This page shows all of the choices supported by this app, when it makes sense to use them,
+          and how they work. Voting always works exactly the same way, voters rate each option from
+          0 to 5 stars. The choices are just different ways to interpret those ratings. You can also
+          check out poll{' '}
           <Anchor component={Link} to="/variants" inherit>
             variants
           </Anchor>{' '}
