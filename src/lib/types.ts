@@ -561,8 +561,6 @@ export interface AssignmentResult {
   unplaced: { name: string }[]
   /** The voters given something, but fewer than `per_voter`, with how many. */
   short: { name: string; count: number }[]
-  /** How many options went to a voter who gave them each number of stars, keyed by the stars. */
-  received: Record<string, number>
   /** The most options one voter was to be given. */
   per_voter: number
   /** Every place counted. */

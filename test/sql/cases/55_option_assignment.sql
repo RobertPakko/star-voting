@@ -65,7 +65,11 @@ begin
     (select array_agg((o ->> 'places')::int) from jsonb_array_elements(a -> 'options') o),
     array[3, 2, 1]);
   perform tests.assert_eq('nobody is left out', jsonb_array_length(a -> 'unplaced'), 0);
-  perform tests.assert_eq('four got a five, two a three', a -> 'received', '{"5": 4, "3": 2}'::jsonb);
+  perform tests.assert_eq('the stars each option was given are not answered', a ? 'received', false);
+  perform tests.assert_eq('the answer is the count less them',
+    a, assignment_count(v_poll, '{}', v_places) - 'received');
+  perform tests.assert_eq('four got a five, two a three',
+    assignment_count(v_poll, '{}', v_places) -> 'received', '{"5": 4, "3": 2}'::jsonb);
   perform tests.assert_eq('six places', (a ->> 'places')::int, 6);
   perform tests.assert_eq('six voters', (a ->> 'voter_count')::int, 6);
   perform tests.assert_eq('a private ballot''s stars are not shown',
@@ -80,7 +84,7 @@ begin
   a := get_poll_assignment(v_poll, '{}');
   perform tests.assert_eq('one place each places three', jsonb_array_length(a -> 'unplaced'), 3);
   perform tests.assert_eq('on the best product there is, 5 x 5 x 4',
-    a -> 'received', '{"5": 2, "4": 1}'::jsonb);
+    assignment_count(v_poll, '{}', null) -> 'received', '{"5": 2, "4": 1}'::jsonb);
   perform tests.assert_eq('and the draw between equal products is the same every time',
     a, get_poll_assignment(v_poll, '{}'));
 
@@ -134,7 +138,7 @@ begin
        jsonb_array_elements(o -> 'voters') v where o ->> 'name' = 'C'), 'voter3@example.com');
   perform tests.assert_eq('so nobody goes without', jsonb_array_length(a -> 'unplaced'), 0);
   perform tests.assert_eq('and a 0 is counted among what was handed out',
-    a -> 'received', '{"5": 1, "1": 1, "0": 1}'::jsonb);
+    assignment_count(v_poll, '{}', null) -> 'received', '{"5": 1, "1": 1, "0": 1}'::jsonb);
 end $$;
 
 -- Two options each, in rounds. Places: A, B and C one each, D two.
@@ -195,13 +199,13 @@ begin
     a -> 'short', '[{"name": "voter3@example.com", "count": 1}]'::jsonb);
   perform tests.assert_eq('nobody is left with nothing', jsonb_array_length(a -> 'unplaced'), 0);
   perform tests.assert_eq('the options handed out, by the stars they were given',
-    a -> 'received', '{"5": 1, "4": 1, "3": 2, "2": 1}'::jsonb);
+    assignment_count(v_poll, '{}', v_places, 2) -> 'received', '{"5": 1, "4": 1, "3": 2, "2": 1}'::jsonb);
 
   -- With one each, the count is round 1 alone.
   a := get_poll_assignment(v_poll, '{}', v_places);
   perform tests.assert_eq('one each by default', (a ->> 'per_voter')::int, 1);
   perform tests.assert_eq('and that is round 1',
-    a -> 'received', '{"5": 1, "4": 1, "3": 1}'::jsonb);
+    assignment_count(v_poll, '{}', v_places) -> 'received', '{"5": 1, "4": 1, "3": 1}'::jsonb);
 
   -- Nobody is given an option twice, however many places it has.
   a := get_poll_assignment(v_poll, '{}',
@@ -210,7 +214,9 @@ begin
     (select count(*) from jsonb_array_elements(a -> 'options') o, jsonb_array_elements(o -> 'voters') v),
     9::bigint);
   perform tests.assert_eq('each on their best three',
-    a -> 'received', '{"5": 2, "4": 1, "3": 3, "2": 3}'::jsonb);
+    assignment_count(v_poll, '{}',
+      (select jsonb_object_agg(id, 9) from candidates where poll_id = v_poll), 3) -> 'received',
+    '{"5": 2, "4": 1, "3": 3, "2": 3}'::jsonb);
 
   perform tests.assert_raises('the cap is at least 1',
     format('select get_poll_assignment(%L, ''{}'', null, 0)', v_poll),
@@ -388,6 +394,10 @@ begin
 
   perform tests.assert_eq('the count is nobody''s to call',
     has_function_privilege('authenticated', 'poll_assignment(uuid, uuid[], jsonb, integer)', 'execute'), false);
+  perform tests.assert_eq('nor the count with the stars it handed out',
+    has_function_privilege('authenticated', 'assignment_count(uuid, uuid[], jsonb, integer)', 'execute')
+      or has_function_privilege('anon', 'assignment_count(uuid, uuid[], jsonb, integer)', 'execute'),
+    false);
   perform tests.assert_eq('nor which field holds an option''s number',
     has_function_privilege('authenticated', 'option_number(text, jsonb)', 'execute'), false);
   perform tests.assert_eq('the link''s door is open to anybody',

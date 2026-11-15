@@ -3565,10 +3565,12 @@ counts the same example, and a second worked by hand over two rounds.
   they were given); it carries no headline count of who was placed, since
   both views show it. The option view also lists voters given none
   (`unplaced`).
-- **No voter's stars are shown beside their options**, even where ballots
-  are published: they made the lists hard to read, and the published sheet
-  has them. On a private poll the answer says only how many options went to
-  a voter who gave them each number of stars (`received`).
+- **It says nothing of anybody's stars**, even where ballots are published:
+  they made the lists hard to read, and the published sheet has them. Nor
+  does it count the options handed out by the stars they were given: beside
+  who got what, that could say how a named voter scored on a private poll.
+  `poll_assignment` is `assignment_count` less that count, which only the
+  suite reads.
 - **Capacities and the cap can be given after the fact**, like costs: an
   assignment question stores its capacities in `candidates.kind_value`
   (optional, none meaning one) and its cap in `polls.kind_value`; on any

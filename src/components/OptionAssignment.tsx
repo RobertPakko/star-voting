@@ -19,7 +19,7 @@ import { AMOUNT_MAX } from '../lib/limits'
 import { choiceNumberLabel, PER_VOTER_NUMBERS } from '../lib/choices'
 import { use24HourTime } from '../lib/clock'
 import { formatWindow } from '../lib/schedule'
-import { count, stars, voters } from '../lib/plural'
+import { count } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { AssignmentResult, PollResults } from '../lib/types'
 import { ChoiceModal } from './ChoiceBlurb'
@@ -40,9 +40,9 @@ import { OptionNote } from './OptionNote'
  * it.
  *
  * **It names who gets what**, so it is offered only on a poll that shows who
- * voted (`offers`). It names no voter's stars, which made the lists hard to
- * read; on a poll that keeps its ballots private, a line says how many
- * options went to a voter who gave them each number of stars.
+ * voted (`offers`). It says nothing of anybody's stars: beside who got what,
+ * even a count of options by the stars they were given could say how a
+ * named voter scored on a poll whose ballots are private.
  *
  * **Capacities and the cap can be given after the fact.** An assignment
  * question has its own (a capacity of one, and one option each, where it says
@@ -180,7 +180,6 @@ export function OptionAssignmentBody({
   const remove = (option: LeftOut) => onLeftOut([...leftOut, option])
   const restore = (id: string) => onLeftOut(leftOut.filter((o) => o.id !== id))
 
-  const placed = result ? result.voter_count - result.unplaced.length : 0
   const optionWord = results.calendar ? 'Time' : 'Option'
 
   return (
@@ -305,13 +304,6 @@ export function OptionAssignmentBody({
               </Text>
             </Stack>
           )}
-
-          {/* A private poll shows no voter's stars, so this is all it says of them. */}
-          {!result.stars_shown && placed > 0 && (
-            <Text size="sm" c="dimmed">
-              {received(result.received, result.per_voter)}
-            </Text>
-          )}
         </Stack>
       )}
     </Stack>
@@ -362,31 +354,6 @@ function VoterView({
       ))}
     </Stack>
   )
-}
-
-/**
- * How many options went to a voter who gave them each number of stars, best
- * first: "4 voters got an option they gave 5 stars and 2 one they gave 3", or
- * with several each, "12 options went to voters who gave them 5 stars and 6
- * to voters who gave them 4". All a private ballot gives away about how well
- * the assignment went.
- */
-function received(counts: Record<string, number>, perVoter: number) {
-  const levels = Object.entries(counts)
-    .map(([given, n]) => [Number(given), n] as const)
-    .sort(([a], [b]) => b - a)
-  const parts = levels.map(([given, n], i) =>
-    perVoter === 1
-      ? i === 0
-        ? `${voters(n)} got an option they gave ${stars(given)}`
-        : `${n} one they gave ${given}`
-      : i === 0
-        ? `${count(n, 'option')} went to voters who gave ${n === 1 ? 'it' : 'them'} ${stars(given)}`
-        : `${n} to voters who gave ${n === 1 ? 'it' : 'them'} ${given}`,
-  )
-  const joined =
-    parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0]
-  return `${joined}.`
 }
 
 /**

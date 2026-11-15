@@ -3794,10 +3794,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
             voters: [],
           },
         ],
-        received: {
-          '4': 1,
-          '5': 8,
-        },
         unplaced: [],
         per_voter: 1,
         stars_shown: true,
@@ -3948,10 +3944,6 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           voters: [],
         },
       ],
-      received: {
-        '4': 1,
-        '5': 8,
-      },
       unplaced: [],
       per_voter: 1,
       stars_shown: true,
