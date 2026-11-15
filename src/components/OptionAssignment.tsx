@@ -40,9 +40,9 @@ import { OptionNote } from './OptionNote'
  * it.
  *
  * **It names who gets what**, so it is offered only on a poll that shows who
- * voted (`offers`). Each voter's stars for their own options are shown only
- * where the poll publishes its ballots; otherwise the count says only how
- * many options went to a voter who gave them each number of stars.
+ * voted (`offers`). It names no voter's stars, which made the lists hard to
+ * read; on a poll that keeps its ballots private, a line says how many
+ * options went to a voter who gave them each number of stars.
  *
  * **Capacities and the cap can be given after the fact.** An assignment
  * question has its own (a capacity of one, and one option each, where it says
@@ -55,9 +55,9 @@ import { OptionNote } from './OptionNote'
  * count with the question's own capacities and nothing removed.
  *
  * **Two views of one answer**: by option (who fills each option's slots) and
- * by voter (what each voter was given). The database calls a capacity
- * `places`; on screen it is a *capacity* where it is set and *slots* where
- * they are filled.
+ * by voter (what each voter was given, and how many of the most they could
+ * be). The database calls a capacity `places`; on screen it is a *capacity*
+ * where it is set and *slots* where they are filled.
  */
 export function OptionAssignment({
   source,
@@ -253,7 +253,9 @@ export function OptionAssignmentBody({
             style={{ alignSelf: 'flex-start' }}
           />
 
-          {view === 'voters' && <VoterView result={result} h24={h24} />}
+          {view === 'voters' && (
+            <VoterView result={result} h24={h24} word={optionWord.toLowerCase()} />
+          )}
 
           {view === 'options' &&
             result.options.map((option) => (
@@ -287,24 +289,11 @@ export function OptionAssignmentBody({
                   <Text size="sm" c={option.voters.length === 0 ? 'dimmed' : undefined}>
                     {option.voters.length === 0
                       ? 'Nobody'
-                      : option.voters
-                          .map((v) => (v.stars === undefined ? v.name : `${v.name} (${v.stars})`))
-                          .join(', ')}
+                      : option.voters.map((v) => v.name).join(', ')}
                   </Text>
                 </Stack>
               </Group>
             ))}
-
-          {view === 'options' && result.short.length > 0 && (
-            <Stack gap={2}>
-              <Text size="sm" fw={600}>
-                Fewer than {count(result.per_voter, 'option')}
-              </Text>
-              <Text size="sm" c="dimmed">
-                {result.short.map((v) => `${v.name} (${v.count})`).join(', ')}
-              </Text>
-            </Stack>
-          )}
 
           {view === 'options' && result.unplaced.length > 0 && (
             <Stack gap={2}>
@@ -330,17 +319,25 @@ export function OptionAssignmentBody({
 }
 
 /**
- * Every voter, alphabetically, with the options they were given (and, where
- * ballots are published, the stars they gave each). The answer names voters
- * as the roster does, so two open-poll voters who typed one name are listed
- * as one.
+ * Every voter, alphabetically, with how many options they were given out of
+ * the most they could be (as the option view counts slots) and which. The
+ * answer names voters as the roster does, so two open-poll voters who typed
+ * one name are listed as one.
  */
-function VoterView({ result, h24 }: { result: AssignmentResult; h24: boolean }) {
-  const given = new Map<string, { id: string; name: string; stars?: number }[]>()
+function VoterView({
+  result,
+  h24,
+  word,
+}: {
+  result: AssignmentResult
+  h24: boolean
+  word: string
+}) {
+  const given = new Map<string, string[]>()
   for (const option of result.options)
     for (const voter of option.voters) {
       const held = given.get(voter.name) ?? []
-      held.push({ id: option.id, name: formatWindow(option.name, h24), stars: voter.stars })
+      held.push(formatWindow(option.name, h24))
       given.set(voter.name, held)
     }
   for (const voter of result.unplaced) if (!given.has(voter.name)) given.set(voter.name, [])
@@ -350,15 +347,16 @@ function VoterView({ result, h24 }: { result: AssignmentResult; h24: boolean }) 
     <Stack gap="sm">
       {rows.map(([name, held]) => (
         <Stack key={name} gap={2}>
-          <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
-            {name}
-          </Text>
+          <Group gap="xs" wrap="nowrap" align="center">
+            <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+              {name}
+            </Text>
+            <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+              {held.length} of {count(result.per_voter, word)}
+            </Text>
+          </Group>
           <Text size="sm" c={held.length === 0 ? 'dimmed' : undefined}>
-            {held.length === 0
-              ? 'No option'
-              : held
-                  .map((o) => (o.stars === undefined ? o.name : `${o.name} (${o.stars})`))
-                  .join(', ')}
+            {held.length === 0 ? `No ${word}` : held.join(', ')}
           </Text>
         </Stack>
       ))}

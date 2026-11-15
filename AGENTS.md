@@ -3561,13 +3561,14 @@ counts the same example, and a second worked by hand over two rounds.
 - **On screen an option has a *capacity*, and fills *slots***: the
   database's word for both is `places`. The answer is one card with two
   views, **Option view** (each option, *2 of 3 slots*, and who fills them)
-  and **Voter view** (each voter alphabetically, and what they were given);
-  it carries no headline count of who was placed, since both views show it.
-- **Each voter's stars are shown only where ballots are published**, in
-  brackets after their name or option; on a private poll the answer says
-  only how many options went to a voter who gave them each number of stars
-  (`received`). The option view lists voters given fewer than the cap with
-  how many (`short`), and voters given none (`unplaced`).
+  and **Voter view** (each voter alphabetically, *1 of 2 options*, and what
+  they were given); it carries no headline count of who was placed, since
+  both views show it. The option view also lists voters given none
+  (`unplaced`).
+- **No voter's stars are shown beside their options**, even where ballots
+  are published: they made the lists hard to read, and the published sheet
+  has them. On a private poll the answer says only how many options went to
+  a voter who gave them each number of stars (`received`).
 - **Capacities and the cap can be given after the fact**, like costs: an
   assignment question stores its capacities in `candidates.kind_value`
   (optional, none meaning one) and its cap in `polls.kind_value`; on any
