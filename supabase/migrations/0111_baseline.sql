@@ -88,11 +88,13 @@ CREATE TABLE IF NOT EXISTS "public"."polls" (
     "reopened_after_reveal" boolean DEFAULT false NOT NULL,
     "reminder_sent_at" timestamp with time zone,
     "results_announced_at" timestamp with time zone,
-    CONSTRAINT "polls_kind_ck" CHECK (("kind" = ANY (ARRAY['option'::"text", 'time'::"text"]))),
+    "kind_value" numeric,
+    CONSTRAINT "polls_kind_ck" CHECK (("kind" = ANY (ARRAY['option'::"text", 'ranking'::"text", 'multiple'::"text", 'fractional'::"text", 'consensus'::"text", 'budget'::"text", 'ranking_budget'::"text", 'fractional_budget'::"text", 'assignment'::"text", 'consensus_winners'::"text"]))),
+    CONSTRAINT "polls_kind_value_ck" CHECK ((("kind_value" IS NULL) OR (("kind_value" = "trunc"("kind_value")) AND ((("kind" = ANY (ARRAY['ranking'::"text", 'multiple'::"text", 'consensus_winners'::"text"])) AND ("kind_value" >= (2)::numeric)) OR (("kind" = ANY (ARRAY['budget'::"text", 'ranking_budget'::"text", 'fractional_budget'::"text", 'assignment'::"text"])) AND ("kind_value" >= (1)::numeric)))))),
     CONSTRAINT "polls_mode_ck" CHECK (("mode" = ANY (ARRAY['invite'::"text", 'open'::"text"]))),
     CONSTRAINT "polls_options_finalized_ck" CHECK ((("options_finalized_at" IS NULL) OR "solicit_options")),
     CONSTRAINT "polls_question_ck" CHECK (((("group_id" IS NULL) AND ("question_position" IS NULL) AND ("question_title" IS NULL)) OR (("group_id" IS NOT NULL) AND ("question_position" >= 1) AND ("question_title" IS NOT NULL)))),
-    CONSTRAINT "polls_schedule_ck" CHECK (((("kind" = 'option'::"text") AND ("schedule" IS NULL)) OR (("kind" = 'time'::"text") AND ("schedule" IS NOT NULL)))),
+    CONSTRAINT "polls_schedule_ck" CHECK ((("schedule" IS NULL) OR ("kind" <> ALL (ARRAY['budget'::"text", 'ranking_budget'::"text", 'fractional_budget'::"text"])))),
     CONSTRAINT "polls_winner_settled_ck" CHECK ((("winner_name" IS NULL) OR ("winner_settled_at" IS NOT NULL)))
 );
 
@@ -124,19 +126,19 @@ COMMENT ON COLUMN "public"."polls"."question_title" IS 'What this one question a
 
 
 
-COMMENT ON COLUMN "public"."polls"."winner_name" IS 'The option this question elected, null for a question that elected nobody. Meaningful only where winner_settled_at is set. Maintained by settle_winner(); never written by a client.';
+COMMENT ON COLUMN "public"."polls"."winner_name" IS 'The option this question elected by its own kind (STAR''s winner, or the consensus), null for a question that elected nobody. Meaningful only where winner_settled_at is set. Maintained by settle_winner(); never written by a client.';
 
 
 
-COMMENT ON COLUMN "public"."polls"."winner_settled_at" IS 'When this question''s result was worked out. Null means it has none yet -- it is still taking votes, or a reset took its result away.';
+COMMENT ON COLUMN "public"."polls"."winner_settled_at" IS 'When this question''s winner was worked out. Null means it has none: it is still taking votes, a reset took its result away, or its kind answers with several options (poll_names_one_winner).';
 
 
 
-COMMENT ON COLUMN "public"."polls"."kind" IS 'What the poll is choosing between. ''option'' is an ordinary ballot; ''time'' is a poll whose options are the start of a meeting window and whose ballot is a calendar. A setting, frozen at creation like mode.';
+COMMENT ON COLUMN "public"."polls"."kind" IS 'What the question asks for, and so which result it opens on: ''option'' (the best option), ''ranking'' (multiple winners: STAR run again without each winner), ''multiple'' (proportional winners), ''fractional'' (fractional winners), ''consensus'' (the consensus option), ''budget'' (proportional winners with a budget, its options costed), ''ranking_budget'' (multiple winners with a budget, its options costed), ''fractional_budget'' (fractional winners with a budget, each option funded up to its cost), ''assignment'' (an option assignment, which shows who voted) or ''consensus_winners'' (consensus winners). Whether the ballot is a calendar is whether the question has a schedule, which no budget may. The other results are still offered. A setting, frozen at creation like mode.';
 
 
 
-COMMENT ON COLUMN "public"."polls"."schedule" IS 'How a time poll''s grid is laid out: {timezone, window: {start, end}, desired_slots, granularity}. Only what cannot be recovered from the options -- the in-bounds days are exactly the dates the options start on, so the client derives those and the two can never disagree. Null on an option poll; required on a time poll.';
+COMMENT ON COLUMN "public"."polls"."schedule" IS 'Present exactly when the ballot is a calendar, whose options are the starts of meeting windows: the UTC offset, the axis, the meeting length in granules, the granularity, and optionally the step between window starts and an assignment''s places per window. See validate_schedule.';
 
 
 
@@ -157,6 +159,10 @@ COMMENT ON COLUMN "public"."polls"."reminder_sent_at" IS 'When the creator sent 
 
 
 COMMENT ON COLUMN "public"."polls"."results_announced_at" IS 'When the poll''s results-ready announcement went out; null while it has not, and cleared when the poll goes back to taking votes, so a second finish is announced again. Set on the group''s first question only.';
+
+
+
+COMMENT ON COLUMN "public"."polls"."kind_value" IS 'A number whose meaning belongs to the kind: the places to rank, the winners to choose (multiple winners, or consensus winners, which must have one), the budget, or the most options an option assignment gives one voter. Null where the kind takes none, or to show as many as the results hold (poll_results_rows()), or on an assignment for one option each; never null on a budget or consensus winners. Readers may look at the result with another number; this is where it opens.';
 
 
 
@@ -332,6 +338,381 @@ $$;
 ALTER FUNCTION "public"."assert_results_readable"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."assignment_count"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer DEFAULT NULL::integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+  v_ballots uuid[];
+  v_names text[];
+  v_options uuid[];
+  v_cap int[];
+  v_left int[];     -- each option's places still free
+  v_stars int[];
+  v_draw bigint[];
+  v_per_voter int;
+  n int;
+  m int;
+  w int;            -- the options and going without
+  v_none int;       -- the column for going without
+  v_big bigint := 9223372036854775807;
+  v_log bigint[] := array[0,
+    round(ln(2::numeric) * 1e12)::bigint, round(ln(3::numeric) * 1e12)::bigint,
+    round(ln(4::numeric) * 1e12)::bigint, round(ln(5::numeric) * 1e12)::bigint];
+  v_gain bigint[];  -- ln((held + stars) / held) x 10^12, at (held - 1) x 5 + stars
+  k bigint;
+  s bigint;
+  -- Across rounds, by voter.
+  v_held_stars int[];
+  v_count int[];
+  v_holds boolean[];  -- by (voter - 1) x m + option
+  -- One round, by the round's own voter numbering.
+  v_who int[];
+  na int;
+  e_hi bigint[];
+  e_lo bigint[];
+  u_hi bigint[];
+  u_lo bigint[];
+  v_hi bigint[];
+  v_lo bigint[];
+  d_hi bigint[];
+  d_lo bigint[];
+  way int[];
+  done boolean[];
+  col int[];
+  cnt int[];
+  nd_hi bigint;
+  nd_lo bigint;
+  v_given int;
+  r int;
+  i int;
+  j int;
+  h int;
+  t int;
+  g int;
+  best int;
+  v_score int;
+  v_key text;
+  v_value jsonb;
+  v_result_options jsonb;
+  v_unplaced jsonb;
+  v_short jsonb;
+  v_received jsonb;
+begin
+  if coalesce(array_length(p_excluded, 1), 0) > 1000 then
+    raise exception 'Too many options left out';
+  end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+
+  -- The answer is a list of who gets what, so it is only for a poll that
+  -- already says who voted.
+  if not v_poll.show_voters then
+    raise exception 'This poll does not show who voted, so it cannot say who gets which option';
+  end if;
+
+  if poll_is_weighted(p_poll_id) then
+    raise exception 'A sequential poll''s ballots carry weights an assignment would ignore';
+  end if;
+
+  if p_per_voter is not null then
+    perform validate_per_voter(p_per_voter);
+  end if;
+  v_per_voter := coalesce(p_per_voter,
+    case when v_poll.kind = 'assignment' then v_poll.kind_value::int end, 1);
+
+  p_places := coalesce(p_places, '{}'::jsonb);
+  if jsonb_typeof(p_places) <> 'object' then
+    raise exception 'Give the places as an object';
+  end if;
+
+  -- Every number a reader sends is held to the rules a stored one is.
+  for v_key, v_value in select key, value from jsonb_each(p_places) loop
+    continue when v_value = 'null'::jsonb;
+    if jsonb_typeof(v_value) <> 'number' then
+      raise exception 'A number of places is not a number';
+    end if;
+    perform validate_amount((v_value #>> '{}')::numeric, 'A number of places');
+  end loop;
+
+  -- The voters, by ballot id so the order is the same on every count.
+  select coalesce(array_agg(b.id order by b.id), '{}'::uuid[]),
+         coalesce(array_agg(coalesce(b.voter_name, lower(u.email), 'A voter') order by b.id), '{}'::text[])
+  into v_ballots, v_names
+  from ballots b
+  -- Invite ballots carry a voter_id and no name; open ones the reverse.
+  left join auth.users u on u.id = b.voter_id
+  where b.poll_id = p_poll_id;
+
+  n := coalesce(array_length(v_ballots, 1), 0);
+  if n = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  if n > 2000 then
+    raise exception 'This poll has too many votes to assign options to them';
+  end if;
+
+  -- The options counted and their places.
+  select coalesce(array_agg(c.id order by c.sort_order, c.name), '{}'::uuid[]),
+         coalesce(array_agg((case when p_places ? c.id::text
+                                  then coalesce((p_places ->> c.id::text)::numeric, 1)
+                                  else coalesce(c.kind_value, 1) end)::int
+                            order by c.sort_order, c.name), '{}'::int[])
+  into v_options, v_cap
+  from candidates c
+  where c.poll_id = p_poll_id
+    and not (c.id = any(coalesce(p_excluded, '{}'::uuid[])));
+
+  m := coalesce(array_length(v_options, 1), 0);
+  if m = 0 then
+    raise exception 'There are no options left to assign';
+  end if;
+
+  -- Bounded by the work the count does: about voters x voters x options for
+  -- the first round, each later one cheaper as the options fill (measured at
+  -- about half), so a reader waits a few seconds at most -- Supabase's
+  -- statement timeout, not CPU, is the ceiling that matters.
+  if n::bigint * n * (m + 1) * (least(v_per_voter, m) + 1) / 2 > 15000000 then
+    raise exception 'This poll has too many votes and options to assign them';
+  end if;
+
+  w := m + 1;
+  v_none := w;
+
+  -- Every voter's stars for every option, a row per voter, and the draw
+  -- that settles an exact tie, from ids nobody chose.
+  select array_agg(coalesce(sc.score, 0) order by b.ord, o.ord),
+         array_agg(('x' || substr(md5(p_poll_id::text || b.id::text || o.id::text), 1, 7))::bit(28)::bigint
+                   order by b.ord, o.ord)
+  into v_stars, v_draw
+  from unnest(v_ballots) with ordinality b(id, ord)
+  cross join unnest(v_options) with ordinality o(id, ord)
+  left join scores sc on sc.ballot_id = b.id and sc.candidate_id = o.id;
+
+  -- ln 6 is the largest gain a round can give a voter already holding a
+  -- star (1 held, 5 more), and ln 5 the largest first star.
+  k := (n + 1)::bigint * 1800000000000;
+  s := (n + 1)::bigint * 268435456;
+
+  v_gain := array_fill(0::bigint, array[5 * v_per_voter * 5]);
+  for g in 1 .. 5 * v_per_voter loop
+    for v_score in 1 .. 5 loop
+      v_gain[(g - 1) * 5 + v_score] := round(ln((g + v_score)::numeric / g) * 1e12)::bigint;
+    end loop;
+  end loop;
+
+  v_left := v_cap;
+  v_held_stars := array_fill(0, array[n]);
+  v_count := array_fill(0, array[n]);
+  v_holds := array_fill(false, array[n * m]);
+
+  loop
+    -- The voters in this round: under the cap, with an option they do not
+    -- hold still having a place.
+    select coalesce(array_agg(g.v order by g.v), '{}'::int[]) into v_who
+    from generate_series(1, n) g(v)
+    where v_count[g.v] < v_per_voter
+      and exists (select 1 from generate_series(1, m) o(h)
+                  where v_left[o.h] > 0 and not v_holds[(g.v - 1) * m + o.h]);
+    na := coalesce(array_length(v_who, 1), 0);
+    exit when na = 0;
+
+    -- Every edge's cost this round, by the round's voter; v_big where the
+    -- voter cannot take the option.
+    e_hi := array_fill(v_big, array[na * w]);
+    e_lo := array_fill(v_big, array[na * w]);
+    for r in 1 .. na loop
+      i := v_who[r];
+      e_hi[(r - 1) * w + v_none] := 0;
+      e_lo[(r - 1) * w + v_none] := 0;
+      for h in 1 .. m loop
+        continue when v_left[h] = 0 or v_holds[(i - 1) * m + h];
+        v_score := v_stars[(i - 1) * m + h];
+        e_hi[(r - 1) * w + h] := case
+          when v_score = 0 then 0
+          when v_held_stars[i] = 0 then -(k + v_log[v_score])
+          else -v_gain[(v_held_stars[i] - 1) * 5 + v_score]
+        end;
+        e_lo[(r - 1) * w + h] := -(v_score * s + v_draw[(i - 1) * m + h]);
+      end loop;
+    end loop;
+
+    u_hi := array_fill(0::bigint, array[na]);
+    u_lo := array_fill(0::bigint, array[na]);
+    v_hi := array_fill(0::bigint, array[w]);
+    v_lo := array_fill(0::bigint, array[w]);
+    col := array_fill(0, array[na]);
+    cnt := array_fill(0, array[w]);
+
+    for r in 1 .. na loop
+      d_hi := array_fill(v_big, array[w]);
+      d_lo := array_fill(v_big, array[w]);
+      way := array_fill(0, array[w]);
+      done := array_fill(false, array[w]);
+
+      -- From the new voter, at a potential of nothing, to every column.
+      for h in 1 .. w loop
+        continue when e_hi[(r - 1) * w + h] = v_big;
+        d_hi[h] := e_hi[(r - 1) * w + h] - v_hi[h];
+        d_lo[h] := e_lo[(r - 1) * w + h] - v_lo[h];
+        way[h] := r;
+      end loop;
+
+      loop
+        -- The nearest column not yet settled. Going without is always
+        -- reachable, so there is one.
+        best := 0;
+        for h in 1 .. w loop
+          continue when done[h] or d_hi[h] = v_big;
+          if best = 0 or (d_hi[h], d_lo[h]) < (d_hi[best], d_lo[best]) then
+            best := h;
+          end if;
+        end loop;
+
+        done[best] := true;
+
+        if best = v_none or cnt[best] < v_left[best] then
+          t := best;
+          exit;
+        end if;
+
+        -- A full option: each voter in it could move on, at no cost to
+        -- reach, since the edge that holds them there is tight.
+        for i in 1 .. r - 1 loop
+          continue when col[i] <> best;
+          for h in 1 .. w loop
+            continue when done[h] or e_hi[(i - 1) * w + h] = v_big;
+            nd_hi := d_hi[best] + e_hi[(i - 1) * w + h] - u_hi[i] - v_hi[h];
+            nd_lo := d_lo[best] + e_lo[(i - 1) * w + h] - u_lo[i] - v_lo[h];
+            if (nd_hi, nd_lo) < (d_hi[h], d_lo[h]) then
+              d_hi[h] := nd_hi;
+              d_lo[h] := nd_lo;
+              way[h] := i;
+            end if;
+          end loop;
+        end loop;
+      end loop;
+
+      -- Potentials, so every edge stays non-negative and the path just found
+      -- is tight: a settled column comes down by how far short of the sink
+      -- it was, and each voter reached through one goes up by the same.
+      for h in 1 .. w loop
+        continue when not done[h] or h = t;
+        for i in 1 .. r - 1 loop
+          continue when col[i] <> h;
+          u_hi[i] := u_hi[i] + (d_hi[t] - d_hi[h]);
+          u_lo[i] := u_lo[i] + (d_lo[t] - d_lo[h]);
+        end loop;
+        v_hi[h] := v_hi[h] - (d_hi[t] - d_hi[h]);
+        v_lo[h] := v_lo[h] - (d_lo[t] - d_lo[h]);
+      end loop;
+      u_hi[r] := d_hi[t];
+      u_lo[r] := d_lo[t];
+
+      -- Along the path, back from the sink: each voter on it moves into the
+      -- column after it, and the new voter takes the first.
+      cnt[t] := cnt[t] + 1;
+      h := t;
+      loop
+        i := way[h];
+        j := col[i];
+        col[i] := h;
+        exit when i = r;
+        h := j;
+      end loop;
+    end loop;
+
+    -- What the round handed out. A round that hands out nothing is the end:
+    -- nobody under the cap could take a place.
+    v_given := 0;
+    for r in 1 .. na loop
+      continue when col[r] = v_none;
+      i := v_who[r];
+      h := col[r];
+      v_holds[(i - 1) * m + h] := true;
+      v_held_stars[i] := v_held_stars[i] + v_stars[(i - 1) * m + h];
+      v_count[i] := v_count[i] + 1;
+      v_left[h] := v_left[h] - 1;
+      v_given := v_given + 1;
+    end loop;
+    exit when v_given = 0;
+  end loop;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', o.id,
+           'name', c.name,
+           'places', v_cap[o.ord],
+           'voters', coalesce((
+             select jsonb_agg(
+                      jsonb_build_object('name', v_names[g.v])
+                      || case when v_poll.show_ballots
+                              then jsonb_build_object('stars', v_stars[(g.v - 1) * m + o.ord])
+                              else '{}'::jsonb end
+                      order by lower(v_names[g.v]), g.v)
+             from generate_series(1, n) g(v)
+             where v_holds[(g.v - 1) * m + o.ord]), '[]'::jsonb))
+           order by v_cap[o.ord] - v_left[o.ord] desc, o.ord), '[]'::jsonb)
+  into v_result_options
+  from unnest(v_options) with ordinality o(id, ord)
+  join candidates c on c.id = o.id;
+
+  select coalesce(jsonb_agg(jsonb_build_object('name', v_names[g.v])
+                            order by lower(v_names[g.v]), g.v), '[]'::jsonb)
+  into v_unplaced
+  from generate_series(1, n) g(v)
+  where v_count[g.v] = 0;
+
+  select coalesce(jsonb_agg(jsonb_build_object('name', v_names[g.v], 'count', v_count[g.v])
+                            order by lower(v_names[g.v]), g.v), '[]'::jsonb)
+  into v_short
+  from generate_series(1, n) g(v)
+  where v_count[g.v] between 1 and v_per_voter - 1;
+
+  select coalesce(jsonb_object_agg(x.stars, x.handed), '{}'::jsonb)
+  into v_received
+  from (
+    select v_stars[(g.v - 1) * m + o.h] as stars, count(*) as handed
+    from generate_series(1, n) g(v)
+    cross join generate_series(1, m) o(h)
+    where v_holds[(g.v - 1) * m + o.h]
+    group by 1
+  ) x;
+
+  return jsonb_build_object(
+    'options', v_result_options,
+    'unplaced', v_unplaced,
+    'short', v_short,
+    'received', v_received,
+    'places', (select sum(p::bigint) from unnest(v_cap) p),
+    'per_voter', v_per_voter,
+    'voter_count', n,
+    'stars_shown', v_poll.show_ballots);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."assignment_count"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."ballot_given"("p_poll_id" "uuid") RETURNS TABLE("ballot_id" "uuid", "given" numeric)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select b.id,
+         case when o.j ->> 'poll' = p_poll_id::text
+              then (o.j -> 'given' ->> b.id::text)::numeric
+              else b.given end
+  from ballots b,
+       (select nullif(current_setting('app.sequential_given', true), '')::jsonb as j) o
+  where b.poll_id = p_poll_id
+$$;
+
+
+ALTER FUNCTION "public"."ballot_given"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."ballot_sheet"("p_poll_id" "uuid", "p_named" boolean) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -346,7 +727,7 @@ begin
   from candidates c
   where c.poll_id = p_poll_id;
 
-  select coalesce(jsonb_agg(x.ballot order by x.sort_key), '[]'::jsonb)
+  select coalesce(jsonb_agg(x.ballot order by x.sort_key, x.id), '[]'::jsonb)
   into v_ballots
   from (
     select
@@ -359,14 +740,19 @@ begin
           (select jsonb_object_agg(s.candidate_id::text, s.score)
            from scores s where s.ballot_id = b.id),
           '{}'::jsonb)
-      ) as ballot,
+      ) || case when p_named and g.given is not null
+                then jsonb_build_object('given', trim_scale(g.given))
+                else '{}'::jsonb end as ballot,
       case
         when p_named then lower(coalesce(b.voter_name, u.email))
         else md5(b.id::text)
-      end as sort_key
+      end as sort_key,
+      b.id
     from ballots b
     -- Invite ballots carry a voter_id and no name; open ones the reverse.
     left join auth.users u on u.id = b.voter_id
+    -- The N each ballot is counted at, which a sequential count may have set.
+    join ballot_given(p_poll_id) g on g.ballot_id = b.id
     where b.poll_id = p_poll_id
   ) x;
 
@@ -600,6 +986,37 @@ $$;
 ALTER FUNCTION "public"."broadcast_polls_touched"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."claim_carried_weight"("p_poll_id" "uuid", "p_voter" "text") RETURNS numeric
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_voter text := nullif(trim(coalesce(p_voter, '')), '');
+  v_given numeric;
+begin
+  if not exists (select 1 from carried_weights where poll_id = p_poll_id) then
+    return null;
+  end if;
+
+  if v_voter is not null then
+    update carried_weights
+    set claimed = true
+    where poll_id = p_poll_id and lower(voter) = lower(v_voter) and not claimed
+    returning given into v_given;
+
+    if found then
+      return v_given;
+    end if;
+  end if;
+
+  return newcomer_given(p_poll_id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."claim_carried_weight"("p_poll_id" "uuid", "p_voter" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."clear_confirmation_for_uninvited"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -723,7 +1140,284 @@ COMMENT ON FUNCTION "public"."confirming_invitee"("p_poll_id" "uuid") IS 'The po
 
 
 
-CREATE OR REPLACE FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text" DEFAULT 'invite'::"text", "p_show_voters" boolean DEFAULT true, "p_show_ballots" boolean DEFAULT false, "p_option_descriptions" "text"[] DEFAULT NULL::"text"[], "p_solicit_options" boolean DEFAULT false, "p_kind" "text" DEFAULT 'option'::"text", "p_schedule" "jsonb" DEFAULT NULL::"jsonb") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."consensus_set_search"("p_voters" integer, "p_second" bigint[], "p_k" integer, "p_budget" bigint DEFAULT 450000) RETURNS integer[]
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  n int := p_voters;
+  m int := cardinality(p_second);
+  k int := least(p_k, cardinality(p_second));
+  w bigint[] := array_fill(0::bigint, array[5]);
+  open_ bit varying[];
+  cov bigint[];
+  sec bigint[];
+  pool int[];
+  gain bigint[];
+  cnt int[];
+  rch int[];
+  topc int[];
+  plen int[];
+  pos int[];
+  topsec bigint[];
+  chosen int[];
+  inc int[] := '{}';
+  inc_cov bigint := -1;
+  inc_sec bigint := -1;
+  work bigint := 0;
+  d int;
+  r int;
+  p int;
+  i int;
+  j int;
+  t int;
+  g bigint;
+  bound bigint;
+  levels bigint;
+  need bigint;
+  top bigint[];
+  row_ record;
+  expanding boolean := true;
+  base int;
+  o1 bit varying;
+  o2 bit varying;
+  o3 bit varying;
+  o4 bit varying;
+  o5 bit varying;
+  q int;
+  tc1 int[];
+  tc2 int[];
+  tc3 int[];
+  tc4 int[];
+  tc5 int[];
+begin
+  if k <= 0 then
+    return '{}';
+  end if;
+  if k = m then
+    return array(select generate_series(1, m));
+  end if;
+
+  for t in 1 .. 5 loop
+    w[t] := (n + 1)::bigint ^ (5 - t);
+  end loop;
+
+  open_ := array_fill(repeat('1', n)::bit varying, array[k * 5]);
+  cov := array_fill(0::bigint, array[k]);
+  sec := array_fill(0::bigint, array[k]);
+  pool := array_fill(0, array[k * m]);
+  gain := array_fill(0::bigint, array[k * m]);
+  cnt := array_fill(0, array[k * m * 5]);
+  rch := array_fill(0, array[k * m * 5]);
+  topc := array_fill(0, array[k * 5]);
+  plen := array_fill(0, array[k]);
+  pos := array_fill(0, array[k]);
+  topsec := array_fill(0::bigint, array[k]);
+  chosen := array_fill(0, array[k]);
+
+  for i in 1 .. m loop
+    pool[i] := i;
+  end loop;
+  plen[1] := m;
+  d := 0;
+
+  <<search>>
+  loop
+    if expanding then
+      expanding := false;
+      r := k - d;
+      base := d * m;
+      work := work + plen[d + 1] + 20;
+      if work > p_budget then
+        raise exception 'This poll is too large to choose that many consensus winners; try fewer, or remove some options';
+      end if;
+
+      o1 := open_[d * 5 + 1];
+      o2 := open_[d * 5 + 2];
+      o3 := open_[d * 5 + 3];
+      o4 := open_[d * 5 + 4];
+      o5 := open_[d * 5 + 5];
+
+      if r = 1 then
+        -- The last choice: every option open here finishes a set.
+        select x.o,
+               w[1] * bit_count(k.m1 & o1) + w[2] * bit_count(k.m2 & o2) + w[3] * bit_count(k.m3 & o3)
+             + w[4] * bit_count(k.m4 & o4) + w[5] * bit_count(k.m5 & o5) as add
+        into row_
+        from unnest(pool[base + 1 : base + plen[d + 1]]) as x(o)
+        join _consensus_masks k on k.o = x.o
+        order by 2 desc, k.second desc, x.o
+        limit 1;
+
+        g := cov[d + 1] + row_.add;
+        if g > inc_cov or (g = inc_cov and sec[d + 1] + p_second[row_.o] > inc_sec) then
+          inc_cov := g;
+          inc_sec := sec[d + 1] + p_second[row_.o];
+          inc := chosen[1:d] || row_.o;
+        end if;
+
+        if d = 0 then exit search; end if;
+        d := d - 1;
+        continue search;
+      end if;
+
+      -- What each option open here would add, most first, so the first set
+      -- reached is the greedy one and the weighted bound below only falls
+      -- along the list. Beside it, level by level, how many voters it would
+      -- lift to that many stars, and how many everything from it down the
+      -- list could lift together.
+      i := 0;
+      top := array_fill(0::bigint, array[r]);
+      tc1 := '{}'; tc2 := '{}'; tc3 := '{}'; tc4 := '{}'; tc5 := '{}';
+      for row_ in
+        select x.o, x.c1, x.c2, x.c3, x.c4, x.c5, x.add, x.second,
+               bit_count(bit_or(x.m1) over rest & o1)::int as r1,
+               bit_count(bit_or(x.m2) over rest & o2)::int as r2,
+               bit_count(bit_or(x.m3) over rest & o3)::int as r3,
+               bit_count(bit_or(x.m4) over rest & o4)::int as r4,
+               bit_count(bit_or(x.m5) over rest & o5)::int as r5
+        from (
+          select c.*, w[1] * c.c1 + w[2] * c.c2 + w[3] * c.c3 + w[4] * c.c4 + w[5] * c.c5 as add
+          from (
+            select y.o, k.second, k.m1, k.m2, k.m3, k.m4, k.m5,
+                   bit_count(k.m1 & o1)::int as c1,
+                   bit_count(k.m2 & o2)::int as c2,
+                   bit_count(k.m3 & o3)::int as c3,
+                   bit_count(k.m4 & o4)::int as c4,
+                   bit_count(k.m5 & o5)::int as c5
+            from unnest(pool[base + 1 : base + plen[d + 1]]) as y(o)
+            join _consensus_masks k on k.o = y.o
+          ) c
+        ) x
+        window rest as (order by x.add, x.second, x.o desc rows between unbounded preceding and current row)
+        order by x.add desc, x.second desc, x.o
+      loop
+        i := i + 1;
+        pool[base + i] := row_.o;
+        gain[base + i] := row_.add;
+        q := (base + i - 1) * 5;
+        cnt[q + 1] := row_.c1;
+        cnt[q + 2] := row_.c2;
+        cnt[q + 3] := row_.c3;
+        cnt[q + 4] := row_.c4;
+        cnt[q + 5] := row_.c5;
+        rch[q + 1] := row_.r1;
+        rch[q + 2] := row_.r2;
+        rch[q + 3] := row_.r3;
+        rch[q + 4] := row_.r4;
+        rch[q + 5] := row_.r5;
+        tc1 := tc1 || row_.c1;
+        tc2 := tc2 || row_.c2;
+        tc3 := tc3 || row_.c3;
+        tc4 := tc4 || row_.c4;
+        tc5 := tc5 || row_.c5;
+        g := row_.second;
+        if g > top[r] then
+          t := r;
+          while t > 1 and top[t - 1] < g loop
+            top[t] := top[t - 1];
+            t := t - 1;
+          end loop;
+          top[t] := g;
+        end if;
+      end loop;
+      topsec[d + 1] := 0;
+      foreach g in array top loop
+        topsec[d + 1] := topsec[d + 1] + g;
+      end loop;
+
+      -- The most voters any r - 1 of the options here could lift to each
+      -- level, as though none of them overlapped.
+      topc[d * 5 + 1] := (select coalesce(sum(c), 0) from (select c from unnest(tc1) c order by c desc limit r - 1) s);
+      topc[d * 5 + 2] := (select coalesce(sum(c), 0) from (select c from unnest(tc2) c order by c desc limit r - 1) s);
+      topc[d * 5 + 3] := (select coalesce(sum(c), 0) from (select c from unnest(tc3) c order by c desc limit r - 1) s);
+      topc[d * 5 + 4] := (select coalesce(sum(c), 0) from (select c from unnest(tc4) c order by c desc limit r - 1) s);
+      topc[d * 5 + 5] := (select coalesce(sum(c), 0) from (select c from unnest(tc5) c order by c desc limit r - 1) s);
+      pos[d + 1] := 0;
+    end if;
+
+    r := k - d;
+    base := d * m;
+    pos[d + 1] := pos[d + 1] + 1;
+    p := pos[d + 1];
+
+    -- Every voter's gain only shrinks as the set grows, so a set through
+    -- this child adds at most the r largest gains from here down the list.
+    -- That falls along the list, so the first child it cuts off cuts off
+    -- the rest.
+    if p + r - 1 > plen[d + 1] then
+      bound := -1;
+    else
+      bound := cov[d + 1];
+      for i in p .. p + r - 1 loop
+        bound := bound + gain[base + i];
+      end loop;
+    end if;
+    if bound < inc_cov or (bound = inc_cov and sec[d + 1] + topsec[d + 1] <= inc_sec) then
+      if d = 0 then exit search; end if;
+      d := d - 1;
+      continue search;
+    end if;
+
+    -- Level by level, no set through this child lifts more voters than this
+    -- option and the best r - 1 others would apart, nor more than all of
+    -- them from here down could together.
+    levels := cov[d + 1];
+    for t in 1 .. 5 loop
+      levels := levels + w[t] * least(rch[(base + p - 1) * 5 + t],
+                                     cnt[(base + p - 1) * 5 + t] + topc[d * 5 + t]);
+    end loop;
+    if levels < inc_cov or (levels = inc_cov and sec[d + 1] + topsec[d + 1] <= inc_sec) then
+      continue search;
+    end if;
+
+    j := pool[base + p];
+    cov[d + 2] := cov[d + 1] + gain[base + p];
+    sec[d + 2] := sec[d + 1] + p_second[j];
+    plen[d + 2] := plen[d + 1] - p;
+
+    if d + 2 = k then
+      -- One choice left: an option can only finish a set as good as the
+      -- one held if it adds at least the difference, and it adds no more
+      -- below than it does here, where the list is sorted. So only the head
+      -- of the list is worth asking about.
+      need := inc_cov - cov[d + 2];
+      i := 0;
+      while i < plen[d + 2] and gain[base + p + i + 1] >= need loop
+        i := i + 1;
+      end loop;
+      plen[d + 2] := i;
+      if i = 0 then
+        continue search;
+      end if;
+    end if;
+
+    chosen[d + 1] := j;
+    select open_[d * 5 + 1] & ~k.m1, open_[d * 5 + 2] & ~k.m2, open_[d * 5 + 3] & ~k.m3,
+           open_[d * 5 + 4] & ~k.m4, open_[d * 5 + 5] & ~k.m5
+    into o1, o2, o3, o4, o5
+    from _consensus_masks k where k.o = j;
+    open_[(d + 1) * 5 + 1] := o1;
+    open_[(d + 1) * 5 + 2] := o2;
+    open_[(d + 1) * 5 + 3] := o3;
+    open_[(d + 1) * 5 + 4] := o4;
+    open_[(d + 1) * 5 + 5] := o5;
+    for i in 1 .. plen[d + 2] loop
+      pool[base + m + i] := pool[base + p + i];
+    end loop;
+    d := d + 1;
+    expanding := true;
+  end loop;
+
+  return array(select x from unnest(inc) x order by x);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."consensus_set_search"("p_voters" integer, "p_second" bigint[], "p_k" integer, "p_budget" bigint) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text" DEFAULT 'invite'::"text", "p_show_voters" boolean DEFAULT true, "p_show_ballots" boolean DEFAULT false, "p_option_descriptions" "text"[] DEFAULT NULL::"text"[], "p_solicit_options" boolean DEFAULT false, "p_kind" "text" DEFAULT 'option'::"text", "p_schedule" "jsonb" DEFAULT NULL::"jsonb", "p_kind_value" numeric DEFAULT NULL::numeric, "p_carried" "jsonb" DEFAULT NULL::"jsonb", "p_option_costs" numeric[] DEFAULT NULL::numeric[]) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -731,6 +1425,7 @@ declare
   v_opts jsonb;
   v_mails text[];
   v_kind text := coalesce(p_kind, 'option');
+  v_id uuid;
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';
@@ -740,22 +1435,20 @@ begin
     raise exception 'Unknown poll mode';
   end if;
 
-  if v_kind not in ('option', 'time') then
-    raise exception 'Unknown poll kind';
-  end if;
+  perform validate_kind(v_kind, p_kind_value);
 
   if coalesce(trim(p_title), '') = '' then
     raise exception 'Title is required';
   end if;
 
-  if v_kind = 'time' then
-    -- A time poll collecting its times starts with whatever its creator
-    -- painted, which may be nothing at all: insert_poll_row applies the
-    -- two-option floor only to a poll that is not collecting, and
-    -- finalize_options applies it again when the list becomes a ballot.
+  -- A schedule is what makes a question a calendar, whatever it asks for.
+  -- A time poll collecting its times starts with whatever its creator
+  -- painted, which may be nothing at all: insert_poll_row applies the
+  -- two-option floor only to a poll that is not collecting, and
+  -- finalize_options applies it again when the list becomes a ballot.
+  if p_schedule is not null then
+    perform validate_calendar_kind(v_kind);
     perform validate_schedule(p_schedule);
-  elsif p_schedule is not null then
-    raise exception 'Only a time poll has a schedule';
   end if;
 
   if p_mode = 'invite' then
@@ -765,12 +1458,14 @@ begin
   -- Paired by position, so a description can only ever belong to the option
   -- it was written for; insert_poll_row drops the blanks from the pairs.
   select coalesce(jsonb_agg(
-           jsonb_build_object('name', o, 'description', p_option_descriptions[ord])
+           jsonb_build_object('name', o, 'description', p_option_descriptions[ord],
+                              case when v_kind = 'assignment' then 'places' else 'cost' end,
+                              p_option_costs[ord])
            order by ord), '[]'::jsonb)
   into v_opts
   from unnest(coalesce(p_options, array[]::text[])) with ordinality as t(o, ord);
 
-  return insert_poll_row(
+  v_id := insert_poll_row(
     trim(p_title),
     nullif(trim(coalesce(p_description, '')), ''),
     null,
@@ -783,16 +1478,21 @@ begin
     null,
     null,
     v_kind,
-    case when v_kind = 'time' then p_schedule else null end
+    p_schedule,
+    p_kind_value
   );
+
+  perform insert_carried_weights(v_id, p_carried);
+
+  return v_id;
 end;
 $$;
 
 
-ALTER FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb", "p_kind_value" numeric, "p_carried" "jsonb", "p_option_costs" numeric[]) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") IS 'Creates one poll with its options and its invitees. A time poll carries a schedule and options its creator''s browser enumerated from a painted calendar; the database stores it exactly as it stores any other poll. A time poll may collect its times from voters, through suggest_options.';
+COMMENT ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb", "p_kind_value" numeric, "p_carried" "jsonb", "p_option_costs" numeric[]) IS 'Creates one poll with its options and its invitees. A time poll carries a schedule and options its creator''s browser enumerated from a painted calendar; the database stores it exactly as it stores any other poll. A time poll may collect its times from voters, through suggest_options. The kind also says which result the poll opens on; see polls.kind. p_carried makes it a sequential poll: see carried_weights. p_option_costs are each option''s number, paired by position with the options: a budget''s costs or an assignment''s places.';
 
 
 
@@ -808,6 +1508,7 @@ declare
   v_question jsonb;
   v_question_title text;
   v_kind text;
+  v_kind_value numeric;
   v_schedule jsonb;
   v_count int;
   i int;
@@ -860,21 +1561,22 @@ begin
       raise exception 'The title of question % is too long', i + 1;
     end if;
 
-    -- What this question is choosing between, question by question: a group
-    -- may ask "what are we watching?" and "when?" and the two are not the
-    -- same shape of ballot. The checks are `create_poll`'s, said again here
-    -- because this is the other way into `insert_poll_row` and the two must
-    -- not disagree about what a schedule is.
+    -- What this question asks for, question by question: a group may ask
+    -- "which film?" (the best option), "when?" (the best option on a
+    -- calendar) and "which three snacks?" (multiple winners). The checks are `create_poll`'s,
+    -- said again here because this is the other way into `insert_poll_row`
+    -- and the two must not disagree about what a kind or a schedule is.
     v_kind := coalesce(nullif(trim(coalesce(v_question ->> 'kind', '')), ''), 'option');
-    if v_kind not in ('option', 'time') then
-      raise exception 'Question % is of an unknown kind', i + 1;
+    if jsonb_typeof(v_question -> 'kind_value') not in ('number', 'null') then
+      raise exception 'The number on question % is not a number', i + 1;
     end if;
+    v_kind_value := (v_question ->> 'kind_value')::numeric;
+    perform validate_kind(v_kind, v_kind_value, i + 1);
 
     v_schedule := nullif(v_question -> 'schedule', 'null'::jsonb);
-    if v_kind = 'time' then
+    if v_schedule is not null then
+      perform validate_calendar_kind(v_kind, i + 1);
       perform validate_schedule(v_schedule);
-    elsif v_schedule is not null then
-      raise exception 'Only a time question has a schedule; question % is not one', i + 1;
     end if;
 
     v_id := insert_poll_row(
@@ -890,8 +1592,13 @@ begin
       v_group_id,
       i + 1,
       v_kind,
-      case when v_kind = 'time' then v_schedule else null end
+      v_schedule,
+      v_kind_value
     );
+
+    -- Each question is its own sequence: one voter can have given the
+    -- winning films a lot of stars and the winning times none.
+    perform insert_carried_weights(v_id, v_question -> 'carried', i + 1);
 
     if i = 0 then
       v_first := v_id;
@@ -906,7 +1613,7 @@ $$;
 ALTER FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) IS 'Creates a poll that asks several questions: one poll row per question, sharing a group, a title, a description, an invite list and their settings. One transaction. A question may be a time poll, by carrying a kind and a schedule of its own. A soliciting group collects options question by question and opens all of them at once; see finalize_options.';
+COMMENT ON FUNCTION "public"."create_poll_group"("p_title" "text", "p_description" "text", "p_questions" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean) IS 'Creates a poll that asks several questions: one poll row per question, sharing a group, a title, a description, an invite list and their settings. One transaction. Each question carries a kind of its own (and a time question a schedule, a ranking or multiple winners a number). A soliciting group collects options question by question and opens all of them at once; see finalize_options.';
 
 
 
@@ -941,7 +1648,7 @@ begin
     raise exception 'The results are out, so the options can no longer be changed';
   end if;
 
-  if v_poll.kind = 'time' then
+  if v_poll.schedule is not null then
     raise exception 'A time poll''s options are its windows; change its schedule instead';
   end if;
 
@@ -1068,7 +1775,7 @@ begin
   -- A typed correction is a typed name, and a time poll's names are windows
   -- the calendar draws and the window rule scores: the same refusal
   -- creator_add_option gives the typed-name path.
-  if jsonb_array_length(p_correct) > 0 and v_poll.kind = 'time' then
+  if jsonb_array_length(p_correct) > 0 and v_poll.schedule is not null then
     raise exception 'A time poll''s options are its windows; change its schedule instead';
   end if;
 
@@ -1091,6 +1798,7 @@ begin
     if length(v_description) > 900 then
       raise exception 'That description is too long';
     end if;
+    perform option_cost(v_poll.kind, option_number(v_poll.kind, v_item), v_name);
   end loop;
 
   -- One row, one correction: an UPDATE joined to two rows for the same id
@@ -1125,16 +1833,17 @@ begin
   -- to it. Scoped to this poll like the delete, and counting only the rows
   -- that actually moved: the card sends what it holds, not a diff.
   update candidates c
-  set name = w.name, description = w.description
+  set name = w.name, description = w.description, kind_value = w.cost
   from (
     select (x ->> 'id')::uuid as id,
            nullif(trim(coalesce(x ->> 'name', '')), '') as name,
-           nullif(trim(coalesce(x ->> 'description', '')), '') as description
+           nullif(trim(coalesce(x ->> 'description', '')), '') as description,
+           option_cost(v_poll.kind, option_number(v_poll.kind, x), trim(x ->> 'name')) as cost
     from jsonb_array_elements(p_correct) x
   ) w
   where c.id = w.id
     and c.poll_id = p_poll_id
-    and (c.name, c.description) is distinct from (w.name, w.description);
+    and (c.name, c.description, c.kind_value) is distinct from (w.name, w.description, w.cost);
 
   get diagnostics v_corrected = row_count;
 
@@ -1418,6 +2127,120 @@ COMMENT ON FUNCTION "public"."forget_push_subscription"("p_endpoint" "text") IS 
 
 
 
+CREATE OR REPLACE FUNCTION "public"."get_poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[], "p_places" "jsonb" DEFAULT NULL::"jsonb", "p_per_voter" integer DEFAULT NULL::integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_results_readable(p_poll_id);
+  return poll_assignment(p_poll_id, p_excluded, p_places, p_per_voter);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[], "p_costs" "jsonb" DEFAULT NULL::"jsonb", "p_budget" numeric DEFAULT NULL::numeric, "p_choice" "text" DEFAULT 'multiple'::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_results_readable(p_poll_id);
+  return poll_budget_count(p_poll_id, p_excluded, p_costs, p_budget, p_choice);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_poll_carried_weights"("p_poll_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+begin
+  select * into v_poll from polls where id = p_poll_id;
+
+  if not found or v_poll.created_by is distinct from auth.uid() then
+    raise exception 'Poll not found';
+  end if;
+
+  if not v_poll.show_voters then
+    raise exception 'This poll does not show who voted';
+  end if;
+
+  return (
+    select coalesce(jsonb_agg(jsonb_build_object('voter', voter, 'given', trim_scale(given))
+                              order by lower(voter)), '[]'::jsonb)
+    from carried_weights
+    where poll_id = p_poll_id and not claimed
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_carried_weights"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_results_readable(p_poll_id);
+  return poll_consensus(p_poll_id, p_excluded);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[], "p_winners" integer DEFAULT NULL::integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_results_readable(p_poll_id);
+  return poll_consensus_winners(p_poll_id, p_excluded, p_winners);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_results_readable(p_poll_id);
+  return poll_fractional_winners(p_poll_id, p_excluded);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_results_readable(p_poll_id);
+  return poll_multiple_winners(p_poll_id, p_excluded);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_poll_ranking"("p_poll_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1444,6 +2267,34 @@ $$;
 
 
 ALTER FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_poll_scores"("p_poll_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_results_readable(p_poll_id);
+  return poll_scores(p_poll_id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_scores"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_results_readable(p_poll_id);
+  return poll_sequential(p_poll_id, p_kind, p_given);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."get_poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."guard_anonymous_polls"() RETURNS "trigger"
@@ -1504,6 +2355,7 @@ declare
   v_poll_id uuid;
   v_invited int;
   v_voted int;
+  v_sent int;
 begin
   perform lock_poll(case when tg_op = 'DELETE' then old.poll_id else new.poll_id end);
 
@@ -1532,6 +2384,27 @@ begin
 
     if v_invited > 0 and v_voted >= v_invited then
       raise exception 'Cannot invite people once the results have been revealed';
+    end if;
+
+    if v_invited >= 500 then
+      raise exception 'A poll can invite 500 people';
+    end if;
+
+    -- The day's count, for whoever is inviting. Each question of a group
+    -- carries the whole list and only the first is emailed, so only the
+    -- first counts. Nobody signed in is the database's own work.
+    if auth.uid() is not null and poll_is_first_question(v_poll_id) then
+      delete from invitations_sent
+      where account_id = auth.uid() and day < current_date;
+
+      insert into invitations_sent (account_id, day, sent)
+      values (auth.uid(), current_date, 1)
+      on conflict (account_id, day) do update set sent = invitations_sent.sent + 1
+      returning sent into v_sent;
+
+      if v_sent > 1000 then
+        raise exception 'That is as many invitations as one account can send in a day';
+      end if;
     end if;
 
     return new;
@@ -1625,7 +2498,88 @@ COMMENT ON FUNCTION "public"."guard_options_frozen"() IS 'Holds an option list s
 
 
 
-CREATE OR REPLACE FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") RETURNS "void"
+CREATE OR REPLACE FUNCTION "public"."insert_carried_weights"("p_poll_id" "uuid", "p_carried" "jsonb", "p_question" integer DEFAULT NULL::integer) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_which text := case when p_question is null then '' else format(' on question %s', p_question) end;
+  v_poll polls;
+  v_item jsonb;
+  v_voter text;
+  v_given numeric;
+begin
+  if p_carried is null or p_carried = 'null'::jsonb then
+    return;
+  end if;
+
+  if jsonb_typeof(p_carried) <> 'array' then
+    raise exception 'The earlier voters must be a list%', v_which;
+  end if;
+
+  if jsonb_array_length(p_carried) = 0 then
+    return;
+  end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+
+  if v_poll.kind not in ('option', 'ranking', 'multiple') then
+    raise exception 'Only a question decided by STAR can be a sequential poll%', v_which;
+  end if;
+
+  -- A question takes one variant at most: a calendar, a sequence or a budget.
+  if v_poll.schedule is not null then
+    raise exception 'A sequential poll cannot also be a time poll%', v_which;
+  end if;
+
+  if v_poll.show_voters <> v_poll.show_ballots then
+    raise exception 'A sequential poll shows both who voted and the ballots, or neither';
+  end if;
+
+  if jsonb_array_length(p_carried) > 500 then
+    raise exception 'A sequential poll can carry 500 earlier voters%', v_which;
+  end if;
+
+  for v_item in select * from jsonb_array_elements(p_carried) loop
+    v_voter := nullif(trim(coalesce(v_item ->> 'voter', '')), '');
+
+    if v_voter is null then
+      raise exception 'Every earlier voter needs a name%', v_which;
+    end if;
+
+    if jsonb_typeof(v_item -> 'given') is distinct from 'number' then
+      raise exception 'Stars given to previous winners must be a number%', v_which;
+    end if;
+
+    v_given := (v_item ->> 'given')::numeric;
+
+    if v_given < 0 or v_given > 10000 then
+      raise exception 'Stars given to previous winners must be from 0 to 10000%', v_which;
+    end if;
+
+    if v_poll.mode = 'invite' then
+      v_voter := lower(v_voter);
+      if not exists (select 1 from invited_voters where poll_id = p_poll_id and email = v_voter) then
+        raise exception '% is not on the invite list', v_voter;
+      end if;
+    elsif length(v_voter) > 60 then
+      raise exception 'That name is too long: %', v_voter;
+    end if;
+
+    if exists (select 1 from carried_weights where poll_id = p_poll_id and lower(voter) = lower(v_voter)) then
+      raise exception '"%" is listed twice%', v_voter, v_which;
+    end if;
+
+    insert into carried_weights (poll_id, voter, given) values (p_poll_id, v_voter, v_given);
+  end loop;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."insert_carried_weights"("p_poll_id" "uuid", "p_carried" "jsonb", "p_question" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text", "p_cost" "jsonb" DEFAULT NULL::"jsonb") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -1634,6 +2588,7 @@ declare
   v_description text := nullif(trim(coalesce(p_description, '')), '');
   v_next int;
   v_count int;
+  v_cost numeric;
 begin
   if v_name is null then
     raise exception 'Give the option a name';
@@ -1649,6 +2604,8 @@ begin
   if length(v_description) > 900 then
     raise exception 'That description is too long';
   end if;
+
+  v_cost := option_cost(p_poll.kind, p_cost, v_name);
 
   if exists (
     select 1 from candidates c
@@ -1669,16 +2626,16 @@ begin
 
   -- Arrival order, which is the order everyone watching the page has been
   -- reading the list in already.
-  insert into candidates (poll_id, name, description, sort_order)
-  values (p_poll.id, v_name, v_description, v_next);
+  insert into candidates (poll_id, name, description, sort_order, kind_value)
+  values (p_poll.id, v_name, v_description, v_next, v_cost);
 end;
 $$;
 
 
-ALTER FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text", "p_cost" "jsonb") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") IS 'The field rules for one option -- name, description, duplicates, the 500-option ceiling -- shared by the suggestion path and the creator''s own. Internal: the caller has already decided it may write to this poll.';
+COMMENT ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text", "p_cost" "jsonb") IS 'The field rules for one option -- name, description, cost, duplicates, the 500-option ceiling -- shared by the suggestion path and the creator''s own. Internal: the caller has already decided it may write to this poll.';
 
 
 
@@ -1726,7 +2683,7 @@ begin
       continue;
     end if;
 
-    perform insert_option(p_poll, v_name, v_item ->> 'description');
+    perform insert_option(p_poll, v_name, v_item ->> 'description', option_number(p_poll.kind, v_item));
     v_added := v_added + 1;
   end loop;
 
@@ -1742,7 +2699,7 @@ COMMENT ON FUNCTION "public"."insert_options"("p_poll" "public"."polls", "p_opti
 
 
 
-CREATE OR REPLACE FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid" DEFAULT NULL::"uuid", "p_question_position" integer DEFAULT NULL::integer, "p_kind" "text" DEFAULT 'option'::"text", "p_schedule" "jsonb" DEFAULT NULL::"jsonb") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid" DEFAULT NULL::"uuid", "p_question_position" integer DEFAULT NULL::integer, "p_kind" "text" DEFAULT 'option'::"text", "p_schedule" "jsonb" DEFAULT NULL::"jsonb", "p_kind_value" numeric DEFAULT NULL::numeric) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -1762,12 +2719,17 @@ begin
     raise exception 'That description is too long';
   end if;
 
+  if p_kind = 'assignment' and not p_show_voters then
+    raise exception 'An option assignment says who gets which option, so it must show who voted';
+  end if;
+
   -- Drop blanks but keep the author's ordering, carrying each option's
   -- description along with it.
   select coalesce(jsonb_agg(
            jsonb_build_object(
              'name', trim(o ->> 'name'),
-             'description', nullif(trim(coalesce(o ->> 'description', '')), '')
+             'description', nullif(trim(coalesce(o ->> 'description', '')), ''),
+             'cost', option_number(p_kind, o)
            ) order by ord), '[]'::jsonb)
   into v_opts
   from jsonb_array_elements(coalesce(p_options, '[]'::jsonb)) with ordinality as t(o, ord)
@@ -1790,18 +2752,20 @@ begin
 
   insert into polls (
     title, description, created_by, mode, show_voters, show_ballots,
-    solicit_options, group_id, question_position, question_title, kind, schedule
+    solicit_options, group_id, question_position, question_title, kind, schedule, kind_value
   )
   values (
     p_title, p_description, auth.uid(), p_mode, p_show_voters, p_show_ballots,
-    p_solicit_options, p_group_id, p_question_position, p_question_title, p_kind, p_schedule
+    p_solicit_options, p_group_id, p_question_position, p_question_title, p_kind, p_schedule,
+    p_kind_value
   )
   returning id into v_poll_id;
 
   for i in 0 .. jsonb_array_length(v_opts) - 1 loop
     v_item := v_opts -> i;
-    insert into candidates (poll_id, name, description, sort_order)
-    values (v_poll_id, v_item ->> 'name', v_item ->> 'description', i);
+    insert into candidates (poll_id, name, description, sort_order, kind_value)
+    values (v_poll_id, v_item ->> 'name', v_item ->> 'description', i,
+            option_cost(p_kind, v_item -> 'cost', v_item ->> 'name'));
   end loop;
 
   -- Every question carries the whole invite list, because that list is what
@@ -1817,10 +2781,10 @@ end;
 $$;
 
 
-ALTER FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb", "p_kind_value" numeric) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") IS 'One poll row with its options and its invitees, for the two functions that create polls. Internal: it checks the title, the description and the option list, because its callers have checked the rest.';
+COMMENT ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb", "p_kind_value" numeric) IS 'One poll row with its options and its invitees, for the two functions that create polls. Internal: it checks the title, the description and the option list, because its callers have checked the rest.';
 
 
 
@@ -2153,6 +3117,365 @@ COMMENT ON FUNCTION "public"."my_notification_settings"("p_endpoint" "text") IS 
 
 
 
+CREATE OR REPLACE FUNCTION "public"."nash_capped_shares"("p_scores" double precision[], "p_counts" double precision[], "p_caps" double precision[]) RETURNS double precision[]
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_k int := coalesce(array_length(p_caps, 1), 0);
+  v_m int := coalesce(array_length(p_counts, 1), 0);
+  v_live boolean[];
+  v_state int[];     -- 0 at 0, 1 free, 2 at its cap
+  v_p float8[];
+  v_try float8[];
+  v_u float8[];
+  v_g float8[];
+  v_idx int[];
+  v_n int;
+  v_h float8[];
+  v_w int;
+  v_x float8[];
+  v_y float8[];
+  v_d float8[];
+  v_lambda float8;
+  v_decrement float8;
+  v_trace float8;
+  v_alpha float8;
+  v_alpha_max float8;
+  v_hit int;
+  v_hit_state int;
+  v_f0 float8;
+  v_best int;
+  v_worst float8;
+  v_total float8 := 0;
+  v_rest float8;
+  v_open int;
+  v_fixed boolean;
+  v_t float8;
+  v_sum float8;
+  v_tmp float8;
+  v_pivot int;
+  v_step int := 0;
+  i int;
+  j int;
+  a int;
+  b int;
+  c int;
+begin
+  v_p := array_fill(0::float8, array[v_k]);
+  if v_k = 0 or v_m = 0 then
+    return v_p;
+  end if;
+
+  for i in 1..v_m loop
+    v_total := v_total + p_counts[i];
+  end loop;
+
+  v_live := array_fill(false, array[v_k]);
+  v_sum := 0;
+  for j in 1..v_k loop
+    for i in 1..v_m loop
+      if p_scores[(i - 1) * v_k + j] > 0 then
+        v_live[j] := true;
+        v_sum := v_sum + p_caps[j];
+        exit;
+      end if;
+    end loop;
+  end loop;
+
+  -- Everything anybody starred fits: each is at its cap.
+  if v_sum <= 1 + 1e-12 then
+    for j in 1..v_k loop
+      if v_live[j] then
+        v_p[j] := p_caps[j];
+      end if;
+    end loop;
+    return v_p;
+  end if;
+
+  -- Start from equal shares, any share above its cap held there and the rest
+  -- shared equally between the others (filling to a level).
+  v_state := array_fill(0, array[v_k]);
+  for j in 1..v_k loop
+    if v_live[j] then
+      v_state[j] := 1;
+    end if;
+  end loop;
+  v_rest := 1;
+  loop
+    v_open := 0;
+    for j in 1..v_k loop
+      if v_state[j] = 1 then
+        v_open := v_open + 1;
+      end if;
+    end loop;
+    v_t := v_rest / v_open;
+    v_fixed := false;
+    for j in 1..v_k loop
+      if v_state[j] = 1 and p_caps[j] <= v_t then
+        v_state[j] := 2;
+        v_p[j] := p_caps[j];
+        v_rest := v_rest - p_caps[j];
+        v_fixed := true;
+      end if;
+    end loop;
+    exit when not v_fixed;
+  end loop;
+  for j in 1..v_k loop
+    if v_state[j] = 1 then
+      v_p[j] := v_t;
+    end if;
+  end loop;
+
+  loop
+    v_step := v_step + 1;
+    exit when v_step > 200;
+
+    v_u := array_fill(0::float8, array[v_m]);
+    for i in 1..v_m loop
+      v_sum := 0;
+      for j in 1..v_k loop
+        v_sum := v_sum + v_p[j] * p_scores[(i - 1) * v_k + j];
+      end loop;
+      v_u[i] := v_sum;
+    end loop;
+
+    v_g := array_fill(0::float8, array[v_k]);
+    for j in 1..v_k loop
+      if v_live[j] then
+        v_sum := 0;
+        for i in 1..v_m loop
+          v_sum := v_sum + p_counts[i] * p_scores[(i - 1) * v_k + j] / v_u[i];
+        end loop;
+        v_g[j] := v_sum;
+      end if;
+    end loop;
+
+    v_idx := '{}';
+    for j in 1..v_k loop
+      if v_state[j] = 1 then
+        v_idx := v_idx || j;
+      end if;
+    end loop;
+    v_n := coalesce(array_length(v_idx, 1), 0);
+    v_d := array_fill(0::float8, array[v_k]);
+    v_decrement := 0;
+
+    if v_n > 0 then
+      v_w := v_n + 2;
+
+      -- [H | g | 1], H minus the Hessian on the free set, with a whisker on
+      -- its diagonal so that options scored alike still solve.
+      v_h := array_fill(0::float8, array[v_n * v_w]);
+      v_trace := 0;
+      for a in 1..v_n loop
+        for b in a..v_n loop
+          v_sum := 0;
+          for i in 1..v_m loop
+            v_sum := v_sum + p_counts[i]
+                     * p_scores[(i - 1) * v_k + v_idx[a]] * p_scores[(i - 1) * v_k + v_idx[b]]
+                     / (v_u[i] * v_u[i]);
+          end loop;
+          v_h[(a - 1) * v_w + b] := v_sum;
+          v_h[(b - 1) * v_w + a] := v_sum;
+        end loop;
+        v_trace := v_trace + v_h[(a - 1) * v_w + a];
+        v_h[(a - 1) * v_w + v_n + 1] := v_g[v_idx[a]];
+        v_h[(a - 1) * v_w + v_n + 2] := 1;
+      end loop;
+      for a in 1..v_n loop
+        v_h[(a - 1) * v_w + a] := v_h[(a - 1) * v_w + a] + 1e-10 * v_trace / v_n;
+      end loop;
+
+      for c in 1..v_n loop
+        v_pivot := c;
+        for a in c + 1..v_n loop
+          if abs(v_h[(a - 1) * v_w + c]) > abs(v_h[(v_pivot - 1) * v_w + c]) then
+            v_pivot := a;
+          end if;
+        end loop;
+        if v_pivot <> c then
+          for b in 1..v_w loop
+            v_tmp := v_h[(c - 1) * v_w + b];
+            v_h[(c - 1) * v_w + b] := v_h[(v_pivot - 1) * v_w + b];
+            v_h[(v_pivot - 1) * v_w + b] := v_tmp;
+          end loop;
+        end if;
+        for a in c + 1..v_n loop
+          v_tmp := v_h[(a - 1) * v_w + c] / v_h[(c - 1) * v_w + c];
+          for b in c..v_w loop
+            v_h[(a - 1) * v_w + b] := v_h[(a - 1) * v_w + b] - v_tmp * v_h[(c - 1) * v_w + b];
+          end loop;
+        end loop;
+      end loop;
+
+      v_x := array_fill(0::float8, array[v_n]);
+      v_y := array_fill(0::float8, array[v_n]);
+      for a in reverse v_n..1 loop
+        v_sum := v_h[(a - 1) * v_w + v_n + 1];
+        v_tmp := v_h[(a - 1) * v_w + v_n + 2];
+        for b in a + 1..v_n loop
+          v_sum := v_sum - v_h[(a - 1) * v_w + b] * v_x[b];
+          v_tmp := v_tmp - v_h[(a - 1) * v_w + b] * v_y[b];
+        end loop;
+        v_x[a] := v_sum / v_h[(a - 1) * v_w + a];
+        v_y[a] := v_tmp / v_h[(a - 1) * v_w + a];
+      end loop;
+
+      v_sum := 0;
+      v_tmp := 0;
+      for a in 1..v_n loop
+        v_sum := v_sum + v_x[a];
+        v_tmp := v_tmp + v_y[a];
+      end loop;
+      v_lambda := v_sum / v_tmp;
+
+      for a in 1..v_n loop
+        v_d[v_idx[a]] := v_x[a] - v_lambda * v_y[a];
+        v_decrement := v_decrement + v_g[v_idx[a]] * v_d[v_idx[a]];
+      end loop;
+    end if;
+
+    if v_decrement < 1e-12 * v_total then
+      -- Nothing left to gain inside the set: the worst option on a bound
+      -- that the gradients say should not be there rejoins it.
+      v_best := null;
+      v_worst := 1e-9;
+      if v_n > 0 then
+        v_sum := 0;
+        v_tmp := 0;
+        for a in 1..v_n loop
+          v_sum := v_sum + v_p[v_idx[a]] * v_g[v_idx[a]];
+          v_tmp := v_tmp + v_p[v_idx[a]];
+        end loop;
+        v_lambda := v_sum / v_tmp;
+        for j in 1..v_k loop
+          if v_live[j] and v_state[j] = 0 and v_g[j] / v_lambda - 1 > v_worst then
+            v_best := j;
+            v_worst := v_g[j] / v_lambda - 1;
+          elsif v_state[j] = 2 and 1 - v_g[j] / v_lambda > v_worst then
+            v_best := j;
+            v_worst := 1 - v_g[j] / v_lambda;
+          end if;
+        end loop;
+      else
+        -- Every share on a bound: the capped option with the lowest
+        -- gradient comes free if an option at 0 beats it.
+        v_tmp := null;
+        v_sum := null;
+        for j in 1..v_k loop
+          if v_state[j] = 2 and (v_tmp is null or v_g[j] < v_tmp) then
+            v_tmp := v_g[j];
+            v_best := j;
+          elsif v_live[j] and v_state[j] = 0 and (v_sum is null or v_g[j] > v_sum) then
+            v_sum := v_g[j];
+          end if;
+        end loop;
+        if v_tmp is null or v_sum is null or v_sum <= v_tmp * (1 + 1e-9) then
+          v_best := null;
+        end if;
+      end if;
+      exit when v_best is null;
+      v_state[v_best] := 1;
+      continue;
+    end if;
+
+    -- As far as the step goes before a share reaches 0 or its cap.
+    v_alpha_max := 1;
+    v_hit := null;
+    for a in 1..v_n loop
+      j := v_idx[a];
+      if v_d[j] < 0 and -v_p[j] / v_d[j] < v_alpha_max then
+        v_alpha_max := -v_p[j] / v_d[j];
+        v_hit := j;
+        v_hit_state := 0;
+      elsif v_d[j] > 0 and (p_caps[j] - v_p[j]) / v_d[j] < v_alpha_max then
+        v_alpha_max := (p_caps[j] - v_p[j]) / v_d[j];
+        v_hit := j;
+        v_hit_state := 2;
+      end if;
+    end loop;
+
+    -- A share already on the bound it is heading for leaves the set.
+    if v_alpha_max < 1e-14 then
+      v_p[v_hit] := case when v_hit_state = 2 then p_caps[v_hit] else 0 end;
+      v_state[v_hit] := v_hit_state;
+      continue;
+    end if;
+
+    v_f0 := nash_log_welfare(v_p, p_scores, p_counts);
+    v_alpha := v_alpha_max;
+    loop
+      v_try := v_p;
+      for a in 1..v_n loop
+        j := v_idx[a];
+        v_try[j] := least(p_caps[j], greatest(0, v_p[j] + v_alpha * v_d[j]));
+      end loop;
+      exit when nash_log_welfare(v_try, p_scores, p_counts) >= v_f0 + 1e-4 * v_alpha * v_decrement
+             or v_alpha < 1e-12;
+      v_alpha := v_alpha / 2;
+    end loop;
+
+    exit when v_alpha < 1e-12;
+
+    v_p := v_try;
+    if v_alpha = v_alpha_max and v_hit is not null then
+      v_p[v_hit] := case when v_hit_state = 2 then p_caps[v_hit] else 0 end;
+      v_state[v_hit] := v_hit_state;
+    end if;
+  end loop;
+
+  return v_p;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."nash_capped_shares"("p_scores" double precision[], "p_counts" double precision[], "p_caps" double precision[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."nash_log_welfare"("p" double precision[], "p_scores" double precision[], "p_counts" double precision[]) RETURNS double precision
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_k int := array_length(p, 1);
+  v_f float8 := 0;
+  v_u float8;
+  i int;
+  j int;
+begin
+  for i in 1..coalesce(array_length(p_counts, 1), 0) loop
+    v_u := 0;
+    for j in 1..v_k loop
+      v_u := v_u + p[j] * p_scores[(i - 1) * v_k + j];
+    end loop;
+    if v_u <= 0 then
+      return '-Infinity'::float8;
+    end if;
+    v_f := v_f + p_counts[i] * ln(v_u);
+  end loop;
+  return v_f;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."nash_log_welfare"("p" double precision[], "p_scores" double precision[], "p_counts" double precision[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."newcomer_given"("p_poll_id" "uuid") RETURNS numeric
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select trim_scale(round(5 / avg(5 / (5 + given)) - 5, 6))
+  from carried_weights
+  where poll_id = p_poll_id
+  having count(*) > 0
+$$;
+
+
+ALTER FUNCTION "public"."newcomer_given"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."normalize_invite_emails"("p_emails" "text"[]) RETURNS "text"[]
     LANGUAGE "plpgsql" IMMUTABLE
     SET "search_path" TO 'public'
@@ -2483,6 +3806,20 @@ COMMENT ON FUNCTION "public"."open_options_when_all_confirmed"("p_poll_id" "uuid
 
 
 
+CREATE OR REPLACE FUNCTION "public"."open_poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[], "p_places" "jsonb" DEFAULT NULL::"jsonb", "p_per_voter" integer DEFAULT NULL::integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_open_results_readable(p_poll_id);
+  return poll_assignment(p_poll_id, p_excluded, p_places, p_per_voter);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."open_poll_ballots"("p_poll_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -2529,6 +3866,20 @@ ALTER FUNCTION "public"."open_poll_ballots"("p_poll_id" "uuid") OWNER TO "postgr
 
 COMMENT ON FUNCTION "public"."open_poll_ballots"("p_poll_id" "uuid") IS 'Every ballot in an open poll, to anyone holding its link, once the poll publishes them and every question in its group is closed. The same gate poll_ballots applies and the same sheet it returns; the split is only about how the caller proves the right to it.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."open_poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[], "p_costs" "jsonb" DEFAULT NULL::"jsonb", "p_budget" numeric DEFAULT NULL::numeric, "p_choice" "text" DEFAULT 'multiple'::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_open_results_readable(p_poll_id);
+  return poll_budget_count(p_poll_id, p_excluded, p_costs, p_budget, p_choice);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."open_poll_confirm_options"("p_poll_id" "uuid", "p_voter_key" "text", "p_voter_name" "text" DEFAULT NULL::"text") RETURNS "void"
@@ -2607,6 +3958,48 @@ COMMENT ON FUNCTION "public"."open_poll_confirm_options"("p_poll_id" "uuid", "p_
 
 
 
+CREATE OR REPLACE FUNCTION "public"."open_poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_open_results_readable(p_poll_id);
+  return poll_consensus(p_poll_id, p_excluded);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."open_poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[], "p_winners" integer DEFAULT NULL::integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_open_results_readable(p_poll_id);
+  return poll_consensus_winners(p_poll_id, p_excluded, p_winners);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."open_poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_open_results_readable(p_poll_id);
+  return poll_fractional_winners(p_poll_id, p_excluded);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."open_poll_group"("p_poll_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -2667,6 +4060,20 @@ ALTER FUNCTION "public"."open_poll_group"("p_poll_id" "uuid") OWNER TO "postgres
 
 COMMENT ON FUNCTION "public"."open_poll_group"("p_poll_id" "uuid") IS 'The questions of an open poll, with the id of each, to a caller already holding one of them -- and, for a caller who is signed in, whether their account has voted in and confirmed each. Nothing about a signed-out reader: their ballots are identified by voter keys scoped per question so they cannot be joined, and this function is not the place that undoes it.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."open_poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[] DEFAULT '{}'::"uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_open_results_readable(p_poll_id);
+  return poll_multiple_winners(p_poll_id, p_excluded);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."open_poll_ranking"("p_poll_id" "uuid") RETURNS "jsonb"
@@ -2779,6 +4186,34 @@ COMMENT ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "
 
 
 
+CREATE OR REPLACE FUNCTION "public"."open_poll_scores"("p_poll_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_open_results_readable(p_poll_id);
+  return poll_scores(p_poll_id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_scores"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."open_poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  perform assert_open_results_readable(p_poll_id);
+  return poll_sequential(p_poll_id, p_kind, p_given);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."open_poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."open_poll_submit"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text" DEFAULT NULL::"text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -2792,6 +4227,7 @@ declare
   v_item jsonb;
   v_candidate_id uuid;
   v_score int;
+  v_given numeric;
 begin
   perform lock_poll(p_poll_id);
 
@@ -2848,9 +4284,14 @@ begin
     raise exception 'Must submit a score for every option';
   end if;
 
+  -- A sequential question matches the name the reader gave, even on a poll
+  -- that hides names: there the name finds the weight and is then thrown
+  -- away, as every name on such a poll is.
+  v_given := claim_carried_weight(v_poll.id, p_voter_name);
+
   begin
-    insert into ballots (poll_id, voter_id, account_id, voter_name, voter_key)
-    values (v_poll.id, null, auth.uid(), v_name, v_key)
+    insert into ballots (poll_id, voter_id, account_id, voter_name, voter_key, given)
+    values (v_poll.id, null, auth.uid(), v_name, v_key, v_given)
     returning id into v_ballot_id;
   exception when unique_violation then
     -- Either the name is taken, or this reader raced themselves (a
@@ -3029,6 +4470,8 @@ declare
   v_confirmed_count int;
   v_confirmed boolean;
   v_your_confirmed_name text;
+  v_sequential boolean;
+  v_carried_names jsonb;
 begin
   select * into v_poll from polls
   where id = p_poll_id and mode = 'open';
@@ -3044,7 +4487,9 @@ begin
     'poll_id', c.poll_id,
     'name', c.name,
     'description', c.description,
-    'sort_order', c.sort_order
+    'sort_order', c.sort_order,
+    'cost', case when v_poll.kind in ('budget', 'ranking_budget', 'fractional_budget') then c.kind_value end,
+    'places', case when v_poll.kind = 'assignment' then c.kind_value end
   ) order by c.sort_order, c.name), '[]'::jsonb)
   into v_options
   from candidates c where c.poll_id = v_poll.id;
@@ -3107,6 +4552,16 @@ begin
     where oc.id = v_confirmation_id;
   end if;
 
+  v_sequential := exists (select 1 from carried_weights where poll_id = v_poll.id);
+
+  -- The names still to vote, on the setting that already shows who has.
+  if v_sequential and v_poll.show_voters then
+    select coalesce(jsonb_agg(cw.voter order by lower(cw.voter)), '[]'::jsonb)
+    into v_carried_names
+    from carried_weights cw
+    where cw.poll_id = v_poll.id and not cw.claimed;
+  end if;
+
   return jsonb_build_object(
     'poll', jsonb_build_object(
       'id', v_poll.id,
@@ -3157,7 +4612,9 @@ begin
     -- condition here: the column is empty while the poll is still taking
     -- votes, so there is nothing to leak to an early reader.
     'winner_name', v_poll.winner_name,
-    'winner_settled', v_poll.winner_settled_at is not null
+    'winner_settled', v_poll.winner_settled_at is not null,
+    'sequential', v_sequential,
+    'carried_names', v_carried_names
   );
 end;
 $$;
@@ -3216,6 +4673,58 @@ ALTER FUNCTION "public"."open_poll_watch"("p_poll_id" "uuid", "p_endpoint" "text
 
 COMMENT ON FUNCTION "public"."open_poll_watch"("p_poll_id" "uuid", "p_endpoint" "text", "p_p256dh" "text", "p_auth" "text") IS 'Asks, through an open poll''s link, for this browser to be pushed a notification when the poll opens for voting and when its results are ready. Needs no account and records nothing about who asked.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."option_cost"("p_kind" "text", "p_cost" "jsonb", "p_name" "text") RETURNS numeric
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_cost numeric;
+begin
+  if p_cost is null or p_cost = 'null'::jsonb then
+    if p_kind in ('budget', 'ranking_budget', 'fractional_budget') then
+      raise exception 'Give "%" a cost', p_name;
+    end if;
+    return null;
+  end if;
+
+  if p_kind = 'assignment' then
+    if jsonb_typeof(p_cost) <> 'number' then
+      raise exception 'The places for "%" are not a number', p_name;
+    end if;
+    v_cost := (p_cost #>> '{}')::numeric;
+    perform validate_amount(v_cost, format('The places for "%s"', p_name));
+    return v_cost;
+  end if;
+
+  if p_kind is null or p_kind not in ('budget', 'ranking_budget', 'fractional_budget') then
+    raise exception 'Only a budget poll gives its options a cost';
+  end if;
+
+  if jsonb_typeof(p_cost) <> 'number' then
+    raise exception 'The cost of "%" is not a number', p_name;
+  end if;
+
+  v_cost := (p_cost #>> '{}')::numeric;
+  perform validate_amount(v_cost, format('The cost of "%s"', p_name));
+  return v_cost;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."option_cost"("p_kind" "text", "p_cost" "jsonb", "p_name" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."option_number"("p_kind" "text", "p_option" "jsonb") RETURNS "jsonb"
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+  select case when p_kind = 'assignment' then p_option -> 'places' else p_option -> 'cost' end;
+$$;
+
+
+ALTER FUNCTION "public"."option_number"("p_kind" "text", "p_option" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."options_confirmed_by_everyone"("p_poll" "public"."polls") RETURNS boolean
@@ -3277,6 +4786,34 @@ COMMENT ON FUNCTION "public"."poll_answering_accounts"("p_poll_id" "uuid") IS 'T
 
 
 
+CREATE OR REPLACE FUNCTION "public"."poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer DEFAULT NULL::integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+begin
+  select * into v_poll from polls where id = p_poll_id;
+
+  -- A poll that hides its voters is refused by the count, in its own words.
+  if found and v_poll.show_voters and not v_poll.show_ballots then
+    if v_poll.kind <> 'assignment' then
+      raise exception 'This poll keeps its ballots private, so it cannot be counted as an option assignment it did not ask for';
+    end if;
+
+    if coalesce(cardinality(p_excluded), 0) > 0 or p_places is not null or p_per_voter is not null then
+      raise exception 'This poll keeps its ballots private, so its assignment can only be counted as it was asked';
+    end if;
+  end if;
+
+  return assignment_count(p_poll_id, p_excluded, p_places, p_per_voter) - 'received';
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."poll_ballot_scores"("p_poll_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3308,6 +4845,19 @@ ALTER FUNCTION "public"."poll_ballot_scores"("p_poll_id" "uuid") OWNER TO "postg
 
 COMMENT ON FUNCTION "public"."poll_ballot_scores"("p_poll_id" "uuid") IS 'The caller''s own scores in an invite poll, keyed by option id, for filling their ballot back in. Reads nobody else''s ballot at any stage of any poll.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_ballot_weights"("p_poll_id" "uuid") RETURNS TABLE("ballot_id" "uuid", "weight" numeric)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select g.ballot_id, (5 + m.low) / (5 + coalesce(g.given, 0))
+  from ballot_given(p_poll_id) g,
+       (select coalesce(min(given), 0) as low from ballot_given(p_poll_id)) m
+$$;
+
+
+ALTER FUNCTION "public"."poll_ballot_weights"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."poll_ballots"("p_poll_id" "uuid") RETURNS "jsonb"
@@ -3375,6 +4925,207 @@ COMMENT ON FUNCTION "public"."poll_ballots"("p_poll_id" "uuid") IS 'Every ballot
 
 
 
+CREATE OR REPLACE FUNCTION "public"."poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_proportional" boolean) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_budget numeric;
+  v_left numeric;
+  v_average numeric;
+  v_ballots uuid[];
+  v_lost numeric[];
+  v_weights numeric[];
+  v_pool uuid[];
+  v_scales numeric[];
+  v_round jsonb;
+  v_finalists uuid[];
+  v_winner uuid;
+  v_placed uuid[];
+  v_placed_json jsonb;
+  v_finalist_names jsonb;
+  v_spots jsonb := '[]'::jsonb;
+  v_tied jsonb;
+  v_unfunded jsonb;
+  v_uncosted jsonb;
+  v_funded uuid[] := '{}';
+  v_place int := 1;
+  v_key text;
+  v_value jsonb;
+begin
+  if coalesce(array_length(p_excluded, 1), 0) > 1000 then
+    raise exception 'Too many options left out';
+  end if;
+
+  if poll_is_weighted(p_poll_id) then
+    raise exception 'A sequential poll''s ballots carry weights a budget would ignore';
+  end if;
+
+  p_costs := coalesce(p_costs, '{}'::jsonb);
+  if jsonb_typeof(p_costs) <> 'object' then
+    raise exception 'Give the costs as an object';
+  end if;
+
+  -- Every cost a reader sends is held to the rules a stored one is.
+  for v_key, v_value in select key, value from jsonb_each(p_costs) loop
+    continue when v_value = 'null'::jsonb;
+    if jsonb_typeof(v_value) <> 'number' then
+      raise exception 'A cost is not a number';
+    end if;
+    perform validate_amount((v_value #>> '{}')::numeric, 'A cost');
+  end loop;
+
+  select coalesce(p_budget, kind_value) into v_budget from polls where id = p_poll_id;
+  if v_budget is null then
+    raise exception 'Give the budget';
+  end if;
+  perform validate_amount(v_budget, 'The budget');
+  v_left := v_budget;
+
+  select coalesce(array_agg(id order by id), '{}'::uuid[]) into v_ballots
+  from ballots where poll_id = p_poll_id;
+
+  if coalesce(array_length(v_ballots, 1), 0) = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  -- Every option on the ballot, with the cost it is counted at.
+  drop table if exists _bcost;
+  create temp table _bcost on commit drop as
+  select c.id as cid, c.name,
+         case when p_costs ? c.id::text then (p_costs ->> c.id::text)::numeric
+              else c.kind_value end as cost
+  from candidates c
+  where c.poll_id = p_poll_id
+    and not (c.id = any(coalesce(p_excluded, '{}'::uuid[])));
+
+  select coalesce(jsonb_agg(jsonb_build_object('id', cid, 'name', name) order by name), '[]'::jsonb)
+  into v_uncosted
+  from _bcost where cost is null;
+
+  delete from _bcost where cost is null;
+
+  if not exists (select 1 from _bcost) then
+    raise exception 'Give at least one option a cost';
+  end if;
+
+  select avg(cost) into v_average from _bcost;
+
+  -- What each ballot has spent of its influence, in v_ballots' order.
+  v_lost := array_fill(0::numeric, array[array_length(v_ballots, 1)]);
+
+  loop
+    select coalesce(array_agg(cid order by cid), '{}'::uuid[]),
+           coalesce(array_agg(case when p_proportional then v_average / cost else 1 end order by cid),
+                    '{}'::numeric[])
+    into v_pool, v_scales
+    from _bcost
+    where not (cid = any(v_funded)) and cost <= v_left;
+
+    exit when coalesce(array_length(v_pool, 1), 0) = 0;
+
+    select array_agg(5::numeric / (5 + l) order by ord) into v_weights
+    from unnest(v_lost) with ordinality u(l, ord);
+
+    v_round := scaled_star_round(p_poll_id, v_pool, v_ballots, v_weights, v_scales);
+
+    select coalesce(array_agg(x::uuid), '{}'::uuid[]) into v_finalists
+    from jsonb_array_elements_text(v_round->'finalists') x;
+
+    v_winner := (v_round->>'winner_id')::uuid;
+
+    if v_winner is not null then
+      v_placed := array[v_winner];
+    elsif (select sum(cost) from _bcost where cid = any(v_finalists)) <= v_left then
+      v_placed := v_finalists;
+    else
+      select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'cost', cost) order by name)
+      into v_tied
+      from _bcost where cid = any(v_finalists);
+      exit;
+    end if;
+
+    v_left := v_left - (select sum(cost) from _bcost where cid = any(v_placed));
+
+    select jsonb_agg(jsonb_build_object('id', r.cid, 'name', r.name, 'cost', b.cost,
+                                        'total_score', r.total)
+                     order by r.total desc, r.name)
+    into v_placed_json
+    from _wround r join _bcost b on b.cid = r.cid
+    where r.cid = any(v_placed);
+
+    select coalesce(jsonb_agg(t.name order by f.ord), '[]'::jsonb)
+    into v_finalist_names
+    from unnest(v_finalists) with ordinality f(cid, ord)
+    join candidates t on t.id = f.cid;
+
+    v_spots := v_spots || jsonb_build_array(jsonb_build_object(
+      'place', v_place,
+      'options', v_placed_json,
+      'finalists', v_round->'finalists',
+      'finalist_names', v_finalist_names,
+      'runoff', v_round->'runoff',
+      'tiebreaks', v_round->'tiebreaks',
+      'left', v_left));
+
+    v_place := v_place + array_length(v_placed, 1);
+    v_funded := v_funded || v_placed;
+
+    -- Every ballot is charged the stars it gave whatever was funded, each
+    -- star at that option's cost over the average. Funding by popularity
+    -- charges nobody, so every round is plain STAR over what still fits.
+    continue when not p_proportional;
+
+    select array_agg(u.l + coalesce((
+             select sum(s.score * b.cost / v_average) from scores s
+             join _bcost b on b.cid = s.candidate_id
+             where s.ballot_id = v_ballots[u.ord::int] and s.candidate_id = any(v_placed)), 0)
+           order by u.ord)
+    into v_lost
+    from unnest(v_lost) with ordinality u(l, ord);
+  end loop;
+
+  select coalesce(jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'cost', cost)
+                            order by cost, name), '[]'::jsonb)
+  into v_unfunded
+  from _bcost where not (cid = any(v_funded));
+
+  return jsonb_build_object(
+    'budget', v_budget,
+    'spent', v_budget - v_left,
+    'left', v_left,
+    'average_cost', round(v_average, 6),
+    'spots', v_spots,
+    'unfunded', v_unfunded,
+    'uncosted', v_uncosted,
+    'tied', v_tied);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_proportional" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_budget_count"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if coalesce(p_choice, 'multiple') not in ('multiple', 'ranking', 'fractional') then
+    raise exception 'A budget counts proportional, multiple or fractional winners';
+  end if;
+  return case coalesce(p_choice, 'multiple')
+    when 'multiple' then poll_budget(p_poll_id, p_excluded, p_costs, p_budget, true)
+    when 'ranking' then poll_budget(p_poll_id, p_excluded, p_costs, p_budget, false)
+    else poll_fractional_budget(p_poll_id, p_excluded, p_costs, p_budget)
+  end;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_budget_count"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."poll_confirmed_count"("p_poll_id" "uuid") RETURNS integer
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3405,6 +5156,268 @@ ALTER FUNCTION "public"."poll_confirmed_count"("p_poll_id" "uuid") OWNER TO "pos
 
 COMMENT ON FUNCTION "public"."poll_confirmed_count"("p_poll_id" "uuid") IS 'How many people have said they are done adding options to this question: invitees who have confirmed on an invite poll, browsers that have on an open one. Internal: it answers about a poll the caller has already established it may read.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_pool uuid[];
+  v_voters int;
+  v_top record;
+  v_second record;
+  v_level uuid[];
+  v_level_names jsonb := '[]'::jsonb;
+  v_tied int;
+  v_winner uuid;
+  v_at int;
+  v_runner_up jsonb;
+  v_options jsonb;
+begin
+  -- A poll has at most a few hundred options; anything longer is not a list
+  -- a reader built by pressing buttons.
+  if coalesce(array_length(p_excluded, 1), 0) > 1000 then
+    raise exception 'Too many options left out';
+  end if;
+
+  select count(*) into v_voters from ballots where poll_id = p_poll_id;
+  if v_voters = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  select coalesce(array_agg(id), '{}'::uuid[]) into v_pool
+  from candidates
+  where poll_id = p_poll_id
+    and not (id = any(coalesce(p_excluded, '{}'::uuid[])));
+
+  if cardinality(v_pool) = 0 then
+    raise exception 'Every option has been left out';
+  end if;
+
+  -- Each option's scores, lowest first. Arrays of one length compare element
+  -- by element, so ordering by `ladder desc` is the whole comparison. One
+  -- score per option per ballot is an invariant (fill_scores_for_new_option),
+  -- but a missing score reads as 0, as the tally reads it.
+  drop table if exists _consensus;
+  create temp table _consensus on commit drop as
+  select
+    c.id as cid,
+    c.name,
+    array_agg(coalesce(s.score, 0)::int order by coalesce(s.score, 0)) as ladder,
+    coalesce(sum(s.score), 0)::int as total
+  from candidates c
+  join ballots b on b.poll_id = p_poll_id
+  left join scores s on s.ballot_id = b.id and s.candidate_id = c.id
+  where c.id = any(v_pool)
+  group by c.id, c.name;
+
+  alter table _consensus add column rn bigint;
+  update _consensus t set rn = o.rn
+  from (select cid, row_number() over (order by ladder desc, name, cid) as rn from _consensus) o
+  where o.cid = t.cid;
+
+  select * into v_top from _consensus where rn = 1;
+  select * into v_second from _consensus where rn = 2;
+
+  select count(*)::int into v_tied from _consensus where ladder[1] = v_top.ladder[1];
+
+  select array_agg(cid order by rn) into v_level from _consensus where ladder = v_top.ladder;
+
+  if cardinality(v_level) > 1 then
+    -- Level on every score: nothing left to compare.
+    select jsonb_agg(name order by rn) into v_level_names from _consensus where ladder = v_top.ladder;
+  else
+    v_winner := v_top.cid;
+    v_level := '{}';
+
+    if v_second.cid is not null then
+      -- The first position the two differ at; they differ somewhere, or they
+      -- would be level.
+      v_at := 1;
+      while v_top.ladder[v_at] = v_second.ladder[v_at] loop
+        v_at := v_at + 1;
+      end loop;
+
+      v_runner_up := jsonb_build_object(
+        'id', v_second.cid,
+        'name', v_second.name,
+        'score', v_second.ladder[v_at]
+      );
+    end if;
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', cid,
+    'name', name,
+    'floor', ladder[1],
+    'total_score', total
+  ) order by rn), '[]'::jsonb)
+  into v_options
+  from _consensus
+  where rn <= poll_results_rows();
+
+  return jsonb_build_object(
+    'winner_id', v_winner,
+    'floor', v_top.ladder[1],
+    'option_count', cardinality(v_pool),
+    'tied_count', v_tied,
+    'voter_count', v_voters,
+    'decided_at', v_at,
+    'winner_score', case when v_at is not null then v_top.ladder[v_at] end,
+    'runner_up', v_runner_up,
+    'level_ids', to_jsonb(v_level),
+    'level_names', v_level_names,
+    'options', v_options
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_kind text;
+  v_kind_value numeric;
+  v_k int;
+  v_voters int;
+  v_options int;
+  v_second bigint[];
+  v_pick int[];
+  v_chosen uuid[];
+  v_served int[];
+  v_floor int;
+  v_single int;
+  v_winners jsonb;
+begin
+  -- A poll has at most a few hundred options; anything longer is not a list
+  -- a reader built by pressing buttons.
+  if coalesce(array_length(p_excluded, 1), 0) > 1000 then
+    raise exception 'Too many options left out';
+  end if;
+
+  select kind, kind_value into v_kind, v_kind_value from polls where id = p_poll_id;
+
+  v_k := coalesce(
+    p_winners,
+    case when v_kind = 'consensus_winners' then v_kind_value::int end,
+    2);
+  perform validate_winner_count(v_k);
+
+  select count(*) into v_voters from ballots where poll_id = p_poll_id;
+  if v_voters = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  -- The search's weights are powers of the number of voters, and must fit a
+  -- bigint summed over every voter.
+  if v_voters > 5000 then
+    raise exception 'This poll has too many ballots to choose its consensus winners';
+  end if;
+
+  -- Every option counted, numbered in the order the search starts from (most
+  -- stars first), with one mask per star level over the ballots in a fixed
+  -- order. A missing score reads as 0, as the tally reads it.
+  drop table if exists _consensus_masks;
+  create temp table _consensus_masks on commit drop as
+  select
+    (row_number() over (order by t.total desc, t.name, t.id))::int as o,
+    t.id,
+    t.name,
+    t.total,
+    (t.total::bigint << 32) + ('x' || substr(md5(p_poll_id::text || t.id::text), 1, 7))::bit(28)::bigint as second,
+    t.m1, t.m2, t.m3, t.m4, t.m5
+  from (
+    select
+      c.id,
+      c.name,
+      coalesce(sum(s.score), 0)::int as total,
+      string_agg(case when coalesce(s.score, 0) >= 1 then '1' else '0' end, '' order by b.id)::bit varying as m1,
+      string_agg(case when coalesce(s.score, 0) >= 2 then '1' else '0' end, '' order by b.id)::bit varying as m2,
+      string_agg(case when coalesce(s.score, 0) >= 3 then '1' else '0' end, '' order by b.id)::bit varying as m3,
+      string_agg(case when coalesce(s.score, 0) >= 4 then '1' else '0' end, '' order by b.id)::bit varying as m4,
+      string_agg(case when coalesce(s.score, 0) >= 5 then '1' else '0' end, '' order by b.id)::bit varying as m5
+    from candidates c
+    join ballots b on b.poll_id = p_poll_id
+    left join scores s on s.ballot_id = b.id and s.candidate_id = c.id
+    where c.poll_id = p_poll_id
+      and not (c.id = any(coalesce(p_excluded, '{}'::uuid[])))
+    group by c.id, c.name
+  ) t;
+
+  alter table _consensus_masks add primary key (o);
+
+  select count(*)::int, array_agg(second order by o) into v_options, v_second from _consensus_masks;
+
+  if v_options = 0 then
+    raise exception 'Every option has been left out';
+  end if;
+
+  v_pick := consensus_set_search(v_voters, v_second, v_k);
+
+  select array_agg(id) into v_chosen from _consensus_masks where o = any(v_pick);
+
+  -- What each voter is served: the most stars they gave any option chosen.
+  drop table if exists _consensus_served;
+  create temp table _consensus_served on commit drop as
+  select b.id as bid, coalesce(max(s.score), 0)::int as served
+  from ballots b
+  left join scores s on s.ballot_id = b.id and s.candidate_id = any(v_chosen)
+  where b.poll_id = p_poll_id
+  group by b.id;
+
+  select min(served) into v_floor from _consensus_served;
+
+  select array_agg((select count(*)::int from _consensus_served where served = level) order by level)
+  into v_served
+  from generate_series(0, 5) level;
+
+  -- The consensus option's floor: the best one option alone could do.
+  select max(f) into v_single
+  from (
+    select min(coalesce(s.score, 0)) as f
+    from _consensus_masks c
+    join ballots b on b.poll_id = p_poll_id
+    left join scores s on s.ballot_id = b.id and s.candidate_id = c.id
+    group by c.id
+  ) floors;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', w.id,
+    'name', w.name,
+    'total_score', w.total,
+    'best_for', w.best_for
+  ) order by w.best_for desc, w.total desc, w.name, w.id), '[]'::jsonb)
+  into v_winners
+  from (
+    select c.id, c.name, c.total,
+           (select count(*)::int
+              from _consensus_served v
+              join scores s on s.ballot_id = v.bid and s.candidate_id = c.id
+             where v.served > 0 and s.score = v.served) as best_for
+    from _consensus_masks c
+    where c.id = any(v_chosen)
+  ) w;
+
+  return jsonb_build_object(
+    'winners', v_winners,
+    'winner_count', cardinality(v_chosen),
+    'floor', v_floor,
+    'served', to_jsonb(v_served),
+    'single_floor', v_single,
+    'option_count', v_options,
+    'voter_count', v_voters
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."poll_email_audience"("p_poll" "public"."polls", "p_include_creator" boolean, "p_actor" "text") RETURNS SETOF "text"
@@ -3541,6 +5554,484 @@ $$;
 
 
 ALTER FUNCTION "public"."poll_expires_at"("p_poll" "public"."polls") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_fractional_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_budget numeric;
+  v_average float8;
+  v_pool uuid[];
+  v_costs float8[];
+  v_caps float8[];
+  v_k int;
+  v_counts float8[];
+  v_scores float8[];
+  v_p float8[];
+  v_uncosted jsonb;
+  v_outside jsonb;
+  v_left numeric;
+  v_key text;
+  v_value jsonb;
+begin
+  if coalesce(array_length(p_excluded, 1), 0) > 1000 then
+    raise exception 'Too many options left out';
+  end if;
+
+  if poll_is_weighted(p_poll_id) then
+    raise exception 'A sequential poll''s ballots carry weights a budget would ignore';
+  end if;
+
+  p_costs := coalesce(p_costs, '{}'::jsonb);
+  if jsonb_typeof(p_costs) <> 'object' then
+    raise exception 'Give the costs as an object';
+  end if;
+
+  for v_key, v_value in select key, value from jsonb_each(p_costs) loop
+    continue when v_value = 'null'::jsonb;
+    if jsonb_typeof(v_value) <> 'number' then
+      raise exception 'A cost is not a number';
+    end if;
+    perform validate_amount((v_value #>> '{}')::numeric, 'A cost');
+  end loop;
+
+  select coalesce(p_budget, kind_value) into v_budget from polls where id = p_poll_id;
+  if v_budget is null then
+    raise exception 'Give the budget';
+  end if;
+  perform validate_amount(v_budget, 'The budget');
+
+  if not exists (select 1 from ballots where poll_id = p_poll_id) then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  drop table if exists _fcost;
+  create temp table _fcost on commit drop as
+  select c.id as cid, c.name,
+         case when p_costs ? c.id::text then (p_costs ->> c.id::text)::numeric
+              else c.kind_value end as cost,
+         coalesce((select sum(s.score) from scores s where s.candidate_id = c.id), 0) as total,
+         (select count(*) from scores s where s.candidate_id = c.id and s.score = 5) as five_stars
+  from candidates c
+  where c.poll_id = p_poll_id
+    and not (c.id = any(coalesce(p_excluded, '{}'::uuid[])));
+
+  select coalesce(jsonb_agg(jsonb_build_object('id', cid, 'name', name) order by name), '[]'::jsonb)
+  into v_uncosted
+  from _fcost where cost is null;
+
+  delete from _fcost where cost is null;
+
+  if not exists (select 1 from _fcost) then
+    raise exception 'Give at least one option a cost';
+  end if;
+
+  -- The pool, chosen as fractional winners chooses it.
+  select array_agg(cid order by total desc, five_stars desc, cid),
+         array_agg(cost::float8 order by total desc, five_stars desc, cid)
+  into v_pool, v_costs
+  from (select * from _fcost order by total desc, five_stars desc, cid
+        limit poll_results_rows()) top;
+
+  v_k := array_length(v_pool, 1);
+
+  select coalesce(jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'cost', cost)
+                            order by total desc, name), '[]'::jsonb)
+  into v_outside
+  from _fcost where not (cid = any(v_pool));
+
+  select avg(x) into v_average from unnest(v_costs) x;
+  select array_agg(x / v_budget::float8 order by ord) into v_caps
+  from unnest(v_costs) with ordinality u(x, ord);
+
+  -- Every ballot's scores for the pool, each scaled by the average cost over
+  -- the option's cost, folded into distinct patterns; all zeros dropped.
+  select coalesce(array_agg(n::float8 order by pattern), '{}'),
+         coalesce(array_agg(pattern order by pattern), '{}')
+  into v_counts, v_scores
+  from (
+    select pattern, count(*) as n
+    from (
+      select bl.id,
+             array_agg(coalesce(s.score, 0)::float8 * v_average / v_costs[o.ord::int]
+                       order by o.ord) as pattern
+      from ballots bl
+      cross join unnest(v_pool) with ordinality o(cid, ord)
+      left join scores s on s.ballot_id = bl.id and s.candidate_id = o.cid
+      where bl.poll_id = p_poll_id
+      group by bl.id
+    ) per_ballot
+    where pattern <> array_fill(0::float8, array[v_k])
+    group by pattern
+  ) patterns;
+
+  select coalesce(array_agg(x), '{}') into v_scores from unnest(v_scores) x;
+
+  v_p := nash_capped_shares(v_scores, v_counts, v_caps);
+
+  -- Amounts, an option within a millionth of the budget of its cost funded
+  -- in full and one within a millionth of nothing given nothing.
+  drop table if exists _ffund;
+  create temp table _ffund on commit drop as
+  select f.cid, f.name, f.cost,
+         case when p * v_budget::float8 >= f.cost::float8 - 1e-6 * v_budget::float8 then f.cost
+              when p < 1e-6 then 0
+              else round((p * v_budget::float8)::numeric, 6) end as amount
+  from unnest(v_pool, v_p) u(cid, p)
+  join _fcost f on f.cid = u.cid;
+
+  -- Left over only where everything starred is funded in full.
+  v_left := case when exists (
+                   select 1 from _ffund where amount > 0 and amount < cost)
+                 then 0
+                 else v_budget - (select coalesce(sum(amount), 0) from _ffund) end;
+  v_left := greatest(v_left, 0);
+
+  return jsonb_build_object(
+    'budget', v_budget,
+    'spent', v_budget - v_left,
+    'left', v_left,
+    'options', (select coalesce(jsonb_agg(jsonb_build_object(
+                  'id', cid, 'name', name, 'cost', cost, 'amount', amount,
+                  'funded', round(amount / cost, 6))
+                  order by amount desc, name), '[]'::jsonb)
+                from _ffund where amount > 0),
+    'unfunded', (select coalesce(jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'cost', cost)
+                   order by cost, name), '[]'::jsonb)
+                 from _ffund where amount = 0),
+    'outside', v_outside,
+    'uncosted', v_uncosted);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_fractional_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_pool uuid[];
+  v_k int;
+  v_m int;
+  v_counts float8[];
+  v_scores float8[];
+  v_total float8;
+  v_live boolean[];
+  v_active boolean[];
+  v_p float8[];
+  v_try float8[];
+  v_u float8[];
+  v_g float8[];
+  v_idx int[];
+  v_n int;
+  v_h float8[];      -- the augmented system [H | g | 1]: n rows of n + 2
+  v_w int;
+  v_x float8[];
+  v_y float8[];
+  v_d float8[];
+  v_lambda float8;
+  v_decrement float8;
+  v_trace float8;
+  v_alpha float8;
+  v_alpha_max float8;
+  v_hit int;
+  v_f0 float8;
+  v_best int;
+  v_best_g float8;
+  v_sum float8;
+  v_tmp float8;
+  v_pivot int;
+  v_step int := 0;
+  i int;
+  j int;
+  a int;
+  b int;
+  c int;
+begin
+  -- A poll has at most a few hundred options; anything longer is not a list
+  -- a reader built by pressing buttons.
+  if coalesce(array_length(p_excluded, 1), 0) > 1000 then
+    raise exception 'Too many options left out';
+  end if;
+
+  if not exists (select 1 from ballots where poll_id = p_poll_id) then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  -- The pool: the options with the most stars, ties on stars going to more
+  -- five-star votes, then by id, so the same ballots give the same pool.
+  select coalesce(array_agg(cid order by total desc, five_stars desc, cid), '{}'::uuid[])
+  into v_pool
+  from (
+    select cand.id as cid,
+           coalesce(sum(s.score), 0) as total,
+           count(s.score) filter (where s.score = 5) as five_stars
+    from candidates cand
+    left join scores s on s.candidate_id = cand.id
+    where cand.poll_id = p_poll_id
+      and not (cand.id = any(coalesce(p_excluded, '{}'::uuid[])))
+    group by cand.id
+    order by total desc, five_stars desc, cand.id
+    limit poll_results_rows()
+  ) top;
+
+  v_k := coalesce(array_length(v_pool, 1), 0);
+  if v_k = 0 then
+    return '[]'::jsonb;
+  end if;
+
+  -- Every ballot's scores for the pool, in the pool's order (a missing score
+  -- is 0), folded into distinct patterns. A pattern of all zeros is dropped.
+  select coalesce(array_agg(n::float8 order by pattern), '{}'),
+         coalesce(array_agg(pattern order by pattern), '{}')
+  into v_counts, v_scores
+  from (
+    select pattern, count(*) as n
+    from (
+      select bl.id,
+             array_agg(coalesce(s.score, 0)::float8 order by o.ord) as pattern
+      from ballots bl
+      cross join unnest(v_pool) with ordinality o(cid, ord)
+      left join scores s on s.ballot_id = bl.id and s.candidate_id = o.cid
+      where bl.poll_id = p_poll_id
+      group by bl.id
+    ) per_ballot
+    where pattern <> array_fill(0::float8, array[v_k])
+    group by pattern
+  ) patterns;
+
+  -- array_agg of arrays makes a two-dimensional array; flatten it, so that
+  -- pattern i's score for option j is v_scores[(i - 1) * k + j].
+  select coalesce(array_agg(x), '{}') into v_scores from unnest(v_scores) x;
+  v_m := coalesce(array_length(v_counts, 1), 0);
+
+  -- Nobody starred any of them: there is nothing to share.
+  if v_m = 0 then
+    return (
+      select jsonb_agg(jsonb_build_object('id', o.id, 'name', o.name, 'share', 0)
+                       order by o.name, o.id)
+      from candidates o where o.id = any(v_pool));
+  end if;
+
+  select sum(x) into v_total from unnest(v_counts) x;
+
+  -- Start every option somebody starred at an equal share. An option nobody
+  -- starred adds nothing to anybody, so stays at 0 throughout.
+  v_live := array_fill(false, array[v_k]);
+  for j in 1..v_k loop
+    for i in 1..v_m loop
+      if v_scores[(i - 1) * v_k + j] > 0 then
+        v_live[j] := true;
+        exit;
+      end if;
+    end loop;
+  end loop;
+  v_active := v_live;
+  v_n := (select count(*) from unnest(v_live) x where x);
+  v_p := array_fill(0::float8, array[v_k]);
+  for j in 1..v_k loop
+    if v_live[j] then
+      v_p[j] := 1.0 / v_n;
+    end if;
+  end loop;
+
+  loop
+    v_step := v_step + 1;
+    exit when v_step > 100;
+
+    -- Every pattern's average stars, and the gradient of the log welfare.
+    v_u := array_fill(0::float8, array[v_m]);
+    for i in 1..v_m loop
+      v_sum := 0;
+      for j in 1..v_k loop
+        v_sum := v_sum + v_p[j] * v_scores[(i - 1) * v_k + j];
+      end loop;
+      v_u[i] := v_sum;
+    end loop;
+
+    v_g := array_fill(0::float8, array[v_k]);
+    for j in 1..v_k loop
+      if v_live[j] then
+        v_sum := 0;
+        for i in 1..v_m loop
+          v_sum := v_sum + v_counts[i] * v_scores[(i - 1) * v_k + j] / v_u[i];
+        end loop;
+        v_g[j] := v_sum;
+      end if;
+    end loop;
+
+    v_idx := '{}';
+    for j in 1..v_k loop
+      if v_active[j] then
+        v_idx := v_idx || j;
+      end if;
+    end loop;
+    v_n := coalesce(array_length(v_idx, 1), 0);
+    v_w := v_n + 2;
+
+    -- [H | g | 1], H being minus the Hessian on the active set, with a
+    -- whisker added to its diagonal so that options scored alike (which make
+    -- it singular) still solve.
+    v_h := array_fill(0::float8, array[v_n * v_w]);
+    v_trace := 0;
+    for a in 1..v_n loop
+      for b in a..v_n loop
+        v_sum := 0;
+        for i in 1..v_m loop
+          v_sum := v_sum + v_counts[i]
+                   * v_scores[(i - 1) * v_k + v_idx[a]] * v_scores[(i - 1) * v_k + v_idx[b]]
+                   / (v_u[i] * v_u[i]);
+        end loop;
+        v_h[(a - 1) * v_w + b] := v_sum;
+        v_h[(b - 1) * v_w + a] := v_sum;
+      end loop;
+      v_trace := v_trace + v_h[(a - 1) * v_w + a];
+      v_h[(a - 1) * v_w + v_n + 1] := v_g[v_idx[a]];
+      v_h[(a - 1) * v_w + v_n + 2] := 1;
+    end loop;
+    for a in 1..v_n loop
+      v_h[(a - 1) * v_w + a] := v_h[(a - 1) * v_w + a] + 1e-10 * v_trace / v_n;
+    end loop;
+
+    -- Gaussian elimination with partial pivoting, both right-hand sides at
+    -- once.
+    for c in 1..v_n loop
+      v_pivot := c;
+      for a in c + 1..v_n loop
+        if abs(v_h[(a - 1) * v_w + c]) > abs(v_h[(v_pivot - 1) * v_w + c]) then
+          v_pivot := a;
+        end if;
+      end loop;
+      if v_pivot <> c then
+        for b in 1..v_w loop
+          v_tmp := v_h[(c - 1) * v_w + b];
+          v_h[(c - 1) * v_w + b] := v_h[(v_pivot - 1) * v_w + b];
+          v_h[(v_pivot - 1) * v_w + b] := v_tmp;
+        end loop;
+      end if;
+      for a in c + 1..v_n loop
+        v_tmp := v_h[(a - 1) * v_w + c] / v_h[(c - 1) * v_w + c];
+        for b in c..v_w loop
+          v_h[(a - 1) * v_w + b] := v_h[(a - 1) * v_w + b] - v_tmp * v_h[(c - 1) * v_w + b];
+        end loop;
+      end loop;
+    end loop;
+
+    v_x := array_fill(0::float8, array[v_n]);
+    v_y := array_fill(0::float8, array[v_n]);
+    for a in reverse v_n..1 loop
+      v_sum := v_h[(a - 1) * v_w + v_n + 1];
+      v_tmp := v_h[(a - 1) * v_w + v_n + 2];
+      for b in a + 1..v_n loop
+        v_sum := v_sum - v_h[(a - 1) * v_w + b] * v_x[b];
+        v_tmp := v_tmp - v_h[(a - 1) * v_w + b] * v_y[b];
+      end loop;
+      v_x[a] := v_sum / v_h[(a - 1) * v_w + a];
+      v_y[a] := v_tmp / v_h[(a - 1) * v_w + a];
+    end loop;
+
+    -- The Newton step kept to a sum of 1: d = H^-1 (g - lambda), lambda
+    -- chosen so that d sums to 0.
+    v_sum := 0;
+    v_tmp := 0;
+    for a in 1..v_n loop
+      v_sum := v_sum + v_x[a];
+      v_tmp := v_tmp + v_y[a];
+    end loop;
+    v_lambda := v_sum / v_tmp;
+
+    v_d := array_fill(0::float8, array[v_k]);
+    v_decrement := 0;
+    for a in 1..v_n loop
+      v_d[v_idx[a]] := v_x[a] - v_lambda * v_y[a];
+      v_decrement := v_decrement + v_g[v_idx[a]] * v_d[v_idx[a]];
+    end loop;
+
+    if v_decrement < 1e-12 * v_total then
+      -- Nothing left to gain inside the set. At the optimum every share
+      -- above 0 has gradient v_total and every other at most that; an option
+      -- beating it comes back in.
+      v_best := null;
+      v_best_g := v_total * (1 + 1e-9);
+      for j in 1..v_k loop
+        if v_live[j] and not v_active[j] and v_g[j] > v_best_g then
+          v_best := j;
+          v_best_g := v_g[j];
+        end if;
+      end loop;
+      exit when v_best is null;
+      v_active[v_best] := true;
+      continue;
+    end if;
+
+    -- As far as the step goes before a share reaches 0.
+    v_alpha_max := 1;
+    v_hit := null;
+    for a in 1..v_n loop
+      j := v_idx[a];
+      if v_d[j] < 0 and -v_p[j] / v_d[j] < v_alpha_max then
+        v_alpha_max := -v_p[j] / v_d[j];
+        v_hit := j;
+      end if;
+    end loop;
+
+    -- Halved until the welfare rises enough (Armijo's rule).
+    v_f0 := nash_log_welfare(v_p, v_scores, v_counts);
+    v_alpha := v_alpha_max;
+    loop
+      v_try := v_p;
+      for a in 1..v_n loop
+        j := v_idx[a];
+        v_try[j] := greatest(0, v_p[j] + v_alpha * v_d[j]);
+      end loop;
+      exit when nash_log_welfare(v_try, v_scores, v_counts) >= v_f0 + 1e-4 * v_alpha * v_decrement
+             or v_alpha < 1e-12;
+      v_alpha := v_alpha / 2;
+    end loop;
+
+    exit when v_alpha < 1e-12;
+
+    v_p := v_try;
+    if v_alpha = v_alpha_max and v_hit is not null then
+      v_p[v_hit] := 0;
+      v_active[v_hit] := false;
+    end if;
+
+    v_sum := 0;
+    for j in 1..v_k loop
+      v_sum := v_sum + v_p[j];
+    end loop;
+    for j in 1..v_k loop
+      v_p[j] := v_p[j] / v_sum;
+    end loop;
+  end loop;
+
+  -- Shares too small to matter are 0, and the rest are scaled back up to sum
+  -- to 1.
+  v_sum := 0;
+  for j in 1..v_k loop
+    if v_p[j] < 1e-6 then
+      v_p[j] := 0;
+    end if;
+    v_sum := v_sum + v_p[j];
+  end loop;
+
+  return (
+    select jsonb_agg(jsonb_build_object('id', o.id, 'name', o.name,
+                                        'share', round((s.share / v_sum)::numeric, 6))
+                     order by s.share desc, o.name, o.id)
+    from unnest(v_pool, v_p) s(cid, share)
+    join candidates o on o.id = s.cid);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."poll_gate_open"("p_poll" "public"."polls") RETURNS boolean
@@ -3782,6 +6273,17 @@ COMMENT ON FUNCTION "public"."poll_is_removed"("p_poll_id" "uuid") IS 'Whether t
 
 
 
+CREATE OR REPLACE FUNCTION "public"."poll_is_weighted"("p_poll_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select exists (select 1 from ballot_given(p_poll_id) where given is not null)
+$$;
+
+
+ALTER FUNCTION "public"."poll_is_weighted"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."poll_list_row"("p_poll_id" "uuid") RETURNS "uuid"
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3801,6 +6303,132 @@ ALTER FUNCTION "public"."poll_list_row"("p_poll_id" "uuid") OWNER TO "postgres";
 
 COMMENT ON FUNCTION "public"."poll_list_row"("p_poll_id" "uuid") IS 'The id a poll is listed under: its group''s first question, or itself. Internal.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_ballots uuid[];
+  v_given numeric[];
+  v_weights numeric[];
+  v_scale numeric;
+  v_pool uuid[];
+  v_round jsonb;
+  v_finalists uuid[];
+  v_winner uuid;
+  v_placed uuid[];
+  v_placed_json jsonb;
+  v_finalist_names jsonb;
+  v_spots jsonb := '[]'::jsonb;
+  v_place int := 1;
+begin
+  -- A poll has at most a few hundred options; anything longer is not a list
+  -- a reader built by pressing buttons.
+  if coalesce(array_length(p_excluded, 1), 0) > 1000 then
+    raise exception 'Too many options left out';
+  end if;
+
+  -- The stars each ballot has given the winners so far, in v_ballots' order:
+  -- those it was cast with, on a sequential question, and nothing otherwise.
+  select coalesce(array_agg(id order by id), '{}'::uuid[]),
+         coalesce(array_agg(coalesce(given, 0) order by id), '{}'::numeric[]),
+         5 + coalesce(min(given), 0)
+  into v_ballots, v_given, v_scale
+  from ballot_given(p_poll_id) g(id, given);
+
+  if coalesce(array_length(v_ballots, 1), 0) = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  select coalesce(array_agg(id), '{}'::uuid[]) into v_pool
+  from candidates
+  where poll_id = p_poll_id
+    and not (id = any(coalesce(p_excluded, '{}'::uuid[])));
+
+  while coalesce(array_length(v_pool, 1), 0) > 0 and v_place <= poll_results_rows() loop
+    select array_agg(v_scale / (5 + g) order by ord) into v_weights
+    from unnest(v_given) with ordinality u(g, ord);
+
+    v_round := weighted_star_round(p_poll_id, v_pool, v_ballots, v_weights);
+
+    select coalesce(array_agg(x::uuid), '{}'::uuid[]) into v_finalists
+    from jsonb_array_elements_text(v_round->'finalists') x;
+
+    v_winner := (v_round->>'winner_id')::uuid;
+
+    if v_winner is null then
+      v_placed := v_finalists;
+    else
+      v_placed := array[v_winner];
+    end if;
+
+    exit when coalesce(array_length(v_placed, 1), 0) = 0;
+
+    -- Each placed option at the weighted total it was elected on.
+    select jsonb_agg(jsonb_build_object('id', r.cid, 'name', r.name, 'total_score', r.total)
+                     order by r.total desc, r.name)
+    into v_placed_json
+    from _wround r where r.cid = any(v_placed);
+
+    select coalesce(jsonb_agg(t.name order by f.ord), '[]'::jsonb)
+    into v_finalist_names
+    from unnest(v_finalists) with ordinality f(cid, ord)
+    join candidates t on t.id = f.cid;
+
+    v_spots := v_spots || jsonb_build_array(jsonb_build_object(
+      'place', v_place,
+      'options', v_placed_json,
+      'finalists', v_round->'finalists',
+      'finalist_names', v_finalist_names,
+      'runoff', v_round->'runoff',
+      'tiebreaks', v_round->'tiebreaks'));
+
+    v_place := v_place + array_length(v_placed, 1);
+
+    -- Every ballot is charged the stars it gave whatever was placed.
+    select array_agg(u.g + coalesce((
+             select sum(s.score) from scores s
+             where s.ballot_id = v_ballots[u.ord::int] and s.candidate_id = any(v_placed)), 0)
+           order by u.ord)
+    into v_given
+    from unnest(v_given) with ordinality u(g, ord);
+
+    select coalesce(array_agg(x), '{}'::uuid[]) into v_pool
+    from unnest(v_pool) x
+    where not (x = any(v_placed));
+  end loop;
+
+  return v_spots;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_names_one_winner"("p_poll_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_kind text;
+  v_options int;
+begin
+  select kind into v_kind from polls where id = p_poll_id;
+  select count(*)::int into v_options from candidates where poll_id = p_poll_id;
+
+  return case
+    when v_kind in ('ranking', 'multiple', 'consensus_winners') then v_options < 3
+    when v_kind in ('fractional', 'budget', 'ranking_budget', 'fractional_budget', 'assignment') then v_options < 2
+    else true
+  end;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_names_one_winner"("p_poll_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."poll_outstanding_invitees"("p_poll" "public"."polls") RETURNS SETOF "text"
@@ -3858,7 +6486,9 @@ begin
           'poll_id', c.poll_id,
           'name', c.name,
           'description', c.description,
-          'sort_order', c.sort_order
+          'sort_order', c.sort_order,
+          'cost', case when v_poll.kind in ('budget', 'ranking_budget', 'fractional_budget') then c.kind_value end,
+          'places', case when v_poll.kind = 'assignment' then c.kind_value end
         ) order by c.sort_order, c.name), '[]'::jsonb)
         from candidates c where c.poll_id = v_poll.id
       ),
@@ -3974,14 +6604,18 @@ declare
   v_winner uuid;
   v_placed uuid[];
   v_placed_json jsonb;
+  v_finalist_names jsonb;
   v_ranking jsonb := '[]'::jsonb;
   v_place int := 1;
+  v_weighted boolean;
 begin
   select count(*) into v_voted from ballots where poll_id = p_poll_id;
 
   if v_voted = 0 then
     raise exception 'No votes were cast in this poll';
   end if;
+
+  v_weighted := poll_is_weighted(p_poll_id);
 
   -- Names and totals, for labelling the places. Scores are absolute sums, so
   -- eliminating an option never changes anyone else's total and this is read
@@ -3991,16 +6625,22 @@ begin
   select
     c.id as cid,
     c.name,
-    coalesce(sum(s.score), 0)::int as total
+    case when v_weighted
+         then trim_scale(round(coalesce(sum(s.score * w.weight), 0), 6))
+         else coalesce(sum(s.score), 0) end as total
   from candidates c
   left join scores s on s.candidate_id = c.id
+  left join poll_ballot_weights(p_poll_id) w on w.ballot_id = s.ballot_id
   where c.poll_id = p_poll_id
   group by c.id, c.name;
 
   select coalesce(array_agg(cid), '{}'::uuid[]) into v_pool from _ranking_tally;
 
-  while coalesce(array_length(v_pool, 1), 0) > 0 loop
-    v_round := star_round(p_poll_id, v_pool);
+  -- Every place is a whole STAR round over every ballot, so the ladder stops
+  -- once the top places are filled. A place shared by a tied runoff can take
+  -- the last round one past the cut; it is kept whole rather than split.
+  while coalesce(array_length(v_pool, 1), 0) > 0 and v_place <= poll_results_rows() loop
+    v_round := poll_round(p_poll_id, v_pool);
 
     select coalesce(array_agg(x::uuid), '{}'::uuid[]) into v_finalists
     from jsonb_array_elements_text(v_round->'finalists') x;
@@ -4023,10 +6663,19 @@ begin
     into v_placed_json
     from _ranking_tally where cid = any(v_placed);
 
+    -- The runoff's two names, in the order of `finalists`. The option a place
+    -- beat may never be placed itself before the ladder stops, so the browser
+    -- cannot look it up anywhere else.
+    select coalesce(jsonb_agg(t.name order by f.ord), '[]'::jsonb)
+    into v_finalist_names
+    from unnest(v_finalists) with ordinality f(cid, ord)
+    join _ranking_tally t on t.cid = f.cid;
+
     v_ranking := v_ranking || jsonb_build_array(jsonb_build_object(
       'place', v_place,
       'options', v_placed_json,
       'finalists', v_round->'finalists',
+      'finalist_names', v_finalist_names,
       'runoff', v_round->'runoff',
       'tiebreaks', v_round->'tiebreaks'));
 
@@ -4116,6 +6765,17 @@ COMMENT ON FUNCTION "public"."poll_results_revealed"("p_poll" "public"."polls") 
 
 
 
+CREATE OR REPLACE FUNCTION "public"."poll_results_rows"() RETURNS integer
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+  select 10
+$$;
+
+
+ALTER FUNCTION "public"."poll_results_rows"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."poll_retention_window"() RETURNS interval
     LANGUAGE "sql" IMMUTABLE
     AS $$ select interval '6 months' $$;
@@ -4126,6 +6786,138 @@ ALTER FUNCTION "public"."poll_retention_window"() OWNER TO "postgres";
 
 COMMENT ON FUNCTION "public"."poll_retention_window"() IS 'How long a poll is kept after it is created. The one place the retention period is written down.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_round"("p_poll_id" "uuid", "p_pool" "uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_ballots uuid[];
+  v_weights numeric[];
+begin
+  if not poll_is_weighted(p_poll_id) then
+    return star_round(p_poll_id, p_pool);
+  end if;
+
+  select coalesce(array_agg(w.ballot_id order by w.ballot_id), '{}'::uuid[]),
+         coalesce(array_agg(w.weight order by w.ballot_id), '{}'::numeric[])
+  into v_ballots, v_weights
+  from poll_ballot_weights(p_poll_id) w;
+
+  return weighted_star_round(p_poll_id, p_pool, v_ballots, v_weights);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_round"("p_poll_id" "uuid", "p_pool" "uuid"[]) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_scores"("p_poll_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_voted int;
+  v_weighted boolean;
+  v_strength numeric;
+begin
+  select count(*) into v_voted from ballots where poll_id = p_poll_id;
+
+  if v_voted = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  v_weighted := poll_is_weighted(p_poll_id);
+  select sum(weight) into v_strength from poll_ballot_weights(p_poll_id);
+
+  return (
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'id', id,
+      'name', name,
+      'total_score', total,
+      'average_score', round(total::numeric / v_strength, 2)
+    ) order by total desc, name), '[]'::jsonb)
+    from (
+      select c.id, c.name,
+             case when v_weighted
+                  then trim_scale(round(coalesce(sum(s.score * w.weight), 0), 6))
+                  else coalesce(sum(s.score), 0) end as total
+      from candidates c
+      left join scores s on s.candidate_id = c.id
+      left join poll_ballot_weights(p_poll_id) w on w.ballot_id = s.ballot_id
+      where c.poll_id = p_poll_id
+      group by c.id, c.name
+    ) t
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_scores"("p_poll_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_poll polls;
+  v_ballots uuid[];
+  v_map jsonb;
+  v_result jsonb;
+begin
+  select * into v_poll from polls where id = p_poll_id;
+
+  if not (v_poll.show_voters and v_poll.show_ballots) then
+    raise exception 'Only a poll that publishes its ballots with names on them can be counted as a sequential poll';
+  end if;
+
+  if v_poll.schedule is not null then
+    raise exception 'A time poll cannot be counted as a sequential poll';
+  end if;
+
+  if p_kind is null or p_kind not in ('option', 'ranking', 'multiple') then
+    raise exception 'Only the best option, multiple winners or proportional winners can be counted as a sequential poll';
+  end if;
+
+  -- The sheet's order, which is how the reader gave the N.
+  select coalesce(array_agg(b.id order by lower(coalesce(b.voter_name, u.email)), b.id), '{}'::uuid[])
+  into v_ballots
+  from ballots b
+  left join auth.users u on u.id = b.voter_id
+  where b.poll_id = p_poll_id;
+
+  if cardinality(v_ballots) = 0 then
+    raise exception 'No votes were cast in this poll';
+  end if;
+
+  if coalesce(cardinality(p_given), 0) <> cardinality(v_ballots) then
+    raise exception 'Give every ballot the stars its voter gave earlier winners';
+  end if;
+
+  if exists (select 1 from unnest(p_given) g where g is null or g < 0 or g > 10000) then
+    raise exception 'Stars given to previous winners must be from 0 to 10000';
+  end if;
+
+  select jsonb_object_agg(u.b::text, u.g) into v_map
+  from unnest(v_ballots, p_given) u(b, g);
+
+  perform set_config('app.sequential_given',
+                     jsonb_build_object('poll', p_poll_id, 'given', v_map)::text, true);
+
+  v_result := case when p_kind = 'multiple'
+                   then poll_multiple_winners(p_poll_id, '{}')
+                   else poll_ranking(p_poll_id) end;
+
+  perform set_config('app.sequential_given', '', true);
+
+  return v_result;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."poll_status"("p_poll_id" "uuid") RETURNS TABLE("invited_count" integer, "voted_count" integer, "is_complete" boolean, "voted" boolean, "is_closed" boolean, "results_available" boolean, "soliciting" boolean, "expires_at" timestamp with time zone, "invited" boolean, "confirmed" boolean, "confirmed_count" integer, "winner_name" "text", "winner_settled" boolean, "reminded_at" timestamp with time zone)
@@ -4204,23 +6996,39 @@ declare
   v_mode text;
   v_edited boolean;
   v_late boolean;
+  v_kind text;
+  v_kind_value numeric;
+  v_kind_result jsonb;
   v_options jsonb;
+  v_option_count int;
   v_pool uuid[];
   v_head jsonb;
   v_head_finalists uuid[];
+  v_weighted boolean;
+  v_strength numeric;
+  v_voters_shown boolean;
+  v_calendar boolean;
+  v_ballots_shown boolean;
 begin
   select count(*) into v_invited from invited_voters where poll_id = p_poll_id;
   select count(*) into v_voted from ballots where poll_id = p_poll_id;
 
-  select closed_at is not null, mode, options_edited_after_votes, votes_after_reveal
-  into v_closed, v_mode, v_edited, v_late
+  select closed_at is not null, mode, options_edited_after_votes, votes_after_reveal,
+         kind, kind_value, show_voters, schedule is not null, show_ballots
+  into v_closed, v_mode, v_edited, v_late, v_kind, v_kind_value, v_voters_shown, v_calendar,
+       v_ballots_shown
   from polls where id = p_poll_id;
 
   if v_voted = 0 then
     raise exception 'No votes were cast in this poll';
   end if;
 
-  -- Names and totals for the whole poll, for the score-round list. star_round
+  v_weighted := poll_is_weighted(p_poll_id);
+
+  -- What an average is taken over: the ballots, or their total weight.
+  select sum(weight) into v_strength from poll_ballot_weights(p_poll_id);
+
+  -- Names and totals for the whole poll, for the score-round list. The round
   -- recomputes its own pool-scoped copy; these two never disagree, since a
   -- total is a per-option sum that no elimination can change.
   drop table if exists _tally;
@@ -4229,24 +7037,31 @@ begin
     c.id as cid,
     c.name,
     c.description,
-    coalesce(sum(s.score), 0)::int as total
+    case when v_weighted
+         then trim_scale(round(coalesce(sum(s.score * w.weight), 0), 6))
+         else coalesce(sum(s.score), 0) end as total
   from candidates c
   left join scores s on s.candidate_id = c.id
+  left join poll_ballot_weights(p_poll_id) w on w.ballot_id = s.ballot_id
   where c.poll_id = p_poll_id
   group by c.id, c.name, c.description;
 
-  select coalesce(array_agg(cid), '{}'::uuid[]) into v_pool from _tally;
+  select coalesce(array_agg(cid), '{}'::uuid[]), count(*)::int
+  into v_pool, v_option_count
+  from _tally;
 
   -- The head round is the whole of STAR: the score round, its tie-breaks and
   -- the runoff. Everything below first place is poll_ranking's, and is not
-  -- computed here.
-  v_head := star_round(p_poll_id, v_pool);
+  -- computed here unless the question asked for it.
+  v_head := poll_round(p_poll_id, v_pool);
 
   select coalesce(array_agg(x::uuid), '{}'::uuid[]) into v_head_finalists
   from jsonb_array_elements_text(v_head->'finalists') x;
 
   -- Order the score list so a tie-break winner sits above the option it
-  -- beat, rather than falling alphabetically below it.
+  -- beat, rather than falling alphabetically below it. That ordering is also
+  -- what makes the cut safe: the two finalists are always the first two rows,
+  -- so every option the page names is in the list.
   select coalesce(jsonb_agg(jsonb_build_object(
     'id', cid,
     'name', name,
@@ -4254,13 +7069,51 @@ begin
     -- nothing at all for those rather than an empty affordance.
     'description', description,
     'total_score', total,
-    'average_score', round(total::numeric / v_voted, 2)
-  ) order by total desc, (case when cid = any(v_head_finalists) then 0 else 1 end), name), '[]'::jsonb)
+    'average_score', round(total::numeric / v_strength, 2)
+  ) order by rn), '[]'::jsonb)
   into v_options
-  from _tally;
+  from (
+    select *, row_number() over (
+      order by total desc, (case when cid = any(v_head_finalists) then 0 else 1 end), name) as rn
+    from _tally
+  ) t
+  where rn <= poll_results_rows();
+
+  -- Last, since the functions below build temp tables of their own.
+  v_kind_result := case
+    when v_kind = 'ranking' and v_option_count >= 3 then poll_ranking(p_poll_id)
+    when v_kind = 'multiple' and v_option_count >= 3 then poll_multiple_winners(p_poll_id, '{}')
+    when v_kind = 'fractional' and v_option_count >= 2 then poll_fractional_winners(p_poll_id, '{}')
+    when v_kind = 'consensus' and v_option_count >= 2 then poll_consensus(p_poll_id, '{}')
+    when v_kind = 'budget' and v_option_count >= 2 then poll_budget(p_poll_id, '{}', null, null, true)
+    when v_kind = 'ranking_budget' and v_option_count >= 2 then poll_budget(p_poll_id, '{}', null, null, false)
+    when v_kind = 'fractional_budget' and v_option_count >= 2 then poll_fractional_budget(p_poll_id, '{}', null, null)
+    else null
+  end;
+
+  -- Refused only for size (or a poll somebody made sequential by hand); the
+  -- page then opens on STAR's winner, and *More results* says why.
+  -- Refused only for size, as the assignment is.
+  if v_kind = 'consensus_winners' and v_option_count >= 3 then
+    begin
+      v_kind_result := poll_consensus_winners(p_poll_id, '{}', null);
+    exception when raise_exception then
+      v_kind_result := null;
+    end;
+  end if;
+
+  if v_kind = 'assignment' and v_option_count >= 2 and v_voters_shown then
+    begin
+      v_kind_result := poll_assignment(p_poll_id, '{}', null);
+    exception when raise_exception then
+      v_kind_result := null;
+    end;
+  end if;
 
   return jsonb_build_object(
     'options', v_options,
+    -- The size of the field the list above was cut from.
+    'option_count', v_option_count,
     'finalists', case when jsonb_array_length(v_head->'finalists') = 2
                       then v_head->'finalists'
                       else '[]'::jsonb end,
@@ -4277,7 +7130,18 @@ begin
     -- get_poll_results and open_poll_results are two gates over this one
     -- function.
     'options_edited_after_votes', coalesce(v_edited, false),
-    'votes_after_reveal', coalesce(v_late, false)
+    'votes_after_reveal', coalesce(v_late, false),
+    'kind', v_kind,
+    -- Whether the options are a calendar's windows, which the results name
+    -- as times and which a budget is never offered on.
+    'calendar', v_calendar,
+    'kind_value', v_kind_value,
+    'kind_result', v_kind_result,
+    'weighted', v_weighted,
+    'voters_shown', v_voters_shown,
+    -- Whether the ballots are published, so a sheet names every ballot and
+    -- *More results* may offer to weigh them (poll_sequential).
+    'ballots_shown', v_ballots_shown
   );
 end;
 $$;
@@ -4293,6 +7157,7 @@ CREATE OR REPLACE FUNCTION "public"."poll_winner_name"("p_poll_id" "uuid") RETUR
 declare
   v_pool uuid[];
   v_winner uuid;
+  v_kind text;
 begin
   -- No ballots, no election. The caller checks this first anyway; the point
   -- of repeating it is that star_round() would otherwise elect the
@@ -4308,15 +7173,21 @@ begin
     return null;
   end if;
 
-  -- The head round is the whole of STAR: the score round, its tie-breaks and
-  -- the runoff. The full ranking below it is this function again on what is
-  -- left, and a list row wants none of that.
-  v_winner := (star_round(p_poll_id, v_pool)->>'winner_id')::uuid;
+  select kind into v_kind from polls where id = p_poll_id;
+
+  if v_kind = 'consensus' and array_length(v_pool, 1) >= 2 then
+    -- The same answer the tally carries as `kind_result`, so the badge and
+    -- the green bar never disagree.
+    v_winner := (poll_consensus(p_poll_id, '{}') ->> 'winner_id')::uuid;
+  else
+    -- The head round is the whole of STAR: the score round, its tie-breaks
+    -- and the runoff, at the ballots' weights on a sequential question.
+    v_winner := (poll_round(p_poll_id, v_pool) ->> 'winner_id')::uuid;
+  end if;
 
   if v_winner is null then
     -- A runoff level on preference, on points and on five-star votes alike.
-    -- The app reports the tie rather than inventing a winner, so this stays
-    -- null and the list says the results are ready instead.
+    -- The app reports the tie rather than inventing a winner.
     return null;
   end if;
 
@@ -4784,6 +7655,255 @@ ALTER FUNCTION "public"."save_push_subscription"("p_endpoint" "text", "p_p256dh"
 
 COMMENT ON FUNCTION "public"."save_push_subscription"("p_endpoint" "text", "p_p256dh" "text", "p_auth" "text") IS 'Binds this browser''s push subscription to the signed-in account, so it hears about that account''s polls.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."scaled_star_round"("p_poll_id" "uuid", "p_pool" "uuid"[], "p_ballots" "uuid"[], "p_weights" numeric[], "p_scales" numeric[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_finalists uuid[] := '{}';
+  v_pick uuid[];
+  v_tiebreaks jsonb := '[]'::jsonb;
+  v_need int := 2;
+  v_score numeric;
+  v_group uuid[];
+  v_grp_size int;
+  v_tied jsonb;
+  v_h2h jsonb;
+  v_matchup jsonb;
+  v_fs jsonb;
+  v_steps jsonb;
+  v_advanced jsonb;
+  v_resolved text;
+  v_fn numeric; v_fn1 numeric;
+  v_a uuid; v_b uuid;
+  v_ta numeric; v_tb numeric;
+  v_fa numeric; v_fb numeric;
+  v_prefers_a numeric; v_prefers_b numeric; v_ties numeric;
+  v_winner uuid;
+  v_runoff_by text;
+begin
+  drop table if exists _wweights;
+  create temp table _wweights on commit drop as
+  select b.ballot_id, b.weight
+  from unnest(p_ballots, p_weights) as b(ballot_id, weight);
+
+  -- Each option's scale, paired with the pool by position.
+  drop table if exists _wscale;
+  create temp table _wscale on commit drop as
+  select x.cid, x.scale
+  from unnest(p_pool, p_scales) as x(cid, scale);
+
+  -- Every ballot's score for every option in the pool, at its strength, and
+  -- the option's scale beside it.
+  drop table if exists _wscores;
+  create temp table _wscores on commit drop as
+  select s.ballot_id, s.candidate_id, s.score, w.weight, x.scale
+  from scores s
+  join _wweights w on w.ballot_id = s.ballot_id
+  join _wscale x on x.cid = s.candidate_id
+  where s.candidate_id = any(p_pool);
+
+  drop table if exists _wround;
+  create temp table _wround on commit drop as
+  select
+    c.id as cid,
+    c.name,
+    round(coalesce(sum(s.score * s.weight * s.scale), 0), 6) as total,
+    round(coalesce(sum(s.weight * s.scale) filter (where s.score = 5), 0), 6) as five_stars
+  from candidates c
+  left join _wscores s on s.candidate_id = c.id
+  where c.poll_id = p_poll_id
+    and c.id = any(p_pool)
+  group by c.id, c.name;
+
+  for v_score in select distinct total from _wround order by total desc loop
+    exit when v_need <= 0;
+
+    select array_agg(cid order by cid) into v_group from _wround where total = v_score;
+    v_grp_size := coalesce(array_length(v_group, 1), 0);
+
+    if v_grp_size <= v_need then
+      v_finalists := v_finalists || v_group;
+      v_need := v_need - v_grp_size;
+    else
+      select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'total_score', total) order by name)
+        into v_tied from _wround where cid = any(v_group);
+      select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'value', five_stars) order by five_stars desc, name)
+        into v_fs from _wround where cid = any(v_group);
+
+      if v_grp_size = 2 then
+        select cid into v_a from _wround where cid = any(v_group) order by name, cid limit 1;
+        select cid into v_b from _wround where cid = any(v_group) and cid <> v_a;
+
+        select
+          round(coalesce(sum(weight) filter (where a_score > b_score), 0)
+                * (select scale from _wscale where cid = v_a), 6),
+          round(coalesce(sum(weight) filter (where b_score > a_score), 0)
+                * (select scale from _wscale where cid = v_b), 6),
+          round(coalesce(sum(weight) filter (where a_score = b_score), 0), 6)
+        into v_prefers_a, v_prefers_b, v_ties
+        from (
+          select
+            w.weight,
+            coalesce((select score from _wscores where ballot_id = w.ballot_id and candidate_id = v_a), 0) as a_score,
+            coalesce((select score from _wscores where ballot_id = w.ballot_id and candidate_id = v_b), 0) as b_score
+          from _wweights w
+        ) v;
+
+        select jsonb_build_object(
+                 'a', v_a, 'a_name', ca.name,
+                 'b', v_b, 'b_name', cb.name,
+                 'prefers_a', v_prefers_a,
+                 'prefers_b', v_prefers_b,
+                 'ties', v_ties)
+          into v_matchup
+        from _wround ca, _wround cb
+        where ca.cid = v_a and cb.cid = v_b;
+
+        drop table if exists _wtb;
+        create temp table _wtb on commit drop as
+        with w as (
+          select
+            t.cid,
+            t.name,
+            t.five_stars,
+            case
+              when t.cid = v_a then (v_prefers_a > v_prefers_b)::int
+              else (v_prefers_b > v_prefers_a)::int
+            end as h2h_wins
+          from _wround t
+          where t.cid = any(v_group)
+        )
+        select w.*, row_number() over (order by h2h_wins desc, five_stars desc, cid) as rn
+        from w;
+
+        select jsonb_agg(jsonb_build_object('id', cid, 'name', name, 'value', h2h_wins) order by h2h_wins desc, name)
+          into v_h2h from _wtb;
+
+        if v_prefers_a <> v_prefers_b then
+          v_resolved := 'head_to_head';
+        elsif (select max(five_stars) <> min(five_stars) from _wtb) then
+          v_resolved := 'five_star_votes';
+        else
+          v_resolved := 'random';
+        end if;
+
+        v_steps := jsonb_build_array(jsonb_build_object(
+          'rule', 'head_to_head',
+          'results', v_h2h,
+          'matchups', jsonb_build_array(v_matchup),
+          'decisive', v_resolved = 'head_to_head'));
+
+        if v_resolved <> 'head_to_head' then
+          v_steps := v_steps || jsonb_build_array(jsonb_build_object(
+            'rule', 'five_star_votes', 'results', v_fs, 'decisive', v_resolved = 'five_star_votes'));
+        end if;
+      else
+        drop table if exists _wtb;
+        create temp table _wtb on commit drop as
+        select
+          t.cid,
+          t.name,
+          t.five_stars,
+          row_number() over (order by t.five_stars desc, t.cid) as rn
+        from _wround t
+        where t.cid = any(v_group);
+
+        select five_stars into v_fn from _wtb where rn = v_need;
+        select five_stars into v_fn1 from _wtb where rn = v_need + 1;
+
+        v_resolved := case when v_fn > v_fn1 then 'five_star_votes' else 'random' end;
+
+        v_steps := jsonb_build_array(jsonb_build_object(
+          'rule', 'five_star_votes', 'results', v_fs, 'decisive', v_resolved = 'five_star_votes'));
+      end if;
+
+      select array_agg(cid order by rn) into v_pick from _wtb where rn <= v_need;
+      select jsonb_agg(jsonb_build_object('id', cid, 'name', name) order by rn)
+        into v_advanced from _wtb where rn <= v_need;
+
+      v_tiebreaks := v_tiebreaks || jsonb_build_array(jsonb_build_object(
+        'tied_at', v_score,
+        'tied', v_tied,
+        'slots', v_need,
+        'steps', v_steps,
+        'resolved_by', v_resolved,
+        'advanced', v_advanced));
+
+      v_finalists := v_finalists || v_pick;
+      v_need := 0;
+    end if;
+  end loop;
+
+  select coalesce(array_agg(cid order by total desc, cid), '{}'::uuid[]) into v_finalists
+  from _wround where cid = any(v_finalists);
+
+  if array_length(v_finalists, 1) is distinct from 2 then
+    return jsonb_build_object(
+      'finalists', to_jsonb(v_finalists),
+      'tiebreaks', v_tiebreaks,
+      'runoff', null,
+      'winner_id', v_finalists[1]
+    );
+  end if;
+
+  v_a := v_finalists[1];
+  v_b := v_finalists[2];
+
+  select
+    round(coalesce(sum(weight) filter (where a_score > b_score), 0)
+          * (select scale from _wscale where cid = v_a), 6),
+    round(coalesce(sum(weight) filter (where b_score > a_score), 0)
+          * (select scale from _wscale where cid = v_b), 6),
+    round(coalesce(sum(weight) filter (where a_score = b_score), 0), 6)
+  into v_prefers_a, v_prefers_b, v_ties
+  from (
+    select
+      w.weight,
+      coalesce((select score from _wscores where ballot_id = w.ballot_id and candidate_id = v_a), 0) as a_score,
+      coalesce((select score from _wscores where ballot_id = w.ballot_id and candidate_id = v_b), 0) as b_score
+    from _wweights w
+  ) t;
+
+  select total, five_stars into v_ta, v_fa from _wround where cid = v_a;
+  select total, five_stars into v_tb, v_fb from _wround where cid = v_b;
+
+  if v_prefers_a > v_prefers_b then
+    v_winner := v_a; v_runoff_by := 'preference';
+  elsif v_prefers_b > v_prefers_a then
+    v_winner := v_b; v_runoff_by := 'preference';
+  elsif v_ta > v_tb then
+    v_winner := v_a; v_runoff_by := 'higher_score';
+  elsif v_tb > v_ta then
+    v_winner := v_b; v_runoff_by := 'higher_score';
+  elsif v_fa > v_fb then
+    v_winner := v_a; v_runoff_by := 'five_star_votes';
+  elsif v_fb > v_fa then
+    v_winner := v_b; v_runoff_by := 'five_star_votes';
+  else
+    v_winner := null; v_runoff_by := 'unresolved';
+  end if;
+
+  return jsonb_build_object(
+    'finalists', to_jsonb(v_finalists),
+    'tiebreaks', v_tiebreaks,
+    'runoff', jsonb_build_object(
+      'prefers_a', v_prefers_a,
+      'prefers_b', v_prefers_b,
+      'ties', v_ties,
+      'five_stars_a', v_fa,
+      'five_stars_b', v_fb,
+      'resolved_by', v_runoff_by
+    ),
+    'winner_id', v_winner
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."scaled_star_round"("p_poll_id" "uuid", "p_pool" "uuid"[], "p_ballots" "uuid"[], "p_weights" numeric[], "p_scales" numeric[]) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."send_contact_email"("p_from" "text", "p_message" "text") RETURNS "void"
@@ -5264,13 +8384,9 @@ begin
   -- The whole group, not the question that was touched. Results unlock for a
   -- poll of several questions when *all* of them have stopped, so the last
   -- ballot cast on question three is what gives questions one and two their
-  -- answers as well; settling only the question that moved would leave those
-  -- two blank forever.
+  -- answers as well.
   for v_question in select q.* from poll_group_members(v_poll) q loop
-    -- The same predicate the three reads report as `results_available`, so a
-    -- poll can never say its results are available and have no settled answer
-    -- to show. Two conditions written separately would be two chances to
-    -- drift.
+    -- The same predicate the three reads report as `results_available`.
     if not poll_results_revealed(v_question) then
       -- Back to taking votes. A poll that finishes again is a second result,
       -- and it is worked out from the votes it has then.
@@ -5285,15 +8401,16 @@ begin
 
     -- Already answered, and the answer cannot have changed: every path that
     -- could move this question's tally refuses once its results are out.
-    -- revise_ballot and open_poll_revise both check poll_results_revealed;
-    -- submit_ballot refuses a closed poll, and an invite poll at full turnout
-    -- has nobody left to hear from; guard_invitee_changes refuses a new
-    -- invitee once the results are out; and the options were frozen by
-    -- guard_options_frozen on the first ballot, with no UPDATE grant on
-    -- candidates to rename one afterwards. So this is a skip rather than a
-    -- recount, and running the election twice for one result is the thing
-    -- this whole migration is about not doing.
     continue when v_question.winner_settled_at is not null;
+
+    -- A question whose answer is several options is never settled with one:
+    -- left unsettled, every screen says *Results ready*. Settled with a null
+    -- name would read as a tie. Nothing is written, so nothing announces it
+    -- but this: its readers are owed the news that the results are out.
+    if not poll_names_one_winner(v_question.id) then
+      perform broadcast_poll_change(v_question.id);
+      continue;
+    end if;
 
     update polls
     set winner_name = poll_winner_name(v_question.id),
@@ -5615,6 +8732,7 @@ declare
   v_candidate_id uuid;
   v_score int;
   v_candidate_count int;
+  v_given numeric;
 begin
   perform lock_poll(p_poll_id);
 
@@ -5652,7 +8770,11 @@ begin
     raise exception 'Must submit a score for every option';
   end if;
 
-  insert into ballots (poll_id, voter_id) values (p_poll_id, auth.uid())
+  -- An invitee is known by their address, so a sequential question finds
+  -- their earlier weight without asking.
+  v_given := claim_carried_weight(p_poll_id, lower(auth.jwt() ->> 'email'));
+
+  insert into ballots (poll_id, voter_id, given) values (p_poll_id, auth.uid(), v_given)
   returning id into v_ballot_id;
 
   for v_item in select * from jsonb_array_elements(p_scores)
@@ -5792,6 +8914,102 @@ COMMENT ON FUNCTION "public"."unconfirm_options"("p_poll_id" "uuid") IS 'Takes b
 
 
 
+CREATE OR REPLACE FUNCTION "public"."validate_amount"("p_value" numeric, "p_what" "text") RETURNS "void"
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if p_value is null or p_value <> trunc(p_value) or p_value < 1 or p_value > 1000000000 then
+    raise exception '% must be a whole number from 1 to 1,000,000,000', p_what;
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."validate_amount"("p_value" numeric, "p_what" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."validate_calendar_kind"("p_kind" "text", "p_question" integer DEFAULT NULL::integer) RETURNS "void"
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if p_kind in ('budget', 'ranking_budget', 'fractional_budget') then
+    raise exception 'A budget poll cannot be a time poll%',
+      case when p_question is null then '' else format(' (question %s)', p_question) end;
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."validate_calendar_kind"("p_kind" "text", "p_question" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."validate_kind"("p_kind" "text", "p_value" numeric, "p_question" integer DEFAULT NULL::integer) RETURNS "void"
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_which text := case when p_question is null then '' else format(' on question %s', p_question) end;
+begin
+  if p_kind is null or p_kind not in ('option', 'ranking', 'multiple', 'fractional', 'consensus', 'budget', 'ranking_budget', 'fractional_budget', 'assignment', 'consensus_winners') then
+    raise exception 'Unknown poll kind%', v_which;
+  end if;
+
+  if p_kind in ('budget', 'ranking_budget', 'fractional_budget') then
+    if p_value is null then
+      raise exception 'Give the budget%', v_which;
+    end if;
+    perform validate_amount(p_value, 'The budget' || v_which);
+    return;
+  end if;
+
+  if p_kind = 'consensus_winners' then
+    if p_value is null then
+      raise exception 'Say how many winners to choose%', v_which;
+    end if;
+    perform validate_winner_count(p_value, v_which);
+    return;
+  end if;
+
+  if p_value is null then
+    return;
+  end if;
+
+  if p_kind = 'assignment' then
+    perform validate_per_voter(p_value, v_which);
+    return;
+  end if;
+
+  if p_kind not in ('ranking', 'multiple') then
+    raise exception 'Only multiple winners, proportional winners, consensus winners, a budget poll or an option assignment takes a number%', v_which;
+  end if;
+
+  if p_value <> trunc(p_value) or p_value < 2 or p_value > poll_results_rows() then
+    raise exception '%', format('Choose a number from 2 to %s%s', poll_results_rows(), v_which);
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."validate_kind"("p_kind" "text", "p_value" numeric, "p_question" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."validate_per_voter"("p_value" numeric, "p_which" "text" DEFAULT ''::"text") RETURNS "void"
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if p_value <> trunc(p_value) or p_value < 1 or p_value > poll_results_rows() then
+    raise exception '%', format('Choose from 1 to %s options per voter%s', poll_results_rows(), p_which);
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."validate_per_voter"("p_value" numeric, "p_which" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."validate_schedule"("p_schedule" "jsonb") RETURNS "void"
     LANGUAGE "plpgsql" IMMUTABLE
     SET "search_path" TO 'public'
@@ -5801,6 +9019,7 @@ declare
   v_end text := p_schedule #>> '{window,end}';
   v_slots int;
   v_granularity int;
+  v_step int;
 begin
   if p_schedule is null or jsonb_typeof(p_schedule) <> 'object' then
     raise exception 'A time poll needs a schedule';
@@ -5848,6 +9067,31 @@ begin
   if v_slots < 1 then
     raise exception 'A meeting is at least one granule long';
   end if;
+
+  -- How far apart the windows start. Missing is every granule, which is
+  -- every poll made before the step could be chosen. A step longer than the
+  -- meeting would leave painted hours no window covers.
+  if p_schedule ? 'step' then
+    if jsonb_typeof(p_schedule -> 'step') <> 'number' then
+      raise exception 'A schedule''s step is a number';
+    end if;
+    v_step := (p_schedule ->> 'step')::int;
+    if v_step::numeric <> (p_schedule ->> 'step')::numeric
+       or v_step < v_granularity or v_step % v_granularity <> 0
+       or v_step > v_slots * v_granularity then
+      raise exception 'A schedule''s step is a whole number of granules, no longer than the meeting';
+    end if;
+  end if;
+
+  -- The places each window has on an option assignment, given to every
+  -- window painted or suggested later. The windows carry their own (as
+  -- candidates.kind_value); this is what a new one is given.
+  if p_schedule ? 'places' then
+    if jsonb_typeof(p_schedule -> 'places') <> 'number' then
+      raise exception 'A schedule''s places are a number';
+    end if;
+    perform validate_amount((p_schedule ->> 'places')::numeric, 'The places per time');
+  end if;
 end;
 $_$;
 
@@ -5857,6 +9101,21 @@ ALTER FUNCTION "public"."validate_schedule"("p_schedule" "jsonb") OWNER TO "post
 
 COMMENT ON FUNCTION "public"."validate_schedule"("p_schedule" "jsonb") IS 'Raises unless the jsonb handed in is a schedule a calendar can be drawn from. The front end enumerates the options, so nothing here can check that they agree with it; what it can check is that the grid itself is describable. Internal.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."validate_winner_count"("p_value" numeric, "p_which" "text" DEFAULT ''::"text") RETURNS "void"
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if p_value <> trunc(p_value) or p_value < 2 or p_value > poll_results_rows() then
+    raise exception '%', format('Choose from 2 to %s winners%s', poll_results_rows(), p_which);
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."validate_winner_count"("p_value" numeric, "p_which" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."wants_email"("p_email" "text") RETURNS boolean
@@ -5895,6 +9154,20 @@ COMMENT ON FUNCTION "public"."wants_push"("p_user_id" "uuid") IS 'Whether an acc
 
 
 
+CREATE OR REPLACE FUNCTION "public"."weighted_star_round"("p_poll_id" "uuid", "p_pool" "uuid"[], "p_ballots" "uuid"[], "p_weights" numeric[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  return scaled_star_round(p_poll_id, p_pool, p_ballots, p_weights,
+                           array_fill(1::numeric, array[coalesce(cardinality(p_pool), 0)]));
+end;
+$$;
+
+
+ALTER FUNCTION "public"."weighted_star_round"("p_poll_id" "uuid", "p_pool" "uuid"[], "p_ballots" "uuid"[], "p_weights" numeric[]) OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."account_carry_overs" (
     "token" "text" NOT NULL,
     "anon_id" "uuid" NOT NULL,
@@ -5918,6 +9191,8 @@ CREATE TABLE IF NOT EXISTS "public"."ballots" (
     "voter_key" "text",
     "revised_at" timestamp with time zone,
     "account_id" "uuid",
+    "given" numeric,
+    CONSTRAINT "ballots_given_ck" CHECK ((("given" IS NULL) OR ("given" >= (0)::numeric))),
     CONSTRAINT "ballots_one_owner_ck" CHECK ((("voter_id" IS NULL) OR ("account_id" IS NULL)))
 );
 
@@ -5933,12 +9208,18 @@ COMMENT ON COLUMN "public"."ballots"."account_id" IS 'The account that cast this
 
 
 
+COMMENT ON COLUMN "public"."ballots"."given" IS 'On a sequential question, the stars this ballot''s voter had given earlier winners when it was cast: the carried row it claimed, or the newcomer''s share (newcomer_given). Its weight is 5 / (5 + given). Null on every ballot of a question that is not sequential. Fixed at casting; a revision does not move it.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."candidates" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "poll_id" "uuid" NOT NULL,
     "name" "text" NOT NULL,
     "description" "text",
-    "sort_order" integer DEFAULT 0 NOT NULL
+    "sort_order" integer DEFAULT 0 NOT NULL,
+    "kind_value" numeric,
+    CONSTRAINT "candidates_kind_value_ck" CHECK ((("kind_value" IS NULL) OR (("kind_value" = "trunc"("kind_value")) AND ("kind_value" >= (1)::numeric))))
 );
 
 
@@ -5946,6 +9227,28 @@ ALTER TABLE "public"."candidates" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."candidates"."description" IS 'Optional detail shown under the option name on the ballot. Fixed at creation, like everything else about a poll.';
+
+
+
+COMMENT ON COLUMN "public"."candidates"."kind_value" IS 'A number whose meaning belongs to the question''s kind: an option''s cost on a proportional budget, where every option has one, or its places on an option assignment, where none means one. Null on every other kind.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."carried_weights" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "poll_id" "uuid" NOT NULL,
+    "voter" "text" NOT NULL,
+    "given" numeric NOT NULL,
+    "claimed" boolean DEFAULT false NOT NULL,
+    CONSTRAINT "carried_weights_given_ck" CHECK ((("given" >= (0)::numeric) AND ("given" <= (10000)::numeric))),
+    CONSTRAINT "carried_weights_voter_ck" CHECK ((("length"("voter") >= 1) AND ("length"("voter") <= 320)))
+);
+
+
+ALTER TABLE "public"."carried_weights" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."carried_weights" IS 'The voters a sequential question remembers from earlier polls, each with the stars it gave their winners (given). A name on an open poll, a lowercased address on an invite poll. Written only by create_poll and create_poll_group; claimed by the first ballot that matches it. RLS on, no policies, no grants: which rows are claimed would be a list of who has voted.';
 
 
 
@@ -5962,6 +9265,20 @@ ALTER TABLE "public"."contact_messages" OWNER TO "postgres";
 
 
 COMMENT ON TABLE "public"."contact_messages" IS 'Messages sent from the contact page, read by hand with the service role. Written only by send_contact_message; nothing in the app reads them.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."invitations_sent" (
+    "account_id" "uuid" NOT NULL,
+    "day" "date" NOT NULL,
+    "sent" integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE "public"."invitations_sent" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."invitations_sent" IS 'How many invitations each account has sent on each day, for the daily ceiling in guard_invitee_changes. A count rather than the rows of invited_voters, because an invitee removed and added again is invited twice and leaves one row. An account''s earlier days are dropped as it is written. RLS on, no policies, no grants.';
 
 
 
@@ -6089,8 +9406,18 @@ ALTER TABLE ONLY "public"."candidates"
 
 
 
+ALTER TABLE ONLY "public"."carried_weights"
+    ADD CONSTRAINT "carried_weights_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."contact_messages"
     ADD CONSTRAINT "contact_messages_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."invitations_sent"
+    ADD CONSTRAINT "invitations_sent_pkey" PRIMARY KEY ("account_id", "day");
 
 
 
@@ -6218,6 +9545,10 @@ CREATE UNIQUE INDEX "uq_ballots_poll_voter_key" ON "public"."ballots" USING "btr
 
 
 CREATE UNIQUE INDEX "uq_ballots_poll_voter_name" ON "public"."ballots" USING "btree" ("poll_id", "lower"("voter_name")) WHERE ("voter_name" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "uq_carried_weights_poll_voter" ON "public"."carried_weights" USING "btree" ("poll_id", "lower"("voter"));
 
 
 
@@ -6369,6 +9700,11 @@ ALTER TABLE ONLY "public"."candidates"
 
 
 
+ALTER TABLE ONLY "public"."carried_weights"
+    ADD CONSTRAINT "carried_weights_poll_id_fkey" FOREIGN KEY ("poll_id") REFERENCES "public"."polls"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."contact_messages"
     ADD CONSTRAINT "contact_messages_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
@@ -6459,7 +9795,13 @@ CREATE POLICY "candidates_select" ON "public"."candidates" FOR SELECT USING (("p
 
 
 
+ALTER TABLE "public"."carried_weights" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."contact_messages" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."invitations_sent" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."invited_voters" ENABLE ROW LEVEL SECURITY;
@@ -6728,6 +10070,14 @@ REVOKE ALL ON FUNCTION "public"."assert_results_readable"("p_poll_id" "uuid") FR
 
 
 
+REVOKE ALL ON FUNCTION "public"."assignment_count"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."ballot_given"("p_poll_id" "uuid") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."ballot_sheet"("p_poll_id" "uuid", "p_named" boolean) FROM PUBLIC;
 
 
@@ -6750,6 +10100,10 @@ REVOKE ALL ON FUNCTION "public"."broadcast_poll_updated"() FROM PUBLIC;
 
 
 
+REVOKE ALL ON FUNCTION "public"."claim_carried_weight"("p_poll_id" "uuid", "p_voter" "text") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."clear_confirmation_for_uninvited"() FROM PUBLIC;
 
 
@@ -6768,8 +10122,12 @@ REVOKE ALL ON FUNCTION "public"."confirming_invitee"("p_poll_id" "uuid") FROM PU
 
 
 
-REVOKE ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."consensus_set_search"("p_voters" integer, "p_second" bigint[], "p_k" integer, "p_budget" bigint) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb", "p_kind_value" numeric, "p_carried" "jsonb", "p_option_costs" numeric[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_poll"("p_title" "text", "p_description" "text", "p_options" "text"[], "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_option_descriptions" "text"[], "p_solicit_options" boolean, "p_kind" "text", "p_schedule" "jsonb", "p_kind_value" numeric, "p_carried" "jsonb", "p_option_costs" numeric[]) TO "authenticated";
 
 
 
@@ -6817,6 +10175,41 @@ GRANT ALL ON FUNCTION "public"."forget_push_subscription"("p_endpoint" "text") T
 
 
 
+REVOKE ALL ON FUNCTION "public"."get_poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_poll_carried_weights"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_carried_weights"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."get_poll_ranking"("p_poll_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_poll_ranking"("p_poll_id" "uuid") TO "authenticated";
 
@@ -6827,11 +10220,25 @@ GRANT ALL ON FUNCTION "public"."get_poll_results"("p_poll_id" "uuid") TO "authen
 
 
 
+REVOKE ALL ON FUNCTION "public"."get_poll_scores"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_scores"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."guard_anonymous_polls"() FROM PUBLIC;
 
 
 
-REVOKE ALL ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text") FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."insert_carried_weights"("p_poll_id" "uuid", "p_carried" "jsonb", "p_question" integer) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."insert_option"("p_poll" "public"."polls", "p_name" "text", "p_description" "text", "p_cost" "jsonb") FROM PUBLIC;
 
 
 
@@ -6839,7 +10246,7 @@ REVOKE ALL ON FUNCTION "public"."insert_options"("p_poll" "public"."polls", "p_o
 
 
 
-REVOKE ALL ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb") FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."insert_poll_row"("p_title" "text", "p_description" "text", "p_question_title" "text", "p_options" "jsonb", "p_emails" "text"[], "p_mode" "text", "p_show_voters" boolean, "p_show_ballots" boolean, "p_solicit_options" boolean, "p_group_id" "uuid", "p_question_position" integer, "p_kind" "text", "p_schedule" "jsonb", "p_kind_value" numeric) FROM PUBLIC;
 
 
 
@@ -6872,6 +10279,18 @@ REVOKE ALL ON FUNCTION "public"."mark_votes_after_reveal"() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "public"."my_notification_settings"("p_endpoint" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."my_notification_settings"("p_endpoint" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."nash_capped_shares"("p_scores" double precision[], "p_counts" double precision[], "p_caps" double precision[]) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."nash_log_welfare"("p" double precision[], "p_scores" double precision[], "p_counts" double precision[]) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."newcomer_given"("p_poll_id" "uuid") FROM PUBLIC;
 
 
 
@@ -6911,9 +10330,21 @@ REVOKE ALL ON FUNCTION "public"."open_options_when_all_confirmed"("p_poll_id" "u
 
 
 
+REVOKE ALL ON FUNCTION "public"."open_poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."open_poll_ballots"("p_poll_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."open_poll_ballots"("p_poll_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."open_poll_ballots"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") TO "authenticated";
 
 
 
@@ -6923,9 +10354,33 @@ GRANT ALL ON FUNCTION "public"."open_poll_confirm_options"("p_poll_id" "uuid", "
 
 
 
+REVOKE ALL ON FUNCTION "public"."open_poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."open_poll_group"("p_poll_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."open_poll_group"("p_poll_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."open_poll_group"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) TO "authenticated";
 
 
 
@@ -6944,6 +10399,18 @@ GRANT ALL ON FUNCTION "public"."open_poll_results"("p_poll_id" "uuid") TO "authe
 REVOKE ALL ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."open_poll_revise"("p_poll_id" "uuid", "p_scores" "jsonb", "p_voter_key" "text", "p_voter_name" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_scores"("p_poll_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_scores"("p_poll_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_scores"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."open_poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."open_poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."open_poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) TO "authenticated";
 
 
 
@@ -6989,6 +10456,14 @@ GRANT ALL ON FUNCTION "public"."open_poll_watch"("p_poll_id" "uuid", "p_endpoint
 
 
 
+REVOKE ALL ON FUNCTION "public"."option_cost"("p_kind" "text", "p_cost" "jsonb", "p_name" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."option_number"("p_kind" "text", "p_option" "jsonb") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."options_confirmed_by_everyone"("p_poll" "public"."polls") FROM PUBLIC;
 
 
@@ -6997,8 +10472,16 @@ REVOKE ALL ON FUNCTION "public"."poll_answering_accounts"("p_poll_id" "uuid") FR
 
 
 
+REVOKE ALL ON FUNCTION "public"."poll_assignment"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_places" "jsonb", "p_per_voter" integer) FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."poll_ballot_scores"("p_poll_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."poll_ballot_scores"("p_poll_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_ballot_weights"("p_poll_id" "uuid") FROM PUBLIC;
 
 
 
@@ -7007,7 +10490,23 @@ GRANT ALL ON FUNCTION "public"."poll_ballots"("p_poll_id" "uuid") TO "authentica
 
 
 
+REVOKE ALL ON FUNCTION "public"."poll_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_proportional" boolean) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_budget_count"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric, "p_choice" "text") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."poll_confirmed_count"("p_poll_id" "uuid") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_consensus"("p_poll_id" "uuid", "p_excluded" "uuid"[]) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_consensus_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_winners" integer) FROM PUBLIC;
 
 
 
@@ -7020,6 +10519,14 @@ REVOKE ALL ON FUNCTION "public"."poll_email_html"("p_heading" "text", "p_body_ht
 
 
 REVOKE ALL ON FUNCTION "public"."poll_expires_at"("p_poll" "public"."polls") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_fractional_budget"("p_poll_id" "uuid", "p_excluded" "uuid"[], "p_costs" "jsonb", "p_budget" numeric) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_fractional_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) FROM PUBLIC;
 
 
 
@@ -7054,7 +10561,19 @@ GRANT ALL ON FUNCTION "public"."poll_is_removed"("p_poll_id" "uuid") TO "authent
 
 
 
+REVOKE ALL ON FUNCTION "public"."poll_is_weighted"("p_poll_id" "uuid") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."poll_list_row"("p_poll_id" "uuid") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_multiple_winners"("p_poll_id" "uuid", "p_excluded" "uuid"[]) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_names_one_winner"("p_poll_id" "uuid") FROM PUBLIC;
 
 
 
@@ -7092,7 +10611,23 @@ REVOKE ALL ON FUNCTION "public"."poll_results_revealed"("p_poll" "public"."polls
 
 
 
+REVOKE ALL ON FUNCTION "public"."poll_results_rows"() FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."poll_retention_window"() FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_round"("p_poll_id" "uuid", "p_pool" "uuid"[]) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_scores"("p_poll_id" "uuid") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."poll_sequential"("p_poll_id" "uuid", "p_kind" "text", "p_given" numeric[]) FROM PUBLIC;
 
 
 
@@ -7156,6 +10691,10 @@ GRANT ALL ON FUNCTION "public"."revise_ballot"("p_poll_id" "uuid", "p_scores" "j
 
 REVOKE ALL ON FUNCTION "public"."save_push_subscription"("p_endpoint" "text", "p_p256dh" "text", "p_auth" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."save_push_subscription"("p_endpoint" "text", "p_p256dh" "text", "p_auth" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."scaled_star_round"("p_poll_id" "uuid", "p_pool" "uuid"[], "p_ballots" "uuid"[], "p_weights" numeric[], "p_scales" numeric[]) FROM PUBLIC;
 
 
 
@@ -7241,11 +10780,35 @@ GRANT ALL ON FUNCTION "public"."unconfirm_options"("p_poll_id" "uuid") TO "authe
 
 
 
+REVOKE ALL ON FUNCTION "public"."validate_amount"("p_value" numeric, "p_what" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."validate_calendar_kind"("p_kind" "text", "p_question" integer) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."validate_kind"("p_kind" "text", "p_value" numeric, "p_question" integer) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."validate_per_voter"("p_value" numeric, "p_which" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."validate_winner_count"("p_value" numeric, "p_which" "text") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."wants_email"("p_email" "text") FROM PUBLIC;
 
 
 
 REVOKE ALL ON FUNCTION "public"."wants_push"("p_user_id" "uuid") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."weighted_star_round"("p_poll_id" "uuid", "p_pool" "uuid"[], "p_ballots" "uuid"[], "p_weights" numeric[]) FROM PUBLIC;
 
 
 
@@ -7288,9 +10851,17 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."candidates" TO "se
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."carried_weights" TO "service_role";
+
+
+
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."contact_messages" TO "anon";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."contact_messages" TO "authenticated";
 GRANT ALL ON TABLE "public"."contact_messages" TO "service_role";
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."invitations_sent" TO "service_role";
 
 
 
