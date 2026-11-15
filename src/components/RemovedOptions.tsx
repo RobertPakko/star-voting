@@ -39,7 +39,9 @@ export function RemovedOptions({
             aria-label={`Restore ${option.name}`}
             style={{ maxWidth: '100%' }}
           >
-            <Text span inherit truncate>
+            {/* The button's line-height of 1 would let the truncating box
+                clip descenders; the name needs a line of its own height. */}
+            <Text span inherit truncate lh={1.4}>
               {option.name}
             </Text>
           </Button>
