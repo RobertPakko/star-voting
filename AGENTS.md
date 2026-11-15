@@ -41,6 +41,7 @@ supabase/migrations/  the schema, as ordered SQL files
 supabase/after-squash.sql  the statements a schema dump cannot carry
 supabase/functions/   Edge Functions: send-push, the half of a push notification Postgres cannot do
 scripts/         squash.sh (squashes the migrations); sample-poll.sh (records the sample poll);
+                 og-image.mjs (draws the link-preview image from og-image.html);
                  intro/ (records the intro's app footage on the live site; record.mjs says how)
 test/            tally tests run against a throwaway Postgres; build-db.sh builds it
 e2e/             the browser suite; screenshots.capture.ts (the manifest's screenshots)
@@ -1803,9 +1804,17 @@ email is best-effort; the table is the record. `45_contact_messages` covers it.
 ## Link previews
 
 Chat apps draw a card from the Open Graph tags in [`index.html`](index.html):
-the title, the byline *Better group decisions*, and `logo.png` as a
-`summary` card (opaque, since some clients composite transparency onto black).
-The crawler runs no JavaScript.
+the title, the byline *Better group decisions*, and `public/og-image.png` as
+a `summary_large_image` card. The crawler runs no JavaScript.
+
+**The image is 1200×630, not the square logo.** Reddit, Discord, Facebook and
+X draw a wide banner whatever the card type says, and crop a square to a
+zoomed band through its middle. It is opaque (some clients composite
+transparency onto black) and keeps everything inside the middle 1000×500,
+which no client trims. It is drawn from
+[`scripts/og-image.html`](scripts/og-image.html) by
+`node scripts/og-image.mjs`; redraw it if the logo's colours or the byline
+change.
 
 **Every poll link gets the same card**: the part after `#` never leaves the
 browser, so GitHub Pages serves one `index.html` for every poll. A card per
@@ -1815,7 +1824,9 @@ poll would need the id in the path and a server answering it.
 Facebook would group and link every poll share to the poll list.
 
 Crawlers cache; Facebook's for weeks. Use [Facebook's Sharing
-Debugger](https://developers.facebook.com/tools/debug/) to refresh it.
+Debugger](https://developers.facebook.com/tools/debug/) to refresh it. A post
+already made keeps the card it was given; a new filename for a changed image
+gets past every cache at once.
 
 ## Push notifications
 
