@@ -27,9 +27,9 @@ const proportional: GuideQuestion = {
 }
 
 const affected: GuideQuestion = {
-  question: 'Do all winners affect all voters?',
+  question: 'Will all winning options affect all voters?',
   answers: [
-    { answer: 'Yes, everyone will be affected by all winners', next: proportional },
+    { answer: 'Yes, everyone will be affected by all winning options', next: proportional },
     {
       answer: 'No, everyone will pick an option from among the winning options',
       next: 'consensus_winners',

@@ -392,7 +392,7 @@ test.describe('all choices', () => {
     })
     await guide.getByRole('button', { name: 'Pick multiple options' }).click()
     await guide.getByRole('button', { name: 'No, picking an option is all-or-nothing' }).click()
-    await expect(guide.getByText('Do all winners affect all voters?')).toBeVisible()
+    await expect(guide.getByText('Will all winning options affect all voters?')).toBeVisible()
     await expectAccessible(page, 'the choice guide, part way')
     await guide.getByRole('button', { name: /^Yes, everyone will be affected/ }).click()
     await guide.getByRole('button', { name: /^Yes, let’s keep a majority/ }).click()
@@ -407,7 +407,7 @@ test.describe('all choices', () => {
     await guide.getByRole('button', { name: /^Can we just take a little of each option\?/ }).click()
     await guide.getByRole('button', { name: 'Sure, we could do that' }).click()
     await expect(guide.getByText(/^Fractional winners computes/)).toBeVisible()
-    await expect(guide.getByText('Do all winners affect all voters?')).toHaveCount(0)
+    await expect(guide.getByText('Will all winning options affect all voters?')).toHaveCount(0)
 
     await guide.getByRole('button', { name: 'Read about it' }).click()
     const section = page.getByRole('button', { name: /^Fractional winners/ })
