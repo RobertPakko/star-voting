@@ -64,6 +64,13 @@ export const MAX_CARRIED = 500
 export const GIVEN_MAX = 10000
 
 /**
+ * How many people one poll may invite. Matches `guard_invitee_changes`, which
+ * also holds an account to a number of invitations a day: every invitation is
+ * an email from this app's domain, so both are bounded.
+ */
+export const MAX_INVITEES = 500
+
+/**
  * A budget poll's budget and each option's cost: whole numbers from 1 to
  * this. Matches `validate_amount`; the ceiling is only there to catch a typo
  * of extra zeros, since the count compares amounts and never sums enough of

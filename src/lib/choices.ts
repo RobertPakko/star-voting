@@ -345,8 +345,14 @@ export function offers(tool: ResultTool, results: PollResults) {
   // A sequential poll's ballots carry weights, which only STAR's results
   // count with; a consensus or a split of them would quietly ignore them.
   if (results.weighted && !SEQUENTIAL_KINDS.includes(tool)) return false
-  // An assignment says who gets what, so it needs a poll that names its voters.
-  if (tool === 'assignment' && !results.voters_shown) return false
+  // An assignment says who gets what, so it needs a poll that names its
+  // voters; and on a question that did not ask for one it needs the ballots
+  // published too, since who was given what says how each of them scored
+  // (`poll_assignment` refuses the same).
+  if (tool === 'assignment') {
+    if (!results.voters_shown) return false
+    if (results.kind !== 'assignment' && !results.ballots_shown) return false
+  }
   return tool === 'fractional' || tool === 'consensus' || tool === 'assignment'
     ? results.option_count >= 2
     : results.option_count >= 3

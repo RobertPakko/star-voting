@@ -112,7 +112,8 @@ create or replace function tests.seed_poll(
   p_options text[],
   p_ballots int[][],
   p_title text default 'Test poll',
-  p_mode text default 'invite'
+  p_mode text default 'invite',
+  p_show_ballots boolean default false
 )
 returns uuid language plpgsql as $$
 declare
@@ -135,7 +136,7 @@ begin
   from generate_series(1, v_voters) g;
 
   perform tests.sign_in('creator@example.com');
-  v_poll_id := create_poll(p_title, null, p_options, v_emails, p_mode, true, false);
+  v_poll_id := create_poll(p_title, null, p_options, v_emails, p_mode, true, p_show_ballots);
 
   -- create_poll preserves the author's ordering in sort_order, so this lines
   -- the candidate ids back up with the columns of p_ballots.

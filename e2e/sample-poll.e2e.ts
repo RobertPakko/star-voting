@@ -272,6 +272,9 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`a calendar poll publishes its ballots as one averaged calendar (${scheme})`, async ({
     page,
   }) => {
+    // Three axe passes over the heaviest page in the suite: eleven seconds
+    // alone, and past the usual thirty beside seven other workers.
+    test.slow()
     await setColorScheme(page, scheme)
     await page.goto('#/sample-result-when')
     // The question asked for the consensus time, which takes the winner's

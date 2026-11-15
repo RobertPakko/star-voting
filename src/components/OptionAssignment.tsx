@@ -49,7 +49,9 @@ import { OptionNote } from './OptionNote'
  * nothing); on any other list every option starts with a capacity of one and every voter with one
  * option, and the reader can change either and count again. Like removals,
  * they are the reader's alone, never stored, and kept while this poll's
- * results stay on screen.
+ * results stay on screen. **Only where the ballots are published**
+ * (`canRecount`): a count the reader shapes reads each named voter's order of
+ * preference back out.
  *
  * **The sample cannot recount**: it answers from a recording, which holds the
  * count with the question's own capacities and nothing removed.
@@ -175,7 +177,12 @@ export function OptionAssignmentBody({
   }, [kind, key, excludedKey, inputsKey, initial])
 
   const remaining = results.option_count - leftOut.length
-  const canRemove = !sample && remaining > 1
+  // Counting again with options removed or other capacities says how each
+  // named voter scored (give every option room for everybody, and each gets
+  // their favourite), so it is only for a poll whose ballots are published.
+  // `poll_assignment` refuses the same.
+  const canRecount = !sample && results.ballots_shown === true
+  const canRemove = canRecount && remaining > 1
 
   const remove = (option: LeftOut) => onLeftOut([...leftOut, option])
   const restore = (id: string) => onLeftOut(leftOut.filter((o) => o.id !== id))
@@ -184,7 +191,7 @@ export function OptionAssignmentBody({
 
   return (
     <Stack gap="md">
-      {!sample && !editing && (
+      {canRecount && !editing && (
         <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
           <Text size="sm" c="dimmed">
             If an option is not available, remove it and everyone is assigned again without it.

@@ -40,7 +40,7 @@ begin
           [5, 2, 0],
           [0, 3, 3],
           [0, 3, 5],
-          [1, 1, 5]]);
+          [1, 1, 5]], p_show_ballots => true);
   perform close_poll(v_poll);
 
   select id into v_pizza from candidates where poll_id = v_poll and name = 'pizza';
@@ -72,11 +72,6 @@ begin
     assignment_count(v_poll, '{}', v_places) -> 'received', '{"5": 4, "3": 2}'::jsonb);
   perform tests.assert_eq('six places', (a ->> 'places')::int, 6);
   perform tests.assert_eq('six voters', (a ->> 'voter_count')::int, 6);
-  perform tests.assert_eq('a private ballot''s stars are not shown',
-    (select bool_or(v ? 'stars') from jsonb_array_elements(a -> 'options') o,
-       jsonb_array_elements(o -> 'voters') v), false);
-  perform tests.assert_eq('and it says so', (a ->> 'stars_shown')::boolean, false);
-
   perform tests.assert_null('nothing was stored',
     (select max(kind_value) from candidates where poll_id = v_poll));
 
@@ -123,7 +118,7 @@ begin
     array['A', 'B', 'C'],
     array[[5, 1, 0],
           [5, 0, 0],
-          [0, 0, 0]]);
+          [0, 0, 0]], p_show_ballots => true);
   perform close_poll(v_poll);
 
   a := get_poll_assignment(v_poll, '{}');
@@ -174,7 +169,7 @@ begin
     array['A', 'B', 'C', 'D'],
     array[[1, 2, 3, 2],
           [3, 1, 2, 4],
-          [1, 3, 5, 5]]);
+          [1, 3, 5, 5]], p_show_ballots => true);
   perform close_poll(v_poll);
 
   select jsonb_object_agg(id, case when name = 'D' then 2 else 1 end) into v_places
@@ -375,6 +370,57 @@ begin
   perform tests.assert_raises('a sequential question is not assigned',
     format('select get_poll_assignment(%L, ''{}'')', v_poll),
     'A sequential poll''s ballots carry weights an assignment would ignore');
+end $$;
+
+-- A count the reader shapes names each voter's favourite (give every option
+-- room for everybody), and their next with that one removed. So where the
+-- ballots are private, only an assignment question is counted, and only as
+-- it was asked.
+do $$
+declare
+  v_emails text[] := array['f1@example.com', 'f2@example.com'];
+  v_poll uuid;
+  v_asked uuid;
+  v_pizza uuid;
+  v_room jsonb;
+  a jsonb;
+  i int;
+begin
+  -- Not an assignment question, ballots private.
+  v_poll := tests.seed_poll(array['pizza', 'tacos'], array[[5, 4], [0, 3]]);
+  perform close_poll(v_poll);
+  perform tests.assert_raises('a private poll that did not ask for an assignment gives none',
+    format('select get_poll_assignment(%L, ''{}'')', v_poll),
+    'This poll keeps its ballots private, so it cannot be counted as an option assignment it did not ask for');
+
+  -- An assignment question, ballots private.
+  perform tests.sign_in('creator@example.com');
+  v_asked := create_poll('Dinner', null, array['pizza', 'tacos'], v_emails, p_kind => 'assignment');
+  for i in 1 .. 2 loop
+    perform tests.sign_in(v_emails[i]);
+    perform tests.cast_ballot(v_asked, array[5, 4]);
+  end loop;
+  perform tests.sign_in('creator@example.com');
+  select id into v_pizza from candidates where poll_id = v_asked and name = 'pizza';
+  select jsonb_object_agg(id, 9) into v_room from candidates where poll_id = v_asked;
+
+  a := get_poll_assignment(v_asked, '{}');
+  perform tests.assert_eq('one that did is counted as it was asked',
+    jsonb_array_length(a -> 'options'), 2);
+  perform tests.assert_eq('which is what its tally carries',
+    get_poll_results(v_asked) -> 'kind_result', a);
+  perform tests.assert_eq('with nobody''s stars',
+    (select bool_or(v ? 'stars') from jsonb_array_elements(a -> 'options') o,
+       jsonb_array_elements(o -> 'voters') v), false);
+  perform tests.assert_raises('but not with room for everybody on every option',
+    format('select get_poll_assignment(%L, ''{}'', %L)', v_asked, v_room),
+    'This poll keeps its ballots private, so its assignment can only be counted as it was asked');
+  perform tests.assert_raises('nor with an option removed',
+    format('select get_poll_assignment(%L, %L)', v_asked, array[v_pizza]),
+    'This poll keeps its ballots private, so its assignment can only be counted as it was asked');
+  perform tests.assert_raises('nor with another number each',
+    format('select get_poll_assignment(%L, ''{}'', null, 2)', v_asked),
+    'This poll keeps its ballots private, so its assignment can only be counted as it was asked');
 end $$;
 
 -- The doors are the tally's: nothing before the results are out, and the

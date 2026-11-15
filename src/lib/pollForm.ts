@@ -21,6 +21,7 @@ import {
   AMOUNT_MAX,
   GIVEN_MAX,
   MAX_CARRIED,
+  MAX_INVITEES,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   OPTION_DESCRIPTION_MAX,
@@ -444,8 +445,8 @@ function validateCarried(
   const rows = question.carried.filter((row) => !isBlankCarried(row, isOpen))
   if (rows.length === 0) {
     errors.carried[questionIndex] = isOpen
-      ? 'Add the voters from earlier polls, or choose another Choice.'
-      : 'Give the stars of at least one invitee who voted in earlier polls, or choose another Choice.'
+      ? 'Add the voters from earlier polls, or choose another variant.'
+      : 'Give the stars of at least one invitee who voted in earlier polls, or choose another variant.'
     return
   }
   if (rows.length > MAX_CARRIED) {
@@ -655,6 +656,8 @@ export function validate(form: {
         errors.emails = `You're invited by the checkbox below; remove ${form.myEmail} from the list, or untick it.`
       } else if (typed.length === 0 && !form.includeSelf) {
         errors.emails = 'Invite at least one voter, or include yourself.'
+      } else if (typed.length + (form.includeSelf ? 1 : 0) > MAX_INVITEES) {
+        errors.emails = `A poll can invite ${MAX_INVITEES} people; this one invites ${typed.length + (form.includeSelf ? 1 : 0)}.`
       }
     }
   }

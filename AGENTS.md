@@ -410,6 +410,10 @@ by `postgres`: `test/sql/shim.sql` creates `postgres`, `anon`,
 That workflow has two more jobs. `app` runs `npm run lint`,
 `npm run fmt:check`, `npm run test:unit` and `npm run build` (typecheck plus
 bundle), with no Supabase secrets. `browser` runs the browser suite.
+[`deploy.yml`](.github/workflows/deploy.yml) runs when this workflow passes
+on a push to `main`, and builds the commit it passed on, so a commit that
+fails a suite is not deployed. (Supabase's integration applies a migration
+on the push regardless.)
 
 ```bash
 npm run test:unit     # vitest
@@ -1090,7 +1094,11 @@ which the test suite (one transaction per case) would see.
 
 **Settling announces itself**: `settle_winner` writes every question in the
 group, and that broadcast is how a reader on question 2 learns the poll
-finished when the last vote landed on question 3. `results_announced_at` and
+finished when the last vote landed on question 3. **A question whose kind
+names no one winner is not written** (see `poll_names_one_winner`), so
+`settle_winner` calls `broadcast_poll_change` for it instead; without that
+its readers go on seeing *your vote is in* over a finished poll.
+`16_live_update_signals` holds it. `results_announced_at` and
 `reminder_sent_at` changing announce nothing; no page draws them.
 
 ## One read opens a poll
@@ -2854,7 +2862,8 @@ they appear **on the first submit and clear as each field is fixed**.
 `src/lib/limits.ts` holds every length, and the option name, description and
 count limits are the database's own (`insert_option`). The create form also
 refuses two options differing only in case, marking the later one. Title and
-poll description lengths are the form's alone.
+poll description lengths are `insert_poll_row`'s, and the invite list's
+ceiling `guard_invitee_changes`'s.
 
 None of this is relied on: **the database decides**, and anything it refuses
 for another reason appears as the error under the form.
@@ -3127,6 +3136,14 @@ by their guard triggers, and the three reconcilers (`settle_winner`,
 - **Opening is announced once** by construction: `options_finalized_at` is
   written once. `open_options_when_all_confirmed` announces only when its
   update actually opened something.
+- **Invitations are bounded**, since each is an email from this domain with
+  a title its sender wrote: a poll invites at most 500 people
+  (`MAX_INVITEES`), and an account sends at most 1000 invitations a day.
+  Both are in `guard_invitee_changes`, which every invitation passes. The
+  day's count is kept in `invitations_sent` (RLS on, no policies, no
+  grants) rather than read off `invited_voters`, because taking an address
+  off a list and putting it back invites it twice and leaves one row; a
+  group counts once, as it emails once. `60_invitation_limits` covers it.
 - **One letterhead, one mailer, one button.** `poll_email_html` is the card,
   `send_poll_email` the only Resend caller, and every email's button says
   **Open poll**. Its footer links to `#/settings`. Sent per address.
@@ -3307,7 +3324,8 @@ say only that voting was closed early, when it was.
 ([`MoreResults`](src/components/MoreResults.tsx)) holding **Consensus
 option** (*Consensus time* on a time poll), **Fractional winners** and
 **Option assignment** (two or more options; the assignment only where the
-poll shows who voted), **Consensus winners** (*Consensus times*),
+poll shows who voted and, on a question that did not ask for one, publishes
+its ballots), **Consensus winners** (*Consensus times*),
 **Multiple winners** and **Proportional winners** (three or more), and the
 two variants a finished question can be counted with after the fact, the
 **Budget variant** and the **Sequential variant** (see below), each opening
@@ -3571,6 +3589,15 @@ counts the same example, and a second worked by hand over two rounds.
   who got what, that could say how a named voter scored on a private poll.
   `poll_assignment` is `assignment_count` less that count, which only the
   suite reads.
+- **A count the reader shapes needs published ballots.** With every option
+  given room for everybody and one option a voter, the answer is each named
+  voter's favourite; remove it and count again for their second choice. So
+  on a poll whose ballots are private, `poll_assignment` answers only an
+  assignment question, and only as it was asked (nothing removed, no
+  capacities or cap given); everything else it refuses. `offers` leaves the
+  assignment off another kind's menu there, and `OptionAssignmentBody` draws
+  no *Edit capacity* or removal (`canRecount`). The one count a private poll
+  does show is the one its voters were told about before they voted.
 - **Capacities and the cap can be given after the fact**, like costs: an
   assignment question stores its capacities in `candidates.kind_value`
   (optional, none meaning one) and its cap in `polls.kind_value`; on any

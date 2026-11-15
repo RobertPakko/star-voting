@@ -521,4 +521,37 @@ begin
     tests.signalled(), array[]::text[]);
 end $$;
 
+-- A poll of several questions finishes on whichever takes the last vote, and
+-- the others hear of it from settle_winner. A question asking for several
+-- winners is never settled with one name, so no row of its is written; it is
+-- announced all the same, or its readers would sit on "your vote is in".
+do $$
+declare
+  v_first uuid;
+  v_questions uuid[];
+begin
+  perform tests.sign_in('creator@example.com');
+  v_first := create_poll_group('Two kinds', null, jsonb_build_array(
+    jsonb_build_object('title', 'Several', 'kind', 'ranking', 'kind_value', 2,
+      'options', jsonb_build_array(
+        jsonb_build_object('name', 'Apple'), jsonb_build_object('name', 'Banana'),
+        jsonb_build_object('name', 'Cherry'))),
+    jsonb_build_object('title', 'One', 'options', jsonb_build_array(
+      jsonb_build_object('name', 'Noon'), jsonb_build_object('name', 'One')))),
+    array['voter1@example.com'], 'invite', true, false);
+  v_questions := tests.group_questions(v_first);
+
+  perform tests.sign_in('voter1@example.com');
+  perform tests.cast_ballot(v_questions[1], array[5, 3, 0]);
+
+  perform tests.forget_signals();
+  perform tests.cast_ballot(v_questions[2], array[5, 0]);
+  perform tests.assert_eq('the last vote, on question 2, gives question 1 its result',
+    (select poll_results_revealed(p) from polls p where p.id = v_questions[1]), true);
+  perform tests.assert_null('which is several winners, so it is settled with no one name',
+    (select winner_settled_at from polls where id = v_questions[1]));
+  perform tests.assert_eq('and its readers are told all the same, once',
+    tests.signals(tests.poll_topic(v_questions[1])), 1);
+end $$;
+
 rollback;

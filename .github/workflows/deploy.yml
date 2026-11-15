@@ -1,7 +1,11 @@
 name: Deploy to GitHub Pages
 
+# After the Tests workflow passes on main, not on the push itself: a commit
+# that fails the suites is not what should be serving the site.
 on:
-  push:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -16,9 +20,18 @@ concurrency:
 
 jobs:
   build:
+    # A manual run deploys whatever is on main; an automatic one only a push
+    # to main that passed (the Tests workflow also runs on pull requests).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The commit the tests ran on, which a later push may have moved past.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20

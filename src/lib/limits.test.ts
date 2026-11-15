@@ -5,6 +5,7 @@ import {
   CONTACT_MESSAGE_MAX,
   GIVEN_MAX,
   MAX_CARRIED,
+  MAX_INVITEES,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   OPTION_DESCRIPTION_MAX,
@@ -122,6 +123,10 @@ describe('the form and the database agree about', () => {
 
   test('how many questions a poll may ask', () => {
     expect(guard('create_poll_group', 'v_count >')).toBe(MAX_QUESTIONS)
+  })
+
+  test('how many people a poll may invite', () => {
+    expect(guard('guard_invitee_changes', 'v_invited >=')).toBe(MAX_INVITEES)
   })
 
   test('how long a voter may name themselves', () => {
