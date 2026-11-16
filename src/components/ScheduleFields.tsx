@@ -93,7 +93,6 @@ function inOrder(days: string[]): string[] {
 export function ScheduleFields({
   schedule,
   overlap,
-  several,
   count,
   onLengthChange,
   onOverlapChange,
@@ -275,14 +274,7 @@ export function ScheduleFields({
         <Switch
           checked={overlap}
           onChange={(e) => onOverlapChange(e.currentTarget.checked)}
-          label="Times can overlap"
-          description={
-            !overlap
-              ? 'Times run back to back, so each is a separate meeting.'
-              : several
-                ? `A time starts every ${daily ? 'day' : 'half hour'}, so two of the winners may be nearly the same time.`
-                : `A time starts every ${daily ? 'day' : 'half hour'}, so voters can find the start that suits everyone.`
-          }
+          label="Times options can overlap"
         />
       )}
 
