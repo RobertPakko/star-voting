@@ -257,7 +257,21 @@ export interface PollListItem extends Omit<Poll, 'created_by' | 'created_by_emai
 }
 
 export interface Invitee {
-  email: string
+  /** The invite list's row, which keys it where there is no address to. */
+  id: string
+  /**
+   * Null on a poll that shows its voters by name, to everybody but its
+   * creator: the names are there so the group does not see the addresses.
+   */
+  email: string | null
+  /**
+   * The name the invitee is shown under: their own, or the one the creator
+   * gave them. Null on a poll that shows addresses instead. See
+   * `poll_names_voters` in the database.
+   */
+  name: string | null
+  /** This reader's own row, whose name the ballot's name box starts from. */
+  is_you: boolean
   /** Null when the poll hides respondents: show no badge, not "pending". */
   has_voted: boolean | null
   /** What the badge shows instead while collecting options. Null on the same terms. */

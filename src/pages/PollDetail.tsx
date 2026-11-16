@@ -37,7 +37,7 @@ import {
   YourBallotSkeleton,
 } from '../components/Skeletons'
 import { VoterNameField } from '../components/VoterNameField'
-import { useVoterName } from '../lib/voterName'
+import { useVoterName, type VoterName } from '../lib/voterName'
 import { countBadge } from '../lib/badgeColors'
 import { Respondents } from '../components/Respondents'
 import { readPollPage, statusFromOpenView, whenRead } from '../lib/pollPage'
@@ -120,6 +120,17 @@ export function PollDetail({
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
   // Held by the page so a typed name survives a crossing; see VoterNameField.
   const voterName = useVoterName(pollId)
+  // An invite poll can show its voters by name: then every invitee has one,
+  // and the reader's own row is marked. See Respondents.
+  const named = invitees?.some((invitee) => invitee.name !== null) ?? false
+  const yourName = invitees?.find((invitee) => invitee.is_you)?.name ?? null
+  const { seed: seedName } = voterName
+  // The box starts from the poll's name for the reader, and follows it when
+  // it changes (from another device, or their own save). Before paint, so
+  // the box never shows another poll's name first.
+  useLayoutEffect(() => {
+    if (yourName !== null) seedName(yourName)
+  }, [yourName, seedName])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Bumped by creator actions to remount the ballot, which rebuilds it from
@@ -416,10 +427,17 @@ export function PollDetail({
   // What the crossing skeleton needs to know to match the question being
   // opened. `tallied` is borrowed from the question being left -- a guess,
   // but questions of one poll nearly always end alike. See QuestionSkeleton.
-  const asksName = isOpen && poll.show_voters && marking
-  const answeredHere = done.browser.has(pollId ?? poll.id)
-  const tallied = status.results_available
   const opening = questions.find((question) => question.id === pollId)
+  // An invitee of a poll that names its voters is asked theirs, as a link's
+  // voter is, and may change it; the name is the poll's, not the question's.
+  const invitedByName = !isOpen && named && status.invited
+  const asksName = marking && (isOpen ? poll.show_voters : invitedByName)
+  const answeredHere = isOpen
+    ? done.browser.has(pollId ?? poll.id)
+    : opening
+      ? done.server(opening)
+      : status.voted
+  const tallied = status.results_available
 
   // A first ballot carries the reader on to the next question they owe. See
   // lib/nextQuestion.ts.
@@ -531,6 +549,7 @@ export function PollDetail({
                   isCreator={isCreator}
                   questionStrip={questionStrip}
                   confirm={confirmation}
+                  voterName={invitedByName ? voterName : undefined}
                   onChanged={reloadAll}
                   onConfirmed={advance}
                 />
@@ -568,6 +587,8 @@ export function PollDetail({
                 <VoteForm
                   poll={poll}
                   options={options}
+                  voterName={invitedByName ? voterName : undefined}
+                  yourName={yourName}
                   initial={revising}
                   onVoted={() => {
                     setRevising(null)
@@ -583,6 +604,11 @@ export function PollDetail({
                   removed={removedHere.removed}
                   onRestored={removedHere.onRestored}
                   onRevise={setRevising}
+                  nameField={
+                    invitedByName ? (
+                      <VoterNameField name={voterName} disabled value={yourName ?? ''} />
+                    ) : undefined
+                  }
                   questionStrip={questionStrip}
                 />
               )
@@ -591,6 +617,8 @@ export function PollDetail({
                 key={refreshKey}
                 poll={poll}
                 options={options}
+                voterName={invitedByName ? voterName : undefined}
+                yourName={yourName}
                 onVoted={advance ?? reloadPage}
                 questionStrip={questionStrip}
               />
@@ -696,6 +724,7 @@ function Waiting({
   removed,
   onRestored,
   onRevise,
+  nameField,
   questionStrip,
 }: {
   status: PollStatus
@@ -704,6 +733,8 @@ function Waiting({
   onRestored?: () => void
   /** The ballot came back: hand it to the page, which puts the form up. */
   onRevise: (scores: Record<string, number>) => void
+  /** The name the reader is shown under, where the poll names its voters. */
+  nameField?: ReactNode
   questionStrip?: ReactNode
 }) {
   const [loading, setLoading] = useState(false)
@@ -727,6 +758,8 @@ function Waiting({
     <Stack gap="md">
       <Card withBorder>
         <Stack gap="sm">
+          {/* Kept on the card, so the strip under it doesn't move between questions. */}
+          {nameField}
           {questionStrip}
           <Group justify="space-between" wrap="nowrap" gap="xs">
             <Text fw={500}>Your vote is in.</Text>
@@ -761,6 +794,8 @@ function Waiting({
 function VoteForm({
   poll,
   options,
+  voterName,
+  yourName,
   initial,
   onVoted,
   onCancel,
@@ -768,6 +803,10 @@ function VoteForm({
 }: {
   poll: Pick<Poll, 'id' | 'kind' | 'schedule' | 'group_id'>
   options: PollOption[]
+  /** Where the poll shows its voters by name: the box this ballot carries. */
+  voterName?: VoterName
+  /** The name the poll holds for this reader now, so an unchanged one isn't resent. */
+  yourName?: string | null
   /** The scores already on this voter's ballot; absent when casting a new one. */
   initial?: Record<string, number>
   onVoted: () => void
@@ -782,7 +821,20 @@ function VoteForm({
     ? undefined
     : { pollId: poll.id, groupId: poll.group_id, owner: session?.user.id ?? null }
 
+  function checkName() {
+    return !voterName || voterName.check('Enter your name so the group can see who has voted.')
+  }
+
   async function send(scores: BallotScore[]) {
+    // The name first, so a ballot never lands under a name that was refused.
+    // It is the poll's rather than this question's, and resent only if it moved.
+    if (voterName && voterName.trimmed !== yourName) {
+      const { error: nameError } = await supabase.rpc('set_voter_name', {
+        p_poll_id: poll.id,
+        p_name: voterName.trimmed,
+      })
+      if (nameError) throw new Error(nameError.message)
+    }
     const { error } = await supabase.rpc(revising ? 'revise_ballot' : 'submit_ballot', {
       p_poll_id: poll.id,
       p_scores: scores,
@@ -790,16 +842,24 @@ function VoteForm({
     if (error) throw new Error(error.message)
   }
 
+  const nameField = voterName && <VoterNameField name={voterName} />
+
   if (poll.schedule) {
     return (
-      <Suspense fallback={<QuestionSkeleton schedule={poll.schedule} strip={questionStrip} />}>
+      <Suspense
+        fallback={
+          <QuestionSkeleton schedule={poll.schedule} nameField={nameField} strip={questionStrip} />
+        }
+      >
         <TimeBallotCard
           options={options}
           schedule={poll.schedule}
           initial={initial}
           draft={draft}
+          nameField={nameField}
           questionStrip={questionStrip}
           note={<RevealNote reveal={{ kind: 'invite' }} canRevise />}
+          beforeSubmit={checkName}
           onSubmit={send}
           onVoted={onVoted}
           onCancel={onCancel}
@@ -813,11 +873,14 @@ function VoteForm({
       options={options}
       initial={initial}
       draft={draft}
+      nameField={nameField}
       questionStrip={questionStrip}
       note={<RevealNote reveal={{ kind: 'invite' }} canRevise />}
+      beforeSubmit={checkName}
       onSubmit={send}
       onVoted={onVoted}
       onCancel={onCancel}
+      onScorePointerDown={() => voterName?.blur()}
     />
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 
 /**
  * The name last typed into this browser's name box, offered back on the next
@@ -29,6 +29,11 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
  * sends, so a remembered name cannot leak onto an anonymous ballot. (A
  * sequential poll that hides names does send it, unasked, to find the
  * ballot's weight from earlier polls; it is discarded all the same.)
+ *
+ * **An invite poll that names its voters starts from the poll's own name for
+ * the reader** (`seed`): the one its creator gave them, or the one they gave
+ * themselves. That is not remembered, since it is the creator's word for them
+ * rather than theirs; what they type over it is.
  */
 
 const STORAGE_KEY = 'star-voting:voter-name'
@@ -88,6 +93,11 @@ export type VoterName = {
    */
   check: (complaint: string) => boolean
   /**
+   * Puts a name in the box without remembering it: the name an invite poll
+   * already holds for this reader. Stable across renders.
+   */
+  seed: (value: string) => void
+  /**
    * Drop focus. Dismissing the on-screen keyboard on a phone does not blur
    * the field it belongs to, so focus never leaves this box on its own and
    * every star a voter then taps pops the keyboard back up over the ballot.
@@ -113,6 +123,7 @@ export function useVoterName(question: string | undefined): VoterName {
   const ref = useRef<HTMLInputElement>(null)
 
   useEffect(() => setError(null), [question])
+  const seed = useCallback((next: string) => setValue(next), [])
 
   return {
     value,
@@ -124,6 +135,7 @@ export function useVoterName(question: string | undefined): VoterName {
       setError(null)
       rememberVoterName(next)
     },
+    seed,
     check(complaint) {
       setError(null)
       if (value.trim()) return true

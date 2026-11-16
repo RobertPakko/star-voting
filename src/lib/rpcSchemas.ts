@@ -156,7 +156,10 @@ const openGroupQuestion = z.object({
 })
 
 const invitee = z.object({
-  email: z.string(),
+  id: z.string(),
+  email: z.string().nullable(),
+  name: z.string().nullable(),
+  is_you: z.boolean(),
   has_voted: z.boolean().nullable(),
   has_confirmed: z.boolean().nullable(),
 })

@@ -132,8 +132,9 @@ export function CollectOptions({
   numbered?: OptionNumber | null
   isCreator: boolean
   /**
-   * The name to confirm under: only an open poll that shows respondents asks.
-   * Held by the page so it survives question changes; see VoterNameField.
+   * The name to confirm under: an open poll that shows respondents asks, and
+   * so does an invite poll that shows its voters by name. Held by the page so
+   * it survives question changes; see VoterNameField.
    */
   voterName?: VoterName
   /** Navigation for a multi-question poll, rendered inside the card as on the ballot. */

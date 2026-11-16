@@ -59,6 +59,7 @@ import {
 } from '../lib/rpcSchemas'
 import { carriedFrom } from '../lib/sequel'
 import { CarriedVoters } from '../components/CarriedVoters'
+import { VoterNamesModal } from '../components/VoterNamesModal'
 import {
   blankCarried,
   blankOption,
@@ -163,6 +164,10 @@ export function CreatePoll() {
   const [solicitOptions, setSolicitOptions] = useState(defaults.solicitOptions)
   const [emails, setEmails] = useState<string[]>([])
   const [includeSelf, setIncludeSelf] = useState(true)
+  // Address to name, for an invite poll that shows its voters by name. Asked
+  // on Create, in VoterNamesModal; kept here so going back keeps them.
+  const [inviteeNames, setInviteeNames] = useState<Record<string, string>>({})
+  const [namingOpen, setNamingOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Errors are shown from the first submit on.
@@ -247,7 +252,7 @@ export function CreatePoll() {
    */
   async function sequelOf(
     row: Poll,
-    invitees: string[] | null,
+    invitees: Invitee[] | null,
   ): Promise<{ voter: string; given: number }[] | string | null> {
     // A question takes one variant at most, so a time question stays one.
     if (!SEQUENTIAL_KINDS.includes(row.kind) || row.schedule != null) return null
@@ -269,9 +274,21 @@ export function CreatePoll() {
       return `Couldn't fill in the earlier voters from that poll: ${sheet.error ?? results.error}`
     }
     const rows = carriedFrom(sheet.value, results.value, skipped)
-    // An invite poll's earlier voters must be on its list; one taken off it
-    // since has nothing to vote with.
-    return invitees ? rows.filter((r) => invitees.includes(r.voter.toLowerCase())) : rows
+    if (!invitees) return rows
+    // An invite poll's earlier voters are addresses. The sheet names a poll's
+    // voters as the poll shows them, so on a poll that names them each name
+    // is turned back into the address it stands for (the creator is sent
+    // both). One taken off the list since has nothing to vote with.
+    const byLabel = new Map<string, string>()
+    for (const invitee of invitees) {
+      if (!invitee.email) continue
+      byLabel.set(invitee.email.toLowerCase(), invitee.email)
+      if (invitee.name) byLabel.set(invitee.name.toLowerCase(), invitee.email)
+    }
+    return rows.flatMap((r) => {
+      const email = byLabel.get(r.voter.toLowerCase())
+      return email ? [{ ...r, voter: email }] : []
+    })
   }
 
   // Duplicating fills the form from the source poll; nothing is created until
@@ -441,15 +458,20 @@ export function CreatePoll() {
         setQuestions([draftFrom(source as Poll, candidates ?? [])])
       }
 
-      let invitees: string[] | null = null
+      let invitees: Invitee[] | null = null
       if (source.mode === 'invite') {
         // `poll_invitees` raises on open polls.
         const { data: inviteeData } = await supabase.rpc('poll_invitees', {
           p_poll_id: sourceId,
         })
         if (cancelled) return
-        const allEmails = ((inviteeData as Invitee[]) ?? []).map((i) => i.email)
-        invitees = allEmails
+        const rows = (inviteeData as Invitee[]) ?? []
+        // The creator is sent every address, beside its name where there is one.
+        const allEmails = rows.flatMap((i) => (i.email ? [i.email] : []))
+        invitees = rows
+        setInviteeNames(
+          Object.fromEntries(rows.flatMap((i) => (i.email && i.name ? [[i.email, i.name]] : []))),
+        )
         // The creator's own address is the checkbox, not a tag.
         setIncludeSelf(allEmails.includes(myEmail))
         setEmails(allEmails.filter((e) => e !== myEmail))
@@ -625,7 +647,11 @@ export function CreatePoll() {
     )
   }
 
-  async function handleSubmit() {
+  /**
+   * `naming` is the answer to VoterNamesModal, which an invite poll showing
+   * its voters asks before anything is sent.
+   */
+  async function handleSubmit(naming?: 'emails' | 'names') {
     setError(null)
     setShowErrors(true)
     if (hasErrors(errors)) {
@@ -643,6 +669,13 @@ export function CreatePoll() {
           else announce('Some of the form needs fixing before the poll can be made')
         }),
       )
+      return
+    }
+
+    // Shown by address or by name: the creator decides here, once the form is
+    // otherwise sound, so the list being named is the one being sent.
+    if (!isOpen && votersShown && naming === undefined) {
+      setNamingOpen(true)
       return
     }
 
@@ -687,6 +720,10 @@ export function CreatePoll() {
     const typedEmails = emails.map((e) => e.trim().toLowerCase()).filter(Boolean)
     const allEmails = Array.from(new Set(includeSelf ? [...typedEmails, myEmail] : typedEmails))
     const only = cleaned[0]
+    const inviteeNamesSent =
+      !isOpen && naming === 'names'
+        ? Object.fromEntries(allEmails.map((email) => [email, inviteeNames[email]?.trim() ?? '']))
+        : undefined
 
     setSubmitting(true)
     // One transaction either way, so a failure leaves no half-built poll.
@@ -710,6 +747,7 @@ export function CreatePoll() {
           p_show_voters: votersShown,
           p_show_ballots: publishBallots,
           p_solicit_options: solicitOptions,
+          p_invitee_names: inviteeNamesSent,
         })
       : await supabase.rpc('create_poll', {
           p_title: title.trim(),
@@ -720,6 +758,7 @@ export function CreatePoll() {
           p_show_voters: votersShown,
           p_show_ballots: publishBallots,
           p_solicit_options: solicitOptions,
+          p_invitee_names: inviteeNamesSent,
           p_carried: only.carried ?? undefined,
           p_kind: only.kind,
           p_schedule: only.schedule ?? undefined,
@@ -739,6 +778,8 @@ export function CreatePoll() {
               : undefined,
         })
     setSubmitting(false)
+    // Closed either way: a refusal is shown under the form, like any other.
+    setNamingOpen(false)
 
     if (rpcError) {
       setError(rpcError.message)
@@ -1244,11 +1285,7 @@ export function CreatePoll() {
                   setShowVoters(e.currentTarget.checked)
                   setShowBallots(e.currentTarget.checked)
                 }}
-                label={
-                  mode === 'invite'
-                    ? 'Show voter emails and publish ballots'
-                    : 'Show voter names and publish ballots'
-                }
+                label="Show voters and publish ballots"
                 description={anyAssignment ? ASSIGNMENT_SHOWS_VOTERS : undefined}
               />
             ) : (
@@ -1257,7 +1294,7 @@ export function CreatePoll() {
                   checked={votersShown}
                   disabled={anyAssignment}
                   onChange={(e) => setShowVoters(e.currentTarget.checked)}
-                  label={mode === 'invite' ? 'Show voter emails' : 'Show voter names'}
+                  label="Show voters"
                   description={anyAssignment ? ASSIGNMENT_SHOWS_VOTERS : undefined}
                 />
 
@@ -1355,8 +1392,8 @@ export function CreatePoll() {
 
       <Group justify="flex-end">
         <Button
-          onClick={handleSubmit}
-          loading={submitting}
+          onClick={() => void handleSubmit()}
+          loading={submitting && !namingOpen}
           leftSection={
             duplicateOf ? <CopyIcon size={16} aria-hidden /> : <PlusIcon size={16} aria-hidden />
           }
@@ -1364,6 +1401,17 @@ export function CreatePoll() {
           {sequel ? 'Create sequel' : duplicateOf ? 'Create copy' : 'Create poll'}
         </Button>
       </Group>
+
+      <VoterNamesModal
+        opened={namingOpen}
+        emails={invitedList ?? []}
+        names={inviteeNames}
+        onNamesChange={setInviteeNames}
+        onUseEmails={() => void handleSubmit('emails')}
+        onUseNames={() => void handleSubmit('names')}
+        onClose={() => setNamingOpen(false)}
+        submitting={submitting}
+      />
     </Stack>
   )
 }

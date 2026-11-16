@@ -124,17 +124,23 @@ export type Database = {
         Row: {
           email: string
           id: string
+          name: string | null
           poll_id: string
+          voter_name: string | null
         }
         Insert: {
           email: string
           id?: string
+          name?: string | null
           poll_id: string
+          voter_name?: string | null
         }
         Update: {
           email?: string
           id?: string
+          name?: string | null
           poll_id?: string
+          voter_name?: string | null
         }
         Relationships: [
           {
@@ -359,7 +365,10 @@ export type Database = {
       broadcast_poll_change: { Args: { p_poll_id: string }; Returns: undefined }
       begin_account_carry_over: { Args: never; Returns: string }
       close_poll: { Args: { p_poll_id: string }; Returns: undefined }
-      invite_voter: { Args: { p_email: string; p_poll_id: string }; Returns: undefined }
+      invite_voter: {
+        Args: { p_email: string; p_name?: string; p_poll_id: string }
+        Returns: undefined
+      }
       uninvite_voter: { Args: { p_email: string; p_poll_id: string }; Returns: undefined }
       confirm_options: { Args: { p_poll_id: string }; Returns: undefined }
       confirming_invitee: {
@@ -398,6 +407,7 @@ export type Database = {
           p_kind_value?: number
           p_description: string
           p_emails: string[]
+          p_invitee_names?: Json
           p_kind?: string
           p_mode?: string
           p_option_costs?: number[]
@@ -415,6 +425,7 @@ export type Database = {
         Args: {
           p_description: string
           p_emails: string[]
+          p_invitee_names?: Json
           p_mode?: string
           p_questions: Json
           p_show_ballots?: boolean
@@ -724,9 +735,12 @@ export type Database = {
       poll_invitees: {
         Args: { p_poll_id: string }
         Returns: {
-          email: string
+          email: string | null
           has_confirmed: boolean
           has_voted: boolean
+          id: string
+          is_you: boolean
+          name: string | null
         }[]
       }
       poll_is_first_question: { Args: { p_poll_id: string }; Returns: boolean }
@@ -860,6 +874,7 @@ export type Database = {
         Args: { p_email: boolean; p_push: boolean }
         Returns: undefined
       }
+      set_voter_name: { Args: { p_name: string; p_poll_id: string }; Returns: undefined }
       settle_winner: { Args: { p_poll_id: string }; Returns: undefined }
       star_round: {
         Args: { p_poll_id: string; p_pool: string[] }

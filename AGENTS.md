@@ -2508,8 +2508,9 @@ sample's ids are words, passed through untouched.
 ### Whether respondents are shown
 
 - **Shown** — everyone in the poll sees who has responded, from the moment
-  the poll exists: invited addresses on an invite poll, names voters type on
-  an open poll.
+  the poll exists: on an invite poll by address or by name (see [Showing an
+  invite poll's voters by name](#showing-an-invite-polls-voters-by-name)),
+  on an open poll by the names voters type.
 - **Hidden** — only the number of votes, to everyone including the creator.
 
 This controls *who responded*, never *how they voted*. **One setting decides,
@@ -2539,6 +2540,45 @@ So the roster answers only *who*, and a poll that hides respondents renders
 no roster card for anyone but its creator — for whom it is the invite list
 they manage, shown without per-person status on a hidden poll (the card says
 so).
+
+### Showing an invite poll's voters by name
+
+A roster of addresses hands every voter's address to every other voter, and
+leaves anybody who does not know them all guessing which is whose. So an
+invite poll that shows its voters asks, on **Create poll**, *Assign names to
+voters?* ([`VoterNamesModal`](src/components/VoterNamesModal.tsx)): **Use
+emails** makes the poll as it always was; **Use names**, enabled once every
+invitee has one, gives each a name (`p_invitee_names` on `create_poll` and
+`create_poll_group`). The switch on the form is *Show voters* because which
+of the two it shows is not decided until then.
+
+- **There is no setting**: a poll's voters are named exactly when its
+  invitees carry names (`poll_names_voters`), which is all of them or none
+  (`apply_invitee_names` refuses a partial list, and `invite_voter` refuses a
+  later invitee without a name on a named poll and with one on any other).
+  The browser asks the same question of the roster it holds.
+- **The name is the poll's, not the question's**: `invited_voters.name` (the
+  creator's) and `voter_name` (the invitee's own, which wins) are written on
+  every question's row together, so one person has one name across the poll.
+  That is also why a pending invitee has a name at all.
+- **The invitee may rename themselves** until the poll finishes, from the
+  name box on the ballot and on the confirmation, which starts from the
+  poll's name for them (`seed` in `lib/voterName.ts`) and is sent through
+  `set_voter_name` before the ballot or confirmation when it has changed.
+  Names are unique within a poll, ignoring case
+  (`validate_invitee_name`), since a roster of two Sams cannot say which has
+  voted.
+- **Only the creator is sent the addresses** of a named poll: `poll_invitees`
+  nulls `email` for everybody else and marks the reader's own row
+  (`is_you`). `Respondents` shows the creator both. A poll that shows
+  addresses shows them to the group, as the creator chose.
+- **Everything else that names an invite ballot goes through
+  `ballot_voter_label`**: the published sheet and its CSV, the option
+  assignment, and the order the sequential count takes ballots in. *Create
+  sequel* maps the sheet's names back to addresses from the creator's
+  roster, since an invite poll's earlier voters are matched by address.
+- **Renaming announces itself** on every question's topic; an unchanged name
+  sends nothing.
 
 ### Whether ballots are published
 
@@ -3673,7 +3713,8 @@ counts the same example, and a second worked by hand over two rounds.
   it, and the create form holds the switch on, saying why), and the count
   refuses a poll that hides them. `poll_tally` carries `voters_shown` so
   `offers` can leave it off the menu. Names are what the roster shows: the
-  typed name on an open poll, the address on an invite poll.
+  typed name on an open poll, and on an invite poll the invitee's name or,
+  where the poll shows addresses, their address (`ballot_voter_label`).
 - **On screen an option has a *capacity*, and fills *slots***: the
   database's word for both is `places`. The answer is one card with two
   views, **Option view** (each option, *2 of 3 slots*, and who fills them)

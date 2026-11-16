@@ -85,7 +85,7 @@ begin
   perform tests.assert_eq('and no delete',
     has_table_privilege('authenticated', 'public.invited_voters', 'delete'), false);
   perform tests.assert_eq('the two doors are not open to a link',
-    has_function_privilege('anon', 'public.invite_voter(uuid, text)', 'execute')
+    has_function_privilege('anon', 'public.invite_voter(uuid, text, text)', 'execute')
       or has_function_privilege('anon', 'public.uninvite_voter(uuid, text)', 'execute'), false);
 
   -- ---- removing --------------------------------------------------------------

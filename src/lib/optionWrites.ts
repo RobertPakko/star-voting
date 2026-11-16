@@ -79,7 +79,16 @@ export async function sendDraft(
     : supabase.rpc('open_poll_suggest_options', body)
 }
 
-export function sendConfirmation(source: OptionsSource, voterName: string | null) {
+export async function sendConfirmation(source: OptionsSource, voterName: string | null) {
+  // An invite poll that names its voters takes the name as its own call: it
+  // is the poll's, on every question, rather than this confirmation's.
+  if (source.kind === 'poll' && voterName) {
+    const { error } = await supabase.rpc('set_voter_name', {
+      p_poll_id: source.pollId,
+      p_name: voterName,
+    })
+    if (error) return { error }
+  }
   return source.kind === 'poll'
     ? supabase.rpc('confirm_options', { p_poll_id: source.pollId })
     : openPollRpc('open_poll_confirm_options', {

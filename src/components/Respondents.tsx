@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { badgeColor } from '../lib/badgeColors'
 import { useArrivals } from '../lib/useArrivals'
 import arrival from './badgeArrival.module.css'
+import { VOTER_NAME_MAX } from '../lib/limits'
 import type { Invitee, PollStatus } from '../lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -49,6 +50,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * renders this only when it holds one and a reader with no roster gets no card
  * rather than a request expected to fail.
  *
+ * **A poll can show its voters by name rather than by address**: the creator
+ * gives everybody a name when making it, and an invitee may give themselves
+ * another. Then everybody but the creator gets names and no addresses
+ * (`poll_invitees` leaves them out), and the creator gets both. A poll is
+ * named exactly when its invitees carry names, so somebody added later needs
+ * one too.
+ *
  * The add/remove controls are creator-only: they write, then ask the page to
  * re-read, which is what brings the list back changed.
  */
@@ -71,17 +79,28 @@ export function Respondents({
   onChange: () => void
 }) {
   const [newEmail, setNewEmail] = useState('')
+  const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
   // Wrong with the address being typed, marked on the box it was typed in.
   // `error` below is for a request that failed, which is about the poll
   // rather than about the field, and stays where it was.
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
+  // Names are all or none, so one name says the poll is the named kind.
+  const named = invitees.some((i) => i.name !== null)
+  // Alphabetical by what is shown, whichever the poll shows; the database
+  // sends that order, and this keeps it for a roster carried by `poll_page`.
+  const roster = [...invitees].sort((a, b) =>
+    labelOf(a).localeCompare(labelOf(b), undefined, { sensitivity: 'base' }),
+  )
   const [error, setError] = useState<string | null>(null)
 
   async function addInvitee() {
     const email = newEmail.trim().toLowerCase()
+    const name = newName.trim()
     setError(null)
     setEmailError(null)
+    setNameError(null)
 
     if (!email) {
       setEmailError('Type an email address to invite.')
@@ -97,6 +116,14 @@ export function Respondents({
       setEmailError('That person is already invited.')
       return
     }
+    if (named && !name) {
+      setNameError('This poll shows its voters by name, so give them one.')
+      return
+    }
+    if (named && invitees.some((i) => i.name?.toLowerCase() === name.toLowerCase())) {
+      setNameError('Somebody in this poll already has that name.')
+      return
+    }
 
     setBusy(true)
     // Through a function, which adds them to every question of the poll: the
@@ -104,6 +131,7 @@ export function Respondents({
     const { error: insertError } = await supabase.rpc('invite_voter', {
       p_poll_id: pollId,
       p_email: email,
+      p_name: named ? name : undefined,
     })
     setBusy(false)
 
@@ -112,14 +140,15 @@ export function Respondents({
       return
     }
     setNewEmail('')
-    notifications.show({ message: `Invited ${email}`, color: 'green' })
+    setNewName('')
+    notifications.show({ message: `Invited ${named ? name : email}`, color: 'green' })
     // One re-read, the page's. This used to ask for the roster itself and
     // then ask the page to read the poll as well, which was the same list
     // fetched twice for one insert.
     onChange()
   }
 
-  async function removeInvitee(email: string) {
+  async function removeInvitee(email: string, label: string) {
     setError(null)
     setBusy(true)
     // Off every question, or none: the database refuses the lot if they have
@@ -134,7 +163,7 @@ export function Respondents({
       setError(deleteError.message)
       return
     }
-    notifications.show({ message: `Removed ${email}`, color: 'green' })
+    notifications.show({ message: `Removed ${label}`, color: 'green' })
     onChange()
   }
 
@@ -162,22 +191,30 @@ export function Respondents({
   // rather than carrying confirmations over as if they were votes.
   const answeredKeys = invitees
     .filter((i) => (collecting ? i.has_confirmed : i.has_voted) === true)
-    .map((i) => answerKey(collecting, i.email))
+    .map((i) => answerKey(collecting, i))
   const answering = useArrivals(answeredKeys)
 
   return (
     <Card withBorder>
       <Stack gap="xs">
-        {invitees.map((invitee) => {
+        {roster.map((invitee) => {
           // Whether this poll says anything about this person at all: the
           // stage decides which column is being drawn, and a poll that hides
           // its respondents nulls it.
           const said = (collecting ? invitee.has_confirmed : invitee.has_voted) !== null
           const mark = standing(collecting, status.is_closed, invitee)
+          const label = labelOf(invitee)
           return (
-            <Group key={invitee.email} justify="space-between" wrap="nowrap" gap="xs">
+            <Group key={invitee.id} justify="space-between" wrap="nowrap" gap="xs">
               <Text size="sm" truncate style={{ flex: 1, minWidth: 0 }}>
-                {invitee.email}
+                {label}
+                {/* The creator alone is sent the address beside a name. */}
+                {invitee.name !== null && invitee.email !== null && (
+                  <Text span size="sm" c="dimmed">
+                    {' '}
+                    ({invitee.email})
+                  </Text>
+                )}
               </Text>
               <Group gap="xs" wrap="nowrap">
                 {said && (
@@ -186,9 +223,7 @@ export function Respondents({
                     variant="light"
                     color={mark.color}
                     className={
-                      answering.has(answerKey(collecting, invitee.email))
-                        ? arrival.arriving
-                        : undefined
+                      answering.has(answerKey(collecting, invitee)) ? arrival.arriving : undefined
                     }
                   >
                     {mark.label}
@@ -198,13 +233,13 @@ export function Respondents({
                   <ActionIcon
                     variant="subtle"
                     color="red"
-                    aria-label={`Remove ${invitee.email}`}
+                    aria-label={`Remove ${label}`}
                     // Someone who already voted can't be removed; their
                     // ballot is counted and can't be honestly un-counted. On a
                     // poll that hides respondents we don't know who that is,
                     // so the database refuses and reports why.
                     disabled={invitee.has_voted === true || status.is_closed || busy}
-                    onClick={() => removeInvitee(invitee.email)}
+                    onClick={() => invitee.email && removeInvitee(invitee.email, label)}
                   >
                     &times;
                   </ActionIcon>
@@ -226,9 +261,25 @@ export function Respondents({
         {/* The row is top-aligned so an error message under the box pushes
             the message down rather than the button that dismisses it. */}
         {isCreator && !status.is_closed && !status.results_available && (
-          <Group gap="xs" wrap="nowrap" align="flex-start" mt={4}>
+          <Group gap="xs" wrap="wrap" align="flex-start" mt={4}>
+            {named && (
+              <TextInput
+                placeholder="Their name"
+                aria-label="Name of the voter to invite"
+                value={newName}
+                maxLength={VOTER_NAME_MAX}
+                onChange={(e) => {
+                  setNewName(e.currentTarget.value)
+                  setNameError(null)
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && addInvitee()}
+                error={nameError}
+                style={{ flex: '1 1 8rem' }}
+              />
+            )}
             <TextInput
               placeholder="Invite another voter"
+              aria-label={named ? 'Email of the voter to invite' : undefined}
               value={newEmail}
               onChange={(e) => {
                 setNewEmail(e.currentTarget.value)
@@ -236,7 +287,7 @@ export function Respondents({
               }}
               onKeyDown={(e) => e.key === 'Enter' && addInvitee()}
               error={emailError}
-              style={{ flex: 1 }}
+              style={{ flex: '1 1 12rem' }}
             />
             <Button
               variant="light"
@@ -275,9 +326,19 @@ export function Respondents({
  * poll is only soliciting while `closed_at` is null, so the two cannot both
  * be true. See poll_status.
  */
-/** One invitee's answer to the stage's question, as `useArrivals` tracks it. */
-function answerKey(collecting: boolean, email: string): string {
-  return `${collecting ? 'confirmed' : 'voted'}:${email}`
+/**
+ * One invitee's answer to the stage's question, as `useArrivals` tracks it.
+ * By person rather than by row: each question has rows of its own, and a
+ * crossing between questions is not everybody arriving. A name is unique
+ * within a poll, so it stands in where there is no address.
+ */
+function answerKey(collecting: boolean, invitee: Invitee): string {
+  return `${collecting ? 'confirmed' : 'voted'}:${invitee.email ?? invitee.name ?? invitee.id}`
+}
+
+/** What the roster calls somebody: their name where the poll gives names. */
+function labelOf(invitee: Invitee): string {
+  return invitee.name ?? invitee.email ?? ''
 }
 
 function standing(
