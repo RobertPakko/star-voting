@@ -274,7 +274,7 @@ export function ScheduleFields({
         <Switch
           checked={overlap}
           onChange={(e) => onOverlapChange(e.currentTarget.checked)}
-          label="Times options can overlap"
+          label="Time options can overlap"
         />
       )}
 

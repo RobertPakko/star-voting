@@ -26,7 +26,7 @@ import { ChoiceModal } from './ChoiceBlurb'
 import { RankingSkeleton } from './Skeletons'
 import type { RankingSource } from './FullRanking'
 import { useEveryOption } from '../lib/useEveryOption'
-import { RemovedOptions, type LeftOut } from './RemovedOptions'
+import { RemoveHint, RemovedOptions, type LeftOut } from './RemovedOptions'
 import { useAssignmentInputs, useLeftOut, type AssignmentInputs } from '../lib/useLeftOut'
 import { OptionNote } from './OptionNote'
 
@@ -193,9 +193,7 @@ export function OptionAssignmentBody({
     <Stack gap="md">
       {canRecount && !editing && (
         <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
-          <Text size="sm" c="dimmed">
-            If an option is not available, remove it and everyone is assigned again without it.
-          </Text>
+          <RemoveHint />
           <Button
             variant="default"
             size="compact-sm"

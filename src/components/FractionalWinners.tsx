@@ -16,7 +16,7 @@ import { count } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { FractionalShare, PollResults } from '../lib/types'
 import type { RankingSource } from './FullRanking'
-import { RemovedOptions, type LeftOut } from './RemovedOptions'
+import { RemoveHint, RemovedOptions, type LeftOut } from './RemovedOptions'
 import { useLeftOut } from '../lib/useLeftOut'
 import { SharesSkeleton } from './Skeletons'
 import { ChoiceModal } from './ChoiceBlurb'
@@ -180,11 +180,7 @@ export function FractionalWinnersBody({
 
   return (
     <Stack gap="md">
-      {!sample && (
-        <Text size="sm" c="dimmed">
-          If an option is not available, remove it and the shares are worked out again without it.
-        </Text>
-      )}
+      {!sample && <RemoveHint />}
 
       <RemovedOptions leftOut={leftOut} onRestore={restore} onRestoreAll={() => onLeftOut([])} />
 

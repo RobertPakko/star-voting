@@ -12,7 +12,7 @@ import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import type { MeetingEvent } from '../lib/calendarEvent'
 import type { ConsensusResult, PollResults } from '../lib/types'
 import type { RankingSource } from './FullRanking'
-import { RemovedOptions, type LeftOut } from './RemovedOptions'
+import { RemoveHint, RemovedOptions, type LeftOut } from './RemovedOptions'
 import { AddToCalendar } from './AddToCalendar'
 import { CoinFlip } from './CoinFlip'
 import { levelOptions } from '../lib/consensus'
@@ -147,11 +147,7 @@ export function ConsensusBody({
 
   return (
     <Stack gap="md">
-      {!sample && (
-        <Text size="sm" c="dimmed">
-          If an option is not available then remove the option to see the recalculated result.
-        </Text>
-      )}
+      {!sample && <RemoveHint />}
 
       <RemovedOptions leftOut={leftOut} onRestore={restore} onRestoreAll={() => onLeftOut([])} />
 

@@ -286,11 +286,21 @@ export function CreatePoll() {
         .select('*, candidates(*)')
         .eq('id', sourceId)
         .order('sort_order', { referencedTable: 'candidates' })
-        .single()
+        .maybeSingle()
       if (cancelled) return
 
       if (pollRes.error) {
         setError(`Couldn't load the poll to duplicate: ${pollRes.error.message}`)
+        setPrefilling(false)
+        return
+      }
+
+      // No row: deleted, mistyped, or not this reader's to see, which row-level
+      // security answers the same way. The form is left blank to fill in.
+      if (!pollRes.data) {
+        setError(
+          "That poll couldn't be found to duplicate. It may have been deleted, or it isn't one of yours.",
+        )
         setPrefilling(false)
         return
       }

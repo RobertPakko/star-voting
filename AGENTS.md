@@ -741,7 +741,7 @@ meeting (`validate_schedule`). Missing means every granule. **Windows are
 taken greedily from the earliest cell** (`enumerateWindows`), so each painted
 stretch is cut from where it starts.
 
-**The creator says only whether times may overlap** (*Times can overlap* in
+**The creator says only whether times may overlap** (*Time options can overlap* in
 `ScheduleFields`; `overlap` on the draft), and `gridFor` turns the length and
 that answer into a grid:
 
@@ -768,8 +768,8 @@ follows the dates): back to back where the kind picks several times
 (`picksSeveral`: multiple winners, proportional winners, consensus winners,
 fractional winners, an assignment), since the counts know nothing of overlap and two answers could
 be nearly the same time; overlapping where it picks one, since a start half
-an hour later can be the one everybody makes. The switch's line says what
-overlap costs on a kind that picks several.
+an hour later can be the one everybody makes. The switch carries no
+explanation of its own.
 
 **A change of grid carries the painting with it** (`reconcileGrid`, run on
 every edit of a question): a length, a kind, the switch or, with cells of a
@@ -1441,6 +1441,35 @@ alone (and caught by `ErrorBoundary`); one later is the next deploy. The
 marker is in `sessionStorage`, per tab, and **if it cannot be written, there
 is no reload at all**.
 
+## The content security policy
+
+The built page carries a `Content-Security-Policy` `<meta>`, written by the
+`contentSecurityPolicy` plugin in [`vite.config.ts`](vite.config.ts). A meta
+tag because GitHub Pages serves no headers of ours; a plugin because the
+Supabase origin is only known at build time. **`vite dev` has no policy**
+(hot reload needs an inline script and a websocket of its own), so check
+anything it could affect under `npm run build && npm run preview`, where a
+refusal is an error in the console. The browser suite runs the build and
+fails on any console error.
+
+What it allows, and what each allowance is for:
+
+- **Scripts** from this origin, plus the inline scripts in `index.html` by
+  hash, computed at build, so editing one needs nothing else changed. No
+  `eval`: zod would probe for it, so `rpcSchemas.ts` sets `jitless`.
+- **Styles** from this origin and inline, since Mantine styles through
+  `style` attributes and a `<style>` of its own.
+- **Connections** to this origin, the Supabase project (`https` and `wss`)
+  and `partners.every.org` (the donate page's count). **A new API the browser
+  calls must be added here**, or it fails only in the build.
+- **Images and fonts** from this origin, `data:` and (images) `blob:`: the
+  QR code, and small files the build inlines, the signature's font among
+  them.
+- **Video, workers and the manifest** from this origin only; no plugins, no
+  `<base>` elsewhere, no form posting off the site.
+
+`frame-ancestors` is not there because a meta tag cannot carry it.
+
 ## Installing it to a home screen
 
 The app is installable on Android, desktop Chrome and iOS (Share → Add to
@@ -1469,6 +1498,13 @@ Chrome thinks the app is or is not installable.
 after it and the new worker deletes every other cache on activate. Nothing
 else needs bumping: hashed assets have new names, and the page itself is
 fetched network-first.
+
+**A new build lets go of the last one's files** (`keepShell`). The worker
+keeps every file it serves, and a deploy renames the whole bundle, so left
+alone the cache grows by a build on every deploy. When the page fetched
+differs from the page kept, everything under `assets/` that the new page does
+not name is dropped. Files that keep their names (icons, the manifest) are
+not under `assets/` and stay.
 
 ### What the manifest says
 
@@ -3384,16 +3420,15 @@ say only that voting was closed early, when it was.
 
 **The answer's banner carries what can be done with it** (`Banner` in
 `Results.tsx`): **More results**, one menu
-([`MoreResults`](src/components/MoreResults.tsx)) holding **Consensus
-option** (*Consensus time* on a time poll), **Fractional winners** and
-**Option assignment** (two or more options; the assignment only where the
-poll shows who voted and, on a question that did not ask for one, publishes
-its ballots), **Consensus winners** (*Consensus times*),
-**Multiple winners** and **Proportional winners** (three or more), and the
-two variants a finished question can be counted with after the fact, the
-**Budget variant** and the **Sequential variant** (see below), each opening
-a modal, in the order `/choices` and `/variants` list them
-(`CHOICE_PAGE_ORDER`); then *Add to calendar* under a time poll's
+([`MoreResults`](src/components/MoreResults.tsx)) holding, in the order `/choices`
+lists them (`CHOICE_PAGE_ORDER`), **Consensus option** (*Consensus time* on
+a time poll; two or more options), **Multiple winners**, **Proportional
+winners** and **Consensus winners** (*Consensus times*; three or more),
+**Fractional winners** and **Option assignment** (two or more; the
+assignment only where the poll shows who voted and, on a question that did
+not ask for one, publishes its ballots), and then the two variants a
+finished question can be counted with after the fact, the **Sequential
+variant** and the **Budget variant** (see below), each opening a modal; then *Add to calendar* under a time poll's
 winner or *Flip a coin* under *No winner*. One menu rather than a
 button each keeps the banner to the name and a control or two. **The modals
 are short**: no title, but the sentence that kind's card on `/choices` opens

@@ -1,4 +1,10 @@
 import { z } from 'zod'
+
+// Zod compiles its object parsers with `new Function` where it may, and finds
+// out by trying. The page's content security policy forbids that, and a
+// refused attempt is reported as a violation even though zod catches it -- so
+// it is told not to try. This is the only file that imports zod.
+z.config({ jitless: true })
 import type {
   AssignmentResult,
   BallotSheet,

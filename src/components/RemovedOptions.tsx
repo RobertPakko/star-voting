@@ -8,6 +8,18 @@ export interface LeftOut {
 }
 
 /**
+ * The line over every count a reader can take options out of. One sentence
+ * for all of them, so the same act is described the same way in each modal.
+ */
+export function RemoveHint() {
+  return (
+    <Text size="sm" c="dimmed">
+      If an option is not available, remove it to see the result without it.
+    </Text>
+  )
+}
+
+/**
  * The options taken out of *Multiple winners* or *Fractional winners*, each a
  * button that puts it back, and *Restore all* once there are two. Draws
  * nothing while nothing is out.

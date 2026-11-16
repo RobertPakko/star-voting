@@ -20,7 +20,7 @@
  * old, and activate throws them away.
  */
 
-const VERSION = 'v7'
+const VERSION = 'v8'
 const CACHE = `star-voting-${VERSION}`
 
 // This file is served from the app's own directory, so its own URL is the
@@ -28,6 +28,9 @@ const CACHE = `star-voting-${VERSION}`
 // against — no build-time base to keep in step with vite.config.ts.
 const SCOPE = new URL('./', self.location.href)
 const SHELL = SCOPE.href
+// Where the build puts every file it names by content hash (Vite's
+// `assetsDir`): the only files here that a deploy leaves behind.
+const HASHED = new URL('assets/', SCOPE)
 
 self.addEventListener('install', (event) => {
   // The shell only. Everything else the app needs is hashed into filenames
@@ -120,17 +123,40 @@ async function shell(event) {
   }
 
   if (cacheable(response)) {
-    const copy = response.clone()
-    event.waitUntil(
-      caches
-        .open(CACHE)
-        .then((cache) => cache.put(SHELL, copy))
-        // Storage can be full, and a shell that did not make it into the
-        // cache costs an offline launch, not this one.
-        .catch(() => {}),
-    )
+    // Storage can be full, and a shell that did not make it into the cache
+    // costs an offline launch, not this one.
+    event.waitUntil(keepShell(response.clone()).catch(() => {}))
   }
   return response
+}
+
+/**
+ * Keeps the page just fetched, and lets go of the build before it.
+ *
+ * Every deploy renames the bundle, so the files of the last build are never
+ * asked for again — and `asset` below keeps whatever it serves, so without
+ * this they would stay for good, a build's worth more on every deploy. A page
+ * that differs from the one kept is a new build: the hashed files it does not
+ * name go. The ones it does name (its entry script and stylesheet) may already
+ * have been fetched for this very launch and are left; a lazy chunk of the new
+ * build caught by the sweep is fetched again when it is next wanted.
+ */
+async function keepShell(fresh) {
+  const cache = await caches.open(CACHE)
+  const kept = await cache.match(SHELL)
+  const [was, now] = await Promise.all([kept ? kept.text() : null, fresh.clone().text()])
+  await cache.put(SHELL, fresh)
+  if (was === null || was === now) return
+
+  const keys = await cache.keys()
+  await Promise.all(
+    keys
+      .filter((request) => {
+        const url = new URL(request.url)
+        return url.href.startsWith(HASHED.href) && !now.includes(url.pathname)
+      })
+      .map((request) => cache.delete(request)),
+  )
 }
 
 /**

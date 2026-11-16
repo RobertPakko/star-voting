@@ -13,7 +13,7 @@ import type { MeetingEvent } from '../lib/calendarEvent'
 import type { ConsensusWinnersResult, PollResults } from '../lib/types'
 import type { RankingSource } from './FullRanking'
 import { OptionNote } from './OptionNote'
-import { RemovedOptions, type LeftOut } from './RemovedOptions'
+import { RemoveHint, RemovedOptions, type LeftOut } from './RemovedOptions'
 import { AddToCalendar } from './AddToCalendar'
 import { useLeftOut, useWinnerCount } from '../lib/useLeftOut'
 import { RankingSkeleton } from './Skeletons'
@@ -161,11 +161,7 @@ export function ConsensusWinnersBody({
 
   return (
     <Stack gap="md">
-      {!sample && (
-        <Text size="sm" c="dimmed">
-          If an option is not available, remove it and the winners are chosen again without it.
-        </Text>
-      )}
+      {!sample && <RemoveHint />}
 
       {!sample && (
         <WinnerCount

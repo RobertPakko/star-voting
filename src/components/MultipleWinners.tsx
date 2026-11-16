@@ -15,7 +15,7 @@ import { RankingSkeleton } from './Skeletons'
 import { count } from '../lib/plural'
 import { SCORING_ROWS_MAX } from '../lib/resultsRows'
 import { TiebreakNote, type RankingSource } from './FullRanking'
-import { RemovedOptions, type LeftOut } from './RemovedOptions'
+import { RemoveHint, RemovedOptions, type LeftOut } from './RemovedOptions'
 import { useLeftOut } from '../lib/useLeftOut'
 import { OptionNote } from './OptionNote'
 
@@ -154,11 +154,7 @@ export function MultipleWinnersBody({
 
   return (
     <Stack gap="md">
-      {!sample && (
-        <Text size="sm" c="dimmed">
-          If an option is not available, remove it and the winners are counted again without it.
-        </Text>
-      )}
+      {!sample && <RemoveHint />}
 
       {counted && (
         <ChoiceCount
