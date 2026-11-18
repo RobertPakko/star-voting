@@ -1394,8 +1394,8 @@ thing and costs nothing: **the open question's highlight crossfades**
 - **A count rolls over** (`roll` in `PollTags.module.css`) when the count
   badge's words change.
 - **A name lands in a roster** (`badgeArrival.module.css`): a voter or
-  confirmation joining `NameRoster`, or an invitee's badge in `Respondents`
-  turning to *Voted* or *Confirmed*, pops in with its colours inverted and
+  confirmation joining `NameRoster`, or an invitee's chip in `Respondents`
+  filling in as they vote or confirm, pops in with its colours inverted and
   fading back, so the reader can find who just answered. Only changes seen on
   screen count (`useArrivals`), never the first read. A name joining
   `NameRoster` goes on the end (`useArrivalOrder`) rather than into its
@@ -2523,12 +2523,20 @@ published](#whether-ballots-are-published)).
 voting. What a poll keeps from its voters is how it is *going*, and the
 standings stay sealed until the results unlock.
 
+**An invite poll's roster is a chip per person, drawn as `NameRoster` draws
+an open poll's names**, and the chip's look is the person's standing, with no
+word for it on screen: answered is light green, still owed an outline.
+**Filled against outline carries it, not the hue**, since green and orange are
+the pair red-green colour blindness confuses; the standing is also hidden
+text on each chip. The chip's own × removes an invitee, for the creator, and
+is not drawn once they cannot be removed.
+
 **What the roster answers changes with the stage; who may read it does not.**
-While collecting options, its badges say *Confirmed* / *Pending*; while
-voting, *Voted* / *Pending*; after the poll has closed, **Did not vote**, in
-the closed colour (`badgeColor` in `badgeColors.ts`) — *Pending* would be a
-reminder for a ballot nobody can now cast. The heading says *Voters*
-throughout. `Respondents` reads `status.soliciting` for the stage.
+While collecting options, a chip means *Confirmed* or *Pending*; while
+voting, *Voted* or *Pending*; after the poll has closed, **Did not vote**, an
+outline in the closed colour (`badgeColor` in `badgeColors.ts`) — *Pending*
+would be a reminder for a ballot nobody can now cast. The heading says
+*Voters* throughout. `Respondents` reads `status.soliciting` for the stage.
 
 **Turnout is stated in exactly one place on any screen**: the count badge in
 the header. It counts confirmations while collecting and votes after, over

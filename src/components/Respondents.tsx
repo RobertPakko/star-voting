@@ -1,5 +1,15 @@
-import { useState } from 'react'
-import { ActionIcon, Badge, Button, Card, Group, Stack, Text, TextInput } from '@mantine/core'
+import { useState, type CSSProperties } from 'react'
+import {
+  Badge,
+  Button,
+  Card,
+  CloseButton,
+  Group,
+  Stack,
+  Text,
+  TextInput,
+  VisuallyHidden,
+} from '@mantine/core'
 import { UserPlusIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
@@ -56,6 +66,17 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * (`poll_invitees` leaves them out), and the creator gets both. A poll is
  * named exactly when its invitees carry names, so somebody added later needs
  * one too.
+ *
+ * **Each person is a chip, drawn as `NameRoster` draws a name**, and the
+ * chip's look is their standing, with no word for it on screen: answered is
+ * the light green the share-link roster uses, still owed is an outline (in
+ * orange, or the closed grey once nobody can answer), and a poll telling this
+ * reader nothing per person draws neutral chips. **Filled against outline is
+ * the part that carries it**, not the hue: green and orange are the pair a
+ * red-green colour-blind reader cannot tell apart. Each chip also carries its
+ * standing as hidden text, for screen readers, and as a hover title. Everyone
+ * is on the roster from the start, so it stays alphabetical; a chip changing
+ * look is the arrival.
  *
  * The add/remove controls are creator-only: they write, then ask the page to
  * re-read, which is what brings the list back changed.
@@ -197,57 +218,67 @@ export function Respondents({
   return (
     <Card withBorder>
       <Stack gap="xs">
-        {roster.map((invitee) => {
-          // Whether this poll says anything about this person at all: the
-          // stage decides which column is being drawn, and a poll that hides
-          // its respondents nulls it.
-          const said = (collecting ? invitee.has_confirmed : invitee.has_voted) !== null
-          const mark = standing(collecting, status.is_closed, invitee)
-          const label = labelOf(invitee)
-          return (
-            <Group key={invitee.id} justify="space-between" wrap="nowrap" gap="xs">
-              <Text size="sm" truncate style={{ flex: 1, minWidth: 0 }}>
-                {label}
-                {/* The creator alone is sent the address beside a name. */}
-                {invitee.name !== null && invitee.email !== null && (
-                  <Text span size="sm" c="dimmed">
-                    {' '}
-                    ({invitee.email})
-                  </Text>
-                )}
-              </Text>
-              <Group gap="xs" wrap="nowrap">
-                {said && (
-                  <Badge
-                    size="sm"
-                    variant="light"
-                    color={mark.color}
-                    className={
-                      answering.has(answerKey(collecting, invitee)) ? arrival.arriving : undefined
-                    }
-                  >
-                    {mark.label}
-                  </Badge>
-                )}
-                {isCreator && (
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    aria-label={`Remove ${label}`}
-                    // Someone who already voted can't be removed; their
-                    // ballot is counted and can't be honestly un-counted. On a
-                    // poll that hides respondents we don't know who that is,
-                    // so the database refuses and reports why.
-                    disabled={invitee.has_voted === true || status.is_closed || busy}
-                    onClick={() => invitee.email && removeInvitee(invitee.email, label)}
-                  >
-                    &times;
-                  </ActionIcon>
-                )}
-              </Group>
-            </Group>
-          )
-        })}
+        {roster.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            Nobody is invited yet.
+          </Text>
+        ) : (
+          <Group gap="xs">
+            {roster.map((invitee) => {
+              // Whether this poll says anything about this person at all: the
+              // stage decides which column is being drawn, and a poll that
+              // hides its respondents nulls it.
+              const said = (collecting ? invitee.has_confirmed : invitee.has_voted) !== null
+              const mark = said ? standing(collecting, status.is_closed, invitee) : null
+              const label = labelOf(invitee)
+              // Someone who already voted can't be removed; their ballot is
+              // counted and can't be honestly un-counted. On a poll that hides
+              // respondents we don't know who that is, so the database
+              // refuses and reports why.
+              const removable = isCreator && !status.is_closed && invitee.has_voted !== true
+              return (
+                <Badge
+                  key={invitee.id}
+                  maw="100%"
+                  variant={mark === null ? 'default' : mark.answered ? 'light' : 'outline'}
+                  color={mark?.color}
+                  title={mark?.label}
+                  // Mantine draws an outline badge's text at shade 6, too light
+                  // for 4.5:1; the ink the theme gives a light badge of the same
+                  // colour (main.tsx) clears it on the card too.
+                  style={
+                    mark !== null && !mark.answered
+                      ? ({
+                          '--badge-color': `var(--mantine-color-${mark.color}-light-color)`,
+                          '--badge-bd': `1px solid var(--mantine-color-${mark.color}-light-color)`,
+                        } as CSSProperties)
+                      : undefined
+                  }
+                  className={
+                    answering.has(answerKey(collecting, invitee)) ? arrival.arriving : undefined
+                  }
+                  rightSection={
+                    removable && (
+                      <CloseButton
+                        size="xs"
+                        variant="transparent"
+                        c="inherit"
+                        aria-label={`Remove ${label}`}
+                        disabled={busy}
+                        onClick={() => invitee.email && removeInvitee(invitee.email, label)}
+                      />
+                    )
+                  }
+                >
+                  {label}
+                  {/* The creator alone is sent the address beside a name. */}
+                  {invitee.name !== null && invitee.email !== null && ` (${invitee.email})`}
+                  {mark && <VisuallyHidden> ({mark.label.toLowerCase()})</VisuallyHidden>}
+                </Badge>
+              )
+            })}
+          </Group>
+        )}
 
         {!showsStatus && (
           <Text size="xs" c="dimmed">
@@ -345,14 +376,14 @@ function standing(
   collecting: boolean,
   isClosed: boolean,
   invitee: Invitee,
-): { label: string; color: string } {
+): { label: string; color: string; answered: boolean } {
   if (collecting) {
     return invitee.has_confirmed
-      ? { label: 'Confirmed', color: badgeColor.done }
-      : { label: 'Pending', color: badgeColor.outstanding }
+      ? { label: 'Confirmed', color: badgeColor.done, answered: true }
+      : { label: 'Pending', color: badgeColor.outstanding, answered: false }
   }
-  if (invitee.has_voted) return { label: 'Voted', color: badgeColor.done }
+  if (invitee.has_voted) return { label: 'Voted', color: badgeColor.done, answered: true }
   return isClosed
-    ? { label: 'Did not vote', color: badgeColor.closed }
-    : { label: 'Pending', color: badgeColor.outstanding }
+    ? { label: 'Did not vote', color: badgeColor.closed, answered: false }
+    : { label: 'Pending', color: badgeColor.outstanding, answered: false }
 }
