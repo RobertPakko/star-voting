@@ -171,7 +171,13 @@ export function TimeList({
  * badge whose words roll over shows that it did; see RollingBadge. The length
  * is fixed at creation, so it is plain text.
  */
-function TimesSummary({ options, schedule }: { options: PollOption[]; schedule: PollSchedule }) {
+export function TimesSummary({
+  options,
+  schedule,
+}: {
+  options: PollOption[]
+  schedule: PollSchedule
+}) {
   const days = options
     .map((o) => parseWindowStart(o.name)?.day)
     .filter((day) => day !== undefined)

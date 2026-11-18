@@ -2406,6 +2406,10 @@ Duplicating a poll copies the descriptions.
 | Results unlock | When everyone invited has voted, or the creator closes the poll | Only when the creator closes the poll |
 | One vote each | Enforced — one ballot per account | **Not** enforced |
 
+**A creator not on their own invite list is not a voter.** While the poll
+takes votes their page draws `NotVoting` (`PollDetail`) where the ballot would
+be: a line saying so, how to add themselves, and the options read-only.
+
 An open poll cannot tell its voters apart: one person can vote again from
 another browser or after clearing site data. The random key in
 `localStorage` (`src/lib/voterKey.ts`) stops accidental double-submits and is

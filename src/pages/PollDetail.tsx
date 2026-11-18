@@ -20,6 +20,8 @@ import { nextUnansweredKey } from '../lib/nextQuestion'
 import { BallotCard } from '../components/BallotCard'
 import type { BallotScore } from '../components/BallotFrame'
 import { CollectOptions } from '../components/CollectOptions'
+import { OptionDescription } from '../components/OptionDescription'
+import { TimesSummary } from '../components/TimeList'
 import { CreatorControls } from '../components/CreatorControls'
 import { OpenPollPanel } from '../components/OpenPollPanel'
 import { NoResultsNotice, RevealNote } from '../components/PollNotices'
@@ -612,6 +614,9 @@ export function PollDetail({
                   questionStrip={questionStrip}
                 />
               )
+            ) : !status.invited ? (
+              /* Only the creator reads an invite poll they are not on. */
+              <NotVoting poll={poll} options={options} questionStrip={questionStrip} />
             ) : (
               <VoteForm
                 key={refreshKey}
@@ -784,6 +789,50 @@ function Waiting({
       </Card>
       <Banners pollId={pollId} removed={removed} onRestored={onRestored} />
     </Stack>
+  )
+}
+
+/**
+ * An invite poll's creator who did not invite themselves, while it takes
+ * votes. `submit_ballot` would refuse them, so a ballot here would be a form
+ * that cannot be sent; this says so instead, and shows what the voters are
+ * scoring, since the ballot was the creator's only view of the list. A
+ * calendar is summarised rather than listed: it can be hundreds of windows.
+ */
+function NotVoting({
+  poll,
+  options,
+  questionStrip,
+}: {
+  poll: Pick<Poll, 'schedule'>
+  options: PollOption[]
+  questionStrip?: ReactNode
+}) {
+  return (
+    <Card withBorder>
+      <Stack gap="sm">
+        {questionStrip}
+        <Text fw={500}>You are not voting in this poll.</Text>
+        <Text size="sm" c="dimmed">
+          Only the people on the invite list can vote. You can add your own email to the invite list
+          below if you want to vote in this poll.
+        </Text>
+        {poll.schedule ? (
+          <TimesSummary options={options} schedule={poll.schedule} />
+        ) : (
+          <Stack gap={6}>
+            {options.map((option) => (
+              <div key={option.id}>
+                <Text size="sm" style={{ overflowWrap: 'anywhere' }}>
+                  {option.name}
+                </Text>
+                {option.description && <OptionDescription description={option.description} />}
+              </div>
+            ))}
+          </Stack>
+        )}
+      </Stack>
+    </Card>
   )
 }
 
