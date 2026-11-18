@@ -442,6 +442,17 @@ function PollListView({ viewingRemoved }: { viewingRemoved: boolean }) {
 type Squeeze = 0 | 1 | 2
 
 /**
+ * Where the row last settled, with and without Archived, so a list coming
+ * back is laid out as it was left from its first render. That render is the
+ * one a heading flying back measures its card on (`PollList`'s layout effect
+ * runs in the same commit, before the row can re-render), so starting from
+ * the words on a phone would aim it a wrapped line below where the card
+ * ends up. The row still starts again from the words before paint, and lands
+ * where it did unless the width has changed meanwhile.
+ */
+const settled: Record<'archived' | 'plain', Squeeze> = { archived: 0, plain: 0 }
+
+/**
  * The list's row, giving up words only where they do not fit. Whether they fit
  * is read off the row itself: if the pair has dropped below the way home, one
  * more set of words goes, before paint. Not a breakpoint, since what fits
@@ -453,11 +464,13 @@ type Squeeze = 0 | 1 | 2
  */
 function ListRow({ archived }: { archived: boolean }) {
   const row = useRef<HTMLDivElement>(null)
-  const [squeeze, setSqueeze] = useState<Squeeze>(0)
+  const [squeeze, setSqueeze] = useState<Squeeze>(() => settled[archived ? 'archived' : 'plain'])
 
-  // Still wrapped, so give up the next set of words.
+  // Still wrapped, so give up the next set of words; otherwise this is where
+  // the row settles.
   useLayoutEffect(() => {
     if (squeeze < 2 && pairWrapped(row.current)) setSqueeze((squeeze + 1) as Squeeze)
+    else settled[archived ? 'archived' : 'plain'] = squeeze
   }, [squeeze, archived])
 
   // A different pair starts again from the words.
