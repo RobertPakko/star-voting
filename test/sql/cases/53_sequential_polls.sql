@@ -227,6 +227,31 @@ begin
       tests.open_scores(v_named, array[1, 1]), 'k3', 'Ana'),
     'has already voted');
 
+  -- A corrected name finds its weight: Cy meant Ben.
+  perform open_poll_revise(v_named, tests.open_scores(v_named, array[0, 5]), 'k2', 'ben');
+  perform tests.assert_eq('renaming a newcomer to an earlier voter takes their N',
+    (select given from ballots where poll_id = v_named and voter_key = 'k2'), 0::numeric);
+  perform tests.assert_null('and nobody is left to vote',
+    (select array_agg(x) from jsonb_array_elements_text(open_poll_view(v_named, 'k0') -> 'carried_names') x));
+
+  perform open_poll_revise(v_named, tests.open_scores(v_named, array[0, 5]), 'k2', 'Cy');
+  perform tests.assert_eq('renaming away lets the row go and is a newcomer again',
+    (select given from ballots where poll_id = v_named and voter_key = 'k2'), 1.666667);
+  perform tests.assert_eq('and Ben is back on the list',
+    (select array_agg(x) from jsonb_array_elements_text(open_poll_view(v_named, 'k0') -> 'carried_names') x),
+    array['Ben']);
+
+  perform open_poll_revise(v_named, tests.open_scores(v_named, array[5, 0]), 'k1', 'ANA');
+  perform tests.assert_eq('a change of case keeps the claim',
+    (select given from ballots where poll_id = v_named and voter_key = 'k1'), 5::numeric);
+
+  perform tests.assert_raises('a name another ballot holds is refused',
+    format('select open_poll_revise(%L, %L::jsonb, %L, %L)', v_named,
+      tests.open_scores(v_named, array[1, 1]), 'k2', 'Ana'),
+    'has already voted');
+  perform tests.assert_eq('a revision that keeps the name keeps the N',
+    (select given from ballots where poll_id = v_named and voter_key = 'k1'), 5::numeric);
+
   perform tests.sign_in('creator@example.com');
   v_hidden := create_poll('Hidden', null, array['a', 'b'], null, 'open', false, false, null, false,
     'option', null, null, '[{"voter": "Ana", "given": 5}, {"voter": "Ben", "given": 0}]');

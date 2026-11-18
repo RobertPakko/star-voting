@@ -133,8 +133,16 @@ export function OpenPollPanel({
   }
 
   // Names only; the count is in the header badge. Null when respondents are hidden.
+  // A sequential poll also lists the earlier voters still to vote, which
+  // `carried_names` already offers in the name box.
   const participation = view.voters ? (
-    <NameRoster title="Voters" names={view.voters} empty="Nobody has voted yet." />
+    <NameRoster
+      title="Voters"
+      names={view.voters}
+      pending={view.sequential ? (view.carried_names ?? []) : undefined}
+      closed={view.is_closed}
+      empty="Nobody has voted yet."
+    />
   ) : null
 
   if (view.results_available) {
@@ -286,6 +294,7 @@ function Voted({
         options={view.options}
         initial={revising}
         voterName={voterName}
+        carried={view.sequential ? (view.carried_names ?? []) : undefined}
         isCreator={isCreator}
         onVoted={() => {
           setRevising(null)
@@ -351,8 +360,10 @@ function OpenBallot({
   /** Absent on polls that don't ask. */
   voterName?: VoterName
   /**
-   * On a new ballot of a sequential poll, the earlier voters still to vote,
-   * offered as names where the poll shows them (empty where it hides them).
+   * On a sequential poll, the earlier voters still to vote, offered as names
+   * where the poll shows them (empty where it hides them). Offered when
+   * changing a vote too: renaming a ballot to one claims that voter's weight
+   * (`open_poll_revise`).
    */
   carried?: string[]
   isCreator: boolean
@@ -400,9 +411,7 @@ function OpenBallot({
     if (error) throw new Error(error.message)
   }
 
-  const nameField = voterName && (
-    <VoterNameField name={voterName} suggestions={revising ? undefined : carried} />
-  )
+  const nameField = voterName && <VoterNameField name={voterName} suggestions={carried} />
 
   if (poll.schedule) {
     return (

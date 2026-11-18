@@ -2858,7 +2858,9 @@ conditions are enforced:
 - **A revision changes scores and, on an open poll, the voter's name — and
   nothing else.** The name box is disabled once the vote is in and re-enabled
   by *Edit vote*, starting from `your_name`; `open_poll_revise` calls
-  `broadcast_poll_change` only when the name moved.
+  `broadcast_poll_change` only when the name moved. On a sequential poll a
+  changed name also moves the ballot's weight with it (see [Sequential
+  polls](#sequential-polls)).
 - **It updates in place, never delete-and-insert**, which would fire two
   spurious signals and change the ballot id.
 
@@ -4055,12 +4057,13 @@ instead of the largest group taking each one. `/variants` explains it;
   (`SEQUENTIAL_KINDS`, `insert_carried_weights`): a consensus or a split
   would ignore the weights. *More results* leaves those out on a weighted
   tally for the same reason.
-- **A ballot takes its N when it is cast and keeps it** (`ballots.given`,
+- **A ballot takes its N from the row its voter matches** (`ballots.given`,
   `claim_carried_weight`): the row matching the invitee's address, or the
   open ballot's name, case-insensitively, claimed once. A ballot matching
   nobody is a newcomer, at the N that gives it **the average weight** of the
   carried rows (`newcomer_given`) — the average of weights, not of N, which
-  would start a newcomer below the average. A revision never moves N.
+  would start a newcomer below the average. A revision moves N only by
+  changing an open ballot's name.
 - **The tally reads the weights off the ballots** (`poll_is_weighted`,
   `poll_round`, which picks `weighted_star_round` over `star_round`), so a
   question that carries nobody is counted exactly as before. The head round,
@@ -4082,8 +4085,18 @@ instead of the largest group taking each one. `/variants` explains it;
   Mantine `Autocomplete`, so a new name can still be typed). Hiding them, the
   ballot sends the name this browser last answered under, which finds the
   weight and is then discarded like every name on such a poll; no list is
-  shown, since a list losing names as they vote would be a roster. Nobody can
-  read which rows are claimed.
+  shown, since a list losing names as they vote would be a roster.
+- **Showing voters, the roster shows who is still to vote**: the same
+  `carried_names`, drawn after the names that have voted as outline chips
+  (*Pending*, then *Did not vote* once closed), as an invite poll's roster
+  draws an invitee still owed (`NameRoster`'s `pending`). So a voter whose
+  typed name missed their row sees it still waiting.
+- **A ballot's N follows its name.** Changing the name on *Edit vote* lets go
+  of the row the old name claimed and claims the one the new name matches,
+  or makes the ballot a newcomer (`open_poll_revise`); the name box offers
+  the unclaimed names there too. It grants nothing new: any unclaimed name
+  could be typed when casting. Ballot names are unique within a poll, so the
+  row a name claimed is the row that name matches.
 - **A voter who skips a poll keeps their N**: their row stays unclaimed, and
   `get_poll_carried_weights` (creator only, on a question showing voters)
   hands it to the next sequel.

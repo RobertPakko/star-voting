@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useState } from 'react'
 import {
   Badge,
   Button,
@@ -13,7 +13,7 @@ import {
 import { UserPlusIcon } from '@phosphor-icons/react'
 import { notifications } from '@mantine/notifications'
 import { supabase } from '../lib/supabase'
-import { badgeColor } from '../lib/badgeColors'
+import { badgeColor, outlineInk } from '../lib/badgeColors'
 import { useArrivals } from '../lib/useArrivals'
 import arrival from './badgeArrival.module.css'
 import { VOTER_NAME_MAX } from '../lib/limits'
@@ -243,17 +243,7 @@ export function Respondents({
                   variant={mark === null ? 'default' : mark.answered ? 'light' : 'outline'}
                   color={mark?.color}
                   title={mark?.label}
-                  // Mantine draws an outline badge's text at shade 6, too light
-                  // for 4.5:1; the ink the theme gives a light badge of the same
-                  // colour (main.tsx) clears it on the card too.
-                  style={
-                    mark !== null && !mark.answered
-                      ? ({
-                          '--badge-color': `var(--mantine-color-${mark.color}-light-color)`,
-                          '--badge-bd': `1px solid var(--mantine-color-${mark.color}-light-color)`,
-                        } as CSSProperties)
-                      : undefined
-                  }
+                  style={mark !== null && !mark.answered ? outlineInk(mark.color) : undefined}
                   className={
                     answering.has(answerKey(collecting, invitee)) ? arrival.arriving : undefined
                   }

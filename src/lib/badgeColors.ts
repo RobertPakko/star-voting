@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 /**
  * Every badge colour the app uses, in one place.
  *
@@ -79,3 +81,16 @@ export const badgeColor = {
  * already spoken for by a setting tag inches away on the same card.
  */
 export const countBadge = { variant: 'default' } as const
+
+/**
+ * The ink for an outline badge, which marks somebody still owed on a roster.
+ * Mantine draws an outline badge's text at shade 6, too light for 4.5:1; the
+ * ink the theme gives a light badge of the same colour (main.tsx) clears it
+ * on the card too.
+ */
+export function outlineInk(color: string): CSSProperties {
+  return {
+    '--badge-color': `var(--mantine-color-${color}-light-color)`,
+    '--badge-bd': `1px solid var(--mantine-color-${color}-light-color)`,
+  } as CSSProperties
+}
