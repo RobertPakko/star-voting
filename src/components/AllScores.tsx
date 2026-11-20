@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Group, Modal, Progress, Stack, Text } from '@mantine/core'
 import { supabase } from '../lib/supabase'
-import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { openPollRpc } from '../lib/samplePoll'
+import { countFor, groupFromKey, groupKeyOf } from '../lib/groupCount'
 import { optionScoresSchema, parseAnswer } from '../lib/rpcSchemas'
 import { relabelScores } from '../lib/schedule'
 import { use24HourTime } from '../lib/clock'
@@ -45,6 +46,7 @@ export function AllScores({
   const h24 = use24HourTime()
   const kind = source.kind
   const key = source.pollId
+  const group = groupKeyOf(source)
 
   const [scores, setScores] = useState<OptionScore[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -57,10 +59,11 @@ export function AllScores({
 
     let cancelled = false
 
-    const request: PromiseLike<RpcAnswer> =
+    const request = countFor({ kind, pollId: key, group: groupFromKey(group) }, 'scores', {}, () =>
       kind === 'poll'
         ? supabase.rpc('get_poll_scores', { p_poll_id: key })
-        : openPollRpc('open_poll_scores', { p_poll_id: key })
+        : openPollRpc('open_poll_scores', { p_poll_id: key }),
+    )
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
@@ -73,7 +76,7 @@ export function AllScores({
     return () => {
       cancelled = true
     }
-  }, [opened, kind, key])
+  }, [opened, kind, key, group])
 
   return (
     <Modal

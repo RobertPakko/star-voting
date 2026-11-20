@@ -20,8 +20,9 @@ export type PollMode = 'invite' | 'open'
  * options that serves its worst-served voter best, the rest the option
  * ranking (*Multiple winners*), proportional winners or fractional winners,
  * 'budget', 'ranking_budget' and 'fractional_budget' proportional, multiple or
- * fractional winners counted against a budget, and 'assignment' an option
- * assignment. Whether the ballot is a calendar is not part of the kind: it is
+ * fractional winners counted against a budget, 'assignment' an option
+ * assignment, and 'groups' and 'mixed_groups' group formation, the voters
+ * split into groups as alike or as mixed as can be. Whether the ballot is a calendar is not part of the kind: it is
  * whether the question has a `schedule`, which every kind but a budget may.
  */
 export type PollKind =
@@ -35,6 +36,8 @@ export type PollKind =
   | 'fractional_budget'
   | 'assignment'
   | 'consensus_winners'
+  | 'groups'
+  | 'mixed_groups'
 
 /**
  * A time poll's grid; null on an ordinary poll. Which days and hours are asked
@@ -589,6 +592,22 @@ export interface AssignmentResult {
   stars_shown: boolean
 }
 
+/**
+ * Group formation, from `get_poll_groups` / `open_poll_groups`: the voters
+ * split into `group_count` groups as even in size as can be, as alike
+ * (`similar`) or as mixed as can be. Every group is listed, in the order
+ * they are shown (largest first), an empty one where there were too few
+ * voters; each group's voters are by name.
+ */
+export interface GroupsResult {
+  groups: { voters: { name: string }[] }[]
+  group_count: number
+  similar: boolean
+  voter_count: number
+  /** An invite poll's invitees who did not vote, so are in no group. */
+  not_grouped: { name: string }[]
+}
+
 export interface PollResults {
   /** The score round's top rows only (`poll_results_rows()`); see `option_count`. */
   options: ResultOption[]
@@ -629,6 +648,7 @@ export interface PollResults {
     | BudgetResult
     | FractionalBudgetResult
     | AssignmentResult
+    | GroupsResult
     | null
   /**
    * Whether the ballots carry weights (a sequential poll): every count is

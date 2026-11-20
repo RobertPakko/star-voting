@@ -476,6 +476,21 @@ export type Database = {
         Args: { p_excluded?: string[]; p_per_voter?: number; p_places?: Json; p_poll_id: string }
         Returns: Json
       }
+      get_poll_groups: {
+        Args: { p_groups?: number; p_poll_id: string; p_similar?: boolean }
+        Returns: Json
+      }
+      get_poll_group_count: {
+        Args: {
+          p_args?: Json
+          p_count: string
+          p_group: number
+          p_groups: number
+          p_poll_id: string
+          p_similar: boolean
+        }
+        Returns: Json
+      }
       get_poll_budget: {
         Args: {
           p_budget?: number
@@ -606,6 +621,21 @@ export type Database = {
       }
       open_poll_assignment: {
         Args: { p_excluded?: string[]; p_per_voter?: number; p_places?: Json; p_poll_id: string }
+        Returns: Json
+      }
+      open_poll_groups: {
+        Args: { p_groups?: number; p_poll_id: string; p_similar?: boolean }
+        Returns: Json
+      }
+      open_poll_group_count: {
+        Args: {
+          p_args?: Json
+          p_count: string
+          p_group: number
+          p_groups: number
+          p_poll_id: string
+          p_similar: boolean
+        }
         Returns: Json
       }
       open_poll_budget: {

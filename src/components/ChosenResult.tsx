@@ -5,11 +5,18 @@ import { RankingBody, type RankingSource } from './FullRanking'
 import { MultipleWinnersBody } from './MultipleWinners'
 import { ConsensusBody } from './Consensus'
 import { ConsensusWinnersBody } from './ConsensusWinners'
-import { consensusWinnersFor } from '../lib/choices'
+import { consensusWinnersFor, groupsFor } from '../lib/choices'
 import { BudgetBody } from './BudgetVariant'
 import { OptionAssignmentBody } from './OptionAssignment'
+import { GroupFormationBody } from './GroupFormation'
 import type { MeetingEvent } from '../lib/calendarEvent'
-import { useBudgetInputs, useLeftOut, useAssignmentInputs, useWinnerCount } from '../lib/useLeftOut'
+import {
+  useBudgetInputs,
+  useLeftOut,
+  useAssignmentInputs,
+  useGroupsInputs,
+  useWinnerCount,
+} from '../lib/useLeftOut'
 
 /**
  * The result a question asked for (`polls.kind`), where it is more than
@@ -36,6 +43,7 @@ export function ChosenResult({
   const [inputs, setInputs] = useBudgetInputs(source.pollId)
   const [assignment, setAssignment] = useAssignmentInputs(source.pollId)
   const [winners, setWinners] = useWinnerCount(source.pollId, consensusWinnersFor(results))
+  const [grouping, setGrouping] = useGroupsInputs(source.pollId, groupsFor(results))
 
   switch (chosen.kind) {
     case 'ranking':
@@ -110,6 +118,17 @@ export function ChosenResult({
           onLeftOut={setLeftOut}
           inputs={assignment}
           onInputs={setAssignment}
+        />
+      )
+    case 'groups':
+    case 'mixed_groups':
+      return (
+        <GroupFormationBody
+          source={source}
+          results={results}
+          initial={chosen.groups}
+          inputs={grouping}
+          onInputs={setGrouping}
         />
       )
   }

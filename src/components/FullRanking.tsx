@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Badge, Group, Stack, Text } from '@mantine/core'
 import { supabase } from '../lib/supabase'
-import { openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { openPollRpc } from '../lib/samplePoll'
+import { countFor, groupFromKey, groupKeyOf, type CountSource } from '../lib/groupCount'
 import { countBadge } from '../lib/badgeColors'
 import { relabelRanking } from '../lib/schedule'
 import { parseAnswer, rankingSchema } from '../lib/rpcSchemas'
@@ -20,9 +21,10 @@ import { OptionNote } from './OptionNote'
 /**
  * Which ranking endpoint to read. Same split as ResultsSource and
  * BallotsSource, and for the same reason: a session proves the caller's
- * right to an invite poll, the link proves it for an open one.
+ * right to an invite poll, the link proves it for an open one. A source
+ * naming a group (*Make choice*) counts that group's ballots alone.
  */
-export type RankingSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
+export type RankingSource = CountSource
 
 /**
  * The whole field in placed order, opened from the result's *More results*
@@ -92,6 +94,7 @@ export function RankingBody({
   // depending on a fresh object identity every render.
   const kind = source.kind
   const key = source.pollId
+  const group = groupKeyOf(source)
   const given = initial !== null
 
   const [ranking, setRanking] = useState<RankingEntry[] | null>(initial)
@@ -107,10 +110,15 @@ export function RankingBody({
 
     let cancelled = false
 
-    const request: PromiseLike<RpcAnswer> =
-      kind === 'poll'
-        ? supabase.rpc('get_poll_ranking', { p_poll_id: key })
-        : openPollRpc('open_poll_ranking', { p_poll_id: key })
+    const request = countFor(
+      { kind, pollId: key, group: groupFromKey(group) },
+      'ranking',
+      {},
+      () =>
+        kind === 'poll'
+          ? supabase.rpc('get_poll_ranking', { p_poll_id: key })
+          : openPollRpc('open_poll_ranking', { p_poll_id: key }),
+    )
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
@@ -123,7 +131,7 @@ export function RankingBody({
     return () => {
       cancelled = true
     }
-  }, [given, kind, key])
+  }, [given, kind, key, group])
 
   const shown = ranking && cutTo(ranking, places)
 

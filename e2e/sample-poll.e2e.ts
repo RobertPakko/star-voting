@@ -177,6 +177,7 @@ test('the results show the rounds, the tie-break and the other answers', async (
     'Proportional winners',
     'Consensus winners',
     'Fractional winners',
+    'Group formation',
   ])
   await page.getByRole('menuitem', { name: 'Multiple winners' }).click()
   const ranking = page.getByRole('dialog', { name: 'Multiple winners' })
@@ -391,6 +392,21 @@ test('consensus winners serve every voter a film they gave 3 or more', async ({ 
   // The recording cannot count again, so nothing offers to.
   await expect(page.getByLabel('Number of winners')).toHaveCount(0)
   await expectAccessible(page, 'consensus winners')
+})
+
+test('group formation seats the film friends with those who voted alike', async ({ page }) => {
+  await page.goto('#/sample-result-movie-as-group-formation')
+  // Nine friends in three groups of three, as `voter_groups` formed them.
+  for (const group of ['Ana, Chloe, Erin', 'Ben, Farid, Hugo', 'Diego, Gina, Iris'])
+    await expect(page.getByText(group, { exact: true })).toBeVisible()
+  await expect(page.getByText('3 voters', { exact: true })).toHaveCount(3)
+  // The voter view turns it round: each friend and their group.
+  await page.getByText('Voter view').click()
+  await expect(page.getByText(/^Group \d$/)).toHaveCount(9)
+  // The recording cannot form them again, nor count a group's ballots.
+  await expect(page.getByRole('combobox', { name: 'Number of groups' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Make choice' })).toHaveCount(0)
+  await expectAccessible(page, 'group formation')
 })
 
 test('a mistyped sample link says so', async ({ page }) => {

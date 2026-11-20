@@ -4,7 +4,8 @@ import { PieChart } from '@mantine/charts'
 import { useReducedMotion } from '@mantine/hooks'
 import { SpinnerBallIcon, XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
-import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { isSampleId, openPollRpc } from '../lib/samplePoll'
+import { countFor, groupFromKey, groupKeyOf } from '../lib/groupCount'
 import { relabelScores } from '../lib/schedule'
 import { fractionalSharesSchema, parseAnswer } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
@@ -121,6 +122,7 @@ export function FractionalWinnersBody({
   const h24 = use24HourTime()
   const kind = source.kind
   const key = source.pollId
+  const group = groupKeyOf(source)
   const sample = isSampleId(key)
 
   const [shares, setShares] = useState<FractionalShare[] | null>(
@@ -149,10 +151,15 @@ export function FractionalWinnersBody({
 
     const excluded = excludedKey ? excludedKey.split(',') : []
     const args = { p_poll_id: key, p_excluded: excluded }
-    const request: PromiseLike<RpcAnswer> =
-      kind === 'poll'
-        ? supabase.rpc('get_poll_fractional_winners', args)
-        : openPollRpc('open_poll_fractional_winners', args)
+    const request = countFor(
+      { kind, pollId: key, group: groupFromKey(group) },
+      'fractional_winners',
+      args,
+      () =>
+        kind === 'poll'
+          ? supabase.rpc('get_poll_fractional_winners', args)
+          : openPollRpc('open_poll_fractional_winners', args),
+    )
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
@@ -166,7 +173,7 @@ export function FractionalWinnersBody({
     return () => {
       cancelled = true
     }
-  }, [kind, key, excludedKey, initial])
+  }, [kind, key, excludedKey, initial, group])
 
   const remaining = results.option_count - leftOut.length
   // Below two there is nothing left to split.

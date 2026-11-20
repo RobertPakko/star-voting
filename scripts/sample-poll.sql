@@ -349,6 +349,10 @@ begin
         -- three, or one fewer than the options.
         'consensus_winners', open_poll_consensus_winners(v_poll.id, '{}',
           greatest(2, least(3, (select count(*)::int - 1 from candidates where poll_id = v_poll.id)))),
+        -- At the number a *More results* modal opens on (groupsFor): three,
+        -- or two where there are fewer than six voters; kept alike.
+        'groups', open_poll_groups(v_poll.id,
+          case when (select count(*) from ballots where poll_id = v_poll.id) >= 6 then 3 else 2 end, true),
         'scores', open_poll_scores(v_poll.id),
         'ballots', open_poll_ballots(v_poll.id)
       );

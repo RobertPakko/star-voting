@@ -338,7 +338,7 @@ test.describe('all choices', () => {
   test('opens with every section folded, its algorithms showing', async ({ page }) => {
     await page.goto('#/choices')
     const sections = page.getByRole('heading', { level: 2 }).getByRole('button')
-    await expect(sections).toHaveCount(7)
+    await expect(sections).toHaveCount(8)
     for (const button of await sections.all())
       await expect(button).toHaveAttribute('aria-expanded', 'false')
     const best = page.getByRole('button', { name: /^Best option/ })
@@ -381,6 +381,13 @@ test.describe('all choices', () => {
     await page.getByRole('link', { name: 'See an example' }).click()
     await expect(page).toHaveURL(/#\/sample-result-snacks-as-fractional-winners$/)
     await expect(page.getByText(/^Fractional winners$/).first()).toBeVisible()
+
+    // Group formation is the film question, recast: its friends in three groups.
+    await page.goto('#/choices?section=group-formation')
+    await page.getByRole('link', { name: 'See an example' }).click()
+    await expect(page).toHaveURL(/#\/sample-result-movie-as-group-formation$/)
+    await expect(page.getByText(/^Group formation$/).first()).toBeVisible()
+    await expect(page.getByText('Group 3', { exact: true })).toBeVisible()
   })
 
   test('guides a reader to a choice, one question at a time', async ({ page }) => {
@@ -418,7 +425,7 @@ test.describe('all choices', () => {
     await expect(guide.getByRole('button', { name: 'Pick an option' })).toBeVisible()
     await guide.getByRole('button', { name: 'See the decision tree' }).click()
     // Every answer of every question, each under the question it answers.
-    await expect(guide.getByRole('listitem')).toHaveCount(11)
+    await expect(guide.getByRole('listitem')).toHaveCount(12)
     await expect(guide.getByText('Can we just take a little of each option?')).toBeVisible()
     await expectAccessible(page, 'the whole decision tree of the choice guide')
     await guide.getByRole('button', { name: 'Consensus winners' }).click()

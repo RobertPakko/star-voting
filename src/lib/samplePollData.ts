@@ -29,7 +29,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: null,
-        created_at: '2026-11-13T21:32:21.764769-08:00',
+        created_at: '2026-11-19T22:20:50.37611-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -175,7 +175,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: 'e0338139-5a10-2e5e-0a17-3511e2a329fd',
         schedule: null,
         closed_at: null,
-        created_at: '2026-11-13T21:32:21.764769-08:00',
+        created_at: '2026-11-19T22:20:50.37611-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -291,7 +291,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: 'e0338139-5a10-2e5e-0a17-3511e2a329fd',
         schedule: null,
         closed_at: null,
-        created_at: '2026-11-13T21:32:21.764769-08:00',
+        created_at: '2026-11-19T22:20:50.37611-08:00',
         description:
           "A simple sample poll, so you can see what voting looks like. Submitting your vote won't do anything.",
         show_voters: true,
@@ -409,7 +409,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
           desired_slots: 8,
         },
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-13T21:32:21.764769-08:00',
+        created_at: '2026-11-19T22:20:50.37611-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film, a snack each and a time to meet.',
         show_voters: true,
@@ -544,6 +544,53 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         question_position: 3,
       },
     ],
+    groups: {
+      groups: [
+        {
+          voters: [
+            {
+              name: 'Ana',
+            },
+            {
+              name: 'Chloe',
+            },
+            {
+              name: 'Farid',
+            },
+          ],
+        },
+        {
+          voters: [
+            {
+              name: 'Ben',
+            },
+            {
+              name: 'Hugo',
+            },
+            {
+              name: 'Iris',
+            },
+          ],
+        },
+        {
+          voters: [
+            {
+              name: 'Diego',
+            },
+            {
+              name: 'Erin',
+            },
+            {
+              name: 'Gina',
+            },
+          ],
+        },
+      ],
+      similar: true,
+      group_count: 3,
+      not_grouped: [],
+      voter_count: 9,
+    },
     scores: [
       {
         id: 'a40a3397-abdd-d3d1-3b4d-0110ab392f37',
@@ -1597,7 +1644,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '0c0ce273-8fac-602a-659a-427718fdd95e',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-13T21:32:21.764769-08:00',
+        created_at: '2026-11-19T22:20:50.37611-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film, a snack each and a time to meet.',
         show_voters: true,
@@ -1702,6 +1749,53 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         question_position: 3,
       },
     ],
+    groups: {
+      groups: [
+        {
+          voters: [
+            {
+              name: 'Ana',
+            },
+            {
+              name: 'Chloe',
+            },
+            {
+              name: 'Erin',
+            },
+          ],
+        },
+        {
+          voters: [
+            {
+              name: 'Ben',
+            },
+            {
+              name: 'Farid',
+            },
+            {
+              name: 'Hugo',
+            },
+          ],
+        },
+        {
+          voters: [
+            {
+              name: 'Diego',
+            },
+            {
+              name: 'Gina',
+            },
+            {
+              name: 'Iris',
+            },
+          ],
+        },
+      ],
+      similar: true,
+      group_count: 3,
+      not_grouped: [],
+      voter_count: 9,
+    },
     scores: [
       {
         id: '08726bf7-0f4d-190a-d5ed-c00d0565abbe',
@@ -3040,7 +3134,7 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         group_id: '0c0ce273-8fac-602a-659a-427718fdd95e',
         schedule: null,
         closed_at: '2026-02-13T13:37:00-08:00',
-        created_at: '2026-11-13T21:32:21.764769-08:00',
+        created_at: '2026-11-19T22:20:50.37611-08:00',
         description:
           'An example of the results from a poll. Nine people voted on a film, a snack each and a time to meet.',
         show_voters: true,
@@ -3254,6 +3348,53 @@ export const SAMPLE_PAYLOADS: SamplePayloads = {
         },
       ],
       average_cost: 5.833333,
+    },
+    groups: {
+      groups: [
+        {
+          voters: [
+            {
+              name: 'Ana',
+            },
+            {
+              name: 'Ben',
+            },
+            {
+              name: 'Erin',
+            },
+          ],
+        },
+        {
+          voters: [
+            {
+              name: 'Chloe',
+            },
+            {
+              name: 'Gina',
+            },
+            {
+              name: 'Iris',
+            },
+          ],
+        },
+        {
+          voters: [
+            {
+              name: 'Diego',
+            },
+            {
+              name: 'Farid',
+            },
+            {
+              name: 'Hugo',
+            },
+          ],
+        },
+      ],
+      similar: true,
+      group_count: 3,
+      not_grouped: [],
+      voter_count: 9,
     },
     scores: [
       {

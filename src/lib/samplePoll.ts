@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import type { Database } from './database.types'
 import type {
   AssignmentResult,
+  GroupsResult,
   BallotSheet,
   BudgetResult,
   ConsensusResult,
@@ -69,6 +70,8 @@ interface SampleQuestion {
   budget?: BudgetResult
   /** The option assignment with nothing removed or given new places; see `OptionAssignment`. */
   assignment?: AssignmentResult
+  /** Group formation at the modal's opening number, kept alike; see `GroupFormation`. */
+  groups?: GroupsResult
   scores?: OptionScore[]
   ballots?: BallotSheet
   /**
@@ -119,7 +122,13 @@ export const SAMPLE_ALIASES: Record<string, string> = {
  * best on: the snacks for fractional winners (a split of a shared order), the
  * film question for the rest.
  */
-const SAMPLE_AS_KINDS = ['ranking', 'multiple', 'fractional', 'consensus_winners'] as const
+const SAMPLE_AS_KINDS = [
+  'ranking',
+  'multiple',
+  'fractional',
+  'consensus_winners',
+  'groups',
+] as const
 type SampleAsKind = (typeof SAMPLE_AS_KINDS)[number]
 
 const SAMPLE_AS_BASE: Record<SampleAsKind, string> = {
@@ -127,6 +136,7 @@ const SAMPLE_AS_BASE: Record<SampleAsKind, string> = {
   multiple: SAMPLE_RESULT_ID,
   fractional: SAMPLE_RESULT_SNACKS_ID,
   consensus_winners: SAMPLE_RESULT_ID,
+  groups: SAMPLE_RESULT_ID,
 }
 
 /**
@@ -175,6 +185,11 @@ interface OpenPollArgs {
   p_choice?: string
   p_kind?: string
   p_given?: number[]
+  p_groups?: number
+  p_similar?: boolean
+  p_group?: number
+  p_count?: string
+  p_args?: unknown
 }
 
 /**
@@ -272,6 +287,16 @@ function answer(payloads: SamplePayloads, fn: OpenPollFn, args: OpenPollArgs): R
       return question.assignment && !args.p_excluded?.length && !args.p_places && !args.p_per_voter
         ? ok(question.assignment)
         : failed('Not available on the example poll')
+    case 'open_poll_groups':
+      return question.groups &&
+        (args.p_groups === undefined || args.p_groups === question.groups.group_count) &&
+        (args.p_similar === undefined || args.p_similar === question.groups.similar)
+        ? ok(question.groups)
+        : failed('Not available on the example poll')
+    // A group's own counts are worked out from its ballots, which the
+    // recording does not split; *Make choice* is not offered on it.
+    case 'open_poll_group_count':
+      return failed('Not available on the example poll')
     case 'open_poll_scores':
       return question.scores ? ok(question.scores) : failed('Results are not available yet')
     case 'open_poll_ballots':
@@ -306,12 +331,15 @@ function recast(payloads: SamplePayloads, pollId: string): SampleQuestion | unde
     multiple: base.multiple_winners,
     fractional: base.fractional_winners,
     consensus_winners: base.consensus_winners,
+    groups: base.groups,
   }[kind]
-  // Consensus winners must have a number, and it is the one recorded.
+  // Consensus winners and groups must have a number, and it is the one recorded.
   const kindValue =
     kind === 'consensus_winners'
       ? (base.consensus_winners?.winner_count ?? null)
-      : (DEFAULT_CHOICE_NUMBER[kind] ?? null)
+      : kind === 'groups'
+        ? (base.groups?.group_count ?? null)
+        : (DEFAULT_CHOICE_NUMBER[kind] ?? null)
   const renamedBase = renamed(base, from, pollId)
   return {
     ...renamedBase,

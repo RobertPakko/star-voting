@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { ActionIcon, Group, Progress, Stack, Text, Tooltip } from '@mantine/core'
 import { XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
-import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { isSampleId, openPollRpc } from '../lib/samplePoll'
+import { countFor, groupFromKey, groupKeyOf } from '../lib/groupCount'
 import { formatWindow, relabelScores } from '../lib/schedule'
 import { consensusSchema, parseAnswer } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
@@ -91,6 +92,7 @@ export function ConsensusBody({
   const h24 = use24HourTime()
   const kind = source.kind
   const key = source.pollId
+  const group = groupKeyOf(source)
   const sample = isSampleId(key)
 
   const [consensus, setConsensus] = useState<ConsensusResult | null>(
@@ -119,10 +121,15 @@ export function ConsensusBody({
 
     const excluded = excludedKey ? excludedKey.split(',') : []
     const args = { p_poll_id: key, p_excluded: excluded }
-    const request: PromiseLike<RpcAnswer> =
-      kind === 'poll'
-        ? supabase.rpc('get_poll_consensus', args)
-        : openPollRpc('open_poll_consensus', args)
+    const request = countFor(
+      { kind, pollId: key, group: groupFromKey(group) },
+      'consensus',
+      args,
+      () =>
+        kind === 'poll'
+          ? supabase.rpc('get_poll_consensus', args)
+          : openPollRpc('open_poll_consensus', args),
+    )
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
@@ -136,7 +143,7 @@ export function ConsensusBody({
     return () => {
       cancelled = true
     }
-  }, [kind, key, excludedKey, initial])
+  }, [kind, key, excludedKey, initial, group])
 
   const remaining = results.option_count - leftOut.length
   // With two left there is still a choice; below that there is none.

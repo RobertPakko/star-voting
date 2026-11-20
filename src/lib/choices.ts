@@ -1,6 +1,7 @@
 import type {
   AssignmentResult,
   BudgetResult,
+  GroupsResult,
   FractionalBudgetResult,
   ConsensusResult,
   ConsensusWinnersResult,
@@ -19,7 +20,9 @@ import { SCORING_ROWS_MAX } from './resultsRows'
  * calendar is the question's schedule and a sequence its carried voters, but
  * a budget changes the count, so each choice that takes one has a stored kind
  * of its own: `ranking_budget`, `budget` and `fractional_budget`
- * (`budgetKindOf`). On a calendar
+ * (`budgetKindOf`). Group formation is stored as two kinds, `groups` and
+ * `mixed_groups`, by whether the groups are kept alike or mixed
+ * (`groupsKindOf`). On a calendar
  * the kinds a meeting time is most often asked for read as times
  * (`CALENDAR_NAMES`).
  */
@@ -75,6 +78,18 @@ export const CHOICES: Record<PollKind, { label: string; section: string; blurb: 
     blurb:
       'assigns each voter to one or more options, choosing the assignment that leaves the group as satisfied as possible.',
   },
+  groups: {
+    label: 'Group formation',
+    section: 'group-formation',
+    blurb:
+      'splits the voters into groups of even size, so that the voters in each group voted as alike as possible.',
+  },
+  mixed_groups: {
+    label: 'Group formation',
+    section: 'group-formation',
+    blurb:
+      'splits the voters into groups of even size, so that the voters in each group voted as differently as possible.',
+  },
 }
 
 /** What a kind is called on a calendar, where it reads as a time rather than an option. */
@@ -122,13 +137,23 @@ export const choicePage = (kind: PollKind) =>
 export const isBudgetKind = (kind: PollKind) =>
   kind === 'budget' || kind === 'ranking_budget' || kind === 'fractional_budget'
 
+/** Whether a kind is group formation, kept alike or mixed. */
+export const isGroupsKind = (kind: PollKind) => kind === 'groups' || kind === 'mixed_groups'
+
+/** The kind group formation is stored as: groups kept alike, or mixed. */
+export const groupsKindOf = (similar: boolean): PollKind => (similar ? 'groups' : 'mixed_groups')
+
 /**
  * What a question can be asked for on the create form: every kind but the
- * budgeted ones, which are a choice with the budget variant.
+ * budgeted ones, which are a choice with the budget variant, and mixed
+ * groups, which is group formation with the groups kept mixed.
  */
-export type Choice = Exclude<PollKind, 'budget' | 'ranking_budget' | 'fractional_budget'>
+export type Choice = Exclude<
+  PollKind,
+  'budget' | 'ranking_budget' | 'fractional_budget' | 'mixed_groups'
+>
 
-/** The choice a stored kind is, with the budget taken off. */
+/** The choice a stored kind is, with the budget or the mixing taken off. */
 export const choiceOfKind = (kind: PollKind): Choice =>
   kind === 'budget'
     ? 'multiple'
@@ -136,7 +161,9 @@ export const choiceOfKind = (kind: PollKind): Choice =>
       ? 'ranking'
       : kind === 'fractional_budget'
         ? 'fractional'
-        : kind
+        : kind === 'mixed_groups'
+          ? 'groups'
+          : kind
 
 /** The kind a choice is stored as with a budget. */
 export const budgetKindOf = (choice: Choice): PollKind =>
@@ -238,6 +265,7 @@ export const CHOICE_ORDER: Choice[] = [
   'multiple',
   'fractional',
   'assignment',
+  'groups',
 ]
 
 /**
@@ -252,6 +280,7 @@ export const CHOICE_PAGE_ORDER: Choice[] = [
   'consensus_winners',
   'fractional',
   'assignment',
+  'groups',
 ]
 
 /**
@@ -280,14 +309,17 @@ export const PER_VOTER_NUMBERS = Array.from({ length: SCORING_ROWS_MAX }, (_, i)
  * What a kind's number (`kind_value`) counts, for the kinds that take one
  * from a dropdown, and the numbers it offers. The database holds a ranking
  * or several winners to 2 – `SCORING_ROWS_MAX` and an assignment to
- * 1 – `SCORING_ROWS_MAX` (`validate_kind`). Consensus winners must have one;
- * the others may be left at *All* (null).
+ * 1 – `SCORING_ROWS_MAX` (`validate_kind`). Consensus winners and group
+ * formation (2 – `SCORING_ROWS_MAX` groups) must have one; the others may be
+ * left at *All* (null).
  */
 export const CHOICE_NUMBER: Partial<Record<PollKind, { label: string; numbers: number[] }>> = {
   ranking: { label: 'Number of winners', numbers: CHOICE_NUMBERS },
   multiple: { label: 'Number of winners', numbers: CHOICE_NUMBERS },
   consensus_winners: { label: 'Number of winners', numbers: CHOICE_NUMBERS },
   assignment: { label: 'Max options per voter', numbers: PER_VOTER_NUMBERS },
+  groups: { label: 'Number of groups', numbers: CHOICE_NUMBERS },
+  mixed_groups: { label: 'Number of groups', numbers: CHOICE_NUMBERS },
 }
 
 /** What a kind's number is called on a calendar, where its options are times. */
@@ -308,6 +340,8 @@ export const DEFAULT_CHOICE_NUMBER: Partial<Record<PollKind, number>> = {
   multiple: 3,
   consensus_winners: 3,
   assignment: 1,
+  groups: 2,
+  mixed_groups: 2,
 }
 
 /**
@@ -320,6 +354,19 @@ export const consensusWinnersFor = (results: PollResults) =>
   results.kind === 'consensus_winners' && results.kind_value !== null
     ? results.kind_value
     : Math.max(2, Math.min(DEFAULT_CHOICE_NUMBER.consensus_winners!, results.option_count - 1))
+
+/**
+ * How many groups, and which way, group formation opens on: the question's
+ * own where it asked for it; elsewhere (a *More results* modal) three groups
+ * kept alike, or two where there are fewer than six voters, since a group is
+ * at least two. The sample records the same (`scripts/sample-poll.sql`).
+ */
+export function groupsFor(results: PollResults): { groups: number; similar: boolean } {
+  if (isGroupsKind(results.kind) && results.kind_value !== null) {
+    return { groups: results.kind_value, similar: results.kind === 'groups' }
+  }
+  return { groups: results.voter_count >= 6 ? 3 : 2, similar: true }
+}
 
 /**
  * Which results a tally is offered, from the option count it already
@@ -353,6 +400,10 @@ export function offers(tool: ResultTool, results: PollResults) {
     if (!results.voters_shown) return false
     if (results.kind !== 'assignment' && !results.ballots_shown) return false
   }
+  // Groups name their voters too, but say only who voted more alike than
+  // whom, never how anybody scored, so any poll showing its voters may be
+  // grouped (`poll_groups`).
+  if (tool === 'groups') return results.voters_shown === true
   return tool === 'fractional' || tool === 'consensus' || tool === 'assignment'
     ? results.option_count >= 2
     : results.option_count >= 3
@@ -366,6 +417,7 @@ export type ChosenResult =
   | { kind: 'budget' | 'ranking_budget'; budget: BudgetResult }
   | { kind: 'fractional_budget'; budget: FractionalBudgetResult }
   | { kind: 'assignment'; assignment: AssignmentResult }
+  | { kind: 'groups' | 'mixed_groups'; groups: GroupsResult }
 
 /**
  * The result a tally opens on, where the question asked for more than STAR's
@@ -394,6 +446,9 @@ export function chosenResult(results: PollResults): ChosenResult | null {
   }
   if (kind === 'assignment') {
     return !Array.isArray(result) && 'unplaced' in result ? { kind, assignment: result } : null
+  }
+  if (kind === 'groups' || kind === 'mixed_groups') {
+    return !Array.isArray(result) && 'group_count' in result ? { kind, groups: result } : null
   }
   if (!Array.isArray(result)) return null
   if (kind === 'fractional') {

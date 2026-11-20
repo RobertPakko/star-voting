@@ -34,6 +34,7 @@ import {
 import type { DailyWindow, PollKind, PollSchedule } from './types'
 import {
   budgetKindOf,
+  groupsKindOf,
   CHOICE_NUMBER,
   CHOICE_ORDER,
   DEFAULT_CHOICE_NUMBER,
@@ -95,6 +96,11 @@ export interface QuestionDraft {
   kindNumbers: Partial<Record<PollKind, number>>
   /** A budget poll's budget, as the number box holds it: '' while empty. */
   budget: number | string
+  /**
+   * Group formation's direction: groups as alike as can be, or as mixed.
+   * Stored as a kind of its own (`sentKind`).
+   */
+  similar: boolean
   /**
    * The form's *Variant*, or null for none: a time poll, a sequential poll or
    * a budget poll, one at most. Kept whatever the choice, like everything
@@ -204,6 +210,7 @@ export function blankQuestion(): QuestionDraft {
     kind: 'option',
     kindNumbers: { ...DEFAULT_CHOICE_NUMBER },
     budget: '',
+    similar: true,
     variant: null,
     schedule: blankSchedule(),
     overlap: null,
@@ -251,9 +258,14 @@ export function isBudgetQuestion(question: QuestionDraft): boolean {
   return variantOf(question) === 'budget'
 }
 
-/** The kind a question is stored as: its choice, or that choice with a budget. */
+/**
+ * The kind a question is stored as: its choice, that choice with a budget, or
+ * group formation kept alike or mixed.
+ */
 export function sentKind(question: QuestionDraft): PollKind {
-  return isBudgetQuestion(question) ? budgetKindOf(question.kind) : question.kind
+  if (isBudgetQuestion(question)) return budgetKindOf(question.kind)
+  if (question.kind === 'groups') return groupsKindOf(question.similar)
+  return question.kind
 }
 
 /**

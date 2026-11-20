@@ -2,7 +2,8 @@ import { useEffect, useId, useState } from 'react'
 import { ActionIcon, Group, Select, Stack, Text, Tooltip } from '@mantine/core'
 import { XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
-import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { isSampleId, openPollRpc } from '../lib/samplePoll'
+import { countFor, groupFromKey, groupKeyOf } from '../lib/groupCount'
 import { formatWindow } from '../lib/schedule'
 import { consensusWinnersSchema, parseAnswer } from '../lib/rpcSchemas'
 import { use24HourTime } from '../lib/clock'
@@ -99,6 +100,7 @@ export function ConsensusWinnersBody({
   const h24 = use24HourTime()
   const kind = source.kind
   const key = source.pollId
+  const group = groupKeyOf(source)
   const sample = isSampleId(key)
   // The tally's answer stands only for the number it was counted at.
   const carried = initial && initial.winner_count === winners ? initial : null
@@ -129,10 +131,15 @@ export function ConsensusWinnersBody({
 
     const excluded = excludedKey ? excludedKey.split(',') : []
     const args = { p_poll_id: key, p_excluded: excluded, p_winners: winners }
-    const request: PromiseLike<RpcAnswer> =
-      kind === 'poll'
-        ? supabase.rpc('get_poll_consensus_winners', args)
-        : openPollRpc('open_poll_consensus_winners', args)
+    const request = countFor(
+      { kind, pollId: key, group: groupFromKey(group) },
+      'consensus_winners',
+      args,
+      () =>
+        kind === 'poll'
+          ? supabase.rpc('get_poll_consensus_winners', args)
+          : openPollRpc('open_poll_consensus_winners', args),
+    )
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
@@ -150,7 +157,7 @@ export function ConsensusWinnersBody({
     return () => {
       cancelled = true
     }
-  }, [kind, key, excludedKey, winners, carried])
+  }, [kind, key, excludedKey, winners, carried, group])
 
   const remaining = results.option_count - leftOut.length
   // Choosing two of three is still a choice; two of two is not.

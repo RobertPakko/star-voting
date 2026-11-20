@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ActionIcon, Badge, Group, Stack, Text, Tooltip } from '@mantine/core'
 import { XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
-import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { isSampleId, openPollRpc } from '../lib/samplePoll'
+import { countFor, groupFromKey, groupKeyOf } from '../lib/groupCount'
 import { countBadge } from '../lib/badgeColors'
 import { relabelRanking } from '../lib/schedule'
 import { parseAnswer, rankingSchema } from '../lib/rpcSchemas'
@@ -94,6 +95,7 @@ export function MultipleWinnersBody({
   const h24 = use24HourTime()
   const kind = source.kind
   const key = source.pollId
+  const group = groupKeyOf(source)
   const sample = isSampleId(key)
 
   const [spots, setSpots] = useState<RankingEntry[] | null>(leftOut.length === 0 ? initial : null)
@@ -123,10 +125,15 @@ export function MultipleWinnersBody({
 
     const excluded = excludedKey ? excludedKey.split(',') : []
     const args = { p_poll_id: key, p_excluded: excluded }
-    const request: PromiseLike<RpcAnswer> =
-      kind === 'poll'
-        ? supabase.rpc('get_poll_multiple_winners', args)
-        : openPollRpc('open_poll_multiple_winners', args)
+    const request = countFor(
+      { kind, pollId: key, group: groupFromKey(group) },
+      'multiple_winners',
+      args,
+      () =>
+        kind === 'poll'
+          ? supabase.rpc('get_poll_multiple_winners', args)
+          : openPollRpc('open_poll_multiple_winners', args),
+    )
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
@@ -140,7 +147,7 @@ export function MultipleWinnersBody({
     return () => {
       cancelled = true
     }
-  }, [kind, key, excludedKey, initial])
+  }, [kind, key, excludedKey, initial, group])
 
   const remaining = results.option_count - leftOut.length
   // Below two there is nothing left to choose several of.

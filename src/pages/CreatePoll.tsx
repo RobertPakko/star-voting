@@ -114,8 +114,12 @@ import {
 import { usePageTitle } from '../lib/pageTitle'
 import { announce } from '../lib/announce'
 
-/** Why the voter switch is on and fixed while a question is an option assignment. */
+/**
+ * Why the voter switch is on and fixed while a question is an option
+ * assignment or group formation, each of which names voters.
+ */
 const ASSIGNMENT_SHOWS_VOTERS = 'An option assignment says who gets which option.'
+const GROUPS_SHOW_VOTERS = 'Group formation says who is in which group.'
 
 /** The *Variant* select's value for none, which a Select needs as a string. */
 const NO_VARIANT = 'none'
@@ -190,10 +194,14 @@ export function CreatePoll() {
   // ballot's weight on an anonymous sheet would say whose it is. So while any
   // question is sequential the two settings are one switch.
   const anySequential = questions.some((question) => variantOf(question) === 'sequential')
-  // An option assignment says who gets which option, so while any question
-  // is one, voters are shown whatever the switch was left at.
-  const anyAssignment = questions.some((q) => q.kind === 'assignment')
-  const votersShown = showVoters || anyAssignment
+  // An option assignment says who gets which option, and group formation who
+  // is in which group, so while any question is one, voters are shown
+  // whatever the switch was left at.
+  const namingVoters = questions.some((q) => q.kind === 'assignment' || q.kind === 'groups')
+  const namesVoters = questions.some((q) => q.kind === 'assignment')
+    ? ASSIGNMENT_SHOWS_VOTERS
+    : GROUPS_SHOW_VOTERS
+  const votersShown = showVoters || namingVoters
   const publishBallots = anySequential ? votersShown : showBallots
 
   // An invite poll's earlier voters are its invitees: each sequential
@@ -355,8 +363,9 @@ export function CreatePoll() {
           kindNumbers:
             number === null || budgeted
               ? fresh.kindNumbers
-              : { ...fresh.kindNumbers, [row.kind]: number },
+              : { ...fresh.kindNumbers, [choiceOfKind(row.kind)]: number },
           budget: budgeted && number !== null ? number : '',
+          similar: row.kind !== 'mixed_groups',
           variant: budgeted ? 'budget' : timed ? 'time' : null,
         }
         const parsed = timed ? pollScheduleSchema.safeParse(row.schedule) : null
@@ -846,82 +855,98 @@ export function CreatePoll() {
     const variants = VARIANT_ORDER.filter((v) => variantAllowed(v, question.kind))
 
     return (
-      <SimpleGrid cols={{ base: 1, xs: columns }} spacing="xs">
-        <Stack gap={2}>
-          <InfoLabel htmlFor={id} label="Choice type" about="What each choice does">
-            Visit the{' '}
-            <Anchor component={Link} to="/choices" target="_blank" inherit>
-              list of choices
-            </Anchor>{' '}
-            to learn about what these options mean.
-          </InfoLabel>
-          <Select
-            id={id}
-            allowDeselect={false}
-            value={question.kind}
-            onChange={(v) => v && patchQuestion(questionIndex, { kind: v as Choice })}
-            // On a calendar each reads as times.
-            data={CHOICE_ORDER.map((kind) => ({ value: kind, label: choiceLabel(kind, timed) }))}
-          />
-        </Stack>
-        <Stack gap={2}>
-          <InfoLabel htmlFor={variantId} label="Variant" about="What each variant does">
-            Visit the{' '}
-            <Anchor component={Link} to="/variants" target="_blank" inherit>
-              poll variants
-            </Anchor>{' '}
-            to learn about what these options mean.
-          </InfoLabel>
-          <Select
-            id={variantId}
-            allowDeselect={false}
-            value={variant ?? NO_VARIANT}
-            onChange={(v) =>
-              v &&
-              patchQuestion(questionIndex, { variant: v === NO_VARIANT ? null : (v as Variant) })
-            }
-            data={[
-              { value: NO_VARIANT, label: 'None' },
-              ...variants.map((v) => ({ value: v, label: VARIANTS[v].label })),
-            ]}
-          />
-        </Stack>
-        {number && (
-          <Stack gap={2} justify="flex-end">
+      <Stack gap="xs">
+        <SimpleGrid cols={{ base: 1, xs: columns }} spacing="xs">
+          <Stack gap={2}>
+            <InfoLabel htmlFor={id} label="Choice type" about="What each choice does">
+              Visit the{' '}
+              <Anchor component={Link} to="/choices" target="_blank" inherit>
+                list of choices
+              </Anchor>{' '}
+              to learn about what these options mean.
+            </InfoLabel>
             <Select
-              label={choiceNumberLabel(question.kind, timed)}
+              id={id}
               allowDeselect={false}
-              value={String(question.kindNumbers[question.kind] ?? number.numbers.at(-1))}
+              value={question.kind}
+              onChange={(v) => v && patchQuestion(questionIndex, { kind: v as Choice })}
+              // On a calendar each reads as times.
+              data={CHOICE_ORDER.map((kind) => ({ value: kind, label: choiceLabel(kind, timed) }))}
+            />
+          </Stack>
+          <Stack gap={2}>
+            <InfoLabel htmlFor={variantId} label="Variant" about="What each variant does">
+              Visit the{' '}
+              <Anchor component={Link} to="/variants" target="_blank" inherit>
+                poll variants
+              </Anchor>{' '}
+              to learn about what these options mean.
+            </InfoLabel>
+            <Select
+              id={variantId}
+              allowDeselect={false}
+              value={variant ?? NO_VARIANT}
               onChange={(v) =>
                 v &&
-                patchQuestion(questionIndex, {
-                  kindNumbers: { ...question.kindNumbers, [question.kind]: Number(v) },
-                })
+                patchQuestion(questionIndex, { variant: v === NO_VARIANT ? null : (v as Variant) })
               }
-              data={number.numbers.map((n) => String(n))}
+              data={[
+                { value: NO_VARIANT, label: 'None' },
+                ...variants.map((v) => ({ value: v, label: VARIANTS[v].label })),
+              ]}
             />
           </Stack>
+          {number && (
+            <Stack gap={2} justify="flex-end">
+              <Select
+                label={choiceNumberLabel(question.kind, timed)}
+                allowDeselect={false}
+                value={String(question.kindNumbers[question.kind] ?? number.numbers.at(-1))}
+                onChange={(v) =>
+                  v &&
+                  patchQuestion(questionIndex, {
+                    kindNumbers: { ...question.kindNumbers, [question.kind]: Number(v) },
+                  })
+                }
+                data={number.numbers.map((n) => String(n))}
+              />
+            </Stack>
+          )}
+          {budget && (
+            // A number field rather than a dropdown: a budget is any amount, in
+            // whatever unit the poll is about, so it says none. It stands where
+            // the number of winners would: the winners are what it buys.
+            <Stack gap={2} justify="flex-end">
+              <NumberInput
+                label="Budget"
+                placeholder="How much there is to spend"
+                value={question.budget}
+                onChange={(v) => patchQuestion(questionIndex, { budget: v })}
+                min={1}
+                max={AMOUNT_MAX}
+                allowDecimal={false}
+                allowNegative={false}
+                thousandSeparator=","
+                error={shown.budgets[questionIndex]}
+              />
+            </Stack>
+          )}
+        </SimpleGrid>
+        {question.kind === 'groups' && (
+          // Which way the groups are formed: a kind of its own when sent
+          // (`sentKind`), a second answer to the one choice here.
+          <Select
+            label="Group similarity"
+            allowDeselect={false}
+            value={question.similar ? 'alike' : 'mixed'}
+            onChange={(v) => v && patchQuestion(questionIndex, { similar: v === 'alike' })}
+            data={[
+              { value: 'alike', label: 'Maximize group similarity' },
+              { value: 'mixed', label: 'Minimize group similarity' },
+            ]}
+          />
         )}
-        {budget && (
-          // A number field rather than a dropdown: a budget is any amount, in
-          // whatever unit the poll is about, so it says none. It stands where
-          // the number of winners would: the winners are what it buys.
-          <Stack gap={2} justify="flex-end">
-            <NumberInput
-              label="Budget"
-              placeholder="How much there is to spend"
-              value={question.budget}
-              onChange={(v) => patchQuestion(questionIndex, { budget: v })}
-              min={1}
-              max={AMOUNT_MAX}
-              allowDecimal={false}
-              allowNegative={false}
-              thousandSeparator=","
-              error={shown.budgets[questionIndex]}
-            />
-          </Stack>
-        )}
-      </SimpleGrid>
+      </Stack>
     )
   }
 
@@ -1280,22 +1305,22 @@ export function CreatePoll() {
             {anySequential ? (
               <Switch
                 checked={votersShown}
-                disabled={anyAssignment}
+                disabled={namingVoters}
                 onChange={(e) => {
                   setShowVoters(e.currentTarget.checked)
                   setShowBallots(e.currentTarget.checked)
                 }}
                 label="Show voters and publish ballots"
-                description={anyAssignment ? ASSIGNMENT_SHOWS_VOTERS : undefined}
+                description={namingVoters ? namesVoters : undefined}
               />
             ) : (
               <>
                 <Switch
                   checked={votersShown}
-                  disabled={anyAssignment}
+                  disabled={namingVoters}
                   onChange={(e) => setShowVoters(e.currentTarget.checked)}
                   label="Show voters"
-                  description={anyAssignment ? ASSIGNMENT_SHOWS_VOTERS : undefined}
+                  description={namingVoters ? namesVoters : undefined}
                 />
 
                 <Switch

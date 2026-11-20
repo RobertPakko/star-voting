@@ -59,6 +59,7 @@ export const CHOICE_GUIDE: GuideQuestion = {
     { answer: 'Pick an option', next: veto },
     { answer: 'Pick multiple options', next: split },
     { answer: 'Assign voters to options', next: 'assignment' },
+    { answer: 'Split voters into groups', next: 'groups' },
   ],
 }
 

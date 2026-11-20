@@ -25,7 +25,7 @@ hash-based routing, deployed to GitHub Pages by
 src/pages/       route components (Home, SignIn, PollList, CreatePoll, PollPage — which picks PollDetail or PublicPoll — Learn, Settings, InstallGuide, Intro, Donate, Contact)
 src/components/  poll UI pieces: the ballots (BallotFrame, BallotCard, TimeBallotCard), the calendar
                  the painting screens share (PaintCalendar, ScheduleFields, PaintTimes, HoursFields),
-                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus, ConsensusWinners, OptionAssignment, BudgetVariant, SequentialVariant — ChosenResult, ChoiceCount, AllScores, CoinFlip),
+                 results and ballots (Results, Ballots, YourBallot, ScheduleBallots, MoreResults — FullRanking, MultipleWinners, FractionalWinners, Consensus, ConsensusWinners, OptionAssignment, GroupFormation, BudgetVariant, SequentialVariant — ChosenResult, ChoiceCount, AllScores, CoinFlip),
                  the collecting stage (CollectOptions, TimeList), a sequential question's earlier
                  voters on the create form (CarriedVoters), the poll heading and its tags,
                  notifications (NotificationSwitches, PushSwitch, Banners), motion helpers (Reveal,
@@ -1744,7 +1744,8 @@ is the page.
   as that kind under an id of its own (`sampleResultAs`, e.g.
   `sample-result-movie-as-multiple-winners`): the snack question for
   fractional winners, which reads best as a split of one shared order, and
-  the film question for the others, consensus winners included.
+  the film question for the others, consensus winners and group formation
+  included.
   `samplePoll.ts` answers each from the same recording with `kind` and
   `kind_result` swapped for the result its *More results* modal records.
   Beside it, **Try it out** (`TryItButton`) opens the create form with its
@@ -3480,7 +3481,8 @@ a time poll; two or more options), **Multiple winners**, **Proportional
 winners** and **Consensus winners** (*Consensus times*; three or more),
 **Fractional winners** and **Option assignment** (two or more; the
 assignment only where the poll shows who voted and, on a question that did
-not ask for one, publishes its ballots), and then the two variants a
+not ask for one, publishes its ballots), **Group formation** (wherever
+the poll shows who voted), and then the two variants a
 finished question can be counted with after the fact, the **Sequential
 variant** and the **Budget variant** (see below), each opening a modal; then *Add to calendar* under a time poll's
 winner or *Flip a coin* under *No winner*. One menu rather than a
@@ -3857,6 +3859,53 @@ checks the search against trying every set.
   `scripts/sample-poll.sql` recorded at the modal's opening number.
 - Like the consensus it is easily gamed, and `/choices` says so.
 
+**Group formation** (`kind` `groups`, or `mixed_groups` for *Minimize
+group similarity*; one choice on the form, two kinds stored, as a budget
+is) splits the voters rather than choosing options: `kind_value` groups,
+required, 2 to `SCORING_ROWS_MAX`, sized as evenly as can be (larger
+first), and more groups than voters leaves some empty. Two voters are
+Σ (stars apart)² over every option; a grouping is that summed over every two
+voters in one group, made as small (alike) or as large (mixed) as the
+search finds. [`GroupFormation`](src/components/GroupFormation.tsx) is the
+modal and the card; `65_group_formation` holds the rules below and checks
+the search against trying every split.
+
+- **Found by search, not proven best** (`voter_groups`): seeded starts
+  (seeds far apart for alike, a hashed deal for mixed), then swaps between
+  groups and moves from a group one larger to one smaller while either
+  helps, keeping the best start. Voters are visited in an order hashed from
+  poll and ballot and only strict improvements are taken, so every read
+  gives the same groups. Distances are bit counts over five per-level masks
+  per ballot, not a sum per option. Fewer starts as polls grow; past 500
+  ballots, or voters² × (options + 50) over 90 million, it refuses (under two
+  seconds locally at the edge), and `poll_tally` then carries no
+  `kind_result`.
+- **It names voters**, so it needs a poll that shows them, at creation
+  (`insert_poll_row`, and the form's switch held on) and when counted.
+  Invitees who did not vote are listed apart (`not_grouped`).
+- **The number and direction are the reader's on any such poll**, held by
+  `useGroupsInputs` and never stored, private ballots included: groups say
+  who voted more alike than whom, never how anybody scored, and the card
+  shows no distances, which on a group of two would be one. No option can
+  be removed, since grouping on one option is grouping by its score.
+- **Each group can *Make choice***: the *More results* menu over that
+  group's own tally, with every modal counting that group's ballots alone.
+  That says how its voters scored, so only where ballots are published
+  (`poll_group_count` refuses otherwise). The browser names a group by its
+  number, direction and place (`GroupRef`), never by ballots, and the
+  database forms the groups again. Every count reads its ballots and scores
+  through `counted_ballots` / `counted_scores`, which `poll_group_count`
+  narrows with the transaction-local `app.counted_ballots` for its call, as
+  `app.sequential_given` weighs ballots; a new count must read through them
+  too. A group's menu offers neither group formation nor the *Sequential
+  variant*, and its modals say which group they count (`CountingGroup`).
+- **It names no one winner** (`poll_names_one_winner`): the badge reads
+  *Results ready*. Not with a sequence or a budget; on a calendar it groups
+  people by availability.
+- **The sample cannot form them again** or count a group: it answers the
+  grouping recorded at the modal's opening number (`groupsFor`: three, or
+  two under six voters), kept alike.
+
 **It is a separate request, made when the button is pressed**
 (`get_poll_ranking` / `open_poll_ranking`, via `poll_ranking`), because the
 ladder is the most expensive thing the app asks the database for and most
@@ -3887,8 +3936,8 @@ A question's `kind` is what it asks for, picked on the create form as
 winners*), `ranking` (*Multiple winners*), `multiple` (*Proportional winners*),
 `fractional` (*Fractional winners*), `budget`, `ranking_budget` and
 `fractional_budget` (the budget variant of proportional, multiple and
-fractional winners) or
-`assignment` (*Option assignment*). **The kind never changes the ballot**:
+fractional winners), `assignment` (*Option assignment*) or `groups` and
+`mixed_groups` (*Group formation*, kept alike or mixed). **The kind never changes the ballot**:
 whether it is a calendar is the schedule, the *Time poll* variant on the form, so
 every kind but a budget can be asked of a meeting time (see [A poll that
 finds a time](#a-poll-that-finds-a-time)). On a calendar some kinds read

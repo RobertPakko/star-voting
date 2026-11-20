@@ -10,6 +10,7 @@ import {
   ArrowsSplitIcon,
   RepeatIcon,
   TrophyIcon,
+  UsersFourIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
 import { CHOICES, offers, toolLabel, type ResultTool } from '../lib/choices'
@@ -23,6 +24,7 @@ import { ConsensusWinners } from './ConsensusWinners'
 import { BudgetVariant } from './BudgetVariant'
 import { SequentialVariant } from './SequentialVariant'
 import { OptionAssignment } from './OptionAssignment'
+import { GroupFormation } from './GroupFormation'
 import { isSampleId } from '../lib/samplePoll'
 
 type Tool = ResultTool
@@ -36,24 +38,38 @@ type Tool = ResultTool
  * page that explains them all, and `/variants` the two variants at the
  * foot: counts the reader sets up, with weights or with costs. The order is
  * the order those two pages list them in.
+ *
+ * **A group's *Make choice* is this menu too**, over the group's own tally
+ * and a source naming the group, so every modal counts that group's ballots
+ * alone (`countFor`). There it offers neither group formation (a group is
+ * not grouped again) nor the *Sequential variant*, which weighs the rows of
+ * a ballot sheet no group has.
  */
 export function MoreResults({
   source,
   results,
   shown,
+  label = 'More results',
+  defaultOpened = false,
 }: {
   source: ComponentProps<typeof FullRanking>['source']
   /** Already relabelled by Results on a time poll; see relabelResults. */
   results: PollResults
   /** The result on the page, left off the menu: `option` where it is STAR's winner. */
   shown: Tool
+  /** The button's words: *Make choice* on a group. */
+  label?: string
+  /** Opened as it arrives, where a press has already asked for it (a group's tally). */
+  defaultOpened?: boolean
 }) {
+  const inGroup = source.group !== undefined
   // The sample answers from a recording, which holds no assignment for a
   // question that did not ask for one, and cannot count with costs or weights
   // a reader types.
   const offered = (tool: Tool) =>
     tool !== shown &&
     offers(tool, results) &&
+    !(inGroup && (tool === 'groups' || tool === 'sequential_variant')) &&
     !(
       (tool === 'budget_variant' || tool === 'sequential_variant' || tool === 'assignment') &&
       isSampleId(source.pollId)
@@ -97,6 +113,11 @@ export function MoreResults({
       label: toolLabel('assignment', results.calendar),
       icon: ArrowsSplitIcon,
     },
+    offered('groups') && {
+      tool: 'groups' as const,
+      label: toolLabel('groups', results.calendar),
+      icon: UsersFourIcon,
+    },
     offered('sequential_variant') && {
       tool: 'sequential_variant' as const,
       label: toolLabel('sequential_variant', results.calendar),
@@ -113,14 +134,14 @@ export function MoreResults({
 
   return (
     <>
-      <Menu position="bottom-end" withinPortal>
+      <Menu position="bottom-end" withinPortal defaultOpened={defaultOpened}>
         <Menu.Target>
           <Button
             variant="default"
             size="compact-sm"
             rightSection={<CaretDownIcon size={14} aria-hidden />}
           >
-            More results
+            {label}
           </Button>
         </Menu.Target>
         <Menu.Dropdown>
@@ -192,6 +213,14 @@ export function MoreResults({
           source={source}
           results={results}
           opened={open === 'sequential_variant'}
+          onClose={close}
+        />
+      )}
+      {offered('groups') && (
+        <GroupFormation
+          source={source}
+          results={results}
+          opened={open === 'groups'}
           onClose={close}
         />
       )}

@@ -7,6 +7,7 @@ import {
   ListNumbersIcon,
   RankingIcon,
   TrophyIcon,
+  UsersFourIcon,
   type Icon,
 } from '@phosphor-icons/react'
 import type { Choice } from '../lib/choices'
@@ -24,4 +25,5 @@ export const CHOICE_ICONS: Record<Choice, { icon: Icon; color: MantineColor }> =
   consensus_winners: { icon: CirclesThreeIcon, color: 'cyan' },
   fractional: { icon: ChartPieSliceIcon, color: 'grape' },
   assignment: { icon: ArrowsSplitIcon, color: 'orange' },
+  groups: { icon: UsersFourIcon, color: 'pink' },
 }

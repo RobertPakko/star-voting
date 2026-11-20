@@ -298,6 +298,8 @@ export function AllChoices() {
   const shares = sharesOf(DINNER)
   const percent = percentagesOf(shares)
   const given = assignmentOf(DINNER, SERVINGS)
+  const alike = groupsOf(DINNER, 2, true)
+  const mixed = groupsOf(DINNER, 2, false)
 
   // The guide's *Read about it*: open the choice's section and bring it up.
   function readAbout(choice: ChoiceKind) {
@@ -718,6 +720,65 @@ export function AllChoices() {
           </Text>
           <AssignmentFormula />
         </Choice>
+
+        <Choice
+          id={CHOICES.groupFormation}
+          {...CHOICE_ICONS.groups}
+          title="Group formation"
+          tags={['k-means', 'Local search']}
+          example={exampleFor('groups')}
+          tryIt={{ choice: 'groups' }}
+        >
+          <Requirement icon={EyeIcon}>The poll shows who voted.</Requirement>
+          <Text>
+            Sometimes the voters themselves need splitting up: into discussion tables, study groups
+            or teams. <strong>Group formation</strong> splits the voters into groups of even size,
+            putting together voters who voted alike, or, if you ask for the opposite, voters who
+            voted differently:
+          </Text>
+          <List type="ordered" spacing={4} withPadding>
+            <List.Item>
+              How far apart two voters are is the difference between the stars they gave each
+              option, squared, added up over every option.
+            </List.Item>
+            <List.Item>
+              The groups are chosen so that these distances between voters in the same group, added
+              up, are as small as possible (<strong>Maximize group similarity</strong>) or as large
+              as possible (<strong>Minimize group similarity</strong>).
+            </List.Item>
+          </List>
+          <Text>
+            Say our six friends are splitting into two tables of three for a long dinner and want to
+            sit with people who like the same food. Here are their ballots again, with the table
+            each friend sits at:
+          </Text>
+          <EmojiTable
+            caption="How many stars each friend gave each restaurant, and the table each friend sits at, grouped alike"
+            rows={groupRows(DINNER, alike)}
+            rowLabel="Restaurant"
+          />
+          <Text>
+            The three pizza lovers sit together, and so do the three who like sushi. If they would
+            rather mix, minimizing similarity seats {groupNames(mixed)} instead:
+          </Text>
+          <EmojiTable
+            caption="How many stars each friend gave each restaurant, and the table each friend sits at, grouped mixed"
+            rows={groupRows(DINNER, mixed)}
+            rowLabel="Restaurant"
+          />
+          <Text>
+            Groups are as even as they can be: seven voters in two groups makes a group of four and
+            a group of three. Asking for more groups than there are voters leaves some empty.
+          </Text>
+          <Text>
+            The groups only say who voted more alike than whom, never how anybody voted, so the
+            number of groups and the similarity can be changed after the poll closes, on any poll
+            that shows who voted. Where the poll also publishes its ballots, each group can{' '}
+            <strong>Make choice</strong>: any of the other choices counted over its own members'
+            ballots, such as the best restaurant for each table.
+          </Text>
+          <GroupsFormula />
+        </Choice>
       </Sections>
     </Stack>
   )
@@ -1130,6 +1191,7 @@ const CHOICES = {
   proportionalWinners: CHOICE_NAMES.multiple.section,
   fractionalWinners: CHOICE_NAMES.fractional.section,
   optionAssignment: CHOICE_NAMES.assignment.section,
+  groupFormation: CHOICE_NAMES.groups.section,
 }
 
 /**
@@ -1593,6 +1655,30 @@ function AssignmentFormula() {
 }
 
 /**
+ * How *Group formation* is found, folded away at the foot of its card. It
+ * says what `voter_groups` does: a search from several starts that swaps and
+ * moves voters while that helps, which is very good and not always best.
+ */
+function GroupsFormula() {
+  return (
+    <Folded label="How it's solved">
+      <Text size="sm">
+        Keeping groups alike this way is{' '}
+        <Ext href="https://en.wikipedia.org/wiki/K-means_clustering">k-means clustering</Ext> with
+        groups of equal size, and finding the very best groups is computationally difficult once
+        there are more than a few voters.
+      </Text>
+      <Text size="sm">
+        The app starts from several different groupings and improves each by swapping voters between
+        groups, or moving one from a larger group to a smaller one, for as long as that helps. It
+        keeps the best grouping it finds. The groups will be very good, but they may not be the best
+        possible. Every step is fixed by the ballots, so everyone sees the same groups.
+      </Text>
+    </Folded>
+  )
+}
+
+/**
  * A card's working, folded away under a button at its foot, for the reader
  * who wants the exact rule rather than the steps.
  */
@@ -1997,6 +2083,87 @@ function assignmentOf(ratings: Ratings, places: Record<string, number>): (string
   }
   visit(0)
   return best
+}
+
+/**
+ * Each voter's group (0 for the first), worked out by trying every way of
+ * splitting them evenly: the split whose voters in one group are least far
+ * apart, added up (`similar`), or most. Two voters are as far apart as their
+ * stars' differences, squared and added up. Groups are numbered as the app
+ * shows them: larger first, then by their first voter. `voter_groups` searches
+ * rather than tries everything, and `65_group_formation` counts the same
+ * example.
+ */
+function groupsOf(ratings: Ratings, groups: number, similar: boolean): number[] {
+  const voters = votersOf(ratings)
+  const options = optionsOf(ratings)
+  const apart = (a: number, b: number) =>
+    sum(options.map((o) => (ratings[o][a] - ratings[o][b]) ** 2))
+  const sizes = Array.from(
+    { length: groups },
+    (_, g) => Math.floor(voters.length / groups) + (g < voters.length % groups ? 1 : 0),
+  )
+  let best: number[] = []
+  let bestWorth = similar ? Infinity : -Infinity
+  const label: number[] = []
+  const visit = (voter: number) => {
+    if (voter === voters.length) {
+      const counts = sizes.map((_, g) => label.filter((l) => l === g).length).sort((a, b) => b - a)
+      if (counts.some((c, g) => c !== sizes[g])) return
+      let worth = 0
+      for (const a of voters)
+        for (const b of voters) if (a < b && label[a] === label[b]) worth += apart(a, b)
+      if (similar ? worth < bestWorth : worth > bestWorth) {
+        bestWorth = worth
+        best = [...label]
+      }
+      return
+    }
+    for (let g = 0; g < groups; g++) {
+      label[voter] = g
+      visit(voter + 1)
+    }
+  }
+  visit(0)
+  // Larger first, then by first voter, as the app numbers them.
+  const order = [...new Set(best)].sort(
+    (a, b) =>
+      best.filter((l) => l === b).length - best.filter((l) => l === a).length ||
+      best.indexOf(a) - best.indexOf(b),
+  )
+  return best.map((l) => order.indexOf(l))
+}
+
+/** Which tables, as the coloured circles `groupRows` draws them. */
+const TABLES = [
+  { emoji: '🔵', said: 'table 1' },
+  { emoji: '🟠', said: 'table 2' },
+  { emoji: '🟣', said: 'table 3' },
+]
+
+/** The ratings, and under them a row giving each voter's table. */
+function groupRows(ratings: Ratings, groups: number[]): Row[] {
+  return [
+    ...optionsOf(ratings).map((name) => ({
+      name,
+      cells: ratings[name].map((score) => keycap(score)),
+    })),
+    {
+      name: 'Table',
+      heading: { emoji: '🪑', said: 'Table' },
+      cells: groups.map((g) => TABLES[g]),
+    },
+  ]
+}
+
+/** Each group's voters as the page names them ("friends 1, 4 and 6"), groups joined by "and". */
+function groupNames(groups: number[]): string {
+  const tables = [...new Set(groups)].sort((a, b) => a - b)
+  const names = tables.map((t) => {
+    const friends = groups.flatMap((g, voter) => (g === t ? [voter + 1] : []))
+    return `friends ${friends.slice(0, -1).join(', ')} and ${friends.at(-1)}`
+  })
+  return `${names.slice(0, -1).join(', ')} at one table and ${names.at(-1)} at the other`
 }
 
 /** The ratings, with each voter's own option circled and each option's places filled. */

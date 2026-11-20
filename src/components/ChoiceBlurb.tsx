@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { Anchor, Modal, Text } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { choiceOf, choicePage, VARIANTS, variantPage, type Variant } from '../lib/choices'
 import type { PollKind } from '../lib/types'
+import { CountingGroup } from '../lib/groupCount'
 
 /**
  * A kind in one sentence, its name in bold, with a link to where `/choices`
@@ -48,6 +49,7 @@ export function ChoiceModal({
       centered
       title={<ChoiceBlurb kind={kind} calendar={calendar} />}
     >
+      <GroupLine />
       {children}
     </Modal>
   )
@@ -86,7 +88,22 @@ export function VariantModal({
       centered
       title={<VariantBlurb variant={variant} />}
     >
+      <GroupLine />
       {children}
     </Modal>
+  )
+}
+
+/**
+ * Whose ballots a modal opened from a group's *Make choice* counts: one
+ * line, above the count, saying which group. Nothing elsewhere.
+ */
+function GroupLine() {
+  const group = useContext(CountingGroup)
+  if (!group) return null
+  return (
+    <Text size="sm" c="dimmed" mb="md">
+      Counting {group}
+    </Text>
   )
 }

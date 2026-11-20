@@ -7,6 +7,7 @@ import { z } from 'zod'
 z.config({ jitless: true })
 import type {
   AssignmentResult,
+  GroupsResult,
   BallotSheet,
   BudgetResult,
   FractionalBudgetResult,
@@ -82,6 +83,8 @@ const pollKind = z.enum([
   'fractional_budget',
   'assignment',
   'consensus_winners',
+  'groups',
+  'mixed_groups',
 ])
 
 /** The vertical axis of a grid: the earliest and latest a day may run. */
@@ -366,6 +369,14 @@ export const assignmentSchema = z.object({
   stars_shown: z.boolean(),
 }) satisfies z.ZodType<AssignmentResult>
 
+export const groupsSchema = z.object({
+  groups: z.array(z.object({ voters: z.array(z.object({ name: z.string() })) })),
+  group_count: z.number(),
+  similar: z.boolean(),
+  voter_count: z.number(),
+  not_grouped: z.array(z.object({ name: z.string() })),
+}) satisfies z.ZodType<GroupsResult>
+
 export const pollResultsSchema = z.object({
   options: z.array(
     z.object({
@@ -392,8 +403,8 @@ export const pollResultsSchema = z.object({
   kind_value: z.number().nullable(),
   // Shares first: an entry of a ranking has no `share`, so it falls through
   // to the ranking; an empty list is either, and either reads as nothing. The
-  // consensus, consensus winners, the budget and the assignment are the
-  // objects.
+  // consensus, consensus winners, the budget, the assignment and the groups
+  // are the objects.
   kind_result: z
     .union([
       consensusSchema,
@@ -401,6 +412,7 @@ export const pollResultsSchema = z.object({
       budgetSchema,
       fractionalBudgetSchema,
       assignmentSchema,
+      groupsSchema,
       fractionalSharesSchema,
       rankingSchema,
     ])

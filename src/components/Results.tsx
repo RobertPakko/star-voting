@@ -14,6 +14,7 @@ import { ChosenResult } from './ChosenResult'
 import { CoinFlip, type Finalist } from './CoinFlip'
 import { levelOptions } from '../lib/consensus'
 import { MoreResults } from './MoreResults'
+import type { CountSource } from '../lib/groupCount'
 import { Reveal } from './Reveal'
 import { ResultsSkeleton } from './Skeletons'
 import { StarRounds } from './StarRounds'
@@ -23,7 +24,7 @@ import { OptionDescriptions } from '../lib/optionDescriptions'
 import classes from './Results.module.css'
 
 /** Which tally endpoint to read: a session for invite polls, the link for open ones. */
-export type ResultsSource = { kind: 'poll'; pollId: string } | { kind: 'open'; pollId: string }
+export type ResultsSource = CountSource
 
 /**
  * A question's result, opening on what the question asked for (`polls.kind`):

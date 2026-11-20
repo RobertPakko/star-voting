@@ -77,3 +77,18 @@ export function useWinnerCount(pollId: string, start: number) {
   }
   return [winners, setWinners] as const
 }
+
+/**
+ * How many groups, and which way, a reader has asked group formation for, for
+ * one poll, held as `useLeftOut` holds removals; a new poll starts from its
+ * own.
+ */
+export function useGroupsInputs(pollId: string, start: { groups: number; similar: boolean }) {
+  const [inputs, setInputs] = useState(start)
+  const [inputsFor, setInputsFor] = useState(pollId)
+  if (inputsFor !== pollId) {
+    setInputsFor(pollId)
+    setInputs(start)
+  }
+  return [inputs, setInputs] as const
+}

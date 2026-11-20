@@ -12,7 +12,8 @@ import {
 } from '@mantine/core'
 import { CalculatorIcon, PencilSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
-import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { isSampleId, openPollRpc } from '../lib/samplePoll'
+import { countFor, groupFromKey, groupKeyOf } from '../lib/groupCount'
 import { assignmentSchema, parseAnswer } from '../lib/rpcSchemas'
 import { amountError } from '../lib/pollForm'
 import { AMOUNT_MAX } from '../lib/limits'
@@ -114,6 +115,7 @@ export function OptionAssignmentBody({
 }) {
   const kind = source.kind
   const key = source.pollId
+  const group = groupKeyOf(source)
   const sample = isSampleId(key)
   // An assignment of times names its windows as times; anything else passes through.
   const h24 = use24HourTime()
@@ -157,10 +159,15 @@ export function OptionAssignmentBody({
       p_places: typed ? Object.fromEntries(placed.filter(([, n]) => n !== 0)) : undefined,
       p_per_voter: typed?.perVoter,
     }
-    const request: PromiseLike<RpcAnswer> =
-      kind === 'poll'
-        ? supabase.rpc('get_poll_assignment', args)
-        : openPollRpc('open_poll_assignment', args)
+    const request = countFor(
+      { kind, pollId: key, group: groupFromKey(group) },
+      'assignment',
+      args,
+      () =>
+        kind === 'poll'
+          ? supabase.rpc('get_poll_assignment', args)
+          : openPollRpc('open_poll_assignment', args),
+    )
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
@@ -174,7 +181,7 @@ export function OptionAssignmentBody({
     return () => {
       cancelled = true
     }
-  }, [kind, key, excludedKey, inputsKey, initial])
+  }, [kind, key, excludedKey, inputsKey, initial, group])
 
   const remaining = results.option_count - leftOut.length
   // Counting again with options removed or other capacities says how each

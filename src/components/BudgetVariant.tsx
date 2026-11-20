@@ -12,7 +12,8 @@ import {
 } from '@mantine/core'
 import { CalculatorIcon, PencilSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
-import { isSampleId, openPollRpc, type RpcAnswer } from '../lib/samplePoll'
+import { isSampleId, openPollRpc } from '../lib/samplePoll'
+import { countFor, groupFromKey, groupKeyOf } from '../lib/groupCount'
 import { budgetSchema, fractionalBudgetSchema, parseAnswer } from '../lib/rpcSchemas'
 import { amountError } from '../lib/pollForm'
 import { AMOUNT_MAX } from '../lib/limits'
@@ -144,6 +145,7 @@ export function BudgetBody({
 }) {
   const kind = source.kind
   const key = source.pollId
+  const group = groupKeyOf(source)
   const sample = isSampleId(key)
   // A budget question costs its own options; any other asks the reader first.
   const ownCosts = isBudgetKind(results.kind)
@@ -193,10 +195,15 @@ export function BudgetBody({
       p_budget: typed?.budget,
       p_choice: budgetCount,
     }
-    const request: PromiseLike<RpcAnswer> =
-      kind === 'poll'
-        ? supabase.rpc('get_poll_budget', args)
-        : openPollRpc('open_poll_budget', args)
+    const request = countFor(
+      { kind, pollId: key, group: groupFromKey(group) },
+      'budget',
+      args,
+      () =>
+        kind === 'poll'
+          ? supabase.rpc('get_poll_budget', args)
+          : openPollRpc('open_poll_budget', args),
+    )
 
     request.then(({ data, error: rpcError }) => {
       if (cancelled) return
@@ -216,7 +223,7 @@ export function BudgetBody({
     return () => {
       cancelled = true
     }
-  }, [kind, key, excludedKey, inputsKey, initial, ownCount, needsCosts, budgetCount])
+  }, [kind, key, excludedKey, inputsKey, initial, ownCount, needsCosts, budgetCount, group])
 
   const remaining = results.option_count - leftOut.length
   const canRemove = !sample && remaining > 1
