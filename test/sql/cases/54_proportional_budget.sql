@@ -240,7 +240,7 @@ begin
     'Only a budget poll gives its options a cost');
   perform tests.assert_raises('nor takes a budget',
     format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_kind => ''fractional'', p_kind_value => 5)', v_emails),
-    'Only multiple winners, proportional winners, consensus winners, a budget poll or an option assignment takes a number');
+    'Only multiple winners, proportional winners, consensus winners, a budget poll, an option assignment or group formation takes a number');
   perform tests.assert_raises('a budget is not a sequential kind',
     format('select create_poll(''P'', null, array[''a'', ''b''], %L, p_kind => ''budget'', p_kind_value => 5, p_option_costs => array[1, 2], p_carried => %L)',
       v_emails, '[{"voter": "f1@example.com", "given": 5}]'),
